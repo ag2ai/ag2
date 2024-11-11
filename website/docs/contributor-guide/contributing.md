@@ -15,7 +15,7 @@ If you are new to GitHub [here](https://help.github.com/categories/collaborating
 ## Roadmaps
 
 To see what we are working on and what we plan to work on, please check our
-[Roadmap Issues](https://autogenhub.com/roadmap).
+[Roadmap Issues](https://ag2labs.com/roadmap).
 
 ## Becoming a Reviewer
 
@@ -31,7 +31,7 @@ The project is currently maintained by a [dynamic group of volunteers](https://g
 To maintain proper licensing and copyright notices, please include the following header at the top of each new source code file you create, regardless of the programming language:
 
 ```python
-# Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2labs
 #
 # SPDX-License-Identifier: Apache-2.0
 ```
@@ -39,7 +39,7 @@ To maintain proper licensing and copyright notices, please include the following
 For files that contain or are derived from the original MIT-licensed code from https://github.com/microsoft/autogen, please use this extended header:
 
 ```python
-# Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2labs
 #
 # SPDX-License-Identifier: Apache-2.0
 #

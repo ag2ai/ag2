@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2labs
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -164,7 +164,7 @@ class ConversableAgent(LLMAgent):
             except TypeError as e:
                 raise TypeError(
                     "Please implement __deepcopy__ method for each value class in llm_config to support deepcopy."
-                    " Refer to the docs for more details: https://autogenhub.github.io/autogen/docs/topics/llm_configuration#adding-http-client-in-llm_config-for-proxy"
+                    " Refer to the docs for more details: https://ag2labs.github.io/autogen/docs/topics/llm_configuration#adding-http-client-in-llm_config-for-proxy"
                 ) from e
 
         self._validate_llm_config(llm_config)

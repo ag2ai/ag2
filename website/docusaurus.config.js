@@ -15,12 +15,12 @@ customPostCssPlugin = () => {
 module.exports = {
   title: "AutoGen",
   tagline: "An Open-Source Programming Framework for Agentic AI",
-  url: "https://autogenhub.github.io",
+  url: "https://ag2labs.github.io",
   baseUrl: "/autogen/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
   favicon: "img/ag.ico",
-  organizationName: "autogenhub", // Usually your GitHub org/user name.
+  organizationName: "ag2labs", // Usually your GitHub org/user name.
   projectName: "AutoGen", // Usually your repo name.
   scripts: [
     {
@@ -136,7 +136,7 @@ module.exports = {
           items: [
             {
               label: "Dotnet",
-              href: "https://autogenhub.github.io/autogen-for-net/",
+              href: "https://ag2labs.github.io/autogen-for-net/",
             },
           ],
         },

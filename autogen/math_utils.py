@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2labs
 #
 # SPDX-License-Identifier: Apache-2.0
 #
