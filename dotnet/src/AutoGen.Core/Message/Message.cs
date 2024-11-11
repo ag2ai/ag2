@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
+﻿// Copyright (c) 2023 - 2024, Owners of https://github.com/ag2labs
 // SPDX-License-Identifier: Apache-2.0
 // Contributions to this project, i.e., https://github.com/ag2labs/ag2, 
 // are licensed under the Apache License, Version 2.0 (Apache-2.0).
@@ -12,7 +12,7 @@ using System.Collections.Generic;
 
 namespace AutoGen.Core;
 
-[Obsolete("This message class is deprecated, please use a specific AutoGen built-in message type instead. For more information, please visit https://autogenhub.github.io/autogen-for-net/articles/Built-in-messages.html")]
+[Obsolete("This message class is deprecated, please use a specific AutoGen built-in message type instead. For more information, please visit https://ag2labs.github.io/autogen-for-net/articles/Built-in-messages.html")]
 public class Message : IMessage
 {
     public Message(

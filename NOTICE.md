@@ -1,6 +1,6 @@
 ## NOTICE
 
-Copyright (c) 2023-2024, Owners of https://github.com/autogenhub
+Copyright (c) 2023-2024, Owners of https://github.com/ag2labs
 
 This project is a fork of https://github.com/microsoft/autogen.
 
