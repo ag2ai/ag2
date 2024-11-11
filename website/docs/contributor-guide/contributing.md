@@ -6,7 +6,7 @@ The project welcomes contributions from developers and organizations worldwide. 
 - Code review of pull requests.
 - Documentation, examples and test cases.
 - Readability improvement, e.g., improvement on docstr and comments.
-- Community participation in [issues](https://github.com/autogenhub/autogen/issues), [discord](https://discord.gg/pAbnFJrkgZ), and [twitter](https://twitter.com/Chi_Wang_).
+- Community participation in [issues](https://github.com/ag2labs/ag2/issues), [discord](https://discord.gg/pAbnFJrkgZ), and [twitter](https://twitter.com/Chi_Wang_).
 - Tutorials, blog posts, talks that promote the project.
 - Sharing application scenarios and/or related research.
 
@@ -23,7 +23,7 @@ There is currently no formal reviewer solicitation process. Current reviewers id
 
 ## Contact Maintainers
 
-The project is currently maintained by a [dynamic group of volunteers](https://github.com/autogenhub/autogen/blob/main/MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via auto-gen@outlook.com if you are interested in becoming a maintainer.
+The project is currently maintained by a [dynamic group of volunteers](https://github.com/ag2labs/ag2/blob/main/MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via auto-gen@outlook.com if you are interested in becoming a maintainer.
 
 
 ## License Headers

@@ -151,7 +151,7 @@ module.exports = {
           position: "left",
         },
         {
-          href: "https://github.com/autogenhub/autogen",
+          href: "https://github.com/ag2labs/ag2",
           label: "GitHub",
           position: "right",
         },
@@ -215,7 +215,7 @@ module.exports = {
         docs: {
           sidebarPath: require.resolve("./sidebars.js"),
           // Please change this to your repo.
-          editUrl: "https://github.com/autogenhub/autogen/edit/main/website/",
+          editUrl: "https://github.com/ag2labs/ag2/edit/main/website/",
           remarkPlugins: [math],
           rehypePlugins: [katex],
         },

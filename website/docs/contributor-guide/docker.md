@@ -15,14 +15,14 @@ For developers contributing to the AutoGen project, we offer a specialized Docke
 - To build the developer Docker image (`autogenhub_dev_img`), use the following commands:
 
   ```bash
-  docker build -f .devcontainer/dev/Dockerfile -t autogenhub_dev_img https://github.com/autogenhub/autogen.git#main
+  docker build -f .devcontainer/dev/Dockerfile -t autogenhub_dev_img https://github.com/ag2labs/ag2.git#main
   ```
 
 - For building the developer image built from a specific Dockerfile in a branch other than main/master
 
   ```bash
   # clone the branch you want to work out of
-  git clone --branch {branch-name} https://github.com/autogenhub/autogen.git
+  git clone --branch {branch-name} https://github.com/ag2labs/ag2.git
 
   # cd to your new directory
   cd autogen
@@ -48,4 +48,4 @@ docker run -it -p 8081:3000 -v /home/AutoGenDeveloper/autogen-newcode:newstuff/ 
 ## Develop in Remote Container
 
 If you use vscode, you can open the autogen folder in a [Container](https://code.visualstudio.com/docs/remote/containers).
-We have provided the configuration in [devcontainer](https://github.com/autogenhub/autogen/blob/main/.devcontainer). They can be used in GitHub codespace too. Developing AutoGen in dev containers is recommended.
+We have provided the configuration in [devcontainer](https://github.com/ag2labs/ag2/blob/main/.devcontainer). They can be used in GitHub codespace too. Developing AutoGen in dev containers is recommended.
