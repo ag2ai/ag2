@@ -4,7 +4,7 @@
 [![Build](https://github.com/ag2labs/ag2/actions/workflows/python-package.yml/badge.svg)](https://github.com/ag2labs/ag2/actions/workflows/python-package.yml)
 ![Python Version](https://img.shields.io/badge/3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
 [![Discord](https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat)](https://discord.gg/pAbnFJrkgZ)
-[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40Chi_Wang_)](https://x.com/Chi_Wang_)
+[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40ag2labs)](https://x.com/ag2labs)
 
 <!-- [![NuGet version](https://badge.fury.io/nu/AutoGen.Core.svg)](https://badge.fury.io/nu/AutoGen.Core) -->
 
@@ -15,14 +15,23 @@
     <img src="https://github.com/ag2labs/ag2/blob/main/website/static/img/flaml.svg"  width=200>
     <br>
 </p> -->
-:fire: :tada: Nov 11, 2024: We are evolving AutoGen into AG2! A new organization [ag2labs](https://github.com/ag2labs) is created to host the development of AG2 and related projects with open governance. We invite collaborators from all organizations and individuals.
 
-:fire: :tada: Sep 06, 2024: AG2 vis `autogen` `pyautogen` on PyPI! We're excited to announce a more convenient package name for AG2: Starting with version 0.3.0, you can now install AG2 using:
+> [!IMPORTANT]
+>
+> :fire: :tada: Nov 11, 2024: We are evolving AutoGen into AG2! A new organization [ag2labs](https://github.com/ag2labs) is created to host the development of AG2 and related projects with open governance. We invite collaborators from all organizations and individuals to join the development.
+
+
+:fire: :tada: Sep 06, 2024: AG2 is available via `ag2` or `pyautogen` on PyPI! Starting with version 0.3.3, you can now install AG2 using:
 ```
-pip install autogen
+pip install ag2
+```
+or
+
+```
+pip install pyautogen
 ```
 
-**Note:** The previous package name `pyautogen` will remain valid for a transitional period. However, we encourage users to switch to the new, more intuitive `autogen` package name, as `pyautogen` will eventually be deprecated.
+**Note:** The previous package name `pyautogen` will remain valid for a transitional period. However, we encourage users to switch to the new, more intuitive `ag2` package name, as `pyautogen` will eventually be deprecated.
 
 📄 **License Change:**
 With this new release and package name, we are officially switching to the Apache 2.0 license. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
@@ -83,7 +92,6 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
 ![AutoGen Overview](https://github.com/ag2labs/ag2/blob/main/website/static/img/autogen_agentchat.png)
 
 
-AG2 is created out of collaborative [research](https://ag2labs.github.io/autogen/docs/Research) from Microsoft, Penn State University, and the University of Washington.
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
