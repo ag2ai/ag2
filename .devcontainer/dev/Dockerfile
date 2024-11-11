@@ -20,8 +20,8 @@ WORKDIR /home/autogenhub
 # ENV OPENAI_API_KEY="{OpenAI-API-Key}"
 
 # Clone the AutoGen repository
-RUN git clone https://github.com/autogenhub/autogen.git /home/autogenhub/autogen
-WORKDIR /home/autogenhub/autogen
+RUN git clone https://github.com/ag2labs/ag2.git /home/ag2labs/ag2
+WORKDIR /home/ag2labs/ag2
 
 # Install AutoGen in editable mode with extra components
 RUN sudo pip install --upgrade pip && \

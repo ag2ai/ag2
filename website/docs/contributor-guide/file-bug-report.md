@@ -1,6 +1,6 @@
 # File A Bug Report
 
-When you submit an issue to [GitHub](https://github.com/autogenhub/autogen/issues), please do your best to
+When you submit an issue to [GitHub](https://github.com/ag2labs/ag2/issues), please do your best to
 follow these guidelines! This will make it a lot easier to provide you with good
 feedback:
 

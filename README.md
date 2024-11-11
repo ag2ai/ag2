@@ -1,18 +1,18 @@
 <a name="readme-top"></a>
 
 [![PyPI version](https://badge.fury.io/py/autogen.svg)](https://badge.fury.io/py/autogen)
-[![Build](https://github.com/autogenhub/autogen/actions/workflows/python-package.yml/badge.svg)](https://github.com/autogenhub/autogen/actions/workflows/python-package.yml)
+[![Build](https://github.com/ag2labs/ag2/actions/workflows/python-package.yml/badge.svg)](https://github.com/ag2labs/ag2/actions/workflows/python-package.yml)
 ![Python Version](https://img.shields.io/badge/3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
 [![Discord](https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat)](https://discord.gg/pAbnFJrkgZ)
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40Chi_Wang_)](https://x.com/Chi_Wang_)
 
 <!-- [![NuGet version](https://badge.fury.io/nu/AutoGen.Core.svg)](https://badge.fury.io/nu/AutoGen.Core) -->
 
-# [AutoGen](https://github.com/autogenhub/autogen)
+# [AG2](https://github.com/ag2labs/ag2)
 
 [📚 Cite paper](#related-papers).
 <!-- <p align="center">
-    <img src="https://github.com/autogenhub/autogen/blob/main/website/static/img/flaml.svg"  width=200>
+    <img src="https://github.com/ag2labs/ag2/blob/main/website/static/img/flaml.svg"  width=200>
     <br>
 </p> -->
 :fire: :tada: Sep 06, 2024: AutoGen now available as `autogen` on PyPI! We're excited to announce a more convenient package name for AutoGen: Starting with version 0.3.0, you can now install AutoGen using:
@@ -80,7 +80,7 @@ AutoGen is an open-source programming framework for building AI agents and facil
 The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via auto-gen@outlook.com if you are interested in becoming a maintainer.
 
 
-![AutoGen Overview](https://github.com/autogenhub/autogen/blob/main/website/static/img/autogen_agentchat.png)
+![AutoGen Overview](https://github.com/ag2labs/ag2/blob/main/website/static/img/autogen_agentchat.png)
 
 <!--
 - AutoGen enables building next-gen LLM applications based on [multi-agent conversations](https://autogenhub.github.io/autogen/docs/Use-Cases/agent_chat) with minimal effort. It simplifies the orchestration, automation, and optimization of a complex LLM workflow. It maximizes the performance of LLM models and overcomes their weaknesses.
@@ -105,7 +105,7 @@ AutoGen is created out of collaborative [research](https://autogenhub.github.io/
 The easiest way to start playing is
 1. Click below to use the GitHub Codespace
 
-    [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/autogenhub/autogen?quickstart=1)
+    [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ag2labs/ag2?quickstart=1)
 
  2. Copy OAI_CONFIG_LIST_sample to ./notebook folder, name to OAI_CONFIG_LIST, and set the correct configuration.
  3. Start playing with the notebooks!
@@ -140,7 +140,7 @@ pip install "autogen[blendsearch]"
 
 Find more options in [Installation](https://autogenhub.github.io/autogen/docs/Installation#option-2-install-autogen-locally-using-virtual-environment).
 
-<!-- Each of the [`notebook examples`](https://github.com/autogenhub/autogen/tree/main/notebook) may require a specific option to be installed. -->
+<!-- Each of the [`notebook examples`](https://github.com/ag2labs/ag2/tree/main/notebook) may require a specific option to be installed. -->
 
 Even if you are installing and running AutoGen locally outside of docker, the recommendation and default behavior of agents is to perform [code execution](https://autogenhub.github.io/autogen/docs/FAQ/#code-execution) in docker. Find more instructions and how to change the default behaviour [here](https://autogenhub.github.io/autogen/docs/Installation#code-execution-with-docker-(default)).
 
@@ -163,7 +163,7 @@ Features of this use case include:
 - **Customization**: AutoGen agents can be customized to meet the specific needs of an application. This includes the ability to choose the LLMs to use, the types of human input to allow, and the tools to employ.
 - **Human participation**: AutoGen seamlessly allows human participation. This means that humans can provide input and feedback to the agents as needed.
 
-For [example](https://github.com/autogenhub/autogen/blob/main/test/twoagent.py),
+For [example](https://github.com/ag2labs/ag2/blob/main/test/twoagent.py),
 
 ```python
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
@@ -186,7 +186,7 @@ python test/twoagent.py
 
 After the repo is cloned.
 The figure below shows an example conversation flow with AutoGen.
-![Agent Chat Example](https://github.com/autogenhub/autogen/blob/main/website/static/img/chat_example.png)
+![Agent Chat Example](https://github.com/ag2labs/ag2/blob/main/website/static/img/chat_example.png)
 
 Alternatively, the [sample code](https://github.com/autogenhub/build-with-autogen/blob/main/samples/simple_chat.py) here allows a user to chat with an AutoGen agent in ChatGPT style.
 Please find more [code examples](https://autogenhub.github.io/autogen/docs/Examples#automated-multi-agent-chat) for this feature.
@@ -232,7 +232,7 @@ You can find detailed documentation about AutoGen [here](https://autogenhub.gith
 
 In addition, you can find:
 
-- [Research](https://autogenhub.github.io/autogen/docs/Research), [blogposts](https://autogenhub.github.io/autogen/blog) around AutoGen, and [Transparency FAQs](https://github.com/autogenhub/autogen/blob/main/TRANSPARENCY_FAQS.md)
+- [Research](https://autogenhub.github.io/autogen/docs/Research), [blogposts](https://autogenhub.github.io/autogen/blog) around AutoGen, and [Transparency FAQs](https://github.com/ag2labs/ag2/blob/main/TRANSPARENCY_FAQS.md)
 
 - [Discord](https://discord.gg/pAbnFJrkgZ)
 
@@ -315,8 +315,8 @@ Explore detailed implementations with sample code and applications to help you g
 </p>
 
 ## Contributors Wall
-<a href="https://github.com/autogenhub/autogen/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=autogenhub/autogen&max=204" />
+<a href="https://github.com/ag2labs/ag2/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ag2labs/ag2&max=204" />
 </a>
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
