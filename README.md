@@ -15,18 +15,18 @@
     <img src="https://github.com/ag2labs/ag2/blob/main/website/static/img/flaml.svg"  width=200>
     <br>
 </p> -->
-:fire: :tada: Sep 06, 2024: AutoGen now available as `autogen` on PyPI! We're excited to announce a more convenient package name for AutoGen: Starting with version 0.3.0, you can now install AutoGen using:
+:fire: :tada: Nov 11, 2024: We are evolving AutoGen into AG2! A new organization [ag2labs](https://github.com/ag2labs) is created to host the development of AG2 and related projects with open governance. We invite collaborators from all organizations and individuals.
+
+:fire: :tada: Sep 06, 2024: AG2 vis `autogen` `pyautogen` on PyPI! We're excited to announce a more convenient package name for AG2: Starting with version 0.3.0, you can now install AG2 using:
 ```
 pip install autogen
 ```
-We extend our sincere gratitude to the original owner of `autogen` pypi package for generously transferring it to us.
 
 **Note:** The previous package name `pyautogen` will remain valid for a transitional period. However, we encourage users to switch to the new, more intuitive `autogen` package name, as `pyautogen` will eventually be deprecated.
 
 📄 **License Change:**
 With this new release and package name, we are officially switching to the Apache 2.0 license. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
 
-:fire: Aug, 2024: A new organization [ag2labs](https://github.com/ag2labs) is created to host the development of AutoGen and related projects with open governance. We invite collaborators from all organizations and individuals.
 
 :tada: May 29, 2024: DeepLearning.ai launched a new short course [AI Agentic Design Patterns with AutoGen](https://www.deeplearning.ai/short-courses/ai-agentic-design-patterns-with-autogen), made in collaboration with Microsoft and Penn State University, and taught by AutoGen creators [Chi Wang](https://github.com/sonichi) and [Qingyun Wu](https://github.com/qingyun-wu).
 
@@ -71,9 +71,9 @@ With this new release and package name, we are officially switching to the Apach
 
 :fire: FLAML supports Code-First AutoML & Tuning – Private Preview in [Microsoft Fabric Data Science](https://learn.microsoft.com/en-us/fabric/data-science/). -->
 
-## What is AutoGen
+## What is AG2
 
-AutoGen is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AutoGen aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
+AG2 (formally AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
 
 **Open Source Statement**: The project welcomes contributions from developers and organizations worldwide. Our goal is to foster a collaborative and inclusive community where diverse perspectives and expertise can drive innovation and enhance the project's capabilities. Whether you are an individual contributor or represent an organization, we invite you to join us in shaping the future of this project. Together, we can build something truly remarkable.
 
@@ -82,14 +82,8 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
 
 ![AutoGen Overview](https://github.com/ag2labs/ag2/blob/main/website/static/img/autogen_agentchat.png)
 
-<!--
-- AutoGen enables building next-gen LLM applications based on [multi-agent conversations](https://ag2labs.github.io/autogen/docs/Use-Cases/agent_chat) with minimal effort. It simplifies the orchestration, automation, and optimization of a complex LLM workflow. It maximizes the performance of LLM models and overcomes their weaknesses.
-- It supports [diverse conversation patterns](https://ag2labs.github.io/autogen/docs/Use-Cases/agent_chat#supporting-diverse-conversation-patterns) for complex workflows. With customizable and conversable agents, developers can use AutoGen to build a wide range of conversation patterns concerning conversation autonomy,
-  the number of agents, and agent conversation topology.
-- It provides a collection of working systems with different complexities. These systems span a [wide range of applications](https://ag2labs.github.io/autogen/docs/Use-Cases/agent_chat#diverse-applications-implemented-with-autogen) from various domains and complexities. This demonstrates how AutoGen can easily support diverse conversation patterns.
-- AutoGen provides [enhanced LLM inference](https://ag2labs.github.io/autogen/docs/Use-Cases/enhanced_inference#api-unification). It offers utilities like API unification and caching, and advanced usage patterns, such as error handling, multi-config inference, context programming, etc.
--->
-AutoGen is created out of collaborative [research](https://ag2labs.github.io/autogen/docs/Research) from Microsoft, Penn State University, and the University of Washington.
+
+AG2 is created out of collaborative [research](https://ag2labs.github.io/autogen/docs/Research) from Microsoft, Penn State University, and the University of Washington.
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
@@ -119,13 +113,13 @@ The easiest way to start playing is
 </p>
 
 ## [Installation](https://ag2labs.github.io/autogen/docs/Installation)
-### Option 1. Install and Run AutoGen in Docker
+### Option 1. Install and Run AG2 in Docker
 
 Find detailed instructions for users [here](https://ag2labs.github.io/autogen/docs/installation/Docker#step-1-install-docker), and for developers [here](https://ag2labs.github.io/autogen/docs/Contribute#docker-for-development).
 
-### Option 2. Install AutoGen Locally
+### Option 2. Install AG2 Locally
 
-AutoGen requires **Python version >= 3.8, < 3.13**. It can be installed from pip:
+AG2 requires **Python version >= 3.8, < 3.13**. It can be installed from pip:
 
 ```bash
 pip install autogen
@@ -142,7 +136,7 @@ Find more options in [Installation](https://ag2labs.github.io/autogen/docs/Insta
 
 <!-- Each of the [`notebook examples`](https://github.com/ag2labs/ag2/tree/main/notebook) may require a specific option to be installed. -->
 
-Even if you are installing and running AutoGen locally outside of docker, the recommendation and default behavior of agents is to perform [code execution](https://ag2labs.github.io/autogen/docs/FAQ/#code-execution) in docker. Find more instructions and how to change the default behaviour [here](https://ag2labs.github.io/autogen/docs/Installation#code-execution-with-docker-(default)).
+Even if you are installing and running AG2 locally outside of docker, the recommendation and default behavior of agents is to perform [code execution](https://ag2labs.github.io/autogen/docs/FAQ/#code-execution) in docker. Find more instructions and how to change the default behaviour [here](https://ag2labs.github.io/autogen/docs/Installation#code-execution-with-docker-(default)).
 
 For LLM inference configurations, check the [FAQs](https://ag2labs.github.io/autogen/docs/FAQ#set-your-api-endpoints).
 
@@ -154,14 +148,14 @@ For LLM inference configurations, check the [FAQs](https://ag2labs.github.io/aut
 
 ## Multi-Agent Conversation Framework
 
-Autogen enables the next-gen LLM applications with a generic [multi-agent conversation](https://ag2labs.github.io/autogen/docs/Use-Cases/agent_chat) framework. It offers customizable and conversable agents that integrate LLMs, tools, and humans.
+AG2 enables the next-gen LLM applications with a generic [multi-agent conversation](https://ag2labs.github.io/autogen/docs/Use-Cases/agent_chat) framework. It offers customizable and conversable agents that integrate LLMs, tools, and humans.
 By automating chat among multiple capable agents, one can easily make them collectively perform tasks autonomously or with human feedback, including tasks that require using tools via code.
 
 Features of this use case include:
 
-- **Multi-agent conversations**: AutoGen agents can communicate with each other to solve tasks. This allows for more complex and sophisticated applications than would be possible with a single LLM.
-- **Customization**: AutoGen agents can be customized to meet the specific needs of an application. This includes the ability to choose the LLMs to use, the types of human input to allow, and the tools to employ.
-- **Human participation**: AutoGen seamlessly allows human participation. This means that humans can provide input and feedback to the agents as needed.
+- **Multi-agent conversations**: AG2 agents can communicate with each other to solve tasks. This allows for more complex and sophisticated applications than would be possible with a single LLM.
+- **Customization**: AG2 agents can be customized to meet the specific needs of an application. This includes the ability to choose the LLMs to use, the types of human input to allow, and the tools to employ.
+- **Human participation**: AG2 seamlessly allows human participation. This means that humans can provide input and feedback to the agents as needed.
 
 For [example](https://github.com/ag2labs/ag2/blob/main/test/twoagent.py),
 
@@ -185,10 +179,10 @@ python test/twoagent.py
 ```
 
 After the repo is cloned.
-The figure below shows an example conversation flow with AutoGen.
+The figure below shows an example conversation flow with AG2.
 ![Agent Chat Example](https://github.com/ag2labs/ag2/blob/main/website/static/img/chat_example.png)
 
-Alternatively, the [sample code](https://github.com/ag2labs/build-with-autogen/blob/main/samples/simple_chat.py) here allows a user to chat with an AutoGen agent in ChatGPT style.
+Alternatively, the [sample code](https://github.com/ag2labs/build-with-autogen/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
 Please find more [code examples](https://ag2labs.github.io/autogen/docs/Examples#automated-multi-agent-chat) for this feature.
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
@@ -199,7 +193,7 @@ Please find more [code examples](https://ag2labs.github.io/autogen/docs/Examples
 
 ## Enhanced LLM Inferences
 
-Autogen also helps maximize the utility out of the expensive LLMs such as ChatGPT and GPT-4. It offers [enhanced LLM inference](https://ag2labs.github.io/autogen/docs/Use-Cases/enhanced_inference#api-unification) with powerful functionalities like caching, error handling, multi-config inference and templating.
+AG2 also helps maximize the utility out of the expensive LLMs such as ChatGPT and GPT-4. It offers [enhanced LLM inference](https://ag2labs.github.io/autogen/docs/Use-Cases/enhanced_inference#api-unification) with powerful functionalities like caching, error handling, multi-config inference and templating.
 
 <!-- For example, you can optimize generations by LLM with your own tuning data, success metrics, and budgets.
 
@@ -228,11 +222,11 @@ Please find more [code examples](https://ag2labs.github.io/autogen/docs/Examples
 
 ## Documentation
 
-You can find detailed documentation about AutoGen [here](https://ag2labs.github.io/autogen/).
+You can find detailed documentation about AG2 [here](https://ag2labs.github.io/autogen/).
 
 In addition, you can find:
 
-- [Research](https://ag2labs.github.io/autogen/docs/Research), [blogposts](https://ag2labs.github.io/autogen/blog) around AutoGen, and [Transparency FAQs](https://github.com/ag2labs/ag2/blob/main/TRANSPARENCY_FAQS.md)
+- [Research](https://ag2labs.github.io/autogen/docs/Research), [blogposts](https://ag2labs.github.io/autogen/blog) around AG2, and [Transparency FAQs](https://github.com/ag2labs/ag2/blob/main/TRANSPARENCY_FAQS.md)
 
 - [Discord](https://discord.gg/pAbnFJrkgZ)
 
@@ -246,13 +240,13 @@ In addition, you can find:
 
 ## CookBook
 
-Explore detailed implementations with sample code and applications to help you get started with AutoGen.
+Explore detailed implementations with sample code and applications to help you get started with AG2.
 [Cookbook](https://github.com/ag2labs/build-with-autogen)
 
 
 ## Related Papers
 
-[AutoGen](https://arxiv.org/abs/2308.08155)
+[AG2](https://arxiv.org/abs/2308.08155)
 
 ```
 @inproceedings{wu2023autogen,
