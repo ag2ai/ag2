@@ -21,7 +21,7 @@
 > :fire: :tada: Nov 11, 2024: We are evolving AutoGen into AG2! A new organization [ag2ai](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. We invite collaborators from all organizations and individuals to join the development.
 
 
-:fire: :tada: Sep 06, 2024: AG2 is available via `ag2` (or its alias  `autogen` or  `pyautogen`)  on PyPI! Starting with version 0.3.3, you can now install AG2 using:
+:fire: :tada: AG2 is available via `ag2` (or its alias  `autogen` or  `pyautogen`)  on PyPI! Starting with version 0.3.2, you can now install AG2 using:
 ```
 pip install ag2
 ```

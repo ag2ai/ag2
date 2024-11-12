@@ -114,14 +114,14 @@ if "--name" in sys.argv:
     sys.argv.pop(index)  # Removes --name
     package_name = sys.argv.pop(index)  # Removes the value after --name
 else:
-    package_name = "autogen"
+    package_name = "ag2"
 
 
 setuptools.setup(
     name=package_name,
     version=__version__,
     author="Chi Wang & Qingyun Wu",
-    author_email="auto-gen@outlook.com",
+    author_email="support@ag2.ai",
     description="A programming framework for agentic AI",
     long_description=long_description,
     long_description_content_type="text/markdown",
