@@ -49,7 +49,7 @@ Create a file name `autogenmistraltemplate.jinja` with the following content:
 
     {% if (message['role'] == 'user' or message['role'] == 'system') %}
         {{ '[INST] ' + message['content'] + ' [/INST]' }}
-    {% elif message['role'] == 'assistant' %}
+    {% elsif message['role'] == 'assistant' %}
         {{ message['content'] + eos_token}}
     {% else %}
         {{ raise_exception('Only system, user and assistant roles are supported!') }}
