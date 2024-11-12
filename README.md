@@ -176,7 +176,7 @@ from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 # See https://ag2ai.github.io/ag2/docs/FAQ#set-your-api-endpoints
 # and OAI_CONFIG_LIST_sample
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST")
-# You can also set config_list directly as a list, for example, config_list = [{'model': 'gpt-4', 'api_key': '<your OpenAI API key here>'},]
+# You can also set config_list directly as a list, for example, config_list = [{'model': 'gpt-4o', 'api_key': '<your OpenAI API key here>'},]
 assistant = AssistantAgent("assistant", llm_config={"config_list": config_list})
 user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False}) # IMPORTANT: set to True to run code in docker, recommended
 user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
@@ -206,7 +206,7 @@ Please find more [code examples](https://ag2ai.github.io/ag2/docs/Examples#autom
 
 ## Enhanced LLM Inferences
 
-AG2 also helps maximize the utility out of the expensive LLMs such as ChatGPT and GPT-4. It offers [enhanced LLM inference](https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference#api-unification) with powerful functionalities like caching, error handling, multi-config inference and templating.
+AG2 also helps maximize the utility out of the expensive LLMs such as gpt-4o. It offers [enhanced LLM inference](https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference#api-unification) with powerful functionalities like caching, error handling, multi-config inference and templating.
 
 <!-- For example, you can optimize generations by LLM with your own tuning data, success metrics, and budgets.
 
