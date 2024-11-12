@@ -3,7 +3,7 @@
 The following step-by-step example shows how to create an @AutoGen.SemanticKernel.SemanticKernelChatCompletionAgent and chat with it:
 
 > [!NOTE]
-> You can find the complete sample code [here](https://github.com/ag2labs/ag2/blob/main/dotnet/sample/AutoGen.SemanticKernel.Sample/Create_Semantic_Kernel_Chat_Agent.cs).
+> You can find the complete sample code [here](https://github.com/ag2ai/ag2/blob/main/dotnet/sample/AutoGen.SemanticKernel.Sample/Create_Semantic_Kernel_Chat_Agent.cs).
 
 ### Step 1: add using statement
 [!code-csharp[](../../../sample/AutoGen.SemanticKernel.Sample/Create_Semantic_Kernel_Chat_Agent.cs?name=Using)]

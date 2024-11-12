@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2labs
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -171,7 +171,7 @@ class GeminiClient:
             raise ValueError(
                 "Please provide a model name for the Gemini Client. "
                 "You can configure it in the OAI Config List file. "
-                "See this [LLM configuration tutorial](https://ag2labs.github.io/autogen/docs/topics/llm_configuration/) for more details."
+                "See this [LLM configuration tutorial](https://ag2ai.github.io/autogen/docs/topics/llm_configuration/) for more details."
             )
 
         params.get("api_type", "google")  # not used

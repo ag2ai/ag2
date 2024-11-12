@@ -61,7 +61,7 @@
       "_appFooter": "AutoGen for .NET",
       "_appFaviconPath": "images/ag.ico",
       "_gitContribute": {
-        "repo": "https://github.com/ag2labs/ag2.git",
+        "repo": "https://github.com/ag2ai/ag2.git",
         "branch": "dotnet"
       }
     },
