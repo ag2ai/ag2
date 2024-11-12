@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2labs
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -125,7 +125,7 @@ setuptools.setup(
     description="A programming framework for agentic AI",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/ag2labs/ag2",
+    url="https://github.com/ag2ai/ag2",
     packages=setuptools.find_packages(include=["autogen*"], exclude=["test"]),
     install_requires=install_requires,
     extras_require=extra_require,
