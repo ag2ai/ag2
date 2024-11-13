@@ -21,7 +21,7 @@ module.exports = {
   onBrokenMarkdownLinks: "warn",
   favicon: "img/ag.ico",
   organizationName: "ag2ai", // Usually your GitHub org/user name.
-  projectName: "AutoGen", // Usually your repo name.
+  projectName: "ag2", // Usually your repo name.
   scripts: [
     {
       src: "/autogen/js/custom.js",
