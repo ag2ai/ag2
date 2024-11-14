@@ -195,7 +195,7 @@ The figure below shows an example conversation flow with AG2.
 ![Agent Chat Example](./website/static/img/chat_example.png)
 
 
-Alternatively, the [sample code](https://github.com/ag2ai/build-with-autogen/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
+Alternatively, the [sample code](https://github.com/ag2ai/build-with-ag2/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
 Please find more [code examples](https://ag2ai.github.io/ag2/docs/Examples#automated-multi-agent-chat) for this feature.
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
@@ -254,12 +254,12 @@ In addition, you can find:
 ## CookBook
 
 Explore detailed implementations with sample code and applications to help you get started with AG2.
-[Cookbook](https://github.com/ag2ai/build-with-autogen)
+[Cookbook](https://github.com/ag2ai/build-with-ag2)
 
 
 ## Related Papers
 
-[AG2](https://arxiv.org/abs/2308.08155)
+[AutoGen](https://arxiv.org/abs/2308.08155)
 
 ```
 @inproceedings{wu2023autogen,
