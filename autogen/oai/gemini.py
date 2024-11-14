@@ -171,7 +171,7 @@ class GeminiClient:
             raise ValueError(
                 "Please provide a model name for the Gemini Client. "
                 "You can configure it in the OAI Config List file. "
-                "See this [LLM configuration tutorial](https://ag2ai.github.io/autogen/docs/topics/llm_configuration/) for more details."
+                "See this [LLM configuration tutorial](https://ag2ai.github.io/ag2/docs/topics/llm_configuration/) for more details."
             )
 
         params.get("api_type", "google")  # not used

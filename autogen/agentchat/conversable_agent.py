@@ -164,7 +164,7 @@ class ConversableAgent(LLMAgent):
             except TypeError as e:
                 raise TypeError(
                     "Please implement __deepcopy__ method for each value class in llm_config to support deepcopy."
-                    " Refer to the docs for more details: https://ag2ai.github.io/autogen/docs/topics/llm_configuration#adding-http-client-in-llm_config-for-proxy"
+                    " Refer to the docs for more details: https://ag2ai.github.io/ag2/docs/topics/llm_configuration#adding-http-client-in-llm_config-for-proxy"
                 ) from e
 
         self._validate_llm_config(llm_config)
