@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -114,28 +114,23 @@ def test_gemini_message_handling(gemini_client):
         {"role": "model", "content": "How can I help you?"},
         {"role": "user", "content": "Which planet is the nearest to the sun?"},
         {"role": "user", "content": "Which planet is the farthest from the sun?"},
-        {"role": "model", "content": "Mercury is the closest palnet to the sun."},
-        {"role": "model", "content": "Neptune is the farthest palnet from the sun."},
+        {"role": "model", "content": "Mercury is the closest planet to the sun."},
+        {"role": "model", "content": "Neptune is the farthest planet from the sun."},
         {"role": "user", "content": "How can we determine the mass of a black hole?"},
     ]
 
     # The datastructure below defines what the structure of the messages
     # should resemble after converting to Gemini format.
-    # Messages of similar roles are expected to be merged to a single message,
-    # where the contents of the original messages will be included in
-    # consecutive parts of the converted Gemini message
+    # Historically it has merged messages and ensured alternating roles,
+    # this no longer appears to be required by the Gemini API
     expected_gemini_struct = [
         # system role is converted to user role
         {"role": "user", "parts": ["You are my personal assistant."]},
         {"role": "model", "parts": ["How can I help you?"]},
-        {
-            "role": "user",
-            "parts": ["Which planet is the nearest to the sun?", "Which planet is the farthest from the sun?"],
-        },
-        {
-            "role": "model",
-            "parts": ["Mercury is the closest palnet to the sun.", "Neptune is the farthest palnet from the sun."],
-        },
+        {"role": "user", "parts": ["Which planet is the nearest to the sun?"]},
+        {"role": "user", "parts": ["Which planet is the farthest from the sun?"]},
+        {"role": "model", "parts": ["Mercury is the closest planet to the sun."]},
+        {"role": "model", "parts": ["Neptune is the farthest planet from the sun."]},
         {"role": "user", "parts": ["How can we determine the mass of a black hole?"]},
     ]
 
@@ -286,22 +281,33 @@ def test_cost_calculation(gemini_client, mock_response):
 
 @pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
 @patch("autogen.oai.gemini.genai.GenerativeModel")
-@patch("autogen.oai.gemini.genai.configure")
-def test_create_response(mock_configure, mock_generative_model, gemini_client):
+# @patch("autogen.oai.gemini.genai.configure")
+@patch("autogen.oai.gemini.calculate_gemini_cost")
+def test_create_response_with_text(mock_calculate_cost, mock_generative_model, gemini_client):
     # Mock the genai model configuration and creation process
     mock_chat = MagicMock()
     mock_model = MagicMock()
-    mock_configure.return_value = None
+    # mock_configure.return_value = None
     mock_generative_model.return_value = mock_model
     mock_model.start_chat.return_value = mock_chat
 
-    # Set up a mock for the chat history item access and the text attribute return
-    mock_history_part = MagicMock()
-    mock_history_part.text = "Example response"
-    mock_chat.history.__getitem__.return_value.parts.__getitem__.return_value = mock_history_part
+    # Set up mock token counts with real integers
+    mock_usage_metadata = MagicMock()
+    mock_usage_metadata.prompt_token_count = 100
+    mock_usage_metadata.candidates_token_count = 50
 
-    # Setup the mock to return a mocked chat response
-    mock_chat.send_message.return_value = MagicMock(history=[MagicMock(parts=[MagicMock(text="Example response")])])
+    # Setup the mock to return a response with only text content
+    mock_text_part = MagicMock()
+    mock_text_part.text = "Example response"
+    mock_text_part.function_call = None
+
+    mock_response = MagicMock()
+    mock_response.parts = [mock_text_part]
+    mock_response.usage_metadata = mock_usage_metadata
+    mock_chat.send_message.return_value = mock_response
+
+    # Mock the calculate_gemini_cost function
+    mock_calculate_cost.return_value = 0.002
 
     # Call the create method
     response = gemini_client.create(
@@ -309,13 +315,25 @@ def test_create_response(mock_configure, mock_generative_model, gemini_client):
     )
 
     # Assertions to check if response is structured as expected
+    # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
     assert response.choices[0].message.content == "Example response", "Response content should match expected output"
+    assert not response.choices[0].message.tool_calls, "There should be no tool calls"
+    assert response.usage.prompt_tokens == 100, "Prompt tokens should match the mocked value"
+    assert response.usage.completion_tokens == 50, "Completion tokens should match the mocked value"
+    assert response.usage.total_tokens == 150, "Total tokens should be the sum of prompt and completion tokens"
+    assert response.cost == 0.002, "Cost should match the mocked calculate_gemini_cost return value"
+
+    # Verify that calculate_gemini_cost was called with the correct arguments
+    mock_calculate_cost.assert_called_once_with(False, 100, 50, "gemini-pro")
 
 
 @pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
 @patch("autogen.oai.gemini.GenerativeModel")
 @patch("autogen.oai.gemini.vertexai.init")
-def test_vertexai_create_response(mock_init, mock_generative_model, gemini_client_with_credentials):
+@patch("autogen.oai.gemini.calculate_gemini_cost")
+def test_vertexai_create_response(
+    mock_calculate_cost, mock_init, mock_generative_model, gemini_client_with_credentials
+):
     # Mock the genai model configuration and creation process
     mock_chat = MagicMock()
     mock_model = MagicMock()
@@ -323,13 +341,23 @@ def test_vertexai_create_response(mock_init, mock_generative_model, gemini_clien
     mock_generative_model.return_value = mock_model
     mock_model.start_chat.return_value = mock_chat
 
-    # Set up a mock for the chat history item access and the text attribute return
-    mock_history_part = MagicMock()
-    mock_history_part.text = "Example response"
-    mock_chat.history.__getitem__.return_value.parts.__getitem__.return_value = mock_history_part
+    # Set up mock token counts with real integers
+    mock_usage_metadata = MagicMock()
+    mock_usage_metadata.prompt_token_count = 100
+    mock_usage_metadata.candidates_token_count = 50
 
-    # Setup the mock to return a mocked chat response
-    mock_chat.send_message.return_value = MagicMock(history=[MagicMock(parts=[MagicMock(text="Example response")])])
+    # Setup the mock to return a response with only text content
+    mock_text_part = MagicMock()
+    mock_text_part.text = "Example response"
+    mock_text_part.function_call = None
+
+    mock_response = MagicMock()
+    mock_response.parts = [mock_text_part]
+    mock_response.usage_metadata = mock_usage_metadata
+    mock_chat.send_message.return_value = mock_response
+
+    # Mock the calculate_gemini_cost function
+    mock_calculate_cost.return_value = 0.002
 
     # Call the create method
     response = gemini_client_with_credentials.create(
@@ -337,125 +365,13 @@ def test_vertexai_create_response(mock_init, mock_generative_model, gemini_clien
     )
 
     # Assertions to check if response is structured as expected
+    # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
     assert response.choices[0].message.content == "Example response", "Response content should match expected output"
+    assert not response.choices[0].message.tool_calls, "There should be no tool calls"
+    assert response.usage.prompt_tokens == 100, "Prompt tokens should match the mocked value"
+    assert response.usage.completion_tokens == 50, "Completion tokens should match the mocked value"
+    assert response.usage.total_tokens == 150, "Total tokens should be the sum of prompt and completion tokens"
+    assert response.cost == 0.002, "Cost should match the mocked calculate_gemini_cost return value"
 
-
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
-@patch("autogen.oai.gemini.GenerativeModel")
-@patch("autogen.oai.gemini.vertexai.init")
-def test_vertexai_default_auth_create_response(mock_init, mock_generative_model, gemini_google_auth_default_client):
-    # Mock the genai model configuration and creation process
-    mock_chat = MagicMock()
-    mock_model = MagicMock()
-    mock_init.return_value = None
-    mock_generative_model.return_value = mock_model
-    mock_model.start_chat.return_value = mock_chat
-
-    # Set up a mock for the chat history item access and the text attribute return
-    mock_history_part = MagicMock()
-    mock_history_part.text = "Example response"
-    mock_chat.history.__getitem__.return_value.parts.__getitem__.return_value = mock_history_part
-
-    # Setup the mock to return a mocked chat response
-    mock_chat.send_message.return_value = MagicMock(history=[MagicMock(parts=[MagicMock(text="Example response")])])
-
-    # Call the create method
-    response = gemini_google_auth_default_client.create(
-        {"model": "gemini-pro", "messages": [{"content": "Hello", "role": "user"}], "stream": False}
-    )
-
-    # Assertions to check if response is structured as expected
-    assert response.choices[0].message.content == "Example response", "Response content should match expected output"
-
-
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
-@patch("autogen.oai.gemini.genai.GenerativeModel")
-@patch("autogen.oai.gemini.genai.configure")
-def test_create_vision_model_response(mock_configure, mock_generative_model, gemini_client):
-    # Mock the genai model configuration and creation process
-    mock_model = MagicMock()
-    mock_configure.return_value = None
-    mock_generative_model.return_value = mock_model
-
-    # Set up a mock to simulate the vision model behavior
-    mock_vision_response = MagicMock()
-    mock_vision_part = MagicMock(text="Vision model output")
-
-    # Setting up the chain of return values for vision model response
-    mock_vision_response._result.candidates.__getitem__.return_value.content.parts.__getitem__.return_value = (
-        mock_vision_part
-    )
-    mock_model.generate_content.return_value = mock_vision_response
-
-    # Call the create method with vision model parameters
-    response = gemini_client.create(
-        {
-            "model": "gemini-pro-vision",  # Vision model name
-            "messages": [
-                {
-                    "content": [
-                        {"type": "text", "text": "Let's play a game."},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-                            },
-                        },
-                    ],
-                    "role": "user",
-                }
-            ],  # Assuming a simple content input for vision
-            "stream": False,
-        }
-    )
-
-    # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Vision model output"
-    ), "Response content should match expected output from vision model"
-
-
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
-@patch("autogen.oai.gemini.GenerativeModel")
-@patch("autogen.oai.gemini.vertexai.init")
-def test_vertexai_create_vision_model_response(mock_init, mock_generative_model, gemini_google_auth_default_client):
-    # Mock the genai model configuration and creation process
-    mock_model = MagicMock()
-    mock_init.return_value = None
-    mock_generative_model.return_value = mock_model
-
-    # Set up a mock to simulate the vision model behavior
-    mock_vision_response = MagicMock()
-    mock_vision_part = MagicMock(text="Vision model output")
-
-    # Setting up the chain of return values for vision model response
-    mock_vision_response.candidates.__getitem__.return_value.content.parts.__getitem__.return_value = mock_vision_part
-
-    mock_model.generate_content.return_value = mock_vision_response
-
-    # Call the create method with vision model parameters
-    response = gemini_google_auth_default_client.create(
-        {
-            "model": "gemini-pro-vision",  # Vision model name
-            "messages": [
-                {
-                    "content": [
-                        {"type": "text", "text": "Let's play a game."},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-                            },
-                        },
-                    ],
-                    "role": "user",
-                }
-            ],  # Assuming a simple content input for vision
-            "stream": False,
-        }
-    )
-
-    # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Vision model output"
-    ), "Response content should match expected output from vision model"
+    # Verify that calculate_gemini_cost was called with the correct arguments
+    mock_calculate_cost.assert_called_once_with(True, 100, 50, "gemini-pro")

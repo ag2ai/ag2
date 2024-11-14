@@ -3,7 +3,7 @@ import sys
 import pytest
 from conftest import reason, skip_openai  # noqa: E402
 from graphrag_sdk import KnowledgeGraph, Source
-from graphrag_sdk.schema import Schema
+from graphrag_sdk.ontology import Ontology
 
 try:
     from autogen.agentchat.contrib.graph_rag.document import (
@@ -34,7 +34,7 @@ def test_falkor_db_query_engine():
     3. Query it with a question and verify the result contains the critical information.
     """
     # Arrange
-    test_schema = Schema()
+    test_schema = Ontology()
     actor = test_schema.add_entity("Actor").add_attribute("name", str, unique=True)
     movie = test_schema.add_entity("Movie").add_attribute("title", str, unique=True)
     test_schema.add_relation("ACTED", actor, movie)
