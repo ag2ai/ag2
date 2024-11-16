@@ -10,7 +10,7 @@ const firstDataRow = [
     link: "/docs/Getting-Started",
     description: (
       <>
-        Learn how to get start with AG2. Follow the instruction to quickly build-up your first AG2 application.
+        Learn how to get started with AG2. Follow the instruction to quickly build-up your first AG2 application.
       </>
     ),
   },
