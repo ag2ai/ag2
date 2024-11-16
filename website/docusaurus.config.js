@@ -13,7 +13,7 @@ customPostCssPlugin = () => {
 };
 
 module.exports = {
-  title: "AutoGen",
+  title: "AG2",
   tagline: "An Open-Source Programming Framework for Agentic AI",
   url: "https://ag2ai.github.io",
   baseUrl: "/ag2/",
@@ -44,9 +44,9 @@ module.exports = {
       },
     },
     navbar: {
-      title: "AutoGen",
+      title: "AG2",
       logo: {
-        alt: "AutoGen",
+        alt: "AG2",
         src: "img/ag.svg",
       },
       items: [
@@ -188,7 +188,7 @@ module.exports = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} AutoGen Authors`,
+      copyright: `Copyright © ${new Date().getFullYear()} AG2 Authors`,
     },
     // announcementBar: {
     //   id: "whats_new",
