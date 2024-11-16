@@ -1,37 +1,37 @@
 # Docker
 
-Docker, an indispensable tool in modern software development, offers a compelling solution for AutoGen's setup. Docker allows you to create consistent environments that are portable and isolated from the host OS. With Docker, everything AutoGen needs to run, from the operating system to specific libraries, is encapsulated in a container, ensuring uniform functionality across different systems. The Dockerfiles necessary for AutoGen are conveniently located in the project's GitHub repository at [https://github.com/ag2ai/ag2/tree/main/.devcontainer](https://github.com/ag2ai/ag2/tree/main/.devcontainer).
+Docker, an indispensable tool in modern software development, offers a compelling solution for AG2's setup. Docker allows you to create consistent environments that are portable and isolated from the host OS. With Docker, everything AG2 needs to run, from the operating system to specific libraries, is encapsulated in a container, ensuring uniform functionality across different systems. The Dockerfiles necessary for AG2 are conveniently located in the project's GitHub repository at [https://github.com/ag2ai/ag2/tree/main/.devcontainer](https://github.com/ag2ai/ag2/tree/main/.devcontainer).
 
-**Pre-configured DockerFiles**: The AutoGen Project offers pre-configured Dockerfiles for your use. These Dockerfiles will run as is, however they can be modified to suit your development needs. Please see the README.md file in autogen/.devcontainer
+**Pre-configured DockerFiles**: The AG2 Project offers pre-configured Dockerfiles for your use. These Dockerfiles will run as is, however they can be modified to suit your development needs. Please see the README.md file in autogen/.devcontainer
 
-- **ag2ai_base_img**: For a basic setup, you can use the `ag2ai_base_img` to run simple scripts or applications. This is ideal for general users or those new to AutoGen.
+- **ag2ai_base_img**: For a basic setup, you can use the `ag2ai_base_img` to run simple scripts or applications. This is ideal for general users or those new to AG2.
 - **ag2ai_full_img**: Advanced users or those requiring more features can use `ag2ai_full_img`. Be aware that this version loads ALL THE THINGS and thus is very large. Take this into consideration if you build your application off of it.
 
 ## Step 1: Install Docker
 
-- **General Installation**: Follow the [official Docker installation instructions](https://docs.docker.com/get-docker/). This is your first step towards a containerized environment, ensuring a consistent and isolated workspace for AutoGen.
+- **General Installation**: Follow the [official Docker installation instructions](https://docs.docker.com/get-docker/). This is your first step towards a containerized environment, ensuring a consistent and isolated workspace for AG2.
 
 - **For Mac Users**: If you encounter issues with the Docker daemon, consider using [colima](https://smallsharpsoftwaretools.com/tutorials/use-colima-to-run-docker-containers-on-macos/). Colima offers a lightweight alternative to manage Docker containers efficiently on macOS.
 
 ## Step 2: Build a Docker Image
 
-AutoGen now provides updated Dockerfiles tailored for different needs. Building a Docker image is akin to setting the foundation for your project's environment:
+AG2 now provides updated Dockerfiles tailored for different needs. Building a Docker image is akin to setting the foundation for your project's environment:
 
-- **Autogen Basic**: Ideal for general use, this setup includes common Python libraries and essential dependencies. Perfect for those just starting with AutoGen.
+- **AG2 Basic**: Ideal for general use, this setup includes common Python libraries and essential dependencies. Perfect for those just starting with AG2.
 
   ```bash
   docker build -f .devcontainer/Dockerfile -t ag2ai_base_img https://github.com/ag2ai/ag2.git#main
   ```
 
-- **Autogen Advanced**: Advanced users or those requiring all the things that AutoGen has to offer `ag2ai_full_img`
+- **AG2 Advanced**: Advanced users or those requiring all the things that AG2 has to offer `ag2ai_full_img`
 
   ```bash
   docker build -f .devcontainer/full/Dockerfile -t ag2ai_full_img https://github.com/ag2ai/ag2.git#main
   ```
 
-## Step 3: Run AutoGen Applications from Docker Image
+## Step 3: Run AG2 Applications from Docker Image
 
-Here's how you can run an application built with AutoGen, using the Docker image:
+Here's how you can run an application built with AG2, using the Docker image:
 
 1. **Mount Your Directory**: Use the Docker `-v` flag to mount your local application directory to the Docker container. This allows you to develop on your local machine while running the code in a consistent Docker environment. For example:
 
@@ -41,7 +41,7 @@ Here's how you can run an application built with AutoGen, using the Docker image
 
    Here, `$(pwd)/myapp` is your local directory, and `/home/ag2ai/ag2/myapp` is the path in the Docker container where your code will be located.
 
-2. **Mount your code:** Now suppose you have your application built with AutoGen in a main script named `twoagent.py` ([example](https://github.com/ag2ai/ag2/blob/main/test/twoagent.py)) in a folder named `myapp`. With the command line below, you can mount your folder and run the application in Docker.
+2. **Mount your code:** Now suppose you have your application built with AG2 in a main script named `twoagent.py` ([example](https://github.com/ag2ai/ag2/blob/main/test/twoagent.py)) in a folder named `myapp`. With the command line below, you can mount your folder and run the application in Docker.
 
    ```python
    # Mount the local folder `myapp` into docker image and run the script named "twoagent.py" in the docker.
