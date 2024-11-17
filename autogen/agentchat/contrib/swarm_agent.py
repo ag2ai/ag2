@@ -68,10 +68,11 @@ def initialize_swarm_chat(
     manager = GroupChatManager(groupchat)
     clear_history = True
 
-    if messages > 1:
+    if len(messages) > 1:
         last_agent, last_message = manager.resume(messages=messages)
         clear_history = False
     else:
+        last_message = messages[0]
         last_agent = init_agent
 
     chat_history = last_agent.initiate_chat(
@@ -202,15 +203,14 @@ class SwarmAgent(ConversableAgent):
 
             # 3. update context_variables and next_agent, convert content to string
             for tool_response in tool_message["tool_responses"]:
-                if tool_response["type"] == "function":
-                    content = tool_response.get("content")
-                    if isinstance(content, SwarmResult):
-                        if content.context_variables != {}:
-                            self.context_variables.update(content.context_variables)
-                        if content.agent is not None:
-                            self.next_agent = content.agent
-                    elif isinstance(content, Agent):
-                        self.next_agent = content
+                content = tool_response.get("content")
+                if isinstance(content, SwarmResult):
+                    if content.context_variables != {}:
+                        self.context_variables.update(content.context_variables)
+                    if content.agent is not None:
+                        self.next_agent = content.agent
+                elif isinstance(content, Agent):
+                    self.next_agent = content
                 tool_response["content"] = str(tool_response["content"])
 
             return True, tool_message
