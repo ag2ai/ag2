@@ -116,7 +116,7 @@ def test_execute_function():
 
     # correct execution
     correct_args = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
-    assert user.execute_function(func_call=correct_args)[1]["content"] == "15"
+    assert user.execute_function(func_call=correct_args)[1]["content"] == 15
 
     # function name called is wrong or doesn't exist
     wrong_func_name = {"name": "subtract_num", "arguments": '{ "num_to_be_added": 5 }'}

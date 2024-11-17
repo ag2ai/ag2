@@ -464,7 +464,7 @@ def test_generate_reply():
 
     # when sender is None, messages is provided
     assert (
-        dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == "15"
+        dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == 15
     ), "generate_reply not working when sender is None"
 
     # when sender is provided, messages is None
