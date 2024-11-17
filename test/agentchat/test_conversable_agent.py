@@ -471,7 +471,7 @@ def test_generate_reply():
     dummy_agent_1 = ConversableAgent(name="dummy_agent_1", llm_config=False, human_input_mode="ALWAYS")
     dummy_agent_2._oai_messages[dummy_agent_1] = messages
     assert (
-        dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == "15"
+        dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == 15
     ), "generate_reply not working when messages is None"
 
     dummy_agent_2.register_reply(["str", None], ConversableAgent.generate_oai_reply)

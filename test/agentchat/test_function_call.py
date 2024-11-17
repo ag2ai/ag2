@@ -144,8 +144,8 @@ def test_execute_function():
 
     user = UserProxyAgent(name="test", function_map={"add_num": AddNum(given_num=10).add})
     func_call = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
-    assert user.execute_function(func_call=func_call)[1]["content"] == "15"
-    assert user.execute_function(func_call=func_call)[1]["content"] == "20"
+    assert user.execute_function(func_call=func_call)[1]["content"] == 15
+    assert user.execute_function(func_call=func_call)[1]["content"] == 20
 
     # 3. test calling a function with no arguments
     def get_number():

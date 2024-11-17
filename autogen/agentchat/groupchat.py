@@ -294,7 +294,7 @@ class GroupChat:
         # if the role is tool, it is OK to modify the name
         if message["role"] != "function":
             message["name"] = speaker.name
-        if not isinstance(message["content"], str) and isinstance(message["content"], list):
+        if not isinstance(message["content"], str) and not isinstance(message["content"], list):
             message["content"] = str(message["content"])
         message["content"] = content_str(message["content"])
         self.messages.append(message)
