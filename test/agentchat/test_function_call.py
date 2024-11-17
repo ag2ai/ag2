@@ -110,13 +110,13 @@ def test_execute_function():
     # 1. test calling a simple function
     def add_num(num_to_be_added):
         given_num = 10
-        return num_to_be_added + given_num
+        return str(num_to_be_added + given_num)
 
     user = UserProxyAgent(name="test", function_map={"add_num": add_num})
 
     # correct execution
     correct_args = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
-    assert user.execute_function(func_call=correct_args)[1]["content"] == 15
+    assert user.execute_function(func_call=correct_args)[1]["content"] == "15"
 
     # function name called is wrong or doesn't exist
     wrong_func_name = {"name": "subtract_num", "arguments": '{ "num_to_be_added": 5 }'}
@@ -144,16 +144,16 @@ def test_execute_function():
 
     user = UserProxyAgent(name="test", function_map={"add_num": AddNum(given_num=10).add})
     func_call = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
-    assert user.execute_function(func_call=func_call)[1]["content"] == 15
-    assert user.execute_function(func_call=func_call)[1]["content"] == 20
+    assert user.execute_function(func_call=func_call)[1]["content"] == "15"
+    assert user.execute_function(func_call=func_call)[1]["content"] == "20"
 
     # 3. test calling a function with no arguments
     def get_number():
-        return 42
+        return str(42)
 
     user = UserProxyAgent("user", function_map={"get_number": get_number})
     func_call = {"name": "get_number", "arguments": "{}"}
-    assert user.execute_function(func_call)[1]["content"] == 42
+    assert user.execute_function(func_call)[1]["content"] == "42"
 
     # 4. test with a non-existent function
     user = UserProxyAgent(name="test", function_map={})
@@ -179,15 +179,15 @@ async def test_a_execute_function():
     async def add_num(num_to_be_added):
         given_num = 10
         time.sleep(1)
-        return num_to_be_added + given_num
+        return str(num_to_be_added + given_num)
 
     user = UserProxyAgent(name="test", function_map={"add_num": add_num})
     correct_args = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
 
     # Asset coroutine doesn't match.
-    assert user.execute_function(func_call=correct_args)[1]["content"] != 15
+    assert user.execute_function(func_call=correct_args)[1]["content"] != "15"
     # Asset awaited coroutine does match.
-    assert (await user.a_execute_function(func_call=correct_args))[1]["content"] == 15
+    assert (await user.a_execute_function(func_call=correct_args))[1]["content"] == "15"
 
     # function name called is wrong or doesn't exist
     wrong_func_name = {"name": "subtract_num", "arguments": '{ "num_to_be_added": 5 }'}
@@ -214,8 +214,7 @@ async def test_a_execute_function():
 
         def add(self, num_to_be_added):
             self.given_num = num_to_be_added + self.given_num
-            return self.given_num
-
+            return str(self.given_num)
     user = UserProxyAgent(name="test", function_map={"add_num": AddNum(given_num=10).add})
     func_call = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
     assert (await user.a_execute_function(func_call=func_call))[1]["content"] == "15"
@@ -223,7 +222,7 @@ async def test_a_execute_function():
 
     # 3. test calling a function with no arguments
     def get_number():
-        return 42
+        return str(42)
 
     user = UserProxyAgent("user", function_map={"get_number": get_number})
     func_call = {"name": "get_number", "arguments": "{}"}
