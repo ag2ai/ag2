@@ -153,7 +153,7 @@ def test_execute_function():
 
     user = UserProxyAgent("user", function_map={"get_number": get_number})
     func_call = {"name": "get_number", "arguments": "{}"}
-    assert user.execute_function(func_call)[1]["content"] == "42"
+    assert user.execute_function(func_call)[1]["content"] == 42
 
     # 4. test with a non-existent function
     user = UserProxyAgent(name="test", function_map={})
@@ -185,9 +185,9 @@ async def test_a_execute_function():
     correct_args = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
 
     # Asset coroutine doesn't match.
-    assert user.execute_function(func_call=correct_args)[1]["content"] != "15"
+    assert user.execute_function(func_call=correct_args)[1]["content"] != 15
     # Asset awaited coroutine does match.
-    assert (await user.a_execute_function(func_call=correct_args))[1]["content"] == "15"
+    assert (await user.a_execute_function(func_call=correct_args))[1]["content"] == 15
 
     # function name called is wrong or doesn't exist
     wrong_func_name = {"name": "subtract_num", "arguments": '{ "num_to_be_added": 5 }'}
