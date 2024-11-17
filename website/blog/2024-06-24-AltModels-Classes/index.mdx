@@ -21,7 +21,7 @@ These new client classes tailor AutoGen's underlying messages to each provider's
 
 Using them is as simple as installing the client-specific library and updating your LLM config with the relevant `api_type` and `model`. We'll demonstrate how to use them below.
 
-The community is continuing to enhance and build new client classes as cloud-based inference providers arrive. So, watch this space, and feel free to [discuss](https://discord.gg/pAbnFJrkgZ) or [develop](https://github.com/microsoft/autogen/pulls) another one.
+The community is continuing to enhance and build new client classes as cloud-based inference providers arrive. So, watch this space, and feel free to [discuss](https://discord.gg/pAbnFJrkgZ) or [develop](https://github.com/ag2ai/ag2/pulls) another one.
 
 ## Benefits of choice
 
@@ -61,7 +61,7 @@ Here are some tips when working with these client classes:
 - **Context length** - as your conversation gets longer, models need to support larger context lengths, be mindful of what the model supports and consider using [Transform Messages](https://ag2ai.github.io/ag2/docs/topics/handling_long_contexts/intro_to_transform_messages) to manage context size.
 - **Provider parameters** - providers have parameters you can set such as temperature, maximum tokens, top-k, top-p, and safety. See each client class in AutoGen's [API Reference](https://ag2ai.github.io/ag2/docs/reference/oai/gemini) or [documentation](https://ag2ai.github.io/ag2/docs/topics/non-openai-models/cloud-gemini) for details.
 - **Prompts** - prompt engineering is critical in guiding smaller LLMs to do what you need. [ConversableAgent](https://ag2ai.github.io/ag2/docs/reference/agentchat/conversable_agent), [GroupChat](https://ag2ai.github.io/ag2/docs/reference/agentchat/groupchat), [UserProxyAgent](https://ag2ai.github.io/ag2/docs/reference/agentchat/user_proxy_agent), and [AssistantAgent](https://ag2ai.github.io/ag2/docs/reference/agentchat/assistant_agent) all have customizable prompt attributes that you can tailor. Here are some prompting tips from [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)([+Library](https://docs.anthropic.com/en/prompt-library/library)), [Mistral AI](https://docs.mistral.ai/guides/prompting_capabilities/), [Together.AI](https://docs.together.ai/docs/examples), and [Meta](https://llama.meta.com/docs/how-to-guides/prompting/).
-- **Help!** - reach out on the AutoGen [Discord](https://discord.gg/pAbnFJrkgZ) or [log an issue](https://github.com/microsoft/autogen/issues) if you need help with or can help improve these client classes.
+- **Help!** - reach out on the AutoGen [Discord](https://discord.gg/pAbnFJrkgZ) or [log an issue](https://github.com/ag2ai/ag2/issues) if you need help with or can help improve these client classes.
 
 Now it's time to try them out.
 
