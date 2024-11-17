@@ -299,6 +299,10 @@ module.exports = {
             to: "/docs/contributor-guide/contributing",
             from: ["/docs/Contribute"],
           },
+          {
+            to: "/docs/topics/captainagent",
+            from: ["/docs/captain-agent"],
+          }
         ],
       },
     ],
