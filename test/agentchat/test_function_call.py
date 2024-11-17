@@ -140,7 +140,7 @@ def test_execute_function():
 
         def add(self, num_to_be_added):
             self.given_num = num_to_be_added + self.given_num
-            return self.given_num
+            return str(self.given_num)
 
     user = UserProxyAgent(name="test", function_map={"add_num": AddNum(given_num=10).add})
     func_call = {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}
