@@ -4,8 +4,8 @@ Docker, an indispensable tool in modern software development, offers a compellin
 
 **Pre-configured DockerFiles**: The AG2 Project offers pre-configured Dockerfiles for your use. These Dockerfiles will run as is, however they can be modified to suit your development needs. Please see the README.md file in autogen/.devcontainer
 
-- **ag2ai_base_img**: For a basic setup, you can use the `ag2ai_base_img` to run simple scripts or applications. This is ideal for general users or those new to AG2.
-- **ag2ai_full_img**: Advanced users or those requiring more features can use `ag2ai_full_img`. Be aware that this version loads ALL THE THINGS and thus is very large. Take this into consideration if you build your application off of it.
+- **ag2_base_img**: For a basic setup, you can use the `ag2_base_img` to run simple scripts or applications. This is ideal for general users or those new to AG2.
+- **ag2_full_img**: Advanced users or those requiring more features can use `ag2_full_img`. Be aware that this version loads ALL THE THINGS and thus is very large. Take this into consideration if you build your application off of it.
 
 ## Step 1: Install Docker
 
@@ -20,13 +20,13 @@ AG2 now provides updated Dockerfiles tailored for different needs. Building a Do
 - **AG2 Basic**: Ideal for general use, this setup includes common Python libraries and essential dependencies. Perfect for those just starting with AG2.
 
   ```bash
-  docker build -f .devcontainer/Dockerfile -t ag2ai_base_img https://github.com/ag2ai/ag2.git#main
+  docker build -f .devcontainer/Dockerfile -t ag2_base_img https://github.com/ag2ai/ag2.git#main
   ```
 
-- **AG2 Advanced**: Advanced users or those requiring all the things that AG2 has to offer `ag2ai_full_img`
+- **AG2 Advanced**: Advanced users or those requiring all the things that AG2 has to offer `ag2_full_img`
 
   ```bash
-  docker build -f .devcontainer/full/Dockerfile -t ag2ai_full_img https://github.com/ag2ai/ag2.git#main
+  docker build -f .devcontainer/full/Dockerfile -t ag2_full_img https://github.com/ag2ai/ag2.git#main
   ```
 
 ## Step 3: Run AG2 Applications from Docker Image
@@ -36,7 +36,7 @@ Here's how you can run an application built with AG2, using the Docker image:
 1. **Mount Your Directory**: Use the Docker `-v` flag to mount your local application directory to the Docker container. This allows you to develop on your local machine while running the code in a consistent Docker environment. For example:
 
    ```bash
-   docker run -it -v $(pwd)/myapp:/home/ag2ai/ag2/myapp ag2ai_base_img:latest python /home/ag2ai/ag2/myapp/main.py
+   docker run -it -v $(pwd)/myapp:/home/ag2ai/ag2/myapp ag2_base_img:latest python /home/ag2ai/ag2/myapp/main.py
    ```
 
    Here, `$(pwd)/myapp` is your local directory, and `/home/ag2ai/ag2/myapp` is the path in the Docker container where your code will be located.
@@ -45,13 +45,13 @@ Here's how you can run an application built with AG2, using the Docker image:
 
    ```python
    # Mount the local folder `myapp` into docker image and run the script named "twoagent.py" in the docker.
-   docker run -it -v `pwd`/myapp:/myapp ag2ai_base_img:latest python /myapp/main_twoagent.py
+   docker run -it -v `pwd`/myapp:/myapp ag2_base_img:latest python /myapp/main_twoagent.py
    ```
 
 3. **Port Mapping**: If your application requires a specific port, use the `-p` flag to map the container's port to your host. For instance, if your app runs on port 3000 inside Docker and you want it accessible on port 8080 on your host machine:
 
    ```bash
-   docker run -it -p 8080:3000 -v $(pwd)/myapp:/myapp ag2ai_base_img:latest python /myapp
+   docker run -it -p 8080:3000 -v $(pwd)/myapp:/myapp ag2_base_img:latest python /myapp
    ```
 
    In this command, `-p 8080:3000` maps port 3000 from the container to port 8080 on your local machine.
@@ -65,19 +65,19 @@ docker run -it -p {WorkstationPortNum}:{DockerPortNum} -v {WorkStation_Dir}:{Doc
 - _Simple Script_: Run a Python script located in your local `myapp` directory.
 
   ```bash
-  docker run -it -v `pwd`/myapp:/myapp ag2ai_base_img:latest python /myapp/my_script.py
+  docker run -it -v `pwd`/myapp:/myapp ag2_base_img:latest python /myapp/my_script.py
   ```
 
 - _Web Application_: If your application includes a web server running on port 5000.
 
   ```bash
-  docker run -it -p 8080:5000 -v $(pwd)/myapp:/myapp ag2ai_base_img:latest
+  docker run -it -p 8080:5000 -v $(pwd)/myapp:/myapp ag2_base_img:latest
   ```
 
 - _Data Processing_: For tasks that involve processing data stored in a local directory.
 
   ```bash
-  docker run -it -v $(pwd)/data:/data ag2ai_base_img:latest python /myapp/process_data.py
+  docker run -it -v $(pwd)/data:/data ag2_base_img:latest python /myapp/process_data.py
   ```
 
 ## Additional Resources
