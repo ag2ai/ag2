@@ -22,10 +22,11 @@ We design a two-step workflow for CaptainAgent to build a high quality team and 
 - (**Step 2**) this team of agents will attempt to solve the subtask via conversation with the free-form tool using. Once it's done, a reflector LLM will provide CaptainAgent with a reflection report for it to decide whether to adjust the team or subtask instruction or to terminate and output the results.
 ![Building workflow](img/chat.png)
 
-We provide an agent library and a tool library for CaptainAgent to choose from when building the team. In the following section, we demonstrate how to use CaptainAgent.
+We also provide an agent library and a tool library for CaptainAgent to choose from when building the team. In the following section, we demonstrate how to use CaptainAgent with or without the provided library.
 
-# Using CaptainAgent
-CaptainAgent can serve as a drop in replacement for the general AssistantAgent. To use CaptainAgent, we need to instantiate a CaptainAgent and the corresponding CaptainUserProxy, then initiate a chat. To do that we just need to configure to the settings of group chat instantiated by CaptainAgent.
+# Using CaptainAgent without libraries
+CaptainAgent can serve as a drop-in replacement for the general AssistantAgent. To use CaptainAgent, we need to instantiate a CaptainAgent and a UserProxy, then start a chat. To do that we just need to configure to the settings of group chat instantiated by CaptainAgent.
+Without the agent library and tool library, CaptainAgent will automatically generate a set of agents into a group chat.
 
 ```python
 from autogen.agentchat.contrib.captain_agent import CaptainAgent
@@ -49,6 +50,57 @@ nested_mode_config = {
     },
     "group_chat_config": {"max_round": 15},
     "group_chat_llm_config": general_llm_config.copy(),
+    "max_turns": 3,
+}
+
+## build agents
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    llm_config=general_llm_config,
+    nested_mode_config=nested_mode_config,
+)
+user_proxy = CaptainUserProxyAgent(
+    name="user_proxy",
+    code_execution_config={"use_docker": False},
+)
+
+query = "Let's play game of 24. Given 4 numbers, you need to use +, -, *, / to get 24. The numbers are 2, 2, 7, 12."
+
+result = user_proxy.initiate_chat(captain_agent, message=query)
+```
+
+# Using CaptainAgent with libraries
+To use CaptainAgent with libraries, we just need to specify the path to the tool library and agent library. The two libraries are independent, so you can choose to use one of the libraries or both.
+The tool library we provide requires subscribing to specific apis, please refer to the [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent) for details. The following example does not necessarily requires tool usage.
+
+```python
+from autogen.agentchat.contrib.captain_agent import CaptainAgent
+
+general_llm_config = {
+    "temperature": 0,
+    "config_list": autogen.config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4-1106-preview"]}),
+}
+
+nested_mode_config = {
+    "autobuild_init_config": {
+        "config_file_or_env": "OAI_CONFIG_LIST",
+        "builder_model": "gpt-4-1106-preview",
+        "agent_model": "gpt-4-1106-preview",
+    },
+    # this is used to configure the autobuild building process
+    "autobuild_build_config": {
+        "default_llm_config": {"temperature": 1, "top_p": 0.95},
+        "code_execution_config": {"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1},
+        "coding": True,
+        "library_path": "captainagent_expert_library.json"
+    },
+    "autobuild_tool_config": {
+        "tool_root": "default",  # this will use the tool library we provide
+        "retriever": "all-mpnet-base-v2",
+    },
+    "group_chat_config": {"max_round": 10},
+    "group_chat_llm_config": general_llm_config.copy(),
+    "max_turns": 3
 }
 
 ## build agents
@@ -64,7 +116,7 @@ user_proxy = CaptainUserProxyAgent(
 
 query = 'Find the stock price of Microsoft in the past 1 year and plot a line chart to show the trend. Save the line chart as "microsoft_stock_price.png".'
 
-result = captain_user_proxy.initiate_chat(captain_agent, message=query, max_turns=3)
+result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
 
 # Further Reading
