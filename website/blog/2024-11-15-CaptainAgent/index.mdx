@@ -1,35 +1,34 @@
 ---
-title: "Introducing Captain Agent for Adaptive Team Building"
+title: "Introducing CaptainAgent for Adaptive Team Building"
 authors:
   - LinxinS97
   - jialeliu
   - jieyuz2
 tags: [LLM, GPT, AutoBuild]
 ---
-![Illustration of how Captain Agent build a team](img/overall.png)
+![Illustration of how CaptainAgent build a team](img/overall.png)
 
 **TL;DR**
-- We introduce Captain Agent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns#nested-chats) conversation pattern in AG2.
-- Captain Agent supports all types of `ConversableAgents` implemented in Autogen.
+- We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns#nested-chats) conversation pattern in AG2.
+- CaptainAgent supports all types of `ConversableAgents` implemented in Autogen.
 
 
 # Introduction
 
-Assembling a team of LLM agents is easy, but dynamically choosing the right agents into a group chat according to the task is hard. In this blog, we introduce **Captain Agent**, an agent that can automatically build a team of agents to fulfill diverse, complex task requirements.
-We design a two-step workflow for Captain Agent to build a high quality team and solve the problem:
-- (**Step 1**) Captain Agent will first identify a subtask instructed by our prompt, list several roles needed for this subtask, and then create a team of agents accordingly by retrieval, selection, and generation. Each of these will be equipped with predefined tools retrieved from the tool library.
+Assembling a team of LLM agents is easy, but dynamically choosing the right agents into a group chat according to the task is hard. In this blog, we introduce **CaptainAgent**, an agent that can automatically build a team of agents to fulfill diverse, complex task requirements.
+We design a two-step workflow for CaptainAgent to build a high quality team and solve the problem:
+- (**Step 1**) CaptainAgent will first identify a subtask instructed by our prompt, list several roles needed for this subtask, and then create a team of agents accordingly by retrieval, selection, and generation. Each of these will be equipped with predefined tools retrieved from the tool library.
 ![Building workflow](img/build.png)
-- (**Step 2**) this team of agents will attempt to solve the subtask via conversation with the free-form tool using. Once it's done, a reflector LLM will provide Captain Agent with a reflection report for it to decide whether to adjust the team or subtask instruction or to terminate and output the results.
+- (**Step 2**) this team of agents will attempt to solve the subtask via conversation with the free-form tool using. Once it's done, a reflector LLM will provide CaptainAgent with a reflection report for it to decide whether to adjust the team or subtask instruction or to terminate and output the results.
 ![Building workflow](img/chat.png)
 
-We provide an agent library and a tool library for Captain Agent to choose from when building the team. In the following section, we demonstrate how to use CaptainAgent.
+We provide an agent library and a tool library for CaptainAgent to choose from when building the team. In the following section, we demonstrate how to use CaptainAgent.
 
-# Using Captain Agent w/o libraries
-To use captain agent, we need to instantiate a Captain Agent and the corresponding CaptainUserProxy, then initiate a chat. To do that we just need to configure to the settings of group chat instantiated by CaptainAgent.
+# Using CaptainAgent
+CaptainAgent can serve as a drop in replacement for the general AssistantAgent. To use CaptainAgent, we need to instantiate a CaptainAgent and the corresponding CaptainUserProxy, then initiate a chat. To do that we just need to configure to the settings of group chat instantiated by CaptainAgent.
 
 ```python
 from autogen.agentchat.contrib.captain_agent import CaptainAgent
-from autogen.agentchat.contrib.captain_user_proxy_agent import CaptainUserProxyAgent
 
 general_llm_config = {
     "temperature": 0,
@@ -53,10 +52,13 @@ nested_mode_config = {
 }
 
 ## build agents
-captain_agent = CaptainAgent(name="captain_agent", llm_config=general_llm_config)
-captain_user_proxy = CaptainUserProxyAgent(
-    name="captain_user_proxy",
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    llm_config=general_llm_config,
     nested_mode_config=nested_mode_config,
+)
+user_proxy = CaptainUserProxyAgent(
+    name="user_proxy",
     code_execution_config={"use_docker": False},
 )
 
@@ -66,9 +68,9 @@ result = captain_user_proxy.initiate_chat(captain_agent, message=query, max_turn
 ```
 
 # Further Reading
-For a detailed description of how to configure the Captain Agent, please refer to the document.
+For a detailed description of how to configure the CaptainAgent, please refer to the document.
 
-Please refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about Captain Agent and the proposed new team-building paradigm: adaptive build.
+Please refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
 
 If you find this blog useful, please consider citing:
 ```
