@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 from openai.types.chat.chat_completion import ChatCompletion
 from pydantic import BaseModel
 
-from autogen.agentchat import Agent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
+from autogen.agentchat import Agent, ChatResult, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
 from autogen.function_utils import get_function_schema
 from autogen.oai import OpenAIWrapper
 
@@ -26,7 +26,7 @@ def initialize_swarm_chat(
     agents: List["SwarmAgent"],
     max_rounds: int = 20,
     context_variables: Optional[Dict[str, Any]] = {},
-):
+) -> Tuple[ChatResult, Dict[str, Any], "SwarmAgent"]:
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]
 
@@ -56,6 +56,12 @@ def initialize_swarm_chat(
             next_agent = tool_execution.next_agent
             tool_execution.next_agent = None
             return next_agent
+
+        # No next agent has been selected, if last agent is the tool executor,
+        # we need to go back to the agent before this last tool execution
+        if last_speaker == tool_execution:
+            return groupchat.agent_by_name(name=messages[-2].get("name", ""))
+
         return None
 
     groupchat = GroupChat(
@@ -80,7 +86,7 @@ def initialize_swarm_chat(
         message=last_message,
         clear_history=clear_history,
     )
-    return chat_history, context_variables
+    return chat_history, context_variables, manager.last_speaker
 
 
 class SwarmResult(BaseModel):
