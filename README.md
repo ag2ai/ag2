@@ -335,7 +335,7 @@ Explore detailed implementations with sample code and applications to help you g
 ## License
 This project is licensed under the [Apache License, Version 2.0 (Apache-2.0)](./LICENSE).
 
-This project is a spin-off of https://github.com/ag2ai/ag2 and contains code under two licenses:
+This project is a spin-off of [AutoGen](https://github.com/microsoft/autogen) and contains code under two licenses:
 
 - The original code from https://github.com/microsoft/autogen is licensed under the MIT License.  See the [LICENSE_original_MIT](./license_original/LICENSE_original_MIT) file for details.
 
