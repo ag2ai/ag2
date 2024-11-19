@@ -1,4 +1,5 @@
 import json
+from enum import Enum
 from inspect import signature
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
@@ -7,7 +8,6 @@ from pydantic import BaseModel
 from autogen.agentchat import Agent, ChatResult, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
 from autogen.function_utils import get_function_schema
 from autogen.oai import OpenAIWrapper
-from enum import Enum
 
 # Parameter name for context variables
 # Use the value in functions and they will be substituted with the context variables:
@@ -15,30 +15,35 @@ from enum import Enum
 __CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
 
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Union
+
 
 class AfterWorkOption(Enum):
     TERMINATE = "TERMINATE"
     REVERT_TO_USER = "REVERT_TO_USER"
     STAY = "STAY"
 
+
 TERMINATE = AfterWorkOption.TERMINATE
 REVERT_TO_USER = AfterWorkOption.REVERT_TO_USER
 STAY = AfterWorkOption.STAY
 
+
 @dataclass
 class AFTER_WORK:
-    agent: Union[AfterWorkOption, 'SwarmAgent', str]
+    agent: Union[AfterWorkOption, "SwarmAgent", str]
+
     def __post_init__(self):
         if isinstance(self.agent, str):
             self.agent = AfterWorkOption(self.agent.upper())
 
+
 @dataclass
 class ON_CONDITION:
-    agent: 'SwarmAgent'
+    agent: "SwarmAgent"
     condition: str = ""
 
-def initialize_swarm_chat(
+
+def initiate_swarm_chat(
     init_agent: "SwarmAgent",
     messages: Union[List[Dict[str, Any]], str],
     agents: List["SwarmAgent"],
@@ -62,7 +67,7 @@ def initialize_swarm_chat(
                 - TERMINATE (Default): Terminate the conversation.
                 - REVERT_TO_USER : Revert to the user agent if an user agent is provided. If not provided, terminate the conversation.
                 - STAY : Stay with the last speaker.
-            
+
             TODO: Accept Callable: A custom function that takes the current agent, messages, groupchat, and context_variables as arguments and returns the next agent. The function should return None to terminate.
                 ```python
                 def custom_afterwork_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat, context_variables: Optional[Dict[str, Any]]) -> Optional[SwarmAgent]:
@@ -102,9 +107,9 @@ def initialize_swarm_chat(
 
         if "tool_calls" in groupchat.messages[-1]:
             return tool_execution
-        if tool_execution.next_agent is not None:
-            next_agent = tool_execution.next_agent
-            tool_execution.next_agent = None
+        if tool_execution._next_agent is not None:
+            next_agent = tool_execution._next_agent
+            tool_execution._next_agent = None
             return next_agent
 
         # get the last swarm agent
@@ -123,28 +128,28 @@ def initialize_swarm_chat(
             return last_swarm_speaker
 
         # No agent selected via hand-offs (tool calls)
-        # Assume the work is Done        
+        # Assume the work is Done
         # override if agent-level after_work is defined, else use the global after_work
         tmp_after_work = last_swarm_speaker.after_work if last_swarm_speaker.after_work is not None else after_work
         if isinstance(tmp_after_work, AFTER_WORK):
             tmp_after_work = tmp_after_work.agent
-        
+
         if isinstance(tmp_after_work, SwarmAgent):
             return tmp_after_work
         elif isinstance(tmp_after_work, AfterWorkOption):
-            if tmp_after_work == TERMINATE:
+            if tmp_after_work == TERMINATE or (user_agent is None and tmp_after_work == REVERT_TO_USER):
                 return None
             elif tmp_after_work == REVERT_TO_USER:
                 return user_agent
             elif tmp_after_work == STAY:
                 return last_speaker
         else:
-            raise NotImplementedError("Custom after_work method not implemented")
+            raise NotImplementedError("Custom after_work method not yet implemented")
             # return tmp_after_work(last_speaker, messages, groupchat, context_variables)
 
     groupchat = GroupChat(
         agents=[tool_execution] + agents + ([user_agent] if user_agent is not None else []),
-        messages=[], # Set to empty. We will resume the conversation with the messages
+        messages=[],  # Set to empty. We will resume the conversation with the messages
         max_round=max_rounds,
         speaker_selection_method=swarm_transition,
     )
@@ -159,7 +164,7 @@ def initialize_swarm_chat(
         if user_agent:
             last_agent = user_agent
         else:
-            last_agent = init_agent # TODO: Definition of init_agent: we want this agent to first speak right? If so, why we also need to use it to initialize the chat?
+            last_agent = init_agent  # TODO: Definition of init_agent: we want this agent to first speak right? If so, why we also need to use it to initialize the chat?
 
     chat_history = last_agent.initiate_chat(
         manager,
@@ -178,6 +183,7 @@ class SwarmResult(BaseModel):
         agent (SwarmAgent): The swarm agent instance, if applicable.
         context_variables (dict): A dictionary of context variables.
     """
+
     values: str = ""
     agent: Optional["SwarmAgent"] = None
     context_variables: Dict[str, Any] = {}
@@ -197,6 +203,7 @@ class SwarmAgent(ConversableAgent):
     Additional args:
         functions (List[Callable]): A list of functions to register with the agent.
     """
+
     def __init__(
         self,
         name: str,
@@ -207,7 +214,7 @@ class SwarmAgent(ConversableAgent):
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
-        code_execution_config = False,
+        code_execution_config=False,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -231,7 +238,7 @@ class SwarmAgent(ConversableAgent):
 
         # use in the tool execution agent to transfer to the next agent
         self._context_variables = {}
-        self._next_agent = None  
+        self._next_agent = None
 
     def _set_to_tool_execution(self, context_variables: Optional[Dict[str, Any]] = None):
         """Set to a special instance of SwarmAgent that is responsible for executing tool calls from other swarm agents.
@@ -261,14 +268,21 @@ class SwarmAgent(ConversableAgent):
         """
         if isinstance(hand_to, (ON_CONDITION, AFTER_WORK)):
             hand_to = [hand_to]
-        
+
         for transit in hand_to:
             if isinstance(transit, AFTER_WORK):
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
-                def transfer_to_agent() -> "SwarmAgent":
-                    return transit.agent
-                self.add_single_function(transfer_to_agent, f"transfer_to_{transit.agent.name}", transit.condition)
+
+                def make_transfer_function(current_transit):  # Create closure with current loop transit value
+                    def transfer_to_agent() -> "SwarmAgent":
+                        print(f"Transferring to {current_transit.agent.name}, type of transit: {type(current_transit)}")
+                        return current_transit.agent
+
+                    return transfer_to_agent
+
+                transfer_func = make_transfer_function(transit)
+                self.add_single_function(transfer_func, f"transfer_to_{transit.agent.name}", transit.condition)
             else:
                 raise ValueError("Invalid hand off condition, must be either ON_CONDITION or AFTER_WORK")
 
@@ -354,3 +368,7 @@ class SwarmAgent(ConversableAgent):
     def add_functions(self, func_list: List[Callable]):
         for func in func_list:
             self.add_single_function(func)
+
+
+# Forward references for SwarmAgent in SwarmResult
+SwarmResult.update_forward_refs()
