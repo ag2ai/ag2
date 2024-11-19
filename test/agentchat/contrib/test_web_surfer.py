@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 BLOG_POST_URL = "https://ag2ai.github.io/ag2/blog/2023/04/21/LLM-tuning-math"
-BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH | AutoGen"
+BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH | AG2"
 BING_QUERY = "Microsoft"
 
 try:
@@ -54,7 +54,7 @@ def test_web_surfer() -> None:
         page_size = 4096
         web_surfer = WebSurferAgent(
             "web_surfer",
-            llm_config={"model": "gpt-4", "config_list": []},
+            llm_config={"model": "gpt-4o", "config_list": []},
             browser_config={"viewport_size": page_size},
         )
 
@@ -110,7 +110,7 @@ def test_web_surfer_oai() -> None:
     llm_config = {"config_list": config_list, "timeout": 180, "cache_seed": 42}
 
     # adding Azure name variations to the model list
-    model = ["gpt-3.5-turbo-1106", "gpt-3.5-turbo-16k-0613", "gpt-3.5-turbo-16k"]
+    model = ["gpt-4o", "gpt-4o-mini"]
     model += [m.replace(".", "") for m in model]
 
     summarizer_llm_config = {
@@ -160,7 +160,7 @@ def test_web_surfer_bing() -> None:
         llm_config={
             "config_list": [
                 {
-                    "model": "gpt-3.5-turbo-16k",
+                    "model": "gpt-4o",
                     "api_key": "sk-PLACEHOLDER_KEY",
                 }
             ]
