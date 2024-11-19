@@ -12,7 +12,6 @@ tags: [LLM, GPT, AutoBuild]
 - We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns#nested-chats) conversation pattern in AG2.
 - CaptainAgent supports all types of `ConversableAgents` implemented in Autogen.
 
-
 # Introduction
 
 Assembling a team of LLM agents is easy, but dynamically choosing the right agents into a group chat according to the task is hard. In this blog, we introduce **CaptainAgent**, an agent that can automatically build a team of agents to fulfill diverse, complex task requirements.
@@ -63,9 +62,7 @@ user_proxy = CaptainUserProxyAgent(
     name="user_proxy",
     code_execution_config={"use_docker": False},
 )
-
 query = "Let's play game of 24. Given 4 numbers, you need to use +, -, *, / to get 24. The numbers are 2, 2, 7, 12."
-
 result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
 
@@ -113,14 +110,12 @@ user_proxy = CaptainUserProxyAgent(
     name="user_proxy",
     code_execution_config={"use_docker": False},
 )
-
 query = 'Find the stock price of Microsoft in the past 1 year and plot a line chart to show the trend. Save the line chart as "microsoft_stock_price.png".'
-
 result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
 
 # Further Reading
-For a detailed description of how to configure the CaptainAgent, please refer to the document.
+For a detailed description of how to configure the CaptainAgent, please refer to the [document](https://ag2ai.github.io/ag2/docs/topics/captainagent).
 
 Please refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
 
