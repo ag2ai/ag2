@@ -252,7 +252,7 @@ class SwarmAgent(ConversableAgent):
         self.register_reply([Agent, None], SwarmAgent.generate_swarm_tool_reply)
 
     def __str__(self):
-        return f"SwarmAgent: {self.name}"
+        return f"SwarmAgent --> {self.name}"
 
     def register_hand_off(
         self,
@@ -274,9 +274,9 @@ class SwarmAgent(ConversableAgent):
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
 
-                def make_transfer_function(current_transit):  # Create closure with current loop transit value
+                # Create closure with current loop transit value
+                def make_transfer_function(current_transit):
                     def transfer_to_agent() -> "SwarmAgent":
-                        print(f"Transferring to {current_transit.agent.name}, type of transit: {type(current_transit)}")
                         return current_transit.agent
 
                     return transfer_to_agent
