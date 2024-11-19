@@ -1,18 +1,30 @@
-title: Building Swarm-based agents with AutoGen
+title: Building Swarm-based agents with AG2
 authors:
   - yiranwu
   - marklysze
 tags: [groupchat, swarm]
 ---
 
-AutoGen Groupchat now supports a new speaker selection method, `swarm`, which allows quick implementation of the swarm orchestration from OpenAI's [Swarm](https://github.com/openai/swarm) framework.
+AG2 now provides an implementation of the swarm orchestration from OpenAI's [Swarm](https://github.com/openai/swarm) framework with some additional features.
 
-Here are two key features of the `swarm` speaker selection method:
-- **Headoffs**: Agents can transfer control to another agent via function calls, enabling smooth transitions within workflows.
-- **Context Variables**: Agents can dynamically update shared variables through function calls, maintaining context and adaptability throughout the process.
+*Background*: the swarm orchestration is a multi-agent collaboration where agents execute tasks and are responsible for handing-off to other agents.
 
+Here are two key features of the swarm orchestration:
+- **Hand offs**: Agents can transfer control to another agent, enabling smooth and direct transitions within workflows.
+- **Context Variables**: Agents can dynamically update a shared dictionary through function calls, maintaining context and adaptability throughout the process.
+
+In addition to the OpenAI implementation, AG2 provides:
+- **Built-in human-in-the-loop**: Adding a user agent (UserProxyAgent) to your swarm will allow swarm agents to transition back to the user. Provides a means to clarify and confirm questions without breaking out of the swarm.
+- **Fall-back agent**: The ability to automatically transition to a nominated swarm agent when an agent has completed their task.
 
 ## Getting Started
+
+To create a swarm:
+1. Define the functions that can be used by your `SwarmAgent`'s.
+2. Create your `SwarmAgent`s (which derive from `ConversableAgent`).
+3. For each agent, specify the hand-offs (transitions to another agent) and what to do when they have finished their work (termed *After Work*).
+
+UP TO HERE
 
 The `swarm` speaker selection method needs to be used in conjunction with `SwarmAgent` and `SwarmResult` classes. Use the `initialize_swarm_chat` to get a swarm reply.
 
