@@ -16,7 +16,7 @@ tags: [LLM, GPT, AutoBuild]
 
 Given an ad-hoc task, dynamically assembling a group of agents capable of effectively solving the problem is a complex challenge. In many cases, we manually design and select the agents involved. In this blog, we introduce **CaptainAgent**, an intelligent agent that can autonomously assemble a team of agents tailored to meet diverse and complex task requirements.
 We design a two-step workflow for CaptainAgent to build a high quality team and solve the problem:
-- (**Step 1**) CaptainAgent will first break down the task, list several roles needed for each subtask, and then create a team of agents accordingly by retrieval, selection, and generation. Each of these will be equipped with predefined tools retrieved from the tool library.
+- (**Step 1**) CaptainAgent will first break down the task, recommend several roles needed for each subtask, and then create a team of agents accordingly. Each agent in the team is either generated from scratch or retrieved and selected from an agent library if provided. Each of them will also be equipped with predefined tools retrieved from a tool library if provided.
 ![Building workflow](img/build.png)
 - (**Step 2**) this team of agents will attempt to solve the subtask via conversation with the free-form tool using. Once it's done, a reflector LLM will provide CaptainAgent with a reflection report for it to decide whether to adjust the team or subtask instruction or to terminate and output the results.
 ![Building workflow](img/chat.png)
