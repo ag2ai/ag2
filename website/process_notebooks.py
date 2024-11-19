@@ -77,8 +77,6 @@ def check_quarto_bin(quarto_bin: str = "quarto") -> None:
 
 def notebooks_target_dir(website_directory: Path) -> Path:
     """Return the target directory for notebooks."""
-    print("result-----------")
-    print(website_directory / "docs" / "notebooks")
     return website_directory / "docs" / "notebooks"
 
 
@@ -459,8 +457,6 @@ def main() -> None:
     test_parser.add_argument("--workers", help="Number of workers to use", type=int, default=-1)
 
     args = parser.parse_args()
-    print("------------------------")
-    print(args.website_directory)
     if args.subcommand is None:
         print("No subcommand specified")
         sys.exit(1)
