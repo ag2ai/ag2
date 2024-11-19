@@ -66,7 +66,7 @@ query = "Let's play game of 24. Given 4 numbers, you need to use +, -, *, / to g
 result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
 
-# Using CaptainAgent with libraries
+# Using CaptainAgent with pre-specified agent/tool libraries
 To use CaptainAgent with libraries, we just need to specify the path to the tool library and agent library. The two libraries are independent, so you can choose to use one of the libraries or both.
 The tool library we provide requires subscribing to specific apis, please refer to the [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent) for details. The following example does not necessarily requires tool usage.
 
