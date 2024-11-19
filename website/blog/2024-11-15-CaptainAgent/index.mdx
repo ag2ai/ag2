@@ -21,7 +21,7 @@ We design a two-step workflow for CaptainAgent to build a high quality team and 
 - (**Step 2**) For each subtask, the corresponding team of agents will jointly solve it. Once it's done, a summarization and reflection step will be triggered to generate a report based on the multi-agent conversation history.  Based on the report, CaptainAgent will decide whether to adjust the subtasks and corresponding team (go to Step 1) or to terminate and output the results.
 ![Building workflow](img/chat.png)
 
-We also provide an agent library and a tool library for CaptainAgent to choose from when building the team. In the following section, we demonstrate how to use CaptainAgent with or without the provided library.
+The design of CaptainAgent allows it to leverage agents and tools from a pre-specified agent library and tool library. In the following section, we demonstrate how to use CaptainAgent with or without the provided library.
 
 # Using CaptainAgent without libraries
 CaptainAgent can serve as a drop-in replacement for the general AssistantAgent. To use CaptainAgent, we need to instantiate a CaptainAgent and a UserProxy, then start a chat. To do that we just need to configure to the settings of group chat instantiated by CaptainAgent.
