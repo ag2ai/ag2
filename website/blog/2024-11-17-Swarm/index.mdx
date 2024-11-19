@@ -1,4 +1,4 @@
-title: Building Swarm-based agents with GroupChat
+title: Building Swarm-based agents with AutoGen
 authors:
   - yiranwu
   - marklysze
@@ -12,21 +12,10 @@ Here are two key features of the `swarm` speaker selection method:
 - **Context Variables**: Agents can dynamically update shared variables through function calls, maintaining context and adaptability throughout the process.
 
 
-## Tips for Building Swarm-based Agents
-
-1. The `swarm` speaker selection method needs to be used in conjunction with `SwarmAgent` and `SwarmResult` classes.
-
-```python
-from autogen.agentchat.swarm.swarm_agent import SwarmAgent, SwarmResult
-```
-
-2. The `Swarm` orchestration require human involvement. When a user (human) sends requests, the swarm would transfer controls within agents so that the most suitable agent can respond.
-Thus, a `UserProxyAgent` must be present in the agent list to accept user requests.
-
-```python
-from autogen import UserProxyAgent
-```
-
 ## Getting Started
 
-Please setup LLM configs.
+The `swarm` speaker selection method needs to be used in conjunction with `SwarmAgent` and `SwarmResult` classes. Use the `initialize_swarm_chat` to get a swarm reply.
+
+```python
+from autogen.agentchat.swarm.swarm_agent import SwarmAgent, SwarmResult, initialize_swarm_chat
+```
