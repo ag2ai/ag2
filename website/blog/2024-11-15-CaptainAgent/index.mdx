@@ -108,7 +108,7 @@ captain_agent = CaptainAgent(
     llm_config=general_llm_config,
     nested_mode_config=nested_mode_config,
 )
-user_proxy = CaptainUserProxyAgent(
+user_proxy = UserProxyAgent(
     name="user_proxy",
     code_execution_config={"use_docker": False},
 )
