@@ -1,8 +1,8 @@
 ---
 title: "Introducing CaptainAgent for Adaptive Team Building"
 authors:
-  - LinxinS97
   - jialeliu
+  - LinxinS97
   - jieyuz2
 tags: [LLM, GPT, AutoBuild]
 ---
@@ -69,7 +69,7 @@ result = user_proxy.initiate_chat(captain_agent, message=query)
 
 # Using CaptainAgent with pre-specified agent/tool libraries
 To use CaptainAgent with pre-specified agent/tool libraries, we just need to specify the path to the agent library and tool library. The two libraries are independent, so you can choose to use one of the libraries or both.
-The tool library we provide requires subscribing to specific APIs, please refer to the [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent) for details. The following example does not necessarily require tool usage, so it's fine if you are subscribing to them.
+The tool library we provide requires subscribing to specific APIs, please refer to the [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/tool_library) for details. The following example does not necessarily require tool usage, so it's fine if you are subscribing to them.
 
 To use agents from an agent library, you just need to specify a `library_path` sub-field or a `autobuild_tool_config` field in CaptainAgent's configuration.
 
