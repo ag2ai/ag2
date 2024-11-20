@@ -10,7 +10,7 @@ const firstDataRow = [
     link: "/docs/Getting-Started",
     description: (
       <>
-        Learn how to get start with AutoGen. Follow the instruction to quickly build-up your first AutoGen application.
+        Learn how to get started with AG2. Follow the instruction to quickly build-up your first AG2 application.
       </>
     ),
   },
@@ -19,7 +19,7 @@ const firstDataRow = [
     link: "docs/tutorial/introduction",
     description: (
       <>
-        This tutorial introduces basic concepts and building blocks of AutoGen.
+        This tutorial introduces basic concepts and building blocks of AG2.
       </>
     ),
   },
@@ -28,7 +28,7 @@ const firstDataRow = [
     link: "docs/topics",
     description: (
       <>
-        Users' guide to different functionalities of AutoGen, including CodeExecution, GroupChat, and more.
+        Users' guide to different functionalities of AG2, including CodeExecution, GroupChat, and more.
       </>
     ),
   },
@@ -40,7 +40,7 @@ const secondDataRow = [
     link: "docs/Examples",
     description: (
       <>
-        Learn different examples demonstrating the usage of AutoGen in various scenarios.
+        Learn different examples demonstrating the usage of AG2 in various scenarios.
       </>
     ),
   },
@@ -49,7 +49,7 @@ const secondDataRow = [
     link: "docs/Gallery",
     description: (
       <>
-        A collection of different applications built using AutoGen.
+        A collection of different applications built using AG2.
       </>
     ),
   },
@@ -58,7 +58,7 @@ const secondDataRow = [
     link: "docs/contributor-guide/contributing",
     description: (
       <>
-        Learn about how you can contribute to AutoGen and this documentation, including pushing patches, code review and more.
+        Learn about how you can contribute to AG2 and this documentation, including pushing patches, code review and more.
       </>
     ),
   },

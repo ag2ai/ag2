@@ -59,7 +59,7 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 :tada: Dec 31, 2023: [AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation Framework](https://arxiv.org/abs/2308.08155) is selected by [TheSequence: My Five Favorite AI Papers of 2023](https://thesequence.substack.com/p/my-five-favorite-ai-papers-of-2023).
 
-<!-- :fire: Nov 24: pyautogen [v0.2](https://github.com/microsoft/autogen/releases/tag/v0.2.0) is released with many updates and new features compared to v0.1.1. It switches to using openai-python v1. Please read the [migration guide](https://ag2ai.github.io/ag2/docs/Installation#python). -->
+<!-- :fire: Nov 24: pyautogen [v0.2](https://github.com/ag2ai/ag2/releases/tag/v0.2.0) is released with many updates and new features compared to v0.1.1. It switches to using openai-python v1. Please read the [migration guide](https://ag2ai.github.io/ag2/docs/Installation#python). -->
 
 <!-- :fire: Nov 11: OpenAI's Assistants are available in AutoGen and interoperatable with other AutoGen agents! Checkout our [blogpost](https://ag2ai.github.io/ag2/blog/2023/11/13/OAI-assistants) for details and examples. -->
 
@@ -84,7 +84,7 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 ## What is AG2
 
-AG2 (formally AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
+AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
 
 **Open Source Statement**: The project welcomes contributions from developers and organizations worldwide. Our goal is to foster a collaborative and inclusive community where diverse perspectives and expertise can drive innovation and enhance the project's capabilities. Whether you are an individual contributor or represent an organization, we invite you to join us in shaping the future of this project. Together, we can build something truly remarkable.
 
@@ -335,7 +335,7 @@ Explore detailed implementations with sample code and applications to help you g
 ## License
 This project is licensed under the [Apache License, Version 2.0 (Apache-2.0)](./LICENSE).
 
-This project is a spin-off of https://github.com/microsoft/autogen and contains code under two licenses:
+This project is a spin-off of [AutoGen](https://github.com/microsoft/autogen) and contains code under two licenses:
 
 - The original code from https://github.com/microsoft/autogen is licensed under the MIT License.  See the [LICENSE_original_MIT](./license_original/LICENSE_original_MIT) file for details.
 

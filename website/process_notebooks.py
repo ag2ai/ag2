@@ -457,7 +457,6 @@ def main() -> None:
     test_parser.add_argument("--workers", help="Number of workers to use", type=int, default=-1)
 
     args = parser.parse_args()
-
     if args.subcommand is None:
         print("No subcommand specified")
         sys.exit(1)

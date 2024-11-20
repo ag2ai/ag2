@@ -10,7 +10,7 @@ const FeatureList = [
     docLink: './docs/Use-Cases/agent_chat',
     description: (
       <>
-        AutoGen provides multi-agent conversation framework as a high-level abstraction. With this framework, one can conveniently build LLM workflows.
+        AG2 provides multi-agent conversation framework as a high-level abstraction. With this framework, one can conveniently build LLM workflows.
       </>
     ),
   },
@@ -20,7 +20,7 @@ const FeatureList = [
     docLink: './docs/Use-Cases/agent_chat#diverse-applications-implemented-with-autogen',
     description: (
       <>
-        AutoGen offers a collection of working systems spanning a wide range of applications from various domains and complexities.
+        AG2 offers a collection of working systems spanning a wide range of applications from various domains and complexities.
       </>
     ),
   },
@@ -30,7 +30,7 @@ const FeatureList = [
     docLink: './docs/Use-Cases/enhanced_inference',
     description: (
       <>
-        AutoGen supports enhanced LLM inference APIs, which can be used to improve inference performance and reduce cost.
+        AG2 supports enhanced LLM inference APIs, which can be used to improve inference performance and reduce cost.
       </>
     ),
   },
