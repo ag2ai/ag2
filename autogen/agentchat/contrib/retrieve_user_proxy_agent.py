@@ -262,6 +262,8 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self._vector_db = self._retrieve_config.get("vector_db", "chroma")
         self._db_config = self._retrieve_config.get("db_config", {})
         self._client = self._retrieve_config.get("client", None)
+        if self._client is None and hasattr(self._vector_db, "client"):
+            self._client = getattr(self._vector_db, "client", None)
         if self._client is None:
             self._client = chromadb.Client()
         self._docs_path = self._retrieve_config.get("docs_path", None)
