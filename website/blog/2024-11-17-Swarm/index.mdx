@@ -23,16 +23,18 @@ In addition to the OpenAI implementation, AG2 provides:
 
 Before we dive into a swarm example, an important concept in the swarm orchestration is when and how an agent hands off to another agent.
 
-These are the points for hand offs for each iteration of the swarm.
+Providing additional flexibility, we introduce the capability to define an after work hand off. Think of *after work* as the agent's next action after completing their task. It can be to hand off to another agent, revert to the user, stay with the agent for another iteration, or terminate the conversation.
 
-1. **Agent-level: Calls a tool that returns a swarm agent**: A swarm agent calls a tool and the associated function returns the next agent to hand off to.
+The following are the prioritised hand offs for each iteration of the swarm.
+
+1. **Agent-level: Calls a tool that returns a swarm agent**: A swarm agent's tool call returns the next agent to hand off to.
 2. **Agent-level: Calls a pre-defined conditional hand off**: A swarm agent has an `ON_CONDITION` hand off that is chosen by the LLM (behaves like a tool call).
-3. **Agent-level: After work hand off**: When no tool calls are made it can use an, optional, `AFTER_WORK` hand off that can be a number of preset options or a nominated swarm agent.
+3. **Agent-level: After work hand off**: When no tool calls are made it can use an, optional, `AFTER_WORK` hand off that is a preset option or a nominated swarm agent.
 4. **Swarm-level: After work hand off**: If the agent does not have an `AFTER_WORK` hand off, the swarm's `AFTER_WORK` hand off will be used.
 
 In this example of agent-level hand offs registration for a `SwarmAgent` named `responder` has:
 - Two conditional hand offs are registered (`ON_CONDITION`), specifying the agent to hand off to and the condition to trigger the hand off.
-- An after work hand off (`AFTER_WORK`) is nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This can also be a swarm agent.
+- An after work hand off (`AFTER_WORK`) is nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This could also be a swarm agent.
 
 ```python
 responder.register_hand_off(
