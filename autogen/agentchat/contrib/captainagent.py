@@ -126,7 +126,7 @@ Note that the previous experts will forget everything after you obtain the respo
     DEFAULT_DESCRIPTION = "A helpful AI assistant that can build a group of agents at a proper time to solve a task."
 
     # This is used to prompt the LLM to summarize the conversation history between CaptainAgent's tool execution history
-    SUMMARY_PROMPT = "Read the following conversation history between an expert and a group of agent experts, summarize the conversation history. You should include the initial task, the experts' plan and the attempt, finally the results of the conversation."
+    DEFAULT_SUMMARY_PROMPT = "Read the following conversation history between an expert and a group of agent experts, summarize the conversation history. You should include the initial task, the experts' plan and the attempt, finally the results of the conversation."
 
     def __init__(
         self,
@@ -196,7 +196,7 @@ Note that the previous experts will forget everything after you obtain the respo
                     "max_turns": nested_config["max_turns"],
                     "summary_method": "reflection_with_llm",
                     "summary_args": {
-                        "summary_prompt": "Please summarize the conversation history derived from an experts' group chat.",
+                        "summary_prompt": self.DEFAULT_SUMMARY_PROMPT,
                     },
                 }
             ],
