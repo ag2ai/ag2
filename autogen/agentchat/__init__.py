@@ -7,7 +7,7 @@
 from .agent import Agent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, initiate_chats
-from .contrib.swarm_agent import SwarmAgent, SwarmResult, initiate_swarm_chat
+from .contrib.swarm_agent import AFTER_WORK, ON_CONDITION, AfterWorkOption, SwarmAgent, SwarmResult, initiate_swarm_chat
 from .conversable_agent import ConversableAgent, register_function
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
@@ -27,4 +27,7 @@ __all__ = (
     "initiate_swarm_chat",
     "SwarmAgent",
     "SwarmResult",
+    "ON_CONDITION",
+    "AFTER_WORK",
+    "AfterWorkOption",
 )
