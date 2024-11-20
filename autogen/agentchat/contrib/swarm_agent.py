@@ -1,4 +1,11 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 import json
+from dataclasses import dataclass
 from enum import Enum
 from inspect import signature
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
@@ -14,18 +21,11 @@ from autogen.oai import OpenAIWrapper
 # e.g. def my_function(context_variables: Dict[str, Any], my_other_parameters: Any) -> Any:
 __CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
 
-from dataclasses import dataclass, field
-
 
 class AfterWorkOption(Enum):
     TERMINATE = "TERMINATE"
     REVERT_TO_USER = "REVERT_TO_USER"
     STAY = "STAY"
-
-
-TERMINATE = AfterWorkOption.TERMINATE
-REVERT_TO_USER = AfterWorkOption.REVERT_TO_USER
-STAY = AfterWorkOption.STAY
 
 
 @dataclass
@@ -50,7 +50,7 @@ def initiate_swarm_chat(
     user_agent: Optional[UserProxyAgent] = None,
     max_rounds: int = 20,
     context_variables: Optional[Dict[str, Any]] = None,
-    after_work: Optional[AFTER_WORK] = AFTER_WORK(TERMINATE),
+    after_work: Optional[AFTER_WORK] = AFTER_WORK(AfterWorkOption.TERMINATE),
 ) -> Tuple[ChatResult, Dict[str, Any], "SwarmAgent"]:
     """Initialize and run a swarm chat
 
@@ -137,11 +137,13 @@ def initiate_swarm_chat(
         if isinstance(tmp_after_work, SwarmAgent):
             return tmp_after_work
         elif isinstance(tmp_after_work, AfterWorkOption):
-            if tmp_after_work == TERMINATE or (user_agent is None and tmp_after_work == REVERT_TO_USER):
+            if tmp_after_work == AfterWorkOption.TERMINATE or (
+                user_agent is None and tmp_after_work == AfterWorkOption.REVERT_TO_USER
+            ):
                 return None
-            elif tmp_after_work == REVERT_TO_USER:
+            elif tmp_after_work == AfterWorkOption.REVERT_TO_USER:
                 return user_agent
-            elif tmp_after_work == STAY:
+            elif tmp_after_work == AfterWorkOption.STAY:
                 return last_speaker
         else:
             raise NotImplementedError("Custom after_work method not yet implemented")
@@ -260,6 +262,9 @@ class SwarmAgent(ConversableAgent):
     ):
         """Register a function to hand off to another agent.
 
+        Args:
+            hand_to: A list of ON_CONDITIONs and an, optional, AFTER_WORK condition
+
         Hand off template:
         def transfer_to_agent_name() -> SwarmAgent:
             return agent_name
@@ -275,6 +280,7 @@ class SwarmAgent(ConversableAgent):
             elif isinstance(transit, ON_CONDITION):
 
                 # Create closure with current loop transit value
+                # to ensure the condition matches the one in the loop
                 def make_transfer_function(current_transit):
                     def transfer_to_agent() -> "SwarmAgent":
                         return current_transit.agent
@@ -292,6 +298,12 @@ class SwarmAgent(ConversableAgent):
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> Tuple[bool, dict]:
+        """Pre-processes and generates tool call replies.
+
+        This function:
+        1. Adds context_variables back to the tool call for the function, if necessary.
+        2. Generates the tool calls reply.
+        3. Updates context_variables and next_agent based on the tool call response."""
 
         if config is None:
             config = self
