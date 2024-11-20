@@ -230,7 +230,7 @@ class CaptainUserProxyAgent(ConversableAgent):
 
     CONVERSATION_REVIEW_PROMPT = """# Your task
 Briefly summarize the conversation history derived from an experts' group chat by following the answer format.
-If you found non-trivial errors or issues in the conversation, point it out with a detailed reason and mark the "Need double-check" as "Yes." if you think it is worth further verification.
+If you found non-trivial errors or issues in the conversation, point it out with a detailed reason, if you think it is worth further verification, mark the "Need double-check" as "Yes"
 
 # Conversation history:
 {chat_history}
@@ -373,7 +373,7 @@ Collect information from the general task, follow the suggestions from manager t
                 tool_root_dir = self.tool_root_dir
                 tool_builder = ToolBuilder(
                     corpus_path=os.path.join(tool_root_dir, "tool_description.tsv"),
-                    retriever=self._nested_config["autobuild_tool_config"]["retriever"],
+                    retriever=self._nested_config["autobuild_tool_config"].get("retriever", "all-mpnet-base-v2"),
                 )
                 for idx, agent in enumerate(agent_list):
                     if idx == len(self.tool_history[group_name]):
@@ -404,7 +404,7 @@ Collect information from the general task, follow the suggestions from manager t
                     # Retrieve and build tools based on the smilarities between the skills and the tool description
                     tool_builder = ToolBuilder(
                         corpus_path=os.path.join(tool_root_dir, "tool_description.tsv"),
-                        retriever=self._nested_config["autobuild_tool_config"]["retriever"],
+                        retriever=self._nested_config["autobuild_tool_config"].get("retriever", "all-mpnet-base-v2"),
                     )
                     for idx, skill in enumerate(skills):
                         tools = tool_builder.retrieve(skill)
