@@ -155,7 +155,7 @@ Note that the previous experts will forget everything after you obtain the respo
                 default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
                 The limit only plays a role when human_input_mode is not "ALWAYS".
             **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](conversable_agent#__init__).
+                [ConversableAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py#L74).
         """
         super().__init__(
             name,
