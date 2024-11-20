@@ -203,7 +203,9 @@ Match roles in the role set to each expert in expert set.
             builder_filter_dict.update({"model": builder_model})
         if len(builder_model_tags) != 0:
             builder_filter_dict.update({"tags": builder_model_tags})
-        builder_config_list = autogen.config_list_from_json(config_file_or_env, filter_dict=builder_filter_dict)
+        builder_config_list = autogen.config_list_from_json(
+            config_file_or_env, file_location=config_file_location, filter_dict=builder_filter_dict
+        )
         if len(builder_config_list) == 0:
             raise RuntimeError(
                 f"Fail to initialize build manager: {builder_model}{builder_model_tags} does not exist in {config_file_or_env}. "
