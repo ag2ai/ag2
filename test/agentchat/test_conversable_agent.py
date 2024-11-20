@@ -464,14 +464,14 @@ def test_generate_reply():
 
     # when sender is None, messages is provided
     assert (
-        dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == "15"
+        dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == 15
     ), "generate_reply not working when sender is None"
 
     # when sender is provided, messages is None
     dummy_agent_1 = ConversableAgent(name="dummy_agent_1", llm_config=False, human_input_mode="ALWAYS")
     dummy_agent_2._oai_messages[dummy_agent_1] = messages
     assert (
-        dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == "15"
+        dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == 15
     ), "generate_reply not working when messages is None"
 
     dummy_agent_2.register_reply(["str", None], ConversableAgent.generate_oai_reply)
@@ -1115,7 +1115,7 @@ def test_message_func():
 
         def get_random_number(self):
             self.call_count += 1
-            return random.randint(0, 100)
+            return str(random.randint(0, 100))
 
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
@@ -1171,7 +1171,7 @@ def test_summary():
 
         def get_random_number(self):
             self.call_count += 1
-            return random.randint(0, 100)
+            return str(random.randint(0, 100))
 
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST, file_location=KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]}
