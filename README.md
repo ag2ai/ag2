@@ -130,7 +130,7 @@ Find detailed instructions for users [here](https://ag2ai.github.io/ag2/docs/ins
 
 ### Option 2. Install AG2 Locally
 
-AG2 requires **Python version >= 3.8, < 3.13**. It can be installed from pip:
+AG2 requires **Python version >= 3.8, < 3.14**. It can be installed from pip:
 
 ```bash
 pip install ag2
