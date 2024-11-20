@@ -135,5 +135,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.8,<3.13",
+    python_requires=">=3.8,<3.14",
 )
