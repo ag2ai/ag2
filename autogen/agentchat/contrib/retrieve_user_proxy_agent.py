@@ -263,6 +263,8 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self._db_config = self._retrieve_config.get("db_config", {})
         self._client = self._retrieve_config.get("client", None)
         if self._client is None and hasattr(self._vector_db, "client"):
+            # Since the client arg is deprecated, let's check
+            # if the `vector_db` instance has a 'client' attribute.
             self._client = getattr(self._vector_db, "client", None)
         if self._client is None:
             self._client = chromadb.Client()
