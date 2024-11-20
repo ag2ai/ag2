@@ -16,6 +16,27 @@ class CaptainAgent(ConversableAgent):
     (In preview) Captain agent, designed to solve a task with an agent or a group of agents.
     """
 
+    DEFAULT_NESTED_CONFIG = {
+        "autobuild_init_config": {
+            "config_file_or_env": "OAI_CONFIG_LIST",
+            "builder_model": "gpt-4o-mini",
+            "agent_model": "gpt-4o-mini",
+        },
+        "autobuild_build_config": {
+            "default_llm_config": {"temperature": 1, "top_p": 0.95, "max_tokens": 2048},
+            "code_execution_config": {
+                "timeout": 300,
+                "work_dir": "groupchat",
+                "last_n_messages": 1,
+                "use_docker": False,
+            },
+            "coding": True,
+        },
+        "group_chat_config": {"max_round": 10},
+        "group_chat_llm_config": None,
+        "max_turns": 5,
+    }
+
     AUTOBUILD_TOOL = {
         "type": "function",
         "function": {
@@ -104,6 +125,9 @@ Note that the previous experts will forget everything after you obtain the respo
 
     DEFAULT_DESCRIPTION = "A helpful AI assistant that can build a group of agents at a proper time to solve a task."
 
+    # This is used to prompt the LLM to summarize the conversation history between CaptainAgent's tool execution history
+    SUMMARY_PROMPT = "Read the following conversation history between an expert and a group of agent experts, summarize the conversation history. You should include the initial task, the experts' plan and the attempt, finally the results of the conversation."
+
     def __init__(
         self,
         name: str,
@@ -146,6 +170,9 @@ Note that the previous experts will forget everything after you obtain the respo
 
         if system_message is None:
             system_message = self.AUTOBUILD_SYSTEM_MESSAGE
+        nested_config = self._update_config(self.DEFAULT_NESTED_CONFIG, nested_config)
+        if nested_config["group_chat_llm_config"] is None:
+            nested_config["group_chat_llm_config"] = llm_config.copy()
 
         self.assistant = ConversableAgent(
             name="CaptainAgent",
@@ -166,9 +193,11 @@ Note that the previous experts will forget everything after you obtain the respo
                 {
                     "sender": self.executor,
                     "recipient": self.assistant,
-                    "max_turns": 6,
-                    # "message": message,
+                    "max_turns": nested_config["max_turns"],
                     "summary_method": "reflection_with_llm",
+                    "summary_args": {
+                        "summary_prompt": "Please summarize the conversation history derived from an experts' group chat.",
+                    },
                 }
             ],
             trigger=UserProxyAgent,
@@ -176,17 +205,24 @@ Note that the previous experts will forget everything after you obtain the respo
             position=0,
         )
 
+    @staticmethod
+    def _update_config(default_dict: Dict, update_dict: Optional[Dict]) -> Dict:
+        """
+        Recursively updates the default_dict with values from update_dict.
+        """
+        if update_dict is None:
+            return default_dict
 
-def check_nested_config(nested_config: Dict):
-    if "autobuild_init_config" in nested_config.keys():
-        assert (
-            "autobuild_build_config" in nested_config.keys()
-        ), "autobuild_build_config is required when using autobuild as nested mode."
-        assert (
-            "group_chat_llm_config" in nested_config.keys()
-        ), "group_chat_llm_config is required when using autobuild as nested mode."
-    else:
-        raise ValueError("nested_config should contain either autobuild_init_config or meta_prompting_llm_config.")
+        for key, value in update_dict.items():
+            default_value = default_dict.get(key)
+            if isinstance(default_value, dict) and isinstance(value, dict):
+                # Recursively update nested dictionaries
+                default_dict[key] = CaptainAgent._update_config(default_value, value)
+            else:
+                # Update the value or add new key
+                default_dict[key] = value
+
+        return default_dict
 
 
 class CaptainUserProxyAgent(ConversableAgent):
@@ -312,7 +348,6 @@ Collect information from the general task, follow the suggestions from manager t
                 "seek_experts_help": lambda **args: self._run_autobuild(**args),
             }
         )
-        check_nested_config(nested_config)
         self._agent_config_save_path = agent_config_save_path
         self._nested_config = nested_config.copy()
         self._code_execution_config = code_execution_config
@@ -323,8 +358,7 @@ Collect information from the general task, follow the suggestions from manager t
     def _run_autobuild(self, group_name: str, execution_task: str, building_task: str = "") -> str:
         """
         Build a group of agents by AutoBuild to solve the task.
-        This function requires the nested_config to contain the autobuild_init_config,
-            autobuild_llm_config, group_chat_llm_config.
+        This function requires the nested_config to contain the autobuild_init_config, autobuild_llm_config, group_chat_llm_config.
         """
         print("==> Running AutoBuild...", flush=True)
         print("\n==> Building task: ", building_task, flush=True)
