@@ -30,7 +30,7 @@ class AfterWorkOption(Enum):
 
 @dataclass
 class AFTER_WORK:
-    agent: Union[AfterWorkOption, "SwarmAgent", str]
+    agent: Union[AfterWorkOption, "SwarmAgent", str, Callable]
 
     def __post_init__(self):
         if isinstance(self.agent, str):
@@ -50,7 +50,7 @@ def initiate_swarm_chat(
     user_agent: Optional[UserProxyAgent] = None,
     max_rounds: int = 20,
     context_variables: Optional[Dict[str, Any]] = None,
-    after_work: Optional[AFTER_WORK] = AFTER_WORK(AfterWorkOption.TERMINATE),
+    after_work: Optional[Union[AFTER_WORK, Callable]] = AFTER_WORK(AfterWorkOption.TERMINATE),
 ) -> Tuple[ChatResult, Dict[str, Any], "SwarmAgent"]:
     """Initialize and run a swarm chat
 
@@ -62,13 +62,13 @@ def initiate_swarm_chat(
         max_rounds: Maximum number of conversation rounds.
         context_variables: Starting context variables.
         after_work: Method to handle conversation continuation when an agent doesn't select the next agent. If no agent is selected and no tool calls are output, we will use this method to determine the next agent.
-            Must be a AFTER_WORK instance, which is a dataclass accepting a SwarmAgent, AfterWorkOption, A str (of the AfterWorkOption)
+            Must be a AFTER_WORK instance (which is a dataclass accepting a SwarmAgent, AfterWorkOption, A str (of the AfterWorkOption)) or a callable.
             AfterWorkOption:
                 - TERMINATE (Default): Terminate the conversation.
-                - REVERT_TO_USER : Revert to the user agent if an user agent is provided. If not provided, terminate the conversation.
+                - REVERT_TO_USER : Revert to the user agent if a user agent is provided. If not provided, terminate the conversation.
                 - STAY : Stay with the last speaker.
 
-            TODO: Accept Callable: A custom function that takes the current agent, messages, groupchat, and context_variables as arguments and returns the next agent. The function should return None to terminate.
+            Callable: A custom function that takes the current agent, messages, groupchat, and context_variables as arguments and returns the next agent. The function should return None to terminate.
                 ```python
                 def custom_afterwork_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat, context_variables: Optional[Dict[str, Any]]) -> Optional[SwarmAgent]:
                 ```
@@ -145,9 +145,10 @@ def initiate_swarm_chat(
                 return user_agent
             elif tmp_after_work == AfterWorkOption.STAY:
                 return last_speaker
+        elif isinstance(tmp_after_work, Callable):
+            return tmp_after_work(last_speaker, groupchat.messages, groupchat, context_variables)
         else:
-            raise NotImplementedError("Custom after_work method not yet implemented")
-            # return tmp_after_work(last_speaker, messages, groupchat, context_variables)
+            raise ValueError("Invalid After Work condition")
 
     groupchat = GroupChat(
         agents=[tool_execution] + agents + ([user_agent] if user_agent is not None else []),
