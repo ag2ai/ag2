@@ -242,6 +242,7 @@ module.exports = {
         routeBasePath: 'talks',
         path: './talks',
         showReadingTime: true,
+        postsPerPage: 'ALL',
       },
     ],
     [
