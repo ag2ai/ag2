@@ -32,9 +32,9 @@ The following are the prioritised hand offs for each iteration of the swarm.
 3. **Agent-level: After work hand off**: When no tool calls are made it can use an, optional, `AFTER_WORK` hand off that is a preset option or a nominated swarm agent.
 4. **Swarm-level: After work hand off**: If the agent does not have an `AFTER_WORK` hand off, the swarm's `AFTER_WORK` hand off will be used.
 
-In this example of agent-level hand offs registration for a `SwarmAgent` named `responder` has:
-- Two conditional hand offs are registered (`ON_CONDITION`), specifying the agent to hand off to and the condition to trigger the hand off.
-- An after work hand off (`AFTER_WORK`) is nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This could also be a swarm agent.
+In the following code sample a `SwarmAgent` named `responder` has:
+- Two conditional hand offs registered (`ON_CONDITION`), specifying the agent to hand off to and the condition to trigger the hand off.
+- An after work hand off (`AFTER_WORK`) nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This could also be a swarm agent.
 
 ```python
 responder.register_hand_off(
@@ -46,12 +46,12 @@ responder.register_hand_off(
 )
 ```
 
-You can specify the swarm-level after work hand off when initiating the swarm (here we terminate):
+You can specify the swarm-level after work hand off when initiating the swarm (here we nominate to terminate):
 ```python
 history, context, last_agent = initiate_swarm_chat(
     init_agent=responder,
     agents=my_list_of_swarm_agents,
-    max_rounds=50,
+    max_rounds=30,
     messages=messages,
     after_work=AFTER_WORK(AfterWorkOption.TERMINATE)
 )
