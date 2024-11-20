@@ -455,7 +455,7 @@ def test_conversable_agent():
 def test_generate_reply():
     def add_num(num_to_be_added):
         given_num = 10
-        return num_to_be_added + given_num
+        return str(num_to_be_added + given_num)
 
     dummy_agent_2 = ConversableAgent(
         name="user_proxy", llm_config=False, human_input_mode="TERMINATE", function_map={"add_num": add_num}
@@ -1115,7 +1115,7 @@ def test_message_func():
 
         def get_random_number(self):
             self.call_count += 1
-            return random.randint(0, 100)
+            return str(random.randint(0, 100))
 
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
@@ -1171,7 +1171,7 @@ def test_summary():
 
         def get_random_number(self):
             self.call_count += 1
-            return random.randint(0, 100)
+            return str(random.randint(0, 100))
 
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST, file_location=KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]}
