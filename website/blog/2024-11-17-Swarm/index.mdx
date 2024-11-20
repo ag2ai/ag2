@@ -12,12 +12,12 @@ AG2 now provides an implementation of the swarm orchestration from OpenAI's [Swa
 
 Here are the key features of the swarm orchestration:
 - **Hand offs**: Agents can transfer control to another agent, enabling smooth and direct transitions within workflows.
-- **Self-execute functions**: Agents execute their own functions
 - **Context variables**: Agents can dynamically update a shared memory through function calls, maintaining context and adaptability throughout the process.
 
-In addition to the OpenAI implementation, AG2 provides:
+Beside these core features, AG2 provides:
+- **Simple Interface for Tool Call/Handoff Registeration**: When creating a swarm agent, you can pass in a list of functions to be registered directly. We also provide a simple method to register handoffs.
+- **Transition Beyond Tool Calls**: We enable the ability to automatically transfer to a nominated swarm agent when an agent has completed their task. In a future release, we may extend this to allo passing in a callable function to determine the next agent to hand off to.
 - **Built-in human-in-the-loop**: Adding a user agent (UserProxyAgent) to your swarm will allow swarm agents to transition back to the user. Provides a means to clarify and confirm with the user without breaking out of the swarm.
-- **Fall-back agent**: The ability to automatically transition to a nominated swarm agent when an agent has completed their task.
 
 ## Hand offs
 
@@ -41,7 +41,7 @@ responder.register_hand_off(
     hand_to=[
         ON_CONDITION(weather, "If you need weather data, hand off to the Weather_Agent"),
         ON_CONDITION(travel_advisor, "If you have weather data but need formatted recommendations, hand off to the Travel_Advisor_Agent"),
-        AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
+        AFTER_WORK(REVERT_TO_USER),
     ]
 )
 ```
@@ -53,7 +53,7 @@ history, context, last_agent = initiate_swarm_chat(
     agents=my_list_of_swarm_agents,
     max_rounds=30,
     messages=messages,
-    after_work=AFTER_WORK(AfterWorkOption.TERMINATE)
+    after_work=AFTER_WORK(TERMINATE)
 )
 ```
 
@@ -70,21 +70,13 @@ history, context, last_agent = initiate_swarm_chat(
 This example of managing refunds demonstrates the context handling, swarm and agent-level conditional and after work hand offs, and the human-in-the-loop feature.
 
 ```python
-from autogen.agentchat.contrib.swarm_agent import initiate_swarm_chat, SwarmAgent, SwarmResult, ON_CONDITION, AFTER_WORK, AfterWorkOption
+from autogen.agentchat.contrib.swarm_agent import initiate_swarm_chat, SwarmAgent, SwarmResult
+from autogen.agentchat.contrib.swarm_agent import ON_CONDITION, AFTER_WORK, REVERT_TO_USER, TERMINATE
 from autogen import UserProxyAgent
 import os
 
 # All our swarm agents will use GPT-4o-mini from OpenAI
-llm_config = {
-    "config_list":
-    [
-        {
-            "api_type": "openai",
-            "model": "gpt-4o-mini",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-        }
-    ]
-}
+llm_config = {...}
 
 # We configure our starting context dictionary
 context_variables = {
@@ -95,7 +87,6 @@ context_variables = {
 }
 
 # Functions that our swarm agents will be assigned
-
 # They can return a SwarmResult, a SwarmAgent, or a string
 # SwarmResult allows you to update context_variables
 # and/or hand off to another agent
@@ -153,7 +144,7 @@ satisfaction_surveyor = SwarmAgent(
 customer_service.register_hand_off(
     hand_to=[
         ON_CONDITION(refund_specialist, "After customer verification, transfer to refund specialist"),
-        AFTER_WORK(AfterWorkOption.REVERT_TO_USER)
+        AFTER_WORK(REVERT_TO_USER)
     ]
 )
 
@@ -180,7 +171,7 @@ chat_result, context_variables, last_speaker = initiate_swarm_chat(
     user_agent=user, # Human user
     messages="Customer requesting refund for order #12345",
     context_variables=context_variables, # Context
-    after_work=AFTER_WORK(AfterWorkOption.TERMINATE) # Swarm-level after work hand off
+    after_work=AFTER_WORK(TERMINATE) # Swarm-level after work hand off
 )
 
 
@@ -344,5 +335,5 @@ Context Variables:
 ### Notes
 
 - Behind-the-scenes, swarm agents are supported by a tool execution agent, that executes tools on their behalf. Hence, the appearance of `Tool Execution` in the output.
-- Only swarm agents can be added to a swarm. This is to maintain their ability to manage context variables, self-execute functions, and support hand offs.
+- Currently only swarm agents can be added to a swarm. This is to maintain their ability to manage context variables, auto-execute functions, and support hand offs. Eventually, we may allow ConversableAgent to have the same capability and make "SwarmAgent" a simpler subclass with certain defaults changed (like AssistantAgent and UserProxyAgent).
 - Would you like to enhance the swarm feature or have found a bug? Please let us know by creating an issue on the [AG2 GitHub](https://github.com/ag2ai/ag2/issues).
