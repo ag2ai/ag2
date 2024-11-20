@@ -31,39 +31,22 @@ Without the agent library and tool library, CaptainAgent will automatically gene
 from autogen.agentchat.contrib.captain_agent import CaptainAgent
 from autogen import UserProxyAgent
 
-general_llm_config = {
+llm_config = {
     "temperature": 0,
-    "config_list": autogen.config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4-1106-preview"]}),
-}
-
-nested_mode_config = {
-    "autobuild_init_config": {
-        "config_file_or_env": "OAI_CONFIG_LIST",
-        "builder_model": "gpt-4-1106-preview",
-        "agent_model": "gpt-4-1106-preview",
-    },
-    # this is used to configure the autobuild building process
-    "autobuild_build_config": {
-        "default_llm_config": {"temperature": 1, "top_p": 0.95},
-        "code_execution_config": {"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1},
-        "coding": True,
-    },
-    "group_chat_config": {"max_round": 15},
-    "group_chat_llm_config": general_llm_config.copy(),
-    "max_turns": 3,
+    "config_list": autogen.config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4o-mini"]}),
 }
 
 ## build agents
 captain_agent = CaptainAgent(
     name="captain_agent",
-    llm_config=general_llm_config,
-    nested_mode_config=nested_mode_config,
+    llm_config=llm_config,
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
 )
 user_proxy = UserProxyAgent(
     name="user_proxy",
-    code_execution_config={"use_docker": False},
+    human_input_mode="NEVER"
 )
-query = "Let's play game of 24. Given 4 numbers, you need to use +, -, *, / to get 24. The numbers are 2, 2, 7, 12."
+query = "Search arxiv for the latest paper about large language models and discuss its potential application in software engineering."
 result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
 
@@ -83,25 +66,14 @@ general_llm_config = {
 }
 
 nested_mode_config = {
-    "autobuild_init_config": {
-        "config_file_or_env": "OAI_CONFIG_LIST",
-        "builder_model": "gpt-4-1106-preview",
-        "agent_model": "gpt-4-1106-preview",
-    },
-    # this is used to configure the autobuild building process
+    # this is used to configure the building process
     "autobuild_build_config": {
-        "default_llm_config": {"temperature": 1, "top_p": 0.95},
-        "code_execution_config": {"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1},
-        "coding": True,
         "library_path": "captainagent_expert_library.json"
     },
+    # this is used to configure tool library
     "autobuild_tool_config": {
         "tool_root": "default",  # this will use the tool library we provide
-        "retriever": "all-mpnet-base-v2",
-    },
-    "group_chat_config": {"max_round": 10},
-    "group_chat_llm_config": general_llm_config.copy(),
-    "max_turns": 3
+    }
 }
 
 ## build agents
@@ -109,12 +81,13 @@ captain_agent = CaptainAgent(
     name="captain_agent",
     llm_config=general_llm_config,
     nested_mode_config=nested_mode_config,
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
 )
 user_proxy = UserProxyAgent(
     name="user_proxy",
-    code_execution_config={"use_docker": False},
+    human_input_mode="NEVER"
 )
-query = 'Find the stock price of Microsoft in the past 1 year and plot a line chart to show the trend. Save the line chart as "microsoft_stock_price.png".'
+query = "Search arxiv for the latest paper about large language models and discuss its potential application in software engineering."
 result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
 
@@ -125,7 +98,7 @@ Please refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details a
 
 If you find this blog useful, please consider citing:
 ```
-@misc{song2024adaptiveinconversationteambuilding,
+@article{song2024adaptive,
       title={Adaptive In-conversation Team Building for Language Model Agents},
       author={Linxin Song and Jiale Liu and Jieyu Zhang and Shaokun Zhang and Ao Luo and Shijian Wang and Qingyun Wu and Chi Wang},
       year={2024},
