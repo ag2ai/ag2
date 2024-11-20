@@ -250,11 +250,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           pip install pytest-cov>=5
-          pip install "numpy>=2.1.0"  # Add this line
-          python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"  # Verification
       - name: Install packages and dependencies for WebSurfer
         run: |
           pip install -e .[websurfer]
+      - name: Upgrade NumPy for Python 3.13 support
+        run: |
+          pip install --upgrade "numpy>=2.1.0"
+          python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
