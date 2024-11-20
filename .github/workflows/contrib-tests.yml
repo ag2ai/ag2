@@ -242,6 +242,18 @@ jobs:
         python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
+      - name: Setup MinGW (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-gcc-fortran
+      - name: Check GCC version
+        if: runner.os == 'Windows'
+        run: gcc --version
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
