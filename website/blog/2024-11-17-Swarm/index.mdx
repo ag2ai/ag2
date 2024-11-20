@@ -1,3 +1,4 @@
+---
 title: Building Swarm-based agents with AG2
 authors:
   - yiranwu
@@ -5,29 +6,341 @@ authors:
 tags: [groupchat, swarm]
 ---
 
-AG2 now provides an implementation of the swarm orchestration from OpenAI's [Swarm](https://github.com/openai/swarm) framework with some additional features.
+AG2 now provides an implementation of the swarm orchestration from OpenAI's [Swarm](https://github.com/openai/swarm) framework, with some additional features!
 
 *Background*: the swarm orchestration is a multi-agent collaboration where agents execute tasks and are responsible for handing-off to other agents.
 
-Here are two key features of the swarm orchestration:
+Here are the key features of the swarm orchestration:
 - **Hand offs**: Agents can transfer control to another agent, enabling smooth and direct transitions within workflows.
-- **Context Variables**: Agents can dynamically update a shared dictionary through function calls, maintaining context and adaptability throughout the process.
+- **Self-execute functions**: Agents execute their own functions
+- **Context variables**: Agents can dynamically update a shared memory through function calls, maintaining context and adaptability throughout the process.
 
 In addition to the OpenAI implementation, AG2 provides:
-- **Built-in human-in-the-loop**: Adding a user agent (UserProxyAgent) to your swarm will allow swarm agents to transition back to the user. Provides a means to clarify and confirm questions without breaking out of the swarm.
+- **Built-in human-in-the-loop**: Adding a user agent (UserProxyAgent) to your swarm will allow swarm agents to transition back to the user. Provides a means to clarify and confirm with the user without breaking out of the swarm.
 - **Fall-back agent**: The ability to automatically transition to a nominated swarm agent when an agent has completed their task.
 
-## Getting Started
+## Hand offs
 
-To create a swarm:
-1. Define the functions that can be used by your `SwarmAgent`'s.
-2. Create your `SwarmAgent`s (which derive from `ConversableAgent`).
-3. For each agent, specify the hand-offs (transitions to another agent) and what to do when they have finished their work (termed *After Work*).
+Before we dive into a swarm example, an important concept in the swarm orchestration is when and how an agent hands off to another agent.
 
-UP TO HERE
+These are the points for hand offs for each iteration of the swarm.
 
-The `swarm` speaker selection method needs to be used in conjunction with `SwarmAgent` and `SwarmResult` classes. Use the `initialize_swarm_chat` to get a swarm reply.
+1. **Agent-level: Calls a tool that returns a swarm agent**: A swarm agent calls a tool and the associated function returns the next agent to hand off to.
+2. **Agent-level: Calls a pre-defined conditional hand off**: A swarm agent has an `ON_CONDITION` hand off that is chosen by the LLM (behaves like a tool call).
+3. **Agent-level: After work hand off**: When no tool calls are made it can use an, optional, `AFTER_WORK` hand off that can be a number of preset options or a nominated swarm agent.
+4. **Swarm-level: After work hand off**: If the agent does not have an `AFTER_WORK` hand off, the swarm's `AFTER_WORK` hand off will be used.
+
+In this example of agent-level hand offs registration for a `SwarmAgent` named `responder` has:
+- Two conditional hand offs are registered (`ON_CONDITION`), specifying the agent to hand off to and the condition to trigger the hand off.
+- An after work hand off (`AFTER_WORK`) is nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This can also be a swarm agent.
 
 ```python
-from autogen.agentchat.swarm.swarm_agent import SwarmAgent, SwarmResult, initialize_swarm_chat
+responder.register_hand_off(
+    hand_to=[
+        ON_CONDITION(weather, "If you need weather data, hand off to the Weather_Agent"),
+        ON_CONDITION(travel_advisor, "If you have weather data but need formatted recommendations, hand off to the Travel_Advisor_Agent"),
+        AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
+    ]
+)
 ```
+
+You can specify the swarm-level after work hand off when initiating the swarm (here we terminate):
+```python
+history, context, last_agent = initiate_swarm_chat(
+    init_agent=responder,
+    agents=my_list_of_swarm_agents,
+    max_rounds=50,
+    messages=messages,
+    after_work=AFTER_WORK(AfterWorkOption.TERMINATE)
+)
+```
+
+## Creating a swarm
+
+1. Define the functions that can be used by your `SwarmAgent`s.
+2. Create your `SwarmAgent`s (which derives from `ConversableAgent`).
+3. For each swarm agent, specify the hand offs (transitions to another agent) and what to do when they have finished their work (termed *After Work*).
+4. Optionally, create your context dictionary.
+5. Call `initiate_swarm_chat`.
+
+### Example
+
+This example of managing refunds demonstrates the context handling, swarm and agent-level conditional and after work hand offs, and the human-in-the-loop feature.
+
+```python
+from autogen.agentchat.contrib.swarm_agent import initiate_swarm_chat, SwarmAgent, SwarmResult, ON_CONDITION, AFTER_WORK, AfterWorkOption
+from autogen import UserProxyAgent
+import os
+
+# All our swarm agents will use GPT-4o-mini from OpenAI
+llm_config = {
+    "config_list":
+    [
+        {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": os.getenv("OPENAI_API_KEY"),
+        }
+    ]
+}
+
+# We configure our starting context dictionary
+context_variables = {
+    "passport_number": "",
+    "customer_verified": False,
+    "refund_approved": False,
+    "payment_processed": False
+}
+
+# Functions that our swarm agents will be assigned
+
+# They can return a SwarmResult, a SwarmAgent, or a string
+# SwarmResult allows you to update context_variables
+# and/or hand off to another agent
+def verify_customer_identity(passport_number: str, context_variables: dict) -> str:
+    context_variables["passport_number"] = passport_number
+    context_variables["customer_verified"] = True
+    return SwarmResult(values="Customer identity verified", context_variables=context_variables)
+
+def approve_refund_and_transfer(context_variables: dict) -> str:
+    context_variables["refund_approved"] = True
+    return SwarmResult(values="Refund approved", context_variables=context_variables, agent=payment_processor)
+
+def process_refund_payment(context_variables: dict) -> str:
+    context_variables["payment_processed"] = True
+    return SwarmResult(values="Payment processed successfully", context_variables=context_variables)
+
+# Swarm Agents, similar to ConversableAgent,
+# but with functions and hand offs (specified later)
+
+customer_service = SwarmAgent(
+    name="CustomerServiceRep",
+    system_message="""You are a customer service representative.
+      First verify the customer's identity by asking for the customer's passport number,
+      then calling the verify_customer_identity function,
+      finally, transfer the case to the refund specialist.""",
+    llm_config=llm_config,
+    functions=[verify_customer_identity],
+)
+
+refund_specialist = SwarmAgent(
+    name="RefundSpecialist",
+    system_message="""You are a refund specialist.
+    Review the case and approve the refund, then transfer to the payment processor.""",
+    llm_config=llm_config,
+    functions=[approve_refund_and_transfer],
+)
+
+payment_processor = SwarmAgent(
+    name="PaymentProcessor",
+    system_message="""You are a payment processor.
+    Process the refund payment and provide a confirmation message to the customer.""",
+    llm_config=llm_config,
+    functions=[process_refund_payment],
+)
+
+satisfaction_surveyor = SwarmAgent(
+    name="SatisfactionSurveyor",
+    system_message="""You are a customer satisfaction specialist.
+    Ask the customer to rate their experience with the refund process.""",
+    llm_config=llm_config,
+)
+
+# Conditional and After work hand offs
+
+customer_service.register_hand_off(
+    hand_to=[
+        ON_CONDITION(refund_specialist, "After customer verification, transfer to refund specialist"),
+        AFTER_WORK(AfterWorkOption.REVERT_TO_USER)
+    ]
+)
+
+payment_processor.register_hand_off(
+    hand_to=[
+        AFTER_WORK(satisfaction_surveyor),
+    ]
+)
+
+# Our human, you, allowing swarm agents to revert back for more information
+user = UserProxyAgent(
+    name="User",
+    system_message="The customer, always answers questions when agents require more information.",
+    human_input_mode="ALWAYS",
+    code_execution_config=False,
+)
+
+# Initiate the swarm
+# Returns the ChatResult, final context, and last speaker
+
+chat_result, context_variables, last_speaker = initiate_swarm_chat(
+    init_agent=customer_service, # Starting agent
+    agents=[customer_service, refund_specialist, payment_processor, satisfaction_surveyor],
+    user_agent=user, # Human user
+    messages="Customer requesting refund for order #12345",
+    context_variables=context_variables, # Context
+    after_work=AFTER_WORK(AfterWorkOption.TERMINATE) # Swarm-level after work hand off
+)
+
+
+print(f"Context Variables:\n{json.dumps(context_variables, indent=2)}")
+```
+
+And here's the output, showing the flow of agents.
+
+```shell
+User (to chat_manager):
+
+Customer requesting refund for order #12345
+
+--------------------------------------------------------------------------------
+
+Next speaker: CustomerServiceRep
+
+CustomerServiceRep (to chat_manager):
+
+To assist you with the refund for order #12345,
+I need to verify your identity.
+Could you please provide your passport number?
+
+--------------------------------------------------------------------------------
+
+Next speaker: User
+
+Replying as User. Provide feedback to chat_manager.
+Press enter to skip and use auto-reply,
+or type 'exit' to end the conversation: AUS923828C
+
+User (to chat_manager):
+
+AUS923828C
+
+--------------------------------------------------------------------------------
+
+Next speaker: CustomerServiceRep
+
+CustomerServiceRep (to chat_manager):
+
+***** Suggested tool call (call_wfx2VoCmuCKDFKV5xcmB6kSc): verify_customer_identity *****
+Arguments:
+{"passport_number":"AUS923828C"}
+*****************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: Tool_Execution
+
+
+>>>>>>>> EXECUTING FUNCTION verify_customer_identity...
+Tool_Execution (to chat_manager):
+
+***** Response from calling tool (call_wfx2VoCmuCKDFKV5xcmB6kSc) *****
+Customer identity verified
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: CustomerServiceRep
+
+CustomerServiceRep (to chat_manager):
+
+***** Suggested tool call (call_Jz1viRLeJuOltPRcKfYZ8bgH): transfer_to_RefundSpecialist *****
+Arguments:
+{}
+*********************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: Tool_Execution
+
+
+>>>>>>>> EXECUTING FUNCTION transfer_to_RefundSpecialist...
+Tool_Execution (to chat_manager):
+
+***** Response from calling tool (call_Jz1viRLeJuOltPRcKfYZ8bgH) *****
+SwarmAgent --> RefundSpecialist
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: RefundSpecialist
+
+RefundSpecialist (to chat_manager):
+
+***** Suggested tool call (call_c4uhy8Mi3Ihe3tVRFVG9M8Uw): approve_refund_and_transfer *****
+Arguments:
+{}
+********************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: Tool_Execution
+
+
+>>>>>>>> EXECUTING FUNCTION approve_refund_and_transfer...
+Tool_Execution (to chat_manager):
+
+***** Response from calling tool (call_c4uhy8Mi3Ihe3tVRFVG9M8Uw) *****
+Refund approved
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: PaymentProcessor
+
+PaymentProcessor (to chat_manager):
+
+***** Suggested tool call (call_qrs5ysx89rQqMFtVuqMUb9O0): process_refund_payment *****
+Arguments:
+{}
+***************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: Tool_Execution
+
+
+>>>>>>>> EXECUTING FUNCTION process_refund_payment...
+Tool_Execution (to chat_manager):
+
+***** Response from calling tool (call_qrs5ysx89rQqMFtVuqMUb9O0) *****
+Payment processed successfully
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: PaymentProcessor
+
+PaymentProcessor (to chat_manager):
+
+Your refund for order #12345 has been processed successfully.
+You should see the amount credited back to your account shortly.
+If you have any further questions or need assistance, feel free to reach out.
+Thank you for your patience!
+
+--------------------------------------------------------------------------------
+
+Next speaker: SatisfactionSurveyor
+
+SatisfactionSurveyor (to chat_manager):
+
+Thank you for your patience during the refund process!
+We hope you are satisfied with your experience.
+Could you please rate your satisfaction with the refund process from 1 to 5,
+where 1 is very dissatisfied and 5 is very satisfied?
+Your feedback is valuable to us!
+
+--------------------------------------------------------------------------------
+Context Variables:
+{
+  "customer_verified": true,
+  "refund_approved": true,
+  "payment_processed": true,
+  "passport_number": "AUS923828C"
+}
+```
+
+### Notes
+
+- Behind-the-scenes, swarm agents are supported by a Tool Executor agent, which executes the tools on their behalf. Hence, the appearance of `Tool Execution` in the output.
+- Only swarm agents can be added to a swarm. This is to maintain their ability to manage context variables, self-execute functions, and support hand offs.
+- Would like to enhance the swarm feature or have found a bug? Please let us know by creating an issue on the [AG2 GitHub](https://github.com/ag2ai/ag2/issues).
