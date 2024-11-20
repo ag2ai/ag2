@@ -455,7 +455,7 @@ def test_conversable_agent():
 def test_generate_reply():
     def add_num(num_to_be_added):
         given_num = 10
-        return str(num_to_be_added + given_num)
+        return num_to_be_added + given_num
 
     dummy_agent_2 = ConversableAgent(
         name="user_proxy", llm_config=False, human_input_mode="TERMINATE", function_map={"add_num": add_num}
