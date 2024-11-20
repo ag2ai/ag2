@@ -9,9 +9,14 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel
 
-from autogen.agentchat import Agent, ChatResult, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
 from autogen.function_utils import get_function_schema
 from autogen.oai import OpenAIWrapper
+
+from ..agent import Agent
+from ..chat import ChatResult
+from ..conversable_agent import ConversableAgent
+from ..groupchat import GroupChat, GroupChatManager
+from ..user_proxy_agent import UserProxyAgent
 
 # Parameter name for context variables
 # Use the value in functions and they will be substituted with the context variables:

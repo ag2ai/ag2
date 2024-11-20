@@ -7,13 +7,22 @@
 from .agent import Agent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, initiate_chats
-from .contrib.swarm_agent import AFTER_WORK, ON_CONDITION, AfterWorkOption, SwarmAgent, SwarmResult, initiate_swarm_chat
+
+# Imported last to avoid circular imports
+from .contrib.swarm_agent import (
+    AFTER_WORK,
+    ON_CONDITION,
+    AfterWorkOption,
+    SwarmAgent,
+    SwarmResult,
+    initiate_swarm_chat,
+)
 from .conversable_agent import ConversableAgent, register_function
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
 from .utils import gather_usage_summary
 
-__all__ = (
+__all__ = [
     "Agent",
     "ConversableAgent",
     "AssistantAgent",
@@ -30,4 +39,4 @@ __all__ = (
     "ON_CONDITION",
     "AFTER_WORK",
     "AfterWorkOption",
-)
+]
