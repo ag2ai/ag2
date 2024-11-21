@@ -19,8 +19,8 @@ class CaptainAgent(ConversableAgent):
     DEFAULT_NESTED_CONFIG = {
         "autobuild_init_config": {
             "config_file_or_env": "OAI_CONFIG_LIST",
-            "builder_model": "gpt-4o-mini",
-            "agent_model": "gpt-4o-mini",
+            "builder_model": "gpt-4o",
+            "agent_model": "gpt-4o",
         },
         "autobuild_build_config": {
             "default_llm_config": {"temperature": 1, "top_p": 0.95, "max_tokens": 2048},
@@ -447,7 +447,6 @@ Collect information from the general task, follow the suggestions from manager t
         manager = autogen.GroupChatManager(
             groupchat=nested_group_chat,
             llm_config=self._nested_config["group_chat_llm_config"],
-            is_termination_msg=lambda x: x.get("content", "") and "terminate" in x.get("content", "").lower(),
         )
         key = list(self.chat_messages.keys())[0]
         general_task = self.chat_messages[key][0]["content"]
@@ -460,7 +459,7 @@ Collect information from the general task, follow the suggestions from manager t
         for item in chat_messages:
             chat_history.append(item)
 
-        # Review the group chat history.
+        # Review the group chat history
         summary_model = builder.builder_model
         summarized_history = (
             summary_model.create(
