@@ -30,7 +30,8 @@ install_requires = [
     "termcolor",
     "flaml",
     # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
-    "numpy>=1.17.0,<2",
+    "numpy>=2.1; python_version>='3.13'",  # numpy 2.1+ required for Python 3.13
+    "numpy>=1.24.0,<2.0.0; python_version<'3.13'",  # numpy 1.24+ for older Python versions
     "python-dotenv",
     "tiktoken",
     # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
@@ -135,5 +136,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.8,<3.13",
+    python_requires=">=3.8,<3.14",
 )
