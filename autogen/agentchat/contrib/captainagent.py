@@ -126,7 +126,7 @@ Note that the previous experts will forget everything after you obtain the respo
     DEFAULT_DESCRIPTION = "A helpful AI assistant that can build a group of agents at a proper time to solve a task."
 
     # This is used to prompt the LLM to summarize the conversation history between CaptainAgent's tool execution history
-    DEFAULT_SUMMARY_PROMPT = "Read the following conversation history between an expert and a group of agent experts, summarize the conversation history. You should include the initial task, the experts' plan and the attempt, finally the results of the conversation."
+    DEFAULT_SUMMARY_PROMPT = "Read the following conversation history between an expert and a group of agent experts, summarize the conversation history. Your summarization should include the initial task, the experts' plan and the attempt, finally the results of the conversation. If the experts arrived at a conclusion, state it as it is without any modification."
 
     def __init__(
         self,
@@ -183,9 +183,10 @@ Note that the previous experts will forget everything after you obtain the respo
 
         self.executor = CaptainUserProxyAgent(
             name="Expert_summoner",
-            code_execution_config=code_execution_config,
             nested_config=nested_config,
+            agent_config_save_path=agent_config_save_path,
             is_termination_msg=lambda x: x.get("content", "") and "terminate" in x.get("content", "").lower(),
+            code_execution_config=code_execution_config,
             human_input_mode="NEVER",
         )
 
@@ -444,7 +445,9 @@ Collect information from the general task, follow the suggestions from manager t
             **self._nested_config["group_chat_config"],
         )
         manager = autogen.GroupChatManager(
-            groupchat=nested_group_chat, llm_config=self._nested_config["group_chat_llm_config"]
+            groupchat=nested_group_chat,
+            llm_config=self._nested_config["group_chat_llm_config"],
+            is_termination_msg=lambda x: x.get("content", "") and "terminate" in x.get("content", "").lower(),
         )
         key = list(self.chat_messages.keys())[0]
         general_task = self.chat_messages[key][0]["content"]
