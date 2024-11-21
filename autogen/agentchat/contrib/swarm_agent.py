@@ -46,7 +46,7 @@ class ON_CONDITION:
 
 
 def initiate_swarm_chat(
-    init_agent: "SwarmAgent",
+    initial_agent: "SwarmAgent",
     messages: Union[List[Dict[str, Any]], str],
     agents: List["SwarmAgent"],
     user_agent: Optional[UserProxyAgent] = None,
@@ -57,7 +57,7 @@ def initiate_swarm_chat(
     """Initialize and run a swarm chat
 
     Args:
-        init_agent: The initial agent of the conversation.
+        initial_agent: The first receiving agent of the conversation.
         messages: Initial message(s).
         agents: List of swarm agents.
         user_agent: Optional user proxy agent for falling back to.
@@ -79,7 +79,7 @@ def initiate_swarm_chat(
         Dict[str, Any]: Updated Context variables.
         SwarmAgent:     Last speaker.
     """
-    assert isinstance(init_agent, SwarmAgent), "init_agent must be a SwarmAgent"
+    assert isinstance(initial_agent, SwarmAgent), "initial_agent must be a SwarmAgent"
     assert all(isinstance(agent, SwarmAgent) for agent in agents), "agents must be a list of SwarmAgents"
 
     context_variables = context_variables or {}
@@ -105,7 +105,7 @@ def initiate_swarm_chat(
         nonlocal INIT_AGENT_USED
         if not INIT_AGENT_USED:
             INIT_AGENT_USED = True
-            return init_agent
+            return initial_agent
 
         if "tool_calls" in groupchat.messages[-1]:
             return tool_execution
@@ -152,8 +152,15 @@ def initiate_swarm_chat(
         else:
             raise ValueError("Invalid After Work condition")
 
+    # If there's only one message and there's no identified swarm agent
+    # Start with a user proxy agent, creating one if they haven't passed one in
+    if len(messages) == 1 and "name" not in messages[0] and not user_agent:
+        temp_user_proxy = [UserProxyAgent(name="_User")]
+    else:
+        temp_user_proxy = []
+
     groupchat = GroupChat(
-        agents=[tool_execution] + agents + ([user_agent] if user_agent is not None else []),
+        agents=[tool_execution] + agents + ([user_agent] if user_agent is not None else temp_user_proxy),
         messages=[],  # Set to empty. We will resume the conversation with the messages
         max_round=max_rounds,
         speaker_selection_method=swarm_transition,
@@ -166,17 +173,35 @@ def initiate_swarm_chat(
         clear_history = False
     else:
         last_message = messages[0]
-        if user_agent:
-            last_agent = user_agent
-        else:
-            last_agent = init_agent  # TODO: Definition of init_agent: we want this agent to first speak right? If so, why we also need to use it to initialize the chat?
 
-    chat_history = last_agent.initiate_chat(
+        if "name" in last_message:
+            if "name" in swarm_agent_names:
+                # If there's a name in the message and it's a swarm agent, use that
+                last_agent = groupchat.agent_by_name(name=last_message["name"])
+            else:
+                raise ValueError(f"Invalid swarm agent name in last message: {last_message['name']}")
+        else:
+            # No name, so we're using the user proxy to start the conversation
+            if user_agent:
+                last_agent = user_agent
+            else:
+                # If no user agent passed in, use our temporary user proxy
+                last_agent = temp_user_proxy[0]
+
+    chat_result = last_agent.initiate_chat(
         manager,
         message=last_message,
         clear_history=clear_history,
     )
-    return chat_history, context_variables, manager.last_speaker
+
+    # Clear the temporary user proxy's name from messages
+    if len(temp_user_proxy) == 1:
+        for message in chat_result.chat_history:
+            if "name" in message and message["name"] == "_User":
+                # delete the name key from the message
+                del message["name"]
+
+    return chat_result, context_variables, manager.last_speaker
 
 
 class SwarmResult(BaseModel):
