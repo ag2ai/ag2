@@ -183,9 +183,10 @@ Note that the previous experts will forget everything after you obtain the respo
 
         self.executor = CaptainUserProxyAgent(
             name="Expert_summoner",
-            code_execution_config=code_execution_config,
             nested_config=nested_config,
+            agent_config_save_path=agent_config_save_path,
             is_termination_msg=lambda x: x.get("content", "") and "terminate" in x.get("content", "").lower(),
+            code_execution_config=code_execution_config,
             human_input_mode="NEVER",
         )
 
