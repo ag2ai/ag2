@@ -1,11 +1,14 @@
 # Tool Library
 In CaptainAgent, tools are in the form of python functions. The agents can write code to import functions and call them according to their needs. This can significantly enhance the functionality and capabilities of the agents.
 
-We provide a list of tools that comes with the release of CaptainAgent.
+We provide a list of tools that comes with the release of CaptainAgent. Its full content can be found [here](https://github.com/ag2ai/ag2/tree/main/autogen/agentchat/contrib/captainagent/tools/README.md)
 
 ## Using the Built-in Tool Library
 ### Install dependencies
-First install the requirements for running tools via pip. The requirements file is located in `autogen/agentchat/contrib/captainagent/tools/requirements.txt`.
+First install the requirements for running the tools via pip.
+```
+pip install -r https://raw.githubusercontent.com/ag2ai/ag2/refs/heads/main/autogen/agentchat/contrib/captainagent/tools/requirements.txt
+```
 
 ### Subscribe to Certain APIs
 To use the provided built-in tools, it is required to obtain a Bing Search API key and RapidAPI key.
@@ -57,3 +60,42 @@ After candidates are retrieved, the agent's system message will be updated with 
 A user proxy with the ability to execute the code will be added to the nested chat. Under the hood, this is achieved by leveraging the
 [User Defined Functions](/docs/topics/code-execution/user-defined-functions) feature. A `LocalCommandLineCodeExecutor` equipped with all the functions serves as
 code executor for the user proxy.
+
+# Building your own Tool Library
+Building your own tool library is simple, follow the same directory layout as the one we provided. The python files should be follow the layout `tools/{category}/{tool_name}.py`.
+The tool you'd like to add should be imported in the following fashion:
+
+```python
+from tools.category.tool_name import tool_name
+```
+
+The `tool_description.tsv` file should be a tab-separated file with two columns `docid` and `document_content`. The `document_content` should always follow
+the format `"category tool_name tool_description"`. The category and tool_name should always be one word with no space in between. The document_content is
+used to calculate semantic similarity for retrieval.
+
+Once your library is ready, specify the path in `nested_config` of CaptainAgent.
+```python
+nested_config = {
+    ...
+    "autobuild_tool_config": {
+        "tool_root": "Your tool root here",
+        "retriever": "all-mpnet-base-v2", # This is the default embedding model, you can reove this line if you are not intending to change it
+    },
+    ...
+}
+```
+
+By following these steps, you can easily customize the tools library of CaptainAgent and empower your agents with new tools and capabilities.
+
+## Note on Adding Customized Tools
+Due to the implementation of [User Defined Functions](/docs/topics/code-execution/user-defined-functions), when writing your own tool, you need to write your import statement in the function definition. For example, adding an audio transcription tool:
+
+```python
+def audio_transcription(audio_file):
+    import whisper
+    model = whisper.load_model("base")
+    result = model.transcribe(audio_file)
+    return result["text"]
+```
+
+There is also decorator `with_requirements` that may become handy for [adding dependencies](/docs/topics/code-execution/user-defined-functions).
