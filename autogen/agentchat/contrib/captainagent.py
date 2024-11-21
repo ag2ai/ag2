@@ -178,12 +178,7 @@ Note that the previous experts will forget everything after you obtain the respo
         if nested_config["group_chat_llm_config"] is None:
             nested_config["group_chat_llm_config"] = llm_config.copy()
 
-        self.assistant = ConversableAgent(
-            name="CaptainAgent",
-            system_message=system_message,
-            llm_config=llm_config,
-            agent_config_save_path=agent_config_save_path,
-        )
+        self.assistant = ConversableAgent(name="CaptainAgent", system_message=system_message, llm_config=llm_config)
         self.assistant.update_tool_signature(self.AUTOBUILD_TOOL, is_remove=False)
 
         self.executor = CaptainUserProxyAgent(
