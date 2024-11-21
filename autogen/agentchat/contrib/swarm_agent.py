@@ -49,7 +49,7 @@ def initiate_swarm_chat(
     init_agent: "SwarmAgent",
     messages: Union[List[Dict[str, Any]], str],
     agents: List["SwarmAgent"],
-    user_agent: Optional[UserProxyAgent] = None,
+    user_agent: Optional[Union[UserProxyAgent, str]] = None,
     max_rounds: int = 20,
     context_variables: Optional[Dict[str, Any]] = None,
     after_work: Optional[Union[AFTER_WORK, Callable]] = AFTER_WORK(AfterWorkOption.TERMINATE),
