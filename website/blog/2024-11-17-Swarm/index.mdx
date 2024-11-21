@@ -49,7 +49,7 @@ responder.register_hand_off(
 You can specify the swarm-level after work handoff when initiating the swarm (here we nominate to terminate):
 ```python
 history, context, last_agent = initiate_swarm_chat(
-    init_agent=responder,
+    initial_agent=responder,
     agents=my_list_of_swarm_agents,
     max_rounds=30,
     messages=messages,
@@ -157,7 +157,7 @@ user = UserProxyAgent(name="User", code_execution_config=False)
 # Returns the ChatResult, final context, and last speaker
 
 chat_result, context_variables, last_speaker = initiate_swarm_chat(
-    init_agent=customer_service, # Starting agent
+    initial_agent=customer_service, # Starting agent
     agents=[customer_service, refund_specialist, payment_processor, satisfaction_surveyor],
     user_agent=user, # Human user
     messages="Customer requesting refund for order #12345",
