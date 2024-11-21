@@ -138,6 +138,7 @@ Note that the previous experts will forget everything after you obtain the respo
         human_input_mode: Optional[str] = "NEVER",
         code_execution_config: Optional[Union[Dict, Literal[False]]] = False,
         nested_config: Optional[Dict] = None,
+        agent_config_save_path: Optional[str] = None,
         description: Optional[str] = DEFAULT_DESCRIPTION,
         **kwargs,
     ):
@@ -154,6 +155,9 @@ Note that the previous experts will forget everything after you obtain the respo
             max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
                 default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
                 The limit only plays a role when human_input_mode is not "ALWAYS".
+            nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
+                A full list of keys and their functionalities can be found in [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
+            agent_config_save_path (str): the path to save the generated or retrieved agent configuration.
             **kwargs (dict): Please refer to other kwargs in
                 [ConversableAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py#L74).
         """
@@ -174,17 +178,14 @@ Note that the previous experts will forget everything after you obtain the respo
         if nested_config["group_chat_llm_config"] is None:
             nested_config["group_chat_llm_config"] = llm_config.copy()
 
-        self.assistant = ConversableAgent(
-            name="CaptainAgent",
-            system_message=system_message,
-            llm_config=llm_config,
-        )
+        self.assistant = ConversableAgent(name="CaptainAgent", system_message=system_message, llm_config=llm_config)
         self.assistant.update_tool_signature(self.AUTOBUILD_TOOL, is_remove=False)
 
         self.executor = CaptainUserProxyAgent(
             name="Expert_summoner",
             code_execution_config=code_execution_config,
             nested_config=nested_config,
+            is_termination_msg=lambda x: x.get("content", "") and "terminate" in x.get("content", "").lower(),
             human_input_mode="NEVER",
         )
 
@@ -201,7 +202,6 @@ Note that the previous experts will forget everything after you obtain the respo
                 }
             ],
             trigger=UserProxyAgent,
-            # reply_func_from_nested_chats=None,
             position=0,
         )
 
@@ -230,7 +230,8 @@ class CaptainUserProxyAgent(ConversableAgent):
 
     CONVERSATION_REVIEW_PROMPT = """# Your task
 Briefly summarize the conversation history derived from an experts' group chat by following the answer format.
-If you found non-trivial errors or issues in the conversation, point it out with a detailed reason and mark the "Need double-check" as "Yes." if you think it is worth further verification.
+If you found non-trivial errors or issues in the conversation, point it out with a detailed reason, if you think it is worth further verification, mark the "Need double-check" as "Yes"
+If you find the conversation ends with TERMINATE and the task is solved, this is normal situation, you can mark the "Need double-check" as "No".
 
 # Conversation history:
 {chat_history}
@@ -373,7 +374,7 @@ Collect information from the general task, follow the suggestions from manager t
                 tool_root_dir = self.tool_root_dir
                 tool_builder = ToolBuilder(
                     corpus_path=os.path.join(tool_root_dir, "tool_description.tsv"),
-                    retriever=self._nested_config["autobuild_tool_config"]["retriever"],
+                    retriever=self._nested_config["autobuild_tool_config"].get("retriever", "all-mpnet-base-v2"),
                 )
                 for idx, agent in enumerate(agent_list):
                     if idx == len(self.tool_history[group_name]):
@@ -404,7 +405,7 @@ Collect information from the general task, follow the suggestions from manager t
                     # Retrieve and build tools based on the smilarities between the skills and the tool description
                     tool_builder = ToolBuilder(
                         corpus_path=os.path.join(tool_root_dir, "tool_description.tsv"),
-                        retriever=self._nested_config["autobuild_tool_config"]["retriever"],
+                        retriever=self._nested_config["autobuild_tool_config"].get("retriever", "all-mpnet-base-v2"),
                     )
                     for idx, skill in enumerate(skills):
                         tools = tool_builder.retrieve(skill)
