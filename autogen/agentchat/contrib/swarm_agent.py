@@ -57,7 +57,7 @@ def initiate_swarm_chat(
     """Initialize and run a swarm chat
 
     Args:
-        initial_agent: The initial agent of the conversation.
+        initial_agent: The first receiving agent of the conversation.
         messages: Initial message(s).
         agents: List of swarm agents.
         user_agent: Optional user proxy agent for falling back to.
