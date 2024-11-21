@@ -231,6 +231,7 @@ class CaptainUserProxyAgent(ConversableAgent):
     CONVERSATION_REVIEW_PROMPT = """# Your task
 Briefly summarize the conversation history derived from an experts' group chat by following the answer format.
 If you found non-trivial errors or issues in the conversation, point it out with a detailed reason, if you think it is worth further verification, mark the "Need double-check" as "Yes"
+If you find the conversation ends with TERMINATE and the task is solved, this is normal situation, you can mark the "Need double-check" as "No".
 
 # Conversation history:
 {chat_history}
