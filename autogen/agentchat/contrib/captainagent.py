@@ -19,8 +19,8 @@ class CaptainAgent(ConversableAgent):
     DEFAULT_NESTED_CONFIG = {
         "autobuild_init_config": {
             "config_file_or_env": "OAI_CONFIG_LIST",
-            "builder_model": "gpt-4o-mini",
-            "agent_model": "gpt-4o-mini",
+            "builder_model": "gpt-4o",
+            "agent_model": "gpt-4o",
         },
         "autobuild_build_config": {
             "default_llm_config": {"temperature": 1, "top_p": 0.95, "max_tokens": 2048},
@@ -138,6 +138,8 @@ Note that the previous experts will forget everything after you obtain the respo
         human_input_mode: Optional[str] = "NEVER",
         code_execution_config: Optional[Union[Dict, Literal[False]]] = False,
         nested_config: Optional[Dict] = None,
+        agent_lib: Optional[str] = None,
+        tool_lib: Optional[str] = None,
         agent_config_save_path: Optional[str] = None,
         description: Optional[str] = DEFAULT_DESCRIPTION,
         **kwargs,
@@ -155,6 +157,8 @@ Note that the previous experts will forget everything after you obtain the respo
             max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
                 default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
                 The limit only plays a role when human_input_mode is not "ALWAYS".
+            agent_lib (str): the path or a JSON file of the agent library for retrieving the nested chat instantiated by CaptainAgent.
+            tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.
             nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
                 A full list of keys and their functionalities can be found in [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
             agent_config_save_path (str): the path to save the generated or retrieved agent configuration.
@@ -177,6 +181,12 @@ Note that the previous experts will forget everything after you obtain the respo
         nested_config = self._update_config(self.DEFAULT_NESTED_CONFIG, nested_config)
         if nested_config["group_chat_llm_config"] is None:
             nested_config["group_chat_llm_config"] = llm_config.copy()
+        if agent_lib:
+            nested_config["autobuild_build_config"]["library_path_or_json"] = agent_lib
+        if tool_lib:
+            if "autobuild_tool_config" not in nested_config:
+                nested_config["autobuild_tool_config"] = {}
+            nested_config["autobuild_tool_config"]["tool_root"] = tool_lib
 
         self.assistant = ConversableAgent(name="CaptainAgent", system_message=system_message, llm_config=llm_config)
         self.assistant.update_tool_signature(self.AUTOBUILD_TOOL, is_remove=False)
@@ -447,7 +457,6 @@ Collect information from the general task, follow the suggestions from manager t
         manager = autogen.GroupChatManager(
             groupchat=nested_group_chat,
             llm_config=self._nested_config["group_chat_llm_config"],
-            is_termination_msg=lambda x: x.get("content", "") and "terminate" in x.get("content", "").lower(),
         )
         key = list(self.chat_messages.keys())[0]
         general_task = self.chat_messages[key][0]["content"]
@@ -460,7 +469,7 @@ Collect information from the general task, follow the suggestions from manager t
         for item in chat_messages:
             chat_history.append(item)
 
-        # Review the group chat history.
+        # Review the group chat history
         summary_model = builder.builder_model
         summarized_history = (
             summary_model.create(
