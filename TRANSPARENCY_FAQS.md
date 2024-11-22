@@ -19,7 +19,7 @@ Please note that AG2 is an open-source library under active development and inte
 
 AG2 is a generic infrastructure that can be used in multiple scenarios. The system’s intended uses include:
 
--	Building LLM workflows that solve more complex tasks: Users can create agents that interleave reasoning and tool use capabilities of the latest LLMs such as GPT-4. To solve complex tasks, multiple agents can converse to work together (e.g., by partitioning a complex problem into simpler steps or by providing different viewpoints or perspectives).
+-	Building LLM workflows that solve more complex tasks: Users can create agents that interleave reasoning and tool use capabilities of the latest LLMs such as GPT-4o. To solve complex tasks, multiple agents can converse to work together (e.g., by partitioning a complex problem into simpler steps or by providing different viewpoints or perspectives).
 -	Application-specific agent topologies: Users can create application specific agent topologies and patterns for agents to interact. The exact topology may depend on the domain’s complexity and semantic capabilities of the LLM available.
 -	Code generation and execution: Users can implement agents that can assume the roles of writing code and other agents that can execute code. Agents can do this with varying levels of human involvement. Users can add more agents and program the conversations to enforce constraints on code and output.
 -	Question answering: Users can create agents that can help answer questions using retrieval augmented generation.
