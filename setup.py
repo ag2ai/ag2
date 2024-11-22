@@ -89,7 +89,7 @@ extra_require = {
     "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
     "graph_rag_falkor_db": graph_rag_falkor_db,
     "autobuild": autobuild,
-    "captainagent": autobuild,
+    "captainagent": autobuild + ["pandas"],
     "teachable": ["chromadb"],
     "lmm": ["replicate", "pillow"],
     "graph": ["networkx", "matplotlib"],
