@@ -138,9 +138,9 @@ Note that the previous experts will forget everything after you obtain the respo
         human_input_mode: Optional[str] = "NEVER",
         code_execution_config: Optional[Union[Dict, Literal[False]]] = False,
         nested_config: Optional[Dict] = None,
-        agent_config_save_path: Optional[str] = None,
         agent_lib: Optional[str] = None,
         tool_lib: Optional[str] = None,
+        agent_config_save_path: Optional[str] = None,
         description: Optional[str] = DEFAULT_DESCRIPTION,
         **kwargs,
     ):
@@ -157,6 +157,8 @@ Note that the previous experts will forget everything after you obtain the respo
             max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
                 default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
                 The limit only plays a role when human_input_mode is not "ALWAYS".
+            agent_lib (str): the path to the agent library for retrieving the nested chat instantiated by CaptainAgent.
+            tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.
             nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
                 A full list of keys and their functionalities can be found in [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
             agent_config_save_path (str): the path to save the generated or retrieved agent configuration.
