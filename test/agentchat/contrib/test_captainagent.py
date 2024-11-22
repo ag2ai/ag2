@@ -28,13 +28,7 @@ else:
     reason=reason,
 )
 def test_captain_agent_from_scratch():
-    config_list = config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={
-            "tags": ["gpt-4"],
-        },
-    )
+    config_list = config_list_from_json(OAI_CONFIG_LIST, file_location=KEY_LOC)
     llm_config = {
         "temperature": 0,
         "config_list": config_list,
@@ -77,13 +71,7 @@ def test_captain_agent_from_scratch():
 )
 def test_captain_agent_with_library():
 
-    config_list = config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={
-            "tags": ["gpt-4"],
-        },
-    )
+    config_list = config_list_from_json(OAI_CONFIG_LIST, file_location=KEY_LOC)
     llm_config = {
         "temperature": 0,
         "config_list": config_list,
@@ -98,10 +86,8 @@ def test_captain_agent_with_library():
             "default_llm_config": {"temperature": 1, "top_p": 0.95, "max_tokens": 1500, "seed": 52},
             "code_execution_config": {"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1},
             "coding": True,
-            "library_path_or_json": "example_test_captainagent.json",
         },
         "autobuild_tool_config": {
-            "tool_root": "default",
             "retriever": "all-mpnet-base-v2",
         },
         "group_chat_config": {"max_round": 10},
@@ -112,6 +98,8 @@ def test_captain_agent_with_library():
         llm_config=llm_config,
         code_execution_config={"use_docker": False, "work_dir": "groupchat"},
         nested_config=nested_config,
+        agent_lib="example_test_captainagent.json",
+        tool_lib="default",
         agent_config_save_path=None,
     )
     captain_user_proxy = UserProxyAgent(name="captain_user_proxy", human_input_mode="NEVER")
