@@ -157,7 +157,7 @@ Note that the previous experts will forget everything after you obtain the respo
             max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
                 default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
                 The limit only plays a role when human_input_mode is not "ALWAYS".
-            agent_lib (str): the path to the agent library for retrieving the nested chat instantiated by CaptainAgent.
+            agent_lib (str): the path or a JSON file of the agent library for retrieving the nested chat instantiated by CaptainAgent.
             tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.
             nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
                 A full list of keys and their functionalities can be found in [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
