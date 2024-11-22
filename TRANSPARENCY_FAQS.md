@@ -34,7 +34,7 @@ While AG2 automates LLM workflows, decisions about how to use specific LLM outpu
 
 
 ## What are the limitations of AG2? How can users minimize the impact of AG2’s limitations when using the system?
-AG2 relies on existing LLMs. Experimenting with AG2 would retain common limitations of large language models; including:
+AG2 relies on existing LLMs. Experimenting with AG2 retains the common limitations of large language models; including:
 
 - Data Biases: Large language models, trained on extensive data, can inadvertently carry biases present in the source data. Consequently, the models may generate outputs that could be potentially biased or unfair.
 -	Lack of Contextual Understanding: Despite their impressive capabilities in language understanding and generation, these models exhibit limited real-world understanding, resulting in potential inaccuracies or nonsensical responses.
