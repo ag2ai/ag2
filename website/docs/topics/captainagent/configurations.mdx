@@ -1,4 +1,4 @@
-# Details of all the available configurations
+# Configurations in `nested_config`
 Captain Agent requires `nested_config` for configuration. Below is an example, we will break it down and provide a detailed explanation.
 
 ```
@@ -25,7 +25,7 @@ nested_config = {
 
 
 ## `autobuild_init_config`
-This section is used to configure the initial setup of autobuild.
+This section is used to configure the initial setup of autobuild. `autobuild_init_config` takes in arguments from `AgentBuilder.__init__()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/agent_builder.py#L181).
 
 ### `config_file_or_env`
 Configures the path to API key config. Defaults to `OAI_CONFIG_LIST`.
@@ -36,11 +36,11 @@ Configures the backbone of agent builder. The builder is used for agent selectio
 ### `agent_model`
 Configures the backbone of agents in the group chat. Defaults to `gpt-4o-mini`.
 
-### `kwargs`
+### Other `kwargs`
 `autobuild_init_config` takes in arguments from `AgentBuilder.__init__()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/agent_builder.py#L181).
 
 ## `autobuild_build_config`
-This section is used to configure the building process of autobuild.
+This section is used to configure the building process of autobuild. `autobuild_build_config` takes in arguments for `AgentBuilder.build()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/agent_builder.py#L365).
 
 ### `default_llm_config`
 Configures the default parameters for the builder during the autobuild process. Defaults to `{"temperature": 1, "top_p": 0.95, "max_tokens": 2048}`. `config_list` is **not* needed here.
@@ -67,7 +67,7 @@ Specifies the root directory of the tool library. When set to `'default'`, it wi
 Configures the retriever model used for fetching relevant tools from the library. Defaults to `all-mpnet-base-v2`. The value is valid as long as it is found by [SentenceTransformers library](https://huggingface.co/sentence-transformers).
 
 ## `group_chat_config`
-This section is used to configure the group chat settings.
+This section is used to configure the group chat settings. `group_chat_config` also takes in arguments for initializing `autogen.GroupChat`. Refer to all the configurables [here](https://ag2ai.github.io/ag2/docs/reference/agentchat/groupchat).
 
 ### `max_round`
 Specifies the maximum number of rounds in a group chat session. Defaults to `10`.

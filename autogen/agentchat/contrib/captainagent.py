@@ -139,6 +139,8 @@ Note that the previous experts will forget everything after you obtain the respo
         code_execution_config: Optional[Union[Dict, Literal[False]]] = False,
         nested_config: Optional[Dict] = None,
         agent_config_save_path: Optional[str] = None,
+        agent_lib: Optional[str] = None,
+        tool_lib: Optional[str] = None,
         description: Optional[str] = DEFAULT_DESCRIPTION,
         **kwargs,
     ):
@@ -177,6 +179,12 @@ Note that the previous experts will forget everything after you obtain the respo
         nested_config = self._update_config(self.DEFAULT_NESTED_CONFIG, nested_config)
         if nested_config["group_chat_llm_config"] is None:
             nested_config["group_chat_llm_config"] = llm_config.copy()
+        if agent_lib:
+            nested_config["autobuild_build_config"]["library_path_or_json"] = agent_lib
+        if tool_lib:
+            if "autobuild_tool_config" not in nested_config:
+                nested_config["autobuild_tool_config"] = {}
+            nested_config["autobuild_tool_config"]["tool_root"] = tool_lib
 
         self.assistant = ConversableAgent(name="CaptainAgent", system_message=system_message, llm_config=llm_config)
         self.assistant.update_tool_signature(self.AUTOBUILD_TOOL, is_remove=False)

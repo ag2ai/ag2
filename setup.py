@@ -68,6 +68,8 @@ if current_os in ["Windows", "Darwin"]:
 elif current_os == "Linux":
     retrieve_chat_pgvector.extend(["psycopg>=3.1.18"])
 
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3"]
+
 extra_require = {
     "test": [
         "ipykernel",
@@ -86,7 +88,8 @@ extra_require = {
     "retrievechat-mongodb": [*retrieve_chat, "pymongo>=4.0.0"],
     "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
     "graph_rag_falkor_db": graph_rag_falkor_db,
-    "autobuild": ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3"],
+    "autobuild": autobuild,
+    "captainagent": autobuild,
     "teachable": ["chromadb"],
     "lmm": ["replicate", "pillow"],
     "graph": ["networkx", "matplotlib"],
