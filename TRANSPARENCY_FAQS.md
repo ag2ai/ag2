@@ -1,12 +1,12 @@
 # AG2: Responsible AI FAQs
 
 ## What is AG2?
-AG2 is a framework for simplifying the orchestration, optimization, and automation of LLM workflows. It offers customizable and conversable agents that leverage the strongest capabilities of the most advanced LLMs, like GPT-4, while addressing their limitations by integrating with humans and tools and having conversations between multiple agents via automated chat. AG2 is a spin-off of AutoGen (initially released at https://github.com/microsoft/autogen) created by [a team consisting of AutoGen’s founders and contributors ](https://github.com/ag2ai/ag2/blob/main/MAINTAINERS.md) of AutoGen.
+AG2 is a framework for simplifying the orchestration, optimization, and automation of LLM workflows. It offers customizable and conversable agents that leverage the strongest capabilities of the most advanced LLMs, like GPT-4, while addressing their limitations by integrating with humans and tools and having conversations between multiple agents via automated chat. AG2 is a spin-off of AutoGen (initially released at https://github.com/microsoft/autogen) created by [a team consisting of AutoGen’s founders and contributors](https://github.com/ag2ai/ag2/blob/main/MAINTAINERS.md) of AutoGen.
 
 ## What can AG2 do?
 AG2 is a framework for building a complex multi-agent conversation system by:
 - Defining a set of agents with specialized capabilities and roles.
--	Defining the interaction behavior between agents, i.e., what to reply when an agent receives messages from another agent.
+- Defining the interaction behavior between agents, i.e., what to reply when an agent receives messages from another agent.
 
 The agent conversation-centric design has numerous benefits, including that it:
 -	Naturally handles ambiguity, feedback, progress, and collaboration.
@@ -29,7 +29,7 @@ While AG2 automates LLM workflows, decisions about how to use specific LLM outpu
 
 ## How was AG2 evaluated? What metrics are used to measure performance?
 -	Current version of AG2 was evaluated on six applications to illustrate its potential in simplifying the development of high-performance multi-agent applications. These applications are selected based on their real-world relevance,  problem difficulty and problem solving capabilities enabled by AG2, and innovative potential.
--	These applications involve using AG2 to solve math problems, question answering, decision making in text world environments, supply chain optimization, etc. For each of these domains AG2 was evaluated on various success based metrics (i.e., how often the AG2 based implementation solved the task). And, in some cases, AG2 based approach was also evaluated on implementation efficiency (e.g., to track reductions in developer effort to build). 
+-	These applications involve using AG2 to solve math problems, question answering, decision making in text world environments, supply chain optimization, etc. For each of these domains AG2 was evaluated on various success based metrics (i.e., how often the AG2 based implementation solved the task). And, in some cases, AG2 based approach was also evaluated on implementation efficiency (e.g., to track reductions in developer effort to build).
 - The team has conducted tests where a “red” agent attempts to get the default AG2 assistant to break from its alignment and guardrails. The team has observed that out of 70 attempts to break guardrails, only 1 was successful in producing text that would have been flagged as problematic by Azure OpenAI filters. The team has not observed any evidence that AG2 (or GPT models as hosted by OpenAI or Azure) can produce novel code exploits or jailbreak prompts, since direct prompts to “be a hacker”, “write exploits”, or “produce a phishing email” are refused by existing filters.
 
 
