@@ -6,7 +6,7 @@ AG2 is a framework for simplifying the orchestration, optimization, and automati
 ## What can AG2 do?
 AG2 is a framework for building a complex multi-agent conversation system by:
 - Defining a set of agents with specialized capabilities and roles.
-- Defining the interaction behavior between agents, i.e., what to reply when an agent receives messages from another agent.
+- Defining the interaction behavior between agents, i.e., what to reply with when an agent receives messages from another agent.
 
 The agent conversation-centric design has numerous benefits, including that it:
 -	Naturally handles ambiguity, feedback, progress, and collaboration.
