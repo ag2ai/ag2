@@ -61,27 +61,18 @@ To use agents from an agent library, you just need to specify a `library_path` s
 from autogen.agentchat.contrib.captain_agent import CaptainAgent
 from autogen import UserProxyAgent
 
-general_llm_config = {
+llm_config = {
     "temperature": 0,
     "config_list": autogen.config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4-1106-preview"]}),
-}
-
-nested_mode_config = {
-    # this is used to configure the building process
-    "autobuild_build_config": {
-        "library_path": "captainagent_expert_library.json"
-    },
-    # this is used to configure tool library
-    "autobuild_tool_config": {
-        "tool_root": "default",  # this will use the tool library we provide
-    }
 }
 
 ## build agents
 captain_agent = CaptainAgent(
     name="captain_agent",
-    llm_config=general_llm_config,
+    llm_config=llm_config,
     nested_mode_config=nested_mode_config,
+    agent_lib="captainagent_expert_library.json",
+    tool_lib="default",
     code_execution_config={"use_docker": False, "work_dir": "groupchat"},
 )
 user_proxy = UserProxyAgent(
