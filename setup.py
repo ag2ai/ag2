@@ -131,6 +131,12 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/ag2ai/ag2",
     packages=setuptools.find_packages(include=["autogen*"], exclude=["test"]),
+    package_data={
+        "autogen.agentchat.contrib.captainagent": [
+            "tools/**/*",  # CaptainAgent tools
+        ]
+    },
+    include_package_data=True,
     install_requires=install_requires,
     extras_require=extra_require,
     classifiers=[

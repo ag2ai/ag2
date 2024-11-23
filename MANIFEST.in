@@ -1,0 +1,2 @@
+# Include CaptainAgent tools
+recursive-include autogen/agentchat/contrib/captainagent/tools *
