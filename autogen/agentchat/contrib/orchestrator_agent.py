@@ -398,10 +398,6 @@ class OrchestratorAgent(ConversableAgent):
                     synthesized_prompt = self._get_synthesize_prompt(
                         self._task, self._team_description, self._facts, self._plan
                     )
-                    
-                    # Share new plan with all agents
-                    for agent in self._agents:
-                        self.send(synthesized_prompt, agent)
 
                     logger.info(
                             f"(thought) New plan:\n{synthesized_prompt}"
@@ -425,8 +421,6 @@ class OrchestratorAgent(ConversableAgent):
                 # Update chat history
                 self._append_oai_message({"role": "assistant", "content": instruction}, "assistant", self, True)
                 
-                # Send instruction directly to the agent
-                self.send(instruction, agent)
                 return agent
 
         return None
