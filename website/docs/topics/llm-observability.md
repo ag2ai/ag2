@@ -9,7 +9,7 @@ AutoGen's SQLite and File Logger - [Tutorial Notebook](/docs/notebooks/agentchat
 
 ### Full-Service Partner Integrations
 - AutoGen partners with [AgentOps](https://agentops.ai) to provide multi-agent tracking, metrics, and monitoring - [Tutorial Notebook](/docs/notebooks/agentchat_agentops)
-- AutoGen partners with [OpenLIT](https://github.com/openlit/openlit) to provide OpenTelemetry-native agent observability, which includes full execution traces and metrics - [Tutorial Notebook](/docs/notebooks/agentchat_openlit)
+- AutoGen partners with [OpenLIT](https://github.com/openlit/openlit) to provide OpenTelemetry-native agent observability, which includes full execution traces and metrics - [Tutorial Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_openlit.ipynb)
 
 ## What is Observability?
 Observability provides developers with the necessary insights to understand and improve the internal workings of their agents. Observability is necessary for maintaining reliability, tracking costs, and ensuring AI safety.
