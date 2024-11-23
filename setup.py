@@ -30,7 +30,8 @@ install_requires = [
     "termcolor",
     "flaml",
     # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
-    "numpy>=1.17.0,<2",
+    "numpy>=2.1; python_version>='3.13'",  # numpy 2.1+ required for Python 3.13
+    "numpy>=1.24.0,<2.0.0; python_version<'3.13'",  # numpy 1.24+ for older Python versions
     "python-dotenv",
     "tiktoken",
     # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
@@ -68,6 +69,8 @@ if current_os in ["Windows", "Darwin"]:
 elif current_os == "Linux":
     retrieve_chat_pgvector.extend(["psycopg>=3.1.18"])
 
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3"]
+
 extra_require = {
     "test": [
         "ipykernel",
@@ -86,7 +89,8 @@ extra_require = {
     "retrievechat-mongodb": [*retrieve_chat, "pymongo>=4.0.0"],
     "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
     "graph_rag_falkor_db": graph_rag_falkor_db,
-    "autobuild": ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3"],
+    "autobuild": autobuild,
+    "captainagent": autobuild + ["pandas"],
     "teachable": ["chromadb"],
     "lmm": ["replicate", "pillow"],
     "graph": ["networkx", "matplotlib"],
@@ -135,5 +139,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.8,<3.13",
+    python_requires=">=3.8,<3.14",
 )

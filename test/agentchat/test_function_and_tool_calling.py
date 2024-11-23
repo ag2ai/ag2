@@ -5,11 +5,15 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import json
+import sys
 from typing import Any, Callable, Dict, List
 
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
+
+# Cater for Python version 3.13+ changes in json error messages
+PYTHON131PLUS = sys.version_info >= (3, 13)
 
 
 def _tool_func_1(arg1: str, arg2: str) -> str:
@@ -107,6 +111,20 @@ _tool_use_message_1_bad_json_expected_reply = {
     "content": "Error: Expecting property name enclosed in double quotes: line 1 column 37 (char 36)\n The argument must be in JSON format.\n\n_tool_func_2: value3 value4",
 }
 
+# Python 3.13+ has different json error messages
+_tool_use_message_1_bad_json_expected_reply_313 = {
+    "role": "tool",
+    "tool_responses": [
+        {
+            "tool_call_id": "1",
+            "role": "tool",
+            "content": "Error: Illegal trailing comma before end of object: line 1 column 36 (char 35)\n The argument must be in JSON format.",
+        },
+        {"tool_call_id": "2", "role": "tool", "content": "_tool_func_2: value3 value4"},
+    ],
+    "content": "Error: Illegal trailing comma before end of object: line 1 column 36 (char 35)\n The argument must be in JSON format.\n\n_tool_func_2: value3 value4",
+}
+
 _tool_use_message_1_error_expected_reply = {
     "role": "tool",
     "tool_responses": [
@@ -161,6 +179,13 @@ _function_use_message_1_bad_json_expected_reply = {
     "name": "_tool_func_1",
     "role": "function",
     "content": "Error: Expecting property name enclosed in double quotes: line 1 column 37 (char 36)\n The argument must be in JSON format.",
+}
+
+# Python 3.13+ has different json error messages
+_function_use_message_1_bad_json_expected_reply_313 = {
+    "name": "_tool_func_1",
+    "role": "function",
+    "content": "Error: Illegal trailing comma before end of object: line 1 column 36 (char 35)\n The argument must be in JSON format.",
 }
 
 _function_use_message_1_error_expected_reply = {
@@ -240,7 +265,14 @@ def test_generate_function_call_reply_on_function_call_message(is_function_async
     # bad JSON
     messages = [_function_use_message_1_bad_json]
     finished, retval = agent.generate_function_call_reply(messages)
-    assert (finished, retval) == (True, _function_use_message_1_bad_json_expected_reply)
+    assert (finished, retval) == (
+        True,
+        (
+            _function_use_message_1_bad_json_expected_reply_313
+            if PYTHON131PLUS
+            else _function_use_message_1_bad_json_expected_reply
+        ),
+    )
 
     # tool call
     messages = [_tool_use_message_1]
@@ -282,7 +314,14 @@ async def test_a_generate_function_call_reply_on_function_call_message(is_functi
     # bad JSON
     messages = [_function_use_message_1_bad_json]
     finished, retval = await agent.a_generate_function_call_reply(messages)
-    assert (finished, retval) == (True, _function_use_message_1_bad_json_expected_reply)
+    assert (finished, retval) == (
+        True,
+        (
+            _function_use_message_1_bad_json_expected_reply_313
+            if PYTHON131PLUS
+            else _function_use_message_1_bad_json_expected_reply
+        ),
+    )
 
     # tool call
     messages = [_tool_use_message_1]
@@ -323,7 +362,14 @@ def test_generate_tool_calls_reply_on_function_call_message(is_function_async: b
     # bad JSON
     messages = [_tool_use_message_1_bad_json]
     finished, retval = agent.generate_tool_calls_reply(messages)
-    assert (finished, retval) == (True, _tool_use_message_1_bad_json_expected_reply)
+    assert (finished, retval) == (
+        True,
+        (
+            _tool_use_message_1_bad_json_expected_reply_313
+            if PYTHON131PLUS
+            else _tool_use_message_1_bad_json_expected_reply
+        ),
+    )
 
     # function call
     messages = [_function_use_message_1]
@@ -365,7 +411,14 @@ async def test_a_generate_tool_calls_reply_on_function_call_message(is_function_
     # bad JSON
     messages = [_tool_use_message_1_bad_json]
     finished, retval = await agent.a_generate_tool_calls_reply(messages)
-    assert (finished, retval) == (True, _tool_use_message_1_bad_json_expected_reply)
+    assert (finished, retval) == (
+        True,
+        (
+            _tool_use_message_1_bad_json_expected_reply_313
+            if PYTHON131PLUS
+            else _tool_use_message_1_bad_json_expected_reply
+        ),
+    )
 
     # function call
     messages = [_function_use_message_1]
