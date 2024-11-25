@@ -59,6 +59,8 @@ class OrchestratorAgent(ConversableAgent):
         max_replans: int = 3,
         return_final_answer: bool = False,
         user_agent: Optional[UserProxyAgent] = None,
+        agent_whole_history: bool = True,
+        reset_agent_after_task: bool = False,
         **kwargs
     ):
         super().__init__(
@@ -117,6 +119,8 @@ class OrchestratorAgent(ConversableAgent):
         self._return_final_answer = return_final_answer
         self._max_rounds = max_rounds
         self._current_round = 0
+        self._agent_whole_history = agent_whole_history
+        self._reset_agent_after_task = reset_agent_after_task
 
         self._team_description = ""
         self._task = ""
@@ -399,9 +403,10 @@ class OrchestratorAgent(ConversableAgent):
                         self._task, self._team_description, self._facts, self._plan
                     )
                     
-                    # Share new plan with all agents
-                    for agent in self._agents:
-                        self.send(synthesized_prompt, agent)
+                    # Share new plan with all agents if whole history enabled
+                    if self._agent_whole_history:
+                        for agent in self._agents:
+                            self.send(synthesized_prompt, agent)
 
                     logger.info(
                             f"(thought) New plan:\n{synthesized_prompt}"
@@ -466,8 +471,8 @@ class OrchestratorAgent(ConversableAgent):
                 # Execute through executor agent
                 chat_result = self.executor.initiate_chat(
                     recipient=next_agent,
-                    message=last_message,  # Pass full message dict
-                    clear_history=True  # Clear history each time to avoid context pollution
+                    #message=last_message,  # Pass full message dict
+                    clear_history=self._reset_agent_after_task  # Clear history based on reset_agent_after_task setting
                 )
                 
                 if chat_result and chat_result.summary:
