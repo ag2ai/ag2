@@ -361,8 +361,14 @@ class OrchestratorAgent(ConversableAgent):
                         "(final answer)\n%s",
                         final_answer
                 )
-                # Add final answer to chat history                                                                                         
-                self._append_oai_message({"role": "assistant", "content": final_answer}, "assistant", self, True)
+                # Add final answer to chat history
+                final_msg = {"role": "assistant", "content": final_answer}
+                self._append_oai_message(final_msg, "assistant", self, True)
+                
+                # Share final answer with all agents if enabled
+                if self._agent_whole_history:
+                    for agent in self._agents:
+                        self.send(final_answer, agent)
             return None
 
         # Stalled or stuck in a loop
@@ -428,10 +434,16 @@ class OrchestratorAgent(ConversableAgent):
                 logger.info(f"{self.name} (-> {next_agent_name}): {instruction}")
                 
                 # Update chat history
-                self._append_oai_message({"role": "assistant", "content": instruction}, "assistant", self, True)
+                instruction_msg = {"role": "assistant", "content": instruction}
+                self._append_oai_message(instruction_msg, "assistant", self, True)
                 
-                # Send instruction directly to the agent
-                self.send(instruction, agent)
+                # Share instruction with all agents if enabled
+                if self._agent_whole_history:
+                    for agent in self._agents:
+                        self.send(instruction, agent)
+                else:
+                    # Otherwise just send to next agent
+                    self.send(instruction, agent)
                 return agent
 
         return None
@@ -482,9 +494,16 @@ class OrchestratorAgent(ConversableAgent):
                     response = chat_result.chat_history[-1]["content"]
                     
                     # Add response to chat history
-                    self._append_oai_message({"role": "user", "content": response}, "user", self, False)
+                    response_msg = {"role": "user", "content": response}
+                    self._append_oai_message(response_msg, "user", self, False)
                     
-                    # Select next agent based on response
+                    # Share response with all other agents if enabled
+                    if self._agent_whole_history:
+                        for agent in self._agents:
+                            if agent != next_agent:  # Don't send to the agent who just responded
+                                self.send(response, agent)
+                    
+                    # Select next agent based on response 
                     next_agent = self._select_next_agent(response)
                     
                 if self._current_round >= self._max_rounds:
