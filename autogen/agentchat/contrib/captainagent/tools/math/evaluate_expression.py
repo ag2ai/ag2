@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def evaluate_expression(expression):
     """
     Evaluates a mathematical expression with support for floor function notation and power notation.

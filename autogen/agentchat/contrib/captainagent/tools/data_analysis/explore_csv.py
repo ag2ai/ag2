@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def explore_csv(file_path, num_lines=5):
     """
     Reads a CSV file and prints the column names, shape, data types, and the first few lines of data.
