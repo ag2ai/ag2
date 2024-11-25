@@ -8,7 +8,14 @@
 
 <!-- [![NuGet version](https://badge.fury.io/nu/AutoGen.Core.svg)](https://badge.fury.io/nu/AutoGen.Core) -->
 
-# [AG2](https://github.com/ag2ai/ag2)
+
+<a name="readme-top"></a>
+
+<div align="center">
+<img src="./website/static/img/ag2.png" alt="AutoGen Logo" width="100">
+
+
+</div>
 
 [📚 Cite paper](#related-papers).
 <!-- <p align="center">
