@@ -474,16 +474,15 @@ class OrchestratorAgent(ConversableAgent):
             while next_agent is not None and self._current_round < self._max_rounds:
                 self._current_round += 1
                 
-                # Get the last message from chat history
-                last_message = self._oai_messages[self][-1] if self._oai_messages[self] else None
-                if not last_message:
+                instructions = self._oai_messages[self][-1] if self._oai_messages[self] else None
+                if not instructions:
                     logger.error("No message found in chat history")
                     break
                     
                 # Execute through executor agent
                 chat_result = self.executor.initiate_chat(
                     recipient=next_agent,
-                    #message=last_message,  # Pass full message dict
+                    message=instructions,  
                     clear_history=self._reset_agent_after_task  # Clear history based on reset_agent_after_task setting
                 )
                 
