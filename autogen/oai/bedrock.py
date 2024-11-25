@@ -79,14 +79,20 @@ class BedrockClient:
             retries={"max_attempts": self._retries, "mode": "standard"},
         )
 
-        session = boto3.Session(
-            aws_access_key_id=self._aws_access_key,
-            aws_secret_access_key=self._aws_secret_key,
-            aws_session_token=self._aws_session_token,
-            profile_name=self._aws_profile_name,
-        )
-
-        self.bedrock_runtime = session.client(service_name="bedrock-runtime", config=bedrock_config)
+        #if haven't got any access_key or secret_key in environment variable or via arugments then
+        if self._aws_access_key is None or self._aws_access_key == "" or self._aws_secret_key is None or self._aws_secret_key == "":
+            
+            # attempts to get client from attached role of mananged service (lambda, ec2, ecs, etc.)
+            self.bedrock_runtime = boto3.client(service_name="bedrock-runtime", config=bedrock_config)
+        else:
+            session = boto3.Session(
+                aws_access_key_id=self._aws_access_key,
+                aws_secret_access_key=self._aws_secret_key,
+                aws_session_token=self._aws_session_token,
+                profile_name=self._aws_profile_name,
+            )
+    
+            self.bedrock_runtime = session.client(service_name="bedrock-runtime", config=bedrock_config)
 
     def message_retrieval(self, response):
         """Retrieve the messages from the response."""
