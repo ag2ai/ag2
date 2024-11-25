@@ -407,9 +407,9 @@ class SwarmAgent(ConversableAgent):
                         if content.context_variables != {}:
                             self._context_variables.update(content.context_variables)
                         if content.agent is not None:
-                            self._next_agent = content.agent
+                            next_agent = content.agent
                     elif isinstance(content, Agent):
-                        self._next_agent = content
+                        next_agent = content
 
                     tool_responses_inner.append(tool_response)
                     contents.append(str(tool_response["content"]))
