@@ -69,7 +69,8 @@ if current_os in ["Windows", "Darwin"]:
 elif current_os == "Linux":
     retrieve_chat_pgvector.extend(["psycopg>=3.1.18"])
 
-autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3"]
+# pysqlite3-binary used so it doesn't need to compile pysqlite3
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
 extra_require = {
     "test": [
@@ -130,10 +131,15 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ag2ai/ag2",
-    packages=setuptools.find_packages(include=["autogen*"], exclude=["test"]),
+    packages=setuptools.find_namespace_packages(
+        include=[
+            "autogen*",
+            "autogen.agentchat.contrib.captainagent.tools*",
+        ],
+        exclude=["test"],
+    ),
     package_data={
         "autogen.agentchat.contrib.captainagent": [
-            "tools/**/*.py",  # CaptainAgent tools
             "tools/tool_description.tsv",
             "tools/requirements.txt",
         ]
