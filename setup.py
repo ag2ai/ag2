@@ -133,7 +133,9 @@ setuptools.setup(
     packages=setuptools.find_packages(include=["autogen*"], exclude=["test"]),
     package_data={
         "autogen.agentchat.contrib.captainagent": [
-            "tools/**/*",  # CaptainAgent tools
+            "tools/**/*.py",  # CaptainAgent tools
+            "tools/tool_description.tsv",
+            "tools/requirements.txt",
         ]
     },
     include_package_data=True,

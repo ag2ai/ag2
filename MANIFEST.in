@@ -1,2 +1,4 @@
 # Include CaptainAgent tools
-recursive-include autogen/agentchat/contrib/captainagent/tools *
+recursive-include autogen/agentchat/contrib/captainagent/tools *.py
+include autogen/agentchat/contrib/captainagent/tools/tool_description.tsv
+include autogen/agentchat/contrib/captainagent/tools/requirements.txt
