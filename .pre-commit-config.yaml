@@ -42,6 +42,7 @@ repos:
             (?x)^(
               pyproject.toml |
               website/static/img/ag.svg |
+              website/static/img/ag2.svg |
               website/yarn.lock |
               website/docs/tutorial/code-executors.ipynb |
               website/docs/topics/code-execution/custom-executor.ipynb |
