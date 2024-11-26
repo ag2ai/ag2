@@ -35,7 +35,7 @@ CaptainAgent can serve as a drop-in replacement for the general `AssistantAgent`
 Without them, CaptainAgent will automatically generate new agents.
 
 ```python
-from autogen.agentchat.contrib.captain_agent import CaptainAgent
+from autogen.agentchat.contrib.captainagent import CaptainAgent
 from autogen import UserProxyAgent
 
 llm_config = {
@@ -64,7 +64,7 @@ The tool library we provide requires subscribing to specific APIs, please refer 
 To use agents from an agent library, you just need to specify a `library_path` sub-field or a `autobuild_tool_config` field in CaptainAgent's configuration.
 
 ```python
-from autogen.agentchat.contrib.captain_agent import CaptainAgent
+from autogen.agentchat.contrib.captainagent import CaptainAgent
 from autogen import UserProxyAgent
 
 llm_config = {
