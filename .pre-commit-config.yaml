@@ -64,6 +64,16 @@ repos:
       require_serial: true
       # Print the number of files as a sanity-check
       verbose: true
+    - id: check-license-headers
+      name: check license headers
+      entry: python ./scripts/pre-commit-license-check.py
+      language: python
+      types: [python]
+      exclude: |
+        (?x)^(
+          notebook/.* |
+          website/.*
+        )$
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.8.5
     hooks:

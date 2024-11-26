@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def calculate_skewness_and_kurtosis(csv_file: str, column_name: str) -> tuple:
     """
     Calculate the skewness and kurtosis of a specified column in a CSV file. The kurtosis is calculated using the Fisher definition.

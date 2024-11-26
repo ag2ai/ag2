@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def detect_outlier_iqr(csv_file: str, column_name: str):
     """
     Detect outliers in a specified column of a CSV file using the IQR method.
