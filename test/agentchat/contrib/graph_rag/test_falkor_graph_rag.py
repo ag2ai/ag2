@@ -8,9 +8,7 @@ import sys
 
 import pytest
 from conftest import reason, skip_openai  # noqa: E402
-from graphrag_sdk import KnowledgeGraph, Source
-from graphrag_sdk.ontology import Ontology
-
+from graphrag_sdk.schema import Schema
 try:
     from autogen.agentchat.contrib.graph_rag.document import (
         Document,

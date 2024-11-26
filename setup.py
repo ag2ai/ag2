@@ -61,7 +61,7 @@ retrieve_chat = [
 retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 
 graph_rag_falkor_db = [
-    "graphrag_sdk",
+    "graphrag_sdk==0.1.3b0",
 ]
 
 if current_os in ["Windows", "Darwin"]:
