@@ -1,23 +1,22 @@
 from typing import Any, Dict
 
 # TODO Why does pylance fail if I import from autogen_core.components.tools instead?
-from autogen_core.components.tools._base import ParametersSchema, ToolSchema
+#from autogen_core.components.tools._base import ParametersSchema, ToolSchema
 
 
-def _load_tool(tooldef: Dict[str, Any]) -> ToolSchema:
-    return ToolSchema(
-        name=tooldef["function"]["name"],
-        description=tooldef["function"]["description"],
-        parameters=ParametersSchema(
-            type="object",
-            properties=tooldef["function"]["parameters"]["properties"],
-            required=tooldef["function"]["parameters"]["required"],
-        ),
-    )
+#def _load_tool(tooldef: Dict[str, Any]) -> ToolSchema:
+#    return ToolSchema(
+#        name=tooldef["function"]["name"],
+#        description=tooldef["function"]["description"],
+#        parameters=ParametersSchema(
+#            type="object",
+#            properties=tooldef["function"]["parameters"]["properties"],
+#            required=tooldef["function"]["parameters"]["required"],
+#        ),
+#‚    )
 
-
-TOOL_VISIT_URL: ToolSchema = _load_tool(
-    {
+#TOOL_VISIT_URL: ToolSchema = _load_tool(
+TOOL_VISIT_URL =  {
         "type": "function",
         "function": {
             "name": "visit_url",
@@ -38,10 +37,8 @@ TOOL_VISIT_URL: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_WEB_SEARCH: ToolSchema = _load_tool(
-    {
+TOOL_WEB_SEARCH = {
         "type": "function",
         "function": {
             "name": "web_search",
@@ -62,10 +59,9 @@ TOOL_WEB_SEARCH: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_HISTORY_BACK: ToolSchema = _load_tool(
-    {
+
+TOOL_HISTORY_BACK = {
         "type": "function",
         "function": {
             "name": "history_back",
@@ -82,10 +78,8 @@ TOOL_HISTORY_BACK: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_PAGE_UP: ToolSchema = _load_tool(
-    {
+TOOL_PAGE_UP = {
         "type": "function",
         "function": {
             "name": "page_up",
@@ -102,10 +96,9 @@ TOOL_PAGE_UP: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_PAGE_DOWN: ToolSchema = _load_tool(
-    {
+
+TOOL_PAGE_DOWN = {
         "type": "function",
         "function": {
             "name": "page_down",
@@ -122,10 +115,9 @@ TOOL_PAGE_DOWN: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_CLICK: ToolSchema = _load_tool(
-    {
+
+TOOL_CLICK =    {
         "type": "function",
         "function": {
             "name": "click",
@@ -146,10 +138,9 @@ TOOL_CLICK: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_TYPE: ToolSchema = _load_tool(
-    {
+
+TOOL_INPUT_TEXT =   {
         "type": "function",
         "function": {
             "name": "input_text",
@@ -174,10 +165,9 @@ TOOL_TYPE: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_SCROLL_ELEMENT_DOWN: ToolSchema = _load_tool(
-    {
+
+TOOL_SCROLL_ELEMENT_DOWN = {
         "type": "function",
         "function": {
             "name": "scroll_element_down",
@@ -198,10 +188,9 @@ TOOL_SCROLL_ELEMENT_DOWN: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_SCROLL_ELEMENT_UP: ToolSchema = _load_tool(
-    {
+
+TOOL_SCROLL_ELEMENT_UP = {
         "type": "function",
         "function": {
             "name": "scroll_element_up",
@@ -222,10 +211,8 @@ TOOL_SCROLL_ELEMENT_UP: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_READ_PAGE_AND_ANSWER: ToolSchema = _load_tool(
-    {
+TOOL_READ_PAGE_AND_ANSWER = {
         "type": "function",
         "function": {
             "name": "answer_question",
@@ -246,10 +233,9 @@ TOOL_READ_PAGE_AND_ANSWER: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_SUMMARIZE_PAGE: ToolSchema = _load_tool(
-    {
+
+TOOL_SUMMARIZE_PAGE = {
         "type": "function",
         "function": {
             "name": "summarize_page",
@@ -266,10 +252,8 @@ TOOL_SUMMARIZE_PAGE: ToolSchema = _load_tool(
             },
         },
     }
-)
 
-TOOL_SLEEP: ToolSchema = _load_tool(
-    {
+TOOL_SLEEP = {
         "type": "function",
         "function": {
             "name": "sleep",
@@ -286,4 +270,3 @@ TOOL_SLEEP: ToolSchema = _load_tool(
             },
         },
     }
-)

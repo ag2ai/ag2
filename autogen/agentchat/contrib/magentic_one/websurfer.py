@@ -8,7 +8,7 @@ import pathlib
 import re
 import time
 import traceback
-from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union, cast  # Any, Callable, Dict, List, Literal, Tuple
+from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union, cast,Callable,Literal  # Any, Callable, Dict, List, Literal, Tuple
 from urllib.parse import quote_plus  # parse_qs, quote, unquote, urlparse, urlunparse
 
 import aiofiles
@@ -16,7 +16,8 @@ import aiofiles
 from PIL import Image
 from playwright._impl._errors import Error as PlaywrightError
 from playwright._impl._errors import TimeoutError
-from autogen.agentchat import ConversableAgent
+from autogen.agentchat import ConversableAgent, Agent
+
 
 # from playwright._impl._async_base.AsyncEventInfo
 from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
@@ -28,6 +29,8 @@ from .websurfer_prompts import (
 
 # TODO: Fix mdconvert
 from .markdown_browser import MarkdownConverter  # type: ignore
+from .utils import SentinelMeta
+from .image import AGImage
 
 #from ...messages import UserContent, WebSurferEvent
 #from ...utils import SentinelMeta, message_content_to_str
@@ -43,7 +46,7 @@ from .tool_definitions import (
     # TOOL_SCROLL_ELEMENT_UP,
     TOOL_SLEEP,
     TOOL_SUMMARIZE_PAGE,
-    TOOL_TYPE,
+    #TOOL_TYPE,
     TOOL_VISIT_URL,
     TOOL_WEB_SEARCH,
 )
@@ -66,13 +69,14 @@ MLM_WIDTH = 1224
 
 SCREENSHOT_TOKENS = 1105
 
+logger = logging.getLogger(__name__)
 
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
     pass
 
 
-@default_subscription
+#@default_subscription
 class MultimodalWebSurfer(ConversableAgent):
     """(In preview) A multimodal agent that acts as a web surfer that can search the web and visit web pages."""
 
@@ -92,6 +96,7 @@ class MultimodalWebSurfer(ConversableAgent):
         description: Optional[str] = DEFAULT_DESCRIPTION,
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
+        screenshot_tool_prompt: str = SCREENSHOT_TOOL_SELECTION,
     ):
         """To instantiate properly please make sure to call MultimodalWebSurfer.init"""
         super().__init__(
@@ -114,7 +119,7 @@ class MultimodalWebSurfer(ConversableAgent):
         self._page: Page | None = None
         self._last_download: Download | None = None
         self._prior_metadata_hash: str | None = None
-        self.logger = logging.getLogger(EVENT_LOGGER_NAME + f".{self.id.key}.MultimodalWebSurfer")
+        #self.logger = logging.getLogger(EVENT_LOGGER_NAME + f".{self.id.key}.MultimodalWebSurfer")
 
         # Read page_script
         self._page_script: str = ""
@@ -127,9 +132,10 @@ class MultimodalWebSurfer(ConversableAgent):
 
         self._download_handler = _download_handler
 
+        self.screenshot_tool_prompt = screenshot_tool_prompt
+
     async def init(
         self,
-        #model_client: ChatCompletionClient,
         headless: bool = True,
         browser_channel: str | type[DEFAULT_CHANNEL] = DEFAULT_CHANNEL,
         browser_data_dir: str | None = None,
@@ -157,7 +163,7 @@ class MultimodalWebSurfer(ConversableAgent):
         self.start_page = start_page or self.DEFAULT_START_PAGE
         self.downloads_folder = downloads_folder
         self.to_save_screenshots = to_save_screenshots
-        self._chat_history: List[LLMMessage] = [] # TODO: use the ag2 message format
+        self._chat_history: List[Dict[str,Any]] = [] # TODO: use the ag2 message format
         self._last_download = None
         self._prior_metadata_hash = None
 
@@ -199,9 +205,8 @@ class MultimodalWebSurfer(ConversableAgent):
         await self._set_debug_dir(debug_dir)
 
     def _get_screenshot_selection_prompt(self, page_url, visible_targets, other_targets_str, focused_hint, tool_names) -> str:
-        self._page.url, 
-        
-        return self._plan_prompt.format(page_url=self._page.url,
+        assert self._page is not None
+        return self.screenshot_tool_prompt.format(page_url=self._page.url,
         visible_targets=visible_targets,
         other_targets_str=other_targets_str,
         focused_hint=focused_hint,
@@ -243,18 +248,12 @@ class MultimodalWebSurfer(ConversableAgent):
                 )
         if self.to_save_screenshots:
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
-            self.logger.info(
-                WebSurferEvent(
-                    source=self.metadata["type"],
-                    url=self._page.url,
-                    message="Screenshot: " + screenshot_png_name,
-                )
-            )
-            self.logger.info(
-                f"Multimodal Web Surfer debug screens: {pathlib.Path(os.path.abspath(debug_html)).as_uri()}\n"
-            )
+            logger.info(f"url: {self._page.url} screenshot: {screenshot_png_name}")
 
-    async def _reset(self, cancellation_token: CancellationToken) -> None: # TODO: ag2
+            logger.info(f"Multimodal Web Surfer debug screens: {pathlib.Path(os.path.abspath(debug_html)).as_uri()}\n")
+
+
+    async def _reset(self) -> None: # TODO: ag2
         assert self._page is not None
         #future = super()._reset(cancellation_token)
         #await future
@@ -263,21 +262,11 @@ class MultimodalWebSurfer(ConversableAgent):
             current_timestamp = "_" + int(time.time()).__str__()
             screenshot_png_name = "screenshot" + current_timestamp + ".png"
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
-            self.logger.info(
-                WebSurferEvent(
-                    source=self.metadata["type"],
-                    url=self._page.url,
-                    message="Screenshot: " + screenshot_png_name,
-                )
-            )
+            
+            logger.info(f"url: {self._page.url} screenshot: {screenshot_png_name}")
 
-        self.logger.info(
-            WebSurferEvent(
-                source=self.metadata["type"],
-                url=self._page.url,
-                message="Resetting browser.",
-            )
-        )
+
+        logger.info(f"url: {self._page.url} Resetting browser.")
 
     def _target_name(self, target: str, rects: Dict[str, InteractiveRegion]) -> str | None:
         try:
@@ -307,35 +296,26 @@ class MultimodalWebSurfer(ConversableAgent):
 
         return targets
 
-    async def _generate_reply(self, cancellation_token: CancellationToken) -> Tuple[bool, UserContent]: # TODO: ag2
+    async def _generate_reply(self):# -> Tuple[bool, UserContent]: # TODO: ag2
         assert self._page is not None
         try:
-            request_halt, content = await self.__generate_reply(cancellation_token)
+            request_halt, content = await self.__generate_reply()
             return request_halt, content
         except Exception:
             return False, f"Web surfing error:\n\n{traceback.format_exc()}"
 
     async def _execute_tool( # TODO: ag2 biggest work integrating with tools
         self,
-        message: List[FunctionCall],
+        message,#: List[FunctionCall],
         rects: Dict[str, InteractiveRegion],
         tool_names: str,
-        use_ocr: bool = True,
-        cancellation_token: Optional[CancellationToken] = None,
-    ) -> Tuple[bool, UserContent]:
+        use_ocr: bool = True
+        ):# -> Tuple[bool, UserContent]:
         name = message[0].name
         args = json.loads(message[0].arguments)
         action_description = ""
         assert self._page is not None
-        self.logger.info(
-            WebSurferEvent(
-                source=self.metadata["type"],
-                url=self._page.url,
-                action=name,
-                arguments=args,
-                message=f"{name}( {json.dumps(args)} )",
-            )
-        )
+        logger.info(f"url: {self._page.url} name: {name} args: {args} message: {f'{name}( {json.dumps(args)} )'}")
 
         if name == "visit_url":
             url = args.get("url")
@@ -411,11 +391,11 @@ class MultimodalWebSurfer(ConversableAgent):
         elif name == "answer_question":
             question = str(args.get("question"))
             # Do Q&A on the DOM. No need to take further action. Browser state does not change.
-            return False, await self._summarize_page(question=question, cancellation_token=cancellation_token)
+            return False, await self._summarize_page(question=question)
 
         elif name == "summarize_page":
             # Summarize the DOM. No need to take further action. Browser state does not change.
-            return False, await self._summarize_page(cancellation_token=cancellation_token)
+            return False, await self._summarize_page()
 
         elif name == "sleep":
             action_description = "I am waiting a short period of time before taking further action."
@@ -466,16 +446,17 @@ class MultimodalWebSurfer(ConversableAgent):
             screenshot_png_name = "screenshot" + current_timestamp + ".png"
             async with aiofiles.open(os.path.join(self.debug_dir, screenshot_png_name), "wb") as file:  # type: ignore
                 await file.write(new_screenshot)  # type: ignore
-            self.logger.info(
-                WebSurferEvent(
-                    source=self.metadata["type"],
-                    url=self._page.url,
-                    message="Screenshot: " + screenshot_png_name,
-                )
-            )
+            logger.info(f"url: {self._page.url} Screenshot: {screenshot_png_name}")
+            #self.logger.info(
+            #    WebSurferEvent(
+            #        source=self.metadata["type"],
+            #        url=self._page.url,
+            #        message="Screenshot: " + screenshot_png_name,
+            #    )
+            #)
 
         ocr_text = (
-            await self._get_ocr_text(new_screenshot, cancellation_token=cancellation_token) if use_ocr is True else ""
+            await self._get_ocr_text(new_screenshot) if use_ocr is True else ""
         )
 
         # Return the complete observation
@@ -487,12 +468,12 @@ class MultimodalWebSurfer(ConversableAgent):
             AGImage.from_pil(Image.open(io.BytesIO(new_screenshot))),
         ]
 
-    async def __generate_reply(self, cancellation_token: CancellationToken) -> Tuple[bool, UserContent]: # TODO: ag2
+    async def __generate_reply(self):# -> Tuple[bool, UserContent]: # TODO: ag2
         assert self._page is not None
         """Generates the actual reply. First calls the LLM to figure out which tool to use, then executes the tool."""
 
         # Clone the messages to give context, removing old screenshots
-        history: List[LLMMessage] = [] 
+        history: List[Dict[str,Any]] = [] 
         for m in self._chat_history:
             if isinstance(m.content, str):
                 history.append(m)
@@ -597,9 +578,12 @@ class MultimodalWebSurfer(ConversableAgent):
             scaled_screenshot.save(os.path.join(self.debug_dir, "screenshot_scaled.png"))  # type: ignore
 
         # Add the multimodal message and make the request
-        #history.append(
-        #    UserMessage(content=[text_prompt, AGImage.from_pil(scaled_screenshot)], source=self.metadata["type"])
-        #)
+        history.append(
+            {
+                "role": "user",
+                "content": [text_prompt, AGImage.from_pil(scaled_screenshot)],
+            }
+        )
         self.chat_messages.append(history)
         response = self.generate_reply(history) # TODO: make sure tool are added
         #response = await self._model_client.create( # TODO: ag2 / generate reply ?
@@ -744,7 +728,7 @@ class MultimodalWebSurfer(ConversableAgent):
         box = cast(Dict[str, Union[int, float]], await target.bounding_box())
         try:
             # Give it a chance to open a new page
-            # TODO: Having trouble with these types
+            # TODO: Having trouble with these types # original comment
             async with self._page.expect_event("popup", timeout=1000) as page_info:  # type: ignore
                 await self._page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, delay=10)
                 # If we got this far without error, than a popup or new tab opened. Handle it.
@@ -754,13 +738,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 assert isinstance(new_page, Page)
                 await self._on_new_page(new_page)
 
-                self.logger.info(
-                    WebSurferEvent(
-                        source=self.metadata["type"],
-                        url=self._page.url,
-                        message="New tab or window.",
-                    )
-                )
+                logger.info(f"url: {self._page.url} New tab or window.")
 
         except TimeoutError:
             pass
@@ -805,8 +783,7 @@ class MultimodalWebSurfer(ConversableAgent):
     async def _summarize_page(
         self,
         question: str | None = None,
-        token_limit: int = 100000,
-        cancellation_token: Optional[CancellationToken] = None,
+        token_limit: int = 100000
     ) -> str:
         assert self._page is not None
 
@@ -825,9 +802,12 @@ class MultimodalWebSurfer(ConversableAgent):
         ag_image = AGImage.from_pil(scaled_screenshot)
 
         # Prepare the system prompt
-        messages: List[LLMMessage] = []
+        messages: List[Dict[str,Any]] = []
         messages.append(
-            SystemMessage(content="You are a helpful assistant that can summarize long documents to answer question.")
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that can summarize long documents to answer question.",
+            }
         )
 
         # Prepare the main prompt
@@ -840,19 +820,29 @@ class MultimodalWebSurfer(ConversableAgent):
         # Grow the buffer (which is added to the prompt) until we overflow the context window or run out of lines
         buffer = ""
         for line in re.split(r"([\r\n]+)", page_markdown):
-            message = UserMessage(
+            message = {
+                "role": "user",
+                "content": [prompt + 
+                buffer + 
+                line, 
+                #ag_image,
+                ],
+            }
+            
+            #UserMessage(
                 # content=[
-                prompt + buffer + line,
+                #prompt + buffer + line,
                 #    ag_image,
                 # ],
-                source=self.metadata["type"],
-            )
+                #source=self.metadata["type"],
+            #)
 
-            remaining = self._model_client.remaining_tokens(messages + [message])
-            if remaining > SCREENSHOT_TOKENS:
-                buffer += line
-            else:
-                break
+            # TODO: is something like this possible in ag2
+            #remaining = self._model_client.remaining_tokens(messages + [message])
+            #if remaining > SCREENSHOT_TOKENS:
+            #    buffer += line
+            #else:
+            #    break
 
         # Nothing to do
         buffer = buffer.strip()
@@ -861,25 +851,21 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Append the message
         messages.append(
-            UserMessage(
-                content=[
-                    prompt + buffer,
-                    ag_image,
-                ],
-                source=self.metadata["type"],
-            )
+            {
+                "role": "user",
+                "content": [prompt + buffer, ag_image],
+            }
         )
 
         # Generate the response
         is_valid_response, response = self.generate_oai_reply(messages=messages)
-        #response = await self._model_client.create(messages, cancellation_token=cancellation_token)
         scaled_screenshot.close()
         assert is_valid_response
         assert isinstance(response, str)
         return response
 
     async def _get_ocr_text(
-        self, image: bytes | io.BufferedIOBase | Image.Image, cancellation_token: Optional[CancellationToken] = None
+        self, image: bytes | io.BufferedIOBase | Image.Image
     ) -> str:
         scaled_screenshot = None
         if isinstance(image, Image.Image):
@@ -894,21 +880,15 @@ class MultimodalWebSurfer(ConversableAgent):
             scaled_screenshot = pil_image.resize((MLM_WIDTH, MLM_HEIGHT))
             pil_image.close()
 
-        # Add the multimodal message and make the request # TODO: Ag2
-        messages: List[LLMMessage] = [] # TODO: ag2 massage format ? 
+        messages: List[Dict[str,Any]] = [] 
         messages.append(
-            UserMessage(
-                content=[
-                    "Please transcribe all visible text on this page, including both main content and the labels of UI elements.",
-                    AGImage.from_pil(scaled_screenshot),
-                ],
-                source=self.metadata["type"],
-            )
+            {"role": "user", 
+            "content": ["Please transcribe all visible text on this page, including both main content and the labels of UI elements.",
+                        AGImage.from_pil(scaled_screenshot)]}
         )
         is_valid_response, response = self.generate_oai_reply(messages=messages)
-        #response = await self._model_client.create(messages, cancellation_token=cancellation_token)  # TODO: Ag2
 
         scaled_screenshot.close()
         assert is_valid_response
-        assert isinstance(content, str)
+        assert isinstance(response, str)
         return response
