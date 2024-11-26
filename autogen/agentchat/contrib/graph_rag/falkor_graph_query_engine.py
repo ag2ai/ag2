@@ -1,5 +1,5 @@
 import os
-from dataclasses import field
+from dataclasses import dataclass, field
 from typing import List
 
 from graphrag_sdk import KnowledgeGraph, Source
@@ -9,6 +9,7 @@ from .document import Document
 from .graph_query_engine import GraphStoreQueryResult
 
 
+@dataclass
 class FalkorGraphQueryResult(GraphStoreQueryResult):
     messages: list = field(default_factory=list)
 
@@ -30,7 +31,7 @@ class FalkorGraphQueryEngine:
     ):
         """
         Initialize a Falkor DB knowledge graph.
-        Please also refer to https://github.com/FalkorDB/GraphRAG-SDK/blob/main/graphrag_sdk/kg.py
+        Please also refer to https://github.com/FalkorDB/GraphRAG-SDK/blob/2-move-away-from-sql-to-json-ontology-detection/graphrag_sdk/kg.py
 
         Args:
             name (str): Knowledge graph name.
@@ -39,7 +40,7 @@ class FalkorGraphQueryEngine:
             username (str|None): FalkorDB username.
             password (str|None): FalkorDB password.
             model (str): OpenAI model to use for Falkor DB to build and retrieve from the graph.
-            schema: Falkor DB knowledge graph schema (ontology), https://github.com/FalkorDB/GraphRAG-SDK/blob/main/graphrag_sdk/schema/schema.py
+            schema: Falkor DB knowledge graph schema (ontology), https://github.com/FalkorDB/GraphRAG-SDK/blob/2-move-away-from-sql-to-json-ontology-detection/graphrag_sdk/schema/schema.py
                     If None, Falkor DB will auto generate a schema from the input docs.
         """
         self.knowledge_graph = KnowledgeGraph(name, host, port, username, password, model, schema)
