@@ -23,6 +23,7 @@ from playwright.async_api import BrowserContext, Download, Page, Playwright, asy
 
 from .websurfer_prompts import (
     DEFAULT_DESCRIPTION,
+    SCREENSHOT_TOOL_SELECTION,
 )
 
 # TODO: Fix mdconvert
@@ -79,7 +80,6 @@ class MultimodalWebSurfer(ConversableAgent):
 
     def __init__(
         self,
-
         name: str = "MultimodalWebSurfer",
         system_message: Optional[Union[str, List]] = "You are a helpful AI Assistant.",
         is_termination_msg: Optional[Callable[[Dict], bool]] = None,
@@ -89,16 +89,25 @@ class MultimodalWebSurfer(ConversableAgent):
         code_execution_config: Union[Dict, Literal[False]] = False,
         llm_config: Optional[Union[Dict, Literal[False]]] = None,
         default_auto_reply: Union[str, Dict] = "",
-        description: Optional[str] = None,
+        description: Optional[str] = DEFAULT_DESCRIPTION,
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
-
-        description: str = DEFAULT_DESCRIPTION,
     ):
         """To instantiate properly please make sure to call MultimodalWebSurfer.init"""
-        # TODO: init conversable agent super 
-        super().__init__(description)
-
+        super().__init__(
+            name=name,
+            system_message=system_message,
+            is_termination_msg=is_termination_msg,
+            max_consecutive_auto_reply=max_consecutive_auto_reply,
+            human_input_mode=human_input_mode,
+            function_map=function_map,
+            code_execution_config=code_execution_config,
+            llm_config=llm_config,
+            default_auto_reply=default_auto_reply,
+            description=description,
+            chat_messages=chat_messages,
+            silent=silent
+        )
         # Call init to set these
         self._playwright: Playwright | None = None
         self._context: BrowserContext | None = None
