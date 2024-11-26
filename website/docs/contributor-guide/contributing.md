@@ -15,7 +15,7 @@ If you are new to GitHub [here](https://help.github.com/categories/collaborating
 ## Roadmaps
 
 To see what we are working on and what we plan to work on, please check our
-[Roadmap Issues](https://ag2ai.com/roadmap).
+[Roadmap](https://ag2ai.com/roadmap) and [Roadmap Issues](https://github.com/ag2ai/ag2/issues?q=is%3Aopen+is%3Aissue+label%3Aroadmap).
 
 ## Becoming a Reviewer
 
