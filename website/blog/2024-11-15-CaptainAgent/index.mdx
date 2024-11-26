@@ -31,8 +31,8 @@ pip install ag2[captainagent]
 ```
 
 # Using CaptainAgent without pre-specified agent/tool libraries
-CaptainAgent can serve as a drop-in replacement for the general `AssistantAgent` class in AG2. To do that we just need to add a few lines of configurations for the group chat involved.
-Without the agent library and tool library, CaptainAgent will automatically generate a set of agents into a group chat.
+CaptainAgent can serve as a drop-in replacement for the general `AssistantAgent` class in AG2. It also allows customization such as agent/tool libraries. When the libraries are provided, CaptainAgent will try to leverage them when solving a task.
+Without them, CaptainAgent will automatically generate new agents.
 
 ```python
 from autogen.agentchat.contrib.captain_agent import CaptainAgent
