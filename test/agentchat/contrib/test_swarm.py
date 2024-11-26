@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 from typing import Any, Dict
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -131,28 +131,40 @@ def test_receiving_agent():
     assert chat_result.chat_history[1].get("name") == "SecondAgent"
 
 
-def test_swarm_transitions():
-    """Test different swarm transition scenarios"""
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
+def test_resume_speaker():
+    """Tests resumption of chat with multiple messages"""
 
-    # Test initial transition
-    chat_result, context_vars, last_speaker = initiate_swarm_chat(
-        initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2]
-    )
-    assert last_speaker == agent1
+    test_initial_agent = SwarmAgent("InitialAgent")
+    test_second_agent = SwarmAgent("SecondAgent")
 
-    # If we have multiple messages, first agent is still the initial_agent
+    # For multiple messages, last agent initiates the chat
     multiple_messages = [
         {"role": "user", "content": "First message"},
-        {"role": "assistant", "name": "agent2", "content": "Response"},
+        {"role": "assistant", "name": "InitialAgent", "content": "Second message"},
+        {"role": "assistant", "name": "SecondAgent", "content": "Third message"},
     ]
 
-    chat_result, context_vars, last_speaker = initiate_swarm_chat(
-        initial_agent=agent1, messages=multiple_messages, agents=[agent1, agent2]
-    )
+    # Patch initiate_chat on agents so we can monitor which started the conversation
+    with patch.object(test_initial_agent, "initiate_chat") as mock_initial_chat, patch.object(
+        test_second_agent, "initiate_chat"
+    ) as mock_second_chat:
 
-    assert last_speaker == agent1
+        mock_chat_result = MagicMock()
+        mock_chat_result.chat_history = multiple_messages
+
+        # Set up the return value for the mock that will be called
+        mock_second_chat.return_value = mock_chat_result
+
+        # Run the function
+        chat_result, context_vars, last_speaker = initiate_swarm_chat(
+            initial_agent=test_initial_agent, messages=multiple_messages, agents=[test_initial_agent, test_second_agent]
+        )
+
+        # Ensure the second agent initiated the chat
+        mock_second_chat.assert_called_once()
+
+        # And it wasn't the initial_agent's agent
+        mock_initial_chat.assert_not_called()
 
 
 def test_after_work_options():
