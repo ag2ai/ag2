@@ -252,7 +252,7 @@ In addition, you can find:
 
 - [Contributing guide](https://ag2ai.github.io/ag2/docs/Contribute)
 
-- [Roadmap](https://ag2.ai/#roadmap) and [Roadmap issues](https://github.com/ag2ai/ag2/issues?q=is%3Aopen+is%3Aissue+label%3Aroadmap)
+- [Roadmap](https://ag2.ai/#roadmap) and [Roadmap Issues](https://github.com/ag2ai/ag2/issues?q=is%3Aopen+is%3Aissue+label%3Aroadmap)
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
