@@ -5,7 +5,6 @@ import re
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
-from autogen.cache.abstract_cache_base import AbstractCache
 from .orchestrator_prompts import (
     ORCHESTRATOR_SYSTEM_MESSAGE,
     ORCHESTRATOR_CLOSED_BOOK_PROMPT,
@@ -140,18 +139,18 @@ class OrchestratorAgent(ConversableAgent):
     def _get_ledger_prompt(self, task: str, team: str, names: List[str]) -> str:
         return self._ledger_prompt.format(
             task=task, 
-            team_description=team,  # Changed from 'team' to 'team_description'
-            agent_roles=names  # Changed from 'names' to 'agent_roles'
+            team_description=team,  
+            agent_roles=names 
         )
 
     def _get_update_facts_prompt(self, task: str, facts: str) -> str:
         return self._update_facts_prompt.format(
             task=task, 
-            previous_facts=facts  # Changed from 'facts' to 'previous_facts'
+            previous_facts=facts  
         )
 
     def _get_update_plan_prompt(self, team: str) -> str:
-        return self._update_plan_prompt.format(team_description=team)  # Changed from 'team' to 'team_description'
+        return self._update_plan_prompt.format(team_description=team)  
 
 
     def _get_closed_book_prompt(self, task: str) -> str:
@@ -404,6 +403,7 @@ class OrchestratorAgent(ConversableAgent):
                     # Reset all agents
                     for agent in self._agents:
                         agent.reset()
+
                     # Send everyone the NEW plan
                     synthesized_prompt = self._get_synthesize_prompt(
                         self._task, self._team_description, self._facts, self._plan
