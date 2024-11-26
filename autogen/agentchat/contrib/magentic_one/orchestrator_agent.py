@@ -179,10 +179,10 @@ class OrchestratorAgent(ConversableAgent):
         planning_conversation.append(
             {"role": "user", "content": self._get_closed_book_prompt(self._task)}
         )
-        response = super().generate_reply(
-            messages=self._system_messages + planning_conversation
-        )
+        is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
 
+        assert is_valid_response
+        # TODO: response dict ? 
         assert isinstance(response, str)
         self._facts = response
         planning_conversation.append(
@@ -194,10 +194,13 @@ class OrchestratorAgent(ConversableAgent):
         planning_conversation.append(
             {"role": "user", "content": self._get_plan_prompt(self._team_description)}
         )
-        response = super().generate_reply(
+
+        is_valid_response, response = self.generate_oai_reply(
             messages=self._system_messages + planning_conversation
         )
 
+        assert is_valid_response
+        # TODO: response dict ?
         assert isinstance(response, str)
         self._plan = response
 
@@ -212,11 +215,13 @@ class OrchestratorAgent(ConversableAgent):
         planning_conversation.append(
             {"role": "user", "content": self._get_update_facts_prompt(self._task, self._facts)}
         )
-        response = super().generate_reply(
-            messages=self._system_messages + planning_conversation
-        )
 
+        is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
+
+        assert is_valid_response
+        # TODO: response dict ? 
         assert isinstance(response, str)
+
         self._facts = response
         planning_conversation.append(
             {"role": "assistant", "content": self._facts}
@@ -226,11 +231,13 @@ class OrchestratorAgent(ConversableAgent):
         planning_conversation.append(
             {"role": "user", "content": self._get_update_plan_prompt(self._team_description)}
         )
-        response = super().generate_reply(
-            messages=self._system_messages + planning_conversation
-        )
 
+        is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
+
+        assert is_valid_response
+        # TODO: response dict ? 
         assert isinstance(response, str)
+
         self._plan = response
 
 
@@ -248,11 +255,14 @@ class OrchestratorAgent(ConversableAgent):
         # retries in case the LLM does not return a valid JSON
         assert max_json_retries > 0
         for _ in range(max_json_retries):
-            ledger_str = super().generate_reply(
+
+            is_valid_response, ledger_str = self.generate_oai_reply(
                 messages=self._system_messages + self._oai_messages[self] + ledger_user_messages,
-                json_output=True,
-            )
-            # TODO: json marchall
+                )
+
+            assert is_valid_response
+            # TODO: response dict ? 
+            assert isinstance(ledger_str, str)
 
             try:
                 assert isinstance(ledger_str, str)
@@ -301,11 +311,14 @@ class OrchestratorAgent(ConversableAgent):
         # called when the task is complete
 
         final_message = {"role": "user", "content": ORCHESTRATOR_GET_FINAL_ANSWER.format(task=self._task)}
-        response = super().generate_reply(
+        is_valid_response, response = self.generate_oai_reply(
             messages=self._system_messages + self._oai_messages[self] + [final_message]
-        )
+            )
 
+        assert is_valid_response
+        # TODO: response dict ? 
         assert isinstance(response, str)
+        
         return response
 
 
