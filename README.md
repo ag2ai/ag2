@@ -8,7 +8,14 @@
 
 <!-- [![NuGet version](https://badge.fury.io/nu/AutoGen.Core.svg)](https://badge.fury.io/nu/AutoGen.Core) -->
 
-# [AG2](https://github.com/ag2ai/ag2)
+
+<a name="readme-top"></a>
+
+<div align="center">
+<img src="./website/static/img/ag2.png" alt="AutoGen Logo" width="100">
+
+
+</div>
 
 [📚 Cite paper](#related-papers).
 <!-- <p align="center">
@@ -244,6 +251,8 @@ In addition, you can find:
 - [Discord](https://discord.gg/pAbnFJrkgZ)
 
 - [Contributing guide](https://ag2ai.github.io/ag2/docs/Contribute)
+
+- [Roadmap](https://ag2.ai/#roadmap) and [Roadmap Issues](https://github.com/ag2ai/ag2/issues?q=is%3Aopen+is%3Aissue+label%3Aroadmap)
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">

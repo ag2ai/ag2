@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def count_distinct_permutations(sequence):
     """
     Counts the number of distinct permutations of a sequence where items may be indistinguishable.
