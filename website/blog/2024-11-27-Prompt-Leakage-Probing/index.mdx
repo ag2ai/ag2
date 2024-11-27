@@ -1,0 +1,142 @@
+---
+title: Testing for prompt leakage security using Autogen
+authors:
+  - sternakt
+  - sonichi
+  - davorrunje
+tags: [LLM, security, research]
+---
+
+## Introduction
+
+As Large Language Models (LLMs) become increasingly integrated into production applications, ensuring their security has never been more crucial. One of the most pressing security concerns for these models is **prompt injection**, specifically **prompt leakage**.
+
+LLMs often rely on **system prompts**, which are internal instructions or guidelines that help shape their behavior and responses. These prompts can sometimes contain sensitive information, such as confidential details or internal logic, that should never be exposed to external users. However, with careful probing and targeted attacks, there is a risk that this sensitive information can be unintentionally revealed.
+
+To address this issue, we have developed the [Prompt Leakage Probing Framework](https://github.com/airtai/prompt-leakage-probing), a tool designed to probe LLM agents for potential prompt leakage vulnerabilities. This framework serves as a proof of concept (PoC) for creating and testing various scenarios to evaluate how easily system prompts can be exposed. By automating the detection of such vulnerabilities, we aim to provide a powerful tool for testing the security of LLMs in real-world applications.
+
+
+### How to Use
+
+Getting started with the **Prompt Leakage Probing Framework** is simple. Follow these steps to run the framework locally and start probing LLMs for prompt leakage:
+
+1. **Clone the Repository**  
+   First, clone the repository to your local machine:
+   ```bash
+   git clone https://github.com/airtai/prompt-leakage-probing.git
+   cd prompt-leakage-probing
+   ```
+
+2. **Install the Dependencies**  
+   Install the necessary dependencies by running the following command:
+   ```bash
+   pip install ."[dev]"
+   ```
+
+3. **Run the FastAPI Service**  
+   The framework includes a FastAPI service that you can run locally. To start the service, execute the provided script:
+   ```bash
+   ./scripts/run_fastapi_locally.sh
+   ```
+
+4. **Access the Application**  
+   Once the service is running, open your browser and navigate to `http://localhost:8888`. You will be presented with a workflow selection screen.
+
+5. **Start Testing for Prompt Leakage**  
+   - Select the "Attempt to leak the prompt from selected LLM model."
+   - Choose the **Prompt Leakage Scenario** you want to test.
+   - Pick the **LLM model** to probe (e.g., Easy, Medium, or Hard models).
+   - Set the number of attempts you want to make to leak the prompt.
+
+6. **Review the Results**  
+   While running the test, the **PromptLeakageClassifierAgent** will classify the responses for potential prompt leakage. You can view the reports by selecting **"Report on the prompt leak attempt"** on the workflow selection screen.
+
+### Implementation
+
+![Illustration of the prompt leakage probing scenario flow](img/probing_flow.png)
+
+The **Prompt Leakage Probing Framework** was designed with flexibility and extensibility in mind. It is built around a core set of components that work together to automate the process of probing LLMs for prompt leakage. The main components of the framework include:
+
+1. **PromptGeneratorAgent**: This agent is responsible for generating adversarial prompts that are specifically designed to probe the LLM for potential prompt leakage. These prompts are crafted to push the model into revealing sensitive internal details, such as system prompts, that should otherwise remain hidden.
+
+2. **PromptLeakageClassifierAgent**: Once a response is received from the LLM, this agent evaluates the response to determine if any context leakage has occurred. It analyzes the output for any signs of the model inadvertently exposing sensitive prompt information. Based on this classification, the agent assigns a leakage level to the response.
+
+3. **Testing Scenarios**: The framework currently includes two testing scenarios designed to demonstrate its capabilities: a simple attack targeting basic leakage and an advanced strategy utilizing Base64 encoding to bypass direct leakage detection. These serve as a foundation for the future implementation of a wider variety of scenarios.
+
+4. **Ready to use chat**: The framework is built using [FastAgency](https://fastagency.ai/latest/) and [AutoGen](https://ag2.ai/), enabling users to seamlessly trigger tests and access reports through an intuitive chat interface. FastAgency operates on FastAPI, and the service includes demonstration test Agents accessible via the `/low`, `/medium`, and `/high` endpoints. This setup functions as a ready-to-use testing lab, designed to help you get started with ease!
+
+The entire system is designed to be flexible, enabling users to create custom scenarios, add new agents, or modify existing tests to suit their needs. This modularity makes it easy to adapt the framework to various use cases and LLMs.
+
+
+### Project Structure
+
+To understand how the framework is organized, here’s a brief overview of the project structure:
+
+Here’s the updated project structure with comments explaining the purpose of important files:
+
+```
+├── prompt_leakage_probing                    # Main application directory.
+    ├── tested_chatbots                       # Logic for handling chatbot interactions.
+    │   ├── chatbots_router.py                # Router to manage endpoints for test chatbots.
+    │   ├── config.py                         # Configuration settings for chatbot testing.
+    │   ├── openai_client.py                  # OpenAI client integration for testing agents.
+    │   ├── prompt_loader.py                  # Handles loading and parsing of prompt data.
+    │   ├── prompts
+    │   │   ├── confidential.md               # Confidential prompt part for testing leakage.
+    │   │   ├── high.json                     # High security prompt scenario data.
+    │   │   ├── low.json                      # Low security prompt scenario data.
+    │   │   ├── medium.json                   # Medium security prompt scenario data.
+    │   │   └── non_confidential.md           # Non-confidential prompt part.
+    │   └── service.py                        # Service logic for managing chatbot interactions.
+    ├── workflow                              # Core workflow and scenario logic.
+        ├── agents
+        │   ├── prompt_leakage_black_box
+        │   │   ├── prompt_leakage_black_box.py # Implements probing of the agent in a black-box setup.
+        │   │   └── system_message.md         # Base system message for black-box testing.
+        │   └── prompt_leakage_classifier
+        │       ├── prompt_leakage_classifier.py # Classifies agent responses for leakage presence.
+        │       └── system_message.md         # System message used for classification tasks.
+        ├── scenarios
+        │   ├── prompt_leak
+        │   │   ├── base64.py                 # Scenario using Base64 encoding to bypass detection.
+        │   │   ├── prompt_leak_scenario.py   # Defines scenario setup for prompt leakage testing.
+        │   │   └── simple.py                 # Basic leakage scenario for testing prompt leakage.
+        │   └── scenario_template.py          # Template for defining new testing scenarios.
+        ├── tools
+        │   ├── log_prompt_leakage.py         # Tool to log and analyze prompt leakage incidents.
+        │   └── model_adapter.py              # Adapter for integrating different model APIs.
+        └── workflow.py                       # Unified workflow for managing tests and scenarios.
+```
+
+### Implementing New Scenarios
+
+The framework is designed to be extensible, and adding new scenarios is relatively simple. Here's how you can implement a new scenario:
+
+1. **Create a New Prompt Leak Scenario Class**  
+   - Define a new class within the `prompt_leak` directory that implements the `PromptLeakageScenario` abstract class. And implement the `get_initial_message` and `get_function_to_register`.
+    - `get_initial_message` will return the initial message for the prompt leakage attempt.
+    - `get_function_to_register`returns the function that the `PromptGeneratorAgent` will use to contact the tested Agent.
+   - Import the class in the `__init__.py` file in the `prompt_leak` folder
+   - The scenario will now be automatically included in the workflow 
+   
+2. **Testing the New Scenario**  
+   - After implementing the new scenario, run the FastAPI service again and use the application to test your new scenario.
+
+### Next Steps
+
+While the **Prompt Leakage Probing Framework** is functional and ready to use, there are several ways it can be expanded:
+
+- **Additional Attacks**: The framework currently includes simple and Base64 attacks. Future work will involve implementing more sophisticated attacks, such as prompt injection via external plugins or context manipulation.
+
+- **Model Customization**: Support for testing additional types of LLMs or integrating with different platforms could be explored, enabling broader use.
+
+### Conclusion
+
+The **Prompt Leakage Probing Framework** provides a tool to help test LLM agents for their vulnerability to prompt leakage, ensuring that sensitive information embedded in system prompts remains secure. By automating the probing and classification process, this framework simplifies the detection of potential security risks in LLMs.
+
+We encourage developers and security researchers to explore the framework, contribute new scenarios, and help improve its capabilities. Whether you’re testing existing LLM models or creating new attack vectors, this framework offers a starting point for securing the growing landscape of large language models.
+
+## Further reading
+
+Please refer to our [codebase](https://github.com/airtai/prompt-leakage-probing) for more details about **Prompt Leakage Probing**.
+
