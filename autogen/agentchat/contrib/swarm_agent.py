@@ -372,6 +372,8 @@ class SwarmAgent(ConversableAgent):
             contents = []
             for index in range(tool_calls):
 
+                func_has_context_variables = False
+
                 # 1. add context_variables to the tool call arguments
                 tool_call = message["tool_calls"][index]
 
@@ -385,6 +387,7 @@ class SwarmAgent(ConversableAgent):
                         # Check if function has context_variables parameter
                         sig = signature(func)
                         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
+                            func_has_context_variables = True
                             current_args = json.loads(tool_call["function"]["arguments"])
                             current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = self._context_variables
                             # Update the tool call with new arguments
@@ -399,6 +402,13 @@ class SwarmAgent(ConversableAgent):
 
                 # 2. generate tool calls reply
                 _, tool_message = self.generate_tool_calls_reply([message_copy])
+
+                # Remove the context variables from the tool_call message so it
+                # doesn't show up in the chat history
+                if func_has_context_variables:
+                    post_run_args = json.loads(tool_call["function"]["arguments"])
+                    del post_run_args[__CONTEXT_VARIABLES_PARAM_NAME__]
+                    tool_call["function"]["arguments"] = json.dumps(post_run_args)
 
                 # 3. update context_variables and next_agent, convert content to string
                 for tool_response in tool_message["tool_responses"]:
