@@ -27,14 +27,13 @@ from .websurfer_prompts import (
     SCREENSHOT_TOOL_SELECTION,
 )
 
-# TODO: Fix mdconvert
+# TODO: Fix mdconvert (I think i saw a new pull request)
 from .markdown_browser import MarkdownConverter  # type: ignore
 from .utils import SentinelMeta
 from .image import AGImage
 
-#from ...messages import UserContent, WebSurferEvent
-#from ...utils import SentinelMeta, message_content_to_str
-#from ..base_worker import BaseWorker
+#from ...utils import message_content_to_str
+
 from .set_of_mark import add_set_of_mark
 from .tool_definitions import (
     TOOL_CLICK,
@@ -175,7 +174,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Create the playwright self
         launch_args: Dict[str, Any] = {"headless": headless}
-        if browser_channel is not DEFAULT_CHANNEL: # TODO: ag2 ? probably just browser
+        if browser_channel is not DEFAULT_CHANNEL: 
             launch_args["channel"] = browser_channel
         self._playwright = await async_playwright().start()
 
@@ -255,7 +254,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
     async def _reset(self) -> None: # TODO: ag2
         assert self._page is not None
-        #future = super()._reset(cancellation_token)
+        #future = super()._reset(cancellation_token) # TODO: ag2
         #await future
         await self._visit_page(self.start_page)
         if self.to_save_screenshots:
@@ -410,7 +409,7 @@ class MultimodalWebSurfer(ConversableAgent):
         # Handle downloads
         if self._last_download is not None and self.downloads_folder is not None:
             fname = os.path.join(self.downloads_folder, self._last_download.suggested_filename)
-            # TODO: Fix this type
+            # TOODO: Fix this type
             await self._last_download.save_as(fname)  # type: ignore
             page_body = f"<html><head><title>Download Successful</title></head><body style=\"margin: 20px;\"><h1>Successfully downloaded '{self._last_download.suggested_filename}' to local path:<br><br>{fname}</h1></body></html>"
             await self._page.goto(
@@ -473,6 +472,7 @@ class MultimodalWebSurfer(ConversableAgent):
         """Generates the actual reply. First calls the LLM to figure out which tool to use, then executes the tool."""
 
         # Clone the messages to give context, removing old screenshots
+        # TODO: massage types in ag2 ? 
         history: List[Dict[str,Any]] = [] 
         for m in self._chat_history:
             if isinstance(m.content, str):
@@ -655,7 +655,7 @@ class MultimodalWebSurfer(ConversableAgent):
     async def _get_page_markdown(self) -> str:
         assert self._page is not None
         html = await self._page.evaluate("document.documentElement.outerHTML;")
-        # TODO: fix types
+        # TOODO: fix types
         res = self._markdown_converter.convert_stream(io.StringIO(html), file_extension=".html", url=self._page.url)  # type: ignore
         return res.text_content  # type: ignore
 
@@ -728,7 +728,7 @@ class MultimodalWebSurfer(ConversableAgent):
         box = cast(Dict[str, Union[int, float]], await target.bounding_box())
         try:
             # Give it a chance to open a new page
-            # TODO: Having trouble with these types # original comment
+            # TOODO: Having trouble with these types 
             async with self._page.expect_event("popup", timeout=1000) as page_info:  # type: ignore
                 await self._page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, delay=10)
                 # If we got this far without error, than a popup or new tab opened. Handle it.
@@ -875,7 +875,7 @@ class MultimodalWebSurfer(ConversableAgent):
             if not isinstance(image, io.BufferedIOBase):
                 pil_image = Image.open(io.BytesIO(image))
             else:
-                # TODO: Not sure why this cast was needed, but by this point screenshot is a binary file-like object
+                # TOODO: Not sure why this cast was needed, but by this point screenshot is a binary file-like object
                 pil_image = Image.open(cast(BinaryIO, image))
             scaled_screenshot = pil_image.resize((MLM_WIDTH, MLM_HEIGHT))
             pil_image.close()
