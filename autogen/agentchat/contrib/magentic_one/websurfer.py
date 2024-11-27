@@ -45,7 +45,7 @@ from .tool_definitions import (
     # TOOL_SCROLL_ELEMENT_UP,
     TOOL_SLEEP,
     TOOL_SUMMARIZE_PAGE,
-    #TOOL_TYPE,
+    TOOL_TYPE,
     TOOL_VISIT_URL,
     TOOL_WEB_SEARCH,
 )
@@ -467,24 +467,18 @@ class MultimodalWebSurfer(ConversableAgent):
             AGImage.from_pil(Image.open(io.BytesIO(new_screenshot))),
         ]
 
-    async def __generate_reply(self):# -> Tuple[bool, UserContent]: # TODO: ag2
+    async def __generate_reply(self) -> Tuple[bool, Union[str, Dict, None]]:
+        """Generates the actual reply. First calls the LLM to figure out which tool to use, then executes the tool.
+        
+        Returns:
+            Tuple[bool, Union[str, Dict, None]]: A tuple containing:
+                - bool: Whether this is a final response
+                - The response content which may be a string, dict or None
+        """
         assert self._page is not None
-        """Generates the actual reply. First calls the LLM to figure out which tool to use, then executes the tool."""
 
-        # Clone the messages to give context, removing old screenshots
-        # TODO: massage types in ag2 ? 
-        history: List[Dict[str,Any]] = [] 
-        for m in self._chat_history:
-            if isinstance(m.content, str):
-                history.append(m)
-            elif isinstance(m.content, list):
-                content = message_content_to_str(m.content)
-                if isinstance(m, UserMessage):
-                    history.append(UserMessage(content=content, source=m.source))
-                elif isinstance(m, AssistantMessage):
-                    history.append(AssistantMessage(content=content, source=m.source))
-                elif isinstance(m, SystemMessage):
-                    history.append(SystemMessage(content=content))
+        # Get the last conversation with this agent
+        history = self._oai_messages[self]
 
         # Ask the page for interactive elements, then prepare the state-of-mark screenshot
         rects = await self._get_interactive_rects() 
@@ -496,13 +490,7 @@ class MultimodalWebSurfer(ConversableAgent):
             current_timestamp = "_" + int(time.time()).__str__()
             screenshot_png_name = "screenshot_som" + current_timestamp + ".png"
             som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
-            self.logger.info(
-                WebSurferEvent(
-                    source=self.metadata["type"],
-                    url=self._page.url,
-                    message="Screenshot: " + screenshot_png_name,
-                )
-            )
+            logger.info(f"url: {self._page.url} Screenshot: {screenshot_png_name}")
         # What tools are available?
         tools = [
             TOOL_VISIT_URL,
@@ -577,32 +565,41 @@ class MultimodalWebSurfer(ConversableAgent):
         if self.to_save_screenshots:
             scaled_screenshot.save(os.path.join(self.debug_dir, "screenshot_scaled.png"))  # type: ignore
 
-        # Add the multimodal message and make the request
-        history.append(
-            {
-                "role": "user",
-                "content": [text_prompt, AGImage.from_pil(scaled_screenshot)],
-            }
-        )
-        self.chat_messages.append(history)
-        response = self.generate_reply(history) # TODO: make sure tool are added
-        #response = await self._model_client.create( # TODO: ag2 / generate reply ?
-        #    history, tools=tools, extra_create_args={"tool_choice": "auto"}, cancellation_token=cancellation_token
-        #)  # , "parallel_tool_calls": False})
-        message = response
+        # Add the multimodal message for the current state
+        message = {
+            "role": "user",
+            "content": [text_prompt, AGImage.from_pil(scaled_screenshot)],
+        }
+        
+        # Register the tools for this interaction
+        for tool in tools:
+            self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
+        # Generate reply using ConversableAgent's infrastructure
+        response = await self.a_generate_reply(messages=[message])
+        
         self._last_download = None
 
-        if isinstance(message, str):
-            # Answer directly
-            return False, message
-        elif isinstance(message, dict):
-            # Take an action
-            self.generate_tool_calls_reply(message)
-            return await self._execute_tool(message, rects, tool_names, cancellation_token=cancellation_token)
-        else:
-            # Not sure what happened here
-            raise AssertionError(f"Unknown response format '{message}'")
+        if isinstance(response, str):
+            # Direct text response
+            return False, response
+        elif isinstance(response, dict):
+            if "tool_calls" in response:
+                # Handle tool execution through ConversableAgent's tool system
+                success, tool_response = await self.a_generate_tool_calls_reply(messages=[response])
+                if success:
+                    return await self._execute_tool(tool_response, rects, tool_names)
+            elif "function_call" in response:
+                # Legacy function call handling
+                success, func_response = await self.a_generate_function_call_reply(messages=[response])
+                if success:
+                    return await self._execute_tool(func_response, rects, tool_names)
+        
+        # Clean up registered tools
+        for tool in tools:
+            self.update_tool_signature(tool["name"], is_remove=True)
+            
+        return False, None
 
     async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
         assert self._page is not None

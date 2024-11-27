@@ -270,3 +270,31 @@ TOOL_SLEEP = {
             },
         },
     }
+
+
+TOOL_TYPE = {
+        "type": "function",
+        "function": {
+            "name": "input_text",
+            "description": "Types the given text value into the specified field.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "A short explanation of the reasoning for calling this tool and taking this action.",
+                    },
+                    "input_field_id": {
+                        "type": "integer",
+                        "description": "The numeric id of the input field to receive the text.",
+                    },
+                    "text_value": {
+                        "type": "string",
+                        "description": "The text to type into the input field.",
+                    },
+                },
+                "required": ["reasoning", "input_field_id", "text_value"],
+            },
+        },
+    }
+
