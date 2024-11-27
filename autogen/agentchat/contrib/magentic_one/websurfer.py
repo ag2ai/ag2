@@ -295,7 +295,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         return targets
 
-    async def _generate_reply(self):# -> Tuple[bool, UserContent]: # TODO: ag2
+    async def _generate_reply(self) -> Tuple[bool, Union[str, Dict, None]]:
         assert self._page is not None
         try:
             request_halt, content = await self.__generate_reply()
@@ -492,7 +492,7 @@ class MultimodalWebSurfer(ConversableAgent):
             som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
             logger.info(f"url: {self._page.url} Screenshot: {screenshot_png_name}")
         # What tools are available?
-        tools = [
+        tools: List[Dict[str, Any]] = [
             TOOL_VISIT_URL,
             TOOL_HISTORY_BACK,
             TOOL_CLICK,
@@ -551,7 +551,7 @@ class MultimodalWebSurfer(ConversableAgent):
         #    tools.append(TOOL_SCROLL_ELEMENT_UP)
         #    tools.append(TOOL_SCROLL_ELEMENT_DOWN)
 
-        tool_names = "\n".join([t["name"] for t in tools])
+        tool_names = "\n".join([t["function"]["name"] for t in tools])
 
         text_prompt = self._get_screenshot_selection_prompt(self._page.url, 
         visible_targets, 
@@ -575,8 +575,7 @@ class MultimodalWebSurfer(ConversableAgent):
         for tool in tools:
             self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
-        # Generate reply using ConversableAgent's infrastructure
-        response = await self.a_generate_reply(messages=[message])
+        response = await self.a_generate_reply(messages=[message]) # TODO: fix is this something else ? 
         
         self._last_download = None
 
@@ -585,7 +584,6 @@ class MultimodalWebSurfer(ConversableAgent):
             return False, response
         elif isinstance(response, dict):
             if "tool_calls" in response:
-                # Handle tool execution through ConversableAgent's tool system
                 success, tool_response = await self.a_generate_tool_calls_reply(messages=[response])
                 if success:
                     return await self._execute_tool(tool_response, rects, tool_names)
@@ -597,7 +595,7 @@ class MultimodalWebSurfer(ConversableAgent):
         
         # Clean up registered tools
         for tool in tools:
-            self.update_tool_signature(tool["name"], is_remove=True)
+            self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
             
         return False, None
 
