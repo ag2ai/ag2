@@ -310,8 +310,21 @@ class MultimodalWebSurfer(ConversableAgent):
         tool_names: str,
         use_ocr: bool = True
         )-> Tuple[bool, Union[str, Dict, None]]:
-        name = message[0].name
-        args = json.loads(message[0].arguments)
+        # Handle both legacy function calls and new tool calls format TODO: remove the comment
+        #if isinstance(message, dict) and "tool_responses" in message:
+        #    # New tool calls format
+        tool_responses = message.get("tool_responses", [])
+        if not tool_responses:
+            return False, None
+        # Use the first tool response
+        tool_response = tool_responses[0]
+        name = tool_response.get("tool_call_id", "").split("_")[0]  # Extract tool name from ID
+        args = json.loads(tool_response.get("content", "{}"))
+        #else:
+        #    # Legacy function call format
+        #    name = message[0].name
+        #    args = json.loads(message[0].arguments)
+            
         action_description = ""
         assert self._page is not None
         logger.info(f"url: {self._page.url} name: {name} args: {args} message: {f'{name}( {json.dumps(args)} )'}")
@@ -561,9 +574,25 @@ class MultimodalWebSurfer(ConversableAgent):
             scaled_screenshot.save(os.path.join(self.debug_dir, "screenshot_scaled.png"))  # type: ignore
 
         # Add the multimodal message for the current state
+        # Convert PIL image to base64
+        buffered = io.BytesIO()
+        scaled_screenshot.save(buffered, format="PNG")
+        encoded_string = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
         message = {
             "role": "user",
-            "content": [text_prompt, AGImage.from_pil(scaled_screenshot)],
+            "content": [
+                {
+                    "type": "text",
+                    "text": text_prompt
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{encoded_string}"
+                    }
+                }
+            ]
         }
         
         # Register the tools for this interaction
@@ -814,16 +843,23 @@ class MultimodalWebSurfer(ConversableAgent):
         else:
             prompt += " Please summarize the webpage into one or two paragraphs:\n\n"
 
+        # Convert ag_image to base64 for the message
+        buffered = io.BytesIO()
+        ag_image.save(buffered, format="PNG")
+        encoded_string = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
         # Grow the buffer (which is added to the prompt) until we overflow the context window or run out of lines
         buffer = ""
         for line in re.split(r"([\r\n]+)", page_markdown):
             message = {
                 "role": "user",
-                "content": [prompt + 
-                buffer + 
-                line, 
-                #ag_image,
-                ],
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt + buffer + line
+                    },
+                    #ag_image
+                ]
             }
 
             # TODO: is something like this possible in ag2
@@ -842,7 +878,18 @@ class MultimodalWebSurfer(ConversableAgent):
         messages.append(
             {
                 "role": "user",
-                "content": [prompt + buffer, ag_image],
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt + buffer
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{encoded_string}"
+                        }
+                    }
+                ]
             }
         )
 
