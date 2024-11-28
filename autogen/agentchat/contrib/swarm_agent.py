@@ -41,12 +41,25 @@ class AFTER_WORK:
 
 @dataclass
 class ON_CONDITION:
-    agent: "SwarmAgent"
+    agent: Optional["SwarmAgent"]
+    nested_chat: Optional[List[Dict[str, Any]]]
     condition: str = ""
 
-    # Ensure that agent is a SwarmAgent
     def __post_init__(self):
-        assert isinstance(self.agent, SwarmAgent), "Agent must be a SwarmAgent"
+        # Ensure that agent is a SwarmAgent
+        if self.agent is not None:
+            assert isinstance(self.agent, SwarmAgent), "'agent' must be a SwarmAgent"
+
+        # Ensure they have an agent or nested_chat
+        assert self.agent is not None or self.nested_chat is not None, "'agent' or 'nested_chat' must be provided"
+
+        # Ensure they don't have both an agent and a nested_chat
+        assert not (
+            self.agent is not None and self.nested_chat is not None
+        ), "'agent' and 'nested_chat' cannot both be provided"
+
+        # Ensure they have a condition
+        assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
 
 
 def initiate_swarm_chat(
@@ -330,16 +343,26 @@ class SwarmAgent(ConversableAgent):
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
 
-                # Create closure with current loop transit value
-                # to ensure the condition matches the one in the loop
-                def make_transfer_function(current_transit):
-                    def transfer_to_agent() -> "SwarmAgent":
-                        return current_transit.agent
+                if transit.agent:
+                    # Transition to agent
 
-                    return transfer_to_agent
+                    # Create closure with current loop transit value
+                    # to ensure the condition matches the one in the loop
+                    def make_transfer_function(current_transit):
+                        def transfer_to_agent() -> "SwarmAgent":
+                            return current_transit.agent
 
-                transfer_func = make_transfer_function(transit)
-                self.add_single_function(transfer_func, f"transfer_to_{transit.agent.name}", transit.condition)
+                        return transfer_to_agent
+
+                    transfer_func = make_transfer_function(transit)
+                    self.add_single_function(transfer_func, f"transfer_to_{transit.agent.name}", transit.condition)
+
+                else:
+                    # Transition to a nested chat
+
+                    # TODO
+                    pass
+
             else:
                 raise ValueError("Invalid hand off condition, must be either ON_CONDITION or AFTER_WORK")
 
