@@ -310,6 +310,7 @@ class MultimodalWebSurfer(ConversableAgent):
         tool_names: str,
         use_ocr: bool = True
         )-> Tuple[bool, Union[str, Dict, None]]:
+        logger.info(f"tool massage 1234 is: {message} ")
         # Handle both legacy function calls and new tool calls format TODO: remove the comment
         #if isinstance(message, dict) and "tool_responses" in message:
         #    # New tool calls format
