@@ -17,7 +17,7 @@
     <br>
 </p> -->
 
-> **:warning: IMPORTANT**
+> **:tada: IMPORTANT**
 >
 > :fire: :tada: **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
 > A new organization [AG2ai](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
