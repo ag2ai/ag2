@@ -460,6 +460,50 @@ def test_initialization():
             initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2], max_rounds=3
         )
 
+    def test_sys_message_func():
+        """Tests a custom system message function"""
+
+        # This test will use context variables and the messages to construct a custom system message
+        # This will be available at the point of reply (we use register a reply to capture it at that point)
+
+        # To store the system message
+        class MessageContainer:
+            def __init__(self):
+                self.final_sys_message = ""
+
+        message_container = MessageContainer()
+
+        def my_sys_message(context_variables, messages) -> str:
+            return f"This is a custom system message with {context_variables['sample_name']} and a total of {len(messages)} message(s)."
+
+        agent1 = SwarmAgent("agent1", system_message_func=my_sys_message)
+        agent2 = SwarmAgent("agent2")
+
+        test_context_variables = {"sample_name": "Bob"}
+
+        # Mock a reply to be able to capture the system message
+        def mock_generate_oai_reply(*args, **kwargs):
+            message_container.final_sys_message = args[0]._oai_system_message[0][
+                "content"
+            ]  # The SwarmAgent's system message
+            return True, "This is a mock response from the agent."
+
+        agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+
+        chat_result, context_vars, last_speaker = initiate_swarm_chat(
+            initial_agent=agent1,
+            messages=TEST_MESSAGES,
+            agents=[agent1, agent2],
+            context_variables=test_context_variables,
+            max_rounds=4,
+        )
+
+        # The system message should be the custom message
+        assert (
+            message_container.final_sys_message
+            == "This is a custom system message with Bob and a total of 1 message(s)."
+        )
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
