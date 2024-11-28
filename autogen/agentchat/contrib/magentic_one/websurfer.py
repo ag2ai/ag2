@@ -252,10 +252,10 @@ class MultimodalWebSurfer(ConversableAgent):
             logger.info(f"Multimodal Web Surfer debug screens: {pathlib.Path(os.path.abspath(debug_html)).as_uri()}\n")
 
 
-    async def _reset(self) -> None: # TODO: ag2
+    async def _reset(self) -> None: 
         assert self._page is not None
-        #future = super()._reset(cancellation_token) # TODO: ag2
-        #await future
+        self.chat_messages[self] = []
+        
         await self._visit_page(self.start_page)
         if self.to_save_screenshots:
             current_timestamp = "_" + int(time.time()).__str__()
@@ -303,7 +303,7 @@ class MultimodalWebSurfer(ConversableAgent):
         except Exception:
             return False, f"Web surfing error:\n\n{traceback.format_exc()}"
 
-    async def _execute_tool( # TODO: ag2 biggest work integrating with tools
+    async def _execute_tool( # TODO: replace with ag2 ? or overwrite ag2 ?ag2 biggest work integrating with tools 
         self,
         message,#: List[FunctionCall],
         rects: Dict[str, InteractiveRegion],
@@ -446,13 +446,6 @@ class MultimodalWebSurfer(ConversableAgent):
             async with aiofiles.open(os.path.join(self.debug_dir, screenshot_png_name), "wb") as file:  # type: ignore
                 await file.write(new_screenshot)  # type: ignore
             logger.info(f"url: {self._page.url} Screenshot: {screenshot_png_name}")
-            #self.logger.info(
-            #    WebSurferEvent(
-            #        source=self.metadata["type"],
-            #        url=self._page.url,
-            #        message="Screenshot: " + screenshot_png_name,
-            #    )
-            #)
 
         ocr_text = (
             await self._get_ocr_text(new_screenshot) if use_ocr is True else ""
@@ -823,14 +816,6 @@ class MultimodalWebSurfer(ConversableAgent):
                 #ag_image,
                 ],
             }
-            
-            #UserMessage(
-                # content=[
-                #prompt + buffer + line,
-                #    ag_image,
-                # ],
-                #source=self.metadata["type"],
-            #)
 
             # TODO: is something like this possible in ag2
             #remaining = self._model_client.remaining_tokens(messages + [message])
