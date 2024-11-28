@@ -568,10 +568,14 @@ class MultimodalWebSurfer(ConversableAgent):
         
         # Register the tools for this interaction
         for tool in tools:
-            self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
+            if isinstance(tool, dict) and "function" in tool:
+                self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=False)
+            else:
+                self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
-        response = await self.a_generate_reply(messages=[message]) # TODO: fix is this something else ? 
-        
+        # Call the parent class's generate_reply instead of our own to avoid recursion
+        response = await super().a_generate_reply(messages=[message])
+
         self._last_download = None
 
         if isinstance(response, str):
@@ -590,7 +594,10 @@ class MultimodalWebSurfer(ConversableAgent):
         
         # Clean up registered tools
         for tool in tools:
-            self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
+            if isinstance(tool, dict) and "function" in tool:
+                self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
+            else:
+                self.update_tool_signature({"type": "function", "function": tool}, is_remove=True)
             
         return False, None
 
@@ -874,3 +881,20 @@ class MultimodalWebSurfer(ConversableAgent):
         assert is_valid_response
         assert isinstance(response, str)
         return response
+
+    async def a_generate_reply(                                                        
+            self,                                                                          
+            messages: Optional[List[Dict[str, Any]]] = None,                               
+            sender: Optional[Agent] = None,                                                
+            **kwargs: Any,                                                                 
+        ) -> Union[str, Dict[str, Any], None]:                                             
+            """Override a_generate_reply to use the web surfing capabilities"""            
+            if messages is None:                                                           
+                messages = self._oai_messages[sender]                                      
+                                                                                            
+            # Get the last message which contains the instruction/query                    
+            if not messages:                                                               
+                return None                                                                
+                                                                                            
+            request_halt, reply = await self._generate_reply()                             
+            return reply    
