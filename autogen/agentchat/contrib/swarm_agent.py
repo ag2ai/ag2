@@ -110,7 +110,17 @@ def initiate_swarm_chat(
     INIT_AGENT_USED = False
 
     def swarm_transition(last_speaker: SwarmAgent, groupchat: GroupChat):
-        """Swarm transition function to determine the next agent in the conversation"""
+        """Swarm transition function to determine and prepare the next agent in the conversation"""
+        next_agent = determine_next_agent(last_speaker, groupchat)
+
+        if next_agent and isinstance(next_agent, SwarmAgent):
+            # Update their state
+            next_agent.update_state(context_variables, groupchat.messages)
+
+        return next_agent
+
+    def determine_next_agent(last_speaker: SwarmAgent, groupchat: GroupChat):
+        """Determine the next agent in the conversation"""
         nonlocal INIT_AGENT_USED
         if not INIT_AGENT_USED:
             INIT_AGENT_USED = True
@@ -257,6 +267,7 @@ class SwarmAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
         code_execution_config=False,
+        system_message_func: Optional[Callable] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -285,6 +296,8 @@ class SwarmAgent(ConversableAgent):
         # use in the tool execution agent to transfer to the next agent
         self._context_variables = {}
         self._next_agent = None
+
+        self._system_message_func = system_message_func
 
     def _set_to_tool_execution(self, context_variables: Optional[Dict[str, Any]] = None):
         """Set to a special instance of SwarmAgent that is responsible for executing tool calls from other swarm agents.
@@ -457,6 +470,11 @@ class SwarmAgent(ConversableAgent):
     def add_functions(self, func_list: List[Callable]):
         for func in func_list:
             self.add_single_function(func)
+
+    def update_state(self, context_variables: Optional[Dict[str, Any]], messages: List[Dict[str, Any]]):
+        """Updates the state of the agent, system message so far. This is called when they're selected and just before they speak."""
+        if self._system_message_func:
+            self.update_system_message(self._system_message_func(context_variables, messages))
 
 
 # Forward references for SwarmAgent in SwarmResult
