@@ -309,7 +309,7 @@ class MultimodalWebSurfer(ConversableAgent):
         rects: Dict[str, InteractiveRegion],
         tool_names: str,
         use_ocr: bool = True
-        ):# -> Tuple[bool, UserContent]:
+        )-> Tuple[bool, Union[str, Dict, None]]:
         name = message[0].name
         args = json.loads(message[0].arguments)
         action_description = ""
@@ -455,10 +455,12 @@ class MultimodalWebSurfer(ConversableAgent):
         message_content = ""  # message.content or ""
         page_title = await self._page.title()
 
-        return False, [
-            f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({self._page.url}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip(),
-            AGImage.from_pil(Image.open(io.BytesIO(new_screenshot))),
-        ]
+        return False, {
+            "content": [
+                f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({self._page.url}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip(),
+                AGImage.from_pil(Image.open(io.BytesIO(new_screenshot))),
+            ]
+        }
 
     async def __generate_reply(self) -> Tuple[bool, Union[str, Dict, None]]:
         """Generates the actual reply. First calls the LLM to figure out which tool to use, then executes the tool.
