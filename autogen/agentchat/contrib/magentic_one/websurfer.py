@@ -319,7 +319,7 @@ class MultimodalWebSurfer(ConversableAgent):
         function = message["tool_calls"][0]["function"]
         args = function["arguments"]
         if isinstance(args, str):
-            args = json.loads(args)
+            args = self._clean_and_parse_json(args) 
 
         name = function["name"]
         assert name is not None
@@ -617,11 +617,11 @@ class MultimodalWebSurfer(ConversableAgent):
                 self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
         # Call the parent class's generate_reply instead of our own to avoid recursion
-        response = await super().a_generate_reply(messages=history + [message])
+        response = await super().a_generate_reply(messages=history + [message]) # system massage
 
         self._last_download = None
 
-        if isinstance(response, str):
+        if isinstance(response, str): #TODO: response format
             # Direct text response
             return False, response
         elif isinstance(response, dict):
@@ -756,13 +756,17 @@ class MultimodalWebSurfer(ConversableAgent):
 
     async def _click_id(self, identifier: str) -> None:
         assert self._page is not None
-        target = self._page.locator(f"[__elementId='{identifier}']")
+        target = self._page.locator(f"[__elementId={identifier}]")
 
         # See if it exists
         try:
-            await target.wait_for(timeout=100)
+            await target.wait_for(timeout=200)
         except TimeoutError:
-            raise ValueError("No such element.") from None
+            try: 
+                target = self._page.locator(f"[__elementId='{identifier}']")
+                await target.wait_for(timeout=200)
+            except TimeoutError:
+                raise ValueError("No such element.") from None
 
         # Click it
         await target.scroll_into_view_if_needed()
@@ -973,12 +977,12 @@ class MultimodalWebSurfer(ConversableAgent):
             **kwargs: Any,                                                                 
         ) -> Tuple[bool, Union[str, Dict[str, Any], None]]:                                             
             """Override a_generate_reply to use the web surfing capabilities"""            
-            if messages is None:                                                           
-                messages = self._oai_messages[sender]                                      
+            #if messages is None:                                                           
+            #    messages = self._oai_messages[sender]                                      
                                                                                             
             # Get the last message which contains the instruction/query                    
-            if not messages:                                                               
-                return True, None                                                                
+            #if not messages:                                                               
+            #    return True, None                                                                
                                                                                             
             request_halt, reply = await self._generate_reply()   
             # TODO: what to do with request_halt ?                           

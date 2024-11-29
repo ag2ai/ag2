@@ -52,7 +52,7 @@ async def main() -> None:
 
     # Initialize the browser
     await websurfer.init(
-        headless=True,
+        headless=False,
         downloads_folder="./downloads",
         start_page="https://www.bing.com",
         browser_channel="chromium",
@@ -60,11 +60,36 @@ async def main() -> None:
     )
 
     # Create a message to start the task
-    await user.a_initiate_chat(
-        websurfer,
-        max_turns=50,
-        message="Please search for information about Python programming language and provide a brief summary of what you find."
-    )
+    messages = [
+        {
+            "role": "user",
+            #"content": "Please search for information about Python programming language and provide a brief summary of what you find."
+            "content": "Go to amazon.com and find a good beginner 3d printer, pick any good one for under 300 dollars. Only loop on amazon.com. without asking for directions. "
+        }
+    ]
+
+    websurfer.send(messages[0], user, request_reply=False)
+
+    for i in range(20):
+        request_halt, response = await websurfer.a_custom_generate_reply(sender=user)
+        if request_halt:
+            logger.info(f"Request halt: {request_halt}")
+            break
+        
+        #messages.append({
+        #    "role": "user",
+        #    "content": response
+        #})
+        #instructions = "please determine if the "
+        #websurfer.generate_oai_reply(messages=messages, sender=user, request_reply=False)
+        #logger.info(f"Response: {response}")
+
+    logger.info(f"Response: {response}")
+    #await user.a_initiate_chat(
+    #    websurfer,
+    #    max_turns=50,
+    #    message="Please search for information about Python programming language and provide a brief summary of what you find."
+    #)
 
 if __name__ == "__main__":
     asyncio.run(main())

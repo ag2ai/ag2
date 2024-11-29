@@ -100,7 +100,7 @@ class OrchestratorAgent(ConversableAgent):
         if user_agent:
             self.executor = user_agent
         else:
-            self.executor = UserProxyAgent(
+            self.executor = UserProxyAgent( #TODO: code execution by the coder itself. nd userproxy just to kick of the tsk ? 
                 name="executor",
                 llm_config=llm_config,
                 is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
@@ -492,8 +492,8 @@ class OrchestratorAgent(ConversableAgent):
                     logger.error("No message found in chat history")
                     break
                     
-                # Execute through executor agent
-                chat_result = self.executor.initiate_chat(
+                # Execute through executor agent 
+                chat_result = self.executor.initiate_chat( # TODO: should just be generate_reply
                     recipient=next_agent,
                     message=instructions,  
                     clear_history=self._reset_agent_after_task  # Clear history based on reset_agent_after_task setting
