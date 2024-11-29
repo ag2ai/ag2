@@ -177,8 +177,8 @@ class AnthropicClient:
 
     def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> Completion:
         if response_format is not None:
-            raise NotImplemented("Response format is not supported for Anthropic API.")
-        
+            raise NotImplementedError("Response format is not supported for Anthropic API.")
+
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions

@@ -206,7 +206,9 @@ class ModelClient(Protocol):
         choices: List[Choice]
         model: str
 
-    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ModelClientResponseProtocol: ...  # pragma: no cover
+    def create(
+        self, params: Dict[str, Any], response_format: Optional[BaseModel] = None
+    ) -> ModelClientResponseProtocol: ...  # pragma: no cover
 
     def message_retrieval(
         self, response: ModelClientResponseProtocol
@@ -282,12 +284,13 @@ class OpenAIClient:
         iostream = IOStream.get_default()
 
         if response_format is not None:
+
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
                     kwargs.pop("stream")
                 kwargs["response_format"] = response_format
                 return self._oai_client.beta.chat.completions.parse(*args, **kwargs)
-            
+
             create_or_parse = _create_or_parse
         else:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
@@ -711,7 +714,9 @@ class OpenAIWrapper:
             ]
         return params
 
-    def create(self, response_format: Optional[BaseModel]=None, **config: Any) -> ModelClient.ModelClientResponseProtocol:
+    def create(
+        self, response_format: Optional[BaseModel] = None, **config: Any
+    ) -> ModelClient.ModelClientResponseProtocol:
         """Make a completion for a given config using available clients.
         Besides the kwargs allowed in openai's [or other] client, we allow the following additional kwargs.
         The config in each client will be overridden by the config.
