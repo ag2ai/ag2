@@ -43,7 +43,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           pip install pytest
-      - name: Install Falkor DB SDK when on linux
+      - name: Install FalkorDB SDK when on linux
         run: |
           pip install -e .[graph_rag_falkor_db]
       - name: Set AUTOGEN_USE_DOCKER based on OS
