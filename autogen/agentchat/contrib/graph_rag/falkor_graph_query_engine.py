@@ -20,7 +20,7 @@ class FalkorGraphQueryResult(GraphStoreQueryResult):
 
 class FalkorGraphQueryEngine:
     """
-    This is a wrapper for Falkor DB KnowledgeGraph.
+    This is a wrapper for FalkorDB KnowledgeGraph.
     """
 
     def __init__(
@@ -30,11 +30,11 @@ class FalkorGraphQueryEngine:
         port: int = 6379,
         username: str | None = None,
         password: str | None = None,
-        model: str = "gpt-4-1106-preview",
+        model: str = "gpt-4o",
         schema: Schema | None = None,
     ):
         """
-        Initialize a Falkor DB knowledge graph.
+        Initialize a FalkorDB knowledge graph.
         Please also refer to https://github.com/FalkorDB/GraphRAG-SDK/blob/2-move-away-from-sql-to-json-ontology-detection/graphrag_sdk/kg.py
 
         Args:
@@ -43,9 +43,9 @@ class FalkorGraphQueryEngine:
             port (int): FalkorDB port number.
             username (str|None): FalkorDB username.
             password (str|None): FalkorDB password.
-            model (str): OpenAI model to use for Falkor DB to build and retrieve from the graph.
-            schema: Falkor DB knowledge graph schema (ontology), https://github.com/FalkorDB/GraphRAG-SDK/blob/2-move-away-from-sql-to-json-ontology-detection/graphrag_sdk/schema/schema.py
-                    If None, Falkor DB will auto generate a schema from the input docs.
+            model (str): OpenAI model to use for FalkorDB to build and retrieve from the graph.
+            schema: FalkorDB knowledge graph schema (ontology), https://github.com/FalkorDB/GraphRAG-SDK/blob/2-move-away-from-sql-to-json-ontology-detection/graphrag_sdk/schema/schema.py
+                    If None, FalkorDB will auto generate a schema from the input docs.
         """
         self.knowledge_graph = KnowledgeGraph(name, host, port, username, password, model, schema)
 
@@ -62,11 +62,11 @@ class FalkorGraphQueryEngine:
             self.knowledge_graph.process_sources(sources)
 
     def add_records(self, new_records: List) -> bool:
-        raise NotImplementedError("This method is not supported by Falkor DB SDK yet.")
+        raise NotImplementedError("This method is not supported by FalkorDB SDK yet.")
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> FalkorGraphQueryResult:
         """
-        Query the knowledage graph with a question and optional message history.
+        Query the knowledge graph with a question and optional message history.
 
         Args:
         question: a human input question.
