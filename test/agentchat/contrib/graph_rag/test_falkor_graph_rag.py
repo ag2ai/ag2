@@ -33,8 +33,8 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
 )
 def test_falkor_db_query_engine():
     """
-    Test Falkor DB Query Engine.
-    1. create a test Falkor DB Query Engine with a schema.
+    Test FalkorDB Query Engine.
+    1. create a test FalkorDB Query Engine with a schema.
     2. Initialize it with an input txt file.
     3. Query it with a question and verify the result contains the critical information.
     """
@@ -44,7 +44,12 @@ def test_falkor_db_query_engine():
     movie = test_schema.add_entity("Movie").add_attribute("title", str, unique=True)
     test_schema.add_relation("ACTED", actor, movie)
 
-    query_engine = FalkorGraphQueryEngine(schema=test_schema)
+    query_engine = FalkorGraphQueryEngine(
+        name="IMDB",
+        # host="192.168.0.115",     # Change
+        # port=6379,                # if needed
+        schema=test_schema,
+    )
 
     source_file = "test/agentchat/contrib/graph_rag/the_matrix.txt"
     input_docs = [Document(doctype=DocumentType.TEXT, path_or_url=source_file)]
