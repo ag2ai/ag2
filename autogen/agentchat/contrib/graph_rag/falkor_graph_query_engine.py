@@ -45,19 +45,14 @@ class FalkorGraphQueryEngine:
             ontology: FalkorDB knowledge graph schema/ontology, https://github.com/FalkorDB/GraphRAG-SDK/blob/main/graphrag_sdk/ontology.py
                 If None, FalkorDB will auto generate an ontology from the input docs.
         """
-
-        self.knowledge_graph = KnowledgeGraph(
-            name=name,
-            host=host,
-            port=port,
-            username=username,
-            password=password,
-            model_config=KnowledgeGraphModelConfig.with_model(model),
-            ontology=ontology,
-        )
-
-        # Establish a chat session, this will maintain the history
-        self._chat_session = self.knowledge_graph.chat_session()
+        self.name = name
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.model = model
+        self.model_config = KnowledgeGraphModelConfig.with_model(model)
+        self.ontology = ontology
 
     def init_db(self, input_doc: List[Document] | None):
         """
@@ -69,6 +64,25 @@ class FalkorGraphQueryEngine:
                 sources.append(Source(doc.path_or_url))
 
         if sources:
+            # Auto generate graph ontology if not created by user.
+            if self.ontology is None:
+                self.ontology = Ontology.from_sources(
+                    sources=sources,
+                    model=self.model,
+                )
+
+            self.knowledge_graph = KnowledgeGraph(
+                name=self.name,
+                host=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                model_config=KnowledgeGraphModelConfig.with_model(self.model),
+                ontology=self.ontology,
+            )
+
+            # Establish a chat session, this will maintain the history
+            self._chat_session = self.knowledge_graph.chat_session()
             self.knowledge_graph.process_sources(sources)
 
     def add_records(self, new_records: List) -> bool:
@@ -86,6 +100,9 @@ class FalkorGraphQueryEngine:
 
         Returns: FalkorGraphQueryResult
         """
+        if self.knowledge_graph is None:
+            raise ValueError("Knowledge graph is not created.")
+
         response = self._chat_session.send_message(question)
 
         # History will be considered when querying by setting the last_answer
