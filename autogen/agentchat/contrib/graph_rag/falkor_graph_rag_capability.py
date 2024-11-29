@@ -6,7 +6,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from autogen import Agent, ConversableAgent, UserProxyAgent
 
-from .falkor_graph_query_engine import FalkorGraphQueryEngine, FalkorGraphQueryResult
+from .falkor_graph_query_engine import FalkorGraphQueryEngine
+from .graph_query_engine import GraphStoreQueryResult
 from .graph_rag_capability import GraphRagCapability
 
 
@@ -23,9 +24,6 @@ class FalkorGraphRagCapability(GraphRagCapability):
         initialize GraphRAG capability with a graph query engine
         """
         self.query_engine = query_engine
-
-        # Graph DB query history.
-        self._history = []
 
     def add_to_agent(self, agent: UserProxyAgent):
         """
@@ -69,9 +67,7 @@ class FalkorGraphRagCapability(GraphRagCapability):
             A tuple containing a boolean indicating success and the assistant's reply.
         """
         question = self._get_last_question(messages[-1])
-        result: FalkorGraphQueryResult = self.query_engine.query(question, messages=self._history)
-
-        self._history = result.messages
+        result: GraphStoreQueryResult = self.query_engine.query(question)
 
         return True, result.answer if result.answer else "I'm sorry, I don't have an answer for that."
 
