@@ -1,24 +1,33 @@
-"""This example demonstrates a human user interacting with a web surfer agent
-to navigate the web through an embedded incognito browser.
-The human user and the web surfer agent takes turn to write input or perform actions,
-orchestrated by an round-robin orchestrator agent."""
+"""This example demonstrates using a web surfer agent to search for and summarize
+information about Python programming through an embedded browser."""
 
-
-from autogen.agentchat.contrib.magentic_one.websurfer import MultimodalWebSurfer
+import asyncio
 import os
+from autogen.agentchat.contrib.magentic_one.websurfer import MultimodalWebSurfer
+from autogen.agentchat.user_proxy_agent import UserProxyAgent
+
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Add console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 # NOTE: Don't forget to 'playwright install --with-deps chromium'
 
-
-def main() -> None:
-
-
+async def main() -> None:
+    # Set up LLM configuration
     config_list = [
-    {
-        "model": os.environ.get("MODEL"),
-        "api_key": os.environ.get("API_KEY"),
-        "base_url": os.environ.get("BASE_URL", None)
-    }
+        {
+            "model": os.environ.get("MODEL", "gpt-4-vision-preview"),
+            "api_key": os.environ.get("API_KEY"),
+            "base_url": os.environ.get("BASE_URL", None)
+        }
     ]
 
     llm_config = {
@@ -27,38 +36,35 @@ def main() -> None:
         "timeout": 120
     }
 
-
+    # Create the web surfer agent
     websurfer = MultimodalWebSurfer(
-        human_input_mode="ALWAYS",
-        llm_config=llm_config)
+        name="WebSurfer",
+        human_input_mode="TERMINATE",
+        llm_config=llm_config
+    )
 
-    # Register agents. 
-    #await MultimodalWebSurfer.register(runtime, "WebSurfer", MultimodalWebSurfer)
-    #web_surfer = AgentProxy(AgentId("WebSurfer", "default"), runtime)
+    user = UserProxyAgent( 
+        name="User",
+        human_input_mode="NEVER",
+        llm_config=llm_config
+    )
 
-    #await UserProxy.register(runtime, "UserProxy", UserProxy)
-    #user_proxy = AgentProxy(AgentId("UserProxy", "default"), runtime)
 
-    #await RoundRobinOrchestrator.register(
-    #    runtime, "orchestrator", lambda: RoundRobinOrchestrator([web_surfer, user_proxy])
-    #)
+    # Initialize the browser
+    await websurfer.init(
+        headless=True,
+        downloads_folder="./downloads",
+        start_page="https://www.bing.com",
+        browser_channel="chromium",
+        to_save_screenshots=True
+    )
 
-    #runtime.start()
-
-    #actual_surfer = await runtime.try_get_underlying_agent_instance(web_surfer.id, type=MultimodalWebSurfer)
-    #await actual_surfer.init(
-    #    model_client=client,
-    #    downloads_folder=os.getcwd(),
-    #    start_page="https://www.bing.com",
-    #    browser_channel="chromium",
-    #)
-
-    #await runtime.send_message(RequestReplyMessage(), user_proxy.id)
-    #await runtime.stop_when_idle()
-
+    # Create a message to start the task
+    await user.a_initiate_chat(
+        websurfer,
+        max_turns=50,
+        message="Please search for information about Python programming language and provide a brief summary of what you find."
+    )
 
 if __name__ == "__main__":
-
-    main()
-
-
+    asyncio.run(main())

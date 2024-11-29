@@ -30,7 +30,6 @@ from .websurfer_prompts import (
 # TODO: Fix mdconvert (I think i saw a new pull request)
 from .markdown_browser import MarkdownConverter  # type: ignore
 from .utils import SentinelMeta
-from .image import AGImage
 
 #from ...utils import message_content_to_str
 
@@ -68,7 +67,10 @@ MLM_WIDTH = 1224
 
 SCREENSHOT_TOKENS = 1105
 
+import logging
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
@@ -305,33 +307,29 @@ class MultimodalWebSurfer(ConversableAgent):
 
     async def _execute_tool( # TODO: replace with ag2 ? or overwrite ag2 ?ag2 biggest work integrating with tools 
         self,
-        message,#: List[FunctionCall],
+        message: Dict[str, Any],
         rects: Dict[str, InteractiveRegion],
         tool_names: str,
         use_ocr: bool = True
         )-> Tuple[bool, Union[str, Dict, None]]:
-        logger.info(f"tool massage 1234 is: {message} ")
         # Handle both legacy function calls and new tool calls format TODO: remove the comment
         #if isinstance(message, dict) and "tool_responses" in message:
         #    # New tool calls format
-        tool_responses = message.get("tool_responses", [])
-        if not tool_responses:
-            return False, None
-        # Use the first tool response
-        tool_response = tool_responses[0]
-        name = tool_response.get("tool_call_id", "").split("_")[0]  # Extract tool name from ID
-        args = json.loads(tool_response.get("content", "{}"))
-        #else:
-        #    # Legacy function call format
-        #    name = message[0].name
-        #    args = json.loads(message[0].arguments)
-            
+
+        function = message["tool_calls"][0]["function"]
+        args = function["arguments"]
+        if isinstance(args, str):
+            args = json.loads(args)
+
+        name = function["name"]
+        assert name is not None
+
         action_description = ""
         assert self._page is not None
-        logger.info(f"url: {self._page.url} name: {name} args: {args} message: {f'{name}( {json.dumps(args)} )'}")
+        logger.info(f"url: {self._page.url} name: {name} args: {args}")
 
         if name == "visit_url":
-            url = args.get("url")
+            url = args["url"]
             action_description = f"I typed '{url}' into the browser address bar."
             # Check if the argument starts with a known protocol
             if url.startswith(("https://", "http://", "file://", "about:")):
@@ -348,7 +346,7 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._back()
 
         elif name == "web_search":
-            query = args.get("query")
+            query = args["query"]
             action_description = f"I typed '{query}' into the browser search bar."
             await self._visit_page(f"https://www.bing.com/search?q={quote_plus(query)}&FORM=QBLH")
 
@@ -361,7 +359,7 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._page_down()
 
         elif name == "click":
-            target_id = str(args.get("target_id"))
+            target_id = str(args["target_id"])
             target_name = self._target_name(target_id, rects)
             if target_name:
                 action_description = f"I clicked '{target_name}'."
@@ -370,8 +368,8 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._click_id(target_id)
 
         elif name == "input_text":
-            input_field_id = str(args.get("input_field_id"))
-            text_value = str(args.get("text_value"))
+            input_field_id = str(args["input_field_id"])
+            text_value = str(args["text_value"])
             input_field_name = self._target_name(input_field_id, rects)
             if input_field_name:
                 action_description = f"I typed '{text_value}' into '{input_field_name}'."
@@ -380,7 +378,7 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._fill_id(input_field_id, text_value)
 
         elif name == "scroll_element_up":
-            target_id = str(args.get("target_id"))
+            target_id = str(args["target_id"])
             target_name = self._target_name(target_id, rects)
 
             if target_name:
@@ -391,7 +389,7 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._scroll_id(target_id, "up")
 
         elif name == "scroll_element_down":
-            target_id = str(args.get("target_id"))
+            target_id = str(args["target_id"])
             target_name = self._target_name(target_id, rects)
 
             if target_name:
@@ -402,7 +400,7 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._scroll_id(target_id, "down")
 
         elif name == "answer_question":
-            question = str(args.get("question"))
+            question = str(args["question"])
             # Do Q&A on the DOM. No need to take further action. Browser state does not change.
             return False, await self._summarize_page(question=question)
 
@@ -468,11 +466,21 @@ class MultimodalWebSurfer(ConversableAgent):
         # Return the complete observation
         message_content = ""  # message.content or ""
         page_title = await self._page.title()
+        encoded_string = base64.b64encode(new_screenshot).decode('utf-8')
 
         return False, {
+            "role": "user",
             "content": [
-                f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({self._page.url}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip(),
-                AGImage.from_pil(Image.open(io.BytesIO(new_screenshot))),
+                {
+                    "type": "text",
+                    "text": f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({self._page.url}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip()
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{encoded_string}"
+                    }
+                }
             ]
         }
 
@@ -486,8 +494,10 @@ class MultimodalWebSurfer(ConversableAgent):
         """
         assert self._page is not None
 
-        # Get the last conversation with this agent
-        history = self._oai_messages[self]
+        # Get the full conversation history
+        history = []
+        for msg in self._oai_messages.values():
+            history.extend(msg)
 
         # Ask the page for interactive elements, then prepare the state-of-mark screenshot
         rects = await self._get_interactive_rects() 
@@ -576,9 +586,12 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Add the multimodal message for the current state
         # Convert PIL image to base64
-        buffered = io.BytesIO()
-        scaled_screenshot.save(buffered, format="PNG")
-        encoded_string = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        buffer = io.BytesIO()
+        scaled_screenshot.save(buffer, format="PNG")
+        image_bytes = buffer.getvalue()
+        buffer.close()
+        scaled_screenshot.close()
+        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
 
         message = {
             "role": "user",
@@ -604,7 +617,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
         # Call the parent class's generate_reply instead of our own to avoid recursion
-        response = await super().a_generate_reply(messages=[message])
+        response = await super().a_generate_reply(messages=history + [message])
 
         self._last_download = None
 
@@ -613,14 +626,15 @@ class MultimodalWebSurfer(ConversableAgent):
             return False, response
         elif isinstance(response, dict):
             if "tool_calls" in response:
-                success, tool_response = await self.a_generate_tool_calls_reply(messages=[response])
-                if success:
-                    return await self._execute_tool(tool_response, rects, tool_names)
+                #success, tool_response = await self.a_generate_tool_calls_reply(messages=[response])
+                #if success:
+                return await self._execute_tool(response, rects, tool_names)
             elif "function_call" in response:
                 # Legacy function call handling
-                success, func_response = await self.a_generate_function_call_reply(messages=[response])
-                if success:
-                    return await self._execute_tool(func_response, rects, tool_names)
+                #success, func_response = await self.a_generate_function_call_reply(messages=[response])
+                #if success:
+                raise Exception("Legacy function call handling not implemented")
+                #return await self._execute_tool(response, rects, tool_names)
         
         # Clean up registered tools
         for tool in tools:
@@ -826,7 +840,7 @@ class MultimodalWebSurfer(ConversableAgent):
         screenshot = Image.open(io.BytesIO(await self._page.screenshot()))
         scaled_screenshot = screenshot.resize((MLM_WIDTH, MLM_HEIGHT))
         screenshot.close()
-        ag_image = AGImage.from_pil(scaled_screenshot)
+        #ag_image = AGImage.from_pil(scaled_screenshot)
 
         # Prepare the system prompt
         messages: List[Dict[str,Any]] = []
@@ -844,10 +858,13 @@ class MultimodalWebSurfer(ConversableAgent):
         else:
             prompt += " Please summarize the webpage into one or two paragraphs:\n\n"
 
-        # Convert ag_image to base64 for the message
-        buffered = io.BytesIO()
-        ag_image.save(buffered, format="PNG")
-        encoded_string = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+        Imagebuffer = io.BytesIO()
+        scaled_screenshot.save(Imagebuffer, format="PNG")
+        image_bytes = Imagebuffer.getvalue()
+        Imagebuffer.close()
+        scaled_screenshot.close()
+        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
 
         # Grow the buffer (which is added to the prompt) until we overflow the context window or run out of lines
         buffer = ""
@@ -896,7 +913,6 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Generate the response
         is_valid_response, response = self.generate_oai_reply(messages=messages)
-        scaled_screenshot.close()
         assert is_valid_response
         assert isinstance(response, str)
         return response
@@ -917,32 +933,100 @@ class MultimodalWebSurfer(ConversableAgent):
             scaled_screenshot = pil_image.resize((MLM_WIDTH, MLM_HEIGHT))
             pil_image.close()
 
+        buffer = io.BytesIO()
+        scaled_screenshot.save(buffer, format="PNG")
+        image_bytes = buffer.getvalue()
+        buffer.close()
+        scaled_screenshot.close()
+        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
+
         messages: List[Dict[str,Any]] = [] 
+
         messages.append(
-            {"role": "user", 
-            "content": ["Please transcribe all visible text on this page, including both main content and the labels of UI elements.",
-                        AGImage.from_pil(scaled_screenshot)]}
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Please transcribe all visible text on this page, including both main content and the labels of UI elements."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{encoded_string}"
+                        }
+                    }
+                ]
+            }
         )
+        
         is_valid_response, response = self.generate_oai_reply(messages=messages)
 
-        scaled_screenshot.close()
         assert is_valid_response
         assert isinstance(response, str)
         return response
 
-    async def a_generate_reply(                                                        
+    async def a_custom_generate_reply(                                                        
             self,                                                                          
             messages: Optional[List[Dict[str, Any]]] = None,                               
             sender: Optional[Agent] = None,                                                
             **kwargs: Any,                                                                 
-        ) -> Union[str, Dict[str, Any], None]:                                             
+        ) -> Tuple[bool, Union[str, Dict[str, Any], None]]:                                             
             """Override a_generate_reply to use the web surfing capabilities"""            
             if messages is None:                                                           
                 messages = self._oai_messages[sender]                                      
                                                                                             
             # Get the last message which contains the instruction/query                    
             if not messages:                                                               
-                return None                                                                
+                return True, None                                                                
                                                                                             
-            request_halt, reply = await self._generate_reply()                             
-            return reply    
+            request_halt, reply = await self._generate_reply()   
+            # TODO: what to do with request_halt ?                           
+            return request_halt, reply    
+
+
+    def _clean_and_parse_json(self, content: str) -> Dict[str, Any]:
+        """Clean and parse JSON content from various formats."""
+        if not content or not isinstance(content, str):
+            raise ValueError("Content must be a non-empty string")
+
+        # Extract JSON from markdown code blocks if present
+        if "```json" in content:
+            parts = content.split("```json")
+            if len(parts) > 1:
+                content = parts[1].split("```")[0].strip()
+        elif "```" in content:  # Handle cases where json block might not be explicitly marked
+            parts = content.split("```")
+            if len(parts) > 1:
+                content = parts[1].strip()  # Take first code block content
+        
+        # Find JSON-like structure if not in code block
+        if not content.strip().startswith('{'):
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if not json_match:
+                raise ValueError(f"No JSON structure found in content: {content}")
+            content = json_match.group(0)
+
+        # Preserve newlines for readability in error messages
+        formatted_content = content
+        
+        # Now clean for parsing
+        try:
+            # First try parsing the cleaned but formatted content
+            return json.loads(formatted_content)
+        except json.JSONDecodeError:
+            # If that fails, try more aggressive cleaning
+            cleaned_content = re.sub(r'[\n\r\t]', ' ', content)  # Replace newlines/tabs with spaces
+            cleaned_content = re.sub(r'\s+', ' ', cleaned_content)  # Normalize whitespace
+            cleaned_content = re.sub(r'\\(?!["\\/bfnrt])', '', cleaned_content)  # Remove invalid escapes
+            cleaned_content = re.sub(r',(\s*[}\]])', r'\1', cleaned_content)  # Remove trailing commas
+            cleaned_content = re.sub(r'([{,]\s*)(\w+)(?=\s*:)', r'\1"\2"', cleaned_content)  # Quote unquoted keys
+            cleaned_content = cleaned_content.replace("'", '"')  # Standardize quotes
+            
+            try:
+                return json.loads(cleaned_content)
+            except json.JSONDecodeError as e:
+                logger.error(f"Original content:\n{formatted_content}")
+                logger.error(f"Cleaned content:\n{cleaned_content}")
+                logger.error(f"JSON error: {str(e)}")
+                raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
