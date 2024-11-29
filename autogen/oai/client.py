@@ -10,6 +10,7 @@ import inspect
 import logging
 import sys
 import uuid
+from pickle import PickleError, PicklingError
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
 from pydantic import BaseModel, schema_json_of
@@ -753,7 +754,6 @@ class OpenAIWrapper:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
         """
-        print(f"{response_format=}, {config=}")
         if ERROR:
             raise ERROR
         invocation_id = str(uuid.uuid4())
@@ -769,7 +769,6 @@ class OpenAIWrapper:
         for i, client in enumerate(self._clients):
             # merge the input config with the i-th config in the config list
             full_config = {**config, **self._config_list[i]}
-            print(f"{full_config=}")
             # separate the config into create_config and extra_kwargs
             create_config, extra_kwargs = self._separate_create_config(full_config)
             api_type = extra_kwargs.get("api_type")
@@ -777,9 +776,6 @@ class OpenAIWrapper:
                 create_config["model"] = create_config["model"].replace(".", "")
             # construct the create params
             params = self._construct_create_params(create_config, extra_kwargs)
-            if "response_format" in params:
-                params["response_format"] = schema_json_of(params["response_format"])
-            print(f"{params=}")
             # get the cache_seed, filter_func and context
             cache_seed = extra_kwargs.get("cache_seed", LEGACY_DEFAULT_CACHE_SEED)
             cache = extra_kwargs.get("cache")
@@ -809,8 +805,11 @@ class OpenAIWrapper:
             if cache_client is not None:
                 with cache_client as cache:
                     # Try to get the response from cache
-                    print(f"{params=}")
-                    key = get_key(params)
+                    key = get_key(
+                        {**params, **{"response_format": schema_json_of(response_format)}}
+                        if response_format
+                        else params
+                    )
                     request_ts = get_current_ts()
 
                     response: ModelClient.ModelClientResponseProtocol = cache.get(key, None)
@@ -916,7 +915,10 @@ class OpenAIWrapper:
                 if cache_client is not None:
                     # Cache the response
                     with cache_client as cache:
-                        cache.set(key, response)
+                        try:
+                            cache.set(key, response)
+                        except (PicklingError, AttributeError) as e:
+                            logger.info(f"Failed to cache response: {e}")
 
                 if logging_enabled():
                     # TODO: log the config_id and pass_filter etc.

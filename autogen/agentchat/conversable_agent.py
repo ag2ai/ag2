@@ -274,11 +274,7 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'."
             )
-        self.client = (
-            None
-            if self.llm_config is False
-            else OpenAIWrapper(**self.llm_config, response_format=self._response_format)
-        )
+        self.client = None if self.llm_config is False else OpenAIWrapper(**self.llm_config)
 
     @staticmethod
     def _is_silent(agent: Agent, silent: Optional[bool] = False) -> bool:
