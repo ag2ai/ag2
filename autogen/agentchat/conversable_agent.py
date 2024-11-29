@@ -20,7 +20,7 @@ from openai import BadRequestError
 from autogen.agentchat.chat import _post_process_carryover_item
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from .._pydantic import model_dump
+from .._pydantic import BaseModel, model_dump
 from ..cache.cache import AbstractCache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -85,6 +85,7 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
+        response_format: Optional[BaseModel] = None,
     ):
         """
         Args:
@@ -135,6 +136,7 @@ class ConversableAgent(LLMAgent):
                 resume previous had conversations. Defaults to an empty chat history.
             silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
                 silent in each function.
+            response_format(BaseModel): Used to specify structured response format for the agent. Not available for all LLMs.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -157,6 +159,7 @@ class ConversableAgent(LLMAgent):
             else (lambda x: content_str(x.get("content")) == "TERMINATE")
         )
         self.silent = silent
+        self._response_format = response_format
         # Take a copy to avoid modifying the given dict
         if isinstance(llm_config, dict):
             try:
@@ -271,7 +274,7 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'."
             )
-        self.client = None if self.llm_config is False else OpenAIWrapper(**self.llm_config)
+        self.client = None if self.llm_config is False else OpenAIWrapper(**self.llm_config, response_format=self._response_format)
 
     @staticmethod
     def _is_silent(agent: Agent, silent: Optional[bool] = False) -> bool:
@@ -1445,7 +1448,7 @@ class ConversableAgent(LLMAgent):
 
         # TODO: #1143 handle token limit exceeded error
         response = llm_client.create(
-            context=messages[-1].pop("context", None), messages=all_messages, cache=cache, agent=self
+            context=messages[-1].pop("context", None), messages=all_messages, cache=cache, agent=self, response_format=self._response_format
         )
         extracted_response = llm_client.extract_text_or_completion_object(response)[0]
 

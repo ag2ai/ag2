@@ -12,7 +12,7 @@ import sys
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, schema_json_of
 
 from autogen.cache import Cache
 from autogen.io.base import IOStream
@@ -206,7 +206,7 @@ class ModelClient(Protocol):
         choices: List[Choice]
         model: str
 
-    def create(self, params: Dict[str, Any]) -> ModelClientResponseProtocol: ...  # pragma: no cover
+    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ModelClientResponseProtocol: ...  # pragma: no cover
 
     def message_retrieval(
         self, response: ModelClientResponseProtocol
@@ -269,7 +269,7 @@ class OpenAIClient:
                 for choice in choices
             ]
 
-    def create(self, params: Dict[str, Any]) -> ChatCompletion:
+    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
 
         Args:
@@ -281,7 +281,18 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        completions: Completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
+        if response_format is not None:
+            def _create_or_parse(*args, **kwargs):
+                if "stream" in kwargs:
+                    kwargs.pop("stream")
+                kwargs["response_format"] = response_format
+                return self._oai_client.beta.chat.completions.parse(*args, **kwargs)
+            
+            create_or_parse = _create_or_parse
+        else:
+            completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
+            create_or_parse = completions.create
+
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
         if params.get("stream", False) and "messages" in params:
             response_contents = [""] * params.get("n", 1)
@@ -296,7 +307,7 @@ class OpenAIClient:
             full_tool_calls: Optional[List[Optional[Dict[str, Any]]]] = None
 
             # Send the chat completion request to OpenAI's API and process the response in chunks
-            for chunk in completions.create(**params):
+            for chunk in create_or_parse(**params):
                 if chunk.choices:
                     for choice in chunk.choices:
                         content = choice.delta.content
@@ -398,7 +409,7 @@ class OpenAIClient:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
             params["stream"] = False
-            response = completions.create(**params)
+            response = create_or_parse(**params)
 
         return response
 
@@ -700,7 +711,7 @@ class OpenAIWrapper:
             ]
         return params
 
-    def create(self, **config: Any) -> ModelClient.ModelClientResponseProtocol:
+    def create(self, response_format: Optional[BaseModel]=None, **config: Any) -> ModelClient.ModelClientResponseProtocol:
         """Make a completion for a given config using available clients.
         Besides the kwargs allowed in openai's [or other] client, we allow the following additional kwargs.
         The config in each client will be overridden by the config.
@@ -737,6 +748,7 @@ class OpenAIWrapper:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
         """
+        print(f"{response_format=}, {config=}")
         if ERROR:
             raise ERROR
         invocation_id = str(uuid.uuid4())
@@ -752,6 +764,7 @@ class OpenAIWrapper:
         for i, client in enumerate(self._clients):
             # merge the input config with the i-th config in the config list
             full_config = {**config, **self._config_list[i]}
+            print(f"{full_config=}")
             # separate the config into create_config and extra_kwargs
             create_config, extra_kwargs = self._separate_create_config(full_config)
             api_type = extra_kwargs.get("api_type")
@@ -759,6 +772,9 @@ class OpenAIWrapper:
                 create_config["model"] = create_config["model"].replace(".", "")
             # construct the create params
             params = self._construct_create_params(create_config, extra_kwargs)
+            if "response_format" in params:
+                params["response_format"] = schema_json_of(params["response_format"])
+            print(f"{params=}")
             # get the cache_seed, filter_func and context
             cache_seed = extra_kwargs.get("cache_seed", LEGACY_DEFAULT_CACHE_SEED)
             cache = extra_kwargs.get("cache")
@@ -788,6 +804,7 @@ class OpenAIWrapper:
             if cache_client is not None:
                 with cache_client as cache:
                     # Try to get the response from cache
+                    print(f"{params=}")
                     key = get_key(params)
                     request_ts = get_current_ts()
 
@@ -829,7 +846,7 @@ class OpenAIWrapper:
                         continue  # filter is not passed; try the next config
             try:
                 request_ts = get_current_ts()
-                response = client.create(params)
+                response = client.create(params, response_format=response_format)
             except APITimeoutError as err:
                 logger.debug(f"config {i} timed out", exc_info=True)
                 if i == last:
