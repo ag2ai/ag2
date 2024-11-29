@@ -8,6 +8,7 @@ from typing import List
 
 from graphrag_sdk import KnowledgeGraph, Source
 from graphrag_sdk.model_config import KnowledgeGraphModelConfig
+from graphrag_sdk.models import GenerativeModel
 from graphrag_sdk.models.openai import OpenAiGenerativeModel
 from graphrag_sdk.ontology import Ontology
 
@@ -27,12 +28,12 @@ class FalkorGraphQueryEngine:
         port: int = 6379,
         username: str | None = None,
         password: str | None = None,
-        model: str = "gpt-4o",
+        model: GenerativeModel = OpenAiGenerativeModel("gpt-4o"),
         ontology: Ontology | None = None,
     ):
         """
         Initialize a FalkorDB knowledge graph.
-        Please also refer to https://github.com/FalkorDB/GraphRAG-SDK/blob/2-move-away-from-sql-to-json-ontology-detection/graphrag_sdk/kg.py
+        Please also refer to https://github.com/FalkorDB/GraphRAG-SDK/blob/main/graphrag_sdk/kg.py
 
         Args:
             name (str): Knowledge graph name.
@@ -40,18 +41,18 @@ class FalkorGraphQueryEngine:
             port (int): FalkorDB port number.
             username (str|None): FalkorDB username.
             password (str|None): FalkorDB password.
-            model (str): OpenAI model to use for FalkorDB to build and retrieve from the graph.
-            ontology: FalkorDB knowledge graph schema/ontology, https://github.com/FalkorDB/GraphRAG-SDK/blob/2-move-away-from-sql-to-json-ontology-detection/graphrag_sdk/schema/schema.py
+            model (GenerativeModel): LLM model to use for FalkorDB to build and retrieve from the graph, default to use OAI gpt-4o.
+            ontology: FalkorDB knowledge graph schema/ontology, https://github.com/FalkorDB/GraphRAG-SDK/blob/main/graphrag_sdk/ontology.py
                 If None, FalkorDB will auto generate an ontology from the input docs.
         """
-        openai_model = OpenAiGenerativeModel(model)
+
         self.knowledge_graph = KnowledgeGraph(
             name=name,
             host=host,
             port=port,
             username=username,
             password=password,
-            model_config=KnowledgeGraphModelConfig.with_model(openai_model),
+            model_config=KnowledgeGraphModelConfig.with_model(model),
             ontology=ontology,
         )
 
