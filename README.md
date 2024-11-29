@@ -95,7 +95,7 @@ AG2 (formerly AutoGen) is an open-source programming framework for building AI a
 The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
 
 
-![AutoGen Overview](https://raw.githubusercontent.com/ag2ai/ag2/main/website/static/img/autogen_agentchat.png)
+![AutoGen Overview](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png)
 
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
@@ -195,7 +195,7 @@ python test/twoagent.py
 After the repo is cloned.
 The figure below shows an example conversation flow with AG2.
 
-![Agent Chat Example](https://raw.githubusercontent.com/ag2ai/ag2/tree/main/website/static/img/chat_example.png)
+![Agent Chat Example](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/chat_example.png)
 
 
 Alternatively, the [sample code](https://github.com/ag2ai/build-with-ag2/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
