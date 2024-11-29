@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+import copy
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -44,6 +45,10 @@ class ON_CONDITION:
     agent: "SwarmAgent"
     condition: str = ""
 
+    # Ensure that agent is a SwarmAgent
+    def __post_init__(self):
+        assert isinstance(self.agent, SwarmAgent), "Agent must be a SwarmAgent"
+
 
 def initiate_swarm_chat(
     initial_agent: "SwarmAgent",
@@ -80,7 +85,12 @@ def initiate_swarm_chat(
         SwarmAgent:     Last speaker.
     """
     assert isinstance(initial_agent, SwarmAgent), "initial_agent must be a SwarmAgent"
-    assert all(isinstance(agent, SwarmAgent) for agent in agents), "agents must be a list of SwarmAgents"
+    assert all(isinstance(agent, SwarmAgent) for agent in agents), "Agents must be a list of SwarmAgents"
+    # Ensure all agents in hand-off after-works are in the passed in agents list
+    for agent in agents:
+        if agent.after_work is not None:
+            if isinstance(agent.after_work.agent, SwarmAgent):
+                assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
 
     context_variables = context_variables or {}
     if isinstance(messages, str):
@@ -175,9 +185,12 @@ def initiate_swarm_chat(
         last_message = messages[0]
 
         if "name" in last_message:
-            if "name" in swarm_agent_names:
+            if last_message["name"] in swarm_agent_names:
                 # If there's a name in the message and it's a swarm agent, use that
                 last_agent = groupchat.agent_by_name(name=last_message["name"])
+            elif user_agent and last_message["name"] == user_agent.name:
+                # If the user agent is passed in and is the first message
+                last_agent = user_agent
             else:
                 raise ValueError(f"Invalid swarm agent name in last message: {last_message['name']}")
         else:
@@ -260,9 +273,13 @@ class SwarmAgent(ConversableAgent):
         )
 
         if isinstance(functions, list):
+            if not all(isinstance(func, Callable) for func in functions):
+                raise TypeError("All elements in the functions list must be callable")
             self.add_functions(functions)
         elif isinstance(functions, Callable):
             self.add_single_function(functions)
+        elif functions is not None:
+            raise TypeError("Functions must be a callable or a list of callables")
 
         self.after_work = None
 
@@ -299,11 +316,18 @@ class SwarmAgent(ConversableAgent):
         1. register the function with the agent
         2. register the schema with the agent, description set to the condition
         """
+        # Ensure that hand_to is a list or ON_CONDITION or AFTER_WORK
+        if not isinstance(hand_to, (list, ON_CONDITION, AFTER_WORK)):
+            raise ValueError("hand_to must be a list of ON_CONDITION or AFTER_WORK")
+
         if isinstance(hand_to, (ON_CONDITION, AFTER_WORK)):
             hand_to = [hand_to]
 
         for transit in hand_to:
             if isinstance(transit, AFTER_WORK):
+                assert isinstance(
+                    transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)
+                ), "Invalid After Work value"
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
 
@@ -340,8 +364,21 @@ class SwarmAgent(ConversableAgent):
 
         message = messages[-1]
         if "tool_calls" in message:
-            # 1. add context_variables to the tool call arguments
-            for tool_call in message["tool_calls"]:
+
+            tool_call_count = len(message["tool_calls"])
+
+            # Loop through tool calls individually (so context can be updated after each function call)
+            next_agent = None
+            tool_responses_inner = []
+            contents = []
+            for index in range(tool_call_count):
+
+                # Deep copy to ensure no changes to messages when we insert the context variables
+                message_copy = copy.deepcopy(message)
+
+                # 1. add context_variables to the tool call arguments
+                tool_call = message_copy["tool_calls"][index]
+
                 if tool_call["type"] == "function":
                     function_name = tool_call["function"]["name"]
 
@@ -349,28 +386,40 @@ class SwarmAgent(ConversableAgent):
                     if function_name in self._function_map:
                         func = self._function_map[function_name]  # Get the original function
 
-                        # Check if function has context_variables parameter
+                        # Inject the context variables into the tool call if it has the parameter
                         sig = signature(func)
                         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
+
                             current_args = json.loads(tool_call["function"]["arguments"])
                             current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = self._context_variables
-                            # Update the tool call with new arguments
                             tool_call["function"]["arguments"] = json.dumps(current_args)
 
-            # 2. generate tool calls reply
-            _, tool_message = self.generate_tool_calls_reply([message])
+                # Ensure we are only executing the one tool at a time
+                message_copy["tool_calls"] = [tool_call]
 
-            # 3. update context_variables and next_agent, convert content to string
-            for tool_response in tool_message["tool_responses"]:
-                content = tool_response.get("content")
-                if isinstance(content, SwarmResult):
-                    if content.context_variables != {}:
-                        self._context_variables.update(content.context_variables)
-                    if content.agent is not None:
-                        self._next_agent = content.agent
-                elif isinstance(content, Agent):
-                    self._next_agent = content
-                tool_response["content"] = str(tool_response["content"])
+                # 2. generate tool calls reply
+                _, tool_message = self.generate_tool_calls_reply([message_copy])
+
+                # 3. update context_variables and next_agent, convert content to string
+                for tool_response in tool_message["tool_responses"]:
+                    content = tool_response.get("content")
+                    if isinstance(content, SwarmResult):
+                        if content.context_variables != {}:
+                            self._context_variables.update(content.context_variables)
+                        if content.agent is not None:
+                            next_agent = content.agent
+                    elif isinstance(content, Agent):
+                        next_agent = content
+
+                    tool_responses_inner.append(tool_response)
+                    contents.append(str(tool_response["content"]))
+
+            self._next_agent = next_agent
+
+            # Put the tool responses and content strings back into the response message
+            # Caters for multiple tool calls
+            tool_message["tool_responses"] = tool_responses_inner
+            tool_message["content"] = "\n".join(contents)
 
             return True, tool_message
         return False, None

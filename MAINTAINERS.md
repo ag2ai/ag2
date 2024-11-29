@@ -19,6 +19,7 @@
 | Davor Runje     | [davorrunje](https://github.com/davorrunje)                | airt.ai                | Tool calling, IO                        |
 | Aaron Ward     | [AaronWard](https://github.com/AaronWard)                | yappstore.ai                | all                      |
 | Rudy Wu     | [rudyalways](https://github.com/rudyalways)                | Google                | all, group chats, sequential chats                |
+| Haiyang Li  | [ohdearquant](https://github.com/ohdearquant)               | -               | all, sequential chats, structured output, low-level|
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |
