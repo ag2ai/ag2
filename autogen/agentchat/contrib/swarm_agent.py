@@ -40,15 +40,51 @@ class AFTER_WORK:
 
 
 @dataclass
+class NESTED_CHAT_CONFIG:
+    chat_list: List[Dict[str, Any]]
+    starting_message_method: Optional[Union[str, Callable]] = None
+    starting_llm_summary_args: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self):
+        assert isinstance(self.chat_list, list) and self.chat_list, "'chat_list' must be a non-empty list"
+        assert all(isinstance(chat, dict) for chat in self.chat_list), "'chat_list' must be a list of dictionaries"
+        assert isinstance(
+            self.starting_message_method, (str, Callable)
+        ), "'starting_message_method' must be a string or callable"
+
+        if self.starting_llm_summary_args is not None:
+            assert (
+                self.starting_message_method == "llm_summary"
+            ), "If 'starting_llm_summary_args' is provided, 'starting_message_method' must be 'carryover_llm_summary'"
+
+        if isinstance(self.starting_message_method, str):
+            assert self.starting_message_method in [
+                "carryover",
+                "carryover_last_msg",
+                "carryover_llm_summary",
+            ], "'starting_message_method' must be 'carryover', 'carryover_last_msg', 'carryover_llm_summary' or a callable"
+            assert "message" in self.chat_list[0], "All carryovers need the first chat_list item to have a 'message'"
+
+        if isinstance(self.starting_message_method, Callable):
+            if "message" in self.chat_list[0]:
+                raise ValueError(
+                    "If 'starting_message_method' is a callable, the first chat_list item can not have a 'message'. The callable will return the message."
+                )
+
+
+@dataclass
 class ON_CONDITION:
-    agent: Optional["SwarmAgent"]
-    nested_chat: Optional[List[Dict[str, Any]]]
+    agent: Optional["SwarmAgent"] = None
+    nested_chat: Optional[NESTED_CHAT_CONFIG] = None
     condition: str = ""
 
     def __post_init__(self):
-        # Ensure that agent is a SwarmAgent
+        # Ensure valid types
         if self.agent is not None:
             assert isinstance(self.agent, SwarmAgent), "'agent' must be a SwarmAgent"
+
+        if self.nested_chat is not None:
+            assert isinstance(self.nested_chat, NESTED_CHAT_CONFIG), "'nested_chat' must be a NESTED_CHAT_CONFIG"
 
         # Ensure they have an agent or nested_chat
         assert self.agent is not None or self.nested_chat is not None, "'agent' or 'nested_chat' must be provided"
@@ -190,6 +226,12 @@ def initiate_swarm_chat(
     manager = GroupChatManager(groupchat)
     clear_history = True
 
+    # We associate the groupchat manager with SwarmAgents
+    # to be able to access group messages, tool executor context variables
+    for agent in agents:
+        if isinstance(agent, SwarmAgent):
+            agent.associate_groupchat(manager)
+
     if len(messages) > 1:
         last_agent, last_message = manager.resume(messages=messages)
         clear_history = False
@@ -295,7 +337,8 @@ class SwarmAgent(ConversableAgent):
 
         self.after_work = None
 
-        # use in the tool execution agent to transfer to the next agent
+        # Used only in the tool execution agent for context and transferring to the next agent
+        # Note: context variables are not stored for each agent
         self._context_variables = {}
         self._next_agent = None
 
@@ -348,7 +391,7 @@ class SwarmAgent(ConversableAgent):
 
                     # Create closure with current loop transit value
                     # to ensure the condition matches the one in the loop
-                    def make_transfer_function(current_transit):
+                    def make_transfer_function(current_transit: ON_CONDITION):
                         def transfer_to_agent() -> "SwarmAgent":
                             return current_transit.agent
 
@@ -360,8 +403,76 @@ class SwarmAgent(ConversableAgent):
                 else:
                     # Transition to a nested chat
 
-                    # TODO
-                    pass
+                    # Create closure (see above note)
+                    def make_transfer_nested_function(nested_chat_config: NESTED_CHAT_CONFIG):
+                        def transfer_to_nested_chat() -> str:
+
+                            # All messages excluding the tool call message to get here
+                            current_messages = self._groupchatmanager.groupchat.messages[:-1]
+                            starting_message = [{"content": "", "role": "user"}]
+
+                            if "message" in nested_chat_config.chat_list[0]:
+                                starting_message[0]["content"] = nested_chat_config.chat_list[0]["message"]
+
+                            carry_over_message = ""
+
+                            if nested_chat_config.starting_message_method == "carryover":
+                                # Carryovers put a string concatenated value of messages into the first message
+                                # All carryovers need the "message" parameter as well
+                                # (e.g. message = <first nested chat message>\nContext: \n<swarm message 1>\n<swarm message 2>\n...)
+                                carry_over_message = current_messages
+
+                            elif nested_chat_config.starting_message_method == "carryover_last_msg":
+                                # (e.g. message = <first nested chat message>\nContext: \n<last swarm message>)
+                                carry_over_message = current_messages[-1]["content"]
+
+                            elif nested_chat_config.starting_message_method == "carryover_llm_summary":
+                                # We need to remove the last tool message from the messages before running inference, as the last message can't be a tool call
+                                last_tool_message = self._oai_messages[self._groupchatmanager].pop()
+
+                                carry_over_message = ConversableAgent._reflection_with_llm_as_summary(
+                                    sender=self._groupchatmanager,
+                                    recipient=self,
+                                    summary_args=(
+                                        nested_chat_config.starting_llm_summary_args
+                                        if nested_chat_config.starting_llm_summary_args
+                                        else {}
+                                    ),
+                                )
+
+                                self._oai_messages[self._groupchatmanager].append(
+                                    last_tool_message
+                                )  # Restore the tool message
+
+                            elif isinstance(nested_chat_config.starting_message_method, Callable):
+                                nested_chat_config.chat_list[0]["message"] = nested_chat_config.starting_message_method(
+                                    context_variables=self.get_swarm_context_variables(),
+                                    messages=self._groupchatmanager.groupchat.messages,
+                                )
+
+                            if carry_over_message:
+                                nested_chat_config.chat_list[0]["carryover"] = carry_over_message
+
+                            print("In transfer_to_nested_chat")
+                            self.register_nested_chats(
+                                nested_chat_config.chat_list, trigger=lambda sender: True, position=0
+                            )
+
+                            # Note: If we pass a list of messages in, the nested chat always
+                            # extracts and uses just the last message. This is the reason we use carryovers.
+                            reply = self.generate_reply(sender=self, messages=starting_message)
+
+                            # Remove the registered nested chat we added
+                            self._reply_func_list.pop(0)
+
+                            return reply
+
+                        return transfer_to_nested_chat
+
+                    transfer_func = make_transfer_nested_function(transit.nested_chat)
+                    self.add_single_function(
+                        transfer_func, f"transfer_to_nested_chat_{len(self._function_map)}", transit.condition
+                    )
 
             else:
                 raise ValueError("Invalid hand off condition, must be either ON_CONDITION or AFTER_WORK")
@@ -480,6 +591,18 @@ class SwarmAgent(ConversableAgent):
     def add_functions(self, func_list: List[Callable]):
         for func in func_list:
             self.add_single_function(func)
+
+    def associate_groupchat(self, groupchatmanager: GroupChatManager):
+        """Associate the group chat with an agent so we can access overall messages and other agents"""
+        self._groupchatmanager = groupchatmanager
+
+    def get_swarm_context_variables(self) -> Dict[str, Any]:
+        """Returns the context variables from the tool execution agent"""
+        for agent in self._groupchatmanager.groupchat.agents:
+            if agent.name == "Tool_Execution":
+                return agent._context_variables
+
+        raise Exception("Tool Execution agent not found")
 
 
 # Forward references for SwarmAgent in SwarmResult

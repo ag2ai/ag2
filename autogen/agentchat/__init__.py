@@ -11,6 +11,7 @@ from .chat import ChatResult, initiate_chats
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
     AFTER_WORK,
+    NESTED_CHAT_CONFIG,
     ON_CONDITION,
     AfterWorkOption,
     SwarmAgent,
@@ -38,5 +39,6 @@ __all__ = [
     "SwarmResult",
     "ON_CONDITION",
     "AFTER_WORK",
+    "NESTED_CHAT_CONFIG",
     "AfterWorkOption",
 ]
