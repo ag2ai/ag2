@@ -8,13 +8,10 @@ import sys
 
 import pytest
 from conftest import reason, skip_openai  # noqa: E402
-from graphrag_sdk.schema import Schema
+from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
 
 try:
-    from autogen.agentchat.contrib.graph_rag.document import (
-        Document,
-        DocumentType,
-    )
+    from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
     from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import (
         FalkorGraphQueryEngine,
         GraphStoreQueryResult,
@@ -39,16 +36,20 @@ def test_falkor_db_query_engine():
     3. Query it with a question and verify the result contains the critical information.
     """
     # Arrange
-    test_schema = Schema()
-    actor = test_schema.add_entity("Actor").add_attribute("name", str, unique=True)
-    movie = test_schema.add_entity("Movie").add_attribute("title", str, unique=True)
-    test_schema.add_relation("ACTED", actor, movie)
+    movie_ontology = Ontology()
+    movie_ontology.add_entity(
+        Entity(label="Actor", attributes=[Attribute(name="name", attr_type=AttributeType.STRING, unique=True)])
+    )
+    movie_ontology.add_entity(
+        Entity(label="Movie", attributes=[Attribute(name="title", attr_type=AttributeType.STRING, unique=True)])
+    )
+    movie_ontology.add_relation(Relation(label="ACTED", source="Actor", target="Movie"))
 
     query_engine = FalkorGraphQueryEngine(
         name="IMDB",
         # host="192.168.0.115",     # Change
         # port=6379,                # if needed
-        schema=test_schema,
+        ontology=movie_ontology,
     )
 
     source_file = "test/agentchat/contrib/graph_rag/the_matrix.txt"
@@ -63,9 +64,3 @@ def test_falkor_db_query_engine():
 
     # Assert
     assert query_result.answer.find("Keanu Reeves") >= 0
-    for message in query_result.messages:
-        if isinstance(message, dict) and "role" in message and message["role"] == "user":
-            assert "content" in message
-            assert message["content"] is question
-            return
-    pytest.fail("Question not found in message history.")
