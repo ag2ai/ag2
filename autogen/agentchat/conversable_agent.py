@@ -85,6 +85,7 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
+        context_variables: Optional[Dict[str, Any]] = None,
     ):
         """
         Args:
@@ -135,6 +136,7 @@ class ConversableAgent(LLMAgent):
                 resume previous had conversations. Defaults to an empty chat history.
             silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
                 silent in each function.
+            context_variables (dict or None): Context variables that provide a persistent context for the agent. Only used in Swarms at this stage.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -192,6 +194,8 @@ class ConversableAgent(LLMAgent):
         self.reply_at_receive = defaultdict(bool)
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
+
+        self._context_variables = context_variables if context_variables is not None else {}
 
         # Setting up code execution.
         # Do not register code execution reply if code execution is disabled.
