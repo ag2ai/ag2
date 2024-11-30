@@ -22,6 +22,34 @@ from ..conversable_agent import ConversableAgent
 from ..groupchat import GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
 
+TreeofThought_message = """
+Role: Expert Planning AI Assistant
+
+Task: Given a question and a list of previous steps (the plan trajectory), generate at least four innovative options for the next step. The user would not answer you anything.
+
+Instructions:
+- Review the user's question and the previous steps taken.
+- Identify any mistakes or errors in the previous steps.
+- If you find any mistakes, include optionss to correct them in your proposed options.
+- Think creatively to propose at least four possible optionss that logically build upon or correct the previous steps.
+- Reply a single word 'TERMINATE' as an option if you believe the user's question is fully resolved.
+- Provide a brief description for each option.
+- Present your output in the specified format.
+
+---
+
+**Format of Output:**
+
+**Reflection**
+*Give a few sentence reflections on the previous steps, what are wrong and what are good.*
+
+**Possible Options:**
+Option 1: Correct the error X in the previous steps.
+Option 2: Reiterate and understand the user's question.
+Option 3: Analyze and validate the results based on the previous steps.
+Option 4: Perform Y.
+"""
+
 
 class ThinkNode:
 
@@ -89,7 +117,7 @@ class ReasoningAgent(AssistantAgent):
         self.verbose = verbose
         assert answer_approach in ["pool", "best"]
         self.answer_approach = answer_approach
-        self.thinker = AssistantAgent(name="tot_thinker", system_message=tot_msg, llm_config=llm_config)
+        self.thinker = AssistantAgent(name="tot_thinker", system_message=TreeofThought_message, llm_config=llm_config)
 
         self.grader = AssistantAgent(
             name="tot_grader",
@@ -126,8 +154,8 @@ class ReasoningAgent(AssistantAgent):
 
         while prev_leafs and len(final_answers) < self.beam_size:
             new_leafs = []
-            print("len(final_answers)", len(final_answers))
-            print("len(prev_leafs)", len(prev_leafs))
+            # print("len(final_answers)", len(final_answers))
+            # print("len(prev_leafs)", len(prev_leafs))
             for node in prev_leafs:
                 if (self.max_depth and node.depth >= self.max_depth) or "TERMINATE" in node.content:
                     # Reached max depth; collect possible answers
@@ -145,10 +173,14 @@ class ReasoningAgent(AssistantAgent):
                 )
                 reply = self.thinker.last_message()["content"].strip()
 
-                options = re.findall(r"Option \d+:(.+?)(?=Option \d+:|$)", reply, re.DOTALL)
-                print("Options:", options)
+                options = re.findall(
+                    r"Option \d+:(.+?)(?=Option \d+:|$)", reply, re.DOTALL
+                )  # the options that the thinker provides
+                # print("Options:", options)
                 for option in options:
-                    new_leafs.append(ThinkNode(content=option.strip().rstrip(), parent=node))
+                    new_leafs.append(
+                        ThinkNode(content=option.strip().rstrip(), parent=node)
+                    )  # each option is a new leaf node
 
             prev_leafs = new_leafs
 
@@ -191,40 +223,3 @@ class ReasoningAgent(AssistantAgent):
 
         final_answer = self.chat_messages[self][-1]["content"].strip()
         return True, final_answer
-
-
-def last_meaningful_msg(sender, recipient, summary_args):
-    if sender == recipient:
-        return "TERMINATE"
-
-    summary = ""
-    chat_messages = recipient.chat_messages[sender]
-
-    for msg in reversed(chat_messages):
-        try:
-            content = msg["content"]
-            if isinstance(content, str):
-                summary = content.replace("TERMINATE", "")
-            elif isinstance(content, list):
-                # Remove the `TERMINATE` word in the content list.
-                summary = "\n".join(
-                    x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
-                )
-            if summary.strip().rstrip():
-                return summary
-        except (IndexError, AttributeError) as e:
-            warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
-    return summary
-
-
-def thought_reply(question: str, config_list: list, verbose: bool = False) -> str:
-    global total_cost
-    thought_agent = ReasoningAgent(name="thought_agent", llm_config={"config_list": config_list}, verbose=verbose)
-    user_proxy = UserProxyAgent(
-        name="user_proxy",
-        human_input_mode="NEVER",
-        code_execution_config={"use_docker": False},
-        max_consecutive_auto_reply=10,
-    )
-    ans = user_proxy.initiate_chat(thought_agent, message=question, summary_method=last_meaningful_msg)
-    return ans.summary
