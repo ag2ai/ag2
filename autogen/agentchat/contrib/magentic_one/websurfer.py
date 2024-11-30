@@ -70,9 +70,10 @@ SCREENSHOT_TOKENS = 1105
 import logging
 
 from autogen.logger import FileLogger
+from autogen.logger.logger_config import LoggerConfig
 
-logger = FileLogger()
-logger.start()  # Start logging session
+# Initialize logger with config
+logger = FileLogger(config=LoggerConfig())
 
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
@@ -253,17 +254,21 @@ class MultimodalWebSurfer(ConversableAgent):
         if self.to_save_screenshots:
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
             logger.log_event(
-                self.name,
-                "screenshot",
-                url=self._page.url,
-                screenshot=screenshot_png_name
+                source=self.name,
+                name="screenshot",
+                data={
+                    "url": self._page.url,
+                    "screenshot": screenshot_png_name
+                }
             )
 
             logger.log_event(
-                self.name,
-                "debug_screens",
-                text="Multimodal Web Surfer debug screens",
-                url=pathlib.Path(os.path.abspath(debug_html)).as_uri()
+                source=self.name,
+                name="debug_screens",
+                data={
+                    "text": "Multimodal Web Surfer debug screens",
+                    "url": pathlib.Path(os.path.abspath(debug_html)).as_uri()
+                }
             )
 
 
@@ -278,13 +283,22 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
             
             logger.log_event(
-                self.name,
-                "screenshot",
-                url=self._page.url,
-                screenshot=screenshot_png_name
+                source=self.name,
+                name="screenshot",
+                data={
+                    "url": self._page.url,
+                    "screenshot": screenshot_png_name
+                }
             )
 
-        logger.log_event(self.name, "reset", text="Resetting browser.", url=self._page.url)
+        logger.log_event(
+            source=self.name,
+            name="reset",
+            data={
+                "text": "Resetting browser.",
+                "url": self._page.url
+            }
+        )
 
     def _target_name(self, target: str, rects: Dict[str, InteractiveRegion]) -> str | None:
         try:
@@ -336,9 +350,13 @@ class MultimodalWebSurfer(ConversableAgent):
         action_description = ""
         assert self._page is not None
         logger.log_event(
-            self.name,
-            url=self._page.url,
-            args=args
+            source=self.name,
+            name="tool_execution",
+            data={
+                "url": self._page.url,
+                "tool_name": name,
+                "args": args
+            }
         )
 
         if name == "visit_url":
@@ -471,10 +489,12 @@ class MultimodalWebSurfer(ConversableAgent):
             async with aiofiles.open(os.path.join(self.debug_dir, screenshot_png_name), "wb") as file:  # type: ignore
                 await file.write(new_screenshot)  # type: ignore
             logger.log_event(
-                self.name,
-                "screenshot",
-                url=self._page.url,
-                screenshot=screenshot_png_name
+                source=self.name,
+                name="screenshot",
+                data={
+                    "url": self._page.url,
+                    "screenshot": screenshot_png_name
+                }
             )
 
         ocr_text = (
@@ -533,10 +553,12 @@ class MultimodalWebSurfer(ConversableAgent):
             screenshot_png_name = "screenshot_som" + current_timestamp + ".png"
             som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
             logger.log_event(
-                self.name,
-                "screenshot",
-                url=self._page.url,
-                screenshot=screenshot_png_name
+                source=self.name,
+                name="screenshot",
+                data={
+                    "url": self._page.url,
+                    "screenshot": screenshot_png_name
+                }
             )
         # What tools are available?
         tools: List[Dict[str, Any]] = [
@@ -742,7 +764,14 @@ class MultimodalWebSurfer(ConversableAgent):
             path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
         )
         await self._page.wait_for_load_state()
-        logger.log_event(self.name, "new_page", url=self._page.url)
+        logger.log_event(
+            source=self.name,
+            name="new_page",
+            data={
+                "url": self._page.url,
+                "text": "New tab or window opened"
+            }
+        )
 
     async def _back(self) -> None:
         assert self._page is not None
@@ -815,9 +844,12 @@ class MultimodalWebSurfer(ConversableAgent):
                 await self._on_new_page(new_page)
 
                 logger.log_event(
-                    self.name,
-                    url=self._page.url,
-                    text=" New tab or window."
+                    source=self.name,
+                    name="popup",
+                    data={
+                        "url": self._page.url,
+                        "text": "New tab or window opened"
+                    }
                 )
 
         except TimeoutError:
@@ -1047,11 +1079,13 @@ class MultimodalWebSurfer(ConversableAgent):
                 return json.loads(cleaned_content)
             except json.JSONDecodeError as e:
                 logger.log_event(
-                    self.name,
-                    "json_error",
-                    original_content=formatted_content,
-                    cleaned_content=cleaned_content,
-                    error=str(e)
+                    source=self.name,
+                    name="json_error",
+                    data={
+                        "original_content": formatted_content,
+                        "cleaned_content": cleaned_content,
+                        "error": str(e)
+                    }
                 )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
 

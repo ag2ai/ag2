@@ -1,8 +1,6 @@
 import json
-import logging
 import traceback
 import re
-from collections import defaultdict
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
 from .orchestrator_prompts import (
@@ -19,13 +17,11 @@ from .orchestrator_prompts import (
 
 
 from autogen.agentchat import Agent, ConversableAgent, UserProxyAgent, ChatResult
-import asyncio
 from autogen.logger import FileLogger
-import uuid
-from datetime import datetime
+from autogen.logger.logger_config import LoggerConfig
 
-logger = FileLogger()
-logger.start()  # Start logging session
+# Initialize logger with config
+logger = FileLogger(config=LoggerConfig())
 
 
 class OrchestratorAgent(ConversableAgent):
@@ -299,12 +295,14 @@ class OrchestratorAgent(ConversableAgent):
                 return ledger_dict
             except json.JSONDecodeError as e:
                 logger.log_event(
-                    self.name,
-                    "error",
-                    error_type="JSONDecodeError",
-                    error_message=str(e),
-                    traceback=traceback.format_exc(),
-                    ledger_str=ledger_str
+                    source=self.name,
+                    name="error",
+                    data={
+                        "error_type": "JSONDecodeError",
+                        "error_message": str(e),
+                        "traceback": traceback.format_exc(),
+                        "ledger_str": ledger_str
+                    }
                 )
                 raise e
 
@@ -336,7 +334,11 @@ class OrchestratorAgent(ConversableAgent):
                 raise ValueError(f"Invalid task format: {task}")
 
         if not task or task.strip() == "":
-            logger.log_event(self.name, "error", error="Invalid task: Empty task content.")
+            logger.log_event(
+                source=self.name,
+                name="error",
+                data={"error": "Invalid task: Empty task content."}
+            )
             return None
 
         if len(self._task) == 0:
@@ -357,7 +359,11 @@ class OrchestratorAgent(ConversableAgent):
             self._stall_counter = 0
             
             # Log the initial plan
-            logger.log_event(self.name, "initial_plan", plan=synthesized_prompt)
+            logger.log_event(
+                source=self.name,
+                name="initial_plan",
+                data={"plan": synthesized_prompt}
+            )
 
             # Add to chat history
             self._append_oai_message({"role": "assistant", "content": synthesized_prompt}, "assistant", self, True)
@@ -367,16 +373,28 @@ class OrchestratorAgent(ConversableAgent):
 
         # Orchestrate the next step
         ledger_dict = self.update_ledger()
-        logger.log_event(self.name, "ledger_update", ledger=ledger_dict)
+        logger.log_event(
+            source=self.name,
+            name="ledger_update",
+            data={"ledger": ledger_dict}
+        )
 
         # Task is complete
         if ledger_dict["is_request_satisfied"]["answer"] is True:
-            logger.log_event(self.name, "task_complete", message="Request satisfied")
+            logger.log_event(
+                source=self.name,
+                name="task_complete",
+                data={"message": "Request satisfied"}
+            )
             
             if self._return_final_answer:
                 # generate a final message to summarize the conversation
                 final_answer = self._prepare_final_answer()
-                logger.log_event(self.name, "final_answer", answer=final_answer)
+                logger.log_event(
+                    source=self.name,
+                    name="final_answer",
+                    data={"answer": final_answer}
+                )
                 
                 # Add final answer to chat history
                 final_msg = {"role": "assistant", "content": final_answer}
@@ -400,11 +418,19 @@ class OrchestratorAgent(ConversableAgent):
 
                 # We exceeded our replan counter
                 if self._replan_counter > self._max_replans:
-                    logger.log_event(self.name, "termination", reason="Replan counter exceeded")
+                    logger.log_event(
+                        source=self.name,
+                        name="termination",
+                        data={"reason": "Replan counter exceeded"}
+                    )
                     return None
                 # Let's create a new plan
                 else:
-                    logger.log_event(self.name, "replan", reason="(thought) Stalled ... Replanning ..")
+                    logger.log_event(
+                        source=self.name,
+                        name="replan",
+                        data={"reason": "Stalled ... Replanning .."}
+                    )
 
                     # Update our plan.
                     self._update_facts_and_plan()
@@ -428,7 +454,11 @@ class OrchestratorAgent(ConversableAgent):
                         for agent in self._agents:
                             self.send(synthesized_prompt, agent)
 
-                    logger.log_event(self.name, "new_plan", plan=synthesized_prompt)
+                    logger.log_event(
+                        source=self.name,
+                        name="new_plan",
+                        data={"plan": synthesized_prompt}
+                    )
 
                     synthesized_message = {"role": "assistant", "content": synthesized_prompt}
                     self._append_oai_message(synthesized_message, "assistant", self, True)
@@ -444,11 +474,13 @@ class OrchestratorAgent(ConversableAgent):
                 
                 # Log the instruction
                 logger.log_event(
-                    self.name, 
-                    "instruction",
-                    from_agent=self.name,
-                    to_agent=next_agent_name,
-                    instruction=instruction
+                    source=self.name,
+                    name="instruction",
+                    data={
+                        "from_agent": self.name,
+                        "to_agent": next_agent_name,
+                        "instruction": instruction
+                    }
                 )
                 
                 # Update chat history
@@ -517,7 +549,11 @@ class OrchestratorAgent(ConversableAgent):
             next_agent = self._select_next_agent(task)
                     
             if self._current_round >= self._max_rounds:
-                logger.log_event(self.name, "max_rounds_reached", max_rounds=self._max_rounds)
+                logger.log_event(
+                    source=self.name,
+                    name="max_rounds_reached",
+                    data={"max_rounds": self._max_rounds}
+                )
                 
         # Track final state
         final_state = {
@@ -526,7 +562,11 @@ class OrchestratorAgent(ConversableAgent):
             "stalls": self._stall_counter,
             "task_completed": next_agent is None and self._current_round < self._max_rounds
         }
-        logger.log_event(self.name, "final_state", **final_state)
+        logger.log_event(
+            source=self.name,
+            name="final_state",
+            data=final_state
+        )
         
         # Return chat result with all relevant info
         return self._oai_messages[self][-1]["content"]
@@ -571,11 +611,13 @@ class OrchestratorAgent(ConversableAgent):
                 return json.loads(cleaned_content)
             except json.JSONDecodeError as e:
                 logger.log_event(
-                    self.name,
-                    "json_error",
-                    original_content=content,
-                    cleaned_content=cleaned_content,
-                    error=str(e)
+                    source=self.name,
+                    name="json_error",
+                    data={
+                        "original_content": content,
+                        "cleaned_content": cleaned_content,
+                        "error": str(e)
+                    }
                 )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
 
