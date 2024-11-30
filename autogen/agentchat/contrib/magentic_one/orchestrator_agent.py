@@ -18,10 +18,9 @@ from .orchestrator_prompts import (
 
 from autogen.agentchat import Agent, ConversableAgent, UserProxyAgent, ChatResult
 from autogen.logger import FileLogger
-from autogen.logger.logger_config import LoggerConfig
 
 # Initialize logger with config
-logger = FileLogger(config=LoggerConfig())
+logger = FileLogger(config={})
 
 
 class OrchestratorAgent(ConversableAgent):

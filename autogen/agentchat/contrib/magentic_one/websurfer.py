@@ -70,10 +70,9 @@ SCREENSHOT_TOKENS = 1105
 import logging
 
 from autogen.logger import FileLogger
-from autogen.logger.logger_config import LoggerConfig
 
 # Initialize logger with config
-logger = FileLogger(config=LoggerConfig())
+logger = FileLogger(config={})
 
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
