@@ -19,6 +19,7 @@ from .orchestrator_prompts import (
 
 
 from autogen.agentchat import Agent, ConversableAgent, UserProxyAgent, ChatResult
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,6 @@ class OrchestratorAgent(ConversableAgent):
         return_final_answer: bool = False,
         user_agent: Optional[UserProxyAgent] = None,
         agent_whole_history: bool = True,
-        reset_agent_after_task: bool = False,
         **kwargs
     ):
         super().__init__(
@@ -119,7 +119,6 @@ class OrchestratorAgent(ConversableAgent):
         self._max_rounds = max_rounds
         self._current_round = 0
         self._agent_whole_history = agent_whole_history
-        self._reset_agent_after_task = reset_agent_after_task
 
         self._team_description = ""
         self._task = ""
@@ -255,9 +254,10 @@ class OrchestratorAgent(ConversableAgent):
         # retries in case the LLM does not return a valid JSON
         assert max_json_retries > 0
         for _ in range(max_json_retries):
+            messages = self._system_messages + self._oai_messages[self] + ledger_user_messages
 
             is_valid_response, ledger_str = self.generate_oai_reply(
-                messages=self._system_messages + self._oai_messages[self] + ledger_user_messages,
+                messages=messages,
                 )
 
             assert is_valid_response
@@ -324,7 +324,14 @@ class OrchestratorAgent(ConversableAgent):
 
     def _select_next_agent(self, task: str) -> Optional[ConversableAgent]:
         """Select the next agent to act based on the current state."""
-        
+        if isinstance(task, List): # TODO: fix type
+            if task[0]["type"] == "text":
+                task = task[0]["text"]
+            elif task[1]["type"] == "text":
+                task = task[1]["text"]
+            else:
+                raise ValueError(f"Invalid task format: {task}")
+
         if not task or task.strip() == "":
             logger.error("Invalid task: Empty task content.")
             return None
@@ -461,7 +468,7 @@ class OrchestratorAgent(ConversableAgent):
 
         return None
 
-    def generate_reply(
+    async def a_generate_reply(
         self,
         messages: Optional[List[Dict[str, Any]]] = None,
         sender: Optional["Agent"] = None,
@@ -493,30 +500,27 @@ class OrchestratorAgent(ConversableAgent):
                     break
                     
                 # Execute through executor agent 
-                chat_result = self.executor.initiate_chat( # TODO: should just be generate_reply
-                    recipient=next_agent,
-                    message=instructions,  
-                    clear_history=self._reset_agent_after_task  # Clear history based on reset_agent_after_task setting
-                )
-                
-                if chat_result and chat_result.summary:
-                    last_summary = chat_result.summary
-                if chat_result and chat_result.chat_history:
-                    # Get the last message from the chat history
-                    response = chat_result.chat_history[-1]["content"]
-                    
-                    # Add response to chat history
-                    response_msg = {"role": "user", "content": response}
-                    self._append_oai_message(response_msg, "user", self, False)
-                    
-                    # Share response with all other agents if enabled
-                    if self._agent_whole_history:
-                        for agent in self._agents:
-                            if agent != next_agent:  # Don't send to the agent who just responded
-                                self.send(response, agent)
-                    
-                    # Select next agent based on response 
-                    next_agent = self._select_next_agent(response)
+                response = await next_agent.a_generate_reply(messages=[instructions], sender=self)
+                #chat_result = self.executor.initiate_chat( # TODO: should just be generate_reply
+                #    recipient=next_agent,
+                #    message=instructions,  
+                #    clear_history=self._reset_agent_after_task  # Clear history based on reset_agent_after_task setting
+                #)
+                if isinstance(response, str):
+                    task = response
+                elif isinstance(response, dict):
+                    task = response["content"]
+                else:
+                    logger.error("Invalid response type: %s", type(response))
+                    break
+                response_msg = {"role": "user", "content": response}
+                self._append_oai_message(response_msg, "user", self, False)
+                if self._agent_whole_history:
+                    for agent in self._agents:
+                        if agent != next_agent:  # Don't send to the agent who just responded
+                            self.send(response, agent)
+
+                next_agent = self._select_next_agent(task)
                     
                 if self._current_round >= self._max_rounds:
                     logger.info(f"Max rounds ({self._max_rounds}) reached. Terminating.")

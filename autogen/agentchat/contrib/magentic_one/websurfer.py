@@ -204,6 +204,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Prepare the debug directory -- which stores the screenshots generated throughout the process
         await self._set_debug_dir(debug_dir)
+        
 
     def _get_screenshot_selection_prompt(self, page_url, visible_targets, other_targets_str, focused_hint, tool_names) -> str:
         assert self._page is not None
@@ -296,14 +297,6 @@ class MultimodalWebSurfer(ConversableAgent):
                 targets.append(f'{{"id": {r}, "name": "{aria_name}", "role": "{aria_role}", "tools": {actions_str} }}')
 
         return targets
-
-    async def _generate_reply(self) -> Tuple[bool, Union[str, Dict, None]]:
-        assert self._page is not None
-        try:
-            request_halt, content = await self.__generate_reply()
-            return request_halt, content
-        except Exception:
-            return False, f"Web surfing error:\n\n{traceback.format_exc()}"
 
     async def _execute_tool( # TODO: replace with ag2 ? or overwrite ag2 ?ag2 biggest work integrating with tools 
         self,
@@ -484,20 +477,25 @@ class MultimodalWebSurfer(ConversableAgent):
             ]
         }
 
-    async def __generate_reply(self) -> Tuple[bool, Union[str, Dict, None]]:
+    async def a_generate_reply(
+        self,
+        messages: Optional[List[Dict[str, Any]]] = None,
+        sender: Optional["Agent"] = None,
+        **kwargs: Any,
+    ) -> Union[str, Dict[str, Any], None]:
         """Generates the actual reply. First calls the LLM to figure out which tool to use, then executes the tool.
         
         Returns:
-            Tuple[bool, Union[str, Dict, None]]: A tuple containing:
-                - bool: Whether this is a final response
-                - The response content which may be a string, dict or None
+            Union[str, Dict, None]: The response content which may be a string, dict or None
         """
         assert self._page is not None
+        assert messages is not None
 
+        history = messages
         # Get the full conversation history
-        history = []
-        for msg in self._oai_messages.values():
-            history.extend(msg)
+        #history = []
+        #for msg in self._oai_messages.values():
+        #    history.extend(msg)
 
         # Ask the page for interactive elements, then prepare the state-of-mark screenshot
         rects = await self._get_interactive_rects() 
@@ -623,12 +621,12 @@ class MultimodalWebSurfer(ConversableAgent):
 
         if isinstance(response, str): #TODO: response format
             # Direct text response
-            return False, response
+            return response
         elif isinstance(response, dict):
             if "tool_calls" in response:
                 #success, tool_response = await self.a_generate_tool_calls_reply(messages=[response])
                 #if success:
-                return await self._execute_tool(response, rects, tool_names)
+                request_halt, tool_response = await self._execute_tool(response, rects, tool_names)
             elif "function_call" in response:
                 # Legacy function call handling
                 #success, func_response = await self.a_generate_function_call_reply(messages=[response])
@@ -642,8 +640,10 @@ class MultimodalWebSurfer(ConversableAgent):
                 self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
             else:
                 self.update_tool_signature({"type": "function", "function": tool}, is_remove=True)
-            
-        return False, None
+        
+        if tool_response is not None:
+            return tool_response
+        return None
 
     async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
         assert self._page is not None
@@ -969,25 +969,6 @@ class MultimodalWebSurfer(ConversableAgent):
         assert is_valid_response
         assert isinstance(response, str)
         return response
-
-    async def a_custom_generate_reply(                                                        
-            self,                                                                          
-            messages: Optional[List[Dict[str, Any]]] = None,                               
-            sender: Optional[Agent] = None,                                                
-            **kwargs: Any,                                                                 
-        ) -> Tuple[bool, Union[str, Dict[str, Any], None]]:                                             
-            """Override a_generate_reply to use the web surfing capabilities"""            
-            #if messages is None:                                                           
-            #    messages = self._oai_messages[sender]                                      
-                                                                                            
-            # Get the last message which contains the instruction/query                    
-            #if not messages:                                                               
-            #    return True, None                                                                
-                                                                                            
-            request_halt, reply = await self._generate_reply()   
-            # TODO: what to do with request_halt ?                           
-            return request_halt, reply    
-
 
     def _clean_and_parse_json(self, content: str) -> Dict[str, Any]:
         """Clean and parse JSON content from various formats."""
