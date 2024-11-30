@@ -69,8 +69,10 @@ SCREENSHOT_TOKENS = 1105
 
 import logging
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from autogen.logger import FileLogger
+
+logger = FileLogger()
+logger.start()  # Start logging session
 
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
@@ -250,9 +252,19 @@ class MultimodalWebSurfer(ConversableAgent):
                 )
         if self.to_save_screenshots:
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
-            logger.info(f"url: {self._page.url} screenshot: {screenshot_png_name}")
+            logger.log_event(
+                self.name,
+                "screenshot",
+                url=self._page.url,
+                screenshot=screenshot_png_name
+            )
 
-            logger.info(f"Multimodal Web Surfer debug screens: {pathlib.Path(os.path.abspath(debug_html)).as_uri()}\n")
+            logger.log_event(
+                self.name,
+                "debug_screens",
+                text="Multimodal Web Surfer debug screens",
+                url=pathlib.Path(os.path.abspath(debug_html)).as_uri()
+            )
 
 
     async def _reset(self) -> None: 
@@ -263,12 +275,16 @@ class MultimodalWebSurfer(ConversableAgent):
         if self.to_save_screenshots:
             current_timestamp = "_" + int(time.time()).__str__()
             screenshot_png_name = "screenshot" + current_timestamp + ".png"
-            await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
+            await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
             
-            logger.info(f"url: {self._page.url} screenshot: {screenshot_png_name}")
+            logger.log_event(
+                self.name,
+                "screenshot",
+                url=self._page.url,
+                screenshot=screenshot_png_name
+            )
 
-
-        logger.info(f"url: {self._page.url} Resetting browser.")
+        logger.log_event(self.name, "reset", text="Resetting browser.", url=self._page.url)
 
     def _target_name(self, target: str, rects: Dict[str, InteractiveRegion]) -> str | None:
         try:
@@ -319,7 +335,11 @@ class MultimodalWebSurfer(ConversableAgent):
 
         action_description = ""
         assert self._page is not None
-        logger.info(f"url: {self._page.url} name: {name} args: {args}")
+        logger.log_event(
+            self.name,
+            url=self._page.url,
+            args=args
+        )
 
         if name == "visit_url":
             url = args["url"]
@@ -450,7 +470,12 @@ class MultimodalWebSurfer(ConversableAgent):
             screenshot_png_name = "screenshot" + current_timestamp + ".png"
             async with aiofiles.open(os.path.join(self.debug_dir, screenshot_png_name), "wb") as file:  # type: ignore
                 await file.write(new_screenshot)  # type: ignore
-            logger.info(f"url: {self._page.url} Screenshot: {screenshot_png_name}")
+            logger.log_event(
+                self.name,
+                "screenshot",
+                url=self._page.url,
+                screenshot=screenshot_png_name
+            )
 
         ocr_text = (
             await self._get_ocr_text(new_screenshot) if use_ocr is True else ""
@@ -507,7 +532,12 @@ class MultimodalWebSurfer(ConversableAgent):
             current_timestamp = "_" + int(time.time()).__str__()
             screenshot_png_name = "screenshot_som" + current_timestamp + ".png"
             som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
-            logger.info(f"url: {self._page.url} Screenshot: {screenshot_png_name}")
+            logger.log_event(
+                self.name,
+                "screenshot",
+                url=self._page.url,
+                screenshot=screenshot_png_name
+            )
         # What tools are available?
         tools: List[Dict[str, Any]] = [
             TOOL_VISIT_URL,
@@ -712,6 +742,7 @@ class MultimodalWebSurfer(ConversableAgent):
             path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
         )
         await self._page.wait_for_load_state()
+        logger.log_event(self.name, "new_page", url=self._page.url)
 
     async def _back(self) -> None:
         assert self._page is not None
@@ -783,7 +814,11 @@ class MultimodalWebSurfer(ConversableAgent):
                 assert isinstance(new_page, Page)
                 await self._on_new_page(new_page)
 
-                logger.info(f"url: {self._page.url} New tab or window.")
+                logger.log_event(
+                    self.name,
+                    url=self._page.url,
+                    text=" New tab or window."
+                )
 
         except TimeoutError:
             pass
@@ -1011,7 +1046,15 @@ class MultimodalWebSurfer(ConversableAgent):
             try:
                 return json.loads(cleaned_content)
             except json.JSONDecodeError as e:
-                logger.error(f"Original content:\n{formatted_content}")
-                logger.error(f"Cleaned content:\n{cleaned_content}")
-                logger.error(f"JSON error: {str(e)}")
+                logger.log_event(
+                    self.name,
+                    "json_error",
+                    original_content=formatted_content,
+                    cleaned_content=cleaned_content,
+                    error=str(e)
+                )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
+
+    def __del__(self):
+        """Cleanup when the object is destroyed."""
+        logger.stop()

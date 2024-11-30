@@ -20,8 +20,12 @@ from .orchestrator_prompts import (
 
 from autogen.agentchat import Agent, ConversableAgent, UserProxyAgent, ChatResult
 import asyncio
+from autogen.logger import FileLogger
+import uuid
+from datetime import datetime
 
-logger = logging.getLogger(__name__)
+logger = FileLogger()
+logger.start()  # Start logging session
 
 
 class OrchestratorAgent(ConversableAgent):
@@ -245,7 +249,7 @@ class OrchestratorAgent(ConversableAgent):
         names = self._get_team_names()
         ledger_prompt = self._get_ledger_prompt(self._task, team_description, names)
 
-        ledger_user_messages= [
+        ledger_user_messages = [
             {"role": "user", "content": ledger_prompt}
         ]
         # retries in case the LLM does not return a valid JSON
@@ -255,7 +259,7 @@ class OrchestratorAgent(ConversableAgent):
 
             is_valid_response, ledger_str = self.generate_oai_reply(
                 messages=messages,
-                )
+            )
 
             assert is_valid_response
             # TODO: response dict ? 
@@ -268,7 +272,7 @@ class OrchestratorAgent(ConversableAgent):
                 required_keys = [
                     "is_request_satisfied",
                     "is_in_loop",
-                    "is_progress_being_made",
+                    "is_progress_being_made", 
                     "next_speaker",
                     "instruction_or_question",
                 ]
@@ -294,11 +298,13 @@ class OrchestratorAgent(ConversableAgent):
                     continue
                 return ledger_dict
             except json.JSONDecodeError as e:
-
-                logger.error("An error occurred in update_ledger: %s", traceback.format_exc())
-                
-                logger.error(
-                    "Failed to parse ledger information: %s", ledger_str
+                logger.log_event(
+                    self.name,
+                    "error",
+                    error_type="JSONDecodeError",
+                    error_message=str(e),
+                    traceback=traceback.format_exc(),
+                    ledger_str=ledger_str
                 )
                 raise e
 
@@ -321,7 +327,7 @@ class OrchestratorAgent(ConversableAgent):
 
     def _select_next_agent(self, task: str) -> Optional[ConversableAgent]:
         """Select the next agent to act based on the current state."""
-        if isinstance(task, List): # TODO: fix type
+        if isinstance(task, List):  # TODO: fix type
             if task[0]["type"] == "text":
                 task = task[0]["text"]
             elif task[1]["type"] == "text":
@@ -330,7 +336,7 @@ class OrchestratorAgent(ConversableAgent):
                 raise ValueError(f"Invalid task format: {task}")
 
         if not task or task.strip() == "":
-            logger.error("Invalid task: Empty task content.")
+            logger.log_event(self.name, "error", error="Invalid task: Empty task content.")
             return None
 
         if len(self._task) == 0:
@@ -351,7 +357,7 @@ class OrchestratorAgent(ConversableAgent):
             self._stall_counter = 0
             
             # Log the initial plan
-            logger.info(f"Initial plan:\n{synthesized_prompt}")
+            logger.log_event(self.name, "initial_plan", plan=synthesized_prompt)
 
             # Add to chat history
             self._append_oai_message({"role": "assistant", "content": synthesized_prompt}, "assistant", self, True)
@@ -361,22 +367,17 @@ class OrchestratorAgent(ConversableAgent):
 
         # Orchestrate the next step
         ledger_dict = self.update_ledger()
-        logger.info(
-                f"Updated Ledger:\n{json.dumps(ledger_dict, indent=2)}"
-        )
+        logger.log_event(self.name, "ledger_update", ledger=ledger_dict)
 
         # Task is complete
         if ledger_dict["is_request_satisfied"]["answer"] is True:
-            logger.info(
-                    "Request satisfied."
-            )
+            logger.log_event(self.name, "task_complete", message="Request satisfied")
+            
             if self._return_final_answer:
                 # generate a final message to summarize the conversation
                 final_answer = self._prepare_final_answer()
-                logger.info(
-                        "(final answer)\n%s",
-                        final_answer
-                )
+                logger.log_event(self.name, "final_answer", answer=final_answer)
+                
                 # Add final answer to chat history
                 final_msg = {"role": "assistant", "content": final_answer}
                 self._append_oai_message(final_msg, "assistant", self, True)
@@ -399,16 +400,11 @@ class OrchestratorAgent(ConversableAgent):
 
                 # We exceeded our replan counter
                 if self._replan_counter > self._max_replans:
-                    logger.info(
-                            "(thought) Replan counter exceeded... Terminating."
-                    )
+                    logger.log_event(self.name, "termination", reason="Replan counter exceeded")
                     return None
                 # Let's create a new plan
                 else:
-                    logger.info(
-                            "(thought) Stalled.... Replanning..."
-                    )
-                    
+                    logger.log_event(self.name, "replan", reason="(thought) Stalled ... Replanning ..")
 
                     # Update our plan.
                     self._update_facts_and_plan()
@@ -432,9 +428,7 @@ class OrchestratorAgent(ConversableAgent):
                         for agent in self._agents:
                             self.send(synthesized_prompt, agent)
 
-                    logger.info(
-                            f"(thought) New plan:\n{synthesized_prompt}"
-                    )
+                    logger.log_event(self.name, "new_plan", plan=synthesized_prompt)
 
                     synthesized_message = {"role": "assistant", "content": synthesized_prompt}
                     self._append_oai_message(synthesized_message, "assistant", self, True)
@@ -449,7 +443,13 @@ class OrchestratorAgent(ConversableAgent):
                 instruction = ledger_dict["instruction_or_question"]["answer"]
                 
                 # Log the instruction
-                logger.info(f"{self.name} (-> {next_agent_name}): {instruction}")
+                logger.log_event(
+                    self.name, 
+                    "instruction",
+                    from_agent=self.name,
+                    to_agent=next_agent_name,
+                    instruction=instruction
+                )
                 
                 # Update chat history
                 instruction_msg = {"role": "assistant", "content": instruction}
@@ -472,68 +472,64 @@ class OrchestratorAgent(ConversableAgent):
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, Dict, None]:
-            """Start the orchestration process with an initial message/task."""
-            # Reset state
-            self._current_round = 0
-            self._oai_messages.clear()
-            for agent in self._agents:
-                agent.reset()
+        """Start the orchestration process with an initial message/task."""
+        # Reset state
+        self._current_round = 0
+        self._oai_messages.clear()
+        for agent in self._agents:
+            agent.reset()
 
-            if messages is None:
-                message = self.get_human_input("Please provide the task: ")
-            else:
-                message = messages[-1]["content"]
+        if messages is None:
+            message = self.get_human_input("Please provide the task: ")
+        else:
+            message = messages[-1]["content"]
 
-            # Initialize the first agent selection
-            next_agent = self._select_next_agent(message)
+        # Initialize the first agent selection
+        next_agent = self._select_next_agent(message)
+        
+        last_summary = ""
+        # Continue orchestration until max rounds reached or no next agent
+        while next_agent is not None and self._current_round < self._max_rounds:
+            self._current_round += 1
             
-            last_summary = ""
-            # Continue orchestration until max rounds reached or no next agent
-            while next_agent is not None and self._current_round < self._max_rounds:
-                self._current_round += 1
+            instructions = self._oai_messages[self][-1] if self._oai_messages[self] else None
+            if not instructions:
+                logger.log_event(self.name, "error", error="No message found in chat history")
+                break
                 
-                instructions = self._oai_messages[self][-1] if self._oai_messages[self] else None
-                if not instructions:
-                    logger.error("No message found in chat history")
-                    break
-                    
-                # Execute through executor agent 
-                response = await next_agent.a_generate_reply(messages=[instructions], sender=self)
-                #chat_result = self.executor.initiate_chat( # TODO: should just be generate_reply
-                #    recipient=next_agent,
-                #    message=instructions,  
-                #    clear_history=self._reset_agent_after_task  # Clear history based on reset_agent_after_task setting
-                #)
-                if isinstance(response, str):
-                    task = response
-                elif isinstance(response, dict):
-                    task = response["content"]
-                else:
-                    logger.error("Invalid response type: %s", type(response))
-                    break
-                response_msg = {"role": "user", "content": task}
-                self._append_oai_message(task, "user", self, False)
+            # Execute through executor agent 
+            response = await next_agent.a_generate_reply(messages=[instructions], sender=self)
+            if isinstance(response, str):
+                task = response
+            elif isinstance(response, dict):
+                task = response["content"]
+            else:
+                logger.log_event(self.name, "error", error=f"Invalid response type: {type(response)}")
+                break
+            response_msg = {"role": "user", "content": task}
+            self._append_oai_message(task, "user", self, False)
 
-                if self._agent_whole_history:
-                    for agent in self._agents:
-                        if agent != next_agent:  # Don't send to the agent who just responded
-                            self.send(response_msg, agent)
+            if self._agent_whole_history:
+                for agent in self._agents:
+                    if agent != next_agent:  # Don't send to the agent who just responded
+                        self.send(response_msg, agent)
 
-                next_agent = self._select_next_agent(task)
+            next_agent = self._select_next_agent(task)
                     
-                if self._current_round >= self._max_rounds:
-                    logger.info(f"Max rounds ({self._max_rounds}) reached. Terminating.")
-                    
-            # Track final state
-            final_state = {
-                "rounds_completed": self._current_round,
-                "replans": self._replan_counter,
-                "stalls": self._stall_counter,
-                "task_completed": next_agent is None and self._current_round < self._max_rounds
-            }
-            logger.info(f"Final state: {str(final_state)}")
-            # Return chat result with all relevant info
-            return self._oai_messages[self][-1]["content"]
+            if self._current_round >= self._max_rounds:
+                logger.log_event(self.name, "max_rounds_reached", max_rounds=self._max_rounds)
+                
+        # Track final state
+        final_state = {
+            "rounds_completed": self._current_round,
+            "replans": self._replan_counter,
+            "stalls": self._stall_counter,
+            "task_completed": next_agent is None and self._current_round < self._max_rounds
+        }
+        logger.log_event(self.name, "final_state", **final_state)
+        
+        # Return chat result with all relevant info
+        return self._oai_messages[self][-1]["content"]
 
 
     def _clean_and_parse_json(self, content: str) -> Dict[str, Any]:
@@ -558,13 +554,10 @@ class OrchestratorAgent(ConversableAgent):
                 raise ValueError(f"No JSON structure found in content: {content}")
             content = json_match.group(0)
 
-        # Preserve newlines for readability in error messages
-        formatted_content = content
-        
         # Now clean for parsing
         try:
             # First try parsing the cleaned but formatted content
-            return json.loads(formatted_content)
+            return json.loads(content)
         except json.JSONDecodeError:
             # If that fails, try more aggressive cleaning
             cleaned_content = re.sub(r'[\n\r\t]', ' ', content)  # Replace newlines/tabs with spaces
@@ -577,7 +570,15 @@ class OrchestratorAgent(ConversableAgent):
             try:
                 return json.loads(cleaned_content)
             except json.JSONDecodeError as e:
-                logger.error(f"Original content:\n{formatted_content}")
-                logger.error(f"Cleaned content:\n{cleaned_content}")
-                logger.error(f"JSON error: {str(e)}")
+                logger.log_event(
+                    self.name,
+                    "json_error",
+                    original_content=content,
+                    cleaned_content=cleaned_content,
+                    error=str(e)
+                )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
+
+    def __del__(self):
+        """Cleanup when the object is destroyed."""
+        logger.stop()
