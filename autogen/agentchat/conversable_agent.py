@@ -530,7 +530,7 @@ class ConversableAgent(LLMAgent):
         """Return the system message."""
         return self._oai_system_message[0]["content"]
 
-    def get_context(self, key: str, default: Any = None) -> Any:
+    def get_context_value(self, key: str, default: Any = None) -> Any:
         """
         Get a context variable by key.
 
@@ -543,7 +543,7 @@ class ConversableAgent(LLMAgent):
         """
         return self._context_variables.get(key, default)
 
-    def set_context(self, key: str, value: Any) -> None:
+    def set_context_value(self, key: str, value: Any) -> None:
         """
         Set a context variable.
 
@@ -553,7 +553,7 @@ class ConversableAgent(LLMAgent):
         """
         self._context_variables[key] = value
 
-    def update_context(self, context_variables: Dict[str, Any]) -> None:
+    def set_context_values(self, context_variables: Dict[str, Any]) -> None:
         """
         Update multiple context variables at once.
 
@@ -562,7 +562,7 @@ class ConversableAgent(LLMAgent):
         """
         self._context_variables.update(context_variables)
 
-    def pop_context(self, key: str, default: Any = None) -> Any:
+    def pop_context_key(self, key: str, default: Any = None) -> Any:
         """
         Remove and return a context variable.
 

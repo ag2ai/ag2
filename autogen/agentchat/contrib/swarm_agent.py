@@ -286,7 +286,7 @@ class SwarmAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
         code_execution_config=False,
-        update_state_functions: Optional[Union[List[Callable], Callable]] = None,
+        update_agent_before_reply: Optional[Union[List[Callable], Callable]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -315,9 +315,9 @@ class SwarmAgent(ConversableAgent):
         # use in the tool execution agent to transfer to the next agent
         self._next_agent = None
 
-        self.register_update_state_functions(update_state_functions)
+        self.register_update_agent_before_reply(update_agent_before_reply)
 
-    def register_update_state_functions(self, functions: Optional[Union[List[Callable], Callable]]):
+    def register_update_agent_before_reply(self, functions: Optional[Union[List[Callable], Callable]]):
         """
         Register functions that will be called when the agent is selected and before it speaks.
         You can add your own validation or precondition functions here.
