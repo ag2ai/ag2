@@ -341,18 +341,18 @@ class SwarmAgent(ConversableAgent):
                 # Outer function to create a closure with the update function
                 def create_wrapper(update_func: UPDATE_SYSTEM_MESSAGE):
                     def update_system_message_wrapper(
-                        context_variables: Dict[str, Any], messages: List[Dict[str, Any]]
+                        agent: ConversableAgent, messages: List[Dict[str, Any]]
                     ) -> List[Dict[str, Any]]:
                         if isinstance(update_func.update_function, str):
                             # Templates like "My context variable passport is {passport}" will
                             # use the context_variables for substitution
                             sys_message = OpenAIWrapper.instantiate(
                                 template=update_func.update_function,
-                                context=context_variables,
+                                context=agent._context_variables,
                                 allow_format_str_template=True,
                             )
                         else:
-                            sys_message = update_func.update_function(context_variables, messages)
+                            sys_message = update_func.update_function(self, messages)
 
                         self.update_system_message(sys_message)
                         return messages
