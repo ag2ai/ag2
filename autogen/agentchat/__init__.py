@@ -12,6 +12,7 @@ from .chat import ChatResult, initiate_chats
 from .contrib.swarm_agent import (
     AFTER_WORK,
     ON_CONDITION,
+    UPDATE_SYSTEM_MESSAGE,
     AfterWorkOption,
     SwarmAgent,
     SwarmResult,
@@ -39,4 +40,5 @@ __all__ = [
     "ON_CONDITION",
     "AFTER_WORK",
     "AfterWorkOption",
+    "UPDATE_SYSTEM_MESSAGE",
 ]
