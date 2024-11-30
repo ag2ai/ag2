@@ -30,8 +30,8 @@ Task: Given a question and a list of previous steps (the plan trajectory), gener
 Instructions:
 - Review the user's question and the previous steps taken.
 - Identify any mistakes or errors in the previous steps.
-- If you find any mistakes, include optionss to correct them in your proposed options.
-- Think creatively to propose at least four possible optionss that logically build upon or correct the previous steps.
+- If you find any mistakes, include options to correct them in your proposed options.
+- Think creatively to propose at least four possible options that logically build upon or correct the previous steps.
 - Reply a single word 'TERMINATE' as an option if you believe the user's question is fully resolved.
 - Provide a brief description for each option.
 - Present your output in the specified format.
