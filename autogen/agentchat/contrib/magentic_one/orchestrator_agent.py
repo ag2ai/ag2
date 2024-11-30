@@ -85,15 +85,12 @@ class OrchestratorAgent(ConversableAgent):
         self._update_facts_prompt = update_facts_prompt
         self._update_plan_prompt = update_plan_prompt
 
-        # Initialize chat messages dictionary with self as a key if not provided
-        self._oai_messages = defaultdict(list)
+
         if chat_messages is not None:
             # Copy existing messages into defaultdict
             for agent, messages in chat_messages.items():
-                self._oai_messages[agent] = messages.copy()
-        # Ensure self has an entry
-        if self not in self._oai_messages:
-            self._oai_messages[self] = []
+                for message in messages:
+                    self._oai_messages[agent]._append_oai_message([message])
         self._agents = agents if agents is not None else []
         
         # Create executor agent for code execution
@@ -418,6 +415,7 @@ class OrchestratorAgent(ConversableAgent):
 
                     # Reset chat history but preserve initial task
                     initial_task = self._oai_messages[self][0]
+                    
                     self._oai_messages[self] = [initial_task]
                     
                     # Reset all agents
@@ -513,12 +511,13 @@ class OrchestratorAgent(ConversableAgent):
                 else:
                     logger.error("Invalid response type: %s", type(response))
                     break
-                response_msg = {"role": "user", "content": response}
-                self._append_oai_message(response_msg, "user", self, False)
+                response_msg = {"role": "user", "content": task}
+                self._append_oai_message(task, "user", self, False)
+
                 if self._agent_whole_history:
                     for agent in self._agents:
                         if agent != next_agent:  # Don't send to the agent who just responded
-                            self.send(response, agent)
+                            self.send(response_msg, agent)
 
                 next_agent = self._select_next_agent(task)
                     
