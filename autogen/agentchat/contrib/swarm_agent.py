@@ -6,7 +6,9 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from inspect import signature
+import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+import warnings
 
 from pydantic import BaseModel
 
@@ -56,7 +58,11 @@ class UPDATE_SYSTEM_MESSAGE:
 
     def __post_init__(self):
         if isinstance(self.update_function, str):
-            pass
+            # find all {var} in the string
+            vars = re.findall(r"\{(\w+)\}", self.update_function)
+            if len(vars) == 0:
+                warnings.warn("Update function string contains no variables. This is probably unintended.")
+            
         elif isinstance(self.update_function, Callable):
             sig = signature(self.update_function)
             if len(sig.parameters) != 2:
@@ -286,7 +292,7 @@ class SwarmAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
         code_execution_config=False,
-        update_agent_before_reply: Optional[Union[List[Callable], Callable]] = None,
+        update_agent_before_reply: Optional[Union[List[Union[Callable, UPDATE_SYSTEM_MESSAGE]], Callable, UPDATE_SYSTEM_MESSAGE]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -328,10 +334,10 @@ class SwarmAgent(ConversableAgent):
         """
         if functions is None:
             return
-        if not isinstance(functions, list) and not isinstance(functions, Callable):
+        if not isinstance(functions, list) and type(functions) not in [UPDATE_SYSTEM_MESSAGE, Callable]:
             raise ValueError("functions must be a list of callables")
 
-        if isinstance(functions, Callable):
+        if type(functions) is not list:
             functions = [functions]
 
         for func in functions:
@@ -353,9 +359,9 @@ class SwarmAgent(ConversableAgent):
                                 allow_format_str_template=True,
                             )
                         else:
-                            sys_message = update_func.update_function(self, messages)
+                            sys_message = update_func.update_function(agent._context_variables, messages)
 
-                        self.update_system_message(sys_message)
+                        agent.update_system_message(sys_message)
                         return messages
 
                     return update_system_message_wrapper

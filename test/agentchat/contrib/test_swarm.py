@@ -1,7 +1,7 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, Dict
+from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +11,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     AFTER_WORK,
     ON_CONDITION,
     AfterWorkOption,
+    UPDATE_SYSTEM_MESSAGE,
     SwarmAgent,
     SwarmResult,
     initiate_swarm_chat,
@@ -460,50 +461,118 @@ def test_initialization():
             initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2], max_rounds=3
         )
 
-    def test_sys_message_func():
-        """Tests a custom system message function"""
 
-        # This test will use context variables and the messages to construct a custom system message
-        # This will be available at the point of reply (we use register a reply to capture it at that point)
+def test_update_system_message():
+    """Tests the update_agent_before_reply functionality with different scenarios"""
+    
+    # Test container to capture system messages
+    class MessageContainer:
+        def __init__(self):
+            self.captured_sys_message = ""
+    
+    message_container = MessageContainer()
 
-        # To store the system message
-        class MessageContainer:
-            def __init__(self):
-                self.final_sys_message = ""
+    # 1. Test with a callable function
+    def custom_update_function(context_variables: Dict[str, Any], messages: List[Dict]) -> str:
+        return f"System message with {context_variables['test_var']} and {len(messages)} messages"
 
-        message_container = MessageContainer()
+    # 2. Test with a string template
+    template_message = "Template message with {test_var}"
 
-        def my_sys_message(context_variables, messages) -> str:
-            return f"This is a custom system message with {context_variables['sample_name']} and a total of {len(messages)} message(s)."
+    # Create agents with different update configurations
+    agent1 = SwarmAgent(
+        "agent1",
+        update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(custom_update_function)
+    )
+    
+    agent2 = SwarmAgent(
+        "agent2", 
+        update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(template_message)
+    )
 
-        agent1 = SwarmAgent("agent1", system_message_func=my_sys_message)
-        agent2 = SwarmAgent("agent2")
+    # Mock the reply function to capture the system message
+    def mock_generate_oai_reply(*args, **kwargs):
+        # Capture the system message for verification
+        message_container.captured_sys_message = args[0]._oai_system_message[0]["content"]
+        return True, "Mock response"
 
-        test_context_variables = {"sample_name": "Bob"}
+    # Register mock reply for both agents
+    agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+    agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply)
 
-        # Mock a reply to be able to capture the system message
-        def mock_generate_oai_reply(*args, **kwargs):
-            message_container.final_sys_message = args[0]._oai_system_message[0][
-                "content"
-            ]  # The SwarmAgent's system message
-            return True, "This is a mock response from the agent."
+    # Test context and messages
+    test_context = {"test_var": "test_value"}
+    test_messages = [{"role": "user", "content": "Test message"}]
 
-        agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+    # Run chat with first agent (using callable function)
+    chat_result1, context_vars1, last_speaker1 = initiate_swarm_chat(
+        initial_agent=agent1,
+        messages=test_messages,
+        agents=[agent1],
+        context_variables=test_context,
+        max_rounds=2
+    )
 
-        chat_result, context_vars, last_speaker = initiate_swarm_chat(
-            initial_agent=agent1,
-            messages=TEST_MESSAGES,
-            agents=[agent1, agent2],
-            context_variables=test_context_variables,
-            max_rounds=4,
-        )
+    # Verify callable function result
+    assert message_container.captured_sys_message == "System message with test_value and 1 messages"
 
-        # The system message should be the custom message
-        assert (
-            message_container.final_sys_message
-            == "This is a custom system message with Bob and a total of 1 message(s)."
-        )
+    # Reset captured message
+    message_container.captured_sys_message = ""
 
+    # Run chat with second agent (using string template)
+    chat_result2, context_vars2, last_speaker2 = initiate_swarm_chat(
+        initial_agent=agent2,
+        messages=test_messages,
+        agents=[agent2],
+        context_variables=test_context,
+        max_rounds=2
+    )
 
+    # Verify template result
+    assert message_container.captured_sys_message == "Template message with test_value"
+
+    # Test invalid update function
+    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
+        SwarmAgent("agent3", update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(123))
+
+    # Test invalid callable (wrong number of parameters)
+    def invalid_update_function(context_variables):
+        return "Invalid function"
+
+    with pytest.raises(ValueError, match="Update function must accept two parameters"):
+        SwarmAgent("agent4", update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(invalid_update_function))
+
+    # Test invalid callable (wrong return type)
+    def invalid_return_function(context_variables, messages) -> dict:
+        return {}
+
+    with pytest.raises(ValueError, match="Update function must return a string"):
+        SwarmAgent("agent5", update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(invalid_return_function))
+
+    # Test multiple update functions
+    def another_update_function(context_variables: Dict[str, Any], messages: List[Dict]) -> str:
+        return "Another update"
+
+    agent6 = SwarmAgent(
+        "agent6",
+        update_agent_before_reply=[
+            UPDATE_SYSTEM_MESSAGE(custom_update_function),
+            UPDATE_SYSTEM_MESSAGE(another_update_function)
+        ]
+    )
+
+    agent6.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+
+    chat_result6, context_vars6, last_speaker6 = initiate_swarm_chat(
+        initial_agent=agent6,
+        messages=test_messages,
+        agents=[agent6],
+        context_variables=test_context,
+        max_rounds=2
+    )
+
+    # Verify last update function took effect
+    assert message_container.captured_sys_message == "Another update"
+    
 if __name__ == "__main__":
     pytest.main([__file__])
