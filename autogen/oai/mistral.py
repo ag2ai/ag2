@@ -172,7 +172,8 @@ class MistralAIClient:
 
     def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ChatCompletion:
         if response_format is not None:
-            raise NotImplementedError("Response format is not supported for Anthropic API.")
+            raise NotImplementedError("Response format is not supported by Mistral's API.")
+
         # 1. Parse parameters to Mistral.AI API's parameters
         mistral_params = self.parse_params(params)
 

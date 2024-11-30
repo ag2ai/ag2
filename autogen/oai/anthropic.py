@@ -175,9 +175,9 @@ class AnthropicClient:
     def aws_region(self):
         return self._aws_region
 
-    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> Completion:
+    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ChatCompletion:
         if response_format is not None:
-            raise NotImplementedError("Response format is not supported for Anthropic API.")
+            raise NotImplementedError("Response format is not supported by Anthropic API.")
 
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
