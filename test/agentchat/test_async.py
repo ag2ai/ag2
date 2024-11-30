@@ -142,7 +142,7 @@ async def test_stream():
                 result.clear()
                 return (
                     True,
-                    f"Just got some latest market news. Merge your new suggestion with previous ones.\n{news_str}",
+                    f"Just got some latest news. Update the summary.\n{news_str}",
                 )
             return False, None
 
