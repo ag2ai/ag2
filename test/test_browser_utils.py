@@ -16,15 +16,15 @@ import pytest
 import requests
 from agentchat.test_assistant_agent import KEY_LOC  # noqa: E402
 
-BLOG_POST_URL = "https://ag2ai.github.io/autogen/blog/2023/04/21/LLM-tuning-math"
-BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH | AutoGen"
+BLOG_POST_URL = "https://ag2ai.github.io/ag2/blog/2023/04/21/LLM-tuning-math"
+BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH | AG2"
 BLOG_POST_STRING = "Large language models (LLMs) are powerful tools that can generate natural language texts for various applications, such as chatbots, summarization, translation, and more. GPT-4 is currently the state of the art LLM in the world. Is model selection irrelevant? What about inference parameters?"
 
 WIKIPEDIA_URL = "https://en.wikipedia.org/wiki/Microsoft"
 WIKIPEDIA_TITLE = "Microsoft - Wikipedia"
 WIKIPEDIA_STRING = "Redmond"
 
-PLAIN_TEXT_URL = "https://raw.githubusercontent.com/microsoft/autogen/main/README.md"
+PLAIN_TEXT_URL = "https://raw.githubusercontent.com/ag2ai/ag2/main/README.md"
 IMAGE_URL = "https://github.com/afourney.png"
 
 PDF_URL = "https://arxiv.org/pdf/2308.08155.pdf"

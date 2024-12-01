@@ -1,4 +1,4 @@
-# Contributing to AutoGen
+# Contributing to AG2
 
 The project welcomes contributions from developers and organizations worldwide. Our goal is to foster a collaborative and inclusive community where diverse perspectives and expertise can drive innovation and enhance the project's capabilities. Whether you are an individual contributor or represent an organization, we invite you to join us in shaping the future of this project. Together, we can build something truly remarkable. Possible contributions include but not limited to:
 
@@ -15,7 +15,7 @@ If you are new to GitHub [here](https://help.github.com/categories/collaborating
 ## Roadmaps
 
 To see what we are working on and what we plan to work on, please check our
-[Roadmap Issues](https://ag2ai.com/roadmap).
+[Roadmap](https://ag2ai.com/roadmap) and [Roadmap Issues](https://github.com/ag2ai/ag2/issues?q=is%3Aopen+is%3Aissue+label%3Aroadmap).
 
 ## Becoming a Reviewer
 
@@ -23,7 +23,7 @@ There is currently no formal reviewer solicitation process. Current reviewers id
 
 ## Contact Maintainers
 
-The project is currently maintained by a [dynamic group of volunteers](https://github.com/ag2ai/ag2/blob/main/MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via auto-gen@outlook.com if you are interested in becoming a maintainer.
+The project is currently maintained by a [dynamic group of volunteers](https://github.com/ag2ai/ag2/blob/main/MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via support@ag2.ai if you are interested in becoming a maintainer.
 
 
 ## License Headers

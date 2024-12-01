@@ -13,13 +13,13 @@ customPostCssPlugin = () => {
 };
 
 module.exports = {
-  title: "AutoGen",
-  tagline: "An Open-Source Programming Framework for Agentic AI",
+  title: "AG2",
+  tagline: "The Open Source Agent OS",
   url: "https://ag2ai.github.io",
   baseUrl: "/ag2/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
-  favicon: "img/ag.ico",
+  favicon: "img/ag2.ico",
   organizationName: "ag2ai", // Usually your GitHub org/user name.
   projectName: "ag2", // Usually your repo name.
   scripts: [
@@ -44,10 +44,10 @@ module.exports = {
       },
     },
     navbar: {
-      title: "AutoGen",
+      title: "AG2",
       logo: {
-        alt: "AutoGen",
-        src: "img/ag.svg",
+        alt: "AG2",
+        src: "img/ag2.svg",
       },
       items: [
         {
@@ -151,6 +151,11 @@ module.exports = {
           position: "left",
         },
         {
+          href: "https://ag2.ai/",
+          label: "AG2.ai",
+          position: "right",
+        },
+        {
           href: "https://github.com/ag2ai/ag2",
           label: "GitHub",
           position: "right",
@@ -188,7 +193,7 @@ module.exports = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} AutoGen Authors`,
+      copyright: `Copyright © ${new Date().getFullYear()} AG2 Authors`,
     },
     // announcementBar: {
     //   id: "whats_new",
@@ -242,6 +247,7 @@ module.exports = {
         routeBasePath: 'talks',
         path: './talks',
         showReadingTime: true,
+        postsPerPage: 'ALL',
       },
     ],
     [

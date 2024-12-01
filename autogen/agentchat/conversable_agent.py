@@ -164,7 +164,7 @@ class ConversableAgent(LLMAgent):
             except TypeError as e:
                 raise TypeError(
                     "Please implement __deepcopy__ method for each value class in llm_config to support deepcopy."
-                    " Refer to the docs for more details: https://ag2ai.github.io/autogen/docs/topics/llm_configuration#adding-http-client-in-llm_config-for-proxy"
+                    " Refer to the docs for more details: https://ag2ai.github.io/ag2/docs/topics/llm_configuration#adding-http-client-in-llm_config-for-proxy"
                 ) from e
 
         self._validate_llm_config(llm_config)
@@ -659,6 +659,9 @@ class ConversableAgent(LLMAgent):
 
         if message.get("role") in ["function", "tool"]:
             oai_message["role"] = message.get("role")
+            if "tool_responses" in oai_message:
+                for tool_response in oai_message["tool_responses"]:
+                    tool_response["content"] = str(tool_response["content"])
         elif "override_role" in message:
             # If we have a direction to override the role then set the
             # role accordingly. Used to customise the role for the
@@ -791,15 +794,16 @@ class ConversableAgent(LLMAgent):
                 "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
             )
 
-    def _print_received_message(self, message: Union[Dict, str], sender: Agent):
+    def _print_received_message(self, message: Union[Dict, str], sender: Agent, skip_head: bool = False):
         iostream = IOStream.get_default()
         # print the message received
-        iostream.print(colored(sender.name, "yellow"), "(to", f"{self.name}):\n", flush=True)
+        if not skip_head:
+            iostream.print(colored(sender.name, "yellow"), "(to", f"{self.name}):\n", flush=True)
         message = self._message_to_dict(message)
 
         if message.get("tool_responses"):  # Handle tool multi-call responses
             for tool_response in message["tool_responses"]:
-                self._print_received_message(tool_response, sender)
+                self._print_received_message(tool_response, sender, skip_head=True)
             if message.get("role") == "tool":
                 return  # If role is tool, then content is just a concatenation of all tool_responses
 
@@ -2288,7 +2292,7 @@ class ConversableAgent(LLMAgent):
             result.append(char)
         return "".join(result)
 
-    def execute_function(self, func_call, verbose: bool = False) -> Tuple[bool, Dict[str, str]]:
+    def execute_function(self, func_call, verbose: bool = False) -> Tuple[bool, Dict[str, Any]]:
         """Execute a function call and return the result.
 
         Override this function to modify the way to execute function and tool calls.
@@ -2342,7 +2346,7 @@ class ConversableAgent(LLMAgent):
         return is_exec_success, {
             "name": func_name,
             "role": "function",
-            "content": str(content),
+            "content": content,
         }
 
     async def a_execute_function(self, func_call):
@@ -2397,7 +2401,7 @@ class ConversableAgent(LLMAgent):
         return is_exec_success, {
             "name": func_name,
             "role": "function",
-            "content": str(content),
+            "content": content,
         }
 
     def generate_init_message(self, message: Union[Dict, str, None], **kwargs) -> Union[str, Dict]:

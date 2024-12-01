@@ -24,13 +24,13 @@ In order to make effective decisions about memo storage and retrieval, the `Teac
 
 AutoGen contains four code examples that use `Teachability`.
 
-1. Run [chat_with_teachable_agent.py](https://github.com/microsoft/autogen/blob/main/test/agentchat/contrib/capabilities/chat_with_teachable_agent.py) to converse with a teachable agent.
+1. Run [chat_with_teachable_agent.py](https://github.com/ag2ai/ag2/blob/main/test/agentchat/contrib/capabilities/chat_with_teachable_agent.py) to converse with a teachable agent.
 
-2. Run [test_teachable_agent.py](https://github.com/microsoft/autogen/blob/main/test/agentchat/contrib/capabilities/test_teachable_agent.py) for quick unit testing of a teachable agent.
+2. Run [test_teachable_agent.py](https://github.com/ag2ai/ag2/blob/main/test/agentchat/contrib/capabilities/test_teachable_agent.py) for quick unit testing of a teachable agent.
 
-3. Use the Jupyter notebook [agentchat_teachability.ipynb](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_teachability.ipynb) to step through examples discussed below.
+3. Use the Jupyter notebook [agentchat_teachability.ipynb](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_teachability.ipynb) to step through examples discussed below.
 
-4. Use the Jupyter notebook [agentchat_teachable_oai_assistants.ipynb](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_teachable_oai_assistants.ipynb) to make arbitrary OpenAI Assistants teachable through `GPTAssistantAgent`.
+4. Use the Jupyter notebook [agentchat_teachable_oai_assistants.ipynb](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_teachable_oai_assistants.ipynb) to make arbitrary OpenAI Assistants teachable through `GPTAssistantAgent`.
 
 ## Basic Usage of Teachability
 
@@ -54,7 +54,7 @@ from autogen import ConversableAgent  # As an example
 
 ```python
 # Load LLM inference endpoints from an env variable or a file
-# See https://ag2ai.github.io/autogen/docs/FAQ#set-your-api-endpoints
+# See https://ag2ai.github.io/ag2/docs/FAQ#set-your-api-endpoints
 # and OAI_CONFIG_LIST_sample
 filter_dict = {"model": ["gpt-4"]}  # GPT-3.5 is less reliable than GPT-4 at learning from user feedback.
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict=filter_dict)

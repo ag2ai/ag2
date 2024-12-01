@@ -1,5 +1,6 @@
 <a name="readme-top"></a>
 
+![Pypi Downloads](https://img.shields.io/pypi/dm/pyautogen?label=PyPI%20downloads)
 [![PyPI version](https://badge.fury.io/py/autogen.svg)](https://badge.fury.io/py/autogen)
 [![Build](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg)](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml)
 ![Python Version](https://img.shields.io/badge/3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
@@ -16,9 +17,12 @@
     <br>
 </p> -->
 
-> [!IMPORTANT]
+> **:tada: IMPORTANT**
 >
-> :fire: :tada: Nov 11, 2024: We are evolving AutoGen into AG2! A new organization [ag2ai](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. We invite collaborators from all organizations and individuals to join the development.
+> :fire: :tada: **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
+> A new organization [AG2ai](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
+>
+> We invite collaborators from all organizations and individuals to join the development.
 
 
 :fire: :tada: AG2 is available via `ag2` (or its alias  `autogen` or  `pyautogen`)  on PyPI! Starting with version 0.3.2, you can now install AG2 using:
@@ -59,7 +63,7 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 :tada: Dec 31, 2023: [AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation Framework](https://arxiv.org/abs/2308.08155) is selected by [TheSequence: My Five Favorite AI Papers of 2023](https://thesequence.substack.com/p/my-five-favorite-ai-papers-of-2023).
 
-<!-- :fire: Nov 24: pyautogen [v0.2](https://github.com/microsoft/autogen/releases/tag/v0.2.0) is released with many updates and new features compared to v0.1.1. It switches to using openai-python v1. Please read the [migration guide](https://ag2ai.github.io/ag2/docs/Installation#python). -->
+<!-- :fire: Nov 24: pyautogen [v0.2](https://github.com/ag2ai/ag2/releases/tag/v0.2.0) is released with many updates and new features compared to v0.1.1. It switches to using openai-python v1. Please read the [migration guide](https://ag2ai.github.io/ag2/docs/Installation#python). -->
 
 <!-- :fire: Nov 11: OpenAI's Assistants are available in AutoGen and interoperatable with other AutoGen agents! Checkout our [blogpost](https://ag2ai.github.io/ag2/blog/2023/11/13/OAI-assistants) for details and examples. -->
 
@@ -84,15 +88,14 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 ## What is AG2
 
-AG2 (formally AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
+AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
 
 **Open Source Statement**: The project welcomes contributions from developers and organizations worldwide. Our goal is to foster a collaborative and inclusive community where diverse perspectives and expertise can drive innovation and enhance the project's capabilities. Whether you are an individual contributor or represent an organization, we invite you to join us in shaping the future of this project. Together, we can build something truly remarkable.
 
 The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
 
 
-![AutoGen Overview](./website/static/img/autogen_agentchat.png)
-
+![AutoGen Overview](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png)
 
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
@@ -130,7 +133,7 @@ Find detailed instructions for users [here](https://ag2ai.github.io/ag2/docs/ins
 
 ### Option 2. Install AG2 Locally
 
-AG2 requires **Python version >= 3.8, < 3.13**. It can be installed from pip:
+AG2 requires **Python version >= 3.8, < 3.14**. It can be installed from pip:
 
 ```bash
 pip install ag2
@@ -192,10 +195,10 @@ python test/twoagent.py
 After the repo is cloned.
 The figure below shows an example conversation flow with AG2.
 
-![Agent Chat Example](./website/static/img/chat_example.png)
+![Agent Chat Example](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/chat_example.png)
 
 
-Alternatively, the [sample code](https://github.com/ag2ai/build-with-autogen/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
+Alternatively, the [sample code](https://github.com/ag2ai/build-with-ag2/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
 Please find more [code examples](https://ag2ai.github.io/ag2/docs/Examples#automated-multi-agent-chat) for this feature.
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
@@ -254,12 +257,12 @@ In addition, you can find:
 ## CookBook
 
 Explore detailed implementations with sample code and applications to help you get started with AG2.
-[Cookbook](https://github.com/ag2ai/build-with-autogen)
+[Cookbook](https://github.com/ag2ai/build-with-ag2)
 
 
 ## Related Papers
 
-[AG2](https://arxiv.org/abs/2308.08155)
+[AutoGen](https://arxiv.org/abs/2308.08155)
 
 ```
 @inproceedings{wu2023autogen,
@@ -335,7 +338,7 @@ Explore detailed implementations with sample code and applications to help you g
 ## License
 This project is licensed under the [Apache License, Version 2.0 (Apache-2.0)](./LICENSE).
 
-This project is a spin-off of https://github.com/microsoft/autogen and contains code under two licenses:
+This project is a spin-off of [AutoGen](https://github.com/microsoft/autogen) and contains code under two licenses:
 
 - The original code from https://github.com/microsoft/autogen is licensed under the MIT License.  See the [LICENSE_original_MIT](./license_original/LICENSE_original_MIT) file for details.
 

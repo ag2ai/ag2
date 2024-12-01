@@ -30,7 +30,8 @@ install_requires = [
     "termcolor",
     "flaml",
     # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
-    "numpy>=1.17.0,<2",
+    "numpy>=2.1; python_version>='3.13'",  # numpy 2.1+ required for Python 3.13
+    "numpy>=1.24.0,<2.0.0; python_version<'3.13'",  # numpy 1.24+ for older Python versions
     "python-dotenv",
     "tiktoken",
     # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
@@ -60,13 +61,16 @@ retrieve_chat = [
 retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 
 graph_rag_falkor_db = [
-    "graphrag_sdk",
+    "graphrag_sdk==0.3.3",
 ]
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
 elif current_os == "Linux":
     retrieve_chat_pgvector.extend(["psycopg>=3.1.18"])
+
+# pysqlite3-binary used so it doesn't need to compile pysqlite3
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
 extra_require = {
     "test": [
@@ -86,7 +90,8 @@ extra_require = {
     "retrievechat-mongodb": [*retrieve_chat, "pymongo>=4.0.0"],
     "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
     "graph_rag_falkor_db": graph_rag_falkor_db,
-    "autobuild": ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3"],
+    "autobuild": autobuild,
+    "captainagent": autobuild + ["pandas"],
     "teachable": ["chromadb"],
     "lmm": ["replicate", "pillow"],
     "graph": ["networkx", "matplotlib"],
@@ -126,7 +131,20 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ag2ai/ag2",
-    packages=setuptools.find_packages(include=["autogen*"], exclude=["test"]),
+    packages=setuptools.find_namespace_packages(
+        include=[
+            "autogen*",
+            "autogen.agentchat.contrib.captainagent.tools*",
+        ],
+        exclude=["test"],
+    ),
+    package_data={
+        "autogen.agentchat.contrib.captainagent": [
+            "tools/tool_description.tsv",
+            "tools/requirements.txt",
+        ]
+    },
+    include_package_data=True,
     install_requires=install_requires,
     extras_require=extra_require,
     classifiers=[
@@ -135,5 +153,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.8,<3.13",
+    python_requires=">=3.8,<3.14",
 )

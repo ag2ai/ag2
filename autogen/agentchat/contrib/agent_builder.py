@@ -117,6 +117,7 @@ Suggest no more than {max_agents} experts with their name according to the follo
 # Task requirement
 - Expert's name should follow the format: [skill]_Expert.
 - Only reply the names of the experts, separated by ",".
+- If coding skills are required, they should be limited to Python and Shell.
 For example: Python_Expert, Math_Expert, ... """
 
     AGENT_SYS_MSG_PROMPT = """# Your goal
@@ -203,7 +204,9 @@ Match roles in the role set to each expert in expert set.
             builder_filter_dict.update({"model": builder_model})
         if len(builder_model_tags) != 0:
             builder_filter_dict.update({"tags": builder_model_tags})
-        builder_config_list = autogen.config_list_from_json(config_file_or_env, filter_dict=builder_filter_dict)
+        builder_config_list = autogen.config_list_from_json(
+            config_file_or_env, file_location=config_file_location, filter_dict=builder_filter_dict
+        )
         if len(builder_config_list) == 0:
             raise RuntimeError(
                 f"Fail to initialize build manager: {builder_model}{builder_model_tags} does not exist in {config_file_or_env}. "
@@ -267,7 +270,7 @@ Match roles in the role set to each expert in expert set.
         description = agent_config["description"]
 
         # Path to the customize **ConversableAgent** class.
-        model_path = agent_config.get("model_path", None)
+        agent_path = agent_config.get("agent_path", None)
         filter_dict = {}
         if len(model_name_or_hf_repo) > 0:
             filter_dict.update({"model": model_name_or_hf_repo})
@@ -302,8 +305,8 @@ Match roles in the role set to each expert in expert set.
                 )
 
             model_class = autogen.AssistantAgent
-            if model_path:
-                module_path, model_class_name = model_path.replace("/", ".").rsplit(".", 1)
+            if agent_path:
+                module_path, model_class_name = agent_path.replace("/", ".").rsplit(".", 1)
                 module = importlib.import_module(module_path)
                 model_class = getattr(module, model_class_name)
                 if not issubclass(model_class, autogen.ConversableAgent):
@@ -313,7 +316,7 @@ Match roles in the role set to each expert in expert set.
             additional_config = {
                 k: v
                 for k, v in agent_config.items()
-                if k not in ["model", "name", "system_message", "description", "model_path", "tags"]
+                if k not in ["model", "name", "system_message", "description", "agent_path", "tags"]
             }
             agent = model_class(
                 name=agent_name, llm_config=current_config.copy(), description=description, **additional_config

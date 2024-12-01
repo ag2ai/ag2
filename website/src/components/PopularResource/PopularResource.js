@@ -19,7 +19,7 @@ function PopularResources() {
                   <iframe
                     src="https://www.youtube.com/embed/RLwyXRVvlNk"
                     className={clsx(styles.responsiveIframe)}
-                    title="Learn AutoGen on DeepLearningAI"
+                    title="Learn AG2 on DeepLearningAI"
                     frameBorder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
@@ -36,7 +36,7 @@ function PopularResources() {
                   <iframe
                     src="https://www.youtube.com/embed/TBNTH-fwGPE"
                     className={clsx(styles.responsiveIframe)}
-                    title="Learn AutoGen on DeepLearningAI"
+                    title="Learn AG2 on DeepLearningAI"
                     frameBorder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
@@ -44,7 +44,7 @@ function PopularResources() {
                   <a
                     href="https://www.youtube.com/watch?v=TBNTH-fwGPE"
                   >
-                    Learn AutoGen on DeepLearningAI
+                    Learn AG2 on DeepLearningAI
                   </a>
                 </div>
               </div>

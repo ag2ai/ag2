@@ -54,8 +54,8 @@ def run_notebook(input_nb, output_nb="executed_openai_notebook.ipynb", save=Fals
 
 
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.10"),
-    reason="do not run if openai is not installed or py!=3.10",
+    skip or not sys.version.startswith("3.13"),
+    reason="do not run if openai is not installed or py!=3.13",
 )
 def test_agentchat_auto_feedback_from_code(save=False):
     run_notebook("agentchat_auto_feedback_from_code_execution.ipynb", save=save)
@@ -86,8 +86,8 @@ def test_agentchat_function_call_currency_calculator(save=False):
 
 
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.11"),
-    reason="do not run if openai is not installed or py!=3.11",
+    skip or not sys.version.startswith("3.13"),
+    reason="do not run if openai is not installed or py!=3.13",
 )
 def test_agentchat_function_call_async(save=False):
     run_notebook("agentchat_function_call_async.ipynb", save=save)
@@ -118,8 +118,8 @@ def test_agentchat_groupchat_finite_state_machine(save=False):
 
 
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.10"),
-    reason="do not run if openai is not installed or py!=3.10",
+    skip or not sys.version.startswith("3.11"),
+    reason="do not run if openai is not installed or py!=3.11",
 )
 def test_agentchat_cost_token_tracking(save=False):
     run_notebook("agentchat_cost_token_tracking.ipynb", save=save)
