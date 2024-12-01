@@ -12,9 +12,9 @@ from .graph_query_engine import GraphQueryEngine
 
 class GraphRagCapability(AgentCapability):
     """
-    A graph rag capability uses a graph query engine to give a conversable agent the graph rag ability.
+    A graph-based RAG capability uses a graph query engine to give a conversable agent the graph-based RAG ability.
 
-    An agent class with graph rag capability could
+    An agent class with graph-based RAG capability could
     1. create a graph in the underlying database with input documents.
     2. retrieved relevant information based on messages received by the agent.
     3. generate answers from retrieved information and send messages back.
@@ -55,8 +55,10 @@ class GraphRagCapability(AgentCapability):
 
     def __init__(self, query_engine: GraphQueryEngine):
         """
-        initialize graph rag capability with a graph query engine
+        Initialize graph-based RAG capability with a graph query engine
         """
         ...
 
-    def add_to_agent(self, agent: ConversableAgent): ...
+    def add_to_agent(self, agent: ConversableAgent):
+        """Add the capability to an agent"""
+        ...
