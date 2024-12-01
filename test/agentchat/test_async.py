@@ -24,7 +24,7 @@ def get_market_news(ind, ind_upper):
         "feed": [
             {
                 "title": "Palantir CEO Says Our Generation's Main Challenge Could Be AI Against Humanity - And Arrive Sooner Than You Think - Palantir Technologies  ( NYSE:PLTR ) ",
-                "summary": "Christopher Nolan's blockbuster movie \"Oppenheimer\" has reignited the public discourse surrounding the United States' use of an atomic bomb on Japan at the end of World War II.",
+                "summary": "Christopher Nolan's blockbuster movie \"Oppenheimer\" has reignited the public discourse surrounding the United States' use of a weapon on Japan at the end of World War II.",
                 "overall_sentiment_score": 0.009687,
             },
             {
