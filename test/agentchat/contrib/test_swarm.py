@@ -10,8 +10,8 @@ from autogen.agentchat.contrib.swarm_agent import (
     __CONTEXT_VARIABLES_PARAM_NAME__,
     AFTER_WORK,
     ON_CONDITION,
-    AfterWorkOption,
     UPDATE_SYSTEM_MESSAGE,
+    AfterWorkOption,
     SwarmAgent,
     SwarmResult,
     initiate_swarm_chat,
@@ -463,13 +463,13 @@ def test_initialization():
 
 
 def test_update_system_message():
-    """Tests the update_agent_before_reply functionality with different scenarios"""
-    
+    """Tests the update_agent_before_reply functionality with multiple scenarios"""
+
     # Test container to capture system messages
     class MessageContainer:
         def __init__(self):
             self.captured_sys_message = ""
-    
+
     message_container = MessageContainer()
 
     # 1. Test with a callable function
@@ -480,15 +480,9 @@ def test_update_system_message():
     template_message = "Template message with {test_var}"
 
     # Create agents with different update configurations
-    agent1 = SwarmAgent(
-        "agent1",
-        update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(custom_update_function)
-    )
-    
-    agent2 = SwarmAgent(
-        "agent2", 
-        update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(template_message)
-    )
+    agent1 = SwarmAgent("agent1", update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(custom_update_function))
+
+    agent2 = SwarmAgent("agent2", update_agent_before_reply=UPDATE_SYSTEM_MESSAGE(template_message))
 
     # Mock the reply function to capture the system message
     def mock_generate_oai_reply(*args, **kwargs):
@@ -506,11 +500,7 @@ def test_update_system_message():
 
     # Run chat with first agent (using callable function)
     chat_result1, context_vars1, last_speaker1 = initiate_swarm_chat(
-        initial_agent=agent1,
-        messages=test_messages,
-        agents=[agent1],
-        context_variables=test_context,
-        max_rounds=2
+        initial_agent=agent1, messages=test_messages, agents=[agent1], context_variables=test_context, max_rounds=2
     )
 
     # Verify callable function result
@@ -521,11 +511,7 @@ def test_update_system_message():
 
     # Run chat with second agent (using string template)
     chat_result2, context_vars2, last_speaker2 = initiate_swarm_chat(
-        initial_agent=agent2,
-        messages=test_messages,
-        agents=[agent2],
-        context_variables=test_context,
-        max_rounds=2
+        initial_agent=agent2, messages=test_messages, agents=[agent2], context_variables=test_context, max_rounds=2
     )
 
     # Verify template result
@@ -557,22 +543,19 @@ def test_update_system_message():
         "agent6",
         update_agent_before_reply=[
             UPDATE_SYSTEM_MESSAGE(custom_update_function),
-            UPDATE_SYSTEM_MESSAGE(another_update_function)
-        ]
+            UPDATE_SYSTEM_MESSAGE(another_update_function),
+        ],
     )
 
     agent6.register_reply([ConversableAgent, None], mock_generate_oai_reply)
 
     chat_result6, context_vars6, last_speaker6 = initiate_swarm_chat(
-        initial_agent=agent6,
-        messages=test_messages,
-        agents=[agent6],
-        context_variables=test_context,
-        max_rounds=2
+        initial_agent=agent6, messages=test_messages, agents=[agent6], context_variables=test_context, max_rounds=2
     )
 
     # Verify last update function took effect
     assert message_container.captured_sys_message == "Another update"
-    
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

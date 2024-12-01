@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 import copy
 import json
+import re
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from inspect import signature
-import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
-import warnings
 
 from pydantic import BaseModel
 
@@ -62,7 +62,7 @@ class UPDATE_SYSTEM_MESSAGE:
             vars = re.findall(r"\{(\w+)\}", self.update_function)
             if len(vars) == 0:
                 warnings.warn("Update function string contains no variables. This is probably unintended.")
-            
+
         elif isinstance(self.update_function, Callable):
             sig = signature(self.update_function)
             if len(sig.parameters) != 2:
@@ -292,7 +292,9 @@ class SwarmAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
         code_execution_config=False,
-        update_agent_before_reply: Optional[Union[List[Union[Callable, UPDATE_SYSTEM_MESSAGE]], Callable, UPDATE_SYSTEM_MESSAGE]] = None,
+        update_agent_before_reply: Optional[
+            Union[List[Union[Callable, UPDATE_SYSTEM_MESSAGE]], Callable, UPDATE_SYSTEM_MESSAGE]
+        ] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -337,7 +339,7 @@ class SwarmAgent(ConversableAgent):
         if not isinstance(functions, list) and type(functions) not in [UPDATE_SYSTEM_MESSAGE, Callable]:
             raise ValueError("functions must be a list of callables")
 
-        if type(functions) is not list:
+        if not isinstance(functions, list):
             functions = [functions]
 
         for func in functions:
@@ -508,6 +510,7 @@ class SwarmAgent(ConversableAgent):
         return False, None
 
     def add_single_function(self, func: Callable, name=None, description=""):
+        """Add a single function to the agent, removing context variables for LLM use"""
         if name:
             func._name = name
         else:
