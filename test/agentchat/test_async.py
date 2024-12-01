@@ -142,14 +142,14 @@ async def test_stream():
                 result.clear()
                 return (
                     True,
-                    f"Just got some latest market news. Merge your new suggestion with previous ones.\n{news_str}",
+                    f"Just got some latest news. Update the summary.\n{news_str}",
                 )
             return False, None
 
     user_proxy.register_reply(autogen.AssistantAgent, add_data_reply, position=2, config={"news_stream": data})
 
     chat_res = await user_proxy.a_initiate_chat(
-        assistant, message="""Give me investment suggestion in 3 bullet points.""", summary_method="reflection_with_llm"
+        assistant, message="""Summarize market dynamics in 3 bullet points.""", summary_method="reflection_with_llm"
     )
 
     print("Chat summary:", chat_res.summary)
