@@ -63,7 +63,7 @@ def get_market_news(ind, ind_upper):
 @pytest.mark.skipif(skip_openai, reason=reason)
 @pytest.mark.asyncio
 async def test_async_groupchat():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]})
+    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -97,7 +97,7 @@ async def test_async_groupchat():
 @pytest.mark.skipif(skip_openai, reason=reason)
 @pytest.mark.asyncio
 async def test_stream():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]})
+    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
     data = asyncio.Future()
 
     async def add_stock_price_data():
