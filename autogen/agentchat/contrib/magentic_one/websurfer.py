@@ -122,7 +122,6 @@ class MultimodalWebSurfer(ConversableAgent):
         self._page: Page | None = None
         self._last_download: Download | None = None
         self._prior_metadata_hash: str | None = None
-        #self.logger = logging.getLogger(EVENT_LOGGER_NAME + f".{self.id.key}.MultimodalWebSurfer")
 
         # Read page_script
         self._page_script: str = ""
@@ -162,11 +161,10 @@ class MultimodalWebSurfer(ConversableAgent):
             to_save_screenshots (bool): Whether to save screenshots. Defaults to False.
             markdown_converter (Any | None): The markdown converter to use. Defaults to None.
         """
-        #self._model_client = model_client
         self.start_page = start_page or self.DEFAULT_START_PAGE
         self.downloads_folder = downloads_folder
         self.to_save_screenshots = to_save_screenshots
-        self._chat_history: List[Dict[str,Any]] = [] # TODO: use the ag2 message format
+        self._chat_history: List[Dict[str,Any]] = [] 
         self._last_download = None
         self._prior_metadata_hash = None
 
@@ -327,14 +325,14 @@ class MultimodalWebSurfer(ConversableAgent):
 
         return targets
 
-    async def _execute_tool( # TODO: replace with ag2 ? or overwrite ag2 ?ag2 biggest work integrating with tools 
+    async def _execute_tool( # TODO: replace with ag2 ? 
         self,
         message: Dict[str, Any],
         rects: Dict[str, InteractiveRegion],
         tool_names: str,
         use_ocr: bool = True
         )-> Tuple[bool, Union[str, Dict, None]]:
-        # Handle both legacy function calls and new tool calls format TODO: remove the comment
+        # TODO: Handle both legacy function calls and new tool calls format 
         #if isinstance(message, dict) and "tool_responses" in message:
         #    # New tool calls format
 
@@ -675,8 +673,6 @@ class MultimodalWebSurfer(ConversableAgent):
             return response
         elif isinstance(response, dict):
             if "tool_calls" in response:
-                #success, tool_response = await self.a_generate_tool_calls_reply(messages=[response])
-                #if success:
                 request_halt, tool_response = await self._execute_tool(response, rects, tool_names)
             elif "function_call" in response:
                 # Legacy function call handling
@@ -1088,6 +1084,3 @@ class MultimodalWebSurfer(ConversableAgent):
                 )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
 
-    def __del__(self):
-        """Cleanup when the object is destroyed."""
-        logger.stop()

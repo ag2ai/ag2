@@ -19,7 +19,6 @@ from .orchestrator_prompts import (
 from autogen.agentchat import Agent, ConversableAgent, UserProxyAgent, ChatResult
 from autogen.logger import FileLogger
 
-# Initialize logger with config
 logger = FileLogger(config={})
 
 
@@ -57,7 +56,6 @@ class OrchestratorAgent(ConversableAgent):
         max_stalls_before_replan: int = 3,
         max_replans: int = 3,
         return_final_answer: bool = False,
-        user_agent: Optional[UserProxyAgent] = None,
         agent_whole_history: bool = True,
         **kwargs
     ):
@@ -91,20 +89,6 @@ class OrchestratorAgent(ConversableAgent):
                 for message in messages:
                     self._oai_messages[agent]._append_oai_message([message])
         self._agents = agents if agents is not None else []
-        
-        # Create executor agent for code execution
-        if user_agent:
-            self.executor = user_agent
-        else:
-            self.executor = UserProxyAgent( #TODO: code execution by the coder itself. nd userproxy just to kick of the tsk ? 
-                name="executor",
-                llm_config=llm_config,
-                is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-                max_consecutive_auto_reply=10,
-                human_input_mode="NEVER",
-                description="Executor agent that executes code and reports results. Returns TERMINATE when task is complete.",
-                code_execution_config=code_execution_config
-            )
             
         self._should_replan = True
         self._max_stalls_before_replan = max_stalls_before_replan
@@ -203,7 +187,6 @@ class OrchestratorAgent(ConversableAgent):
     def _update_facts_and_plan(self) -> None:
         # called when the orchestrator decides to replan
 
-        # Shallow-copy the conversation
         planning_conversation = [m for m in self._oai_messages[self]]
 
         # Update the facts
@@ -620,6 +603,4 @@ class OrchestratorAgent(ConversableAgent):
                 )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
 
-    def __del__(self):
-        """Cleanup when the object is destroyed."""
-        logger.stop()
+
