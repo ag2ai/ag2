@@ -4,7 +4,7 @@ authors: sonichi
 tags: [LLM, GPT, research]
 ---
 
-![An adaptive way of using GPT-3.5 and GPT-4 outperforms GPT-4 in both coding success rate and inference cost](img/humaneval.png)
+![An adaptive way of using GPT-3.5 and GPT-4 outperforms GPT-4 in both coding success rate and inference cost](website/blog/2023-05-18-GPT-adaptive-humaneval/img/humaneval-b2718b0b15d76b8fc59a4094e1bd684c.png)
 
 **TL;DR:**
 
@@ -52,7 +52,7 @@ Combining these observations, we can design a solution with two intuitive ideas:
 - Make use of auto-generated feedback, i.e., code execution results, to filter responses.
 - Try inference configurations one by one, until one response can pass the filter.
 
-![Design](img/design.png)
+![Design](website/blog/2023-05-18-GPT-adaptive-humaneval/img/design-88630f6d8d95f1e31ef5ce79e81aab54.png)
 
 This solution works adaptively without knowing or predicting which task fits which configuration. It simply tries multiple configurations one by one, starting from the cheapest configuration. Note that one configuration can generate multiple responses (by setting the inference parameter n larger than 1). And different configurations can use the same model and different inference parameters such as n and temperature. Only one response is returned and evaluated per task.
 
