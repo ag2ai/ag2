@@ -1,11 +1,13 @@
 ---
-title: Testing for prompt leakage security using Autogen
+title: Agentic testing for prompt leakage security
 authors:
   - sternakt
   - davorrunje
   - sonichi
 tags: [LLM, security]
 ---
+
+![Prompt leakage social img](img/prompt_leakage_social_img.png)
 
 ## Introduction
 
@@ -17,20 +19,21 @@ To address this issue, we have developed the [Prompt Leakage Probing Framework](
 
 ### Prompt Leakage Testing in Action
 
-#### Tested Models and Endpoints
+#### Predefined Testing Endpoints
 
-Our framework currently supports three predefined testing endpoints, tailored for different levels of challenge:
+Our framework currently exposes three predefined **testing endpoints**, each designed to evaluate the performance of models with varying levels of challenge:
 
+| **Endpoint**   | **Description**                                                                                           |
+|----------------|-----------------------------------------------------------------------------------------------------------|
+| `/low`         | **Easy**: Evaluates a basic model configuration without hardening techniques. No canary words or guardrails are applied. |
+| `/medium`      | **Medium**: Tests a model with prompt hardening techniques for improved robustness. Canary words and guardrails are still excluded. |
+| `/high`        | **Hard**: Challenges a model with both prompt hardening, the inclusion of canary words, and the application of guardrails for enhanced protection. |
 
-| **Endpoint**   | **Model Description**                                                                                          |
-|----------------|----------------------------------------------------------------------------------------------------------------|
-| `/low`         | Easy: Uses a basic prompt without any hardening techniques. No canary words are included, and no LLM guardrail is applied. |
-| `/medium`      | Medium: Applies prompt hardening techniques to improve robustness over the easy model but still lacks canary words or guardrail. |
-| `/high`        | Hard: Combines prompt hardening with the addition of canary words and the use of a guardrail for better protection. |
+These endpoints are part of the application and serve as abstractions to streamline prompt leakage testing. The models configured behind these endpoints are defined in the `tested_chatbots` module and can be easily modified.
 
-These endpoints serve as a foundation for our prompt leakage testing.
+By separating the tested models from the chat interface, we have prepared the abstraction necessary to support the integration of external endpoints in future iterations, allowing seamless testing of custom or third-party models.
 
-The agents are configured using system prompts to act as a highly personalized automotive sales assistant tailored for a fantasy automotive company, leveraging **confidential** pricing strategies to maximize customer satisfaction and sales success. You can see their prompts [here](https://github.com/airtai/prompt-leakage-probing/tree/main/prompt_leakage_probing/tested_chatbots/prompts)
+The default agents accessed through these endpoints simulate a highly personalized automotive sales assistant, tailored for a fictional automotive company. They leverage **confidential** pricing strategies to maximize customer satisfaction and sales success. You can explore their prompts [here](https://github.com/airtai/prompt-leakage-probing/tree/main/prompt_leakage_probing/tested_chatbots/prompts).
 
 #### Workflow Overview
 
@@ -70,18 +73,37 @@ The framework categorizes responses based on their sensitivity and highlights po
 
 ### Project highlights
 
-The **Prompt Leakage Probing Framework** was designed with flexibility and extensibility in mind. It is built around a core set of components that work together to automate the process of probing LLMs for prompt leakage. The main components of the framework include:
+#### Agentic Design Patterns
 
-1. [`PromptGeneratorAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_black_box/prompt_leakage_black_box.py#L7): This agent is responsible for generating adversarial prompts that are specifically designed to probe the LLM for potential prompt leakage. These prompts are crafted to push the model into revealing sensitive internal details, such as system prompts, that should otherwise remain hidden.
+The **Prompt Leakage Probing Framework** leverages key agentic design patterns from the [AG2 library](https://ag2ai.github.io/ag2/docs/tutorial), providing a robust and modular structure for its functionality. Below are the patterns and components used, along with relevant links for further exploration:
 
-2. [`PromptLeakageClassifierAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_classifier/prompt_leakage_classifier.py#L7): Once a response is received from the LLM, this agent evaluates the response to determine if any context leakage has occurred. It analyzes the output for any signs of the model inadvertently exposing sensitive prompt information. Based on this classification, the agent assigns a leakage level to the response.
+1. **Group Chat Pattern**
+   - The chat between agents in this project is modeled on the [Group Chat Pattern](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns#group-chat), where multiple agents collaboratively interact to perform tasks.
+   - This structure allows for seamless coordination between agents like the prompt generator, classifier, and user proxy agent.
+   - The chat has a [custom speaker selection](https://ag2ai.github.io/ag2/docs/notebooks/agentchat_groupchat_customized) method implemented so that it guarantees the prompt->response->classification chat flow.
 
-3. **Testing Scenarios**: The framework currently includes two testing scenarios designed to demonstrate its capabilities: a simple attack targeting basic leakage and an advanced strategy utilizing Base64 encoding to bypass direct attack detection. These serve as a foundation for the future implementation of a wider variety of scenarios.
+2. **ConversableAgents**
+   - The system includes two [ConversableAgents](https://ag2ai.github.io/ag2/docs/reference/agentchat/conversable_agent#conversableagent):
+     - [`PromptGeneratorAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_black_box/prompt_leakage_black_box.py#L7): Responsible for creating adversarial prompts aimed at probing LLMs.
+     - [`PromptLeakageClassifierAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_classifier/prompt_leakage_classifier.py#L7): Evaluates the model's responses to identify prompt leakage.
 
-4. **Ready to use chat**: The framework is built using [FastAgency](https://fastagency.ai/latest/) and [AG2](https://ag2.ai/), enabling users to seamlessly trigger tests and access reports through an intuitive chat interface. [FastAgency](https://fastagency.ai/latest/) operates on [FastAPI](https://fastapi.tiangolo.com/), and the service includes demonstration test Agents accessible via the `/low`, `/medium`, and `/high` endpoints. This setup functions as a ready-to-use testing lab, designed to help you get started with ease!
+3. **UserProxyAgent**
+   - A [UserProxyAgent](https://ag2ai.github.io/ag2/docs/reference/agentchat/user_proxy_agent#userproxyagent) acts as the intermediary for executing external functions, such as:
+     - Communicating with the tested chatbot.
+     - Logging prompt leakage attempts and their classifications.
 
-The entire system is designed to be flexible, enabling users to create custom scenarios, add new agents, or modify existing tests to suit their needs. This modularity makes it easy to adapt the framework to various use cases and LLMs.
 
+#### Modular and Extensible Framework
+
+The **Prompt Leakage Probing Framework** is designed to be both flexible and extensible, allowing users to automate LLM prompt leakage testing while adapting the system to their specific needs. Built around a robust set of modular components, the framework enables the creation of custom scenarios, the addition of new agents, and the modification of existing tests. Key highlights include:
+
+1. **Testing Scenarios**
+   - The framework includes two predefined scenarios: a basic attack targeting prompt leakage and a more advanced Base64-encoded strategy to bypass detection. These scenarios form the foundation for expanding into more complex and varied testing setups in the future.
+
+2. **Ready-to-Use Chat Interface**
+   - Powered by [FastAgency](https://fastagency.ai/latest/) and [AG2](https://ag2.ai/), the framework features an intuitive chat interface that lets users seamlessly initiate tests and review reports. Demonstration agents are accessible through the `/low`, `/medium`, and `/high` endpoints, creating a ready-to-use testing lab for exploring prompt leakage security.
+
+This modular approach, combined with the agentic design patterns discussed earlier, ensures the framework remains adaptable to evolving testing needs.
 
 ### Project Structure
 
@@ -168,6 +190,8 @@ While the **Prompt Leakage Probing Framework** is functional and ready to use, t
 
 The **Prompt Leakage Probing Framework** provides a tool to help test LLM agents for their vulnerability to prompt leakage, ensuring that sensitive information embedded in system prompts remains secure. By automating the probing and classification process, this framework simplifies the detection of potential security risks in LLMs.
 
-## Further reading
+## Further Reading
 
-Please refer to our [codebase](https://github.com/airtai/prompt-leakage-probing) for more details about **Prompt Leakage Probing**.
+For more details about **Prompt Leakage Probing**, please explore our [codebase](https://github.com/airtai/prompt-leakage-probing).
+
+Additionally, check out [AutoDefense](https://ag2ai.github.io/ag2/blog/2024/03/11/AutoDefense/Defending%20LLMs%20Against%20Jailbreak%20Attacks%20with%20AutoDefense), which aligns with future directions for this work. One proposed idea is to use the testing system to compare the performance of unprotected LLMs versus LLMs fortified with AutoDefense protection. The testing system can serve as an evaluator for different defense strategies, with the expectation that AutoDefense provides enhanced safety.
