@@ -15,6 +15,7 @@ try:
 
     if chromadb.__version__ < "0.4.15":
         raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
+    import chromadb.errors
     import chromadb.utils.embedding_functions as ef
     from chromadb.api.models.Collection import Collection
 except ImportError:
@@ -90,7 +91,7 @@ class ChromaVectorDB(VectorDB):
                 collection = self.active_collection
             else:
                 collection = self.client.get_collection(collection_name, embedding_function=self.embedding_function)
-        except ValueError:
+        except (ValueError, chromadb.errors.ChromaError):
             collection = None
         if collection is None:
             return self.client.create_collection(
