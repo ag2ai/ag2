@@ -68,7 +68,7 @@ jobs:
       - name: Build pyautogen
         shell: pwsh
         run: |
-          python setup.py sdist bdist_wheel --name "pyautogen"
+          python setup.py sdist bdist_wheel
       - name: Publish pyautogen to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}
