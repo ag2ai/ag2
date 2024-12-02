@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "name": "Starter Kit",
+  "name": "AG2.ai",
   "logo": {
     "dark": "website/static/img/ag2-white.svg",
     "light": "website/static/img/ag2.svg"
@@ -13,6 +13,14 @@
     "anchors": {
       "from": "#0D9373",
       "to": "#07C983"
+    }
+  },
+  "font": {
+    "headings": {
+      "family": "Jersey 10"
+    },
+    "body": {
+      "family": "Inter"
     }
   },
   "topbarLinks": [
@@ -43,8 +51,7 @@
   "navigation": [
     {
       "group": "",
-      "pages": ["website/docs/Getting-Started"],
-      "icon": "graduation-cap"
+      "pages": ["website/docs/Getting-Started"]
     },
     {
       "group": "",
@@ -189,11 +196,11 @@
       ]
     },
     {
-      "group": "Research",
+      "group": "",
       "pages": ["website/docs/Research"]
     },
     {
-      "group": "Migration Guide",
+      "group": "",
       "pages": ["website/docs/Migration-Guide"]
     },
     {
