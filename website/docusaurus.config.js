@@ -24,7 +24,7 @@ module.exports = {
   projectName: "ag2", // Usually your repo name.
   scripts: [
     {
-      src: "/autogen/js/custom.js",
+      src: "/js/custom.js",
       async: true,
       defer: true,
     },
@@ -247,7 +247,7 @@ module.exports = {
         routeBasePath: 'talks',
         path: './talks',
         showReadingTime: true,
-        postsPerPage: 'ALL',
+        blogSidebarCount: "ALL",
       },
     ],
     [
