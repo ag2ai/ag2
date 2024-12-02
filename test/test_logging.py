@@ -5,6 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import json
+import os
 import sqlite3
 import uuid
 from pathlib import Path
@@ -276,6 +277,7 @@ def test_to_dict():
     bar = Bar()
     bar.build()
 
+    expected_path = "\\to\\something" if os.name == "nt" else "/to/something"
     expected_foo_val_field = [
         {
             "a": 1.234,
@@ -283,7 +285,7 @@ def test_to_dict():
             "c": {"some_key": [7, 8, 9]},
             "d": None,
             "test_function": "self.test_function = lambda x, y: x + y",
-            "path": "/to/something",
+            "path": expected_path,
         }
     ]
 
