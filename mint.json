@@ -102,6 +102,10 @@
           "pages": [
             "website/docs/topics/non-openai-models/about-using-nonopenai-models",
             "website/docs/topics/non-openai-models/best-tips-for-nonopenai-models",
+            "website/docs/topics/non-openai-models/cloud-anthropic",
+            "website/docs/topics/non-openai-models/cloud-bedrock",
+            "website/docs/topics/non-openai-models/cloud-cerebras",
+            "website/docs/topics/non-openai-models/cloud-cohere",
             "website/docs/topics/non-openai-models/cloud-gemini_vertexai",
             "website/docs/topics/non-openai-models/cloud-gemini",
             "website/docs/topics/non-openai-models/cloud-groq",
