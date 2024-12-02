@@ -21,6 +21,7 @@
 | Rudy Wu     | [rudyalways](https://github.com/rudyalways)                | Google                | all, group chats, sequential chats                |
 | Haiyang Li  | [ohdearquant](https://github.com/ohdearquant)               | -               | all, sequential chats, structured output, low-level|
 | Eric Moore  | [emooreatx](https://github.com/emooreatx)               | IBM               | all|
+| Tvrtko Sternak  | [sternakt](https://github.com/sternakt)               | airt.ai               | structured output |
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |
