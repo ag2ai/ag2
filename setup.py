@@ -119,7 +119,7 @@ if "--name" in sys.argv:
     sys.argv.pop(index)  # Removes --name
     package_name = sys.argv.pop(index)  # Removes the value after --name
 else:
-    package_name = "ag2"
+    package_name = ["ag2", "autogen", "pyautogen"]
 
 
 setuptools.setup(
