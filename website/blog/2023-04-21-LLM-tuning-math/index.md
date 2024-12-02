@@ -6,11 +6,15 @@ tags: [LLM, GPT, research]
 
 ![level 2 algebra](website/blog/2023-04-21-LLM-tuning-math/img/level2algebra.png)
 
-**TL;DR:**
-* **Just by tuning the inference parameters like model, number of responses, temperature etc. without changing any model weights or prompt, the baseline accuracy of untuned gpt-4 can be improved by 20% in high school math competition problems.**
-* **For easy problems, the tuned gpt-3.5-turbo model vastly outperformed untuned gpt-4 in accuracy (e.g., 90% vs. 70%) and cost efficiency. For hard problems, the tuned gpt-4 is much more accurate (e.g., 35% vs. 20%) and less expensive than untuned gpt-4.**
-* **AutoGen can help with model selection, parameter tuning, and cost-saving in LLM applications.**
+![](nexla_autogen-e105b0dd9a1db16a51a10dc967a17357.png)
 
+**TL;DR:**
+
+* **Just by tuning the inference parameters like model, number of responses, temperature etc. without changing any model weights or prompt, the baseline accuracy of untuned gpt-4 can be improved by 20% in high school math competition problems.**
+
+* **For easy problems, the tuned gpt-3.5-turbo model vastly outperformed untuned gpt-4 in accuracy (e.g., 90% vs. 70%) and cost efficiency. For hard problems, the tuned gpt-4 is much more accurate (e.g., 35% vs. 20%) and less expensive than untuned gpt-4.**
+
+* **AutoGen can help with model selection, parameter tuning, and cost-saving in LLM applications.**
 
 Large language models (LLMs) are powerful tools that can generate natural language texts for various applications, such as chatbots, summarization, translation, and more. GPT-4 is currently the state of the art LLM in the world. Is model selection irrelevant? What about inference parameters?
 
@@ -23,16 +27,22 @@ We will use AutoGen to perform model selection and inference parameter tuning. T
 ## Experiment Setup
 
 We use AutoGen to select between the following models with a target inference budget $0.02 per instance:
-- gpt-3.5-turbo, a relatively cheap model that powers the popular ChatGPT app
-- gpt-4, the state of the art LLM that costs more than 10 times of gpt-3.5-turbo
+
+* gpt-3.5-turbo, a relatively cheap model that powers the popular ChatGPT app
+
+* gpt-4, the state of the art LLM that costs more than 10 times of gpt-3.5-turbo
 
 We adapt the models using 20 examples in the train set, using the problem statement as the input and generating the solution as the output. We use the following inference parameters:
 
-- temperature: The parameter that controls the randomness of the output text. A higher temperature means more diversity but less coherence. We search for the optimal temperature in the range of [0, 1].
-- top_p: The parameter that controls the probability mass of the output tokens. Only tokens with a cumulative probability less than or equal to top-p are considered. A lower top-p means more diversity but less coherence. We search for the optimal top-p in the range of [0, 1].
-- max_tokens: The maximum number of tokens that can be generated for each output. We search for the optimal max length in the range of [50, 1000].
-- n: The number of responses to generate. We search for the optimal n in the range of [1, 100].
-- prompt: We use the template: "{problem} Solve the problem carefully. Simplify your answer as much as possible. Put the final answer in \\boxed{{}}." where {problem} will be replaced by the math problem instance.
+* temperature: The parameter that controls the randomness of the output text. A higher temperature means more diversity but less coherence. We search for the optimal temperature in the range of \[0, 1].
+
+* top\_p: The parameter that controls the probability mass of the output tokens. Only tokens with a cumulative probability less than or equal to top-p are considered. A lower top-p means more diversity but less coherence. We search for the optimal top-p in the range of \[0, 1].
+
+* max\_tokens: The maximum number of tokens that can be generated for each output. We search for the optimal max length in the range of \[50, 1000].
+
+* n: The number of responses to generate. We search for the optimal n in the range of \[1, 100].
+
+* prompt: We use the template: "{problem} Solve the problem carefully. Simplify your answer as much as possible. Put the final answer in \boxed{{}}." where {problem} will be replaced by the math problem instance.
 
 In this experiment, when n > 1, we find the answer with highest votes among all the responses and then select it as the final answer to compare with the ground truth. For example, if n = 5 and 3 of the responses contain a final answer 301 while 2 of the responses contain a final answer 159, we choose 301 as the final answer. This can help with resolving potential errors due to randomness. We use the average accuracy and average inference cost as the metric to evaluate the performance over a dataset. The inference cost of a particular instance is measured by the price per 1K tokens and the number of tokens consumed.
 
@@ -56,7 +66,7 @@ On level 5 the result is similar.
 
 We can see that AutoGen has found different optimal model and inference parameters for each subset of a particular level, which shows that these parameters matter in cost-sensitive LLM applications and need to be carefully tuned or adapted.
 
-An example notebook to run these experiments can be found at: https://github.com/microsoft/FLAML/blob/v1.2.1/notebook/autogen_chatgpt.ipynb. The experiments were run when AutoGen was a subpackage in FLAML.
+An example notebook to run these experiments can be found at: [https://github.com/microsoft/FLAML/blob/v1.2.1/notebook/autogen\_chatgpt.ipynb.](https://github.com/microsoft/FLAML/blob/v1.2.1/notebook/autogen_chatgpt.ipynb.) The experiments were run when AutoGen was a subpackage in FLAML.
 
 ## Analysis and Discussion
 
@@ -69,6 +79,7 @@ The need for model selection, parameter tuning and cost saving is not specific t
 ## For Further Reading
 
 * [Research paper about the tuning technique](https://arxiv.org/abs/2303.04673)
+
 * [Documentation about inference tuning](/docs/Use-Cases/enhanced_inference)
 
-*Do you have any experience to share about LLM applications? Do you like to see more support or research of LLM optimization or automation? Please join our [Discord](https://aka.ms/autogen-dc) server for discussion.*
+*Do you have any experience to share about LLM applications? Do you like to see more support or research of LLM optimization or automation? Please join our* [Discord](https://aka.ms/autogen-dc) *server for discussion.*
