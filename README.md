@@ -25,19 +25,11 @@
 > We invite collaborators from all organizations and individuals to join the development.
 
 
-:fire: :tada: AG2 is available via `ag2` (or its alias  `autogen` or  `pyautogen`)  on PyPI! Starting with version 0.3.2, you can now install AG2 using:
-```
-pip install ag2
-```
-or
+:fire: :tada: AG2 is available via `pyautogen` (or its alias  `autogen` or  `ag2`)  on PyPI!
+
 ```
 pip install pyautogen
 ```
-or
-```
-pip install autogen
-```
-
 
 📄 **License:**
 We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
