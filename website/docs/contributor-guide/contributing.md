@@ -23,7 +23,7 @@ There is currently no formal reviewer solicitation process. Current reviewers id
 
 ## Contact Maintainers
 
-The project is currently maintained by a [dynamic group of volunteers](https://github.com/ag2ai/ag2/blob/main/MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via auto-gen@outlook.com if you are interested in becoming a maintainer.
+The project is currently maintained by a [dynamic group of volunteers](https://github.com/ag2ai/ag2/blob/main/MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via support@ag2.ai if you are interested in becoming a maintainer.
 
 
 ## License Headers

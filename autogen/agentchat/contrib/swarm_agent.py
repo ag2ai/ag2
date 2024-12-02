@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+import copy
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -364,16 +365,19 @@ class SwarmAgent(ConversableAgent):
         message = messages[-1]
         if "tool_calls" in message:
 
-            tool_calls = len(message["tool_calls"])
+            tool_call_count = len(message["tool_calls"])
 
             # Loop through tool calls individually (so context can be updated after each function call)
             next_agent = None
             tool_responses_inner = []
             contents = []
-            for index in range(tool_calls):
+            for index in range(tool_call_count):
+
+                # Deep copy to ensure no changes to messages when we insert the context variables
+                message_copy = copy.deepcopy(message)
 
                 # 1. add context_variables to the tool call arguments
-                tool_call = message["tool_calls"][index]
+                tool_call = message_copy["tool_calls"][index]
 
                 if tool_call["type"] == "function":
                     function_name = tool_call["function"]["name"]
@@ -382,20 +386,16 @@ class SwarmAgent(ConversableAgent):
                     if function_name in self._function_map:
                         func = self._function_map[function_name]  # Get the original function
 
-                        # Check if function has context_variables parameter
+                        # Inject the context variables into the tool call if it has the parameter
                         sig = signature(func)
                         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
+
                             current_args = json.loads(tool_call["function"]["arguments"])
                             current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = self._context_variables
-                            # Update the tool call with new arguments
                             tool_call["function"]["arguments"] = json.dumps(current_args)
 
-                # Copy the message
-                message_copy = message.copy()
-                tool_calls_copy = message_copy["tool_calls"]
-
-                # remove all the tool calls except the one at the index
-                message_copy["tool_calls"] = [tool_calls_copy[index]]
+                # Ensure we are only executing the one tool at a time
+                message_copy["tool_calls"] = [tool_call]
 
                 # 2. generate tool calls reply
                 _, tool_message = self.generate_tool_calls_reply([message_copy])

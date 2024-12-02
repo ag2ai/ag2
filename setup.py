@@ -61,7 +61,7 @@ retrieve_chat = [
 retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 
 graph_rag_falkor_db = [
-    "graphrag_sdk",
+    "graphrag_sdk==0.3.3",
 ]
 
 if current_os in ["Windows", "Darwin"]:
@@ -69,7 +69,8 @@ if current_os in ["Windows", "Darwin"]:
 elif current_os == "Linux":
     retrieve_chat_pgvector.extend(["psycopg>=3.1.18"])
 
-autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3"]
+# pysqlite3-binary used so it doesn't need to compile pysqlite3
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
 extra_require = {
     "test": [
@@ -112,17 +113,8 @@ extra_require = {
     "bedrock": ["boto3>=1.34.149"],
 }
 
-
-if "--name" in sys.argv:
-    index = sys.argv.index("--name")
-    sys.argv.pop(index)  # Removes --name
-    package_name = sys.argv.pop(index)  # Removes the value after --name
-else:
-    package_name = "ag2"
-
-
 setuptools.setup(
-    name=package_name,
+    name="pyautogen",
     version=__version__,
     author="Chi Wang & Qingyun Wu",
     author_email="support@ag2.ai",
@@ -130,7 +122,20 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ag2ai/ag2",
-    packages=setuptools.find_packages(include=["autogen*"], exclude=["test"]),
+    packages=setuptools.find_namespace_packages(
+        include=[
+            "autogen*",
+            "autogen.agentchat.contrib.captainagent.tools*",
+        ],
+        exclude=["test"],
+    ),
+    package_data={
+        "autogen.agentchat.contrib.captainagent": [
+            "tools/tool_description.tsv",
+            "tools/requirements.txt",
+        ]
+    },
+    include_package_data=True,
     install_requires=install_requires,
     extras_require=extra_require,
     classifiers=[

@@ -23,8 +23,8 @@ def get_market_news(ind, ind_upper):
     data = {
         "feed": [
             {
-                "title": "Palantir CEO Says Our Generation's Atomic Bomb Could Be AI Weapon - And Arrive Sooner Than You Think - Palantir Technologies  ( NYSE:PLTR ) ",
-                "summary": "Christopher Nolan's blockbuster movie \"Oppenheimer\" has reignited the public discourse surrounding the United States' use of an atomic bomb on Japan at the end of World War II.",
+                "title": "Palantir CEO Says Our Generation's Main Challenge Could Be AI Against Humanity - And Arrive Sooner Than You Think - Palantir Technologies  ( NYSE:PLTR ) ",
+                "summary": "Christopher Nolan's blockbuster movie \"Oppenheimer\" has reignited the public discourse surrounding the United States' use of a weapon on Japan at the end of World War II.",
                 "overall_sentiment_score": 0.009687,
             },
             {
@@ -63,7 +63,7 @@ def get_market_news(ind, ind_upper):
 @pytest.mark.skipif(skip_openai, reason=reason)
 @pytest.mark.asyncio
 async def test_async_groupchat():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]})
+    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -97,7 +97,7 @@ async def test_async_groupchat():
 @pytest.mark.skipif(skip_openai, reason=reason)
 @pytest.mark.asyncio
 async def test_stream():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]})
+    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
     data = asyncio.Future()
 
     async def add_stock_price_data():
@@ -142,14 +142,14 @@ async def test_stream():
                 result.clear()
                 return (
                     True,
-                    f"Just got some latest market news. Merge your new suggestion with previous ones.\n{news_str}",
+                    f"Just got some latest news. Update the summary.\n{news_str}",
                 )
             return False, None
 
     user_proxy.register_reply(autogen.AssistantAgent, add_data_reply, position=2, config={"news_stream": data})
 
     chat_res = await user_proxy.a_initiate_chat(
-        assistant, message="""Give me investment suggestion in 3 bullet points.""", summary_method="reflection_with_llm"
+        assistant, message="""Summarize market dynamics in 3 bullet points.""", summary_method="reflection_with_llm"
     )
 
     print("Chat summary:", chat_res.summary)
