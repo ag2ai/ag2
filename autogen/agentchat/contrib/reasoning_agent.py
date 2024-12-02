@@ -89,7 +89,7 @@ class ThinkNode:
     @property
     def _trajectory_arr(self) -> List[str]:
         """Get the full path from root to this node as a list of strings.
-        
+
         Returns:
             List[str]: List containing the content of each node from root to current node
         """
@@ -100,7 +100,7 @@ class ThinkNode:
     @property
     def trajectory(self) -> str:
         """Get a formatted string representation of the path from root to this node.
-        
+
         Returns:
             str: A formatted string showing the question and each step in the reasoning process
         """
@@ -118,7 +118,7 @@ class ThinkNode:
 
     def to_dict(self) -> Dict:
         """Convert ThinkNode to dictionary representation.
-        
+
         Returns:
             Dict: Dictionary containing all node attributes and recursive children
         """
@@ -133,11 +133,11 @@ class ThinkNode:
     @classmethod
     def from_dict(cls, data: Dict, parent: Optional["ThinkNode"] = None) -> "ThinkNode":
         """Create ThinkNode from dictionary representation.
-        
+
         Args:
             data (Dict): Dictionary containing node data
             parent (Optional[ThinkNode]): Parent node to attach to
-            
+
         Returns:
             ThinkNode: Reconstructed node with all children
         """
@@ -163,12 +163,12 @@ def visualize_tree(root: ThinkNode) -> None:
         print("Please install graphviz: pip install graphviz")
         return
 
-    dot = Digraph(comment='Tree of Thoughts')
-    dot.attr(rankdir='TB')  # Top to Bottom direction
+    dot = Digraph(comment="Tree of Thoughts")
+    dot.attr(rankdir="TB")  # Top to Bottom direction
 
-    def add_nodes(node: ThinkNode, node_id: str = '0'):
+    def add_nodes(node: ThinkNode, node_id: str = "0"):
         # Truncate long content for better visualization
-        display_content = (node.content[:50] + '...') if len(node.content) > 50 else node.content
+        display_content = (node.content[:50] + "...") if len(node.content) > 50 else node.content
 
         # Add node with stats
         label = f"{display_content}\n visits: {node.visits}\n value: {node.value}"
@@ -184,17 +184,18 @@ def visualize_tree(root: ThinkNode) -> None:
 
     # Render the graph
     try:
-        dot.render('tree_of_thoughts', view=False, format='png', cleanup=True)
+        dot.render("tree_of_thoughts", view=False, format="png", cleanup=True)
     except Exception as e:
         print(f"Error rendering graph: {e}")
         print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
 
 
 class ReasoningAgent(AssistantAgent):
-
-    def __init__(self, name, llm_config, max_depth=4, beam_size=3, answer_approach="pool", verbose=True, *args, **kwargs) -> None:
+    def __init__(
+        self, name, llm_config, max_depth=4, beam_size=3, answer_approach="pool", verbose=True, **kwargs
+    ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.,
-        
+
         Args:
             name: Name of the agent
             llm_config: Configuration for the language model
@@ -203,7 +204,7 @@ class ReasoningAgent(AssistantAgent):
             answer_approach (str): Either "pool" or "best" - how to generate final answer
             verbose (bool): Whether to show intermediate steps
         """
-        super().__init__(name=name, llm_config=llm_config, *args, **kwargs)
+        super().__init__(name=name, llm_config=llm_config, **kwargs)
         self.max_depth = max_depth
         self.beam_size = beam_size
         self.verbose = verbose
@@ -222,10 +223,10 @@ class ReasoningAgent(AssistantAgent):
 
     def rate_node(self, node: ThinkNode) -> float:
         """Rate the quality of a reasoning path using the grader agent.
-        
+
         Args:
             node (ThinkNode): Node containing the reasoning trajectory to evaluate
-            
+
         Returns:
             float: Normalized score between 0 and 1 indicating trajectory quality
         """
@@ -242,15 +243,15 @@ class ReasoningAgent(AssistantAgent):
 
     def generate_response(self, messages, sender, config=None):
         """Generate a response using tree-of-thought reasoning.
-        
+
         Implements beam search through a tree of reasoning steps, using the thinker
         agent to generate possible next steps and the grader agent to evaluate paths.
-        
+
         Args:
             messages: Input messages to respond to
             sender: Agent sending the messages
             config: Optional configuration
-            
+
         Returns:
             Tuple[bool, str]: Success flag and generated response
         """
@@ -263,7 +264,7 @@ class ReasoningAgent(AssistantAgent):
             return True, "TERMINATE"
 
         root = ThinkNode(content=prompt, parent=None)
-        self._root = root # save the root node for later visualization
+        self._root = root  # save the root node for later visualization
         prev_leafs = [root]
 
         final_answers = set()  # store the final answers
