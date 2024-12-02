@@ -1010,6 +1010,14 @@ class MultimodalWebSurfer(ConversableAgent):
         scaled_screenshot.close()
         encoded_string = base64.b64encode(image_bytes).decode('utf-8')
 
+        # Save the encoded string to a file
+        with open("debug_base64.txt", "w") as f:
+            f.write(encoded_string)
+
+        # Load the encoded string from the file
+        #with open("debug_base64.txt", "r") as f:
+        #    encoded_string = f.read()
+
         messages: List[Dict[str,Any]] = [] 
 
         messages.append(
