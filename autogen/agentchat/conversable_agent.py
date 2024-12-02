@@ -85,6 +85,7 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
+        context_variables: Optional[Dict[str, Any]] = None,
     ):
         """
         Args:
@@ -135,6 +136,9 @@ class ConversableAgent(LLMAgent):
                 resume previous had conversations. Defaults to an empty chat history.
             silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
                 silent in each function.
+            context_variables (dict or None): Context variables that provide a persistent context for the agent.
+                The passed in context variables will be deep-copied, not referenced.
+                Only used in Swarms at this stage.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -192,6 +196,8 @@ class ConversableAgent(LLMAgent):
         self.reply_at_receive = defaultdict(bool)
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
+
+        self._context_variables = copy.deepcopy(context_variables) if context_variables is not None else {}
 
         # Setting up code execution.
         # Do not register code execution reply if code execution is disabled.
@@ -519,6 +525,45 @@ class ConversableAgent(LLMAgent):
                 not use_async if use_async is not None else kwargs.get("ignore_async_in_sync_chat")
             ),
         )
+
+    def get_context_value(self, key: str, default: Any = None) -> Any:
+        """
+        Get a context variable by key.
+        Args:
+            key: The key to look up
+            default: Value to return if key doesn't exist
+        Returns:
+            The value associated with the key, or default if not found
+        """
+        return self._context_variables.get(key, default)
+
+    def set_context_value(self, key: str, value: Any) -> None:
+        """
+        Set a context variable.
+        Args:
+            key: The key to set
+            value: The value to associate with the key
+        """
+        self._context_variables[key] = value
+
+    def set_context_values(self, context_variables: Dict[str, Any]) -> None:
+        """
+        Update multiple context variables at once.
+        Args:
+            context_variables: Dictionary of variables to update/add
+        """
+        self._context_variables.update(context_variables)
+
+    def pop_context_key(self, key: str, default: Any = None) -> Any:
+        """
+        Remove and return a context variable.
+        Args:
+            key: The key to remove
+            default: Value to return if key doesn't exist
+        Returns:
+            The value that was removed, or default if key not found
+        """
+        return self._context_variables.pop(key, default)
 
     @property
     def system_message(self) -> str:

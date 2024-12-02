@@ -1527,20 +1527,77 @@ def test_handle_carryover():
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
 
 
+@pytest.mark.skipif(skip_openai, reason=reason)
+def test_context_variables():
+    # Test initialization with context_variables
+    initial_context = {"test_key": "test_value", "number": 42, "nested": {"inner": "value"}}
+    agent = ConversableAgent(name="context_test_agent", llm_config=False, context_variables=initial_context)
+
+    # Check that context was properly initialized
+    assert agent._context_variables == initial_context
+
+    # Test initialization without context_variables
+    agent_no_context = ConversableAgent(name="no_context_agent", llm_config=False)
+    assert agent_no_context._context_variables == {}
+
+    # Test get_context_value
+    assert agent.get_context_value("test_key") == "test_value"
+    assert agent.get_context_value("number") == 42
+    assert agent.get_context_value("nested") == {"inner": "value"}
+    assert agent.get_context_value("non_existent") is None
+    assert agent.get_context_value("non_existent", default="default") == "default"
+
+    # Test set_context_value
+    agent.set_context_value("new_key", "new_value")
+    assert agent.get_context_value("new_key") == "new_value"
+
+    # Test overwriting existing value
+    agent.set_context_value("test_key", "updated_value")
+    assert agent.get_context_value("test_key") == "updated_value"
+
+    # Test set_context_values
+    new_values = {"bulk_key1": "bulk_value1", "bulk_key2": "bulk_value2", "test_key": "bulk_updated_value"}
+    agent.set_context_values(new_values)
+    assert agent.get_context_value("bulk_key1") == "bulk_value1"
+    assert agent.get_context_value("bulk_key2") == "bulk_value2"
+    assert agent.get_context_value("test_key") == "bulk_updated_value"
+
+    # Test pop_context_key
+    # Pop existing key
+    popped_value = agent.pop_context_key("bulk_key1")
+    assert popped_value == "bulk_value1"
+    assert agent.get_context_value("bulk_key1") is None
+
+    # Pop with default value
+    default_value = "default_value"
+    popped_default = agent.pop_context_key("non_existent", default=default_value)
+    assert popped_default == default_value
+
+    # Pop without default (should return None)
+    popped_none = agent.pop_context_key("another_non_existent")
+    assert popped_none is None
+
+    # Verify final state of context
+    expected_final_context = {
+        "number": 42,
+        "nested": {"inner": "value"},
+        "new_key": "new_value",
+        "bulk_key2": "bulk_value2",
+        "test_key": "bulk_updated_value",
+    }
+    assert agent._context_variables == expected_final_context
+
+
 if __name__ == "__main__":
     # test_trigger()
     # test_context()
-    # test_max_consecutive_auto_reply()
-    # test_generate_code_execution_reply()
-    # test_conversable_agent()
-    # test_no_llm_config()
+    # test_handle_carryover():
     # test_max_turn()
     # test_process_before_send()
     # test_message_func()
-
-    test_summary()
-    test_adding_duplicate_function_warning()
+    # test_summary()
+    # test_adding_duplicate_function_warning()
     # test_function_registration_e2e_sync()
-
-    test_process_gemini_carryover()
-    test_process_carryover()
+    # test_process_gemini_carryover()
+    # test_process_carryover()
+    test_context_variables()
