@@ -153,10 +153,47 @@ class ThinkNode:
         return node
 
 
+def visualize_tree(root: ThinkNode) -> None:
+    """
+    Visualize the tree of thoughts using graphviz.
+    """
+    try:
+        from graphviz import Digraph
+    except ImportError:
+        print("Please install graphviz: pip install graphviz")
+        return
+
+    dot = Digraph(comment='Tree of Thoughts')
+    dot.attr(rankdir='TB')  # Top to Bottom direction
+
+    def add_nodes(node: ThinkNode, node_id: str = '0'):
+        # Truncate long content for better visualization
+        display_content = (node.content[:50] + '...') if len(node.content) > 50 else node.content
+
+        # Add node with stats
+        label = f"{display_content}\n visits: {node.visits}\n value: {node.value}"
+        dot.node(node_id, label)
+
+        # Recursively add children
+        for i, child in enumerate(node.children):
+            child_id = f"{node_id}_{i}"
+            add_nodes(child, child_id)
+            dot.edge(node_id, child_id)
+
+    add_nodes(root)
+
+    # Render the graph
+    try:
+        dot.render('tree_of_thoughts', view=False, format='png', cleanup=True)
+    except Exception as e:
+        print(f"Error rendering graph: {e}")
+        print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
+
+
 class ReasoningAgent(AssistantAgent):
 
-    def __init__(self, name, llm_config, max_depth=4, beam_size=3, answer_approach="pool", verbose=True) -> None:
-        """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
+    def __init__(self, name, llm_config, max_depth=4, beam_size=3, answer_approach="pool", verbose=True, *args, **kwargs) -> None:
+        """Initialize a ReasoningAgent that uses tree-of-thought reasoning.,
         
         Args:
             name: Name of the agent
@@ -166,7 +203,7 @@ class ReasoningAgent(AssistantAgent):
             answer_approach (str): Either "pool" or "best" - how to generate final answer
             verbose (bool): Whether to show intermediate steps
         """
-        super().__init__(name=name, llm_config=llm_config)
+        super().__init__(name=name, llm_config=llm_config, *args, **kwargs)
         self.max_depth = max_depth
         self.beam_size = beam_size
         self.verbose = verbose
@@ -180,6 +217,8 @@ class ReasoningAgent(AssistantAgent):
             llm_config=llm_config,
         )
         self.register_reply([Agent, None], ReasoningAgent.generate_response)
+
+        self._root = None
 
     def rate_node(self, node: ThinkNode) -> float:
         """Rate the quality of a reasoning path using the grader agent.
@@ -224,6 +263,7 @@ class ReasoningAgent(AssistantAgent):
             return True, "TERMINATE"
 
         root = ThinkNode(content=prompt, parent=None)
+        self._root = root # save the root node for later visualization
         prev_leafs = [root]
 
         final_answers = set()  # store the final answers
@@ -274,7 +314,6 @@ class ReasoningAgent(AssistantAgent):
                 ]
 
         assert final_answers, "No final answers found."
-        # visualize_tree(root) #TODO: inspect if this in necessary
         final_answers = list(final_answers)
 
         if self.answer_approach == "best":
