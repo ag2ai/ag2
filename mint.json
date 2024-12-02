@@ -42,11 +42,10 @@
   "anchors": [],
   "navigation": [
     {
-      "group": "Get Started",
       "pages": ["website/docs/Getting-Started"]
     },
     {
-      "group": "Installation",
+      "group": "",
       "pages": [
         "website/docs/installation/Installation",
         "website/docs/installation/Docker",
@@ -147,7 +146,7 @@
       ]
     },
     {
-      "group": "FAQ",
+      "group": "",
       "pages": ["website/docs/FAQ"]
     },
     {
