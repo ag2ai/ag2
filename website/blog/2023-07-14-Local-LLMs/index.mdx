@@ -3,6 +3,7 @@ title: Use AutoGen for Local LLMs
 authors: jialeliu
 tags: [LLM]
 ---
+
 **TL;DR:**
 We demonstrate how to use autogen for local LLM application. As an example, we will initiate an endpoint using [FastChat](https://github.com/lm-sys/FastChat) and perform inference on [ChatGLMv2-6b](https://github.com/THUDM/ChatGLM2-6B).
 
@@ -63,11 +64,9 @@ class CompletionResponseStreamChoice(BaseModel):
     # finish_reason: Optional[Literal["stop", "length"]] = None
 ```
 
-
-## Interact with model using `oai.Completion` (requires openai<1)
+## Interact with model using `oai.Completion` (requires openai)
 
 Now the models can be directly accessed through openai-python library as well as `autogen.oai.Completion` and `autogen.oai.ChatCompletion`.
-
 
 ```python
 from autogen import oai
@@ -143,5 +142,5 @@ print(response)
 
 ## For Further Reading
 
-* [Documentation](/docs/Getting-Started) about `autogen`.
-* [Documentation](https://github.com/lm-sys/FastChat) about FastChat.
+- [Documentation](/docs/Getting-Started) about `autogen`.
+- [Documentation](https://github.com/lm-sys/FastChat) about FastChat.
