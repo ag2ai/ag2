@@ -647,10 +647,7 @@ class SwarmAgent(ConversableAgent):
                 recipient._oai_messages[sender].append(last_tool_message)
 
         elif isinstance(carryover_summary_method, Callable):
-            carry_over_message_result = carryover_summary_method(
-                recipient,
-                messages=messages,
-            )
+            carry_over_message_result = carryover_summary_method(recipient, messages, carryover_summary_args)
 
             carry_over_message = concat_carryover(chat_message, carry_over_message_result)
 
