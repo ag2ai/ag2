@@ -16,13 +16,19 @@ try:
     from llama_index.core.agent.runner.base import AgentRunner
     from llama_index.core.base.llms.types import ChatMessage
     from llama_index.core.chat_engine.types import AgentChatResponse
-    from pydantic import BaseModel
+    from pydantic import BaseModel, __version__ as pydantic_version
+    
+    # let's Avoid: AttributeError: type object 'Config' has no attribute 'copy'
+    if pydantic_version >= "2.0":
+        from pydantic import ConfigDict
+
+        Config = ConfigDict(arbitrary_types_allowed=True)
+    else:
+        class Config:
+            arbitrary_types_allowed = True
 
     # Add Pydantic configuration to allow arbitrary types
     # Added to mitigate PydanticSchemaGenerationError
-    class Config:
-        arbitrary_types_allowed = True
-
     BaseModel.model_config = Config
 
 except ImportError as e:
