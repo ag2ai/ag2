@@ -12,7 +12,7 @@ tags: [LLM, GPT, research]
 **TL;DR:**
 * We introduce **ReasoningAgent**, an AutoGen agent that implements tree-of-thought reasoning with beam search to solve complex problems.
 * ReasoningAgent explores multiple reasoning paths in parallel and uses a grader agent to evaluate and select the most promising paths.
-* Experiments show that ReasoningAgent can achieve better results than basic prompting by exploring multiple solution paths systematically.
+* The exploration trajectory and thought tree can be saved locally for further analysis. These logs can even be saved as SFT dataset and preference dataset for DPO and PPO training.
 
 ## Introduction
 
@@ -52,8 +52,8 @@ When `beam_size=1`, ReasoningAgent behaves similarly to Chain-of-Thought (CoT) o
 For example:
 ```python
 # Create a reasoning agent with beam size 1 (O1-style)
-thought_agent = ReasoningAgent(
-    name="thought_agent",
+reason_agent = ReasoningAgent(
+    name="reason_agent",
     llm_config={"config_list": config_list},
     verbose=False,
     beam_size=1,  # Using beam size 1 for O1-style reasoning
@@ -77,8 +77,8 @@ from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, visualize_
 config_list = [{"model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]
 
 # Create a reasoning agent with beam search
-thought_agent = ReasoningAgent(
-    name="thought_agent",
+reason_agent = ReasoningAgent(
+    name="reason_agent",
     llm_config={"config_list": config_list},
     verbose=False,
     beam_size=1,  # Using beam size 1 for O1-style reasoning
@@ -99,8 +99,8 @@ user_proxy = UserProxyAgent(
 For more complex problems, we can increase the beam size to explore multiple reasoning paths in parallel:
 
 ```python
-thought_agent = ReasoningAgent(
-    name="thought_agent",
+reason_agent = ReasoningAgent(
+    name="reason_agent",
     llm_config={"config_list": config_list},
     verbose=False,
     beam_size=3,  # Explore 3 paths in parallel
@@ -110,7 +110,7 @@ thought_agent = ReasoningAgent(
 # Example complex problem
 task = "Design a mixed integer linear program for a coffee roasting supply chain"
 response = user_proxy.initiate_chat(
-    thought_agent,
+    reason_agent,
     message=task,
     summary_method=last_meaningful_msg
 )
@@ -127,7 +127,7 @@ ReasoningAgent includes built-in visualization support using graphviz:
 
 ```python
 # After running a query, visualize the reasoning tree
-visualize_tree(thought_agent._root)
+visualize_tree(reason_agent._root)
 ```
 
 This generates a tree diagram showing:
@@ -135,15 +135,150 @@ This generates a tree diagram showing:
 - Evaluation scores for each path
 - Number of visits to each node
 
+## Save the Thought Tree as Training dataset
+As you have played with the `ReasoningAgent`, you may find the LLM's API expense is really high.
+On the other hand, the thought tree is a good training dataset for SFT, DPO, and PPO.
+
+After asking a question to the `ReasoningAgent`, you only need to simply call the `to_dict` function to save the thought tree as a file.
+
+```python
+import json
+data = reasoning_agent._root.to_dict()
+with open("reasoning_tree.json", "w") as f:
+    json.dump(data, f)
+
+# recover the node
+new_node = ThinkNode.from_dict(json.load(open("reasoning_tree.json", "r")))
+```
+
+You can also use `pickle` directly to save the thought tree.
+
+```python
+import pickle
+pickle.dump(reasoning_agent._root, open("reasoning_tree.pkl", "wb"))
+
+# recover the node
+new_node = pickle.load(open("reasoning_tree.pkl", "rb"))
+```
+
+### Cleaning for SFT
+This step finds the best trajectory in the thought tree and converts it to a SFT dataset as a sequence of strings. The best trajectory is determined by following the highest-scoring path from root to leaf.
+
+```python
+def extract_sft_dataset(root):
+    """
+    Extract the best trajectory or multiple equally good trajectories
+    for SFT training.
+
+    Args:
+        root: The root node of the tree.
+
+    Returns:
+        List of best trajectories, where each trajectory is a pair of instruction and response.
+    """
+    instruction = root.content
+    idx = len("# Question: ") + len(root.content) + 1
+
+    def find_leaf_nodes(node):
+        """Recursively find all leaf nodes."""
+        if not node.children:
+            return [node]
+        leafs = []
+        for child in node.children:
+            leafs.extend(find_leaf_nodes(child))
+        return leafs
+
+    # Step 1: Find all leaf nodes
+    leaf_nodes = find_leaf_nodes(root)
+
+    # Step 2: Determine the highest score among leaf nodes
+    max_value = max(leaf_nodes, key=lambda x: x.value).value
+
+    # Step 3: Collect all leaf nodes with the highest score
+    best_leafs = [leaf for leaf in leaf_nodes if leaf.value == max_value]
+
+    # Step 4: Collect trajectories for all the best leaf nodes
+    best_trajectories = [{"instruction": instruction, "response": leaf.trajectory[idx:]} for leaf in best_leafs]
+
+    return best_trajectories
+
+
+# Example usage
+sft_data = extract_sft_dataset(reason_agent._root)
+json.dump(sft_data, open("sft_data.json", "w"), indent=2)
+```
+
+### Cleaning for RLHF (DPO and PPO)
+This step generates preference pairs by comparing sibling nodes in the tree. For each parent node with multiple children, we create training pairs where the higher-scored response is marked as preferred over the lower-scored one.
+
+```python
+def extract_rlhf_preference_dataset(root, contrastive_threshold=0.2):
+    """
+    Extract and generate preference pairs for RLHF training by comparing sibling nodes.
+
+    Args:
+        root: The root node of the tree.
+        contrastive_threshold (float): between (0, 1), a distance measure that we are confidence to call
+            one is positive and another is negative.
+
+    Returns:
+        A list of preference pairs, where each pair contains two responses and
+        indicates which one is preferred.
+    """
+    preference_pairs = []
+
+    assert contrastive_threshold > 0
+    assert contrastive_threshold < 1
+
+    def traverse_tree(node):
+        """Traverse the tree to compare sibling nodes and collect preferences."""
+        if not node.children:
+            return  # Leaf node, no comparisons needed
+
+        # Step 1: Compare all sibling nodes
+        for i in range(len(node.children)):
+            for j in range(len(node.children)):
+                if i == j:
+                    continue
+                child_a, child_b = node.children[i], node.children[j]
+                if child_a.value - child_b.value > contrastive_threshold:
+                    preference_pairs.append({
+                        "instruction": node.trajectory,
+                        "preferred_response": f"Step {child_a.depth}: {child_a.content}",
+                        "dispreferred_response": f"Step {child_b.depth}: {child_b.content}",
+                    })
+
+
+        # Step 2: Recurse into child nodes
+        for child in node.children:
+            traverse_tree(child)
+
+    # Start traversal from the root
+    traverse_tree(root)
+
+    return preference_pairs
+
+
+# Example usage
+rlhf_data = extract_rlhf_preference_dataset(reason_agent._root)
+
+print(f"There are {len(rlhf_data)} pairs of data\n\n")
+json.dump(rlhf_data, open("rlhf_data.json", "w"), indent=2)
+```
+
+The resulting datasets can be used to:
+- Fine-tune a base model using SFT with the best trajectories
+- Train reward models or directly optimize policies using the preference pairs
+- Analyze and improve the reasoning patterns of the agent
+
 ## Key Benefits
 
 1. **Systematic Exploration**: Instead of committing to a single reasoning path, ReasoningAgent explores multiple possibilities systematically.
 
 2. **Quality Control**: The grader agent helps ensure that each step in the reasoning process is sound.
 
-3. **Resource Efficiency**: Beam search focuses computational resources on the most promising paths.
+3. **Transparency**: The visualization tools help understand how the agent arrives at its conclusions.
 
-4. **Transparency**: The visualization tools help understand how the agent arrives at its conclusions.
 
 ## Conclusion
 

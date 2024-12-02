@@ -271,8 +271,6 @@ class ReasoningAgent(AssistantAgent):
 
         while prev_leafs and len(final_answers) < self.beam_size:
             new_leafs = []
-            # print("len(final_answers)", len(final_answers))
-            # print("len(prev_leafs)", len(prev_leafs))
             for node in prev_leafs:
                 if (self.max_depth and node.depth >= self.max_depth) or "TERMINATE" in node.content:
                     # Reached max depth; collect possible answers
@@ -293,7 +291,6 @@ class ReasoningAgent(AssistantAgent):
                 options = re.findall(
                     r"Option \d+:(.+?)(?=Option \d+:|$)", reply, re.DOTALL
                 )  # the options that the thinker provides
-                # print("Options:", options)
                 for option in options:
                     new_leafs.append(
                         ThinkNode(content=option.strip().rstrip(), parent=node)
