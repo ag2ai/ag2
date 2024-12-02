@@ -43,7 +43,8 @@
   "navigation": [
     {
       "group": "",
-      "pages": ["website/docs/Getting-Started"]
+      "pages": ["website/docs/Getting-Started"],
+      "icon": "website/static/img/ag2.svg"
     },
     {
       "group": "",
