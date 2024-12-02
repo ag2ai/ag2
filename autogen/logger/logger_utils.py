@@ -4,15 +4,16 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import datetime
 import inspect
+from datetime import datetime, timezone
+from pathlib import Path, PurePath
 from typing import Any, Dict, List, Tuple, Union
 
 __all__ = ("get_current_ts", "to_dict")
 
 
 def get_current_ts() -> str:
-    return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 def to_dict(
@@ -22,6 +23,8 @@ def to_dict(
 ) -> Any:
     if isinstance(obj, (int, float, str, bool)):
         return obj
+    elif isinstance(obj, (Path, PurePath)):
+        return str(obj)
     elif callable(obj):
         return inspect.getsource(obj).strip()
     elif isinstance(obj, dict):
