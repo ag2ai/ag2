@@ -1,0 +1,304 @@
+# Command Line Code Executor
+
+Command line code execution is the simplest form of code execution. Generally speaking, it will save each code block to a file and the execute that file. This means that each code block is executed in a new process. There are two forms of this executor:
+
+- Docker ([`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor)) - this is where all commands are executed in a Docker container
+- Local ([`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)) - this is where all commands are executed on the host machine
+
+This executor type is similar to the legacy code execution in AutoGen.
+
+## Docker
+
+The [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) will create a Docker container and run all commands within that container. The default image that is used is `python:3-slim`, this can be customized by passing the `image` parameter to the constructor. If the image is not found locally then the class will try to pull it. Therefore, having built the image locally is enough. The only thing required for this image to be compatible with the executor is to have `sh` and `python` installed. Therefore, creating a custom image is a simple and effective way to ensure required system dependencies are available.
+
+You can use the executor as a context manager to ensure the container is cleaned up after use. Otherwise, the `atexit` module will be used to stop the container when the program exits.
+
+### Inspecting the container
+
+If you wish to keep the container around after AutoGen is finished using it for whatever reason (e.g. to inspect the container), then you can set the `auto_remove` parameter to `False` when creating the executor. `stop_container` can also be set to `False` to prevent the container from being stopped at the end of the execution.
+
+### Example
+
+
+```python
+from pathlib import Path
+
+from autogen.coding import CodeBlock, DockerCommandLineCodeExecutor
+
+work_dir = Path("coding")
+work_dir.mkdir(exist_ok=True)
+
+with DockerCommandLineCodeExecutor(work_dir=work_dir) as executor:
+    print(
+        executor.execute_code_blocks(
+            code_blocks=[
+                CodeBlock(language="python", code="print('Hello, World!')"),
+            ]
+        )
+    )
+```
+
+    exit_code=0 output='Hello, World!\n' code_file='coding/tmp_code_07da107bb575cc4e02b0e1d6d99cc204.py'
+
+
+### Combining AutoGen in Docker with a Docker based executor
+
+It is desirable to bundle your AutoGen application into a Docker image. But then, how do you allow your containerised application to execute code in a different container?
+
+The recommended approach to this is called "Docker out of Docker", where the Docker socket is mounted to the main AutoGen container, so that it can spawn and control "sibling" containers on the host. This is better than what is called "Docker in Docker", where the main container runs a Docker daemon and spawns containers within itself. You can read more about this [here](https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/).
+
+To do this you would need to mount the Docker socket into the AutoGen container. This can be done by adding the following to the `docker run` command:
+
+```bash
+-v /var/run/docker.sock:/var/run/docker.sock
+```
+
+This will allow the AutoGen container to spawn and control sibling containers on the host.
+
+If you need to bind a working directory to the AutoGen container but the directory belongs to your host machine, use the `bind_dir` parameter. This will allow the main AutoGen container to bind the *host* directory to the new spawned containers and allow it to access the files within the said directory. If the `bind_dir` is not specified, it will fallback to `work_dir`.
+
+## Local
+
+````{=mdx}
+:::danger
+The local version will run code on your local system. Use it with caution.
+:::
+````
+
+To execute code on the host machine, as in the machine running AutoGen, the [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor) can be used.
+
+### Example
+
+
+```python
+from pathlib import Path
+
+from autogen.coding import CodeBlock, LocalCommandLineCodeExecutor
+
+work_dir = Path("coding")
+work_dir.mkdir(exist_ok=True)
+
+executor = LocalCommandLineCodeExecutor(work_dir=work_dir)
+print(
+    executor.execute_code_blocks(
+        code_blocks=[
+            CodeBlock(language="python", code="print('Hello, World!')"),
+        ]
+    )
+)
+```
+
+    exit_code=0 output='\nHello, World!\n' code_file='coding/065b51a16ee54f3298847518f9e999d7.py'
+
+
+## Using a Python virtual environment
+
+By default, the LocalCommandLineCodeExecutor executes code and installs dependencies within the same Python environment as the AutoGen code. You have the option to specify a Python virtual environment to prevent polluting the base Python environment.
+
+### Example
+
+
+```python
+from autogen.code_utils import create_virtual_env
+from autogen.coding import CodeBlock, LocalCommandLineCodeExecutor
+
+venv_dir = ".venv"
+venv_context = create_virtual_env(venv_dir)
+
+executor = LocalCommandLineCodeExecutor(virtual_env_context=venv_context)
+print(
+    executor.execute_code_blocks(code_blocks=[CodeBlock(language="python", code="import sys; print(sys.executable)")])
+)
+```
+
+## Assigning to an agent
+
+These executors can be used to facilitate the execution of agent written code. 
+
+
+```python
+from pathlib import Path
+
+from autogen import ConversableAgent
+from autogen.coding import DockerCommandLineCodeExecutor
+
+work_dir = Path("coding")
+work_dir.mkdir(exist_ok=True)
+
+executor = DockerCommandLineCodeExecutor(work_dir=work_dir)
+
+code_executor_agent = ConversableAgent(
+    name="code_executor_agent",
+    llm_config=False,
+    code_execution_config={
+        "executor": executor,
+    },
+    human_input_mode="NEVER",
+)
+```
+
+When using code execution it is critical that you update the system prompt of agents you expect to write code to be able to make use of the executor. For example, for the [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) you might setup a code writing agent like so:
+
+
+```python
+# The code writer agent's system message is to instruct the LLM on how to
+# use the Jupyter code executor with IPython kernel.
+code_writer_system_message = """
+You have been given coding capability to solve tasks using Python code.
+In the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.
+    1. When you need to collect info, use the code to output the info you need, for example, browse or search the web, download/read a file, print the content of a webpage or a file, get the current date/time, check the operating system. After sufficient info is printed and the task is ready to be solved based on your language skill, you can solve the task by yourself.
+    2. When you need to perform some task with code, use the code to perform the task and output the result. Finish the task smartly.
+Solve the task step by step if you need to. If a plan is not provided, explain your plan first. Be clear which step uses code, and which step uses your language skill.
+When using code, you must indicate the script type in the code block. The user cannot provide any other feedback or perform any other action beyond executing the code you suggest. The user can't modify your code. So do not suggest incomplete code which requires users to modify. Don't use a code block if it's not intended to be executed by the user.
+If you want the user to save the code in a file before executing it, put # filename: <filename> inside the code block as the first line. Don't include multiple code blocks in one response. Do not ask users to copy and paste the result. Instead, use 'print' function for the output when relevant. Check the execution result returned by the user.
+"""
+
+import os
+
+code_writer_agent = ConversableAgent(
+    "code_writer",
+    system_message=code_writer_system_message,
+    llm_config={"config_list": [{"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    code_execution_config=False,  # Turn off code execution for this agent.
+    max_consecutive_auto_reply=2,
+    human_input_mode="NEVER",
+)
+```
+
+Then we can use these two agents to solve a problem:
+
+
+```python
+import pprint
+
+chat_result = code_executor_agent.initiate_chat(
+    code_writer_agent, message="Write Python code to calculate the 14th Fibonacci number."
+)
+
+pprint.pprint(chat_result)
+```
+
+    [33mcode_executor_agent[0m (to code_writer):
+    
+    Write Python code to calculate the 14th Fibonacci number.
+    
+    --------------------------------------------------------------------------------
+    [33mcode_writer[0m (to code_executor_agent):
+    
+    Sure, we can calculate the Fibonacci series using a few different methods such as recursion, iterative, by using Binet's formula, or by using matrix exponentiation.
+    
+    But, since we only need to calculate the 14th number, we will simply use the iterative method as it's the most efficient for this case.
+    
+    Here is the Python code that solves the task:
+    
+    ```python
+    def fibonacci(n):
+        a, b = 0, 1
+        for _ in range(n):
+            a, b = b, a + b
+        return a
+    
+    print(fibonacci(14))
+    ```
+    
+    In this script, `fibonacci(n)` is a function that calculates the nth Fibonacci number. Inside the function, two variables `a` and `b` are initialised to `0` and `1` which are the first two numbers in the Fibonacci series. Then, a loop runs `n` times (14 times in your case), and in each iteration `a` is replaced with `b` and `b` is replaced with `a + b`, which generates the next number in the series. 
+    
+    The function returns `a`, which is the nth Fibonacci number. The result is then printed to the console.
+    
+    --------------------------------------------------------------------------------
+    [31m
+    >>>>>>>> EXECUTING 1 CODE BLOCKS (inferred languages are [python])...[0m
+    [33mcode_executor_agent[0m (to code_writer):
+    
+    exitcode: 0 (execution succeeded)
+    Code output: 377
+    
+    
+    --------------------------------------------------------------------------------
+    [33mcode_writer[0m (to code_executor_agent):
+    
+    Great! The script has successfully computed the 14th Fibonacci number as 377. If you need to compute other Fibonacci numbers, you can simply change the argument in the `fibonacci()` function call. Please let me know if you need help with anything else.
+    
+    --------------------------------------------------------------------------------
+    [33mcode_executor_agent[0m (to code_writer):
+    
+    
+    
+    --------------------------------------------------------------------------------
+    ChatResult(chat_id=None,
+               chat_history=[{'content': 'Write Python code to calculate the 14th '
+                                         'Fibonacci number.',
+                              'role': 'assistant'},
+                             {'content': 'Sure, we can calculate the Fibonacci '
+                                         'series using a few different methods '
+                                         'such as recursion, iterative, by using '
+                                         "Binet's formula, or by using matrix "
+                                         'exponentiation.\n'
+                                         '\n'
+                                         'But, since we only need to calculate the '
+                                         '14th number, we will simply use the '
+                                         "iterative method as it's the most "
+                                         'efficient for this case.\n'
+                                         '\n'
+                                         'Here is the Python code that solves the '
+                                         'task:\n'
+                                         '\n'
+                                         '```python\n'
+                                         'def fibonacci(n):\n'
+                                         '    a, b = 0, 1\n'
+                                         '    for _ in range(n):\n'
+                                         '        a, b = b, a + b\n'
+                                         '    return a\n'
+                                         '\n'
+                                         'print(fibonacci(14))\n'
+                                         '```\n'
+                                         '\n'
+                                         'In this script, `fibonacci(n)` is a '
+                                         'function that calculates the nth '
+                                         'Fibonacci number. Inside the function, '
+                                         'two variables `a` and `b` are '
+                                         'initialised to `0` and `1` which are the '
+                                         'first two numbers in the Fibonacci '
+                                         'series. Then, a loop runs `n` times (14 '
+                                         'times in your case), and in each '
+                                         'iteration `a` is replaced with `b` and '
+                                         '`b` is replaced with `a + b`, which '
+                                         'generates the next number in the '
+                                         'series. \n'
+                                         '\n'
+                                         'The function returns `a`, which is the '
+                                         'nth Fibonacci number. The result is then '
+                                         'printed to the console.',
+                              'role': 'user'},
+                             {'content': 'exitcode: 0 (execution succeeded)\n'
+                                         'Code output: 377\n',
+                              'role': 'assistant'},
+                             {'content': 'Great! The script has successfully '
+                                         'computed the 14th Fibonacci number as '
+                                         '377. If you need to compute other '
+                                         'Fibonacci numbers, you can simply change '
+                                         'the argument in the `fibonacci()` '
+                                         'function call. Please let me know if you '
+                                         'need help with anything else.',
+                              'role': 'user'},
+                             {'content': '', 'role': 'assistant'}],
+               summary='',
+               cost=({'gpt-4-0613': {'completion_tokens': 302,
+                                     'cost': 0.04842,
+                                     'prompt_tokens': 1010,
+                                     'total_tokens': 1312},
+                      'total_cost': 0.04842},
+                     {'gpt-4-0613': {'completion_tokens': 302,
+                                     'cost': 0.04842,
+                                     'prompt_tokens': 1010,
+                                     'total_tokens': 1312},
+                      'total_cost': 0.04842}),
+               human_input=[])
+
+
+Finally, stop the container. Or better yet use a context manager for it to be stopped automatically.
+
+
+```python
+executor.stop()
+```

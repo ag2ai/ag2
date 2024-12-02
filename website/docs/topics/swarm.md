@@ -1,0 +1,506 @@
+# Swarm Ochestration
+
+With AG2, you can initiate a Swarm Chat similar to OpenAI's [Swarm](https://github.com/openai/swarm). This orchestration offers two main features:
+
+- **Headoffs**: Agents can transfer control to another agent via function calls, enabling smooth transitions within workflows.  
+- **Context Variables**: Agents can dynamically update shared variables through function calls, maintaining context and adaptability throughout the process.
+
+Instead of sending a task to a single LLM agent, you can assign it to a swarm of agents. Each agent in the swarm can decide whether to hand off the task to another agent. The chat terminates when the last active agent's response is a plain string (i.e., it doesn't suggest a tool call or handoff).  
+
+## Components
+We now introduce the main components that need to be used to create a swarm chat. 
+
+### Create a `SwarmAgent`
+
+All the agents passed to the swarm chat should be instances of `SwarmAgent`. `SwarmAgent` is very similar to `AssistantAgent`, but it has some additional features to support function registration and handoffs. When creating a `SwarmAgent`, you can pass in a list of functions. These functions will be converted to schemas to be passed to the LLMs, and you don't need to worry about registering the functions for execution. You can also pass back a `SwarmResult` class, where you can return a value, the next agent to call, and update context variables at the same time.
+
+**Notes for creating the function calls**    
+- For input arguments, you must define the type of the argument, otherwise, the registration will fail (e.g. `arg_name: str`).      
+- If your function requires access or modification of the context variables, you must pass in `context_variables: dict` as one argument. This argument will not be visible to the LLM (removed when registering the function schema). But when called, the global context variables will be passed in by the swarm chat.     
+- The docstring of the function will be used as the prompt. So make sure to write a clear description.     
+- The function name will be used as the tool name.
+
+### Registering Handoffs
+While you can create a function to decide what next agent to call, we provide a quick way to register the handoff using `ON_CONDITION`. We will craft this transition function and add it to the LLM config directly.
+
+```python
+agent_2 = SwarmAgent(...)
+agent_3 = SwarmAgent(...)
+
+# Register the handoff
+agent_1 = SwarmAgent(...)
+agent_1.handoff(hand_to=[ON_CONDITION(agent_2, "condition_1"), ON_CONDITION(agent_3, "condition_2")])
+
+# This is equivalent to:
+def transfer_to_agent_2():
+    """condition_1"""
+    return agent_2
+
+def transfer_to_agent_3():
+    """condition_1"""
+    return agent_3
+    
+agent_1 = SwarmAgent(..., functions=[transfer_to_agent_2, transfer_to_agent_3])
+# You can also use agent_1.add_functions to add more functions after initialization
+```
+
+### AFTER_WORK
+
+When the last active agent's response doesn't suggest a tool call or handoff, the chat will terminate by default. However, you can register an `AFTER_WORK` handoff to define a fallback agent if you don't want the chat to end at this agent. At the swarm chat level, you also pass in an `AFTER_WORK` handoff to define the fallback mechanism for the entire chat.
+If this parameter is set for the agent and the chat, we will prioritize the agent's setting. There should only be one `AFTER_WORK`. If multiple `AFTER_WORK` handoffs are passed, only the last one will be used.
+
+Besides fallback to an agent, we provide 3 `AfterWorkOption`:     
+- `TERMINATE`: Terminate the chat    
+- `STAY`: Stay at the current agent    
+- `REVERT_TO_USER`: Revert to the user agent. Only if a user agent is passed in when initializing. (See below for more details)    
+
+```python
+agent_1 = SwarmAgent(...)
+
+# Register the handoff
+agent_1.handoff(hand_to=[
+ ON_CONDITION(...), 
+ ON_CONDITION(...),
+ AFTER_WORK(agent_4) # Fallback to agent_4 if no handoff is suggested
+])
+
+agent_2.handoff(hand_to=[AFTER_WORK(AfterWorkOption.TERMINATE)]) # Terminate the chat if no handoff is suggested
+```
+
+### Initialize SwarmChat with `initiate_swarm_chat`
+
+After a set of swarm agents are created, you can initiate a swarm chat by calling `initiate_swarm_chat`.
+
+```python
+chat_history, context_variables, last_active_agent = initiate_swarm_chat(
+    initial_agent=agent_1, # the first agent to start the chat
+    agents=[agent_1, agent_2, agent_3], # a list of agents
+    messages=[{"role": "user", "content": "Hello"}], # a list of messages to start the chat, you can also pass in one string
+    user_agent=user_agent, # optional, if you want to revert to the user agent
+    context_variables={"key": "value"} # optional, initial context variables
+)
+```
+
+How we handle messages:     
+- Case 1: If you pass in one single message    
+    - If there is a name in that message, we will assume this message is from that agent. (It will be error if that name doesn't match any agent you passed in.)    
+    - If there is no name, 1. User agent passed in: we assume this message is from the user agent. 2. No user agent passed in: we will create a temporary user agent just to start the chat.    
+- Case 2: We will use the [Resume GroupChat](https://ag2ai.github.io/ag2/docs/topics/groupchat/resuming_groupchat) feature to resume the chat. The `name` fields in these messages must be one of the names of the agents you passed in, otherwise, it will be an error.
+
+## Q&As
+
+> How are context variables updated?
+
+The context variables will only be updated through custom function calls when returning a `SwarmResult` object. In fact, all interactions with context variables will be done through function calls (accessing and updating). The context variables dictionary is a reference, and any modification will be done in place.
+
+> What is the difference between ON_CONDITION and AFTER_WORK?
+
+When registering an ON_CONDITION handoff, we are creating a function schema to be passed to the LLM. The LLM will decide whether to call this function.
+
+When registering an AFTER_WORK handoff, we are defining the fallback mechanism when no tool calls are suggested. This is a higher level of control from the swarm chat level.
+
+> When to pass in a user agent?
+
+If your application requires interactions with the user, you can pass in a user agent to the groupchat, so that don't need to write an outer loop to accept user inputs and call swarm.
+
+
+## Demonstration
+
+
+### Create Swarm Agents
+
+
+```python
+import autogen
+
+config_list = autogen.config_list_from_json(...)
+llm_config = {"config_list": config_list}
+```
+
+
+```python
+import random
+
+from autogen import (
+    AFTER_WORK,
+    ON_CONDITION,
+    AfterWorkOption,
+    SwarmAgent,
+    SwarmResult,
+    initiate_swarm_chat,
+)
+
+
+# 1. A function that returns a value of "success" and updates the context variable "1" to True
+def update_context_1(context_variables: dict) -> str:
+    context_variables["1"] = True
+    return SwarmResult(value="success", context_variables=context_variables)
+
+
+# 2. A function that returns an SwarmAgent object
+def transfer_to_agent_2() -> SwarmAgent:
+    """Transfer to agent 2"""
+    return agent_2
+
+
+# 3. A function that returns the value of "success", updates the context variable and transfers to agent 3
+def update_context_2_and_transfer_to_3(context_variables: dict) -> str:
+    context_variables["2"] = True
+    return SwarmResult(value="success", context_variables=context_variables, agent=agent_3)
+
+
+# 4. A function that returns a normal value
+def get_random_number() -> str:
+    return random.randint(1, 100)
+
+
+def update_context_3_with_random_number(context_variables: dict, random_number: int) -> str:
+    context_variables["3"] = random_number
+    return SwarmResult(value="success", context_variables=context_variables)
+
+
+agent_1 = SwarmAgent(
+    name="Agent_1",
+    system_message="You are Agent 1, first, call the function to update context 1, and transfer to Agent 2",
+    llm_config=llm_config,
+    functions=[update_context_1, transfer_to_agent_2],
+)
+
+agent_2 = SwarmAgent(
+    name="Agent_2",
+    system_message="You are Agent 2, call the function that updates context 2 and transfer to Agent 3",
+    llm_config=llm_config,
+    functions=[update_context_2_and_transfer_to_3],
+)
+
+agent_3 = SwarmAgent(
+    name="Agent_3",
+    system_message="You are Agent 3, tell a joke",
+    llm_config=llm_config,
+)
+
+agent_4 = SwarmAgent(
+    name="Agent_4",
+    system_message="You are Agent 4, call the function to get a random number",
+    llm_config=llm_config,
+    functions=[get_random_number],
+)
+
+agent_5 = SwarmAgent(
+    name="Agent_5",
+    system_message="Update context 3 with the random number.",
+    llm_config=llm_config,
+    functions=[update_context_3_with_random_number],
+)
+
+
+# This is equivalent to writing a transfer function
+agent_3.register_hand_off(ON_CONDITION(agent_4, "Transfer to Agent 4"))
+
+agent_4.register_hand_off([AFTER_WORK(agent_5)])
+
+print("Agent 1 function schema:")
+for func_schema in agent_1.llm_config["tools"]:
+    print(func_schema)
+
+print("Agent 3 function schema:")
+for func_schema in agent_3.llm_config["tools"]:
+    print(func_schema)
+```
+
+    Agent 1 function schema:
+    {'type': 'function', 'function': {'description': '', 'name': 'update_context_1', 'parameters': {'type': 'object', 'properties': {}}}}
+    {'type': 'function', 'function': {'description': 'Transfer to agent 2', 'name': 'transfer_to_agent_2', 'parameters': {'type': 'object', 'properties': {}}}}
+    Agent 3 function schema:
+    {'type': 'function', 'function': {'description': 'Transfer to Agent 4', 'name': 'transfer_to_Agent_4', 'parameters': {'type': 'object', 'properties': {}}}}
+
+
+### Start Chat
+
+
+```python
+context_variables = {"1": False, "2": False, "3": False}
+chat_result, context_variables, last_agent = initiate_swarm_chat(
+    initial_agent=agent_1,
+    agents=[agent_1, agent_2, agent_3, agent_4, agent_5],
+    messages="start",
+    context_variables=context_variables,
+    after_work=AFTER_WORK(AfterWorkOption.TERMINATE),  # this is the default
+)
+```
+
+    [33m_User[0m (to chat_manager):
+    
+    start
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_1
+    [0m
+    [33mAgent_1[0m (to chat_manager):
+    
+    [32m***** Suggested tool call (call_kfcEAY2IeRZww06CQN7lbxOf): update_context_1 *****[0m
+    Arguments: 
+    {}
+    [32m*********************************************************************************[0m
+    [32m***** Suggested tool call (call_izl5eyV8IQ0Wg6XY2SaR1EJM): transfer_to_agent_2 *****[0m
+    Arguments: 
+    {}
+    [32m************************************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Tool_Execution
+    [0m
+    [35m
+    >>>>>>>> EXECUTING FUNCTION update_context_1...[0m
+    [35m
+    >>>>>>>> EXECUTING FUNCTION transfer_to_agent_2...[0m
+    [33mTool_Execution[0m (to chat_manager):
+    
+    [32m***** Response from calling tool (call_kfcEAY2IeRZww06CQN7lbxOf) *****[0m
+    
+    [32m**********************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m***** Response from calling tool (call_izl5eyV8IQ0Wg6XY2SaR1EJM) *****[0m
+    SwarmAgent --> Agent_2
+    [32m**********************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_2
+    [0m
+    [33mAgent_2[0m (to chat_manager):
+    
+    [32m***** Suggested tool call (call_Yf5DTGaaYkA726ubnfJAvQMq): update_context_2_and_transfer_to_3 *****[0m
+    Arguments: 
+    {}
+    [32m***************************************************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Tool_Execution
+    [0m
+    [35m
+    >>>>>>>> EXECUTING FUNCTION update_context_2_and_transfer_to_3...[0m
+    [33mTool_Execution[0m (to chat_manager):
+    
+    [32m***** Response from calling tool (call_Yf5DTGaaYkA726ubnfJAvQMq) *****[0m
+    
+    [32m**********************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_3
+    [0m
+    [33mAgent_3[0m (to chat_manager):
+    
+    [32m***** Suggested tool call (call_jqZNHuMtQYeNh5Mq4pV2uwAj): transfer_to_Agent_4 *****[0m
+    Arguments: 
+    {}
+    [32m************************************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Tool_Execution
+    [0m
+    [35m
+    >>>>>>>> EXECUTING FUNCTION transfer_to_Agent_4...[0m
+    [33mTool_Execution[0m (to chat_manager):
+    
+    [32m***** Response from calling tool (call_jqZNHuMtQYeNh5Mq4pV2uwAj) *****[0m
+    SwarmAgent --> Agent_4
+    [32m**********************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_4
+    [0m
+    [33mAgent_4[0m (to chat_manager):
+    
+    [32m***** Suggested tool call (call_KeNGv98klvDZsrAX10Ou3I71): get_random_number *****[0m
+    Arguments: 
+    {}
+    [32m**********************************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Tool_Execution
+    [0m
+    [35m
+    >>>>>>>> EXECUTING FUNCTION get_random_number...[0m
+    [33mTool_Execution[0m (to chat_manager):
+    
+    [32m***** Response from calling tool (call_KeNGv98klvDZsrAX10Ou3I71) *****[0m
+    27
+    [32m**********************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_4
+    [0m
+    [33mAgent_4[0m (to chat_manager):
+    
+    The random number generated is 27.
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_5
+    [0m
+    [33mAgent_5[0m (to chat_manager):
+    
+    [32m***** Suggested tool call (call_MlSGNNktah3m3QGssWBEzxCe): update_context_3_with_random_number *****[0m
+    Arguments: 
+    {"random_number":27}
+    [32m****************************************************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Tool_Execution
+    [0m
+    [35m
+    >>>>>>>> EXECUTING FUNCTION update_context_3_with_random_number...[0m
+    [33mTool_Execution[0m (to chat_manager):
+    
+    [32m***** Response from calling tool (call_MlSGNNktah3m3QGssWBEzxCe) *****[0m
+    
+    [32m**********************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_5
+    [0m
+    [33mAgent_5[0m (to chat_manager):
+    
+    The random number 27 has been successfully updated in context 3.
+    
+    --------------------------------------------------------------------------------
+
+
+
+```python
+print(context_variables)
+```
+
+    {'1': True, '2': True, '3': 27}
+
+
+### Demo with User Agent
+
+We pass in a user agent to the swarm chat to accept user inputs. With `agent_6`, we register an `AFTER_WORK` handoff to revert to the user agent when no tool calls are suggested. 
+
+
+```python
+from autogen import UserProxyAgent
+
+user_agent = UserProxyAgent(name="User", code_execution_config=False)
+
+agent_6 = SwarmAgent(
+    name="Agent_6",
+    system_message="You are Agent 6. Your job is to tell jokes.",
+    llm_config=llm_config,
+)
+
+agent_7 = SwarmAgent(
+    name="Agent_7",
+    system_message="You are Agent 7, explain the joke.",
+    llm_config=llm_config,
+)
+
+agent_6.register_hand_off(
+    [
+        ON_CONDITION(
+            agent_7, "Used to transfer to Agent 7. Don't call this function, unless the user explicitly tells you to."
+        ),
+        AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
+    ]
+)
+
+chat_result, _, _ = initiate_swarm_chat(
+    initial_agent=agent_6,
+    agents=[agent_6, agent_7],
+    user_agent=user_agent,
+    messages="start",
+)
+```
+
+    [33mUser[0m (to chat_manager):
+    
+    start
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_6
+    [0m
+    [33mAgent_6[0m (to chat_manager):
+    
+    Why did the scarecrow win an award? 
+    
+    Because he was outstanding in his field! 
+    
+    Want to hear another one?
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: User
+    [0m
+    [33mUser[0m (to chat_manager):
+    
+    yes
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_6
+    [0m
+    [33mAgent_6[0m (to chat_manager):
+    
+    Why don't skeletons fight each other?
+    
+    They don't have the guts! 
+    
+    How about another?
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: User
+    [0m
+    [33mUser[0m (to chat_manager):
+    
+    transfer
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_6
+    [0m
+    [33mAgent_6[0m (to chat_manager):
+    
+    [32m***** Suggested tool call (call_gQ9leFamxgzQp8ZVQB8rUH73): transfer_to_Agent_7 *****[0m
+    Arguments: 
+    {}
+    [32m************************************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Tool_Execution
+    [0m
+    [35m
+    >>>>>>>> EXECUTING FUNCTION transfer_to_Agent_7...[0m
+    [33mTool_Execution[0m (to chat_manager):
+    
+    [32m***** Response from calling tool (call_gQ9leFamxgzQp8ZVQB8rUH73) *****[0m
+    SwarmAgent --> Agent_7
+    [32m**********************************************************************[0m
+    
+    --------------------------------------------------------------------------------
+    [32m
+    Next speaker: Agent_7
+    [0m
+    [33mAgent_7[0m (to chat_manager):
+    
+    The joke about the scarecrow winning an award is a play on words. It utilizes the term "outstanding," which can mean both exceptionally good (in the context of the scarecrow's performance) and literally being "standing out" in a field (where scarecrows are placed). So, the double meaning creates a pun that makes the joke humorous. 
+    
+    The skeleton joke works similarly. When it says skeletons "don't have the guts," it plays on the literal fact that skeletons don't have internal organs (guts), and metaphorically, "having guts" means having courage. The humor comes from this clever wordplay.
+    
+    --------------------------------------------------------------------------------
+

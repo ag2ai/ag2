@@ -1,0 +1,200 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Starter Kit",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0D9373",
+    "light": "#07C983",
+    "dark": "#0D9373",
+    "anchors": {
+      "from": "#0D9373",
+      "to": "#07C983"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Support",
+      "url": "mailto:support@ag2.ai"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "AG2.ai",
+    "url": "https://ag2.ai/"
+  },
+  "tabs": [
+    {
+      "name": "Documentation",
+      "url": "website/docs"
+    },
+    {
+      "name": "Community Talks",
+      "url": "website/talks"
+    },
+    {
+      "name": "Blog",
+      "url": "website/blog"
+    }
+  ],
+  "anchors": [],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": ["website/docs/Getting-Started"]
+    },
+    {
+      "group": "Installation",
+      "pages": [
+        "website/docs/installation/Installation",
+        "website/docs/installation/Docker",
+        "website/docs/installation/Optional-Dependencies"
+      ]
+    },
+    {
+      "group": "Tutorials",
+      "pages": [
+        "website/docs/tutorial/introduction",
+        "website/docs/tutorial/chat-termination",
+        "website/docs/tutorial/human-in-the-loop",
+        "website/docs/tutorial/tool-use",
+        "website/docs/tutorial/code-executors",
+        "website/docs/tutorial/conversation-patterns",
+        "website/docs/tutorial/what-next"
+      ]
+    },
+    {
+      "group": "Use Cases",
+      "pages": [
+        "website/docs/Use-Cases/agent_chat",
+        "website/docs/Use-Cases/enhanced_inference"
+      ]
+    },
+    {
+      "group": "User Guide",
+      "pages": [
+        {
+          "group": "Code Execution",
+          "pages": [
+            "website/docs/topics/code-execution/cli-code-executor",
+            "website/docs/topics/code-execution/custom-executor",
+            "website/docs/topics/code-execution/jupyter-code-executor",
+            "website/docs/topics/code-execution/user-defined-functions"
+          ]
+        },
+        {
+          "group": "OpenAI Assistant",
+          "pages": ["website/docs/topics/openai-assistant/gpt_assistant_agent"]
+        },
+        {
+          "group": "GroupChat",
+          "pages": [
+            "website/docs/topics/groupchat/customized_speaker_selection",
+            "website/docs/topics/groupchat/resuming_groupchat",
+            "website/docs/topics/groupchat/transform_messages_speaker_selection",
+            "website/docs/topics/groupchat/using_custom_model_client_classes"
+          ]
+        },
+        {
+          "group": "Using Non-OpenAI Models",
+          "pages": [
+            "website/docs/topics/non-openai-models/about-using-nonopenai-models",
+            "website/docs/topics/non-openai-models/best-tips-for-nonopenai-models",
+            "website/docs/topics/non-openai-models/cloud-gemini_vertexai",
+            "website/docs/topics/non-openai-models/cloud-gemini",
+            "website/docs/topics/non-openai-models/cloud-groq",
+            "website/docs/topics/non-openai-models/cloud-mistralai",
+            "website/docs/topics/non-openai-models/cloud-togetherai",
+            "website/docs/topics/non-openai-models/local-litellm-ollama",
+            "website/docs/topics/non-openai-models/local-lm-studio",
+            "website/docs/topics/non-openai-models/local-ollama"
+          ]
+        },
+        {
+          "group": "CaptainAgent",
+          "pages": [
+            "website/docs/topics/captainagent/agent_library",
+            "website/docs/topics/captainagent/configurations",
+            "website/docs/topics/captainagent/tool_library"
+          ]
+        },
+        {
+          "group": "Handling Long Contexts",
+          "pages": [
+            "website/docs/topics/handling_long_contexts/compressing_text_w_llmligua",
+            "website/docs/topics/handling_long_contexts/intro_to_transform_messages"
+          ]
+        },
+        "website/docs/topics/llm-caching",
+        "website/docs/topics/llm-observability",
+        "website/docs/topics/llm_configuration",
+        {
+          "group": "Prompting and Reasoning",
+          "pages": [
+            "website/docs/topics/prompting-and-reasoning/react",
+            "website/docs/topics/prompting-and-reasoning/reflection"
+          ]
+        },
+        "website/docs/topics/retrieval_augmentation",
+        "website/docs/topics/swarm",
+        "website/docs/topics/task_decomposition"
+      ]
+    },
+    {
+      "group": "FAQ",
+      "pages": ["website/docs/FAQ"]
+    },
+    {
+      "group": "AutoGen Studio",
+      "pages": [
+        "website/docs/autogen-studio/getting-started",
+        "website/docs/autogen-studio/usage",
+        "website/docs/autogen-studio/faqs"
+      ]
+    },
+    {
+      "group": "Ecosystem",
+      "pages": [
+        "website/docs/ecosystem/agentops",
+        "website/docs/ecosystem/azure_cosmos_db",
+        "website/docs/ecosystem/composio",
+        "website/docs/ecosystem/databricks",
+        "website/docs/ecosystem/llamaindex",
+        "website/docs/ecosystem/mem0",
+        "website/docs/ecosystem/memgpt",
+        "website/docs/ecosystem/microsoft-fabric",
+        "website/docs/ecosystem/ollama",
+        "website/docs/ecosystem/pgvector",
+        "website/docs/ecosystem/portkey",
+        "website/docs/ecosystem/promptflow"
+      ]
+    },
+    {
+      "group": "Contributor Guide",
+      "pages": [
+        "website/docs/contributor-guide/contributing",
+        "website/docs/contributor-guide/docker",
+        "website/docs/contributor-guide/documentation",
+        "website/docs/contributor-guide/file-bug-report",
+        "website/docs/contributor-guide/maintainer",
+        "website/docs/contributor-guide/pre-commit",
+        "website/docs/contributor-guide/tests"
+      ]
+    },
+    {
+      "group": "Research",
+      "pages": ["website/docs/Research"]
+    },
+    {
+      "group": "Migration Guide",
+      "pages": ["website/docs/Migration-Guide"]
+    }
+  ],
+  "footerSocials": {
+    "x": "https://x.com/ag2ai",
+    "github": "https://github.com/ag2ai",
+    "discord": "https://discord.gg/pAbnFJrkgZ"
+  }
+}
