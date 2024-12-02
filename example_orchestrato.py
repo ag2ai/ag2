@@ -95,7 +95,7 @@ async def main() -> None:
     orchestrator = OrchestratorAgent(
         name="Orchestrator",
         llm_config=llm_config,
-        agents=[coder,websurfer],
+        agents=[websurfer],
         max_consecutive_auto_reply=10,
         max_stalls_before_replan=3,  
         max_replans=3, 
@@ -103,7 +103,8 @@ async def main() -> None:
         description="An orchestrator that manages conversation flow and handles errors."
     )
 
-    task = """Go to amazon.com and find a good beginner 3d printer, pick any good one for under 300 dollars. """
+    task = """Go to zeit.de. Accept the cookie banner. After the cookie banner is successfully accepted, click on the first article."""
+    #task = """Go to amazon.com and find a good beginner 3d printer, pick any good one for under 300 dollars. """
     massages = [
         {"role": "user", "content": task}]
     result = await orchestrator.a_generate_reply(messages=massages)

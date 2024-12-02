@@ -811,14 +811,14 @@ class MultimodalWebSurfer(ConversableAgent):
 
     async def _click_id(self, identifier: str) -> None:
         assert self._page is not None
-        target = self._page.locator(f"[__elementId={identifier}]")
+        target = self._page.locator(f"[__elementId='{identifier}']")
 
         # See if it exists
         try:
             await target.wait_for(timeout=200)
         except TimeoutError:
             try: 
-                target = self._page.locator(f"[__elementId='{identifier}']")
+                target = self._page.locator(f"[__elementId={identifier}]")
                 await target.wait_for(timeout=200)
             except TimeoutError:
                 raise ValueError("No such element.") from None
@@ -852,13 +852,17 @@ class MultimodalWebSurfer(ConversableAgent):
 
     async def _fill_id(self, identifier: str, value: str) -> None:
         assert self._page is not None
-        target = self._page.locator(f"[__elementId='{identifier}']")
+        target = self._page.locator(f"[__elementId={identifier}]")
 
         # See if it exists
         try:
-            await target.wait_for(timeout=100)
+            await target.wait_for(timeout=200)
         except TimeoutError:
-            raise ValueError("No such element.") from None
+            try: 
+                target = self._page.locator(f"[__elementId='{identifier}']")
+                await target.wait_for(timeout=200)
+            except TimeoutError:
+                raise ValueError("No such element.") from None
 
         # Fill it
         await target.scroll_into_view_if_needed()
@@ -978,7 +982,7 @@ class MultimodalWebSurfer(ConversableAgent):
         )
 
         # Generate the response
-        is_valid_response, response = self.generate_oai_reply(messages=messages)
+        is_valid_response, response = await self.a_generate_oai_reply(messages=messages)
         assert is_valid_response
         assert isinstance(response, str)
         return response
@@ -1026,7 +1030,7 @@ class MultimodalWebSurfer(ConversableAgent):
             }
         )
         
-        is_valid_response, response = self.generate_oai_reply(messages=messages)
+        is_valid_response, response = await self.a_generate_oai_reply(messages=messages)
 
         assert is_valid_response
         assert isinstance(response, str)
