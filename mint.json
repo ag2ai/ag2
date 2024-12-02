@@ -42,6 +42,7 @@
   "anchors": [],
   "navigation": [
     {
+      "group": "",
       "pages": ["website/docs/Getting-Started"]
     },
     {
