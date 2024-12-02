@@ -4,7 +4,8 @@ authors: sonichi
 tags: [LLM, GPT, research]
 ---
 
-![](website/static/images/nexla_autogen-e105b0dd9a1db16a51a10dc967a17357.png)
+![level 2 algebra](website/static/images/blog-images/blog-1/level2algebra-659ba95286432d9945fc89e84d606797.png)
+
 
 **TL;DR:**
 
@@ -51,16 +52,16 @@ The first figure in this blog post shows the average accuracy and average infere
 Surprisingly, the tuned gpt-3.5-turbo model is selected as a better model and it vastly outperforms untuned gpt-4 in accuracy (92% vs. 70%) with equal or 2.5 times higher inference budget.
 The same observation can be obtained on the level 3 Algebra test set.
 
-![level 3 algebra](website/blog/2023-04-21-LLM-tuning-math/img/level3algebra.png)
+![level 3 algebra](website/static/images/blog-images/blog-1/level3algebra-94e87a683ac8832ac7ae6f41f30131a4.png)
 
 However, the selected model changes on level 4 Algebra.
 
-![level 4 algebra](website/blog/2023-04-21-LLM-tuning-math/img/level4algebra.png)
+![level 4 algebra](website/static/images/blog-images/blog-1/level4algebra-492beb22490df30d6cc258f061912dcd.png)
 
 This time gpt-4 is selected as the best model. The tuned gpt-4 achieves much higher accuracy (56% vs. 44%) and lower cost than the untuned gpt-4.
 On level 5 the result is similar.
 
-![level 5 algebra](website/blog/2023-04-21-LLM-tuning-math/img/level5algebra.png)
+![level 5 algebra](website/static/images/blog-images/blog-1/level5algebra-8fba701551334296d08580b4b489fe56.png)
 
 We can see that AutoGen has found different optimal model and inference parameters for each subset of a particular level, which shows that these parameters matter in cost-sensitive LLM applications and need to be carefully tuned or adapted.
 
