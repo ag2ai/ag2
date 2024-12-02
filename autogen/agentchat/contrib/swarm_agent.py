@@ -122,6 +122,11 @@ def initiate_swarm_chat(
         if tool_execution._next_agent is not None:
             next_agent = tool_execution._next_agent
             tool_execution._next_agent = None
+            
+            # Check for string, access agent from group chat.
+            if isinstance(next_agent, str):
+                next_agent = groupchat.agent_by_name(name=next_agent)
+            
             return next_agent
 
         # get the last swarm agent
@@ -228,7 +233,7 @@ class SwarmResult(BaseModel):
     """
 
     values: str = ""
-    agent: Optional["SwarmAgent"] = None
+    agent: Optional[Union["SwarmAgent", str]] = None
     context_variables: Dict[str, Any] = {}
 
     class Config:  # Add this inner class
