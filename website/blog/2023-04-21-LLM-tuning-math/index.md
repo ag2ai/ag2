@@ -4,8 +4,6 @@ authors: sonichi
 tags: [LLM, GPT, research]
 ---
 
-![level 2 algebra](website/blog/2023-04-21-LLM-tuning-math/img/level2algebra.png)
-
 ![](website/static/images/nexla_autogen-e105b0dd9a1db16a51a10dc967a17357.png)
 
 **TL;DR:**
