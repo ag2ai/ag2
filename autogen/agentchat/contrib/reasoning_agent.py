@@ -54,6 +54,29 @@ Option 4: Perform Y.
 class ThinkNode:
 
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
+        """A node in a tree structure representing a step in the reasoning process.
+
+        This class implements a tree node that stores content (text describing a reasoning step),
+        maintains parent-child relationships, tracks node statistics, and provides utilities
+        for traversing/visualizing the reasoning path.
+
+        Args:
+            content (str): The text content/description for this reasoning step
+            parent (Optional[ThinkNode]): The parent node in the tree, if any
+
+        Attributes:
+            content (str): The text content/description for this reasoning step
+            value (Optional[float]): A numeric score/value assigned to this node
+            parent (Optional[ThinkNode]): Reference to parent node
+            depth (int): The depth of this node in the tree (root = 0)
+            children (List[ThinkNode]): List of child nodes
+            visits (int): Number of times this node has been visited during search
+
+        The node automatically maintains the tree structure by:
+        - Setting its depth based on parent's depth + 1
+        - Adding itself to parent's children list if parent exists
+        - Providing trajectory utilities to get the full path from root to this node
+        """
         self.content = content
         self.value = None
         self.parent = parent
@@ -65,12 +88,22 @@ class ThinkNode:
 
     @property
     def _trajectory_arr(self) -> List[str]:
+        """Get the full path from root to this node as a list of strings.
+        
+        Returns:
+            List[str]: List containing the content of each node from root to current node
+        """
         if self.parent:
             return self.parent._trajectory_arr + [self.content]
         return ["# Question: " + self.content]
 
     @property
     def trajectory(self) -> str:
+        """Get a formatted string representation of the path from root to this node.
+        
+        Returns:
+            str: A formatted string showing the question and each step in the reasoning process
+        """
         traj = self._trajectory_arr
         ans = traj[0]
         for i, option in enumerate(traj[1:]):
@@ -84,7 +117,11 @@ class ThinkNode:
         return self.__str__()
 
     def to_dict(self) -> Dict:
-        """Convert ThinkNode to dictionary representation."""
+        """Convert ThinkNode to dictionary representation.
+        
+        Returns:
+            Dict: Dictionary containing all node attributes and recursive children
+        """
         return {
             "content": self.content,
             "value": self.value,
@@ -95,7 +132,15 @@ class ThinkNode:
 
     @classmethod
     def from_dict(cls, data: Dict, parent: Optional["ThinkNode"] = None) -> "ThinkNode":
-        """Create ThinkNode from dictionary representation."""
+        """Create ThinkNode from dictionary representation.
+        
+        Args:
+            data (Dict): Dictionary containing node data
+            parent (Optional[ThinkNode]): Parent node to attach to
+            
+        Returns:
+            ThinkNode: Reconstructed node with all children
+        """
         node = cls(content=data["content"], parent=parent)
         node.value = data["value"]
         node.depth = data["depth"]
@@ -111,6 +156,16 @@ class ThinkNode:
 class ReasoningAgent(AssistantAgent):
 
     def __init__(self, name, llm_config, max_depth=4, beam_size=3, answer_approach="pool", verbose=True) -> None:
+        """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
+        
+        Args:
+            name: Name of the agent
+            llm_config: Configuration for the language model
+            max_depth (int): Maximum depth of the reasoning tree
+            beam_size (int): Number of parallel reasoning paths to maintain
+            answer_approach (str): Either "pool" or "best" - how to generate final answer
+            verbose (bool): Whether to show intermediate steps
+        """
         super().__init__(name=name, llm_config=llm_config)
         self.max_depth = max_depth
         self.beam_size = beam_size
@@ -127,6 +182,14 @@ class ReasoningAgent(AssistantAgent):
         self.register_reply([Agent, None], ReasoningAgent.generate_response)
 
     def rate_node(self, node: ThinkNode) -> float:
+        """Rate the quality of a reasoning path using the grader agent.
+        
+        Args:
+            node (ThinkNode): Node containing the reasoning trajectory to evaluate
+            
+        Returns:
+            float: Normalized score between 0 and 1 indicating trajectory quality
+        """
         self.send(
             message=f"Rate the trajectory:\n{node.trajectory}", recipient=self.grader, request_reply=True, silent=False
         )
@@ -139,6 +202,19 @@ class ReasoningAgent(AssistantAgent):
         return reward
 
     def generate_response(self, messages, sender, config=None):
+        """Generate a response using tree-of-thought reasoning.
+        
+        Implements beam search through a tree of reasoning steps, using the thinker
+        agent to generate possible next steps and the grader agent to evaluate paths.
+        
+        Args:
+            messages: Input messages to respond to
+            sender: Agent sending the messages
+            config: Optional configuration
+            
+        Returns:
+            Tuple[bool, str]: Success flag and generated response
+        """
         if sender == self:
             return False, ""  # Defer the LLM call to next reply functions.
 
