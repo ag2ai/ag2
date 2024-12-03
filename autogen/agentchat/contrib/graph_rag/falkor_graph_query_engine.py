@@ -81,16 +81,6 @@ class FalkorGraphQueryEngine:
         """
         Build the knowledge graph with input documents.
         """
-        self.knowledge_graph = KnowledgeGraph(
-            name=self.name,
-            host=self.host,
-            port=self.port,
-            username=self.username,
-            password=self.password,
-            model_config=KnowledgeGraphModelConfig.with_model(self.model),
-            ontology=self.ontology,
-        )
-
         sources = []
         for doc in input_doc:
             if os.path.exists(doc.path_or_url):
@@ -104,13 +94,22 @@ class FalkorGraphQueryEngine:
                     model=self.model,
                 )
 
+            self.knowledge_graph = KnowledgeGraph(
+                name=self.name,
+                host=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                model_config=KnowledgeGraphModelConfig.with_model(self.model),
+                ontology=self.ontology,
+            )
+
             self.knowledge_graph.process_sources(sources)
 
+            # Establishing a chat session will maintain the history
+            self._chat_session = self.knowledge_graph.chat_session()
         else:
             raise ValueError("No input documents could be loaded.")
-
-        # Establishing a chat session will maintain the history
-        self._chat_session = self.knowledge_graph.chat_session()
 
     def add_records(self, new_records: List) -> bool:
         raise NotImplementedError("This method is not supported by FalkorDB SDK yet.")
