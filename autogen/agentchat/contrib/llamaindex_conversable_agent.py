@@ -16,11 +16,12 @@ try:
     from llama_index.core.agent.runner.base import AgentRunner
     from llama_index.core.base.llms.types import ChatMessage
     from llama_index.core.chat_engine.types import AgentChatResponse
+    from packaging import version
     from pydantic import BaseModel
     from pydantic import __version__ as pydantic_version
 
     # let's Avoid: AttributeError: type object 'Config' has no attribute 'copy'
-    if pydantic_version >= "2.0":
+    if version.parse(pydantic_version) >= version.parse("2.0.0"):
         from pydantic import ConfigDict
 
         Config = ConfigDict(arbitrary_types_allowed=True)
