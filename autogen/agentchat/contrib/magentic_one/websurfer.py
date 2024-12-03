@@ -389,7 +389,7 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._page_down()
 
         elif name == "click":
-            target_id = str(args["target_id"])
+            target_id = str(args["target_id"]) 
             target_name = self._target_name(target_id, rects)
             if target_name:
                 action_description = f"I clicked '{target_name}'."
@@ -696,14 +696,54 @@ class MultimodalWebSurfer(ConversableAgent):
     async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
         assert self._page is not None
 
+        # Ensure page is fully loaded
+        try:
+            await self._page.wait_for_load_state('networkidle', timeout=1000)
+        except TimeoutError:
+            logger.log_event(
+                source=self.name,
+                name="page_load_timeout",
+                data={
+                    "url": self._page.url
+                }
+            )
+
         # Read the regions from the DOM
         try:
             await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.log_event(
+                source=self.name,
+                name="page_script_error",
+                data={
+                    "error": str(e),
+                    "url": self._page.url
+                }
+            )
+
         result = cast(
             Dict[str, Dict[str, Any]], await self._page.evaluate("MultimodalWebSurfer.getInteractiveRects();")
         )
+
+        # Log the number of interactive regions found
+        logger.log_event(
+            source=self.name,
+            name="interactive_rects",
+            data={
+                "count": len(result),
+                "url": self._page.url
+            }
+        )
+
+        # Fallback if no interactive regions
+        if not result:
+            logger.log_event(
+                source=self.name,
+                name="no_interactive_regions",
+                data={
+                    "url": self._page.url
+                }
+            )
 
         # Convert the results into appropriate types
         assert isinstance(result, dict)
@@ -812,67 +852,90 @@ class MultimodalWebSurfer(ConversableAgent):
 
     async def _click_id(self, identifier: str) -> None:
         assert self._page is not None
-        target = self._page.locator(f"[__elementId='{identifier}']")
-
-        # See if it exists
-        try:
-            await target.wait_for(timeout=200)
-        except TimeoutError:
-            try: 
-                target = self._page.locator(f"[__elementId={identifier}]")
+                                                             
+                                                                                            
+        # Ensure identifier is a valid integer string                                       
+        try:                                                                                
+            identifier = str(int(identifier.strip()))                                               
+        except ValueError:                                                                  
+            raise ValueError(f"Invalid element identifier: {identifier}")  
+        
+        # Validate input
+        if not identifier:
+            raise ValueError("Empty element identifier")
+        
+        # Try multiple locator strategies
+        locator_strategies = [
+            f"[__elementId='{identifier}']",
+            f"[__elementId={identifier}]",
+        ]
+        
+        for strategy in locator_strategies:
+            try:
+                target = self._page.locator(strategy)
                 await target.wait_for(timeout=200)
+                
+                # If found, proceed with click
+                await target.scroll_into_view_if_needed()
+                box = cast(Dict[str, Union[int, float]], await target.bounding_box())
+                
+                try:
+                    async with self._page.expect_event("popup", timeout=1000) as page_info:
+                        await self._page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, delay=10)
+                    
+                    new_page = await page_info.value
+                    assert isinstance(new_page, Page)
+                    await self._on_new_page(new_page)
+                    
+                    logger.log_event(
+                        source=self.name,
+                        name="popup",
+                        data={
+                            "url": self._page.url,
+                            "text": "New tab or window opened"
+                        }
+                    )
+                    return
+                
+                except TimeoutError:
+                    # No popup, just return after successful click
+                    return
+            
             except TimeoutError:
-                raise ValueError("No such element.") from None
-
-        # Click it
-        await target.scroll_into_view_if_needed()
-        box = cast(Dict[str, Union[int, float]], await target.bounding_box())
-        try:
-            # Give it a chance to open a new page
-            # TOODO: Having trouble with these types 
-            async with self._page.expect_event("popup", timeout=1000) as page_info:  # type: ignore
-                await self._page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, delay=10)
-                # If we got this far without error, than a popup or new tab opened. Handle it.
-
-                new_page = await page_info.value  # type: ignore
-
-                assert isinstance(new_page, Page)
-                await self._on_new_page(new_page)
-
-                logger.log_event(
-                    source=self.name,
-                    name="popup",
-                    data={
-                        "url": self._page.url,
-                        "text": "New tab or window opened"
-                    }
-                )
-
-        except TimeoutError:
-            pass
+                # Try next strategy
+                continue
+        
+        raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
 
     async def _fill_id(self, identifier: str, value: str) -> None:
         assert self._page is not None
-        target = self._page.locator(f"[__elementId={identifier}]")
-
-        # See if it exists
-        try:
-            await target.wait_for(timeout=200)
-        except TimeoutError:
-            try: 
-                target = self._page.locator(f"[__elementId='{identifier}']")
+        
+        # Try multiple locator strategies
+        locator_strategies = [
+            f"[__elementId='{identifier}']",
+            f"[__elementId={identifier}]",
+        ]
+        
+        for strategy in locator_strategies:
+            try:
+                target = self._page.locator(strategy)
                 await target.wait_for(timeout=200)
+                
+                # Fill it
+                await target.scroll_into_view_if_needed()
+                await target.focus()
+                try:
+                    await target.fill(value)
+                except PlaywrightError:
+                    await target.press_sequentially(value)
+                await target.press("Enter")
+                return
+            
             except TimeoutError:
-                raise ValueError("No such element.") from None
-
-        # Fill it
-        await target.scroll_into_view_if_needed()
-        await target.focus()
-        try:
-            await target.fill(value)
-        except PlaywrightError:
-            await target.press_sequentially(value)
-        await target.press("Enter")
+                # Try next strategy
+                continue
+        
+        raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
 
     async def _scroll_id(self, identifier: str, direction: str) -> None:
         assert self._page is not None
@@ -989,6 +1052,50 @@ class MultimodalWebSurfer(ConversableAgent):
         assert isinstance(response, str)
         return response
 
+    async def test_set_of_mark(self, url: str) -> Image.Image:
+        """
+        Test the set_of_mark functionality by visiting a URL and generating a marked screenshot.
+        
+        Args:
+            url (str): The URL to visit and screenshot
+        
+        Returns:
+            Image.Image: The screenshot with interactive regions marked
+        """
+        assert self._page is not None
+        
+        # Visit the page
+        await self._visit_page(url)
+        await self._page.wait_for_load_state('networkidle')
+        await asyncio.sleep(2)
+        
+        
+        # Get interactive rects
+        rects = await self._get_interactive_rects()
+        
+        # Take screenshot
+        screenshot = await self._page.screenshot()
+        
+        # Apply set of mark
+        som_screenshot, visible_rects, rects_above, rects_below = add_set_of_mark(screenshot, rects)
+        
+        # Optionally save the screenshot
+        if self.to_save_screenshots and self.debug_dir:
+            current_timestamp = "_" + int(time.time()).__str__()
+            screenshot_png_name = "screenshot_som" + current_timestamp + ".png"
+            som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))
+            
+            logger.log_event(
+                source=self.name,
+                name="screenshot",
+                data={
+                    "url": self._page.url,
+                    "screenshot": screenshot_png_name
+                }
+            )
+        
+        return som_screenshot
+
     async def _get_ocr_text(
         self, image: bytes | io.BufferedIOBase | Image.Image
     ) -> str:
@@ -1008,19 +1115,6 @@ class MultimodalWebSurfer(ConversableAgent):
         img_uri = img_utils.pil_to_data_uri(scaled_screenshot)
         await asyncio.sleep(0.1)  # Small delay
         scaled_screenshot.close()  
-
-        try:                                                                                                                        
-             b64_part = img_uri.split(',')[1]                                                                                        
-             base64.b64decode(b64_part)                                                                                              
-        except Exception as e:                                                                                                      
-            logger.log_event(
-                source=self.name,
-                name="base64_decode_error",
-                data={
-                    "img_uri_length": len(img_uri),
-                    "img_uri_prefix": img_uri[:100]
-                }
-            )
 
         messages: List[Dict[str,Any]] = [{
                 "role": "system",
