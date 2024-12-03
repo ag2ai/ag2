@@ -524,14 +524,6 @@ class SwarmAgent(ConversableAgent):
         for func in func_list:
             self.add_single_function(func)
 
-    def get_swarm_context_variables(self) -> Dict[str, Any]:
-        """Returns the context variables from the tool execution agent"""
-        for agent in self._groupchatmanager.groupchat.agents:
-            if agent.name == "Tool_Execution":
-                return agent._context_variables
-
-        raise Exception("Tool Execution agent not found")
-
     @staticmethod
     def process_nested_chat_carryover(
         chat: Dict[str, Any],
