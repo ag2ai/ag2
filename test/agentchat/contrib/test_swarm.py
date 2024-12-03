@@ -461,5 +461,103 @@ def test_initialization():
         )
 
 
+def test_string_agent_params_for_transfer():
+    """Test that string agent parameters are handled correctly without using real LLMs."""
+    # Define test configuration
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    # Define a simple function for testing
+    def hello_world(context_variables: dict) -> SwarmResult:
+        value = "Hello, World!"
+        return SwarmResult(values=value, context_variables=context_variables, agent="agent_2")
+
+    # Create SwarmAgent instances
+    agent_1 = SwarmAgent(
+        name="agent_1",
+        system_message="Your task is to call hello_world() function.",
+        llm_config=testing_llm_config,
+        functions=[hello_world],
+    )
+    agent_2 = SwarmAgent(
+        name="agent_2",
+        system_message="Your task is to let the user know what the previous agent said.",
+        llm_config=testing_llm_config,
+    )
+
+    # Mock LLM responses
+    def mock_generate_oai_reply_agent1(*args, **kwargs):
+        return True, {
+            "role": "assistant",
+            "name": "agent_1",
+            "tool_calls": [{"type": "function", "function": {"name": "hello_world", "arguments": "{}"}}],
+            "content": "I will call the hello_world function.",
+        }
+
+    def mock_generate_oai_reply_agent2(*args, **kwargs):
+        return True, {
+            "role": "assistant",
+            "name": "agent_2",
+            "content": "The previous agent called hello_world and got: Hello, World!",
+        }
+
+    # Register mock responses
+    agent_1.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent1)
+    agent_2.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent2)
+
+    # Initiate the swarm chat
+    chat_result, final_context, last_active_agent = initiate_swarm_chat(
+        initial_agent=agent_1,
+        agents=[agent_1, agent_2],
+        context_variables={},
+        messages="Begin by calling the hello_world() function.",
+        after_work=AFTER_WORK(AfterWorkOption.TERMINATE),
+        max_rounds=5,
+    )
+
+    # Assertions to verify the behavior
+    assert chat_result.chat_history[3]["name"] == "agent_2"
+    assert last_active_agent.name == "agent_2"
+
+    # Define a simple function for testing
+    def hello_world(context_variables: dict) -> SwarmResult:
+        value = "Hello, World!"
+        return SwarmResult(values=value, context_variables=context_variables, agent="agent_unknown")
+
+    agent_1 = SwarmAgent(
+        name="agent_1",
+        system_message="Your task is to call hello_world() function.",
+        llm_config=testing_llm_config,
+        functions=[hello_world],
+    )
+    agent_2 = SwarmAgent(
+        name="agent_2",
+        system_message="Your task is to let the user know what the previous agent said.",
+        llm_config=testing_llm_config,
+    )
+
+    # Register mock responses
+    agent_1.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent1)
+    agent_2.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent2)
+
+    with pytest.raises(
+        ValueError, match="No agent found with the name 'agent_unknown'. Ensure the agent exists in the swarm."
+    ):
+        chat_result, final_context, last_active_agent = initiate_swarm_chat(
+            initial_agent=agent_1,
+            agents=[agent_1, agent_2],
+            context_variables={},
+            messages="Begin by calling the hello_world() function.",
+            after_work=AFTER_WORK(AfterWorkOption.TERMINATE),
+            max_rounds=5,
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

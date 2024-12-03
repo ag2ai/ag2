@@ -33,13 +33,14 @@ import random
 import sys
 import time
 import warnings
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from cohere import Client as Cohere
 from cohere.types import ToolParameterDefinitionsValue, ToolResult
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import logging_formatter, validate_parameter
 
@@ -147,7 +148,9 @@ class CohereClient:
 
         return cohere_params
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
+        if response_format is not None:
+            raise NotImplementedError("Response format is not supported by Cohere's API.")
 
         messages = params.get("messages", [])
         client_name = params.get("client_name") or "autogen-cohere"
