@@ -53,7 +53,7 @@ import json
 import os
 import time
 import warnings
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic import __version__ as anthropic_version
@@ -61,6 +61,7 @@ from anthropic.types import Completion, Message, TextBlock, ToolUseBlock
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 from typing_extensions import Annotated
 
 from autogen.oai.client_utils import validate_parameter
@@ -174,7 +175,10 @@ class AnthropicClient:
     def aws_region(self):
         return self._aws_region
 
-    def create(self, params: Dict[str, Any]) -> Completion:
+    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ChatCompletion:
+        if response_format is not None:
+            raise NotImplementedError("Response format is not supported by Anthropic API.")
+
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions
