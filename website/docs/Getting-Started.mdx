@@ -1,7 +1,9 @@
+---
+title: "Getting Started"
+---
 import Tabs from "@theme/Tabs";
 import TabItem from "@theme/TabItem";
 
-# Getting Started
 
 AutoGen is an open-source programming framework for building AI agents and facilitating
 cooperation among multiple agents to solve tasks. AutoGen aims to provide an easy-to-use
@@ -10,7 +12,7 @@ like PyTorch for Deep Learning. It offers features such as agents that can conve
 with other agents, LLM and tool use support, autonomous and human-in-the-loop workflows,
 and multi-agent conversation patterns.
 
-![AutoGen Overview](/img/autogen_agentchat.png)
+![AutoGen Overview](/website/static/img/autogen_agentchat.webp)
 
 ### Main Features
 
@@ -37,86 +39,81 @@ Microsoft, Penn State University, and University of Washington.
 ```sh
 pip install autogen
 ```
-:::tip
+<Tip>
 You can also install with different [optional dependencies](/docs/installation/Optional-Dependencies).
-:::
-
+</Tip>
 <Tabs>
-    <TabItem value="nocode" label="No code execution" default>
+  <Tab title="No code execution">
+    ```python
+    import os
+    from autogen import AssistantAgent, UserProxyAgent
 
-```python
-import os
-from autogen import AssistantAgent, UserProxyAgent
-
-llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
-assistant = AssistantAgent("assistant", llm_config=llm_config)
-user_proxy = UserProxyAgent("user_proxy", code_execution_config=False)
-
-# Start the chat
-user_proxy.initiate_chat(
-    assistant,
-    message="Tell me a joke about NVDA and TESLA stock prices.",
-)
-```
-
-    </TabItem>
-    <TabItem value="local" label="Local execution" default>
-
-:::warning
-When asked, be sure to check the generated code before continuing to ensure it is safe to run.
-:::
-
-```python
-import os
-import autogen
-from autogen import AssistantAgent, UserProxyAgent
-
-llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
-assistant = AssistantAgent("assistant", llm_config=llm_config)
-
-user_proxy = UserProxyAgent(
-    "user_proxy", code_execution_config={"executor": autogen.coding.LocalCommandLineCodeExecutor(work_dir="coding")}
-)
-
-# Start the chat
-user_proxy.initiate_chat(
-    assistant,
-    message="Plot a chart of NVDA and TESLA stock price change YTD.",
-)
-```
-
-    </TabItem>
-    <TabItem value="docker" label="Docker execution" default>
-
-```python
-import os
-import autogen
-from autogen import AssistantAgent, UserProxyAgent
-
-llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
-
-with autogen.coding.DockerCommandLineCodeExecutor(work_dir="coding") as code_executor:
+    llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
     assistant = AssistantAgent("assistant", llm_config=llm_config)
+    user_proxy = UserProxyAgent("user_proxy", code_execution_config=False)
+
+    # Start the chat
+    user_proxy.initiate_chat(
+        assistant,
+        message="Tell me a joke about NVDA and TESLA stock prices.",
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Local execution">
+    <Warning>
+      When asked, be sure to check the generated code before continuing to ensure it is safe to run.
+    </Warning>
+
+    ```python
+    import os
+    import autogen
+    from autogen import AssistantAgent, UserProxyAgent
+
+    llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+    assistant = AssistantAgent("assistant", llm_config=llm_config)
+
     user_proxy = UserProxyAgent(
-        "user_proxy", code_execution_config={"executor": code_executor}
+        "user_proxy", code_execution_config={"executor": autogen.coding.LocalCommandLineCodeExecutor(work_dir="coding")}
     )
 
     # Start the chat
     user_proxy.initiate_chat(
         assistant,
-        message="Plot a chart of NVDA and TESLA stock price change YTD. Save the plot to a file called plot.png",
+        message="Plot a chart of NVDA and TESLA stock price change YTD.",
     )
-```
+    ```
+  </Tab>
+  
+  <Tab title="Docker execution">
+    ```python
+    import os
+    import autogen
+    from autogen import AssistantAgent, UserProxyAgent
 
-Open `coding/plot.png` to see the generated plot.
+    llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
 
-    </TabItem>
+    with autogen.coding.DockerCommandLineCodeExecutor(work_dir="coding") as code_executor:
+        assistant = AssistantAgent("assistant", llm_config=llm_config)
+        user_proxy = UserProxyAgent(
+            "user_proxy", code_execution_config={"executor": code_executor}
+        )
 
+        # Start the chat
+        user_proxy.initiate_chat(
+            assistant,
+            message="Plot a chart of NVDA and TESLA stock price change YTD. Save the plot to a file called plot.png",
+        )
+    ```
+
+    Open `coding/plot.png` to see the generated plot.
+  </Tab>
 </Tabs>
 
-:::tip
+
+<Tip>
 Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
-:::
+</Tip>
 
 #### Multi-Agent Conversation Framework
 
@@ -125,7 +122,7 @@ By automating chat among multiple capable agents, one can easily make them colle
 
 The figure below shows an example conversation flow with AutoGen.
 
-![Agent Chat Example](/img/chat_example.png)
+![Agent Chat Example](/website/static/img/chat_example.webp)
 
 ### Where to Go Next?
 
