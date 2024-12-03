@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List
 
+from falkordb import FalkorDB
 from graphrag_sdk import KnowledgeGraph, Source
 from graphrag_sdk.model_config import KnowledgeGraphModelConfig
 from graphrag_sdk.models import GenerativeModel
@@ -53,11 +54,43 @@ class FalkorGraphQueryEngine:
         self.model = model
         self.model_config = KnowledgeGraphModelConfig.with_model(model)
         self.ontology = ontology
+        self.knowledge_graph = None
 
-    def init_db(self, input_doc: List[Document] | None):
+    def connect_db(self):
+        """
+        Connect to an existing knowledge graph.
+        """
+        falkordb = FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
+        if self.name in falkordb.list_graphs():
+            self.knowledge_graph = KnowledgeGraph(
+                name=self.name,
+                host=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                model_config=self.model_config,
+                ontology=self.ontology,
+            )
+
+            # Establishing a chat session will maintain the history
+            self._chat_session = self.knowledge_graph.chat_session()
+        else:
+            raise ValueError(f"Knowledge graph '{self.name}' does not exist")
+
+    def init_db(self, input_doc: List[Document]):
         """
         Build the knowledge graph with input documents.
         """
+        self.knowledge_graph = KnowledgeGraph(
+            name=self.name,
+            host=self.host,
+            port=self.port,
+            username=self.username,
+            password=self.password,
+            model_config=KnowledgeGraphModelConfig.with_model(self.model),
+            ontology=self.ontology,
+        )
+
         sources = []
         for doc in input_doc:
             if os.path.exists(doc.path_or_url):
@@ -71,19 +104,13 @@ class FalkorGraphQueryEngine:
                     model=self.model,
                 )
 
-            self.knowledge_graph = KnowledgeGraph(
-                name=self.name,
-                host=self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
-                model_config=KnowledgeGraphModelConfig.with_model(self.model),
-                ontology=self.ontology,
-            )
-
-            # Establish a chat session, this will maintain the history
-            self._chat_session = self.knowledge_graph.chat_session()
             self.knowledge_graph.process_sources(sources)
+
+        else:
+            raise ValueError("No input documents could be loaded.")
+
+        # Establishing a chat session will maintain the history
+        self._chat_session = self.knowledge_graph.chat_session()
 
     def add_records(self, new_records: List) -> bool:
         raise NotImplementedError("This method is not supported by FalkorDB SDK yet.")
@@ -101,7 +128,7 @@ class FalkorGraphQueryEngine:
         Returns: FalkorGraphQueryResult
         """
         if self.knowledge_graph is None:
-            raise ValueError("Knowledge graph is not created.")
+            raise ValueError("Knowledge graph has not been selected or created.")
 
         response = self._chat_session.send_message(question)
 
