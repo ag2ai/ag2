@@ -124,11 +124,11 @@ def initiate_swarm_chat(
             tool_execution._next_agent = None
 
             # Check for string, access agent from group chat.
-            if isinstance(next_agent, str):
-                next_agent = groupchat.agent_by_name(name=next_agent)
 
-                # If no agent is found, raise an error or handle it appropriately
-                if next_agent is None:
+            if isinstance(next_agent, str):
+                if next_agent in swarm_agent_names:
+                    next_agent = groupchat.agent_by_name(name=next_agent)
+                else:
                     raise ValueError(
                         f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm."
                     )
