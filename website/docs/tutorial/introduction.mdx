@@ -1,4 +1,24 @@
-# Introduction to AutoGen
+---
+title: "Introduction to AutoGen"
+sidebarTitle: "Introduction"
+---
+
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
+    <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" style={{ height: "20px", pointerEvents: "none" }} />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a href="https://github.com/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
+    <img src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open in GitHub" style={{ height: "20px", pointerEvents: "none" }} />
+  </a>
+</div>
+
+
+
+
+
+
 
 Welcome! AutoGen is an open-source framework that leverages multiple _agents_ to enable complex workflows. This tutorial introduces basic concepts and building blocks of AutoGen.
 
@@ -31,9 +51,8 @@ other agents in its environment. An agent can be powered by models (such as a la
 like GPT-4), code executors (such as an IPython kernel), human, or a combination of these
 and other pluggable and customizable components.
 
-```{=mdx}
-![ConversableAgent](./assets/conversable-agent.jpg)
-```
+![ConversableAgent](./assets/conversable-agent.webp)
+
 
 An example of such agents is the built-in `ConversableAgent` which supports the following components:
 
@@ -75,13 +94,13 @@ You can ask this agent to generate a response to a question using the `generate_
 reply = agent.generate_reply(messages=[{"content": "Tell me a joke.", "role": "user"}])
 print(reply)
 ```
-
-    Sure, here's a light-hearted joke for you:
+```python
+Sure, here's a light-hearted joke for you:
     
-    Why don't scientists trust atoms?
+Why don't scientists trust atoms?
     
-    Because they make up everything!
-
+Because they make up everything!
+```
 
 ## Roles and Conversations
 
@@ -113,40 +132,40 @@ We set the `max_turns` to 2 to keep the conversation short.
 ```python
 result = joe.initiate_chat(cathy, message="Cathy, tell me a joke.", max_turns=2)
 ```
+```python
+joe (to cathy):
 
-    [33mjoe[0m (to cathy):
-    
-    Cathy, tell me a joke.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Sure, here's one for you:
-    
-    Why don't scientists trust atoms?
-    
-    Because they make up everything!
-    
-    --------------------------------------------------------------------------------
-    [33mjoe[0m (to cathy):
-    
-    Haha, that's a good one, Cathy! Okay, my turn. 
-    
-    Why don't we ever tell secrets on a farm?
-    
-    Because the potatoes have eyes, the corn has ears, and the beans stalk.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
-    
-    Why couldn't the bicycle stand up by itself?
-    
-    Because it was two-tired!
-    
-    --------------------------------------------------------------------------------
+Cathy, tell me a joke.
 
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Sure, here's one for you:
+
+Why don't scientists trust atoms?
+
+Because they make up everything!
+
+--------------------------------------------------------------------------------
+joe (to cathy):
+
+Haha, that's a good one, Cathy! Okay, my turn. 
+
+Why don't we ever tell secrets on a farm?
+
+Because the potatoes have eyes, the corn has ears, and the beans stalk.
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+
+Why couldn't the bicycle stand up by itself?
+
+Because it was two-tired!
+
+--------------------------------------------------------------------------------
+```
 
 The comedians are bouncing off each other!
 

@@ -1,4 +1,17 @@
-# Allowing Human Feedback in Agents
+---
+title: "Allowing Human Feedback in Agents"
+sidebarTitle: "Human in the loop"
+---
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
+    <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" style={{ height: "20px", pointerEvents: "none" }} />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a href="https://github.com/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
+    <img src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open in GitHub" style={{ height: "20px", pointerEvents: "none" }} />
+  </a>
+</div>
 
 In the last two chapters we introduced the `ConversableAgent` class and showed how you can use it to create autonomous (`human_input_mode=NEVER`) agents that can accomplish tasks. We also showed how to properly terminate a conversation between agents.
 
@@ -9,9 +22,7 @@ of the auto-reply components. It can intercept the incoming messages and
 decide whether to pass them to the auto-reply components or to provide
 human feedback. The figure below illustrates the design.
 
-```{=mdx}
 ![Human in the loop](./assets/human-in-the-loop.png)
-```
 
 The human-in-the-loop component can be customized through the `human_input_mode` parameter.
 We will show you how to use it in the following sections.

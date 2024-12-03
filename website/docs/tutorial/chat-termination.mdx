@@ -1,4 +1,19 @@
-# Terminating Conversations Between Agents
+---
+title: "Terminating Conversations Between Agents"
+sidebarTitle: "Chat Termination"
+---
+
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
+    <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" style={{ height: "20px", pointerEvents: "none" }} />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a href="https://github.com/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
+    <img src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open in GitHub" style={{ height: "20px", pointerEvents: "none" }} />
+  </a>
+</div>
+
 
 In this chapter, we will explore how to terminate a conversation between AutoGen agents.
 
@@ -43,39 +58,40 @@ joe = ConversableAgent(
 ```python
 result = joe.initiate_chat(cathy, message="Cathy, tell me a joke.", max_turns=2)
 ```
+```python
+joe (to cathy):
 
-    [33mjoe[0m (to cathy):
-    
-    Cathy, tell me a joke.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Sure, here's one for you:
-    
-    Why don't scientists trust atoms?
-    
-    Because they make up everything!
-    
-    --------------------------------------------------------------------------------
-    [33mjoe[0m (to cathy):
-    
-    Haha, that's a good one, Cathy! Okay, my turn. 
-    
-    Why don't we ever tell secrets on a farm?
-    
-    Because the potatoes have eyes, the corn has ears, and the beans stalk.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
-    
-    Why couldn't the bicycle stand up by itself?
-    
-    Because it was two-tired!
-    
-    --------------------------------------------------------------------------------
+Cathy, tell me a joke.
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Sure, here's one for you:
+
+Why don't scientists trust atoms?
+
+Because they make up everything!
+
+--------------------------------------------------------------------------------
+joe (to cathy):
+
+Haha, that's a good one, Cathy! Okay, my turn. 
+
+Why don't we ever tell secrets on a farm?
+
+Because the potatoes have eyes, the corn has ears, and the beans stalk.
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+
+Why couldn't the bicycle stand up by itself?
+
+Because it was two-tired!
+
+--------------------------------------------------------------------------------
+```
 
 
 
@@ -85,56 +101,58 @@ result = joe.initiate_chat(
 )  # increase the number of max turns before termination
 ```
 
-    [33mjoe[0m (to cathy):
-    
-    Cathy, tell me a joke.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Sure, here's one for you:
-    
-    Why don't scientists trust atoms?
-    
-    Because they make up everything!
-    
-    --------------------------------------------------------------------------------
-    [33mjoe[0m (to cathy):
-    
-    Haha, that's a good one, Cathy! Okay, my turn. 
-    
-    Why don't we ever tell secrets on a farm?
-    
-    Because the potatoes have eyes, the corn has ears, and the beans stalk.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
-    
-    Why couldn't the bicycle stand up by itself?
-    
-    Because it was two-tired!
-    
-    --------------------------------------------------------------------------------
-    [33mjoe[0m (to cathy):
-    
-    Haha, that's a wheely good one, Cathy!
-    
-    Why did the golfer bring two pairs of pants?
-    
-    In case he got a hole in one!
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Haha, that's a perfect swing of a joke!
-    
-    Why did the scarecrow win an award?
-    
-    Because he was outstanding in his field!
-    
-    --------------------------------------------------------------------------------
+```python
+joe (to cathy):
+
+Cathy, tell me a joke.
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Sure, here's one for you:
+
+Why don't scientists trust atoms?
+
+Because they make up everything!
+
+--------------------------------------------------------------------------------
+joe (to cathy):
+
+Haha, that's a good one, Cathy! Okay, my turn. 
+
+Why don't we ever tell secrets on a farm?
+
+Because the potatoes have eyes, the corn has ears, and the beans stalk.
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+
+Why couldn't the bicycle stand up by itself?
+
+Because it was two-tired!
+
+--------------------------------------------------------------------------------
+joe (to cathy):
+
+Haha, that's a wheely good one, Cathy!
+
+Why did the golfer bring two pairs of pants?
+
+In case he got a hole in one!
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Haha, that's a perfect swing of a joke!
+
+Why did the scarecrow win an award?
+
+Because he was outstanding in his field!
+
+--------------------------------------------------------------------------------
+```
 
 
 
@@ -162,39 +180,40 @@ joe = ConversableAgent(
 result = joe.initiate_chat(cathy, message="Cathy, tell me a joke.")
 ```
 
-    [33mjoe[0m (to cathy):
-    
-    Cathy, tell me a joke.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Sure, here's one for you:
-    
-    Why don't scientists trust atoms?
-    
-    Because they make up everything!
-    
-    --------------------------------------------------------------------------------
-    [33mjoe[0m (to cathy):
-    
-    Haha, that's a good one, Cathy! Okay, my turn. 
-    
-    Why don't we ever tell secrets on a farm?
-    
-    Because the potatoes have eyes, the corn has ears, and the beans stalk.
-    
-    --------------------------------------------------------------------------------
-    [33mcathy[0m (to joe):
-    
-    Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
-    
-    Why couldn't the bicycle stand up by itself?
-    
-    Because it was two-tired!
-    
-    --------------------------------------------------------------------------------
+```python
+joe (to cathy):
 
+Cathy, tell me a joke.
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Sure, here's one for you:
+
+Why don't scientists trust atoms?
+
+Because they make up everything!
+
+--------------------------------------------------------------------------------
+joe (to cathy):
+
+Haha, that's a good one, Cathy! Okay, my turn. 
+
+Why don't we ever tell secrets on a farm?
+
+Because the potatoes have eyes, the corn has ears, and the beans stalk.
+
+--------------------------------------------------------------------------------
+cathy (to joe):
+
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+
+Why couldn't the bicycle stand up by itself?
+
+Because it was two-tired!
+
+--------------------------------------------------------------------------------
+```
 
 ### Using `is_termination_msg`
 
@@ -212,23 +231,22 @@ joe = ConversableAgent(
 
 result = joe.initiate_chat(cathy, message="Cathy, tell me a joke and then say the words GOOD BYE.")
 ```
+```python
+joe (to cathy):
 
-    [33mjoe[0m (to cathy):
-    
-    Cathy, tell me a joke and then say the words GOOD BYE.
-    
-    --------------------------------------------------------------------------------
+Cathy, tell me a joke and then say the words GOOD BYE.
 
+--------------------------------------------------------------------------------
+cathy (to joe):
 
-    [33mcathy[0m (to joe):
-    
-    Why don't scientists trust atoms?
-    
-    Because they make up everything!
-    
-    GOOD BYE!
-    
-    --------------------------------------------------------------------------------
+Why don't scientists trust atoms?
+
+Because they make up everything!
+
+GOOD BYE!
+
+--------------------------------------------------------------------------------
+```
 
 
 
