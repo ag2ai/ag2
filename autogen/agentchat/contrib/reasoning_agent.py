@@ -1,26 +1,11 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-import copy
-import json
 import re
-import warnings
-from dataclasses import dataclass
-from enum import Enum
-from inspect import signature
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
-
-from pydantic import BaseModel
-
-from autogen.function_utils import get_function_schema
-from autogen.oai import OpenAIWrapper
 
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
-from ..chat import ChatResult
-from ..conversable_agent import ConversableAgent
-from ..groupchat import GroupChat, GroupChatManager
-from ..user_proxy_agent import UserProxyAgent
 
 TreeofThought_message = """
 Role: Expert Planning AI Assistant
