@@ -127,6 +127,12 @@ def initiate_swarm_chat(
             if isinstance(next_agent, str):
                 next_agent = groupchat.agent_by_name(name=next_agent)
 
+                # If no agent is found, raise an error or handle it appropriately
+                if next_agent is None:
+                    raise ValueError(
+                        f"No agent found with the name '{next_agent}'. Ensure the agent exists in the group chat."
+                    )
+
             return next_agent
 
         # get the last swarm agent
