@@ -1,68 +1,60 @@
+---
+title: "Installation"
+---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Installation
 
 ## Create a virtual environment (optional)
 
 When installing AutoGen locally, we recommend using a virtual environment for the installation. This will ensure that the dependencies for AutoGen are isolated from the rest of your system.
 
 <Tabs>
-  <TabItem value="venv" label="venv" default>
-
-    Create and activate:
-
-    ```bash
-    python3 -m venv autogen
-    source autogen/bin/activate
+  <Tab title="venv" default>
+    <p>Create and activate:</p>
+    
+      ```
+      python3 -m venv autogen
+      source autogen/bin/activate
+      ```
+    
+    <p>To deactivate later, run:</p>
     ```
-
-    To deactivate later, run:
-
-    ```bash
     deactivate
     ```
+  </Tab>
 
-  </TabItem>
-  <TabItem value="conda" label="Conda">
-
-    [Install Conda](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html) if you have not already.
-
-
-    Create and activate:
-
-    ```bash
-    conda create -n autogen python=3.10
-    conda activate autogen
+  <Tab title="Conda">
+    <p><a href="https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html" target="_blank" rel="noopener noreferrer">install Conda</a> if you have not already.</p>
+    <p>Create and activate:</p>
+      ```
+      conda create -n autogen python=3.10
+      conda activate autogen
+      ```
+    <p>To deactivate later, run:</p>
     ```
-
-    To deactivate later, run:
-
-    ```bash
     conda deactivate
     ```
+  </Tab>
 
-  </TabItem>
-  <TabItem value="poetry" label="Poetry">
+  <Tab title="Poetry">
+    <p><a href="https://python-poetry.org/docs/#installation" target="_blank" rel="noopener noreferrer">install Poetry</a> if you have not already.</p>
+    <p>Create and active:</p>
 
-    [Install Poetry](https://python-poetry.org/docs/#installation) if you have not already.
+      ```
+      poetry init
+      poetry shell
 
-    Create and activate:
-    ```bash
-    poetry init
-    poetry shell
+      poetry add autogen
+      ```
 
-    poetry add autogen
+    <p>To deactivate later, run:</p>
     ```
-
-    To deactivate later, run:
-
-    ```bash
     exit
     ```
-
-  </TabItem>
+  </Tab>
 </Tabs>
+
 
 ## Install AutoGen
 
@@ -72,11 +64,8 @@ AutoGen requires **Python version >= 3.8, < 3.14**. It can be installed from pip
 pip install autogen
 ```
 
-:::info
+<Info> `openai>=1` is required. </Info>
 
-`openai>=1` is required.
-
-:::
 
 ## Install Docker for Code Execution
 
