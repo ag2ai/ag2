@@ -1540,41 +1540,41 @@ def test_context_variables():
     agent_no_context = ConversableAgent(name="no_context_agent", llm_config=False)
     assert agent_no_context._context_variables == {}
 
-    # Test get_context_value
-    assert agent.get_context_value("test_key") == "test_value"
-    assert agent.get_context_value("number") == 42
-    assert agent.get_context_value("nested") == {"inner": "value"}
-    assert agent.get_context_value("non_existent") is None
-    assert agent.get_context_value("non_existent", default="default") == "default"
+    # Test get_context
+    assert agent.get_context("test_key") == "test_value"
+    assert agent.get_context("number") == 42
+    assert agent.get_context("nested") == {"inner": "value"}
+    assert agent.get_context("non_existent") is None
+    assert agent.get_context("non_existent", default="default") == "default"
 
-    # Test set_context_value
-    agent.set_context_value("new_key", "new_value")
-    assert agent.get_context_value("new_key") == "new_value"
+    # Test set_context
+    agent.set_context("new_key", "new_value")
+    assert agent.get_context("new_key") == "new_value"
 
     # Test overwriting existing value
-    agent.set_context_value("test_key", "updated_value")
-    assert agent.get_context_value("test_key") == "updated_value"
+    agent.set_context("test_key", "updated_value")
+    assert agent.get_context("test_key") == "updated_value"
 
-    # Test set_context_values
+    # Test update_context
     new_values = {"bulk_key1": "bulk_value1", "bulk_key2": "bulk_value2", "test_key": "bulk_updated_value"}
-    agent.set_context_values(new_values)
-    assert agent.get_context_value("bulk_key1") == "bulk_value1"
-    assert agent.get_context_value("bulk_key2") == "bulk_value2"
-    assert agent.get_context_value("test_key") == "bulk_updated_value"
+    agent.update_context(new_values)
+    assert agent.get_context("bulk_key1") == "bulk_value1"
+    assert agent.get_context("bulk_key2") == "bulk_value2"
+    assert agent.get_context("test_key") == "bulk_updated_value"
 
-    # Test pop_context_key
+    # Test pop_context
     # Pop existing key
-    popped_value = agent.pop_context_key("bulk_key1")
+    popped_value = agent.pop_context("bulk_key1")
     assert popped_value == "bulk_value1"
-    assert agent.get_context_value("bulk_key1") is None
+    assert agent.get_context("bulk_key1") is None
 
     # Pop with default value
     default_value = "default_value"
-    popped_default = agent.pop_context_key("non_existent", default=default_value)
+    popped_default = agent.pop_context("non_existent", default=default_value)
     assert popped_default == default_value
 
     # Pop without default (should return None)
-    popped_none = agent.pop_context_key("another_non_existent")
+    popped_none = agent.pop_context("another_non_existent")
     assert popped_none is None
 
     # Verify final state of context
