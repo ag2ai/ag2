@@ -45,7 +45,7 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Dict, List, Mapping, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 import google.generativeai as genai
 import requests
@@ -56,6 +56,7 @@ from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from PIL import Image
+from pydantic import BaseModel
 from vertexai.generative_models import Content as VertexAIContent
 from vertexai.generative_models import GenerativeModel
 from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
@@ -159,7 +160,10 @@ class GeminiClient:
             "model": response.model,
         }
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
+        if response_format is not None:
+            raise NotImplementedError("Response format is not supported by Gemini's API.")
+
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:
