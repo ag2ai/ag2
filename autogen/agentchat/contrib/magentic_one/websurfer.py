@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import io
@@ -17,6 +18,7 @@ from PIL import Image
 from playwright._impl._errors import Error as PlaywrightError
 from playwright._impl._errors import TimeoutError
 from autogen.agentchat import ConversableAgent, Agent
+from autogen.agentchat.contrib import img_utils
 
 
 # from playwright._impl._async_base.AsyncEventInfo
@@ -637,7 +639,6 @@ class MultimodalWebSurfer(ConversableAgent):
         scaled_screenshot.save(buffer, format="PNG")
         image_bytes = buffer.getvalue()
         buffer.close()
-        scaled_screenshot.close()
         encoded_string = base64.b64encode(image_bytes).decode('utf-8')
 
         message = {
@@ -910,7 +911,15 @@ class MultimodalWebSurfer(ConversableAgent):
         screenshot = Image.open(io.BytesIO(await self._page.screenshot()))
         scaled_screenshot = screenshot.resize((MLM_WIDTH, MLM_HEIGHT))
         screenshot.close()
+        
         #ag_image = AGImage.from_pil(scaled_screenshot)
+        # Calculate tokens for the image
+        #image_tokens = img_utils.num_tokens_from_gpt_image(scaled_screenshot, model=self.client.)
+        #token_limit = max(token_limit - image_tokens, 1000)  # Reserve space for image tokens
+        
+        # Convert image to data URI
+        img_uri = img_utils.pil_to_data_uri(scaled_screenshot)
+        scaled_screenshot.close()  # Move the close() call after using the image
 
         # Prepare the system prompt
         messages: List[Dict[str,Any]] = []
@@ -928,13 +937,6 @@ class MultimodalWebSurfer(ConversableAgent):
         else:
             prompt += " Please summarize the webpage into one or two paragraphs:\n\n"
 
-
-        Imagebuffer = io.BytesIO()
-        scaled_screenshot.save(Imagebuffer, format="PNG")
-        image_bytes = Imagebuffer.getvalue()
-        Imagebuffer.close()
-        scaled_screenshot.close()
-        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
 
         # Grow the buffer (which is added to the prompt) until we overflow the context window or run out of lines
         buffer = ""
@@ -974,7 +976,7 @@ class MultimodalWebSurfer(ConversableAgent):
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/png;base64,{encoded_string}"
+                            "url": img_uri
                         }
                     }
                 ]
@@ -995,7 +997,7 @@ class MultimodalWebSurfer(ConversableAgent):
             scaled_screenshot = image.resize((MLM_WIDTH, MLM_HEIGHT))
         else:
             pil_image = None
-            if not isinstance(image, io.BufferedIOBase):
+            if isinstance(image, bytes):
                 pil_image = Image.open(io.BytesIO(image))
             else:
                 # TOODO: Not sure why this cast was needed, but by this point screenshot is a binary file-like object
@@ -1003,22 +1005,27 @@ class MultimodalWebSurfer(ConversableAgent):
             scaled_screenshot = pil_image.resize((MLM_WIDTH, MLM_HEIGHT))
             pil_image.close()
 
-        buffer = io.BytesIO()
-        scaled_screenshot.save(buffer, format="PNG")
-        image_bytes = buffer.getvalue()
-        buffer.close()
-        scaled_screenshot.close()
-        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
+        img_uri = img_utils.pil_to_data_uri(scaled_screenshot)
+        await asyncio.sleep(0.1)  # Small delay
+        scaled_screenshot.close()  
 
-        # Save the encoded string to a file
-        with open("debug_base64.txt", "w") as f:
-            f.write(encoded_string)
+        try:                                                                                                                        
+             b64_part = img_uri.split(',')[1]                                                                                        
+             base64.b64decode(b64_part)                                                                                              
+        except Exception as e:                                                                                                      
+            logger.log_event(
+                source=self.name,
+                name="base64_decode_error",
+                data={
+                    "img_uri_length": len(img_uri),
+                    "img_uri_prefix": img_uri[:100]
+                }
+            )
 
-        # Load the encoded string from the file
-        #with open("debug_base64.txt", "r") as f:
-        #    encoded_string = f.read()
-
-        messages: List[Dict[str,Any]] = [] 
+        messages: List[Dict[str,Any]] = [{
+                "role": "system",
+                "content": "You are a helpful assistant that returns text from an image.",
+            }] 
 
         messages.append(
             {
@@ -1031,12 +1038,14 @@ class MultimodalWebSurfer(ConversableAgent):
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/png;base64,{encoded_string}"
-                        }
+                            "url": img_uri
+                        },
                     }
                 ]
             }
         )
+        
+
         
         is_valid_response, response = await self.a_generate_oai_reply(messages=messages)
 
@@ -1095,4 +1104,3 @@ class MultimodalWebSurfer(ConversableAgent):
                     }
                 )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
-
