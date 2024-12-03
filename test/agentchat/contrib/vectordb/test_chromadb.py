@@ -13,6 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 try:
     import chromadb
+    import chromadb.errors
     import sentence_transformers
 
     from autogen.agentchat.contrib.vectordb.chromadb import ChromaVectorDB
@@ -32,12 +33,18 @@ def test_chromadb():
 
     # test_delete_collection
     db.delete_collection(collection_name)
-    pytest.raises(ValueError, db.get_collection, collection_name)
+    pytest.raises((ValueError, chromadb.errors.ChromaError), db.get_collection, collection_name)
 
     # test more create collection
     collection = db.create_collection(collection_name, overwrite=False, get_or_create=False)
     assert collection.name == collection_name
-    pytest.raises(ValueError, db.create_collection, collection_name, overwrite=False, get_or_create=False)
+    pytest.raises(
+        (ValueError, chromadb.errors.ChromaError),
+        db.create_collection,
+        collection_name,
+        overwrite=False,
+        get_or_create=False,
+    )
     collection = db.create_collection(collection_name, overwrite=True, get_or_create=False)
     assert collection.name == collection_name
     collection = db.create_collection(collection_name, overwrite=False, get_or_create=True)
