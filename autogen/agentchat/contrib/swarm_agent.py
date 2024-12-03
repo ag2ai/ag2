@@ -130,7 +130,7 @@ def initiate_swarm_chat(
                 # If no agent is found, raise an error or handle it appropriately
                 if next_agent is None:
                     raise ValueError(
-                        f"No agent found with the name '{next_agent}'. Ensure the agent exists in the group chat."
+                        f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm."
                     )
 
             return next_agent
