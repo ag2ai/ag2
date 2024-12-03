@@ -29,12 +29,13 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from groq import Groq, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
@@ -125,7 +126,9 @@ class GroqClient:
 
         return groq_params
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
+        if response_format is not None:
+            raise NotImplementedError("Response format is not supported by Groq's API.")
 
         messages = params.get("messages", [])
 
