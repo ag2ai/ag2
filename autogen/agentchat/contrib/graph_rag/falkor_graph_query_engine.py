@@ -55,13 +55,18 @@ class FalkorGraphQueryEngine:
         self.model_config = KnowledgeGraphModelConfig.with_model(model)
         self.ontology = ontology
         self.knowledge_graph = None
+        self.falkordb = FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
 
     def connect_db(self):
         """
         Connect to an existing knowledge graph.
         """
-        falkordb = FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
-        if self.name in falkordb.list_graphs():
+        if self.name in self.falkordb.list_graphs():
+            graph = self.falkordb.select_graph(self.name)
+            self.ontology = Ontology.from_graph(graph)
+            if self.ontology is None:
+                raise ValueError(f"Ontology of the knowledge graph '{self.name}' can't be None.")
+
             self.knowledge_graph = KnowledgeGraph(
                 name=self.name,
                 host=self.host,
@@ -108,6 +113,10 @@ class FalkorGraphQueryEngine:
 
             # Establishing a chat session will maintain the history
             self._chat_session = self.knowledge_graph.chat_session()
+
+            # Save Ontology to graph for future access.
+            graph = self.falkordb.select_graph(self.name)
+            self.ontology.save_to_graph(graph)
         else:
             raise ValueError("No input documents could be loaded.")
 
