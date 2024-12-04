@@ -108,9 +108,28 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
     def add_records(self, new_records: List) -> bool:
         """
-        Add a record to the knowledge graph.
+        Add new records to the knowledge graph.
+
+        Args:
+            new_records (List[Document]): List of new documents to add.
+
+        Returns:
+            bool: True if successful, False otherwise.
         """
-        pass
+        if self.graph_store is None:
+            raise ValueError("Knowledge graph is not initialized. Please call init_db first.")
+
+        try:
+            # Load new documents
+            new_documents = SimpleDirectoryReader(input_files=[doc.path_or_url for doc in new_records]).load_data()
+
+            for doc in new_documents:
+                self.index.insert(doc)
+
+            return True
+        except Exception as e:
+            print(f"Error adding records: {e}")
+            return False
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
         """
