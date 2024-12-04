@@ -7,6 +7,7 @@
 
 import os
 import sys
+from typing import List
 from unittest.mock import MagicMock
 
 import pytest
@@ -70,7 +71,7 @@ class Step(BaseModel):
 
 
 class MathReasoning(BaseModel):
-    steps: list[Step]
+    steps: List[Step]
     final_answer: str
 
     def format(self) -> str:
