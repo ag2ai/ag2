@@ -1,0 +1,446 @@
+---
+title: "Perform Research with Multi-Agent Group Chat"
+---
+
+AutoGen offers conversable agents powered by LLM, tool, or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
+Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+## Requirements
+
+````{=mdx}
+:::info Requirements
+Install `pyautogen`:
+```bash
+pip install pyautogen
+```
+
+For more information, please refer to the [installation guide](/docs/installation/).
+:::
+````
+
+## Set your API Endpoint
+
+The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
+
+```python
+import autogen
+
+config_list_gpt4 = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4-32k", "gpt-4-32k-0314", "gpt-4-32k-v0314"],
+    },
+)
+```
+
+```{=mdx}
+:::tip
+Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
+:::
+```
+
+## Construct Agents
+
+```python
+gpt4_config = {
+    "cache_seed": 42,  # change the cache_seed for different trials
+    "temperature": 0,
+    "config_list": config_list_gpt4,
+    "timeout": 120,
+}
+user_proxy = autogen.UserProxyAgent(
+    name="Admin",
+    system_message="A human admin. Interact with the planner to discuss the plan. Plan execution needs to be approved by this admin.",
+    code_execution_config=False,
+)
+engineer = autogen.AssistantAgent(
+    name="Engineer",
+    llm_config=gpt4_config,
+    system_message="""Engineer. You follow an approved plan. You write python/shell code to solve tasks. Wrap the code in a code block that specifies the script type. The user can't modify your code. So do not suggest incomplete code which requires others to modify. Don't use a code block if it's not intended to be executed by the executor.
+Don't include multiple code blocks in one response. Do not ask others to copy and paste the result. Check the execution result returned by the executor.
+If the result indicates there is an error, fix the error and output the code again. Suggest the full code instead of partial code or code changes. If the error can't be fixed or if the task is not solved even after the code is executed successfully, analyze the problem, revisit your assumption, collect additional info you need, and think of a different approach to try.
+""",
+)
+scientist = autogen.AssistantAgent(
+    name="Scientist",
+    llm_config=gpt4_config,
+    system_message="""Scientist. You follow an approved plan. You are able to categorize papers after seeing their abstracts printed. You don't write code.""",
+)
+planner = autogen.AssistantAgent(
+    name="Planner",
+    system_message="""Planner. Suggest a plan. Revise the plan based on feedback from admin and critic, until admin approval.
+The plan may involve an engineer who can write code and a scientist who doesn't write code.
+Explain the plan first. Be clear which step is performed by an engineer, and which step is performed by a scientist.
+""",
+    llm_config=gpt4_config,
+)
+executor = autogen.UserProxyAgent(
+    name="Executor",
+    system_message="Executor. Execute the code written by the engineer and report the result.",
+    human_input_mode="NEVER",
+    code_execution_config={
+        "last_n_messages": 3,
+        "work_dir": "paper",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+)
+critic = autogen.AssistantAgent(
+    name="Critic",
+    system_message="Critic. Double check plan, claims, code from other agents and provide feedback. Check whether the plan includes adding verifiable info such as source URL.",
+    llm_config=gpt4_config,
+)
+groupchat = autogen.GroupChat(
+    agents=[user_proxy, engineer, scientist, planner, executor, critic], messages=[], max_round=50
+)
+manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=gpt4_config)
+```
+
+## Start Chat
+
+````python
+user_proxy.initiate_chat(
+    manager,
+    message="""
+find papers on LLM applications from arxiv in the last week, create a markdown table of different domains.
+""",
+)
+
+    Admin (to chat_manager):
+
+
+    find papers on LLM applications from arxiv in the last week, create a markdown table of different domains.
+
+
+    --------------------------------------------------------------------------------
+    Planner (to chat_manager):
+
+    Plan:
+
+    1. Engineer: Write a script to scrape the arXiv website for papers related to LLM (Language Model) applications published in the last week. The script should extract the title, authors, abstract, and link to the paper.
+
+    2. Scientist: Review the scraped data to identify the different domains in which LLM is applied. This could be based on keywords in the title or abstract, or the scientist's knowledge of the field.
+
+    3. Engineer: Modify the script to categorize the papers based on the domains identified by the scientist. The script should output a markdown table with columns for the domain, title, authors, abstract, and link.
+
+    4. Scientist: Review the markdown table to ensure the papers are correctly categorized and the information is accurate.
+
+    5. Engineer: Make any necessary revisions to the script based on the scientist's feedback.
+
+    6. Scientist: Give final approval of the markdown table.
+
+    7. Engineer: Submit the final markdown table.
+
+    --------------------------------------------------------------------------------
+    Critic (to chat_manager):
+
+    The plan seems solid and well-structured. However, it lacks the inclusion of verifiable information such as source URLs. Here's a revised version:
+
+    1. Engineer: Write a script to scrape the arXiv website for papers related to LLM (Language Model) applications published in the last week. The script should extract the title, authors, abstract, and link to the paper.
+
+    2. Scientist: Review the scraped data to identify the different domains in which LLM is applied. This could be based on keywords in the title or abstract, or the scientist's knowledge of the field.
+
+    3. Engineer: Modify the script to categorize the papers based on the domains identified by the scientist. The script should output a markdown table with columns for the domain, title, authors, abstract, and link (source URL).
+
+    4. Scientist: Review the markdown table to ensure the papers are correctly categorized and the information is accurate. Check the source URLs to verify the information.
+
+    5. Engineer: Make any necessary revisions to the script based on the scientist's feedback.
+
+    6. Scientist: Give final approval of the markdown table, ensuring all entries have a valid source URL.
+
+    7. Engineer: Submit the final markdown table.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+
+    >>>>>>>> USING AUTO REPLY...
+    Admin (to chat_manager):
+
+
+
+    --------------------------------------------------------------------------------
+    Engineer (to chat_manager):
+
+    I'm sorry for the confusion, but as an AI model developed by OpenAI, I don't have the ability to directly scrape websites or access real-time data from external databases or websites, including arXiv. However, I can help you write a Python script that uses the arXiv API to fetch the data you need.
+
+    Here's a Python script that uses the `arxiv` package to search for papers related to "LLM applications" from the last week. This script will print out the title, authors, summary, and URL of each paper.
+
+    ```python
+    import arxiv
+    import datetime
+
+    # Calculate the date one week ago
+    one_week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y%m%d%H%M%S')
+
+    # Search for papers on LLM applications
+    search = arxiv.Search(
+      query="LLM applications",
+      max_results=100,
+      sort_by=arxiv.SortCriterion.SubmittedDate,
+      sort_order=arxiv.SortOrder.Descending
+    )
+
+    for result in search.get():
+      # Check if the paper was submitted in the last week
+      if result.submitted.strftime('%Y%m%d%H%M%S') > one_week_ago:
+        print(f"Title: {result.title}")
+        print(f"Authors: {', '.join(author.name for author in result.authors)}")
+        print(f"Summary: {result.summary}")
+        print(f"URL: {result.entry_id}")
+        print("\n")
+    ```
+
+    You can install the `arxiv` package using pip:
+
+    ```shell
+    pip install arxiv
+    ```
+
+    Please note that you'll need to replace `"LLM applications"` with the actual search term you're interested in. The arXiv API doesn't support searching by the submission date, so the script fetches the 100 most recent results and filters them manually. You may need to increase `max_results` if there are more than 100 papers submitted per week on your topic.
+
+    To create a markdown table, you'll need to format the output like this:
+
+    ```markdown
+    | Title | Authors | Summary | URL |
+    |-------|---------|---------|-----|
+    | ...   | ...     | ...     | ... |
+    ```
+
+    You can do this in Python using f-strings:
+
+    ```python
+    print("| Title | Authors | Summary | URL |")
+    print("|-------|---------|---------|-----|")
+    for result in search.get():
+      # Check if the paper was submitted in the last week
+      if result.submitted.strftime('%Y%m%d%H%M%S') > one_week_ago:
+        print(f"| {result.title} | {', '.join(author.name for author in result.authors)} | {result.summary} | {result.entry_id} |")
+    ```
+
+    This will print a markdown table to the console. If you want to write the table to a file, you can open a file and use the `write` method instead of `print`.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    Executor (to chat_manager):
+
+    exitcode: 1 (execution failed)
+    Code output:
+    :15: DeprecationWarning: The 'get' method is deprecated, use 'results' instead
+      for result in search.get():
+    Traceback (most recent call last):
+      File "", line 17, in <module>
+        if result.submitted.strftime('%Y%m%d%H%M%S') > one_week_ago:
+    AttributeError: 'Result' object has no attribute 'submitted'
+
+
+    --------------------------------------------------------------------------------
+    Engineer (to chat_manager):
+
+    I apologize for the confusion. It seems there was a mistake in the code. The `arxiv` package's `Result` object doesn't have a `submitted` attribute. Instead, we should use the `published` attribute to get the date when the paper was published.
+
+    Here's the corrected code:
+
+    ```python
+    import arxiv
+    import datetime
+
+    # Calculate the date one week ago
+    one_week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y%m%d%H%M%S')
+
+    # Search for papers on LLM applications
+    search = arxiv.Search(
+      query="LLM applications",
+      max_results=100,
+      sort_by=arxiv.SortCriterion.Relevance,
+      sort_order=arxiv.SortOrder.Descending
+    )
+
+    print("| Title | Authors | Summary | URL |")
+    print("|-------|---------|---------|-----|")
+    for result in search.results():
+      # Check if the paper was published in the last week
+      if result.published.strftime('%Y%m%d%H%M%S') > one_week_ago:
+        print(f"| {result.title} | {', '.join(author.name for author in result.authors)} | {result.summary} | {result.entry_id} |")
+    ```
+
+    This script will print a markdown table of papers related to "LLM applications" that were published in the last week. The table includes the title, authors, summary, and URL of each paper.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    Executor (to chat_manager):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    | Title | Authors | Summary | URL |
+    |-------|---------|---------|-----|
+    | Large Language Models as Data Preprocessors | Haochen Zhang, Yuyang Dong, Chuan Xiao, Masafumi Oyamada | Large Language Models (LLMs), typified by OpenAI's GPT series and Meta's
+    LLaMA variants, have marked a significant advancement in artificial
+    intelligence. Trained on vast amounts of text data, LLMs are capable of
+    understanding and generating human-like text across a diverse range of topics.
+    This study expands on the applications of LLMs, exploring their potential in
+    data preprocessing, a critical stage in data mining and analytics applications.
+    We delve into the applicability of state-of-the-art LLMs such as GPT-3.5,
+    GPT-4, and Vicuna-13B for error detection, data imputation, schema matching,
+    and entity matching tasks. Alongside showcasing the inherent capabilities of
+    LLMs, we highlight their limitations, particularly in terms of computational
+    expense and inefficiency. We propose an LLM-based framework for data
+    preprocessing, which integrates cutting-edge prompt engineering techniques,
+    coupled with traditional methods like contextualization and feature selection,
+    to improve the performance and efficiency of these models. The effectiveness of
+    LLMs in data preprocessing is evaluated through an experimental study spanning
+    12 datasets. GPT-4 emerged as a standout, achieving 100\% accuracy or F1 score
+    on 4 datasets, suggesting LLMs' immense potential in these tasks. Despite
+    certain limitations, our study underscores the promise of LLMs in this domain
+    and anticipates future developments to overcome current hurdles. | http://arxiv.org/abs/2308.16361v1 |
+    | Large language models in medicine: the potentials and pitfalls | Jesutofunmi A. Omiye, Haiwen Gui, Shawheen J. Rezaei, James Zou, Roxana Daneshjou | Large language models (LLMs) have been applied to tasks in healthcare,
+    ranging from medical exam questions to responding to patient questions. With
+    increasing institutional partnerships between companies producing LLMs and
+    healthcare systems, real world clinical application is coming closer to
+    reality. As these models gain traction, it is essential for healthcare
+    practitioners to understand what LLMs are, their development, their current and
+    potential applications, and the associated pitfalls when utilized in medicine.
+    This review and accompanying tutorial aim to give an overview of these topics
+    to aid healthcare practitioners in understanding the rapidly changing landscape
+    of LLMs as applied to medicine. | http://arxiv.org/abs/2309.00087v1 |
+    | Point-Bind & Point-LLM: Aligning Point Cloud with Multi-modality for 3D Understanding, Generation, and Instruction Following | Ziyu Guo, Renrui Zhang, Xiangyang Zhu, Yiwen Tang, Xianzheng Ma, Jiaming Han, Kexin Chen, Peng Gao, Xianzhi Li, Hongsheng Li, Pheng-Ann Heng | We introduce Point-Bind, a 3D multi-modality model aligning point clouds with
+    2D image, language, audio, and video. Guided by ImageBind, we construct a joint
+    embedding space between 3D and multi-modalities, enabling many promising
+    applications, e.g., any-to-3D generation, 3D embedding arithmetic, and 3D
+    open-world understanding. On top of this, we further present Point-LLM, the
+    first 3D large language model (LLM) following 3D multi-modal instructions. By
+    parameter-efficient fine-tuning techniques, Point-LLM injects the semantics of
+    Point-Bind into pre-trained LLMs, e.g., LLaMA, which requires no 3D instruction
+    data, but exhibits superior 3D and multi-modal question-answering capacity. We
+    hope our work may cast a light on the community for extending 3D point clouds
+    to multi-modality applications. Code is available at
+    https://github.com/ZiyuGuo99/Point-Bind_Point-LLM. | http://arxiv.org/abs/2309.00615v1 |
+    | Where Would I Go Next? Large Language Models as Human Mobility Predictors | Xinglei Wang, Meng Fang, Zichao Zeng, Tao Cheng | Accurate human mobility prediction underpins many important applications
+    across a variety of domains, including epidemic modelling, transport planning,
+    and emergency responses. Due to the sparsity of mobility data and the
+    stochastic nature of people's daily activities, achieving precise predictions
+    of people's locations remains a challenge. While recently developed large
+    language models (LLMs) have demonstrated superior performance across numerous
+    language-related tasks, their applicability to human mobility studies remains
+    unexplored. Addressing this gap, this article delves into the potential of LLMs
+    for human mobility prediction tasks. We introduce a novel method, LLM-Mob,
+    which leverages the language understanding and reasoning capabilities of LLMs
+    for analysing human mobility data. We present concepts of historical stays and
+    context stays to capture both long-term and short-term dependencies in human
+    movement and enable time-aware prediction by using time information of the
+    prediction target. Additionally, we design context-inclusive prompts that
+    enable LLMs to generate more accurate predictions. Comprehensive evaluations of
+    our method reveal that LLM-Mob excels in providing accurate and interpretable
+    predictions, highlighting the untapped potential of LLMs in advancing human
+    mobility prediction techniques. We posit that our research marks a significant
+    paradigm shift in human mobility modelling, transitioning from building complex
+    domain-specific models to harnessing general-purpose LLMs that yield accurate
+    predictions through language instructions. The code for this work is available
+    at https://github.com/xlwang233/LLM-Mob. | http://arxiv.org/abs/2308.15197v1 |
+    | Interactively Robot Action Planning with Uncertainty Analysis and Active Questioning by Large Language Model | Kazuki Hori, Kanata Suzuki, Tetsuya Ogata | The application of the Large Language Model (LLM) to robot action planning
+    has been actively studied. The instructions given to the LLM by natural
+    language may include ambiguity and lack of information depending on the task
+    context. It is possible to adjust the output of LLM by making the instruction
+    input more detailed; however, the design cost is high. In this paper, we
+    propose the interactive robot action planning method that allows the LLM to
+    analyze and gather missing information by asking questions to humans. The
+    method can minimize the design cost of generating precise robot instructions.
+    We demonstrated the effectiveness of our method through concrete examples in
+    cooking tasks. However, our experiments also revealed challenges in robot
+    action planning with LLM, such as asking unimportant questions and assuming
+    crucial information without asking. Shedding light on these issues provides
+    valuable insights for future research on utilizing LLM for robotics. | http://arxiv.org/abs/2308.15684v1 |
+    | AskIt: Unified Programming Interface for Programming with Large Language Models | Katsumi Okuda, Saman Amarasinghe | In the evolving landscape of software development, Large Language Models
+    (LLMs) exhibit a unique phenomenon known as emergent abilities, demonstrating
+    adeptness across numerous tasks, from text summarization to code generation.
+    While these abilities open up novel avenues in software design and crafting,
+    their incorporation presents substantial challenges. Developers grapple with
+    decisions surrounding the direct embedding of LLMs within applications versus
+    employing them for code generation. Moreover, effective prompt design becomes a
+    critical concern, given the necessity of data extraction from natural language
+    outputs. To address these intricacies, this paper introduces AskIt, a
+    domain-specific language (DSL) specifically designed for LLMs. AskIt simplifies
+    LLM integration, offering type-guided output control, template-based function
+    definitions, and a unified interface that diminishes the distinction between
+    LLM-based code generation and application integration. Furthermore, through
+    Programming by Example (PBE), AskIt harnesses the power of few-shot learning at
+    the programming language level. Our evaluations underscore AskIt's potency.
+    Across 50 tasks, AskIt generated concise prompts for the given tasks, achieving
+    a 16.14% reduction in prompt length relative to benchmarks. Additionally, by
+    enabling the transition from direct LLM application usage to function
+    generation, AskIt achieved significant speedups, as observed in our GSM8K
+    benchmark experiments. Through these advancements, AskIt streamlines the
+    integration of LLMs in software development, offering a more efficient,
+    versatile approach for leveraging emergent abilities. The implementations of
+    AskIt in TypeScript and Python are available at
+    https://github.com/katsumiok/ts-askit and https://github.com/katsumiok/pyaskit,
+    respectively. | http://arxiv.org/abs/2308.15645v1 |
+
+
+    --------------------------------------------------------------------------------
+    Scientist (to chat_manager):
+
+    Here are the papers related to LLM applications published in the last week:
+
+    | Domain | Title | Authors | Summary | URL |
+    |-------|---------|---------|-----|-----|
+    | Data Preprocessing | [Large Language Models as Data Preprocessors](http://arxiv.org/abs/2308.16361v1) | Haochen Zhang, Yuyang Dong, Chuan Xiao, Masafumi Oyamada | This study expands on the applications of LLMs, exploring their potential in data preprocessing, a critical stage in data mining and analytics applications. | [Link](http://arxiv.org/abs/2308.16361v1) |
+    | Medicine | [Large language models in medicine: the potentials and pitfalls](http://arxiv.org/abs/2309.00087v1) | Jesutofunmi A. Omiye, Haiwen Gui, Shawheen J. Rezaei, James Zou, Roxana Daneshjou | This review and accompanying tutorial aim to give an overview of these topics to aid healthcare practitioners in understanding the rapidly changing landscape of LLMs as applied to medicine. | [Link](http://arxiv.org/abs/2309.00087v1) |
+    | 3D Understanding, Generation, and Instruction Following | [Point-Bind & Point-LLM: Aligning Point Cloud with Multi-modality for 3D Understanding, Generation, and Instruction Following](http://arxiv.org/abs/2309.00615v1) | Ziyu Guo, Renrui Zhang, Xiangyang Zhu, Yiwen Tang, Xianzheng Ma, Jiaming Han, Kexin Chen, Peng Gao, Xianzhi Li, Hongsheng Li, Pheng-Ann Heng | We introduce Point-Bind, a 3D multi-modality model aligning point clouds with 2D image, language, audio, and video. | [Link](http://arxiv.org/abs/2309.00615v1) |
+    | Human Mobility Prediction | [Where Would I Go Next? Large Language Models as Human Mobility Predictors](http://arxiv.org/abs/2308.15197v1) | Xinglei Wang, Meng Fang, Zichao Zeng, Tao Cheng | This article delves into the potential of LLMs for human mobility prediction tasks. | [Link](http://arxiv.org/abs/2308.15197v1) |
+    | Robotics | [Interactively Robot Action Planning with Uncertainty Analysis and Active Questioning by Large Language Model](http://arxiv.org/abs/2308.15684v1) | Kazuki Hori, Kanata Suzuki, Tetsuya Ogata | In this paper, we propose the interactive robot action planning method that allows the LLM to analyze and gather missing information by asking questions to humans. | [Link](http://arxiv.org/abs/2308.15684v1) |
+    | Software Development | [AskIt: Unified Programming Interface for Programming with Large Language Models](http://arxiv.org/abs/2308.15645v1) | Katsumi Okuda, Saman Amarasinghe | This paper introduces AskIt, a domain-specific language (DSL) specifically designed for LLMs. | [Link](http://arxiv.org/abs/2308.15645v1) |
+
+    --------------------------------------------------------------------------------
+    Critic (to chat_manager):
+
+    The scientist has done a good job categorizing the papers into different domains and providing a summary for each. The markdown table is correctly formatted and includes the source URL for each paper, which allows for verification of the information. The domains identified are diverse, indicating a broad range of applications for Large Language Models (LLMs). This review and categorization should provide a useful resource for anyone interested in the recent applications of LLMs.
+
+    --------------------------------------------------------------------------------
+````
+
+## Create Group Chat without Critic for Comparison
+
+```python
+groupchat_nocritic = autogen.GroupChat(
+    agents=[user_proxy, engineer, scientist, planner, executor], messages=[], max_round=50
+)
+for agent in groupchat.agents:
+    agent.reset()
+manager_nocritic = autogen.GroupChatManager(groupchat=groupchat_nocritic, llm_config=gpt4_config)
+user_proxy.initiate_chat(
+    manager_nocritic,
+    message="""
+find papers on LLM applications from arxiv in the last week, create a markdown table of different domains.
+""",
+)
+
+    Admin (to chat_manager):
+
+
+    find papers on LLM applications from arxiv in the last week, create a markdown table of different domains.
+
+
+    --------------------------------------------------------------------------------
+    Planner (to chat_manager):
+
+    Plan:
+
+    1. Engineer: Write a script to scrape the arXiv website for papers related to LLM (Language Model) applications published in the last week. The script should extract the title, authors, abstract, and link to the paper.
+
+    2. Scientist: Review the scraped data to identify the different domains in which LLM is applied. This could be based on keywords in the title or abstract, or the scientist's knowledge of the field.
+
+    3. Engineer: Modify the script to categorize the papers based on the domains identified by the scientist. The script should output a markdown table with columns for the domain, title, authors, abstract, and link.
+
+    4. Scientist: Review the markdown table to ensure the papers are correctly categorized and the information is accurate.
+
+    5. Engineer: Make any necessary revisions to the script based on the scientist's feedback.
+
+    6. Scientist: Give final approval of the markdown table.
+
+    7. Engineer: Submit the final markdown table.
+
+    --------------------------------------------------------------------------------
+
+```

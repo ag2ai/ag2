@@ -1,0 +1,244 @@
+---
+title: "Using FalkorGraphRagCapability with agents for GraphRAG Question & Answering"
+---
+
+AG2 provides GraphRAG integration using agent capabilities. This is an example to integrate FalkorDB (a Knowledge Graph database).
+
+````{=mdx}
+:::info Requirements
+FalkorDB's GraphRAG-SDK is a dependency for this notebook, which can be installed with ag2 via pip:
+
+```bash
+pip install ag2[graph_rag_falkor_db]
+```
+
+or if you have already installed ag2/autogen/pyautogen
+
+```bash
+pip install graphrag_sdk==0.3.3
+```
+
+For more information, please refer to the [installation guide](/docs/installation/).
+:::
+````
+
+## Set Configuration and OpenAI API Key
+
+By default, in order to use FalkorDB you need to have an OpenAI key in your environment variable `OPENAI_API_KEY`.
+
+You can utilise an OAI_CONFIG_LIST file and extract the OpenAI API key and put it in the environment, as will be shown in the following cell.
+
+Alternatively, you can load the environment variable yourself.
+
+```{=mdx}
+:::tip
+Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
+:::
+```
+
+```python
+import os
+
+import autogen
+
+config_list = autogen.config_list_from_json(env_or_file="OAI_CONFIG_LIST")
+
+# Put the OpenAI API key into the environment
+os.environ["OPENAI_API_KEY"] = config_list[0]["api_key"]
+```
+
+    /usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+      from .autonotebook import tqdm as notebook_tqdm
+
+```{=mdx}
+:::important
+The default model for loading graph data and answering questions using FalkorDB's SDK is OpenAI's GPT 4o and this can be changed by setting the `model` parameter on the FalkorGraphQueryEngine.
+:::
+```
+
+## Create a Knowledge Graph with Your Own Data
+
+**Note:** You need to have a FalkorDB graph database running. If you are running one in a Docker container, please ensure your Docker network is setup to allow access to it.
+
+In this example, the FalkorDB endpoint is set to host="172.18.0.3" and port=6379, please adjust accordingly. For how to set up FalkorDB, please refer to https://docs.falkordb.com/
+
+Below, we have some sample data from IMDB on the movie 'The Matrix'. See the [contents of the file here](https://github.com/ag2ai/ag2/blob/main/test/agentchat/contrib/graph_rag/the_matrix.txt).
+
+We then initialise the database with that text document, creating the graph in FalkorDB.
+
+### A Simple Example
+
+In this example, the graph ontology is auto-generated. This allows you to load data without specifying the specific types of entities and relationships that will make up the database (however, this may not be optimal and not cost efficient).
+
+```python
+from autogen import ConversableAgent, UserProxyAgent
+from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
+from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import FalkorGraphQueryEngine
+from autogen.agentchat.contrib.graph_rag.falkor_graph_rag_capability import FalkorGraphRagCapability
+
+# Auto generate graph schema from unstructured data
+input_path = "../test/agentchat/contrib/graph_rag/the_matrix.txt"
+input_documents = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
+
+# Create FalkorGraphQueryEngine
+query_engine = FalkorGraphQueryEngine(
+    name="The_Matrix_Auto",
+    host="172.18.0.3",  # Change
+    port=6379,  # if needed
+)
+
+# Ingest data and initialize the database
+query_engine.init_db(input_doc=input_documents)
+
+# Create a ConversableAgent (no LLM configuration)
+graph_rag_agent = ConversableAgent(
+    name="matrix_agent",
+    human_input_mode="NEVER",
+)
+
+# Associate the capability with the agent
+graph_rag_capability = FalkorGraphRagCapability(query_engine)
+graph_rag_capability.add_to_agent(graph_rag_agent)
+
+# Create a user proxy agent to converse with our RAG agent
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="ALWAYS",
+)
+
+user_proxy.initiate_chat(graph_rag_agent, message="Name a few actors who've played in 'The Matrix'")
+
+    user_proxy (to matrix_agent):
+
+    Name a few actors who've played in 'The Matrix'
+
+    --------------------------------------------------------------------------------
+    matrix_agent (to user_proxy):
+
+    Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving are a few actors who've played in 'The Matrix'.
+
+    --------------------------------------------------------------------------------
+    user_proxy (to matrix_agent):
+
+    Who else acted in The Matrix?
+
+    --------------------------------------------------------------------------------
+    matrix_agent (to user_proxy):
+
+    Based on the provided information, there is no additional data about other actors who acted in 'The Matrix' outside of Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving.
+
+    --------------------------------------------------------------------------------
+
+
+
+
+
+    ChatResult(chat_id=None, chat_history=[{'content': "Name a few actors who've played in 'The Matrix'", 'role': 'assistant', 'name': 'user_proxy'}, {'content': "Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving are a few actors who've played in 'The Matrix'.", 'role': 'user', 'name': 'matrix_agent'}, {'content': 'Who else acted in The Matrix?', 'role': 'assistant', 'name': 'user_proxy'}, {'content': "Based on the provided information, there is no additional data about other actors who acted in 'The Matrix' outside of Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving.", 'role': 'user', 'name': 'matrix_agent'}], summary="Based on the provided information, there is no additional data about other actors who acted in 'The Matrix' outside of Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving.", cost={'usage_including_cached_inference': {'total_cost': 0}, 'usage_excluding_cached_inference': {'total_cost': 0}}, human_input=['Who else acted in The Matrix?', 'exit'])
+```
+
+### Revisit the example with self defined graph ontology
+
+If you want to be more specific on the entities and attributes in the graph database you can create an `Ontology` before loading your data, in the case below we define these entities (`Actor` with `name` and `Movie` with `title`) and relationships (Actors `ACTED` in Movies). This allows the RAG agent to answer questions about actors in the movie.
+
+```python
+from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
+
+from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
+from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import FalkorGraphQueryEngine
+
+input_path = "../test/agentchat/contrib/graph_rag/the_matrix.txt"
+
+movie_ontology = Ontology()
+movie_ontology.add_entity(
+    Entity(label="Actor", attributes=[Attribute(name="name", attr_type=AttributeType.STRING, unique=True)])
+)
+movie_ontology.add_entity(
+    Entity(label="Movie", attributes=[Attribute(name="title", attr_type=AttributeType.STRING, unique=True)])
+)
+movie_ontology.add_relation(Relation(label="ACTED", source="Actor", target="Movie"))
+
+query_engine = FalkorGraphQueryEngine(
+    name="IMDB",
+    host="172.18.0.3",  # Change
+    port=6379,  # if needed
+    ontology=movie_ontology,
+)
+
+input_documents = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
+
+query_engine.init_db(input_doc=input_documents)
+```
+
+## Add capability to a ConversableAgent and query them
+
+With FalkorDB setup with an ontology and data, we can now associate the GraphRAG capability with a ConversableAgent and have a chat with it.
+
+```python
+from autogen import ConversableAgent, UserProxyAgent
+from autogen.agentchat.contrib.graph_rag.falkor_graph_rag_capability import FalkorGraphRagCapability
+
+# Create a ConversableAgent (no LLM configuration)
+graph_rag_agent = ConversableAgent(
+    name="matrix_agent",
+    human_input_mode="NEVER",
+)
+
+# Associate the capability with the agent
+graph_rag_capability = FalkorGraphRagCapability(query_engine)
+graph_rag_capability.add_to_agent(graph_rag_agent)
+
+# Create a user proxy agent to converse with our RAG agent
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    code_execution_config=False,
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
+    human_input_mode="ALWAYS",
+)
+
+user_proxy.initiate_chat(graph_rag_agent, message="Name a few actors who've played in 'The Matrix'")
+
+# You will be prompted, as a human in the loop, after the response - feel free to ask more questions.
+
+    user_proxy (to matrix_agent):
+
+    Name a few actors who've played in 'The Matrix'
+
+    --------------------------------------------------------------------------------
+    matrix_agent (to user_proxy):
+
+    Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving are some of the actors who have played in "The Matrix".
+
+    --------------------------------------------------------------------------------
+    user_proxy (to matrix_agent):
+
+    Who else acted in The Matrix?
+
+    --------------------------------------------------------------------------------
+    matrix_agent (to user_proxy):
+
+    No other actors are listed as having acted in "The Matrix" beyond Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving.
+
+    --------------------------------------------------------------------------------
+    user_proxy (to matrix_agent):
+
+    Where was The Matrix filmed?
+
+    --------------------------------------------------------------------------------
+    matrix_agent (to user_proxy):
+
+    I am sorry, I could not find the answer to your question
+
+    --------------------------------------------------------------------------------
+
+
+
+
+
+    ChatResult(chat_id=None, chat_history=[{'content': "Name a few actors who've played in 'The Matrix'", 'role': 'assistant', 'name': 'user_proxy'}, {'content': 'Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving are some of the actors who have played in "The Matrix".', 'role': 'user', 'name': 'matrix_agent'}, {'content': 'Who else acted in The Matrix?', 'role': 'assistant', 'name': 'user_proxy'}, {'content': 'No other actors are listed as having acted in "The Matrix" beyond Keanu Reeves, Laurence Fishburne, Carrie-Anne Moss, and Hugo Weaving.', 'role': 'user', 'name': 'matrix_agent'}, {'content': 'Where was The Matrix filmed?', 'role': 'assistant', 'name': 'user_proxy'}, {'content': 'I am sorry, I could not find the answer to your question', 'role': 'user', 'name': 'matrix_agent'}], summary='I am sorry, I could not find the answer to your question', cost={'usage_including_cached_inference': {'total_cost': 0}, 'usage_excluding_cached_inference': {'total_cost': 0}}, human_input=['Who else acted in The Matrix?', 'Where was The Matrix filmed?', 'exit'])
+```
+
+From the output we can see that:
+
+- We can ask about actors and movies because we defined the ontology (and they were also automatically created in the prior example)
+- There is inbuilt awareness of answers it has provided previously
+- It can't answer any questions outside of the actors and movies entities as we didn't include anything else in the ontology

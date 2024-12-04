@@ -1,0 +1,309 @@
+---
+title: "SocietyOfMindAgent"
+---
+
+TODO: reimplement the society of mind agent using `register_nested_chat` and move to the core library.
+
+This notebook demonstrates the SocietyOfMindAgent, which runs a group chat as an internal monologue, but appears to the external world as a single agent. This confers three distinct advantages:
+
+1. It provides a clean way of producing a hierarchy of agents, hiding complexity as inner monologues.
+2. It provides a consistent way of extracting an answer from a lengthy group chat (normally, it is not clear which message is the final response, and the response itself may not always be formatted in a way that makes sense when extracted as a standalone message).
+3. It provides a way of recovering when agents exceed their context window constraints (the inner monologue is protected by try-catch blocks)
+
+````{=mdx}
+:::info Requirements
+Install `autogen`:
+```bash
+pip install autogen
+```
+
+For more information, please refer to the [installation guide](/docs/installation/).
+:::
+````
+
+```python
+import autogen  # noqa: E402
+
+llm_config = {
+    "timeout": 600,
+    "cache_seed": 44,  # change the seed for different trials
+    "config_list": autogen.config_list_from_json(
+        "OAI_CONFIG_LIST",
+        filter_dict={"model": ["gpt-4", "gpt-4-0613", "gpt-4-32k", "gpt-4-32k-0613", "gpt-4-1106-preview"]},
+    ),
+    "temperature": 0,
+}
+```
+
+```{=mdx}
+:::tip
+Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
+:::
+```
+
+### Example Group Chat with Two Agents
+
+In this example, we will use an AssistantAgent and a UserProxy agent (configured for code execution) to work together to solve a problem. Executing code requires _at least_ two conversation turns (one to write the code, and one to execute the code). If the code fails, or needs further refinement, then additional turns may also be needed. We will then wrap these agents in a SocietyOfMindAgent, hiding the internal discussion from other agents (though will still appear in the console), and ensuring that the response is suitable as a standalone message.
+
+#### Construct the Inner-Monologue Agents
+
+We begin by constructing the inner-monologue agents. These are the agents that do that real work.
+
+```python
+assistant = autogen.AssistantAgent(
+    "inner-assistant",
+    llm_config=llm_config,
+    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+)
+
+code_interpreter = autogen.UserProxyAgent(
+    "inner-code-interpreter",
+    human_input_mode="NEVER",
+    code_execution_config={
+        "work_dir": "coding",
+        "use_docker": False,
+    },
+    default_auto_reply="",
+    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+)
+
+groupchat = autogen.GroupChat(
+    agents=[assistant, code_interpreter],
+    messages=[],
+    speaker_selection_method="round_robin",  # With two agents, this is equivalent to a 1:1 conversation.
+    allow_repeat_speaker=False,
+    max_round=8,
+)
+
+manager = autogen.GroupChatManager(
+    groupchat=groupchat,
+    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    llm_config=llm_config,
+)
+```
+
+#### Construct and Run the SocietyOfMind Agent
+
+We now wrap the inner group-chat with the SocietyOfMind Agent, and create a UserProxy to talk to it.
+
+````python
+from autogen.agentchat.contrib.society_of_mind_agent import SocietyOfMindAgent  # noqa: E402
+
+task = "On which days in 2024 was Microsoft Stock higher than $370?"
+
+society_of_mind_agent = SocietyOfMindAgent(
+    "society_of_mind",
+    chat_manager=manager,
+    llm_config=llm_config,
+)
+
+user_proxy = autogen.UserProxyAgent(
+    "user_proxy",
+    human_input_mode="NEVER",
+    code_execution_config=False,
+    default_auto_reply="",
+    is_termination_msg=lambda x: True,
+)
+
+user_proxy.initiate_chat(society_of_mind_agent, message=task)
+
+    user_proxy (to society_of_mind):
+
+    On which days in 2024 was Microsoft Stock higher than $370?
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    society_of_mind (to chat_manager):
+
+    On which days in 2024 was Microsoft Stock higher than $370?
+
+    --------------------------------------------------------------------------------
+    inner-assistant (to chat_manager):
+
+    To find out on which days in 2024 Microsoft stock (MSFT) was higher than $370, we would typically need to access historical stock price data. This data can be obtained from financial data providers or APIs that offer stock market data.
+
+    One common way to access such data is by using the `yfinance` library in Python, which allows us to download historical stock prices from Yahoo Finance. However, since I cannot directly access the internet or external APIs, I will provide you with a Python script that you can run on your machine to fetch the data and determine on which days MSFT was higher than $370 in 2024.
+
+    Please install the `yfinance` library if you haven't already by running `pip install yfinance` in your terminal, and then run the following Python script:
+
+    ```python
+    # filename: msft_stock_analysis.py
+    import yfinance as yf
+    from datetime import datetime
+
+    # Define the ticker symbol and the date range
+    ticker_symbol = "MSFT"
+    start_date = "2024-01-01"
+    end_date = "2024-12-31"
+
+    # Download the historical stock prices
+    msft_data = yf.download(ticker_symbol, start=start_date, end=end_date)
+
+    # Filter the days where the stock price was higher than $370
+    days_higher_than_370 = msft_data[msft_data['Close'] > 370]
+
+    # Print the dates
+    print("Dates in 2024 when MSFT stock was higher than $370:")
+    for date in days_higher_than_370.index:
+        print(date.strftime('%Y-%m-%d'))
+    ```
+
+    This script will download the historical data for Microsoft stock for the year 2024 and print out the dates when the closing price was higher than $370. Please run this script and provide me with the output.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    inner-code-interpreter (to chat_manager):
+
+    exitcode: 1 (execution failed)
+    Code output:
+    Traceback (most recent call last):
+      File "msft_stock_analysis.py", line 2, in <module>
+        import yfinance as yf
+    ModuleNotFoundError: No module named 'yfinance'
+
+
+    --------------------------------------------------------------------------------
+    inner-assistant (to chat_manager):
+
+    The error indicates that the `yfinance` module is not installed on your system. To resolve this, you need to install the `yfinance` library. Please run the following command in your terminal to install it:
+
+    ```sh
+    pip install yfinance
+    ```
+
+    After you have installed `yfinance`, please try running the provided Python script again. If you encounter any further issues, please let me know.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is sh)...
+    inner-code-interpreter (to chat_manager):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    Collecting yfinance
+      Using cached yfinance-0.2.36-py2.py3-none-any.whl (72 kB)
+    Requirement already satisfied: lxml>=4.9.1 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (5.1.0)
+    Requirement already satisfied: appdirs>=1.4.4 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (1.4.4)
+    Requirement already satisfied: pytz>=2022.5 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (2023.3.post1)
+    Requirement already satisfied: pandas>=1.3.0 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (2.2.0)
+    Requirement already satisfied: peewee>=3.16.2 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (3.17.0)
+    Requirement already satisfied: requests>=2.31 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (2.31.0)
+    Requirement already satisfied: beautifulsoup4>=4.11.1 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (4.12.3)
+    Requirement already satisfied: numpy>=1.16.5 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (1.26.3)
+    Requirement already satisfied: html5lib>=1.1 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (1.1)
+    Requirement already satisfied: frozendict>=2.3.4 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (2.4.0)
+    Requirement already satisfied: multitasking>=0.0.7 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from yfinance) (0.0.11)
+    Requirement already satisfied: soupsieve>1.2 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from beautifulsoup4>=4.11.1->yfinance) (2.5)
+    Requirement already satisfied: six>=1.9 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from html5lib>=1.1->yfinance) (1.16.0)
+    Requirement already satisfied: webencodings in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from html5lib>=1.1->yfinance) (0.5.1)
+    Requirement already satisfied: python-dateutil>=2.8.2 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from pandas>=1.3.0->yfinance) (2.8.2)
+    Requirement already satisfied: tzdata>=2022.7 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from pandas>=1.3.0->yfinance) (2023.4)
+    Requirement already satisfied: certifi>=2017.4.17 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from requests>=2.31->yfinance) (2023.11.17)
+    Requirement already satisfied: charset-normalizer<4,>=2 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from requests>=2.31->yfinance) (3.3.2)
+    Requirement already satisfied: idna<4,>=2.5 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from requests>=2.31->yfinance) (3.6)
+    Requirement already satisfied: urllib3<3,>=1.21.1 in /home/afourney/repos/autogen/notebook/.venv/lib/python3.10/site-packages (from requests>=2.31->yfinance) (2.1.0)
+    Installing collected packages: yfinance
+    Successfully installed yfinance-0.2.36
+
+
+    --------------------------------------------------------------------------------
+    inner-assistant (to chat_manager):
+
+    It seems that the `yfinance` library has been successfully installed. Now that the library is available, please run the previously provided Python script again to fetch the historical stock prices for Microsoft and determine on which days the stock was higher than $370 in 2024.
+
+    Here is the script again for your convenience:
+
+    ```python
+    # filename: msft_stock_analysis.py
+    import yfinance as yf
+    from datetime import datetime
+
+    # Define the ticker symbol and the date range
+    ticker_symbol = "MSFT"
+    start_date = "2024-01-01"
+    end_date = "2024-12-31"
+
+    # Download the historical stock prices
+    msft_data = yf.download(ticker_symbol, start=start_date, end=end_date)
+
+    # Filter the days where the stock price was higher than $370
+    days_higher_than_370 = msft_data[msft_data['Close'] > 370]
+
+    # Print the dates
+    print("Dates in 2024 when MSFT stock was higher than $370:")
+    for date in days_higher_than_370.index:
+        print(date.strftime('%Y-%m-%d'))
+    ```
+
+    Please execute this script and provide me with the output.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    inner-code-interpreter (to chat_manager):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    Dates in 2024 when MSFT stock was higher than $370:
+    2024-01-02
+    2024-01-03
+    2024-01-08
+    2024-01-09
+    2024-01-10
+    2024-01-11
+    2024-01-12
+    2024-01-16
+    2024-01-17
+    2024-01-18
+    2024-01-19
+
+
+    --------------------------------------------------------------------------------
+    inner-assistant (to chat_manager):
+
+    The output indicates that Microsoft stock (MSFT) was higher than $370 on the following days in 2024:
+
+    - January 2, 2024
+    - January 3, 2024
+    - January 8, 2024
+    - January 9, 2024
+    - January 10, 2024
+    - January 11, 2024
+    - January 12, 2024
+    - January 16, 2024
+    - January 17, 2024
+    - January 18, 2024
+    - January 19, 2024
+
+    Please note that this list includes only the dates provided in the output and may not be exhaustive for the entire year of 2024. The script would have listed more dates if the stock price was higher than $370 on additional days beyond those listed.
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+    society_of_mind (to user_proxy):
+
+    Microsoft stock (MSFT) was higher than $370 on the following days in 2024:
+
+    - January 2, 2024
+    - January 3, 2024
+    - January 8, 2024
+    - January 9, 2024
+    - January 10, 2024
+    - January 11, 2024
+    - January 12, 2024
+    - January 16, 2024
+    - January 17, 2024
+    - January 18, 2024
+    - January 19, 2024
+
+    --------------------------------------------------------------------------------
+````
+
+#### Remarks
+
+There are a few things to notice about this output:
+
+- First, the user_proxy sent only one message to the society_of_mind agent, and received only one message in response. As far as it is concerned, the society_of_mind agent is the only agent in the chat.
+- Second, the final response is formatted in a way that is standalone. Unlike the prior response, it makes no reference of a previous script or execution, and it lacks the TERMINATE keyword that ended the inner monologue.

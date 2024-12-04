@@ -1,0 +1,285 @@
+---
+title: "Interactive LLM Agent Dealing with Data Stream"
+---
+
+AutoGen offers conversable agents powered by LLM, tool, or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
+Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+In this notebook, we demonstrate how to use customized agents to continuously acquire news from the web and ask for investment suggestions.
+
+## Requirements
+
+AutoGen requires `Python>=3.8`. To run this notebook example, please install:
+
+```bash
+pip install autogen
+```
+
+```python
+# %pip install "autogen"
+```
+
+## Set your API Endpoint
+
+The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
+
+```python
+import asyncio
+
+import autogen
+
+config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
+
+It first looks for environment variable "OAI_CONFIG_LIST" which needs to be a valid json string. If that variable is not found, it then looks for a json file named "OAI_CONFIG_LIST". It filters the configs by models (you can filter by other keys as well). Only the models with matching names are kept in the list based on the filter condition.
+
+The config list looks like the following:
+```
+
+```python
+config_list = [
+    {
+        'model': 'gpt-4',
+        'api_key': '<your OpenAI API key here>',
+    },
+    {
+        'model': 'gpt-3.5-turbo',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+    },
+    {
+        'model': 'gpt-3.5-turbo-16k',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+    },
+]
+```
+
+You can set the value of config_list in any way you prefer. Please refer to this [notebook](https://github.com/ag2ai/ag2/blob/main/website/docs/topics/llm_configuration.ipynb) for full code examples of the different methods.
+
+## Example Task: Investment suggestion with realtime data
+
+We consider a scenario where news data are streamed from a source, and we use an assistant agent to provide investment suggestions based on the data continually.
+
+First, we use the following code to simulate the data stream process.
+
+```python
+def get_market_news(ind, ind_upper):
+    import json
+
+    import requests
+
+    # replace the "demo" apikey below with your own key from https://www.alphavantage.co/support/#api-key
+    # url = 'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=AAPL&sort=LATEST&limit=5&apikey=demo'
+    # r = requests.get(url)
+    # data = r.json()
+    # with open('market_news_local.json', 'r') as file:
+    #     # Load JSON data from file
+    #     data = json.load(file)
+    data = {
+        "feed": [
+            {
+                "title": "Palantir CEO Says Our Generation's Atomic Bomb Could Be AI Weapon - And Arrive Sooner Than You Think - Palantir Technologies  ( NYSE:PLTR ) ",
+                "summary": "Christopher Nolan's blockbuster movie \"Oppenheimer\" has reignited the public discourse surrounding the United States' use of an atomic bomb on Japan at the end of World War II.",
+                "overall_sentiment_score": 0.009687,
+            },
+            {
+                "title": '3 "Hedge Fund Hotels" Pulling into Support',
+                "summary": "Institutional quality stocks have several benefits including high-liquidity, low beta, and a long runway. Strategist Andrew Rocco breaks down what investors should look for and pitches 3 ideas.",
+                "banner_image": "https://staticx-tuner.zacks.com/images/articles/main/92/87.jpg",
+                "overall_sentiment_score": 0.219747,
+            },
+            {
+                "title": "PDFgear, Bringing a Completely-Free PDF Text Editing Feature",
+                "summary": "LOS ANGELES, July 26, 2023 /PRNewswire/ -- PDFgear, a leading provider of PDF solutions, announced a piece of exciting news for everyone who works extensively with PDF documents.",
+                "overall_sentiment_score": 0.360071,
+            },
+            {
+                "title": "Researchers Pitch 'Immunizing' Images Against Deepfake Manipulation",
+                "summary": "A team at MIT says injecting tiny disruptive bits of code can cause distorted deepfake images.",
+                "overall_sentiment_score": -0.026894,
+            },
+            {
+                "title": "Nvidia wins again - plus two more takeaways from this week's mega-cap earnings",
+                "summary": "We made some key conclusions combing through quarterly results for Microsoft and Alphabet and listening to their conference calls with investors.",
+                "overall_sentiment_score": 0.235177,
+            },
+        ]
+    }
+    feeds = data["feed"][ind:ind_upper]
+    feeds_summary = "\n".join(
+        [
+            f"News summary: {f['title']}. {f['summary']} overall_sentiment_score: {f['overall_sentiment_score']}"
+            for f in feeds
+        ]
+    )
+    return feeds_summary
+
+
+data = asyncio.Future()
+
+
+async def add_stock_price_data():
+    # simulating the data stream
+    for i in range(0, 5, 1):
+        latest_news = get_market_news(i, i + 1)
+        if data.done():
+            data.result().append(latest_news)
+        else:
+            data.set_result([latest_news])
+        # print(data.result())
+        await asyncio.sleep(5)
+
+
+data_task = asyncio.create_task(add_stock_price_data())
+```
+
+Then, we construct agents. An assistant agent is created to answer the question using LLM. A UserProxyAgent is created to ask questions, and add the new data in the conversation when they are available.
+
+```python
+# create an AssistantAgent instance named "assistant"
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config={
+        "timeout": 600,
+        "cache_seed": 41,
+        "config_list": config_list,
+        "temperature": 0,
+    },
+    system_message="You are a financial expert.",
+)
+# create a UserProxyAgent instance named "user"
+user_proxy = autogen.UserProxyAgent(
+    name="user",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=5,
+    code_execution_config=False,
+    default_auto_reply=None,
+)
+
+
+async def add_data_reply(recipient, messages, sender, config):
+    await asyncio.sleep(0.1)
+    data = config["news_stream"]
+    if data.done():
+        result = data.result()
+        if result:
+            news_str = "\n".join(result)
+            result.clear()
+            return (
+                True,
+                f"Just got some latest market news. Merge your new suggestion with previous ones.\n{news_str}",
+            )
+        return False, None
+
+
+user_proxy.register_reply(autogen.AssistantAgent, add_data_reply, position=2, config={"news_stream": data})
+```
+
+We invoke the `a_initiate_chat()` method of the user proxy agent to start the conversation.
+
+```python
+await user_proxy.a_initiate_chat(  # noqa: F704
+    assistant,
+    message="""Give me investment suggestion in 3 bullet points.""",
+)
+while not data_task.done() and not data_task.cancelled():
+    reply = await user_proxy.a_generate_reply(sender=assistant)  # noqa: F704
+    if reply is not None:
+        await user_proxy.a_send(reply, assistant)  # noqa: F704
+
+    user (to assistant):
+
+    Give me investment suggestion in 3 bullet points.
+
+    --------------------------------------------------------------------------------
+    assistant (to user):
+
+    1. Diversify Your Portfolio: Don't put all your eggs in one basket. Spread your investments across a variety of asset classes such as stocks, bonds, real estate, and commodities. This can help to mitigate risk and potentially increase returns.
+
+    2. Invest for the Long Term: Investing is not about making a quick buck, but about growing your wealth over time. Stick to a long-term investment strategy and avoid the temptation to engage in frequent buying and selling.
+
+    3. Regularly Review Your Investments: The market is dynamic and constantly changing. Regularly review your investment portfolio to ensure it aligns with your financial goals and risk tolerance. Adjust your investments as necessary based on changes in your personal circumstances and market conditions.
+
+    --------------------------------------------------------------------------------
+    user (to assistant):
+
+    Just got some latest market news. Merge your new suggestion with previous ones.
+    News summary: Palantir CEO Says Our Generation's Atomic Bomb Could Be AI Weapon - And Arrive Sooner Than You Think - Palantir Technologies  ( NYSE:PLTR ) . Christopher Nolan's blockbuster movie "Oppenheimer" has reignited the public discourse surrounding the United States' use of an atomic bomb on Japan at the end of World War II. overall_sentiment_score: 0.009687
+    News summary: 3 "Hedge Fund Hotels" Pulling into Support. Institutional quality stocks have several benefits including high-liquidity, low beta, and a long runway. Strategist Andrew Rocco breaks down what investors should look for and pitches 3 ideas. overall_sentiment_score: 0.219747
+
+    --------------------------------------------------------------------------------
+    assistant (to user):
+
+    1. Diversify Your Portfolio: Given the recent news about AI technology and its potential impact, consider investing in tech companies like Palantir Technologies that are at the forefront of AI development. However, remember to maintain a diversified portfolio across various sectors and asset classes to mitigate risk.
+
+    2. Long-Term Investment Strategy: Despite the potential for rapid advancements in AI, it's important to maintain a long-term investment perspective. While these developments may bring short-term volatility, they could also present long-term growth opportunities.
+
+    3. Regularly Review and Adjust Your Investments: With the news about "Hedge Fund Hotels" and their potential benefits, consider reviewing your portfolio to see if these high-liquidity, low beta stocks fit into your investment strategy. However, always adjust your investments based on your personal circumstances, risk tolerance, and market conditions.
+
+    4. Invest in AI and Tech Stocks: Given the potential of AI as highlighted by Palantir's CEO, consider investing in companies that are leading in AI and other technological advancements. This could provide significant growth opportunities.
+
+    5. Consider "Hedge Fund Hotels": The news suggests that these stocks have several benefits including high-liquidity, low beta, and a long runway. If these align with your investment goals, they could be a good addition to your portfolio.
+
+    --------------------------------------------------------------------------------
+    user (to assistant):
+
+    Just got some latest market news. Merge your new suggestion with previous ones.
+    News summary: PDFgear, Bringing a Completely-Free PDF Text Editing Feature. LOS ANGELES, July 26, 2023 /PRNewswire/ -- PDFgear, a leading provider of PDF solutions, announced a piece of exciting news for everyone who works extensively with PDF documents. overall_sentiment_score: 0.360071
+
+    --------------------------------------------------------------------------------
+    assistant (to user):
+
+    1. Diversify Your Portfolio: With the latest news about PDFgear, consider investing in companies that provide digital solutions, as they are becoming increasingly important in our digital age. However, continue to maintain a diversified portfolio across various sectors and asset classes to mitigate risk.
+
+    2. Long-Term Investment Strategy: The announcement from PDFgear could potentially lead to short-term gains, but remember to maintain a long-term investment perspective. The digital solutions sector is expected to grow in the long run, providing potential growth opportunities.
+
+    3. Regularly Review and Adjust Your Investments: Given the news about PDFgear and its potential impact on the digital solutions sector, it's important to review your portfolio to see if it aligns with these new market trends. Adjust your investments based on your personal circumstances, risk tolerance, and market conditions.
+
+    4. Invest in Digital Solutions: The news about PDFgear highlights the potential growth in the digital solutions sector. Consider investing in companies that are leading in this field, as they could provide significant growth opportunities.
+
+    5. Consider Tech Stocks: With the continuous advancements in technology, tech stocks, including those in AI, digital solutions, and other tech sub-sectors, could be a good addition to your portfolio, given their potential for high growth.
+
+    --------------------------------------------------------------------------------
+    user (to assistant):
+
+    Just got some latest market news. Merge your new suggestion with previous ones.
+    News summary: Researchers Pitch 'Immunizing' Images Against Deepfake Manipulation. A team at MIT says injecting tiny disruptive bits of code can cause distorted deepfake images. overall_sentiment_score: -0.026894
+
+    --------------------------------------------------------------------------------
+    assistant (to user):
+
+    1. Diversify Your Portfolio: The latest news about deepfake manipulation suggests potential growth in cybersecurity and AI sectors. Consider investing in companies that are working on these technologies, but continue to maintain a diversified portfolio across various sectors and asset classes to mitigate risk.
+
+    2. Long-Term Investment Strategy: While the news about deepfake manipulation might cause short-term volatility in the tech sector, it's important to maintain a long-term investment perspective. The cybersecurity and AI sectors are expected to grow in the long run, providing potential growth opportunities.
+
+    3. Regularly Review and Adjust Your Investments: Given the news about deepfake manipulation and its potential impact on the tech sector, it's important to review your portfolio to see if it aligns with these new market trends. Adjust your investments based on your personal circumstances, risk tolerance, and market conditions.
+
+    4. Invest in Cybersecurity and AI: The news about deepfake manipulation highlights the potential growth in the cybersecurity and AI sectors. Consider investing in companies that are leading in these fields, as they could provide significant growth opportunities.
+
+    5. Consider Tech Stocks: With the continuous advancements in technology, tech stocks, including those in AI, digital solutions, cybersecurity, and other tech sub-sectors, could be a good addition to your portfolio, given their potential for high growth.
+
+    --------------------------------------------------------------------------------
+    user (to assistant):
+
+    Just got some latest market news. Merge your new suggestion with previous ones.
+    News summary: Nvidia wins again - plus two more takeaways from this week's mega-cap earnings. We made some key conclusions combing through quarterly results for Microsoft and Alphabet and listening to their conference calls with investors. overall_sentiment_score: 0.235177
+
+    --------------------------------------------------------------------------------
+    assistant (to user):
+
+    1. Diversify Your Portfolio: The latest news about Nvidia, Microsoft, and Alphabet suggests potential growth in the tech sector. Consider investing in these companies, but continue to maintain a diversified portfolio across various sectors and asset classes to mitigate risk.
+
+    2. Long-Term Investment Strategy: While the news about these tech giants might cause short-term volatility, it's important to maintain a long-term investment perspective. The tech sector, particularly companies like Nvidia, Microsoft, and Alphabet, are expected to grow in the long run, providing potential growth opportunities.
+
+    3. Regularly Review and Adjust Your Investments: Given the news about Nvidia, Microsoft, and Alphabet and their potential impact on the tech sector, it's important to review your portfolio to see if it aligns with these new market trends. Adjust your investments based on your personal circumstances, risk tolerance, and market conditions.
+
+    4. Invest in Tech Giants: The news about Nvidia, Microsoft, and Alphabet highlights the potential growth in the tech sector. Consider investing in these tech giants, as they could provide significant growth opportunities.
+
+    5. Consider Tech Stocks: With the continuous advancements in technology, tech stocks, including those in AI, digital solutions, cybersecurity, and other tech sub-sectors, could be a good addition to your portfolio, given their potential for high growth.
+
+    --------------------------------------------------------------------------------
+```

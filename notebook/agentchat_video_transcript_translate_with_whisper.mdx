@@ -1,0 +1,293 @@
+---
+title: "Translating Video audio using Whisper and GPT-3.5-turbo"
+---
+
+In this notebook, we demonstrate how to use whisper and GPT-3.5-turbo with `AssistantAgent` and `UserProxyAgent` to recognize and translate
+the speech sound from a video file and add the timestamp like a subtitle file based on [agentchat_function_call.ipynb](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_function_call.ipynb)
+
+## Requirements
+
+````{=mdx}
+:::info Requirements
+Some extra dependencies are needed for this notebook, which can be installed via pip:
+
+```bash
+pip install autogen openai openai-whisper
+```
+
+For more information, please refer to the [installation guide](/docs/installation/).
+:::
+````
+
+## Set your API Endpoint
+
+It is recommended to store your OpenAI API key in the environment variable. For example, store it in `OPENAI_API_KEY`.
+
+```python
+import os
+
+config_list = [
+    {
+        "model": "gpt-4",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+    }
+]
+```
+
+```{=mdx}
+:::tip
+Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
+:::
+```
+
+## Example and Output
+
+Below is an example of speech recognition from a [Peppa Pig cartoon video clip](https://drive.google.com/file/d/1QY0naa2acHw2FuH7sY3c-g2sBLtC2Sv4/view?usp=drive_link) originally in English and translated into Chinese.
+'FFmpeg' does not support online files. To run the code on the example video, you need to download the example video locally. You can change `your_file_path` to your local video file path.
+
+```python
+from typing import Annotated, List
+
+import whisper
+from openai import OpenAI
+
+import autogen
+
+source_language = "English"
+target_language = "Chinese"
+key = os.getenv("OPENAI_API_KEY")
+target_video = "your_file_path"
+
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+    llm_config={"config_list": config_list, "timeout": 120},
+)
+
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=10,
+    code_execution_config={},
+)
+
+
+def translate_text(input_text, source_language, target_language):
+    client = OpenAI(api_key=key)
+
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {
+                "role": "user",
+                "content": f"Directly translate the following {source_language} text to a pure {target_language} "
+                f"video subtitle text without additional explanation.: '{input_text}'",
+            },
+        ],
+        max_tokens=1500,
+    )
+
+    # Correctly accessing the response content
+    translated_text = response.choices[0].message.content if response.choices else None
+    return translated_text
+
+
+@user_proxy.register_for_execution()
+@assistant.register_for_llm(description="using translate_text function to translate the script")
+def translate_transcript(
+    source_language: Annotated[str, "Source language"], target_language: Annotated[str, "Target language"]
+) -> str:
+    with open("transcription.txt", "r") as f:
+        lines = f.readlines()
+
+    translated_transcript = []
+
+    for line in lines:
+        # Split each line into timestamp and text parts
+        parts = line.strip().split(": ")
+        if len(parts) == 2:
+            timestamp, text = parts[0], parts[1]
+            # Translate only the text part
+            translated_text = translate_text(text, source_language, target_language)
+            # Reconstruct the line with the translated text and the preserved timestamp
+            translated_line = f"{timestamp}: {translated_text}"
+            translated_transcript.append(translated_line)
+        else:
+            # If the line doesn't contain a timestamp, add it as is
+            translated_transcript.append(line.strip())
+
+    return "\n".join(translated_transcript)
+
+
+@user_proxy.register_for_execution()
+@assistant.register_for_llm(description="recognize the speech from video and transfer into a txt file")
+def recognize_transcript_from_video(filepath: Annotated[str, "path of the video file"]) -> List[dict]:
+    try:
+        # Load model
+        model = whisper.load_model("small")
+
+        # Transcribe audio with detailed timestamps
+        result = model.transcribe(filepath, verbose=True)
+
+        # Initialize variables for transcript
+        transcript = []
+        sentence = ""
+        start_time = 0
+
+        # Iterate through the segments in the result
+        for segment in result["segments"]:
+            # If new sentence starts, save the previous one and reset variables
+            if segment["start"] != start_time and sentence:
+                transcript.append(
+                    {
+                        "sentence": sentence.strip() + ".",
+                        "timestamp_start": start_time,
+                        "timestamp_end": segment["start"],
+                    }
+                )
+                sentence = ""
+                start_time = segment["start"]
+
+            # Add the word to the current sentence
+            sentence += segment["text"] + " "
+
+        # Add the final sentence
+        if sentence:
+            transcript.append(
+                {
+                    "sentence": sentence.strip() + ".",
+                    "timestamp_start": start_time,
+                    "timestamp_end": result["segments"][-1]["end"],
+                }
+            )
+
+        # Save the transcript to a file
+        with open("transcription.txt", "w") as file:
+            for item in transcript:
+                sentence = item["sentence"]
+                start_time, end_time = item["timestamp_start"], item["timestamp_end"]
+                file.write(f"{start_time}s to {end_time}s: {sentence}\n")
+
+        return transcript
+
+    except FileNotFoundError:
+        return "The specified audio file could not be found."
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}"
+```
+
+Now, start the chat:
+
+```python
+user_proxy.initiate_chat(
+    assistant,
+    message=f"For the video located in {target_video}, recognize the speech and transfer it into a script file, "
+    f"then translate from {source_language} text to a {target_language} video subtitle text. ",
+)
+
+    user_proxy (to chatbot):
+
+    For the video located in E:\pythonProject\gpt_detection\peppa pig.mp4, recognize the speech and transfer it into a script file, then translate from English text to a Chinese video subtitle text.
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    ***** Suggested function Call: recognize_transcript_from_video *****
+    Arguments:
+    {
+    "audio_filepath": "E:\\pythonProject\\gpt_detection\\peppa pig.mp4"
+    }
+    ********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION recognize_transcript_from_video...
+    Detecting language using up to the first 30 seconds. Use `--language` to specify the language
+    Detected language: English
+    [00:00.000 --> 00:03.000]  This is my little brother George.
+    [00:03.000 --> 00:05.000]  This is Mummy Pig.
+    [00:05.000 --> 00:07.000]  And this is Daddy Pig.
+    [00:07.000 --> 00:09.000]  Pee-pah Pig.
+    [00:09.000 --> 00:11.000]  Desert Island.
+    [00:11.000 --> 00:14.000]  Pepper and George are at Danny Dog's house.
+    [00:14.000 --> 00:17.000]  Captain Dog is telling stories of when he was a sailor.
+    [00:17.000 --> 00:20.000]  I sailed all around the world.
+    [00:20.000 --> 00:22.000]  And then I came home again.
+    [00:22.000 --> 00:25.000]  But now I'm back for good.
+    [00:25.000 --> 00:27.000]  I'll never forget you.
+    [00:27.000 --> 00:29.000]  Daddy, do you miss the sea?
+    [00:29.000 --> 00:31.000]  Well, sometimes.
+    [00:31.000 --> 00:36.000]  It is Grandad Dog, Grandpa Pig and Grumpy Rabbit.
+    [00:36.000 --> 00:37.000]  Hello.
+    [00:37.000 --> 00:40.000]  Can Captain Dog come out to play?
+    [00:40.000 --> 00:43.000]  What? We are going on a fishing trip.
+    [00:43.000 --> 00:44.000]  On a boat?
+    [00:44.000 --> 00:45.000]  On the sea!
+    [00:45.000 --> 00:47.000]  OK, let's go.
+    [00:47.000 --> 00:51.000]  But Daddy, you said you'd never get on a boat again.
+    [00:51.000 --> 00:54.000]  I'm not going to get on a boat again.
+    [00:54.000 --> 00:57.000]  You said you'd never get on a boat again.
+    [00:57.000 --> 01:00.000]  Oh, yes. So I did.
+    [01:00.000 --> 01:02.000]  OK, bye-bye.
+    [01:02.000 --> 01:03.000]  Bye.
+    user_proxy (to chatbot):
+
+    ***** Response from calling function "recognize_transcript_from_video" *****
+    [{'sentence': 'This is my little brother George..', 'timestamp_start': 0, 'timestamp_end': 3.0}, {'sentence': 'This is Mummy Pig..', 'timestamp_start': 3.0, 'timestamp_end': 5.0}, {'sentence': 'And this is Daddy Pig..', 'timestamp_start': 5.0, 'timestamp_end': 7.0}, {'sentence': 'Pee-pah Pig..', 'timestamp_start': 7.0, 'timestamp_end': 9.0}, {'sentence': 'Desert Island..', 'timestamp_start': 9.0, 'timestamp_end': 11.0}, {'sentence': "Pepper and George are at Danny Dog's house..", 'timestamp_start': 11.0, 'timestamp_end': 14.0}, {'sentence': 'Captain Dog is telling stories of when he was a sailor..', 'timestamp_start': 14.0, 'timestamp_end': 17.0}, {'sentence': 'I sailed all around the world..', 'timestamp_start': 17.0, 'timestamp_end': 20.0}, {'sentence': 'And then I came home again..', 'timestamp_start': 20.0, 'timestamp_end': 22.0}, {'sentence': "But now I'm back for good..", 'timestamp_start': 22.0, 'timestamp_end': 25.0}, {'sentence': "I'll never forget you..", 'timestamp_start': 25.0, 'timestamp_end': 27.0}, {'sentence': 'Daddy, do you miss the sea?.', 'timestamp_start': 27.0, 'timestamp_end': 29.0}, {'sentence': 'Well, sometimes..', 'timestamp_start': 29.0, 'timestamp_end': 31.0}, {'sentence': 'It is Grandad Dog, Grandpa Pig and Grumpy Rabbit..', 'timestamp_start': 31.0, 'timestamp_end': 36.0}, {'sentence': 'Hello..', 'timestamp_start': 36.0, 'timestamp_end': 37.0}, {'sentence': 'Can Captain Dog come out to play?.', 'timestamp_start': 37.0, 'timestamp_end': 40.0}, {'sentence': 'What? We are going on a fishing trip..', 'timestamp_start': 40.0, 'timestamp_end': 43.0}, {'sentence': 'On a boat?.', 'timestamp_start': 43.0, 'timestamp_end': 44.0}, {'sentence': 'On the sea!.', 'timestamp_start': 44.0, 'timestamp_end': 45.0}, {'sentence': "OK, let's go..", 'timestamp_start': 45.0, 'timestamp_end': 47.0}, {'sentence': "But Daddy, you said you'd never get on a boat again..", 'timestamp_start': 47.0, 'timestamp_end': 51.0}, {'sentence': "I'm not going to get on a boat again..", 'timestamp_start': 51.0, 'timestamp_end': 54.0}, {'sentence': "You said you'd never get on a boat again..", 'timestamp_start': 54.0, 'timestamp_end': 57.0}, {'sentence': 'Oh, yes. So I did..', 'timestamp_start': 57.0, 'timestamp_end': 60.0}, {'sentence': 'OK, bye-bye..', 'timestamp_start': 60.0, 'timestamp_end': 62.0}, {'sentence': 'Bye..', 'timestamp_start': 62.0, 'timestamp_end': 63.0}]
+    ****************************************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    ***** Suggested function Call: translate_transcript *****
+    Arguments:
+    {
+    "source_language": "en",
+    "target_language": "zh"
+    }
+    *********************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION translate_transcript...
+    user_proxy (to chatbot):
+
+    ***** Response from calling function "translate_transcript" *****
+    0s to 3.0s: 这是我小弟弟乔治。
+    3.0s to 5.0s: 这是妈妈猪。
+    5.0s to 7.0s: 这位是猪爸爸..
+    7.0s to 9.0s: 'Peppa Pig...' (皮皮猪)
+    9.0s to 11.0s: "荒岛.."
+    11.0s to 14.0s: 胡椒和乔治在丹尼狗的家里。
+    14.0s to 17.0s: 船长狗正在讲述他作为一名海员时的故事。
+    17.0s to 20.0s: 我环游了全世界。
+    20.0s to 22.0s: 然后我又回到了家。。
+    22.0s to 25.0s: "但现在我回来了，永远地回来了..."
+    25.0s to 27.0s: "我永远不会忘记你..."
+    27.0s to 29.0s: "爸爸，你想念大海吗？"
+    29.0s to 31.0s: 嗯，有时候...
+    31.0s to 36.0s: 这是大爷狗、爷爷猪和脾气暴躁的兔子。
+    36.0s to 37.0s: 你好。
+    37.0s to 40.0s: "船长狗可以出来玩吗?"
+    40.0s to 43.0s: 什么？我们要去钓鱼了。。
+    43.0s to 44.0s: 在船上？
+    44.0s to 45.0s: 在海上！
+    45.0s to 47.0s: 好的，我们走吧。
+    47.0s to 51.0s: "但是爸爸，你说过你再也不会上船了…"
+    51.0s to 54.0s: "我不会再上船了.."
+    54.0s to 57.0s: "你说过再也不会上船了..."
+    57.0s to 60.0s: 哦，是的。所以我做了。
+    60.0s to 62.0s: 好的，再见。
+    62.0s to 63.0s: 再见。。
+    *****************************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+
+```

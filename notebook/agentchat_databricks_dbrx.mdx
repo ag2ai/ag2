@@ -1,0 +1,493 @@
+---
+title: "Use AutoGen in Databricks with DBRX"
+---
+
+![DBRX launch](https://www.databricks.com/en-blog-assets/static/2fe1a0af1ee0f6605024a810b604079c/dbrx-blog-header-optimized.png)
+
+In March 2024, Databricks released [DBRX](https://www.databricks.com/blog/introducing-dbrx-new-state-art-open-llm), a general-purpose LLM that sets a new standard for open LLMs. While available as an open-source model on Hugging Face ([databricks/dbrx-instruct](https://huggingface.co/databricks/dbrx-instruct/tree/main) and [databricks/dbrx-base](https://huggingface.co/databricks/dbrx-base) ), customers of Databricks can also tap into the [Foundation Model APIs](https://docs.databricks.com/en/machine-learning/model-serving/score-foundation-models.html#query-a-chat-completion-model), which make DBRX available through an OpenAI-compatible, autoscaling REST API.
+
+[Autogen](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat) is becoming a popular standard for agent creation. Built to support any "LLM as a service" that implements the OpenAI SDK, it can easily be extended to integrate with powerful open source models.
+
+This notebook will demonstrate a few basic examples of Autogen with DBRX, including the use of `AssistantAgent`, `UserProxyAgent`, and `ConversableAgent`. These demos are not intended to be exhaustive - feel free to use them as a base to build upon!
+
+## Requirements
+
+AutoGen must be installed on your Databricks cluster, and requires `Python>=3.8`. This example includes the `%pip` magic command to install: `%pip install pyautogen`, as well as other necessary libraries.
+
+This code has been tested on:
+
+- [Serverless Notebooks](https://docs.databricks.com/en/compute/serverless.html) (in public preview as of Apr 18, 2024)
+- Databricks Runtime 14.3 LTS ML [docs](https://docs.databricks.com/en/release-notes/runtime/14.3lts-ml.html)
+
+This code can run in any Databricks workspace in a region where DBRX is available via pay-per-token APIs (or provisioned throughput). To check if your region is supported, see [Foundation Model Region Availability](https://docs.databricks.com/en/machine-learning/model-serving/model-serving-limits.html#foundation-model-apis-limits). If the above is true, the workspace must also be enabled by an admin for Foundation Model APIs [docs](https://docs.databricks.com/en/machine-learning/foundation-models/index.html#requirements).
+
+## Tips
+
+- This notebook can be imported from github to a Databricks workspace and run directly. Use [sparse checkout mode with git](https://www.databricks.com/blog/2023/01/26/work-large-monorepos-sparse-checkout-support-databricks-repos.html) to import only this notebook or the examples directory.
+
+- Databricks recommends using [Secrets](https://docs.databricks.com/en/security/secrets/secrets.html) instead of storing tokens in plain text.
+
+## Contributor
+
+tj@databricks.com (Github: tj-cycyota)
+
+```python
+%pip install pyautogen==0.2.25 openai==1.21.2 typing_extensions==4.11.0 --upgrade
+```
+
+It is recommended to restart the Python kernel after installs - uncomment and run the below:
+
+```python
+# dbutils.library.restartPython()
+```
+
+## Setup DBRX config list
+
+See Autogen docs for more inforation on the use of `config_list`: [LLM Configuration](https://ag2ai.github.io/ag2/docs/topics/llm_configuration#why-is-it-a-list)
+
+```python
+import os
+
+# Set environment variables with your current workspace host and a personal access token
+# To a secret you have already set up: dbutils.secrets.get('your_scope_name','databricks_host')
+
+# DATABRICKS_HOST format: "https://{your workspace url}" (no trailing slash)
+## AWS Workspace example: "https://my-databricks-workspace.cloud.databricks.com"
+## Azure Workspace example: "https://adb-123456790123.12.azuredatabricks.net"
+os.environ["DATABRICKS_HOST"] = "<FILL IN WITH YOUR WORKSPACE URL IN SUPPORTED DBRX REGION>"
+
+# DATABRICKS_TOKEN format: "dapi..."
+## Temp token: dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+os.environ["DATABRICKS_TOKEN"] = "dapi...."
+
+llm_config = {
+    "config_list": [
+        {
+            "model": "databricks-dbrx-instruct",
+            "api_key": str(os.environ["DATABRICKS_TOKEN"]),
+            "base_url": str(os.getenv("DATABRICKS_HOST")) + "/serving-endpoints",
+        }
+    ],
+}
+```
+
+## Hello World Example
+
+Our first example will be with a simple `UserProxyAgent` asking a question to an `AssistantAgent`. This is based on the tutorial demo [here](https://ag2ai.github.io/ag2/docs/tutorial/introduction).
+
+After sending the question and seeing a response, you can type `exit` to end the chat or continue to converse.
+
+````python
+import autogen
+
+# Create Assistant and User
+assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
+
+user_proxy = autogen.UserProxyAgent(name="user", code_execution_config=False)
+
+# Initiate chat from user_proxy side
+chat_result = user_proxy.initiate_chat(assistant, message="What is MLflow?")
+
+    user (to assistant):
+
+    What is MLflow?
+
+    --------------------------------------------------------------------------------
+    assistant (to user):
+
+    Sure, I'd be happy to explain MLflow to you. MLflow is an open-source platform for managing machine learning workflows. It was developed by Databricks and was open-sourced in 2018. MLflow provides a number of features to help data scientists and machine learning engineers manage the end-to-end machine learning lifecycle, including:
+
+    1. **MLflow Tracking**: This is a logging API that allows you to record and query experiments, including code, data, config, and results.
+    2. **MLflow Projects**: This is a format for packaging reusable and reproducible data science code, which can be run on different platforms.
+    3. **MLflow Models**: This is a convention for packaging machine learning models in multiple formats, making it easy to deploy in different environments.
+    4. **MLflow Model Registry**: This is a central repository to store, manage, and serve machine learning models.
+
+    Here is a Python code example of how you might use MLflow Tracking to log a simple experiment:
+    ```python
+    # filename: mlflow_example.py
+
+    import mlflow
+    import numpy as np
+
+    # Log a parameter (e.g., number of trees in a random forest)
+    mlflow.log_param("num_trees", 100)
+
+    # Log a metric (e.g., accuracy of a model)
+    accuracy = np.random.rand()
+    mlflow.log_metric("accuracy", accuracy)
+
+    # Log the model
+    mlflow.sklearn.log_model(model, "model")
+
+    # End the run
+    mlflow.end_run()
+    ```
+    To run this code, you would need to have MLflow installed and running on your machine. You can install MLflow using pip:
+    ```
+    pip install mlflow
+    ```
+    Then, you can run the code using the following command:
+    ```
+    python mlflow_example.py
+    ```
+    This will create a new experiment in MLflow and log the parameters, metrics, and model. You can then view the experiment in the MLflow UI.
+
+    I hope this helps! Let me know if you have any other questions.
+
+    --------------------------------------------------------------------------------
+````
+
+    Provide feedback to assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:  exit
+
+## Simple Coding Agent
+
+In this example, we will implement a "coding agent" that can execute code. You will see how this code is run alongside your notebook in your current workspace, taking advantage of the performance benefits of Databricks clusters. This is based off the demo [here](https://ag2ai.github.io/ag2/docs/topics/non-openai-models/cloud-mistralai/).
+
+First, set up a directory:
+
+```python
+from pathlib import Path
+
+workdir = Path("coding")
+print(workdir)
+workdir.mkdir(exist_ok=True)
+
+from autogen.coding import LocalCommandLineCodeExecutor
+
+code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
+
+    coding
+```
+
+Next, setup our agents and initiate a coding problem. Notice how the `UserProxyAgent` will take advantage of our `code_executor`; after the code is shown on screen, type Return/Enter in the chatbox to have it execute locally on your cluster via the bot's auto-reply.
+
+**Note**: with generative AI coding assistants, you should **always** manually read and review the code before executing it yourself, as LLM results are non-deterministic and may lead to unintended consequences.
+
+````python
+from autogen import AssistantAgent, UserProxyAgent
+
+# Setting up the agents.
+user_proxy_agent = UserProxyAgent(
+    name="User",
+    code_execution_config={"executor": code_executor},
+    is_termination_msg=lambda msg: "TERMINATE" in msg.get("content"),
+)
+
+assistant_agent = AssistantAgent(
+    name="DBRX Assistant",
+    llm_config=llm_config,
+)
+
+chat_result = user_proxy_agent.initiate_chat(
+    assistant_agent,
+    message="Count how many prime numbers from 1 to 10000.",
+)
+
+    User (to DBRX Assistant):
+
+    Count how many prime numbers from 1 to 10000.
+
+    --------------------------------------------------------------------------------
+    DBRX Assistant (to User):
+
+    Sure, I can help you with that. We can write a Python script to count the number of prime numbers from 1 to 10000. Here's the script:
+
+    ```python
+    # filename: count_primes.py
+
+    def is_prime(n):
+        if n <= 1:
+            return False
+        if n <= 3:
+            return True
+        if n % 2 == 0 or n % 3 == 0:
+            return False
+        i = 5
+        while i * i <= n:
+            if n % i == 0 or n % (i + 2) == 0:
+                return False
+            i += 6
+        return True
+
+    def count_primes(end):
+        count = 0
+        for num in range(1, end + 1):
+            if is_prime(num):
+                count += 1
+        return count
+
+    print(count_primes(10000))
+    ```
+
+    This script first defines a helper function `is_prime(n)` to check if a number `n` is prime. Then, it defines the main function `count_primes(end)` to count the number of prime numbers up to `end`. Finally, it prints the number of prime numbers from 1 to 10000.
+
+    To run the script, save it to a file named `count_primes.py`, and then execute it using the command `python count_primes.py` in a terminal or command prompt. The script will print the number of prime numbers from 1 to 10000.
+
+    Let me know if you encounter any issues or errors when running the script.
+
+    --------------------------------------------------------------------------------
+
+
+
+    Provide feedback to DBRX Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
+
+
+
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+
+    >>>>>>>> USING AUTO REPLY...
+
+    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
+    User (to DBRX Assistant):
+
+    exitcode: 0 (execution succeeded)
+    Code output: 1229
+
+
+    --------------------------------------------------------------------------------
+    DBRX Assistant (to User):
+
+    Great! The execution succeeded and the output is 1229, which is the number of prime numbers from 1 to 10000. This means that there are 1229 prime numbers in the range of 1 to 10000.
+
+    To verify the result, we can manually check the prime numbers in the range of 1 to 10000. Here are the first few prime numbers:
+
+    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 169, 173, 179, 181, 191, 193, 197, 199,...
+
+    We can see that there are indeed 1229 prime numbers in the range of 1 to 10000.
+
+    Therefore, the output of the script is correct and the task is solved.
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+````
+
+    Provide feedback to DBRX Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:  exit
+
+We can see the python file that was created in our working directory:
+
+```python
+%sh ls coding
+```
+
+    count_primes.py
+
+```python
+%sh head coding/count_primes.py
+
+    # filename: count_primes.py
+
+    def is_prime(n):
+        if n <= 1:
+            return False
+        if n <= 3:
+            return True
+        if n % 2 == 0 or n % 3 == 0:
+            return False
+        i = 5
+```
+
+## Conversable Bots
+
+We can also implement the [two-agent chat pattern](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns/#two-agent-chat-and-chat-result) using DBRX to "talk to itself" in a teacher/student exchange:
+
+```python
+from autogen import ConversableAgent
+
+# Setting up the agents.
+student_agent = ConversableAgent(
+    name="Student_Agent",
+    system_message="You are a student willing to learn.",
+    llm_config=llm_config,
+)
+
+teacher_agent = ConversableAgent(
+    name="Teacher_Agent",
+    system_message="You are a computer science teacher.",
+    llm_config=llm_config,
+)
+
+# Initiate chat
+chat_result = student_agent.initiate_chat(
+    teacher_agent,
+    message="How does deep learning relate to artificial intelligence?",
+    summary_method="last_msg",
+    max_turns=1,  # Set to higher number to control back and forth
+)
+
+    Student_Agent (to Teacher_Agent):
+
+    How does deep learning relate to artificial intelligence?
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Teacher_Agent (to Student_Agent):
+
+    Hello there! I'm glad you asked about the relationship between deep learning and artificial intelligence (AI).
+
+    Deep learning is actually a subset of AI, which is a broader field dedicated to creating algorithms and systems that can perform tasks that would normally require human intelligence. Other subsets of AI include rule-based systems, machine learning, natural language processing, and computer vision, among others.
+
+    Deep learning, on the other hand, is a specific approach to building AI systems that is inspired by the structure and function of the human brain. In deep learning, we use artificial neural networks, which are composed of interconnected nodes or "neurons," to learn patterns in data and make predictions or decisions without being explicitly programmed to do so.
+
+    Deep learning has been particularly successful in recent years due to several factors, including the availability of large amounts of data, powerful computational resources, and advances in neural network architectures and training algorithms. As a result, deep learning has achieved state-of-the-art performance in a wide range of tasks, such as image and speech recognition, natural language processing, and game playing.
+
+    So, in summary, deep learning is a specific approach to building AI systems that has gained a lot of attention in recent years due to its impressive performance on a variety of tasks. However, it is just one of many approaches to building AI systems, and it is important to understand the broader context of AI in order to fully appreciate the potential and limitations of deep learning.
+
+    --------------------------------------------------------------------------------
+```
+
+## Implement Logging Display
+
+It can be useful to display chat logs to the notebook for debugging, and then persist those logs to a Delta table. The following section demonstrates how to extend the default AutoGen logging libraries.
+
+First, we will implement a Python `class` that extends the capabilities of `autogen.runtime_logging` [docs](https://ag2ai.github.io/ag2/docs/notebooks/agentchat_logging):
+
+```python
+class Databricks_AutoGenLogger:
+    def __init__(self):
+        from pyspark.sql import SparkSession
+        import autogen
+
+        self.spark = SparkSession.builder.getOrCreate()
+        self.logger_config = {"dbname": "logs.db"}
+
+    def start(self):
+        import autogen.runtime_logging
+
+        self.logging_session_id = autogen.runtime_logging.start(config=self.logger_config)
+        print("Logging session ID: " + str(self.logging_session_id))
+
+    def stop(self):
+        import autogen.runtime_logging
+
+        autogen.runtime_logging.stop()
+
+    def _get_log(self, dbname="logs.db", table="chat_completions"):
+        import sqlite3
+
+        con = sqlite3.connect(dbname)
+        query = f"SELECT * from {table} WHERE session_id == '{self.logging_session_id}' ORDER BY end_time DESC"
+        cursor = con.execute(query)
+        rows = cursor.fetchall()
+        column_names = [description[0] for description in cursor.description]
+        data = [dict(zip(column_names, row)) for row in rows]
+        con.close()
+        return data
+
+    def display_session(self):
+        import pandas as pd
+
+        return pd.DataFrame(self._get_log())
+
+    def persist_results(self, target_delta_table: str, mode="append"):
+        import pandas as pd
+
+        # Convert to Spark DF
+        sdf = self.spark.createDataFrame(pd.DataFrame(self._get_log()))
+
+        try:
+            sdf.write.format("delta").mode(mode).saveAsTable(target_delta_table)
+            print(f"Logs sucessfully written to table {target_delta_table} in {mode} mode")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+```
+
+Let's use the class above on our simplest example. Note the addition of logging `.start()` and `.stop()`, as well as try/except for error handling.
+
+````python
+assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
+user_proxy = autogen.UserProxyAgent(name="user", code_execution_config=False)
+
+# Before initiating chat, start logging:
+logs = Databricks_AutoGenLogger()
+logs.start()
+try:
+    user_proxy.initiate_chat(assistant, message="What is MLflow?", max_turns=1)
+except Exception as e:
+    print(f"An error occurred: {e}")
+logs.stop()
+# Display logs
+display(logs.display_session())
+
+    Logging session ID: 6c389f5f-3619-4762-8118-bc98dd414f90
+    user (to assistant):
+
+    What is MLflow?
+
+    --------------------------------------------------------------------------------
+    assistant (to user):
+
+    Sure, I'd be happy to explain MLflow to you. MLflow is an open-source platform for managing machine learning workflows. It was developed by Databricks and was open-sourced in 2018. MLflow provides a number of features to help data scientists and machine learning engineers manage the end-to-end machine learning lifecycle, including:
+
+    1. **MLflow Tracking**: This is a logging API that allows you to record and query experiments, including code, data, config, and results.
+    2. **MLflow Projects**: This is a format for packaging reusable and reproducible data science code, which can be run on different platforms.
+    3. **MLflow Models**: This is a convention for packaging machine learning models in multiple formats, making it easy to deploy in different environments.
+    4. **MLflow Model Registry**: This is a central repository to store, manage, and serve machine learning models.
+
+    Here is a Python code example of how you might use MLflow Tracking to log a simple experiment:
+    ```python
+    # filename: mlflow_example.py
+
+    import mlflow
+    import numpy as np
+
+    # Log a parameter (e.g., number of trees in a random forest)
+    mlflow.log_param("num_trees", 100)
+
+    # Log a metric (e.g., accuracy of a model)
+    accuracy = np.random.rand()
+    mlflow.log_metric("accuracy", accuracy)
+
+    # Log the model
+    mlflow.sklearn.log_model(model, "model")
+
+    # End the run
+    mlflow.end_run()
+    ```
+    To run this code, you would need to have MLflow installed and running on your machine. You can install MLflow using pip:
+    ```
+    pip install mlflow
+    ```
+    Then, you can run the code using the following command:
+    ```
+    python mlflow_example.py
+    ```
+    This will create a new experiment in MLflow and log the parameters, metrics, and model. You can then view the experiment in the MLflow UI.
+
+    I hope this helps! Let me know if you have any other questions.
+
+    --------------------------------------------------------------------------------
+````
+
+With this, we have a simple framework to review and persist logs from our chats! Notice that in the `request` field above, we can also see the system prompt for the LLM - this can be useful for prompt engineering as well as debugging.
+
+Note that when you deploy this to Databricks Model Serving, model responses are auto-logged using [Lakehouse Monitoring](https://docs.databricks.com/en/lakehouse-monitoring/index.html); but the above approach provides a simple mechanism to log chats from the **client side**.
+
+Let's now persist these results to a Delta table in [Unity Catalog](https://docs.databricks.com/en/data-governance/unity-catalog/index.html):
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.getOrCreate()  # Not needed in Databricks; session pre-provisioned in notebooks
+
+# Use 3-layer namespace: catalog.schema.table. The table will be created if it does not exist.
+target_delta_table = "your_catalog.your_schema.autogen_logs"
+logs.persist_results(target_delta_table=target_delta_table, mode="append")
+
+# Display current rows in table
+display(spark.table(target_delta_table))
+
+    Logs sucessfully written to table shared.tjc.autogent_logs in append mode
+
+```
+
+## Closing Thoughts
+
+This notebook provides a few basic examples of using Autogen with DBRX, and we're excited to see how you can use this framework alongside leading open-source LLMs!
+
+### Limitations
+
+- Databricks Foundation Model API supports other open-source LLMs (Mixtral, Llama2, etc.), but the above code has not been tested on those.
+
+- As of April 2024, DBRX does not yet support tool/function calling abilities. To discuss this capability further, please reach out to your Databricks representative.

@@ -1,0 +1,267 @@
+---
+title: "Runtime Logging with AutoGen"
+---
+
+AutoGen offers utilities to log data for debugging and performance analysis. This notebook demonstrates how to use them.
+
+we log data in different modes:
+
+- SQlite Database
+- File
+
+In general, users can initiate logging by calling `autogen.runtime_logging.start()` and stop logging by calling `autogen.runtime_logging.stop()`
+
+```python
+import json
+
+import pandas as pd
+
+import autogen
+from autogen import AssistantAgent, UserProxyAgent
+
+# Setup API key. Add your own API key to config file or environment variable
+llm_config = {
+    "config_list": autogen.config_list_from_json(
+        env_or_file="OAI_CONFIG_LIST",
+    ),
+    "temperature": 0.9,
+}
+
+# Start logging
+logging_session_id = autogen.runtime_logging.start(config={"dbname": "logs.db"})
+print("Logging session ID: " + str(logging_session_id))
+
+# Create an agent workflow and run it
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    code_execution_config=False,
+    human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
+)
+
+user_proxy.initiate_chat(
+    assistant, message="What is the height of the Eiffel Tower? Only respond with the answer and terminate"
+)
+autogen.runtime_logging.stop()
+
+    Logging session ID: 6e08f3e0-392b-434e-8b69-4ab36c4fcf99
+    user_proxy (to assistant):
+
+    What is the height of the Eiffel Tower? Only respond with the answer and terminate
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    The height of the Eiffel Tower is approximately 330 meters.
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+```
+
+## Getting Data from the SQLite Database
+
+`logs.db` should be generated, by default it's using SQLite database. You can view the data with GUI tool like `sqlitebrowser`, using SQLite command line shell or using python script:
+
+```python
+def get_log(dbname="logs.db", table="chat_completions"):
+    import sqlite3
+
+    con = sqlite3.connect(dbname)
+    query = f"SELECT * from {table}"
+    cursor = con.execute(query)
+    rows = cursor.fetchall()
+    column_names = [description[0] for description in cursor.description]
+    data = [dict(zip(column_names, row)) for row in rows]
+    con.close()
+    return data
+```
+
+```python
+def str_to_dict(s):
+    return json.loads(s)
+
+
+log_data = get_log()
+log_data_df = pd.DataFrame(log_data)
+
+log_data_df["total_tokens"] = log_data_df.apply(
+    lambda row: str_to_dict(row["response"])["usage"]["total_tokens"], axis=1
+)
+
+log_data_df["request"] = log_data_df.apply(lambda row: str_to_dict(row["request"])["messages"][0]["content"], axis=1)
+
+log_data_df["response"] = log_data_df.apply(
+    lambda row: str_to_dict(row["response"])["choices"][0]["message"]["content"], axis=1
+)
+
+log_data_df
+```
+
+```html
+<div>
+  <style scoped>
+    .dataframe tbody tr th:only-of-type {
+      vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+      vertical-align: top;
+    }
+
+    .dataframe thead th {
+      text-align: right;
+    }
+  </style>
+  <table border="1" class="dataframe">
+    <thead>
+      <tr style="text-align: right;">
+        <th></th>
+        <th>id</th>
+        <th>invocation_id</th>
+        <th>client_id</th>
+        <th>wrapper_id</th>
+        <th>session_id</th>
+        <th>request</th>
+        <th>response</th>
+        <th>is_cached</th>
+        <th>cost</th>
+        <th>start_time</th>
+        <th>end_time</th>
+        <th>total_tokens</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th>0</th>
+        <td>1</td>
+        <td>e8bb00d7-6da5-4407-a949-e19b55d53da8</td>
+        <td>139819167322784</td>
+        <td>139823225568704</td>
+        <td>8821a150-8c78-4d05-a858-8a64f1d18648</td>
+        <td>You are a helpful AI assistant.\nSolve tasks u...</td>
+        <td>The height of the Eiffel Tower is approximatel...</td>
+        <td>1</td>
+        <td>0.01572</td>
+        <td>2024-02-13 15:06:22.082896</td>
+        <td>2024-02-13 15:06:22.083169</td>
+        <td>507</td>
+      </tr>
+      <tr>
+        <th>1</th>
+        <td>2</td>
+        <td>c8522790-0067-484b-bb37-d39ae80db98b</td>
+        <td>139823225568656</td>
+        <td>139823225563040</td>
+        <td>fb0ef547-a2ac-428b-8c20-a5e63263b8e1</td>
+        <td>You are a helpful AI assistant.\nSolve tasks u...</td>
+        <td>The height of the Eiffel Tower is approximatel...</td>
+        <td>1</td>
+        <td>0.01572</td>
+        <td>2024-02-13 15:06:23.498758</td>
+        <td>2024-02-13 15:06:23.499045</td>
+        <td>507</td>
+      </tr>
+      <tr>
+        <th>2</th>
+        <td>3</td>
+        <td>91c3f6c0-c6f7-4306-89cd-f304c9556de4</td>
+        <td>139823225449024</td>
+        <td>139819166072448</td>
+        <td>6e08f3e0-392b-434e-8b69-4ab36c4fcf99</td>
+        <td>You are a helpful AI assistant.\nSolve tasks u...</td>
+        <td>The height of the Eiffel Tower is approximatel...</td>
+        <td>1</td>
+        <td>0.01572</td>
+        <td>2024-02-13 15:06:24.688990</td>
+        <td>2024-02-13 15:06:24.689238</td>
+        <td>507</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+```
+
+## Computing Cost
+
+One use case of logging data is to compute the cost of a session.
+
+```python
+# Sum totoal tokens for all sessions
+total_tokens = log_data_df["total_tokens"].sum()
+
+# Sum total cost for all sessions
+total_cost = log_data_df["cost"].sum()
+
+# Total tokens for specific session
+session_tokens = log_data_df[log_data_df["session_id"] == logging_session_id]["total_tokens"].sum()
+session_cost = log_data_df[log_data_df["session_id"] == logging_session_id]["cost"].sum()
+
+print("Total tokens for all sessions: " + str(total_tokens) + ", total cost: " + str(round(total_cost, 4)))
+print(
+    "Total tokens for session "
+    + str(logging_session_id)
+    + ": "
+    + str(session_tokens)
+    + ", cost: "
+    + str(round(session_cost, 4))
+)
+```
+
+    Total tokens for all sessions: 1521, total cost: 0.0472
+    Total tokens for session 6e08f3e0-392b-434e-8b69-4ab36c4fcf99: 507, cost: 0.0157
+
+## Log data in File mode
+
+By default, the log type is set to `sqlite` as shown above, but we introduced a new parameter for the `autogen.runtime_logging.start()`
+
+the `logger_type = "file"` will start to log data in the File mode.
+
+```python
+import pandas as pd
+
+import autogen
+from autogen import AssistantAgent, UserProxyAgent
+
+# Setup API key. Add your own API key to config file or environment variable
+llm_config = {
+    "config_list": autogen.config_list_from_json(
+        env_or_file="OAI_CONFIG_LIST",
+    ),
+    "temperature": 0.9,
+}
+
+# Start logging with logger_type and the filename to log to
+logging_session_id = autogen.runtime_logging.start(logger_type="file", config={"filename": "runtime.log"})
+print("Logging session ID: " + str(logging_session_id))
+
+# Create an agent workflow and run it
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    code_execution_config=False,
+    human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
+)
+
+user_proxy.initiate_chat(
+    assistant, message="What is the height of the Eiffel Tower? Only respond with the answer and terminate"
+)
+autogen.runtime_logging.stop()
+
+    Logging session ID: ed493ebf-d78e-49f0-b832-69557276d557
+    user_proxy (to assistant):
+
+    What is the height of the Eiffel Tower? Only respond with the answer and terminate
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    The height of the Eiffel Tower is 330 meters.
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+```
+
+This should create a `runtime.log` file in your current directory.

@@ -1,0 +1,1310 @@
+---
+title: "Group Chat with Retrieval Augmented Generation"
+---
+
+AutoGen supports conversable agents powered by LLMs, tools, or humans, performing tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
+Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+````{=mdx}
+:::info Requirements
+Some extra dependencies are needed for this notebook, which can be installed via pip:
+
+```bash
+pip install pyautogen[retrievechat]
+```
+
+For more information, please refer to the [installation guide](/docs/installation/).
+:::
+````
+
+## Set your API Endpoint
+
+The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
+
+```python
+import chromadb
+from typing_extensions import Annotated
+
+import autogen
+from autogen import AssistantAgent
+from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
+
+config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
+
+print("LLM models: ", [config_list[i]["model"] for i in range(len(config_list))])
+
+    LLM models:  ['gpt-35-turbo', 'gpt4-1106-preview', 'gpt-4o']
+```
+
+```{=mdx}
+:::tip
+Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
+:::
+```
+
+## Construct Agents
+
+```python
+def termination_msg(x):
+    return isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
+
+
+llm_config = {"config_list": config_list, "timeout": 60, "temperature": 0.8, "seed": 1234}
+
+boss = autogen.UserProxyAgent(
+    name="Boss",
+    is_termination_msg=termination_msg,
+    human_input_mode="NEVER",
+    code_execution_config=False,  # we don't want to execute code in this case.
+    default_auto_reply="Reply `TERMINATE` if the task is done.",
+    description="The boss who ask questions and give tasks.",
+)
+
+boss_aid = RetrieveUserProxyAgent(
+    name="Boss_Assistant",
+    is_termination_msg=termination_msg,
+    human_input_mode="NEVER",
+    default_auto_reply="Reply `TERMINATE` if the task is done.",
+    max_consecutive_auto_reply=3,
+    retrieve_config={
+        "task": "code",
+        "docs_path": "https://raw.githubusercontent.com/microsoft/FLAML/main/website/docs/Examples/Integrate%20-%20Spark.md",
+        "chunk_token_size": 1000,
+        "model": config_list[0]["model"],
+        "collection_name": "groupchat",
+        "get_or_create": True,
+    },
+    code_execution_config=False,  # we don't want to execute code in this case.
+    description="Assistant who has extra content retrieval power for solving difficult problems.",
+)
+
+coder = AssistantAgent(
+    name="Senior_Python_Engineer",
+    is_termination_msg=termination_msg,
+    system_message="You are a senior python engineer, you provide python code to answer questions. Reply `TERMINATE` in the end when everything is done.",
+    llm_config=llm_config,
+    description="Senior Python Engineer who can write code to solve problems and answer questions.",
+)
+
+pm = autogen.AssistantAgent(
+    name="Product_Manager",
+    is_termination_msg=termination_msg,
+    system_message="You are a product manager. Reply `TERMINATE` in the end when everything is done.",
+    llm_config=llm_config,
+    description="Product Manager who can design and plan the project.",
+)
+
+reviewer = autogen.AssistantAgent(
+    name="Code_Reviewer",
+    is_termination_msg=termination_msg,
+    system_message="You are a code reviewer. Reply `TERMINATE` in the end when everything is done.",
+    llm_config=llm_config,
+    description="Code Reviewer who can review the code.",
+)
+
+PROBLEM = "How to use spark for parallel training in FLAML? Give me sample code."
+
+
+def _reset_agents():
+    boss.reset()
+    boss_aid.reset()
+    coder.reset()
+    pm.reset()
+    reviewer.reset()
+
+
+def rag_chat():
+    _reset_agents()
+    groupchat = autogen.GroupChat(
+        agents=[boss_aid, pm, coder, reviewer], messages=[], max_round=12, speaker_selection_method="round_robin"
+    )
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+
+    # Start chatting with boss_aid as this is the user proxy agent.
+    boss_aid.initiate_chat(
+        manager,
+        message=boss_aid.message_generator,
+        problem=PROBLEM,
+        n_results=3,
+    )
+
+
+def norag_chat():
+    _reset_agents()
+    groupchat = autogen.GroupChat(
+        agents=[boss, pm, coder, reviewer],
+        messages=[],
+        max_round=12,
+        speaker_selection_method="auto",
+        allow_repeat_speaker=False,
+    )
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+
+    # Start chatting with the boss as this is the user proxy agent.
+    boss.initiate_chat(
+        manager,
+        message=PROBLEM,
+    )
+
+
+def call_rag_chat():
+    _reset_agents()
+
+    # In this case, we will have multiple user proxy agents and we don't initiate the chat
+    # with RAG user proxy agent.
+    # In order to use RAG user proxy agent, we need to wrap RAG agents in a function and call
+    # it from other agents.
+    def retrieve_content(
+        message: Annotated[
+            str,
+            "Refined message which keeps the original meaning and can be used to retrieve content for code generation and question answering.",
+        ],
+        n_results: Annotated[int, "number of results"] = 3,
+    ) -> str:
+        boss_aid.n_results = n_results  # Set the number of results to be retrieved.
+        _context = {"problem": message, "n_results": n_results}
+        ret_msg = boss_aid.message_generator(boss_aid, None, _context)
+        return ret_msg or message
+
+    boss_aid.human_input_mode = "NEVER"  # Disable human input for boss_aid since it only retrieves content.
+
+    for caller in [pm, coder, reviewer]:
+        d_retrieve_content = caller.register_for_llm(
+            description="retrieve content for code generation and question answering.", api_style="function"
+        )(retrieve_content)
+
+    for executor in [boss, pm]:
+        executor.register_for_execution()(d_retrieve_content)
+
+    groupchat = autogen.GroupChat(
+        agents=[boss, pm, coder, reviewer],
+        messages=[],
+        max_round=12,
+        speaker_selection_method="round_robin",
+        allow_repeat_speaker=False,
+    )
+
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+
+    # Start chatting with the boss as this is the user proxy agent.
+    boss.initiate_chat(
+        manager,
+        message=PROBLEM,
+    )
+```
+
+## Start Chat
+
+### UserProxyAgent doesn't get the correct code
+
+[FLAML](https://github.com/microsoft/FLAML) was open sourced in 2020, so ChatGPT is familiar with it. However, Spark-related APIs were added in 2022, so they were not in ChatGPT's training data. As a result, we end up with invalid code.
+
+````python
+norag_chat()
+
+    Boss (to chat_manager):
+
+    How to use spark for parallel training in FLAML? Give me sample code.
+
+    --------------------------------------------------------------------------------
+    How to use spark for parallel training in FLAML? Give me sample code.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Senior_Python_Engineer
+
+    Senior_Python_Engineer (to chat_manager):
+
+    To use Spark for parallel training in FLAML, you need to install `pyspark` package and set up a Spark cluster. Here's some sample code for using Spark in FLAML:
+
+    ```python
+    from flaml import AutoML
+    from pyspark.sql import SparkSession
+
+    # create a SparkSession
+    spark = SparkSession.builder.appName("FLAML-Spark").getOrCreate()
+
+    # create a FLAML AutoML object with Spark backend
+    automl = AutoML()
+
+    # load data from Spark DataFrame
+    data = spark.read.format("csv").option("header", "true").load("data.csv")
+
+    # specify the target column and task type
+    settings = {
+        "time_budget": 60, # time budget in seconds
+        "metric": 'accuracy',
+        "task": 'classification',
+    }
+
+    # train and validate models in parallel using Spark
+    best_model = automl.fit(data, **settings)
+
+    # print the best model and its metadata
+    print(automl.model_name)
+    print(automl.best_model)
+    print(automl.best_config)
+
+    # stop the SparkSession
+    spark.stop()
+
+    # terminate the code execution
+    TERMINATE
+    ```
+
+    Note that this is just a sample code, you may need to modify it to fit your specific use case.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Code_Reviewer
+
+    Code_Reviewer (to chat_manager):
+
+
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Product_Manager (to chat_manager):
+
+    Do you have any questions related to the code sample?
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Senior_Python_Engineer
+
+    Senior_Python_Engineer (to chat_manager):
+
+    No, I don't have any questions related to the code sample.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Product_Manager (to chat_manager):
+
+    Great, let me know if you need any further assistance.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Senior_Python_Engineer
+
+    Senior_Python_Engineer (to chat_manager):
+
+    Sure, will do. Thank you!
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Product_Manager (to chat_manager):
+
+    You're welcome! Have a great day ahead!
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Senior_Python_Engineer
+
+    Senior_Python_Engineer (to chat_manager):
+
+    You too, have a great day ahead!
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Product_Manager (to chat_manager):
+
+    Thank you! Goodbye!
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Senior_Python_Engineer
+
+    Senior_Python_Engineer (to chat_manager):
+
+    Goodbye!
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Code_Reviewer
+
+    Code_Reviewer (to chat_manager):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+````
+
+### RetrieveUserProxyAgent get the correct code
+
+Since RetrieveUserProxyAgent can perform retrieval-augmented generation based on the given documentation file, ChatGPT can generate the correct code for us!
+
+````python
+rag_chat()
+# type exit to terminate the chat
+
+    Trying to create collection.
+
+
+    2024-08-14 06:59:09,583 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Use the existing collection `groupchat`.
+
+
+    2024-08-14 06:59:09,902 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
+    2024-08-14 06:59:09,912 - autogen.agentchat.contrib.vectordb.chromadb - INFO - No content embedding is provided. Will use the VectorDB's embedding function to generate the content embedding.
+
+
+    VectorDB returns doc_ids:  [['bdfbc921', 'b2c1ec51', '0e57e70f']]
+    Adding content of doc bdfbc921 to context.
+    Adding content of doc b2c1ec51 to context.
+    Boss_Assistant (to chat_manager):
+
+    You're a retrieve augmented coding assistant. You answer user's questions based on your own knowledge and the
+    context provided by the user.
+    If you can't answer the question with or without the current context, you should reply exactly `UPDATE CONTEXT`.
+    For code generation, you must obey the following rules:
+    Rule 1. You MUST NOT install any packages because all the packages needed are already installed.
+    Rule 2. You must follow the formats below to write your code:
+    ```language
+    # your code
+    ```
+
+    User's question is: How to use spark for parallel training in FLAML? Give me sample code.
+
+    Context is: # Integrate - Spark
+
+    FLAML has integrated Spark for distributed training. There are two main aspects of integration with Spark:
+
+    - Use Spark ML estimators for AutoML.
+    - Use Spark to run training in parallel spark jobs.
+
+    ## Spark ML Estimators
+
+    FLAML integrates estimators based on Spark ML models. These models are trained in parallel using Spark, so we called them Spark estimators. To use these models, you first need to organize your data in the required format.
+
+    ### Data
+
+    For Spark estimators, AutoML only consumes Spark data. FLAML provides a convenient function `to_pandas_on_spark` in the `flaml.automl.spark.utils` module to convert your data into a pandas-on-spark (`pyspark.pandas`) dataframe/series, which Spark estimators require.
+
+    This utility function takes data in the form of a `pandas.Dataframe` or `pyspark.sql.Dataframe` and converts it into a pandas-on-spark dataframe. It also takes `pandas.Series` or `pyspark.sql.Dataframe` and converts it into a [pandas-on-spark](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/index.html) series. If you pass in a `pyspark.pandas.Dataframe`, it will not make any changes.
+
+    This function also accepts optional arguments `index_col` and `default_index_type`.
+
+    - `index_col` is the column name to use as the index, default is None.
+    - `default_index_type` is the default index type, default is "distributed-sequence". More info about default index type could be found on Spark official [documentation](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/options.html#default-index-type)
+
+    Here is an example code snippet for Spark Data:
+
+    ```python
+    import pandas as pd
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Creating a dictionary
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    # Creating a pandas DataFrame
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+    ```
+
+    To use Spark ML models you need to format your data appropriately. Specifically, use [`VectorAssembler`](https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) to merge all feature columns into a single vector column.
+
+    Here is an example of how to use it:
+
+    ```python
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+    ```
+
+    Later in conducting the experiment, use your pandas-on-spark data like non-spark data and pass them using `X_train, y_train` or `dataframe, label`.
+
+    ### Estimators
+
+    #### Model List
+
+    - `lgbm_spark`: The class for fine-tuning Spark version LightGBM models, using [SynapseML](https://microsoft.github.io/SynapseML/docs/features/lightgbm/about/) API.
+
+    #### Usage
+
+    First, prepare your data in the required format as described in the previous section.
+
+    By including the models you intend to try in the `estimators_list` argument to `flaml.automl`, FLAML will start trying configurations for these models. If your input is Spark data, FLAML will also use estimators with the `_spark` postfix by default, even if you haven't specified them.
+
+    Here is an example code snippet using SparkML models in AutoML:
+
+    ```python
+    import flaml
+
+    # prepare your data in pandas-on-spark format as we previously mentioned
+
+    automl = flaml.AutoML()
+    settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "estimator_list": ["lgbm_spark"],  # this setting is optional
+        "task": "regression",
+    }
+
+    automl.fit(
+        dataframe=psdf,
+        label=label,
+        **settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb)
+
+    ## Parallel Spark Jobs
+
+    You can activate Spark as the parallel backend during parallel tuning in both [AutoML](/docs/Use-Cases/Task-Oriented-AutoML#parallel-tuning) and [Hyperparameter Tuning](/docs/Use-Cases/Tune-User-Defined-Function#parallel-tuning), by setting the `use_spark` to `true`. FLAML will dispatch your job to the distributed Spark backend using [`joblib-spark`](https://github.com/joblib/joblib-spark).
+
+    Please note that you should not set `use_spark` to `true` when applying AutoML and Tuning for Spark Data. This is because only SparkML models will be used for Spark Data in AutoML and Tuning. As SparkML models run in parallel, there is no need to distribute them with `use_spark` again.
+
+    All the Spark-related arguments are stated below. These arguments are available in both Hyperparameter Tuning and AutoML:
+
+    - `use_spark`: boolean, default=False | Whether to use spark to run the training in parallel spark jobs. This can be used to accelerate training on large models and large datasets, but will incur more overhead in time and thus slow down training in some cases. GPU training is not supported yet when use_spark is True. For Spark clusters, by default, we will launch one trial per executor. However, sometimes we want to launch more trials than the number of executors (e.g., local mode). In this case, we can set the environment variable `FLAML_MAX_CONCURRENT` to override the detected `num_executors`. The final number of concurrent trials will be the minimum of `n_concurrent_trials` and `num_executors`.
+    - `n_concurrent_trials`: int, default=1 | The number of concurrent trials. When n_concurrent_trials > 1, FLAML performes parallel tuning.
+    - `force_cancel`: boolean, default=False | Whether to forcely cancel Spark jobs if the search time exceeded the time budget. Spark jobs include parallel tuning jobs and Spark-based model training jobs.
+
+    An example code snippet for using parallel Spark jobs:
+
+    ```python
+    import flaml
+
+    automl_experiment = flaml.AutoML()
+    automl_settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "task": "regression",
+        "n_concurrent_trials": 2,
+        "use_spark": True,
+        "force_cancel": True,  # Activating the force_cancel option can immediately halt Spark jobs once they exceed the allocated time_budget.
+    }
+
+    automl.fit(
+        dataframe=dataframe,
+        label=label,
+        **automl_settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb)
+    # Integrate - Spark
+
+    FLAML has integrated Spark for distributed training. There are two main aspects of integration with Spark:
+
+    - Use Spark ML estimators for AutoML.
+    - Use Spark to run training in parallel spark jobs.
+
+    ## Spark ML Estimators
+
+    FLAML integrates estimators based on Spark ML models. These models are trained in parallel using Spark, so we called them Spark estimators. To use these models, you first need to organize your data in the required format.
+
+    ### Data
+
+    For Spark estimators, AutoML only consumes Spark data. FLAML provides a convenient function `to_pandas_on_spark` in the `flaml.automl.spark.utils` module to convert your data into a pandas-on-spark (`pyspark.pandas`) dataframe/series, which Spark estimators require.
+
+    This utility function takes data in the form of a `pandas.Dataframe` or `pyspark.sql.Dataframe` and converts it into a pandas-on-spark dataframe. It also takes `pandas.Series` or `pyspark.sql.Dataframe` and converts it into a [pandas-on-spark](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/index.html) series. If you pass in a `pyspark.pandas.Dataframe`, it will not make any changes.
+
+    This function also accepts optional arguments `index_col` and `default_index_type`.
+
+    - `index_col` is the column name to use as the index, default is None.
+    - `default_index_type` is the default index type, default is "distributed-sequence". More info about default index type could be found on Spark official [documentation](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/options.html#default-index-type)
+
+    Here is an example code snippet for Spark Data:
+
+    ```python
+    import pandas as pd
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Creating a dictionary
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    # Creating a pandas DataFrame
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+    ```
+
+    To use Spark ML models you need to format your data appropriately. Specifically, use [`VectorAssembler`](https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) to merge all feature columns into a single vector column.
+
+    Here is an example of how to use it:
+
+    ```python
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+    ```
+
+    Later in conducting the experiment, use your pandas-on-spark data like non-spark data and pass them using `X_train, y_train` or `dataframe, label`.
+
+    ### Estimators
+
+    #### Model List
+
+    - `lgbm_spark`: The class for fine-tuning Spark version LightGBM models, using [SynapseML](https://microsoft.github.io/SynapseML/docs/features/lightgbm/about/) API.
+
+    #### Usage
+
+    First, prepare your data in the required format as described in the previous section.
+
+    By including the models you intend to try in the `estimators_list` argument to `flaml.automl`, FLAML will start trying configurations for these models. If your input is Spark data, FLAML will also use estimators with the `_spark` postfix by default, even if you haven't specified them.
+
+    Here is an example code snippet using SparkML models in AutoML:
+
+    ```python
+    import flaml
+
+    # prepare your data in pandas-on-spark format as we previously mentioned
+
+
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Adding content of doc b2c1ec51 to context.
+    Boss_Assistant (to chat_manager):
+
+    You're a retrieve augmented coding assistant. You answer user's questions based on your own knowledge and the
+    context provided by the user.
+    If you can't answer the question with or without the current context, you should reply exactly `UPDATE CONTEXT`.
+    For code generation, you must obey the following rules:
+    Rule 1. You MUST NOT install any packages because all the packages needed are already installed.
+    Rule 2. You must follow the formats below to write your code:
+    ```language
+    # your code
+    ```
+
+    User's question is: How to use spark for parallel training in FLAML? Give me sample code.
+
+    Context is: # Integrate - Spark
+
+    FLAML has integrated Spark for distributed training. There are two main aspects of integration with Spark:
+
+    - Use Spark ML estimators for AutoML.
+    - Use Spark to run training in parallel spark jobs.
+
+    ## Spark ML Estimators
+
+    FLAML integrates estimators based on Spark ML models. These models are trained in parallel using Spark, so we called them Spark estimators. To use these models, you first need to organize your data in the required format.
+
+    ### Data
+
+    For Spark estimators, AutoML only consumes Spark data. FLAML provides a convenient function `to_pandas_on_spark` in the `flaml.automl.spark.utils` module to convert your data into a pandas-on-spark (`pyspark.pandas`) dataframe/series, which Spark estimators require.
+
+    This utility function takes data in the form of a `pandas.Dataframe` or `pyspark.sql.Dataframe` and converts it into a pandas-on-spark dataframe. It also takes `pandas.Series` or `pyspark.sql.Dataframe` and converts it into a [pandas-on-spark](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/index.html) series. If you pass in a `pyspark.pandas.Dataframe`, it will not make any changes.
+
+    This function also accepts optional arguments `index_col` and `default_index_type`.
+
+    - `index_col` is the column name to use as the index, default is None.
+    - `default_index_type` is the default index type, default is "distributed-sequence". More info about default index type could be found on Spark official [documentation](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/options.html#default-index-type)
+
+    Here is an example code snippet for Spark Data:
+
+    ```python
+    import pandas as pd
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Creating a dictionary
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    # Creating a pandas DataFrame
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+    ```
+
+    To use Spark ML models you need to format your data appropriately. Specifically, use [`VectorAssembler`](https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) to merge all feature columns into a single vector column.
+
+    Here is an example of how to use it:
+
+    ```python
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+    ```
+
+    Later in conducting the experiment, use your pandas-on-spark data like non-spark data and pass them using `X_train, y_train` or `dataframe, label`.
+
+    ### Estimators
+
+    #### Model List
+
+    - `lgbm_spark`: The class for fine-tuning Spark version LightGBM models, using [SynapseML](https://microsoft.github.io/SynapseML/docs/features/lightgbm/about/) API.
+
+    #### Usage
+
+    First, prepare your data in the required format as described in the previous section.
+
+    By including the models you intend to try in the `estimators_list` argument to `flaml.automl`, FLAML will start trying configurations for these models. If your input is Spark data, FLAML will also use estimators with the `_spark` postfix by default, even if you haven't specified them.
+
+    Here is an example code snippet using SparkML models in AutoML:
+
+    ```python
+    import flaml
+
+    # prepare your data in pandas-on-spark format as we previously mentioned
+
+    automl = flaml.AutoML()
+    settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "estimator_list": ["lgbm_spark"],  # this setting is optional
+        "task": "regression",
+    }
+
+    automl.fit(
+        dataframe=psdf,
+        label=label,
+        **settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb)
+
+    ## Parallel Spark Jobs
+
+    You can activate Spark as the parallel backend during parallel tuning in both [AutoML](/docs/Use-Cases/Task-Oriented-AutoML#parallel-tuning) and [Hyperparameter Tuning](/docs/Use-Cases/Tune-User-Defined-Function#parallel-tuning), by setting the `use_spark` to `true`. FLAML will dispatch your job to the distributed Spark backend using [`joblib-spark`](https://github.com/joblib/joblib-spark).
+
+    Please note that you should not set `use_spark` to `true` when applying AutoML and Tuning for Spark Data. This is because only SparkML models will be used for Spark Data in AutoML and Tuning. As SparkML models run in parallel, there is no need to distribute them with `use_spark` again.
+
+    All the Spark-related arguments are stated below. These arguments are available in both Hyperparameter Tuning and AutoML:
+
+    - `use_spark`: boolean, default=False | Whether to use spark to run the training in parallel spark jobs. This can be used to accelerate training on large models and large datasets, but will incur more overhead in time and thus slow down training in some cases. GPU training is not supported yet when use_spark is True. For Spark clusters, by default, we will launch one trial per executor. However, sometimes we want to launch more trials than the number of executors (e.g., local mode). In this case, we can set the environment variable `FLAML_MAX_CONCURRENT` to override the detected `num_executors`. The final number of concurrent trials will be the minimum of `n_concurrent_trials` and `num_executors`.
+    - `n_concurrent_trials`: int, default=1 | The number of concurrent trials. When n_concurrent_trials > 1, FLAML performes parallel tuning.
+    - `force_cancel`: boolean, default=False | Whether to forcely cancel Spark jobs if the search time exceeded the time budget. Spark jobs include parallel tuning jobs and Spark-based model training jobs.
+
+    An example code snippet for using parallel Spark jobs:
+
+    ```python
+    import flaml
+
+    automl_experiment = flaml.AutoML()
+    automl_settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "task": "regression",
+        "n_concurrent_trials": 2,
+        "use_spark": True,
+        "force_cancel": True,  # Activating the force_cancel option can immediately halt Spark jobs once they exceed the allocated time_budget.
+    }
+
+    automl.fit(
+        dataframe=dataframe,
+        label=label,
+        **automl_settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb)
+    # Integrate - Spark
+
+    FLAML has integrated Spark for distributed training. There are two main aspects of integration with Spark:
+
+    - Use Spark ML estimators for AutoML.
+    - Use Spark to run training in parallel spark jobs.
+
+    ## Spark ML Estimators
+
+    FLAML integrates estimators based on Spark ML models. These models are trained in parallel using Spark, so we called them Spark estimators. To use these models, you first need to organize your data in the required format.
+
+    ### Data
+
+    For Spark estimators, AutoML only consumes Spark data. FLAML provides a convenient function `to_pandas_on_spark` in the `flaml.automl.spark.utils` module to convert your data into a pandas-on-spark (`pyspark.pandas`) dataframe/series, which Spark estimators require.
+
+    This utility function takes data in the form of a `pandas.Dataframe` or `pyspark.sql.Dataframe` and converts it into a pandas-on-spark dataframe. It also takes `pandas.Series` or `pyspark.sql.Dataframe` and converts it into a [pandas-on-spark](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/index.html) series. If you pass in a `pyspark.pandas.Dataframe`, it will not make any changes.
+
+    This function also accepts optional arguments `index_col` and `default_index_type`.
+
+    - `index_col` is the column name to use as the index, default is None.
+    - `default_index_type` is the default index type, default is "distributed-sequence". More info about default index type could be found on Spark official [documentation](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/options.html#default-index-type)
+
+    Here is an example code snippet for Spark Data:
+
+    ```python
+    import pandas as pd
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Creating a dictionary
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    # Creating a pandas DataFrame
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+    ```
+
+    To use Spark ML models you need to format your data appropriately. Specifically, use [`VectorAssembler`](https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) to merge all feature columns into a single vector column.
+
+    Here is an example of how to use it:
+
+    ```python
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+    ```
+
+    Later in conducting the experiment, use your pandas-on-spark data like non-spark data and pass them using `X_train, y_train` or `dataframe, label`.
+
+    ### Estimators
+
+    #### Model List
+
+    - `lgbm_spark`: The class for fine-tuning Spark version LightGBM models, using [SynapseML](https://microsoft.github.io/SynapseML/docs/features/lightgbm/about/) API.
+
+    #### Usage
+
+    First, prepare your data in the required format as described in the previous section.
+
+    By including the models you intend to try in the `estimators_list` argument to `flaml.automl`, FLAML will start trying configurations for these models. If your input is Spark data, FLAML will also use estimators with the `_spark` postfix by default, even if you haven't specified them.
+
+    Here is an example code snippet using SparkML models in AutoML:
+
+    ```python
+    import flaml
+
+    # prepare your data in pandas-on-spark format as we previously mentioned
+
+
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Product_Manager (to chat_manager):
+
+    ```python
+    from flaml import AutoML
+
+    # Assuming psdf is the pandas-on-spark dataframe and label is the name of the target variable
+    # Presuming that the data conversion and feature vectorization have been done as shown in the context
+
+    automl = AutoML()
+
+    settings = {
+        "time_budget": 120,  # for example, set the time budget to 2 minutes
+        "metric": "accuracy",  # assuming a classification problem, change to "r2" for regression
+        "estimator_list": ["lgbm_spark"],  # specify the Spark estimator
+        "task": "classification",  # assuming a classification problem, change to "regression" for regression
+        "n_concurrent_trials": 2,  # number of concurrent Spark jobs
+        "use_spark": True,  # enable distributed training using Spark
+    }
+
+    automl.fit(dataframe=psdf, label=label, **settings)
+    ```
+    Please adjust the `metric`, `task`, and other settings according to your specific problem and requirements. This code snippet sets up FLAML with Spark for parallel training using the LightGBM Spark estimator, with two concurrent trials. Make sure your Spark environment is properly configured to run the distributed training.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Senior_Python_Engineer
+
+    Senior_Python_Engineer (to chat_manager):
+
+    ```python
+    from flaml import AutoML
+
+    # Assuming psdf is the pandas-on-spark dataframe and label is the name of the target variable
+    # Presuming that the data conversion and feature vectorization have been done as shown in the context
+
+    automl = AutoML()
+
+    settings = {
+        "time_budget": 120,  # for example, set the time budget to 2 minutes
+        "metric": "accuracy",  # assuming a classification problem, change to "r2" for regression
+        "estimator_list": ["lgbm_spark"],  # specify the Spark estimator
+        "task": "classification",  # assuming a classification problem, change to "regression" for regression
+        "n_concurrent_trials": 2,  # number of concurrent Spark jobs
+        "use_spark": True,  # enable distributed training using Spark
+    }
+
+    automl.fit(dataframe=psdf, label=label, **settings)
+    ```
+    Please adjust the `metric`, `task`, and other settings according to your specific problem and requirements. This code snippet sets up FLAML with Spark for parallel training using the LightGBM Spark estimator, with two concurrent trials. Make sure your Spark environment is properly configured to run the distributed training.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Code_Reviewer
+
+    Code_Reviewer (to chat_manager):
+
+    The provided code snippet is mostly correct and follows the guidelines provided in the context. However, there is one minor issue: if we are using the pandas-on-spark DataFrame `psdf`, the `fit` method should be called with `dataframe` and `label` arguments, not `X_train` and `y_train`.
+
+    This is because, with FLAML and Spark integration, the `fit` method expects the entire data as a single pandas-on-spark DataFrame along with the name of the target variable as `label`, rather than being provided with separate feature and target data as it would expect with standard pandas DataFrames.
+
+    Here's the correct code snippet reflecting this:
+
+    ```python
+    from flaml import AutoML
+
+    # Assuming psdf is the pandas-on-spark dataframe and label is the name of the target variable
+    # Presuming that the data conversion and feature vectorization have been done as shown in the context
+
+    automl = AutoML()
+
+    settings = {
+        "time_budget": 120,  # for example, set the time budget to 2 minutes
+        "metric": "accuracy",  # assuming a classification problem, change to "r2" for regression
+        "estimator_list": ["lgbm_spark"],  # specify the Spark estimator
+        "task": "classification",  # assuming a classification problem, change to "regression" for regression
+        "n_concurrent_trials": 2,  # number of concurrent Spark jobs
+        "use_spark": True,  # enable distributed training using Spark
+    }
+
+    # Use dataframe and label parameters to fit the model
+    automl.fit(dataframe=psdf, label=label, **settings)
+    ```
+
+    Please ensure that your Spark cluster is correctly configured to support distributed training, and adjust the `metric`, `task`, and other settings as needed for your specific use case.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Boss_Assistant
+
+    Boss_Assistant (to chat_manager):
+
+    Reply `TERMINATE` if the task is done.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Product_Manager (to chat_manager):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+````
+
+### Call RetrieveUserProxyAgent while init chat with another user proxy agent
+
+Sometimes, there might be a need to use RetrieveUserProxyAgent in group chat without initializing the chat with it. In such scenarios, it becomes essential to create a function that wraps the RAG agents and allows them to be called from other agents.
+
+````python
+call_rag_chat()
+
+    Boss (to chat_manager):
+
+    How to use spark for parallel training in FLAML? Give me sample code.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+
+
+    Product_Manager (to chat_manager):
+
+    ***** Suggested function call: retrieve_content *****
+    Arguments:
+    {"message":"How to use spark for parallel training in FLAML? Give me sample code.","n_results":3}
+    *****************************************************
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Boss
+
+
+    >>>>>>>> EXECUTING FUNCTION retrieve_content...
+
+
+    2024-08-14 07:09:05,717 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Use the existing collection `groupchat`.
+    2024-08-14 07:09:05,845 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
+
+
+    Trying to create collection.
+    VectorDB returns doc_ids:  [['bdfbc921', 'b2c1ec51', '0e57e70f']]
+    Adding content of doc bdfbc921 to context.
+    Adding content of doc b2c1ec51 to context.
+    Adding content of doc 0e57e70f to context.
+    Boss (to chat_manager):
+
+    ***** Response from calling function (retrieve_content) *****
+    You're a retrieve augmented coding assistant. You answer user's questions based on your own knowledge and the
+    context provided by the user.
+    If you can't answer the question with or without the current context, you should reply exactly `UPDATE CONTEXT`.
+    For code generation, you must obey the following rules:
+    Rule 1. You MUST NOT install any packages because all the packages needed are already installed.
+    Rule 2. You must follow the formats below to write your code:
+    ```language
+    # your code
+    ```
+
+    User's question is: How to use spark for parallel training in FLAML? Give me sample code.
+
+    Context is: # Integrate - Spark
+
+    FLAML has integrated Spark for distributed training. There are two main aspects of integration with Spark:
+
+    - Use Spark ML estimators for AutoML.
+    - Use Spark to run training in parallel spark jobs.
+
+    ## Spark ML Estimators
+
+    FLAML integrates estimators based on Spark ML models. These models are trained in parallel using Spark, so we called them Spark estimators. To use these models, you first need to organize your data in the required format.
+
+    ### Data
+
+    For Spark estimators, AutoML only consumes Spark data. FLAML provides a convenient function `to_pandas_on_spark` in the `flaml.automl.spark.utils` module to convert your data into a pandas-on-spark (`pyspark.pandas`) dataframe/series, which Spark estimators require.
+
+    This utility function takes data in the form of a `pandas.Dataframe` or `pyspark.sql.Dataframe` and converts it into a pandas-on-spark dataframe. It also takes `pandas.Series` or `pyspark.sql.Dataframe` and converts it into a [pandas-on-spark](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/index.html) series. If you pass in a `pyspark.pandas.Dataframe`, it will not make any changes.
+
+    This function also accepts optional arguments `index_col` and `default_index_type`.
+
+    - `index_col` is the column name to use as the index, default is None.
+    - `default_index_type` is the default index type, default is "distributed-sequence". More info about default index type could be found on Spark official [documentation](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/options.html#default-index-type)
+
+    Here is an example code snippet for Spark Data:
+
+    ```python
+    import pandas as pd
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Creating a dictionary
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    # Creating a pandas DataFrame
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+    ```
+
+    To use Spark ML models you need to format your data appropriately. Specifically, use [`VectorAssembler`](https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) to merge all feature columns into a single vector column.
+
+    Here is an example of how to use it:
+
+    ```python
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+    ```
+
+    Later in conducting the experiment, use your pandas-on-spark data like non-spark data and pass them using `X_train, y_train` or `dataframe, label`.
+
+    ### Estimators
+
+    #### Model List
+
+    - `lgbm_spark`: The class for fine-tuning Spark version LightGBM models, using [SynapseML](https://microsoft.github.io/SynapseML/docs/features/lightgbm/about/) API.
+
+    #### Usage
+
+    First, prepare your data in the required format as described in the previous section.
+
+    By including the models you intend to try in the `estimators_list` argument to `flaml.automl`, FLAML will start trying configurations for these models. If your input is Spark data, FLAML will also use estimators with the `_spark` postfix by default, even if you haven't specified them.
+
+    Here is an example code snippet using SparkML models in AutoML:
+
+    ```python
+    import flaml
+
+    # prepare your data in pandas-on-spark format as we previously mentioned
+
+    automl = flaml.AutoML()
+    settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "estimator_list": ["lgbm_spark"],  # this setting is optional
+        "task": "regression",
+    }
+
+    automl.fit(
+        dataframe=psdf,
+        label=label,
+        **settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb)
+
+    ## Parallel Spark Jobs
+
+    You can activate Spark as the parallel backend during parallel tuning in both [AutoML](/docs/Use-Cases/Task-Oriented-AutoML#parallel-tuning) and [Hyperparameter Tuning](/docs/Use-Cases/Tune-User-Defined-Function#parallel-tuning), by setting the `use_spark` to `true`. FLAML will dispatch your job to the distributed Spark backend using [`joblib-spark`](https://github.com/joblib/joblib-spark).
+
+    Please note that you should not set `use_spark` to `true` when applying AutoML and Tuning for Spark Data. This is because only SparkML models will be used for Spark Data in AutoML and Tuning. As SparkML models run in parallel, there is no need to distribute them with `use_spark` again.
+
+    All the Spark-related arguments are stated below. These arguments are available in both Hyperparameter Tuning and AutoML:
+
+    - `use_spark`: boolean, default=False | Whether to use spark to run the training in parallel spark jobs. This can be used to accelerate training on large models and large datasets, but will incur more overhead in time and thus slow down training in some cases. GPU training is not supported yet when use_spark is True. For Spark clusters, by default, we will launch one trial per executor. However, sometimes we want to launch more trials than the number of executors (e.g., local mode). In this case, we can set the environment variable `FLAML_MAX_CONCURRENT` to override the detected `num_executors`. The final number of concurrent trials will be the minimum of `n_concurrent_trials` and `num_executors`.
+    - `n_concurrent_trials`: int, default=1 | The number of concurrent trials. When n_concurrent_trials > 1, FLAML performes parallel tuning.
+    - `force_cancel`: boolean, default=False | Whether to forcely cancel Spark jobs if the search time exceeded the time budget. Spark jobs include parallel tuning jobs and Spark-based model training jobs.
+
+    An example code snippet for using parallel Spark jobs:
+
+    ```python
+    import flaml
+
+    automl_experiment = flaml.AutoML()
+    automl_settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "task": "regression",
+        "n_concurrent_trials": 2,
+        "use_spark": True,
+        "force_cancel": True,  # Activating the force_cancel option can immediately halt Spark jobs once they exceed the allocated time_budget.
+    }
+
+    automl.fit(
+        dataframe=dataframe,
+        label=label,
+        **automl_settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb)
+    # Integrate - Spark
+
+    FLAML has integrated Spark for distributed training. There are two main aspects of integration with Spark:
+
+    - Use Spark ML estimators for AutoML.
+    - Use Spark to run training in parallel spark jobs.
+
+    ## Spark ML Estimators
+
+    FLAML integrates estimators based on Spark ML models. These models are trained in parallel using Spark, so we called them Spark estimators. To use these models, you first need to organize your data in the required format.
+
+    ### Data
+
+    For Spark estimators, AutoML only consumes Spark data. FLAML provides a convenient function `to_pandas_on_spark` in the `flaml.automl.spark.utils` module to convert your data into a pandas-on-spark (`pyspark.pandas`) dataframe/series, which Spark estimators require.
+
+    This utility function takes data in the form of a `pandas.Dataframe` or `pyspark.sql.Dataframe` and converts it into a pandas-on-spark dataframe. It also takes `pandas.Series` or `pyspark.sql.Dataframe` and converts it into a [pandas-on-spark](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/index.html) series. If you pass in a `pyspark.pandas.Dataframe`, it will not make any changes.
+
+    This function also accepts optional arguments `index_col` and `default_index_type`.
+
+    - `index_col` is the column name to use as the index, default is None.
+    - `default_index_type` is the default index type, default is "distributed-sequence". More info about default index type could be found on Spark official [documentation](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/options.html#default-index-type)
+
+    Here is an example code snippet for Spark Data:
+
+    ```python
+    import pandas as pd
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Creating a dictionary
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    # Creating a pandas DataFrame
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+    ```
+
+    To use Spark ML models you need to format your data appropriately. Specifically, use [`VectorAssembler`](https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) to merge all feature columns into a single vector column.
+
+    Here is an example of how to use it:
+
+    ```python
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+    ```
+
+    Later in conducting the experiment, use your pandas-on-spark data like non-spark data and pass them using `X_train, y_train` or `dataframe, label`.
+
+    ### Estimators
+
+    #### Model List
+
+    - `lgbm_spark`: The class for fine-tuning Spark version LightGBM models, using [SynapseML](https://microsoft.github.io/SynapseML/docs/features/lightgbm/about/) API.
+
+    #### Usage
+
+    First, prepare your data in the required format as described in the previous section.
+
+    By including the models you intend to try in the `estimators_list` argument to `flaml.automl`, FLAML will start trying configurations for these models. If your input is Spark data, FLAML will also use estimators with the `_spark` postfix by default, even if you haven't specified them.
+
+    Here is an example code snippet using SparkML models in AutoML:
+
+    ```python
+    import flaml
+
+    # prepare your data in pandas-on-spark format as we previously mentioned
+    automl = flaml.AutoML()
+    settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "estimator_list": ["lgbm_spark"],  # this setting is optional
+        "task": "regression",
+    }
+
+    automl.fit(
+        dataframe=psdf,
+        label=label,
+        **settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb)
+
+    ## Parallel Spark Jobs
+
+    You can activate Spark as the parallel backend during parallel tuning in both [AutoML](/docs/Use-Cases/Task-Oriented-AutoML#parallel-tuning) and [Hyperparameter Tuning](/docs/Use-Cases/Tune-User-Defined-Function#parallel-tuning), by setting the `use_spark` to `true`. FLAML will dispatch your job to the distributed Spark backend using [`joblib-spark`](https://github.com/joblib/joblib-spark).
+
+    Please note that you should not set `use_spark` to `true` when applying AutoML and Tuning for Spark Data. This is because only SparkML models will be used for Spark Data in AutoML and Tuning. As SparkML models run in parallel, there is no need to distribute them with `use_spark` again.
+
+    All the Spark-related arguments are stated below. These arguments are available in both Hyperparameter Tuning and AutoML:
+
+    - `use_spark`: boolean, default=False | Whether to use spark to run the training in parallel spark jobs. This can be used to accelerate training on large models and large datasets, but will incur more overhead in time and thus slow down training in some cases. GPU training is not supported yet when use_spark is True. For Spark clusters, by default, we will launch one trial per executor. However, sometimes we want to launch more trials than the number of executors (e.g., local mode). In this case, we can set the environment variable `FLAML_MAX_CONCURRENT` to override the detected `num_executors`. The final number of concurrent trials will be the minimum of `n_concurrent_trials` and `num_executors`.
+    - `n_concurrent_trials`: int, default=1 | The number of concurrent trials. When n_concurrent_trials > 1, FLAML performes parallel tuning.
+    - `force_cancel`: boolean, default=False | Whether to forcely cancel Spark jobs if the search time exceeded the time budget. Spark jobs include parallel tuning jobs and Spark-based model training jobs.
+
+    An example code snippet for using parallel Spark jobs:
+
+    ```python
+    import flaml
+
+    automl_experiment = flaml.AutoML()
+    automl_settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "task": "regression",
+        "n_concurrent_trials": 2,
+        "use_spark": True,
+        "force_cancel": True,  # Activating the force_cancel option can immediately halt Spark jobs once they exceed the allocated time_budget.
+    }
+
+    automl.fit(
+        dataframe=dataframe,
+        label=label,
+        **automl_settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb)
+
+
+    *************************************************************
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Product_Manager
+
+    Product_Manager (to chat_manager):
+
+    To use Spark for parallel training in FLAML, follow these steps:
+
+    ## Steps:
+
+    1. **Prepare Your Data:**
+       Convert your data into a pandas-on-spark DataFrame using `to_pandas_on_spark` function.
+
+    2. **Configure Spark Settings:**
+       Set the `use_spark` parameter to `True` to enable Spark for parallel training jobs.
+
+    3. **Run the AutoML Experiment:**
+       Configure the AutoML settings and run the experiment.
+
+    ## Sample Code:
+
+    ```python
+    import pandas as pd
+    import flaml
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Prepare your data
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+
+    # Use VectorAssembler to format data for Spark ML
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+
+    # Configure AutoML settings
+    automl = flaml.AutoML()
+    automl_settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "task": "regression",
+        "n_concurrent_trials": 2,
+        "use_spark": True,
+        "force_cancel": True,  # Optionally force cancel jobs that exceed time budget
+    }
+
+    # Run the AutoML experiment
+    automl.fit(
+        dataframe=psdf,
+        label=label,
+        **automl_settings,
+    )
+    ```
+
+    This code demonstrates how to prepare your data, configure Spark settings for parallel training, and run the AutoML experiment using FLAML with Spark.
+
+    You can find more information and examples in the [FLAML documentation](https://github.com/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb).
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Senior_Python_Engineer
+````

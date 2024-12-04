@@ -1,0 +1,495 @@
+---
+title: "Auto Generated Agent Chat: Task Solving with Langchain Provided Tools as Functions"
+---
+
+AutoGen offers conversable agents powered by LLM, tool, or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participants through multi-agent conversation. Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+In this notebook, we demonstrate how to use `AssistantAgent` and `UserProxyAgent` to make function calls with the new feature of OpenAI models (in model version 0613) with a set of Langchain-provided tools and toolkits, to demonstrate how to leverage the 35+ tools available.
+A specified prompt and function configs must be passed to `AssistantAgent` to initialize the agent. The corresponding functions must be passed to `UserProxyAgent`, which will execute any function calls made by `AssistantAgent`. Besides this requirement of matching descriptions with functions, we recommend checking the system message in the `AssistantAgent` to ensure the instructions align with the function call descriptions.
+
+## Requirements
+
+AutoGen requires `Python>=3.8`. To run this notebook example, please install `pyautogen` and `Langchain`:
+
+```bash
+pip install pyautogen Langchain
+```
+
+```python
+%pip install "pyautogen>=0.2.3" Langchain
+```
+
+## Set your API Endpoint
+
+The [`config_list_from_models`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_models) function tries to create a list of configurations using Azure OpenAI endpoints and OpenAI endpoints for the provided list of models. It assumes the api keys and api bases are stored in the corresponding environment variables or local txt files:
+
+- OpenAI API key: os.environ["OPENAI_API_KEY"] or `openai_api_key_file="key_openai.txt"`.
+- Azure OpenAI API key: os.environ["AZURE_OPENAI_API_KEY"] or `aoai_api_key_file="key_aoai.txt"`. Multiple keys can be stored, one per line.
+- Azure OpenAI API base: os.environ["AZURE_OPENAI_API_BASE"] or `aoai_api_base_file="base_aoai.txt"`. Multiple bases can be stored, one per line.
+
+It's OK to have only the OpenAI API key, or only the Azure OpenAI API key + base.
+If you open this notebook in google colab, you can upload your files by clicking the file icon on the left panel and then choosing "upload file" icon.
+
+The following code excludes Azure OpenAI endpoints from the config list because some endpoints don't support functions yet. Remove the `exclude` argument if they do.
+
+```python
+import math
+import os
+from typing import Optional, Type
+
+# Starndard Langchain example
+from langchain.agents import create_spark_sql_agent
+from langchain.agents.agent_toolkits import SparkSQLToolkit
+from langchain.chat_models import ChatOpenAI
+
+# Import things that are needed generically
+from langchain.pydantic_v1 import BaseModel, Field
+from langchain.tools import BaseTool
+from langchain.tools.file_management.read import ReadFileTool
+from langchain.utilities.spark_sql import SparkSQL
+from pyspark.sql import SparkSession
+
+import autogen
+
+config_list = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"],
+    },
+)
+```
+
+It first looks for environment variable "OAI_CONFIG_LIST" which needs to be a valid json string. If that variable is not found, it then looks for a json file named "OAI_CONFIG_LIST". It filters the configs by models (you can filter by other keys as well). Only the models with matching names are kept in the list based on the filter condition.
+
+The config list looks like the following:
+
+```python
+config_list = [
+    {
+        'model': 'gpt-4',
+        'api_key': '<your OpenAI API key here>',
+    },
+    {
+        'model': 'gpt-3.5-turbo',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-15-preview',
+    },
+    {
+        'model': 'gpt-3.5-turbo-16k',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-15-preview',
+    },
+]
+```
+
+You can set the value of config_list in any way you prefer. Please refer to this [notebook](https://github.com/ag2ai/ag2/blob/main/website/docs/topics/llm_configuration.ipynb) for full code examples of the different methods.
+
+## Making Function Calls
+
+In this example, we demonstrate function call execution with `AssistantAgent` and `UserProxyAgent`. With the default system prompt of `AssistantAgent`, we allow the LLM assistant to perform tasks with code, and the `UserProxyAgent` would extract code blocks from the LLM response and execute them. With the new "function_call" feature, we define functions and specify the description of the function in the OpenAI config for the `AssistantAgent`. Then we register the functions in `UserProxyAgent`.
+
+```python
+class CircumferenceToolInput(BaseModel):
+    radius: float = Field()
+
+
+class CircumferenceTool(BaseTool):
+    name = "circumference_calculator"
+    description = "Use this tool when you need to calculate a circumference using the radius of a circle"
+    args_schema: Type[BaseModel] = CircumferenceToolInput
+
+    def _run(self, radius: float):
+        return float(radius) * 2.0 * math.pi
+
+
+def get_file_path_of_example():
+    # Get the current working directory
+    current_dir = os.getcwd()
+
+    # Go one directory up
+    parent_dir = os.path.dirname(current_dir)
+
+    # Move to the target directory
+    target_folder = os.path.join(parent_dir, "test")
+
+    # Construct the path to your target file
+    file_path = os.path.join(target_folder, "test_files/radius.txt")
+
+    return file_path
+```
+
+```python
+# Define a function to generate llm_config from a LangChain tool
+
+
+def generate_llm_config(tool):
+    # Define the function schema based on the tool's args_schema
+    function_schema = {
+        "name": tool.name.lower().replace(" ", "_"),
+        "description": tool.description,
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    }
+
+    if tool.args is not None:
+        function_schema["parameters"]["properties"] = tool.args
+
+    return function_schema
+
+
+# Instantiate the ReadFileTool
+read_file_tool = ReadFileTool()
+custom_tool = CircumferenceTool()
+
+# Construct the llm_config
+llm_config = {
+    # Generate functions config for the Tool
+    "functions": [
+        generate_llm_config(custom_tool),
+        generate_llm_config(read_file_tool),
+    ],
+    "config_list": config_list,  # Assuming you have this defined elsewhere
+    "timeout": 120,
+}
+
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=10,
+    code_execution_config={
+        "work_dir": "coding",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+)
+
+# Register the tool and start the conversation
+user_proxy.register_function(
+    function_map={
+        custom_tool.name: custom_tool._run,
+        read_file_tool.name: read_file_tool._run,
+    }
+)
+
+chatbot = autogen.AssistantAgent(
+    name="chatbot",
+    system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+    llm_config=llm_config,
+)
+
+user_proxy.initiate_chat(
+    chatbot,
+    message=f"Read the file with the path {get_file_path_of_example()}, then calculate the circumference of a circle that has a radius of that files contents.",  # 7.81mm in the file
+    llm_config=llm_config,
+)
+
+    user_proxy (to chatbot):
+
+    Read the file with the path 'Test.txt', then calculate the circumference of a circle that has a radius of that files contents.
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    ***** Suggested function Call: read_file *****
+    Arguments:
+    {
+      "file_path": "Test.txt"
+    }
+    **********************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION read_file...
+    user_proxy (to chatbot):
+
+    ***** Response from calling function "read_file" *****
+    7.81mm
+    ******************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    ***** Suggested function Call: circumference_calculator *****
+    Arguments:
+    {
+      "radius": 7.81
+    }
+    *************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION circumference_calculator...
+    user_proxy (to chatbot):
+
+    ***** Response from calling function "circumference_calculator" *****
+    49.071677249072565
+    *********************************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    The circumference of a circle with a radius of 7.81mm is approximately 49.071mm.
+
+    --------------------------------------------------------------------------------
+    user_proxy (to chatbot):
+
+
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+```
+
+# A PySpark Example
+
+```python
+%pip install pyspark
+```
+
+    Requirement already satisfied: pyspark in /usr/local/lib/python3.10/dist-packages (3.5.0)
+    Requirement already satisfied: py4j==0.10.9.7 in /usr/local/lib/python3.10/dist-packages (from pyspark) (0.10.9.7)
+
+```python
+spark = SparkSession.builder.getOrCreate()
+schema = "langchain_example"
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {schema}")
+spark.sql(f"USE {schema}")
+csv_file_path = "./sample_data/california_housing_train.csv"
+table = "california_housing_train"
+spark.read.csv(csv_file_path, header=True, inferSchema=True).write.option(
+    "path", "file:/content/spark-warehouse/langchain_example.db/california_housing_train"
+).mode("overwrite").saveAsTable(table)
+spark.table(table).show()
+```
+
+    +---------+--------+------------------+-----------+--------------+----------+----------+-------------+------------------+
+    |longitude|latitude|housing_median_age|total_rooms|total_bedrooms|population|households|median_income|median_house_value|
+    +---------+--------+------------------+-----------+--------------+----------+----------+-------------+------------------+
+    |  -114.31|   34.19|              15.0|     5612.0|        1283.0|    1015.0|     472.0|       1.4936|           66900.0|
+    |  -114.47|    34.4|              19.0|     7650.0|        1901.0|    1129.0|     463.0|         1.82|           80100.0|
+    |  -114.56|   33.69|              17.0|      720.0|         174.0|     333.0|     117.0|       1.6509|           85700.0|
+    |  -114.57|   33.64|              14.0|     1501.0|         337.0|     515.0|     226.0|       3.1917|           73400.0|
+    |  -114.57|   33.57|              20.0|     1454.0|         326.0|     624.0|     262.0|        1.925|           65500.0|
+    |  -114.58|   33.63|              29.0|     1387.0|         236.0|     671.0|     239.0|       3.3438|           74000.0|
+    |  -114.58|   33.61|              25.0|     2907.0|         680.0|    1841.0|     633.0|       2.6768|           82400.0|
+    |  -114.59|   34.83|              41.0|      812.0|         168.0|     375.0|     158.0|       1.7083|           48500.0|
+    |  -114.59|   33.61|              34.0|     4789.0|        1175.0|    3134.0|    1056.0|       2.1782|           58400.0|
+    |   -114.6|   34.83|              46.0|     1497.0|         309.0|     787.0|     271.0|       2.1908|           48100.0|
+    |   -114.6|   33.62|              16.0|     3741.0|         801.0|    2434.0|     824.0|       2.6797|           86500.0|
+    |   -114.6|    33.6|              21.0|     1988.0|         483.0|    1182.0|     437.0|        1.625|           62000.0|
+    |  -114.61|   34.84|              48.0|     1291.0|         248.0|     580.0|     211.0|       2.1571|           48600.0|
+    |  -114.61|   34.83|              31.0|     2478.0|         464.0|    1346.0|     479.0|        3.212|           70400.0|
+    |  -114.63|   32.76|              15.0|     1448.0|         378.0|     949.0|     300.0|       0.8585|           45000.0|
+    |  -114.65|   34.89|              17.0|     2556.0|         587.0|    1005.0|     401.0|       1.6991|           69100.0|
+    |  -114.65|    33.6|              28.0|     1678.0|         322.0|     666.0|     256.0|       2.9653|           94900.0|
+    |  -114.65|   32.79|              21.0|       44.0|          33.0|      64.0|      27.0|       0.8571|           25000.0|
+    |  -114.66|   32.74|              17.0|     1388.0|         386.0|     775.0|     320.0|       1.2049|           44000.0|
+    |  -114.67|   33.92|              17.0|       97.0|          24.0|      29.0|      15.0|       1.2656|           27500.0|
+    +---------+--------+------------------+-----------+--------------+----------+----------+-------------+------------------+
+    only showing top 20 rows
+
+```python
+# Note, you can also connect to Spark via Spark connect. For example:
+# db = SparkSQL.from_uri("sc://localhost:15002", schema=schema)
+spark_sql = SparkSQL(schema=schema)
+llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-16k")
+toolkit = SparkSQLToolkit(db=spark_sql, llm=llm)
+agent_executor = create_spark_sql_agent(llm=llm, toolkit=toolkit, verbose=True)
+```
+
+```python
+# Starndard Langchain example
+agent_executor.run("Describe the california_housing_train table")
+
+
+
+    > Entering new AgentExecutor chain...
+    Action: list_tables_sql_db
+    Action Input: ""
+    Observation: california_housing_train
+    Thought: I see that there is a table called "california_housing_train" in the database. I can use the "schema_sql_db" tool to get more information about this table.
+    Action: schema_sql_db
+    Action Input: "california_housing_train"
+    Observation: CREATE TABLE spark_catalog.langchain_example.california_housing_train (
+      longitude DOUBLE,
+      latitude DOUBLE,
+      housing_median_age DOUBLE,
+      total_rooms DOUBLE,
+      total_bedrooms DOUBLE,
+      population DOUBLE,
+      households DOUBLE,
+      median_income DOUBLE,
+      median_house_value DOUBLE)
+    ;
+
+    /*
+    3 rows from california_housing_train table:
+    longitude	latitude	housing_median_age	total_rooms	total_bedrooms	population	households	median_income	median_house_value
+    -114.31	34.19	15.0	5612.0	1283.0	1015.0	472.0	1.4936	66900.0
+    -114.47	34.4	19.0	7650.0	1901.0	1129.0	463.0	1.82	80100.0
+    -114.56	33.69	17.0	720.0	174.0	333.0	117.0	1.6509	85700.0
+    */
+    Thought: The "california_housing_train" table has the following columns: longitude, latitude, housing_median_age, total_rooms, total_bedrooms, population, households, median_income, and median_house_value. It contains information about housing in California. I can now answer the question.
+    Action: None
+    Final Answer: The "california_housing_train" table has the following columns: longitude, latitude, housing_median_age, total_rooms, total_bedrooms, population, households, median_income, and median_house_value.
+
+    > Finished chain.
+
+
+
+```
+
+    'The "california_housing_train" table has the following columns: longitude, latitude, housing_median_age, total_rooms, total_bedrooms, population, households, median_income, and median_house_value.'
+
+```python
+# LangChain direct tool usage instead of toolkit example
+# from langchain.tools.spark_sql.tool import (
+#     InfoSparkSQLTool,
+#     ListSparkSQLTool,
+#     QueryCheckerTool,
+#     QuerySparkSQLTool,
+# )
+# debug_toolkit = [
+#   QuerySparkSQLTool(db=spark_sql),
+#   InfoSparkSQLTool(db=spark_sql),
+#   ListSparkSQLTool(db=spark_sql),
+#   QueryCheckerTool(db=spark_sql, llm=llm),
+# ]
+```
+
+```python
+# Now use AutoGen with Langchain Tool Bridgre
+tools = []
+function_map = {}
+
+for tool in toolkit.get_tools():  # debug_toolkit if you want to use tools directly
+    tool_schema = generate_llm_config(tool)
+    print(tool_schema)
+    tools.append(tool_schema)
+    function_map[tool.name] = tool._run
+
+# Construct the llm_config
+llm_config = {
+    "functions": tools,
+    "config_list": config_list,  # Assuming you have this defined elsewhere
+    "timeout": 120,
+}
+
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=10,
+    code_execution_config={
+        "work_dir": "coding",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+)
+
+print(function_map)
+
+# Register the tool and start the conversation
+user_proxy.register_function(function_map=function_map)
+
+chatbot = autogen.AssistantAgent(
+    name="chatbot",
+    system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+    llm_config=llm_config,
+)
+
+user_proxy.initiate_chat(
+    chatbot,
+    message="Describe the table names california_housing_train",
+    llm_config=llm_config,
+)
+
+    {'name': 'query_sql_db', 'description': '\n    Input to this tool is a detailed and correct SQL query, output is a result from the Spark SQL.\n    If the query is not correct, an error message will be returned.\n    If an error is returned, rewrite the query, check the query, and try again.\n    ', 'parameters': {'type': 'object', 'properties': {'query': {'title': 'Query', 'type': 'string'}}, 'required': []}}
+    {'name': 'schema_sql_db', 'description': '\n    Input to this tool is a comma-separated list of tables, output is the schema and sample rows for those tables.\n    Be sure that the tables actually exist by calling list_tables_sql_db first!\n\n    Example Input: "table1, table2, table3"\n    ', 'parameters': {'type': 'object', 'properties': {'table_names': {'title': 'Table Names', 'type': 'string'}}, 'required': []}}
+    {'name': 'list_tables_sql_db', 'description': 'Input is an empty string, output is a comma separated list of tables in the Spark SQL.', 'parameters': {'type': 'object', 'properties': {'tool_input': {'title': 'Tool Input', 'default': '', 'type': 'string'}}, 'required': []}}
+    {'name': 'query_checker_sql_db', 'description': '\n    Use this tool to double check if your query is correct before executing it.\n    Always use this tool before executing a query with query_sql_db!\n    ', 'parameters': {'type': 'object', 'properties': {'query': {'title': 'Query', 'type': 'string'}}, 'required': []}}
+    user_proxy (to chatbot):
+
+    Describe the table names california_housing_train
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    ***** Suggested function Call: schema_sql_db *****
+    Arguments:
+    {
+      "table_names": "california_housing_train"
+    }
+    **************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION schema_sql_db...
+    user_proxy (to chatbot):
+
+    ***** Response from calling function "schema_sql_db" *****
+    CREATE TABLE spark_catalog.langchain_example.california_housing_train (
+      longitude DOUBLE,
+      latitude DOUBLE,
+      housing_median_age DOUBLE,
+      total_rooms DOUBLE,
+      total_bedrooms DOUBLE,
+      population DOUBLE,
+      households DOUBLE,
+      median_income DOUBLE,
+      median_house_value DOUBLE)
+    ;
+
+    /*
+    3 rows from california_housing_train table:
+    longitude	latitude	housing_median_age	total_rooms	total_bedrooms	population	households	median_income	median_house_value
+    -114.31	34.19	15.0	5612.0	1283.0	1015.0	472.0	1.4936	66900.0
+    -114.47	34.4	19.0	7650.0	1901.0	1129.0	463.0	1.82	80100.0
+    -114.56	33.69	17.0	720.0	174.0	333.0	117.0	1.6509	85700.0
+    */
+    **********************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    The california_housing_train table has the following schema:
+
+    - longitude: DOUBLE
+    - latitude: DOUBLE
+    - housing_median_age: DOUBLE
+    - total_rooms: DOUBLE
+    - total_bedrooms: DOUBLE
+    - population: DOUBLE
+    - households: DOUBLE
+    - median_income: DOUBLE
+    - median_house_value: DOUBLE
+
+    Here are sample rows from the table:
+
+    | longitude | latitude | housing_median_age | total_rooms | total_bedrooms | population | households | median_income | median_house_value |
+    |-----------|----------|--------------------|-------------|----------------|------------|------------|---------------|--------------------|
+    | -114.31   | 34.19    | 15.0               | 5612.0      | 1283.0         | 1015.0     | 472.0      | 1.4936        | 66900.0            |
+    | -114.47   | 34.4     | 19.0               | 7650.0      | 1901.0         | 1129.0     | 463.0      | 1.82          | 80100.0            |
+    | -114.56   | 33.69    | 17.0               | 720.0       | 174.0          | 333.0      | 117.0      | 1.6509        | 85700.0            |
+
+    --------------------------------------------------------------------------------
+    user_proxy (to chatbot):
+
+
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+```

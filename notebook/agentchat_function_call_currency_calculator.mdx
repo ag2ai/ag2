@@ -1,0 +1,408 @@
+---
+title: "Currency Calculator: Task Solving with Provided Tools as Functions"
+---
+
+AutoGen offers conversable agents powered by LLM, tool, or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation. Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+In this notebook, we demonstrate how to use `AssistantAgent` and `UserProxyAgent` to make function calls with the new feature of OpenAI models (in model version 0613). A specified prompt and function configs must be passed to `AssistantAgent` to initialize the agent. The corresponding functions must be passed to `UserProxyAgent`, which will execute any function calls made by `AssistantAgent`. Besides this requirement of matching descriptions with functions, we recommend checking the system message in the `AssistantAgent` to ensure the instructions align with the function call descriptions.
+
+## Requirements
+
+AutoGen requires `Python>=3.8`. To run this notebook example, please install `pyautogen`:
+
+```bash
+pip install pyautogen
+```
+
+```python
+# %pip install "pyautogen>=0.2.3"
+```
+
+## Set your API Endpoint
+
+The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
+
+```python
+from typing import Literal
+
+from pydantic import BaseModel, Field
+from typing_extensions import Annotated
+
+import autogen
+from autogen.cache import Cache
+
+config_list = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={"tags": ["3.5-tool"]},  # comment out to get all
+)
+```
+
+It first looks for environment variable "OAI_CONFIG_LIST" which needs to be a valid json string. If that variable is not found, it then looks for a json file named "OAI_CONFIG_LIST". It filters the configs by tags (you can filter by other keys as well). Only the configs with matching tags are kept in the list based on the filter condition.
+
+The config list looks like the following:
+
+```python
+config_list = [
+    {
+        'model': 'gpt-3.5-turbo',
+        'api_key': '<your OpenAI API key here>',
+        'tags': ['tool', '3.5-tool'],
+    },
+    {
+        'model': 'gpt-3.5-turbo',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+        'tags': ['tool', '3.5-tool'],
+    },
+    {
+        'model': 'gpt-3.5-turbo-16k',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+        'tags': ['tool', '3.5-tool'],
+    },
+]
+```
+
+You can set the value of config_list in any way you prefer. Please refer to this [notebook](https://github.com/microsoft/autogen/blob/main/website/docs/topics/llm_configuration.ipynb) for full code examples of the different methods.
+
+## Making Function Calls
+
+In this example, we demonstrate function call execution with `AssistantAgent` and `UserProxyAgent`. With the default system prompt of `AssistantAgent`, we allow the LLM assistant to perform tasks with code, and the `UserProxyAgent` would extract code blocks from the LLM response and execute them. With the new "function_call" feature, we define functions and specify the description of the function in the OpenAI config for the `AssistantAgent`. Then we register the functions in `UserProxyAgent`.
+
+```python
+llm_config = {
+    "config_list": config_list,
+    "timeout": 120,
+}
+
+chatbot = autogen.AssistantAgent(
+    name="chatbot",
+    system_message="For currency exchange tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+    llm_config=llm_config,
+)
+
+# create a UserProxyAgent instance named "user_proxy"
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=10,
+)
+
+
+CurrencySymbol = Literal["USD", "EUR"]
+
+
+def exchange_rate(base_currency: CurrencySymbol, quote_currency: CurrencySymbol) -> float:
+    if base_currency == quote_currency:
+        return 1.0
+    elif base_currency == "USD" and quote_currency == "EUR":
+        return 1 / 1.1
+    elif base_currency == "EUR" and quote_currency == "USD":
+        return 1.1
+    else:
+        raise ValueError(f"Unknown currencies {base_currency}, {quote_currency}")
+
+
+@user_proxy.register_for_execution()
+@chatbot.register_for_llm(description="Currency exchange calculator.")
+def currency_calculator(
+    base_amount: Annotated[float, "Amount of currency in base_currency"],
+    base_currency: Annotated[CurrencySymbol, "Base currency"] = "USD",
+    quote_currency: Annotated[CurrencySymbol, "Quote currency"] = "EUR",
+) -> str:
+    quote_amount = exchange_rate(base_currency, quote_currency) * base_amount
+    return f"{quote_amount} {quote_currency}"
+```
+
+The decorator `@chatbot.register_for_llm()` reads the annotated signature of the function `currency_calculator` and generates the following JSON schema used by OpenAI API to suggest calling the function. We can check the JSON schema generated as follows:
+
+```python
+chatbot.llm_config["tools"]
+
+[{'type': 'function',
+    'function': {'description': 'Currency exchange calculator.',
+    'name': 'currency_calculator',
+    'parameters': {'type': 'object',
+    'properties': {'base_amount': {'type': 'number',
+        'description': 'Amount of currency in base_currency'},
+        'base_currency': {'enum': ['USD', 'EUR'],
+        'type': 'string',
+        'default': 'USD',
+        'description': 'Base currency'},
+        'quote_currency': {'enum': ['USD', 'EUR'],
+        'type': 'string',
+        'default': 'EUR',
+        'description': 'Quote currency'}},
+    'required': ['base_amount']}}}]
+
+```
+
+The decorator `@user_proxy.register_for_execution()` maps the name of the function to be proposed by OpenAI API to the actual implementation. The function mapped is wrapped since we also automatically handle serialization of the output of function as follows:
+
+- string are untouched, and
+
+- objects of the Pydantic BaseModel type are serialized to JSON.
+
+We can check the correctness of function map by using `._origin` property of the wrapped function as follows:
+
+```python
+assert user_proxy.function_map["currency_calculator"]._origin == currency_calculator
+```
+
+Finally, we can use this function to accurately calculate exchange amounts:
+
+```python
+with Cache.disk() as cache:
+    # start the conversation
+    res = user_proxy.initiate_chat(
+        chatbot, message="How much is 123.45 USD in EUR?", summary_method="reflection_with_llm", cache=cache
+    )
+
+    user_proxy (to chatbot):
+
+    How much is 123.45 USD in EUR?
+
+    --------------------------------------------------------------------------------
+
+
+    chatbot (to user_proxy):
+
+    ***** Suggested tool call (call_9ogJS4d40BT1rXfMn7YJb151): currency_calculator *****
+    Arguments:
+    {
+      "base_amount": 123.45,
+      "base_currency": "USD",
+      "quote_currency": "EUR"
+    }
+    ************************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION currency_calculator...
+    user_proxy (to chatbot):
+
+    user_proxy (to chatbot):
+
+    ***** Response from calling tool (call_9ogJS4d40BT1rXfMn7YJb151) *****
+    112.22727272727272 EUR
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    123.45 USD is equivalent to 112.23 EUR.
+
+    --------------------------------------------------------------------------------
+    user_proxy (to chatbot):
+
+
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+```
+
+```python
+print("Chat summary:", res.summary)
+
+    Chat summary: 123.45 USD is equivalent to 112.23 EUR.
+```
+
+### Pydantic models
+
+We can also use Pydantic Base models to rewrite the function as follows:
+
+```python
+llm_config = {
+    "config_list": config_list,
+    "timeout": 120,
+}
+
+chatbot = autogen.AssistantAgent(
+    name="chatbot",
+    system_message="For currency exchange tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+    llm_config=llm_config,
+)
+
+# create a UserProxyAgent instance named "user_proxy"
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=10,
+)
+
+
+class Currency(BaseModel):
+    currency: Annotated[CurrencySymbol, Field(..., description="Currency symbol")]
+    amount: Annotated[float, Field(0, description="Amount of currency", ge=0)]
+
+
+# another way to register a function is to use register_function instead of register_for_execution and register_for_llm decorators
+def currency_calculator(
+    base: Annotated[Currency, "Base currency: amount and currency symbol"],
+    quote_currency: Annotated[CurrencySymbol, "Quote currency symbol"] = "USD",
+) -> Currency:
+    quote_amount = exchange_rate(base.currency, quote_currency) * base.amount
+    return Currency(amount=quote_amount, currency=quote_currency)
+
+
+autogen.agentchat.register_function(
+    currency_calculator,
+    caller=chatbot,
+    executor=user_proxy,
+    description="Currency exchange calculator.",
+)
+```
+
+```python
+chatbot.llm_config["tools"]
+
+[{'type': 'function',
+    'function': {'description': 'Currency exchange calculator.',
+    'name': 'currency_calculator',
+    'parameters': {'type': 'object',
+    'properties': {'base': {'properties': {'currency': {'description': 'Currency symbol',
+        'enum': ['USD', 'EUR'],
+        'title': 'Currency',
+        'type': 'string'},
+        'amount': {'default': 0,
+        'description': 'Amount of currency',
+        'minimum': 0.0,
+        'title': 'Amount',
+        'type': 'number'}},
+        'required': ['currency'],
+        'title': 'Currency',
+        'type': 'object',
+        'description': 'Base currency: amount and currency symbol'},
+        'quote_currency': {'enum': ['USD', 'EUR'],
+        'type': 'string',
+        'default': 'USD',
+        'description': 'Quote currency symbol'}},
+    'required': ['base']}}}]
+```
+
+```python
+with Cache.disk() as cache:
+    # start the conversation
+    res = user_proxy.initiate_chat(
+        chatbot, message="How much is 112.23 Euros in US Dollars?", summary_method="reflection_with_llm", cache=cache
+    )
+
+    user_proxy (to chatbot):
+
+    How much is 112.23 Euros in US Dollars?
+
+    --------------------------------------------------------------------------------
+
+
+    chatbot (to user_proxy):
+
+    ***** Suggested tool call (call_BQkSmdFHsrKvmtDWCk0mY5sF): currency_calculator *****
+    Arguments:
+    {
+      "base": {
+        "currency": "EUR",
+        "amount": 112.23
+      },
+      "quote_currency": "USD"
+    }
+    ************************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION currency_calculator...
+    user_proxy (to chatbot):
+
+    user_proxy (to chatbot):
+
+    ***** Response from calling tool (call_BQkSmdFHsrKvmtDWCk0mY5sF) *****
+    {"currency":"USD","amount":123.45300000000002}
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    112.23 Euros is equivalent to 123.45 US Dollars.
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+```
+
+```python
+print("Chat summary:", res.summary)
+
+    Chat summary: 112.23 Euros is equivalent to 123.45 US Dollars.
+```
+
+```python
+with Cache.disk() as cache:
+    # start the conversation
+    res = user_proxy.initiate_chat(
+        chatbot,
+        message="How much is 123.45 US Dollars in Euros?",
+        cache=cache,
+    )
+
+    user_proxy (to chatbot):
+
+    How much is 123.45 US Dollars in Euros?
+
+    --------------------------------------------------------------------------------
+
+
+    chatbot (to user_proxy):
+
+    ***** Suggested tool call (call_Xxol42xTswZHGX60OjvIQRG1): currency_calculator *****
+    Arguments:
+    {
+      "base": {
+        "currency": "USD",
+        "amount": 123.45
+      },
+      "quote_currency": "EUR"
+    }
+    ************************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION currency_calculator...
+    user_proxy (to chatbot):
+
+    user_proxy (to chatbot):
+
+    ***** Response from calling tool (call_Xxol42xTswZHGX60OjvIQRG1) *****
+    {"currency":"EUR","amount":112.22727272727272}
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    123.45 US Dollars is equivalent to 112.23 Euros.
+
+    --------------------------------------------------------------------------------
+    user_proxy (to chatbot):
+
+
+
+    --------------------------------------------------------------------------------
+    chatbot (to user_proxy):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+```
+
+```python
+print("Chat history:", res.chat_history)
+
+    Chat history: [{'content': 'How much is 123.45 US Dollars in Euros?', 'role': 'assistant'}, {'tool_calls': [{'id': 'call_Xxol42xTswZHGX60OjvIQRG1', 'function': {'arguments': '{\n  "base": {\n    "currency": "USD",\n    "amount": 123.45\n  },\n  "quote_currency": "EUR"\n}', 'name': 'currency_calculator'}, 'type': 'function'}], 'content': None, 'role': 'assistant'}, {'content': '{"currency":"EUR","amount":112.22727272727272}', 'tool_responses': [{'tool_call_id': 'call_Xxol42xTswZHGX60OjvIQRG1', 'role': 'tool', 'content': '{"currency":"EUR","amount":112.22727272727272}'}], 'role': 'tool'}, {'content': '123.45 US Dollars is equivalent to 112.23 Euros.', 'role': 'user'}, {'content': '', 'role': 'assistant'}, {'content': 'TERMINATE', 'role': 'user'}]
+```

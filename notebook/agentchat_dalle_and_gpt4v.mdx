@@ -1,0 +1,436 @@
+---
+title: "Agent Chat with Multimodal Models: DALLE  and GPT-4V"
+---
+
+Requires: OpenAI V1.
+
+### Before everything starts, install AutoGen with the `lmm` option
+
+```bash
+pip install "pyautogen[lmm]>=0.2.3"
+```
+
+```python
+import json
+import os
+import pdb
+import random
+import re
+import time
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+
+import matplotlib.pyplot as plt
+import PIL
+import requests
+from diskcache import Cache
+from openai import OpenAI
+from PIL import Image
+from termcolor import colored
+
+import autogen
+from autogen import Agent, AssistantAgent, ConversableAgent, UserProxyAgent
+from autogen.agentchat.contrib.img_utils import _to_pil, get_image_data, get_pil_image, gpt4v_formatter
+from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
+```
+
+```python
+config_list_4v = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4-vision-preview"],
+    },
+)
+
+config_list_gpt4 = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4", "gpt-4-0314", "gpt4", "gpt-4-32k", "gpt-4-32k-0314", "gpt-4-32k-v0314"],
+    },
+)
+
+config_list_dalle = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["dalle"],
+    },
+)
+
+gpt4_llm_config = {"config_list": config_list_gpt4, "cache_seed": 42}
+```
+
+The `config_list_dalle` should be something like:
+
+```python
+[
+    {
+        'model': 'dalle',
+        'api_key': 'Your API Key here',
+        'api_version': '2024-02-01'
+    }
+]
+```
+
+## Helper Functions
+
+We first create a warpper for DALLE call, make the
+
+```python
+def dalle_call(client: OpenAI, model: str, prompt: str, size: str, quality: str, n: int) -> str:
+    """
+    Generate an image using OpenAI's DALL-E model and cache the result.
+
+    This function takes a prompt and other parameters to generate an image using OpenAI's DALL-E model.
+    It checks if the result is already cached; if so, it returns the cached image data. Otherwise,
+    it calls the DALL-E API to generate the image, stores the result in the cache, and then returns it.
+
+    Args:
+        client (OpenAI): The OpenAI client instance for making API calls.
+        model (str): The specific DALL-E model to use for image generation.
+        prompt (str): The text prompt based on which the image is generated.
+        size (str): The size specification of the image. TODO: This should allow specifying landscape, square, or portrait modes.
+        quality (str): The quality setting for the image generation.
+        n (int): The number of images to generate.
+
+    Returns:
+    str: The image data as a string, either retrieved from the cache or newly generated.
+
+    Note:
+    - The cache is stored in a directory named '.cache/'.
+    - The function uses a tuple of (model, prompt, size, quality, n) as the key for caching.
+    - The image data is obtained by making a secondary request to the URL provided by the DALL-E API response.
+    """
+    # Function implementation...
+    cache = Cache(".cache/")  # Create a cache directory
+    key = (model, prompt, size, quality, n)
+    if key in cache:
+        return cache[key]
+
+    # If not in cache, compute and store the result
+    response = client.images.generate(
+        model=model,
+        prompt=prompt,
+        size=size,
+        quality=quality,
+        n=n,
+    )
+    image_url = response.data[0].url
+    img_data = get_image_data(image_url)
+    cache[key] = img_data
+
+    return img_data
+```
+
+Here is a helper function to extract image from a DALLE agent. We will show the DALLE agent later.
+
+```python
+def extract_img(agent: Agent) -> PIL.Image:
+    """
+    Extracts an image from the last message of an agent and converts it to a PIL image.
+
+    This function searches the last message sent by the given agent for an image tag,
+    extracts the image data, and then converts this data into a PIL (Python Imaging Library) image object.
+
+    Parameters:
+        agent (Agent): An instance of an agent from which the last message will be retrieved.
+
+    Returns:
+        PIL.Image: A PIL image object created from the extracted image data.
+
+    Note:
+    - The function assumes that the last message contains an <img> tag with image data.
+    - The image data is extracted using a regular expression that searches for <img> tags.
+    - It's important that the agent's last message contains properly formatted image data for successful extraction.
+    - The `_to_pil` function is used to convert the extracted image data into a PIL image.
+    - If no <img> tag is found, or if the image data is not correctly formatted, the function may raise an error.
+    """
+    last_message = agent.last_message()["content"]
+
+    if isinstance(last_message, str):
+        img_data = re.findall("<img (.*)>", last_message)[0]
+    elif isinstance(last_message, list):
+        # The GPT-4V format, where the content is an array of data
+        assert isinstance(last_message[0], dict)
+        img_data = last_message[0]["image_url"]["url"]
+
+    pil_img = get_pil_image(img_data)
+    return pil_img
+```
+
+## The DALLE Agent
+
+```python
+class DALLEAgent(ConversableAgent):
+    def __init__(self, name, llm_config: dict, **kwargs):
+        super().__init__(name, llm_config=llm_config, **kwargs)
+
+        try:
+            config_list = llm_config["config_list"]
+            api_key = config_list[0]["api_key"]
+        except Exception as e:
+            print("Unable to fetch API Key, because", e)
+            api_key = os.getenv("OPENAI_API_KEY")
+        self._dalle_client = OpenAI(api_key=api_key)
+        self.register_reply([Agent, None], DALLEAgent.generate_dalle_reply)
+
+    def send(
+        self,
+        message: Union[Dict, str],
+        recipient: Agent,
+        request_reply: Optional[bool] = None,
+        silent: Optional[bool] = False,
+    ):
+        # override and always "silent" the send out message;
+        # otherwise, the print log would be super long!
+        super().send(message, recipient, request_reply, silent=True)
+
+    def generate_dalle_reply(self, messages: Optional[List[Dict]], sender: "Agent", config):
+        """Generate a reply using OpenAI DALLE call."""
+        client = self._dalle_client if config is None else config
+        if client is None:
+            return False, None
+        if messages is None:
+            messages = self._oai_messages[sender]
+
+        prompt = messages[-1]["content"]
+        # TODO: integrate with autogen.oai. For instance, with caching for the API call
+        img_data = dalle_call(
+            client=client,
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",  # TODO: the size should be flexible, deciding landscape, square, or portrait mode.
+            quality="standard",
+            n=1,
+        )
+
+        img_data = _to_pil(img_data)  # Convert to PIL image
+
+        # Return the OpenAI message format
+        return True, {"content": [{"type": "image_url", "image_url": {"url": img_data}}]}
+```
+
+## Simple Example: Call directly from User
+
+```python
+dalle = DALLEAgent(name="Dalle", llm_config={"config_list": config_list_dalle})
+
+user_proxy = UserProxyAgent(
+    name="User_proxy", system_message="A human admin.", human_input_mode="NEVER", max_consecutive_auto_reply=0
+)
+
+# Ask the question with an image
+user_proxy.initiate_chat(
+    dalle,
+    message="""Create an image with black background, a happy robot is showing a sign with "I Love AutoGen".""",
+)
+
+    User_proxy (to Dalle):
+
+    Create an image with black background, a happy robot is showing a sign with "I Love AutoGen".
+
+    --------------------------------------------------------------------------------
+
+
+    /home/beibinli/autogen/autogen/agentchat/user_proxy_agent.py:83: UserWarning: Using None to signal a default code_execution_config is deprecated. Use {} to use default or False to disable code execution.
+      super().__init__(
+    /home/beibinli/autogen/autogen/agentchat/conversable_agent.py:954: UserWarning: Cannot extract summary using last_msg: 'list' object has no attribute 'replace'
+      warnings.warn(f"Cannot extract summary using last_msg: {e}", UserWarning)
+
+
+
+
+
+    ChatResult(chat_id=None, chat_history=[{'content': 'Create an image with black background, a happy robot is showing a sign with "I Love AutoGen".', 'role': 'assistant'}, {'content': [{'type': 'image_url', 'image_url': {'url': <PIL.PngImagePlugin.PngImageFile image mode=RGB size=1024x1024 at 0x7F8EB52561C0>}}], 'role': 'user'}], summary='', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
+```
+
+```python
+img = extract_img(dalle)
+
+plt.imshow(img)
+plt.axis("off")  # Turn off axis numbers
+plt.show()
+```
+
+![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_13_0.png)
+
+## Example With Critics: Iterate several times to improve
+
+```python
+class DalleCreator(AssistantAgent):
+    def __init__(self, n_iters=2, **kwargs):
+        """
+        Initializes a DalleCreator instance.
+
+        This agent facilitates the creation of visualizations through a collaborative effort among
+        its child agents: dalle and critics.
+
+        Parameters:
+            - n_iters (int, optional): The number of "improvement" iterations to run. Defaults to 2.
+            - **kwargs: keyword arguments for the parent AssistantAgent.
+        """
+        super().__init__(**kwargs)
+        self.register_reply([Agent, None], reply_func=DalleCreator._reply_user, position=0)
+        self._n_iters = n_iters
+
+    def _reply_user(self, messages=None, sender=None, config=None):
+        if all((messages is None, sender is None)):
+            error_msg = f"Either {messages=} or {sender=} must be provided."
+            logger.error(error_msg)  # noqa: F821
+            raise AssertionError(error_msg)
+
+        if messages is None:
+            messages = self._oai_messages[sender]
+
+        img_prompt = messages[-1]["content"]
+
+        ## Define the agents
+        self.critics = MultimodalConversableAgent(
+            name="Critics",
+            system_message="""You need to improve the prompt of the figures you saw.
+How to create a figure that is better in terms of color, shape, text (clarity), and other things.
+Reply with the following format:
+
+CRITICS: the image needs to improve...
+PROMPT: here is the updated prompt!
+
+""",
+            llm_config={"config_list": config_list_4v, "max_tokens": 1000},
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=3,
+        )
+
+        self.dalle = DALLEAgent(
+            name="Dalle", llm_config={"config_list": config_list_dalle}, max_consecutive_auto_reply=0
+        )
+
+        # Data flow begins
+        self.send(message=img_prompt, recipient=self.dalle, request_reply=True)
+        img = extract_img(self.dalle)
+        plt.imshow(img)
+        plt.axis("off")  # Turn off axis numbers
+        plt.show()
+        print("Image PLOTTED")
+
+        for i in range(self._n_iters):
+            # Downsample the image s.t. GPT-4V can take
+            img = extract_img(self.dalle)
+            smaller_image = img.resize((128, 128), Image.Resampling.LANCZOS)
+            smaller_image.save("result.png")
+
+            self.msg_to_critics = f"""Here is the prompt: {img_prompt}.
+            Here is the figure <img result.png>.
+            Now, critic and create a prompt so that DALLE can give me a better image.
+            Show me both "CRITICS" and "PROMPT"!
+            """
+            self.send(message=self.msg_to_critics, recipient=self.critics, request_reply=True)
+            feedback = self._oai_messages[self.critics][-1]["content"]
+            img_prompt = re.findall("PROMPT: (.*)", feedback)[0]
+
+            self.send(message=img_prompt, recipient=self.dalle, request_reply=True)
+            img = extract_img(self.dalle)
+            plt.imshow(img)
+            plt.axis("off")  # Turn off axis numbers
+            plt.show()
+            print(f"Image {i} PLOTTED")
+
+        return True, "result.jpg"
+```
+
+```python
+creator = DalleCreator(
+    name="DALLE Creator!",
+    max_consecutive_auto_reply=0,
+    system_message="Help me coordinate generating image",
+    llm_config=gpt4_llm_config,
+)
+
+user_proxy = UserProxyAgent(name="User", human_input_mode="NEVER", max_consecutive_auto_reply=0)
+
+user_proxy.initiate_chat(
+    creator, message="""Create an image with black background, a happy robot is showing a sign with "I Love AutoGen"."""
+)
+
+    User (to DALLE Creator!):
+
+    Create an image with black background, a happy robot is showing a sign with "I Love AutoGen".
+
+    --------------------------------------------------------------------------------
+    DALLE Creator! (to Dalle):
+
+    Create an image with black background, a happy robot is showing a sign with "I Love AutoGen".
+
+    --------------------------------------------------------------------------------
+
+![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_1.png)
+
+    Image PLOTTED
+    DALLE Creator! (to Critics):
+
+    Here is the prompt: Create an image with black background, a happy robot is showing a sign with "I Love AutoGen"..
+                Here is the figure <image>.
+                Now, critic and create a prompt so that DALLE can give me a better image.
+                Show me both "CRITICS" and "PROMPT"!
+
+
+    --------------------------------------------------------------------------------
+    Critics (to DALLE Creator!):
+
+    CRITICS: The image needs to improve in the following aspects:
+
+    1. Lighting: The robot and the sign could benefit from additional lighting to enhance details and textures, ensuring that they stand out more against the black background.
+    2. Legibility: The text on the sign could be more prominent and the font size increased for better readability. Additionally, a contrasting color could be used for the text to ensure it pops against the background.
+    3. Robot's Expression: While the robot appears happy, its expression could be made more apparent with clearer facial features or more exaggerated happiness indicators in its body language or facial features.
+    4. Composition: The robot and the sign could be positioned in a way that creates a more dynamic composition, keeping the viewer’s eye engaged.
+    5. Resolution: A higher resolution would make the image sharper, improving the overall quality and detail.
+
+    PROMPT: Create a high-resolution image with a richly detailed, happy robot made of shiny metal, standing center frame against a stark black background. The robot is holding up a large, rectangular sign with rounded corners that reads "I ❤️ AutoGen" in bold, white sans-serif font, with the heart symbol in a vivid red color. The sign should be well-lit with a soft glow that highlights the text and makes it stand out. Ensure the robot's features clearly convey joy, perhaps through a broad smile and posture conveying enthusiasm. The composition should be balanced and visually appealing, with an intelligent use of space that guides the viewer's attention to the robot and the sign.
+
+    --------------------------------------------------------------------------------
+    DALLE Creator! (to Dalle):
+
+    Create a high-resolution image with a richly detailed, happy robot made of shiny metal, standing center frame against a stark black background. The robot is holding up a large, rectangular sign with rounded corners that reads "I ❤️ AutoGen" in bold, white sans-serif font, with the heart symbol in a vivid red color. The sign should be well-lit with a soft glow that highlights the text and makes it stand out. Ensure the robot's features clearly convey joy, perhaps through a broad smile and posture conveying enthusiasm. The composition should be balanced and visually appealing, with an intelligent use of space that guides the viewer's attention to the robot and the sign.
+
+    --------------------------------------------------------------------------------
+
+![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_3.png)
+
+    Image 0 PLOTTED
+    DALLE Creator! (to Critics):
+
+    Here is the prompt: Create a high-resolution image with a richly detailed, happy robot made of shiny metal, standing center frame against a stark black background. The robot is holding up a large, rectangular sign with rounded corners that reads "I ❤️ AutoGen" in bold, white sans-serif font, with the heart symbol in a vivid red color. The sign should be well-lit with a soft glow that highlights the text and makes it stand out. Ensure the robot's features clearly convey joy, perhaps through a broad smile and posture conveying enthusiasm. The composition should be balanced and visually appealing, with an intelligent use of space that guides the viewer's attention to the robot and the sign..
+                Here is the figure <image>.
+                Now, critic and create a prompt so that DALLE can give me a better image.
+                Show me both "CRITICS" and "PROMPT"!
+
+
+    --------------------------------------------------------------------------------
+    Critics (to DALLE Creator!):
+
+    CRITICS: The image could be improved in the following ways:
+
+    1. Color Contrast: The overall color contrast between the robot and the sign could be enhanced to make the elements more distinct from one another.
+    2. Clarity and Details: The details of the robot's material and structure could be made sharper and more intricate to accentuate its shiny metal look.
+    3. Sign's Design: The design of the sign could be simplified by using negative space more effectively, ensuring the message "I ❤️ AutoGen" is instantly recognizable and stands out more.
+    4. Lighting and Shadows: The lighting could be diversified to cast subtle shadows, which would add depth and volume, making the image more three-dimensional.
+    5. Emotion and Posture: The robot's expression and posture could be exaggerated further to emphasize its joyfulness and the message it is conveying.
+    6. Background: While the background is appropriately black, adding a subtle texture or gradient could give the image more depth without distracting from the main subject.
+
+    PROMPT: Generate a high-resolution 3D rendering of an exuberant, animated-style robot constructed from glossy, reflective metal surfaces. It stands in the center of a pure black background with a soft, radial gradient to provide subtle depth. The robot is displaying a sizable sign with prominent "I ❤️ AutoGen" lettering in a bold, white, sans-serif font, the heart being a luminous red, creating a stark, elegant contrast. Incorporate adequate lighting from multiple angles to cast dynamic, gentle shadows around the robot, enhancing its dimensional appearance. Ensure that the robot's facial features and stance radiate delight, featuring an exaggerated smile and arms raised in a victorious, welcoming gesture. The sign should be backlit with a soft halo effect, making it vibrant and eye-catching. The overall composition must be striking yet harmonious, drawing attention to both the robot’s delighted demeanor and the message it presents.
+
+    --------------------------------------------------------------------------------
+    DALLE Creator! (to Dalle):
+
+    Generate a high-resolution 3D rendering of an exuberant, animated-style robot constructed from glossy, reflective metal surfaces. It stands in the center of a pure black background with a soft, radial gradient to provide subtle depth. The robot is displaying a sizable sign with prominent "I ❤️ AutoGen" lettering in a bold, white, sans-serif font, the heart being a luminous red, creating a stark, elegant contrast. Incorporate adequate lighting from multiple angles to cast dynamic, gentle shadows around the robot, enhancing its dimensional appearance. Ensure that the robot's facial features and stance radiate delight, featuring an exaggerated smile and arms raised in a victorious, welcoming gesture. The sign should be backlit with a soft halo effect, making it vibrant and eye-catching. The overall composition must be striking yet harmonious, drawing attention to both the robot’s delighted demeanor and the message it presents.
+
+    --------------------------------------------------------------------------------
+
+![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_5.png)
+
+    Image 1 PLOTTED
+    DALLE Creator! (to User):
+
+    result.jpg
+
+    --------------------------------------------------------------------------------
+
+    ChatResult(chat_id=None, chat_history=[{'content': 'Create an image with black background, a happy robot is showing a sign with "I Love AutoGen".', 'role': 'assistant'}, {'content': 'result.jpg', 'role': 'user'}], summary='result.jpg', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
+```

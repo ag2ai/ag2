@@ -57,7 +57,7 @@ h4 {
   padding-left: 48px;
   padding-right: 48px;
   padding-bottom: 38px;
-  background-color: rgba(0, 0, 0, 0.08);
+  background-color: #fafafa;
   border-width: 0px 1px;
   border-style: solid;
   border-color: rgb(var(--gray-500) / 0.05);
@@ -120,4 +120,20 @@ h4 {
     var(--font-inter, sans-serif)
   );
   font-size: 20px;
+}
+
+.dark table {
+  border-color: rgb(var(--gray-800));
+}
+
+table {
+  td,
+  th {
+    border: 1px solid rgb(var(--gray-300));
+    padding: 0.75rem !important;
+  }
+
+  td:not(:first-child) {
+    border-left-width: 1px;
+  }
 }

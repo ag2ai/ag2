@@ -1,0 +1,338 @@
+---
+title: "Auto Generated Agent Chat: Collaborative Task Solving with Coding and Planning Agent"
+---
+
+AutoGen offers conversable agents powered by LLM, tool, or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
+Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+In this notebook, we demonstrate how to use multiple agents to work together and accomplish a task that requires finding info from the web and coding. `AssistantAgent` is an LLM-based agent that can write and debug Python code (in a Python coding block) for a user to execute for a given task. `UserProxyAgent` is an agent which serves as a proxy for a user to execute the code written by `AssistantAgent`. We further create a planning agent for the assistant agent to consult. The planning agent is a variation of the LLM-based `AssistantAgent` with a different system message.
+
+## Requirements
+
+AutoGen requires `Python>=3.8`. To run this notebook example, please install autogen and docker:
+
+```bash
+pip install autogen docker
+```
+
+```python
+# %pip install "autogen" docker
+```
+
+## Set your API Endpoint
+
+The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file. It first looks for an environment variable with a specified name. The value of the environment variable needs to be a valid json string. If that variable is not found, it looks for a json file with the same name. It filters the configs by filter_dict.
+
+It's OK to have only the OpenAI API key, or only the Azure OpenAI API key + base.
+
+```python
+import autogen
+
+config_list = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4", "gpt-4-0314", "gpt4", "gpt-4-32k", "gpt-4-32k-0314", "gpt-4-32k-v0314"],
+    },
+)
+```
+
+The config list looks like the following:
+
+```python
+config_list = [
+    {
+        'model': 'gpt-4',
+        'api_key': '<your OpenAI API key here>',
+    },  # OpenAI API endpoint for gpt-4
+    {
+        'model': 'gpt-4',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+    },  # Azure OpenAI API endpoint for gpt-4
+    {
+        'model': 'gpt-4-32k',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+    },  # Azure OpenAI API endpoint for gpt-4-32k
+]
+```
+
+You can set the value of config_list in any way you prefer. Please refer to this [notebook](https://github.com/ag2ai/ag2/blob/main/notebook/oai_openai_utils.ipynb) for full code examples of the different methods.
+
+## Construct Agents
+
+We construct the planning agent named "planner" and a user proxy agent for the planner named "planner_user". We specify `human_input_mode` as "NEVER" in the user proxy agent, which will never ask for human feedback. We define `ask_planner` function to send a message to the planner and return the suggestion from the planner.
+
+```python
+planner = autogen.AssistantAgent(
+    name="planner",
+    llm_config={"config_list": config_list},
+    # the default system message of the AssistantAgent is overwritten here
+    system_message="You are a helpful AI assistant. You suggest coding and reasoning steps for another AI assistant to accomplish a task. Do not suggest concrete code. For any action beyond writing code or reasoning, convert it to a step that can be implemented by writing code. For example, browsing the web can be implemented by writing code that reads and prints the content of a web page. Finally, inspect the execution result. If the plan is not good, suggest a better plan. If the execution is wrong, analyze the error and suggest a fix.",
+)
+planner_user = autogen.UserProxyAgent(
+    name="planner_user",
+    max_consecutive_auto_reply=0,  # terminate without auto-reply
+    human_input_mode="NEVER",
+    code_execution_config={
+        "use_docker": False
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+)
+
+
+def ask_planner(message):
+    planner_user.initiate_chat(planner, message=message)
+    # return the last message received from the planner
+    return planner_user.last_message()["content"]
+```
+
+We construct the assistant agent and the user proxy agent. We specify `human_input_mode` as "TERMINATE" in the user proxy agent, which will ask for feedback when it receives a "TERMINATE" signal from the assistant agent. We set the `functions` in `AssistantAgent` and `function_map` in `UserProxyAgent` to use the created `ask_planner` function.
+
+```python
+# create an AssistantAgent instance named "assistant"
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config={
+        "temperature": 0,
+        "timeout": 600,
+        "cache_seed": 42,
+        "config_list": config_list,
+        "functions": [
+            {
+                "name": "ask_planner",
+                "description": "ask planner to: 1. get a plan for finishing a task, 2. verify the execution result of the plan and potentially suggest new plan.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "question to ask planner. Make sure the question include enough context, such as the code and the execution result. The planner does not know the conversation between you and the user, unless you share the conversation with the planner.",
+                        },
+                    },
+                    "required": ["message"],
+                },
+            },
+        ],
+    },
+)
+
+# create a UserProxyAgent instance named "user_proxy"
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="TERMINATE",
+    max_consecutive_auto_reply=10,
+    # is_termination_msg=lambda x: "content" in x and x["content"] is not None and x["content"].rstrip().endswith("TERMINATE"),
+    code_execution_config={
+        "work_dir": "planning",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+    function_map={"ask_planner": ask_planner},
+)
+```
+
+## Perform a task
+
+We invoke the `initiate_chat()` method of the user proxy agent to start the conversation. When you run the cell below, you will be prompted to provide feedback after the assistant agent sends a "TERMINATE" signal at the end of the message. If you don't provide any feedback (by pressing Enter directly), the conversation will finish. Before the "TERMINATE" signal, the user proxy agent will try to execute the code suggested by the assistant agent on behalf of the user.
+
+````python
+# the assistant receives a message from the user, which contains the task description
+user_proxy.initiate_chat(
+    assistant,
+    message="""Suggest a fix to an open good first issue of flaml""",
+)
+
+    user_proxy (to assistant):
+
+    Suggest a fix to an open good first issue of flaml
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    To suggest a fix to an open good first issue of FLAML, we first need to fetch the list of open issues labeled as "good first issue" from the FLAML GitHub repository. We can do this using the GitHub API. Here is a Python script that fetches and prints the list of open issues labeled as "good first issue" from the FLAML repository.
+
+    ```python
+    # filename: fetch_issues.py
+
+    import requests
+    import json
+
+    def fetch_issues():
+        url = "https://api.github.com/repos/microsoft/FLAML/issues"
+        params = {
+            "state": "open",
+            "labels": "good first issue"
+        }
+        response = requests.get(url, params=params)
+        issues = json.loads(response.text)
+        for issue in issues:
+            print(f"Issue #{issue['number']}: {issue['title']}")
+
+    if __name__ == "__main__":
+        fetch_issues()
+    ```
+
+    Please run this script to fetch the list of open issues. After that, I can help you analyze one of the issues and suggest a potential fix.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+
+
+    execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
+
+
+    user_proxy (to assistant):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    Issue #1228: include that `retrain_full = True` does not include the user provided validation data in the docs.
+    Issue #1120: use_label_encoder warning with xgboost
+    Issue #981: Running flaml[tune] using "-O" flag for python interpreter (optimization - disables assertions) crashes
+    Issue #903: Conditional parameter flow2 crash
+    Issue #884: indentation space
+    Issue #882: Check if openml version is required
+    Issue #834: Adjust the indent
+    Issue #821: pip install flaml FAIL
+    Issue #807: Isolate the ensemble part and expose it to users
+    Issue #805: how to pass categorical features names or indices to learner
+    Issue #785: Flaml/LightGBM - Shouldn't I found better/faster or equal results from FLAML than direct LightGBM?
+    Issue #764: Add an announcement of the discord channel
+    Issue #748: Documentation about small budget
+    Issue #737: Make zero-shot automl more discoverable
+    Issue #509: New HCrystalBall release
+    Issue #429: samples about conversion to ONNX
+    Issue #413: support anomaly detection
+    Issue #304: CatBoost Fails with Keyword 'groups'
+
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    ***** Suggested function Call: ask_planner *****
+    Arguments:
+    {
+      "message": "Here are the open issues labeled as 'good first issue' in the FLAML repository. Please suggest a plan to fix one of these issues. \n\n1. Issue #1228: include that `retrain_full = True` does not include the user provided validation data in the docs.\n2. Issue #1120: use_label_encoder warning with xgboost\n3. Issue #981: Running flaml[tune] using \"-O\" flag for python interpreter (optimization - disables assertions) crashes\n4. Issue #903: Conditional parameter flow2 crash\n5. Issue #884: indentation space\n6. Issue #882: Check if openml version is required\n7. Issue #834: Adjust the indent\n8. Issue #821: pip install flaml FAIL\n9. Issue #807: Isolate the ensemble part and expose it to users\n10. Issue #805: how to pass categorical features names or indices to learner\n11. Issue #785: Flaml/LightGBM - Shouldn't I found better/faster or equal results from FLAML than direct LightGBM?\n12. Issue #764: Add an announcement of the discord channel\n13. Issue #748: Documentation about small budget\n14. Issue #737: Make zero-shot automl more discoverable\n15. Issue #509: New HCrystalBall release\n16. Issue #429: samples about conversion to ONNX\n17. Issue #413: support anomaly detection\n18. Issue #304: CatBoost Fails with Keyword 'groups'"
+    }
+    ************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    >>>>>>>> EXECUTING FUNCTION ask_planner...
+    planner_user (to planner):
+
+    Here are the open issues labeled as 'good first issue' in the FLAML repository. Please suggest a plan to fix one of these issues.
+
+    1. Issue #1228: include that `retrain_full = True` does not include the user provided validation data in the docs.
+    2. Issue #1120: use_label_encoder warning with xgboost
+    3. Issue #981: Running flaml[tune] using "-O" flag for python interpreter (optimization - disables assertions) crashes
+    4. Issue #903: Conditional parameter flow2 crash
+    5. Issue #884: indentation space
+    6. Issue #882: Check if openml version is required
+    7. Issue #834: Adjust the indent
+    8. Issue #821: pip install flaml FAIL
+    9. Issue #807: Isolate the ensemble part and expose it to users
+    10. Issue #805: how to pass categorical features names or indices to learner
+    11. Issue #785: Flaml/LightGBM - Shouldn't I found better/faster or equal results from FLAML than direct LightGBM?
+    12. Issue #764: Add an announcement of the discord channel
+    13. Issue #748: Documentation about small budget
+    14. Issue #737: Make zero-shot automl more discoverable
+    15. Issue #509: New HCrystalBall release
+    16. Issue #429: samples about conversion to ONNX
+    17. Issue #413: support anomaly detection
+    18. Issue #304: CatBoost Fails with Keyword 'groups'
+
+    --------------------------------------------------------------------------------
+    planner (to planner_user):
+
+    Here are the steps to fix the first issue (Issue #1228: include that `retrain_full = True` does not include the user provided validation data in the docs):
+
+    1. **Identify where the issue is**: Understand the context of `retrain_full = True` within FLAML. Figure out how it works - whether it really ignores the user-provided validation data or not.
+
+    2. **Update the documentation**: Based on your understanding, update the corresponding part of the documentation to include a note or clarification about this fact. You can use Markdown language to do the documentation. The note can be written in a clear and concise way.
+
+    3. **Commit and Push Code**: After making the necessary changes, commit and push the changes to your repository. Make sure to include a detailed commit message to make it clear what changes were made.
+
+    4. **Submit a Pull Request (PR)**: Then submit a pull request to the FLAML repository. In the message of the PR, be sure to reference the issue number (i.e. #1228), to automatically link it.
+
+    5. **Wait for Review**: Maintainers will then review your code. They may suggest changes or improvements, and once they're satisfied, they'll merge your changes into the main repository.
+
+    6. **Inspect the Results**: After the pull request is merged, verify that the changes have been successfully incorporated and the documentation correctly reflects the behavior of `retrain_full = True`.
+
+    Please note, this plan does not involve writing code in any programming language. Instead, it focuses on understanding the library, editing Markdown files, and using Git and GitHub functionalities appropriately.
+
+    Should any of your actions result in an error, this could be due to multiple reasons such as misinterpretation of the behaviour of `retrain_full = True`, errors in the markdown syntax, among others. You will need to debug the error based on the specific error message and review your changes. After making corrections, you should commit and push your changes and verify that the error has been fixed.
+
+    --------------------------------------------------------------------------------
+    user_proxy (to assistant):
+
+    ***** Response from calling function "ask_planner" *****
+    Here are the steps to fix the first issue (Issue #1228: include that `retrain_full = True` does not include the user provided validation data in the docs):
+
+    1. **Identify where the issue is**: Understand the context of `retrain_full = True` within FLAML. Figure out how it works - whether it really ignores the user-provided validation data or not.
+
+    2. **Update the documentation**: Based on your understanding, update the corresponding part of the documentation to include a note or clarification about this fact. You can use Markdown language to do the documentation. The note can be written in a clear and concise way.
+
+    3. **Commit and Push Code**: After making the necessary changes, commit and push the changes to your repository. Make sure to include a detailed commit message to make it clear what changes were made.
+
+    4. **Submit a Pull Request (PR)**: Then submit a pull request to the FLAML repository. In the message of the PR, be sure to reference the issue number (i.e. #1228), to automatically link it.
+
+    5. **Wait for Review**: Maintainers will then review your code. They may suggest changes or improvements, and once they're satisfied, they'll merge your changes into the main repository.
+
+    6. **Inspect the Results**: After the pull request is merged, verify that the changes have been successfully incorporated and the documentation correctly reflects the behavior of `retrain_full = True`.
+
+    Please note, this plan does not involve writing code in any programming language. Instead, it focuses on understanding the library, editing Markdown files, and using Git and GitHub functionalities appropriately.
+
+    Should any of your actions result in an error, this could be due to multiple reasons such as misinterpretation of the behaviour of `retrain_full = True`, errors in the markdown syntax, among others. You will need to debug the error based on the specific error message and review your changes. After making corrections, you should commit and push your changes and verify that the error has been fixed.
+    ********************************************************
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    To fix the issue #1228, you need to follow these steps:
+
+    1. **Identify where the issue is**: Understand the context of `retrain_full = True` within FLAML. Figure out how it works - whether it really ignores the user-provided validation data or not.
+
+    2. **Update the documentation**: Based on your understanding, update the corresponding part of the documentation to include a note or clarification about this fact. You can use Markdown language to do the documentation. The note can be written in a clear and concise way.
+
+    3. **Commit and Push Code**: After making the necessary changes, commit and push the changes to your repository. Make sure to include a detailed commit message to make it clear what changes were made.
+
+    4. **Submit a Pull Request (PR)**: Then submit a pull request to the FLAML repository. In the message of the PR, be sure to reference the issue number (i.e. #1228), to automatically link it.
+
+    5. **Wait for Review**: Maintainers will then review your code. They may suggest changes or improvements, and once they're satisfied, they'll merge your changes into the main repository.
+
+    6. **Inspect the Results**: After the pull request is merged, verify that the changes have been successfully incorporated and the documentation correctly reflects the behavior of `retrain_full = True`.
+
+    Please note, this plan does not involve writing code in any programming language. Instead, it focuses on understanding the library, editing Markdown files, and using Git and GitHub functionalities appropriately.
+
+    Should any of your actions result in an error, this could be due to multiple reasons such as misinterpretation of the behaviour of `retrain_full = True`, errors in the markdown syntax, among others. You will need to debug the error based on the specific error message and review your changes. After making corrections, you should commit and push your changes and verify that the error has been fixed.
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    user_proxy (to assistant):
+
+
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+````
+
+When the assistant needs to consult the planner, it suggests a function call to `ask_planner`. When this happens, a line like the following will be displayed:
+
+**\*** Suggested function Call: ask_planner **\***

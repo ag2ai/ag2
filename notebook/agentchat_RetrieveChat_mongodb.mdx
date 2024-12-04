@@ -1,0 +1,479 @@
+---
+title: "Using RetrieveChat Powered by MongoDB Atlas for Retrieve Augmented Code Generation and Question Answering"
+---
+
+AutoGen offers conversable agents powered by LLM, tool or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
+Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+RetrieveChat is a conversational system for retrieval-augmented code generation and question answering. In this notebook, we demonstrate how to utilize RetrieveChat to generate code and answer questions based on customized documentations that are not present in the LLM's training dataset. RetrieveChat uses the `AssistantAgent` and `RetrieveUserProxyAgent`, which is similar to the usage of `AssistantAgent` and `UserProxyAgent` in other notebooks (e.g., [Automated Task Solving with Code Generation, Execution & Debugging](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_auto_feedback_from_code_execution.ipynb)). Essentially, `RetrieveUserProxyAgent` implement a different auto-reply mechanism corresponding to the RetrieveChat prompts.
+
+## Table of Contents
+
+We'll demonstrate six examples of using RetrieveChat for code generation and question answering:
+
+- [Example 1: Generate code based off docstrings w/o human feedback](#example-1)
+
+````{=mdx}
+:::info Requirements
+Some extra dependencies are needed for this notebook, which can be installed via pip:
+
+```bash
+pip install autogen[retrievechat-mongodb] flaml[automl]
+```
+
+For more information, please refer to the [installation guide](/docs/installation/).
+:::
+````
+
+Ensure you have a MongoDB Atlas instance with Cluster Tier >= M10. Read more on Cluster support [here](https://www.mongodb.com/docs/atlas/atlas-search/manage-indexes/#create-and-manage-fts-indexes)
+
+## Set your API Endpoint
+
+```python
+import json
+import os
+
+import autogen
+from autogen import AssistantAgent
+from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
+
+# Accepted file formats for that can be stored in
+# a vector database instance
+from autogen.retrieve_utils import TEXT_FORMATS
+
+config_list = [{"model": "gpt-3.5-turbo-0125", "api_key": os.environ["OPENAI_API_KEY"], "api_type": "openai"}]
+assert len(config_list) > 0
+print("models to use: ", [config_list[i]["model"] for i in range(len(config_list))])
+```
+
+    models to use:  ['gpt-3.5-turbo-0125']
+
+```{=mdx}
+:::tip
+Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
+:::
+```
+
+## Construct agents for RetrieveChat
+
+We start by initializing the `AssistantAgent` and `RetrieveUserProxyAgent`. The system message needs to be set to "You are a helpful assistant." for AssistantAgent. The detailed instructions are given in the user message. Later we will use the `RetrieveUserProxyAgent.message_generator` to combine the instructions and a retrieval augmented generation task for an initial prompt to be sent to the LLM assistant.
+
+```python
+print("Accepted file formats for `docs_path`:")
+print(TEXT_FORMATS)
+
+    Accepted file formats for `docs_path`:
+    ['txt', 'json', 'csv', 'tsv', 'md', 'html', 'htm', 'rtf', 'rst', 'jsonl', 'log', 'xml', 'yaml', 'yml', 'pdf']
+
+```
+
+```python
+# 1. create an AssistantAgent instance named "assistant"
+assistant = AssistantAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config={
+        "timeout": 600,
+        "cache_seed": 42,
+        "config_list": config_list,
+    },
+)
+
+# 2. create the RetrieveUserProxyAgent instance named "ragproxyagent"
+# Refer to https://ag2ai.github.io/ag2/docs/reference/agentchat/contrib/retrieve_user_proxy_agent
+# and https://ag2ai.github.io/ag2/docs/reference/agentchat/contrib/vectordb/mongodb
+# for more information on the RetrieveUserProxyAgent and MongoDBAtlasVectorDB
+ragproxyagent = RetrieveUserProxyAgent(
+    name="ragproxyagent",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=3,
+    retrieve_config={
+        "task": "code",
+        "docs_path": [
+            "https://raw.githubusercontent.com/microsoft/FLAML/main/website/docs/Examples/Integrate%20-%20Spark.md",
+            "https://raw.githubusercontent.com/microsoft/FLAML/main/website/docs/Research.md",
+        ],
+        "chunk_token_size": 2000,
+        "model": config_list[0]["model"],
+        "vector_db": "mongodb",  # MongoDB Atlas database
+        "collection_name": "demo_collection",
+        "db_config": {
+            "connection_string": os.environ["MONGODB_URI"],  # MongoDB Atlas connection string
+            "database_name": "test_db",  # MongoDB Atlas database
+            "index_name": "vector_index",
+            "wait_until_index_ready": 120.0,  # Setting to wait 120 seconds or until index is constructed before querying
+            "wait_until_document_ready": 120.0,  # Setting to wait 120 seconds or until document is properly indexed after insertion/update
+        },
+        "get_or_create": True,  # set to False if you don't want to reuse an existing collection
+        "overwrite": False,  # set to True if you want to overwrite an existing collection, each overwrite will force a index creation and reupload of documents
+    },
+    code_execution_config=False,  # set to False if you don't want to execute the code
+)
+```
+
+### Example 1
+
+[Back to top](#table-of-contents)
+
+Use RetrieveChat to help generate sample code and automatically run the code and fix errors if there is any.
+
+Problem: Which API should I use if I want to use FLAML for a classification task and I want to train the model in 30 seconds. Use spark to parallel the training. Force cancel jobs if time limit is reached.
+
+````python
+# reset the assistant. Always reset the assistant before starting a new conversation.
+assistant.reset()
+
+# given a problem, we use the ragproxyagent to generate a prompt to be sent to the assistant as the initial message.
+# the assistant receives the message and generates a response. The response will be sent back to the ragproxyagent for processing.
+# The conversation continues until the termination condition is met, in RetrieveChat, the termination condition when no human-in-loop is no code block detected.
+# With human-in-loop, the conversation will continue until the user says "exit".
+code_problem = "How can I use FLAML to perform a classification task and use spark to do parallel training. Train 30 seconds and force cancel jobs if time limit is reached."
+chat_result = ragproxyagent.initiate_chat(assistant, message=ragproxyagent.message_generator, problem=code_problem)
+
+    2024-07-25 13:47:30,700 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Use the existing collection `demo_collection`.
+
+
+    Trying to create collection.
+
+
+    2024-07-25 13:47:31,048 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
+    2024-07-25 13:47:31,051 - autogen.agentchat.contrib.vectordb.mongodb - INFO - No documents to insert.
+
+
+    VectorDB returns doc_ids:  [['bdfbc921', '7968cf3c']]
+    Adding content of doc bdfbc921 to context.
+    Adding content of doc 7968cf3c to context.
+    ragproxyagent (to assistant):
+
+    You're a retrieve augmented coding assistant. You answer user's questions based on your own knowledge and the
+    context provided by the user.
+    If you can't answer the question with or without the current context, you should reply exactly `UPDATE CONTEXT`.
+    For code generation, you must obey the following rules:
+    Rule 1. You MUST NOT install any packages because all the packages needed are already installed.
+    Rule 2. You must follow the formats below to write your code:
+    ```language
+    # your code
+    ```
+
+    User's question is: How can I use FLAML to perform a classification task and use spark to do parallel training. Train 30 seconds and force cancel jobs if time limit is reached.
+
+    Context is: # Integrate - Spark
+
+    FLAML has integrated Spark for distributed training. There are two main aspects of integration with Spark:
+
+    - Use Spark ML estimators for AutoML.
+    - Use Spark to run training in parallel spark jobs.
+
+    ## Spark ML Estimators
+
+    FLAML integrates estimators based on Spark ML models. These models are trained in parallel using Spark, so we called them Spark estimators. To use these models, you first need to organize your data in the required format.
+
+    ### Data
+
+    For Spark estimators, AutoML only consumes Spark data. FLAML provides a convenient function `to_pandas_on_spark` in the `flaml.automl.spark.utils` module to convert your data into a pandas-on-spark (`pyspark.pandas`) dataframe/series, which Spark estimators require.
+
+    This utility function takes data in the form of a `pandas.Dataframe` or `pyspark.sql.Dataframe` and converts it into a pandas-on-spark dataframe. It also takes `pandas.Series` or `pyspark.sql.Dataframe` and converts it into a [pandas-on-spark](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/index.html) series. If you pass in a `pyspark.pandas.Dataframe`, it will not make any changes.
+
+    This function also accepts optional arguments `index_col` and `default_index_type`.
+
+    - `index_col` is the column name to use as the index, default is None.
+    - `default_index_type` is the default index type, default is "distributed-sequence". More info about default index type could be found on Spark official [documentation](https://spark.apache.org/docs/latest/api/python/user_guide/pandas_on_spark/options.html#default-index-type)
+
+    Here is an example code snippet for Spark Data:
+
+    ```python
+    import pandas as pd
+    from flaml.automl.spark.utils import to_pandas_on_spark
+
+    # Creating a dictionary
+    data = {
+        "Square_Feet": [800, 1200, 1800, 1500, 850],
+        "Age_Years": [20, 15, 10, 7, 25],
+        "Price": [100000, 200000, 300000, 240000, 120000],
+    }
+
+    # Creating a pandas DataFrame
+    dataframe = pd.DataFrame(data)
+    label = "Price"
+
+    # Convert to pandas-on-spark dataframe
+    psdf = to_pandas_on_spark(dataframe)
+    ```
+
+    To use Spark ML models you need to format your data appropriately. Specifically, use [`VectorAssembler`](https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.ml.feature.VectorAssembler.html) to merge all feature columns into a single vector column.
+
+    Here is an example of how to use it:
+
+    ```python
+    from pyspark.ml.feature import VectorAssembler
+
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf.to_spark(index_col="index"))["index", "features"]
+    ```
+
+    Later in conducting the experiment, use your pandas-on-spark data like non-spark data and pass them using `X_train, y_train` or `dataframe, label`.
+
+    ### Estimators
+
+    #### Model List
+
+    - `lgbm_spark`: The class for fine-tuning Spark version LightGBM models, using [SynapseML](https://microsoft.github.io/SynapseML/docs/features/lightgbm/about/) API.
+
+    #### Usage
+
+    First, prepare your data in the required format as described in the previous section.
+
+    By including the models you intend to try in the `estimators_list` argument to `flaml.automl`, FLAML will start trying configurations for these models. If your input is Spark data, FLAML will also use estimators with the `_spark` postfix by default, even if you haven't specified them.
+
+    Here is an example code snippet using SparkML models in AutoML:
+
+    ```python
+    import flaml
+
+    # prepare your data in pandas-on-spark format as we previously mentioned
+
+    automl = flaml.AutoML()
+    settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "estimator_list": ["lgbm_spark"],  # this setting is optional
+        "task": "regression",
+    }
+
+    automl.fit(
+        dataframe=psdf,
+        label=label,
+        **settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/automl_bankrupt_synapseml.ipynb)
+
+    ## Parallel Spark Jobs
+
+    You can activate Spark as the parallel backend during parallel tuning in both [AutoML](/docs/Use-Cases/Task-Oriented-AutoML#parallel-tuning) and [Hyperparameter Tuning](/docs/Use-Cases/Tune-User-Defined-Function#parallel-tuning), by setting the `use_spark` to `true`. FLAML will dispatch your job to the distributed Spark backend using [`joblib-spark`](https://github.com/joblib/joblib-spark).
+
+    Please note that you should not set `use_spark` to `true` when applying AutoML and Tuning for Spark Data. This is because only SparkML models will be used for Spark Data in AutoML and Tuning. As SparkML models run in parallel, there is no need to distribute them with `use_spark` again.
+
+    All the Spark-related arguments are stated below. These arguments are available in both Hyperparameter Tuning and AutoML:
+
+    - `use_spark`: boolean, default=False | Whether to use spark to run the training in parallel spark jobs. This can be used to accelerate training on large models and large datasets, but will incur more overhead in time and thus slow down training in some cases. GPU training is not supported yet when use_spark is True. For Spark clusters, by default, we will launch one trial per executor. However, sometimes we want to launch more trials than the number of executors (e.g., local mode). In this case, we can set the environment variable `FLAML_MAX_CONCURRENT` to override the detected `num_executors`. The final number of concurrent trials will be the minimum of `n_concurrent_trials` and `num_executors`.
+    - `n_concurrent_trials`: int, default=1 | The number of concurrent trials. When n_concurrent_trials > 1, FLAML performes parallel tuning.
+    - `force_cancel`: boolean, default=False | Whether to forcely cancel Spark jobs if the search time exceeded the time budget. Spark jobs include parallel tuning jobs and Spark-based model training jobs.
+
+    An example code snippet for using parallel Spark jobs:
+
+    ```python
+    import flaml
+
+    automl_experiment = flaml.AutoML()
+    automl_settings = {
+        "time_budget": 30,
+        "metric": "r2",
+        "task": "regression",
+        "n_concurrent_trials": 2,
+        "use_spark": True,
+        "force_cancel": True,  # Activating the force_cancel option can immediately halt Spark jobs once they exceed the allocated time_budget.
+    }
+
+    automl.fit(
+        dataframe=dataframe,
+        label=label,
+        **automl_settings,
+    )
+    ```
+
+    [Link to notebook](https://github.com/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb) | [Open in colab](https://colab.research.google.com/github/microsoft/FLAML/blob/main/notebook/integrate_spark.ipynb)
+    # Research
+
+    For technical details, please check our research publications.
+
+    - [FLAML: A Fast and Lightweight AutoML Library](https://www.microsoft.com/en-us/research/publication/flaml-a-fast-and-lightweight-automl-library/). Chi Wang, Qingyun Wu, Markus Weimer, Erkang Zhu. MLSys 2021.
+
+    ```bibtex
+    @inproceedings{wang2021flaml,
+        title={FLAML: A Fast and Lightweight AutoML Library},
+        author={Chi Wang and Qingyun Wu and Markus Weimer and Erkang Zhu},
+        year={2021},
+        booktitle={MLSys},
+    }
+    ```
+
+    - [Frugal Optimization for Cost-related Hyperparameters](https://arxiv.org/abs/2005.01571). Qingyun Wu, Chi Wang, Silu Huang. AAAI 2021.
+
+    ```bibtex
+    @inproceedings{wu2021cfo,
+        title={Frugal Optimization for Cost-related Hyperparameters},
+        author={Qingyun Wu and Chi Wang and Silu Huang},
+        year={2021},
+        booktitle={AAAI},
+    }
+    ```
+
+    - [Economical Hyperparameter Optimization With Blended Search Strategy](https://www.microsoft.com/en-us/research/publication/economical-hyperparameter-optimization-with-blended-search-strategy/). Chi Wang, Qingyun Wu, Silu Huang, Amin Saied. ICLR 2021.
+
+    ```bibtex
+    @inproceedings{wang2021blendsearch,
+        title={Economical Hyperparameter Optimization With Blended Search Strategy},
+        author={Chi Wang and Qingyun Wu and Silu Huang and Amin Saied},
+        year={2021},
+        booktitle={ICLR},
+    }
+    ```
+
+    - [An Empirical Study on Hyperparameter Optimization for Fine-Tuning Pre-trained Language Models](https://aclanthology.org/2021.acl-long.178.pdf). Susan Xueqing Liu, Chi Wang. ACL 2021.
+
+    ```bibtex
+    @inproceedings{liuwang2021hpolm,
+        title={An Empirical Study on Hyperparameter Optimization for Fine-Tuning Pre-trained Language Models},
+        author={Susan Xueqing Liu and Chi Wang},
+        year={2021},
+        booktitle={ACL},
+    }
+    ```
+
+    - [ChaCha for Online AutoML](https://www.microsoft.com/en-us/research/publication/chacha-for-online-automl/). Qingyun Wu, Chi Wang, John Langford, Paul Mineiro and Marco Rossi. ICML 2021.
+
+    ```bibtex
+    @inproceedings{wu2021chacha,
+        title={ChaCha for Online AutoML},
+        author={Qingyun Wu and Chi Wang and John Langford and Paul Mineiro and Marco Rossi},
+        year={2021},
+        booktitle={ICML},
+    }
+    ```
+
+    - [Fair AutoML](https://arxiv.org/abs/2111.06495). Qingyun Wu, Chi Wang. ArXiv preprint arXiv:2111.06495 (2021).
+
+    ```bibtex
+    @inproceedings{wuwang2021fairautoml,
+        title={Fair AutoML},
+        author={Qingyun Wu and Chi Wang},
+        year={2021},
+        booktitle={ArXiv preprint arXiv:2111.06495},
+    }
+    ```
+
+    - [Mining Robust Default Configurations for Resource-constrained AutoML](https://arxiv.org/abs/2202.09927). Moe Kayali, Chi Wang. ArXiv preprint arXiv:2202.09927 (2022).
+
+    ```bibtex
+    @inproceedings{kayaliwang2022default,
+        title={Mining Robust Default Configurations for Resource-constrained AutoML},
+        author={Moe Kayali and Chi Wang},
+        year={2022},
+        booktitle={ArXiv preprint arXiv:2202.09927},
+    }
+    ```
+
+    - [Targeted Hyperparameter Optimization with Lexicographic Preferences Over Multiple Objectives](https://openreview.net/forum?id=0Ij9_q567Ma). Shaokun Zhang, Feiran Jia, Chi Wang, Qingyun Wu. ICLR 2023 (notable-top-5%).
+
+    ```bibtex
+    @inproceedings{zhang2023targeted,
+        title={Targeted Hyperparameter Optimization with Lexicographic Preferences Over Multiple Objectives},
+        author={Shaokun Zhang and Feiran Jia and Chi Wang and Qingyun Wu},
+        booktitle={International Conference on Learning Representations},
+        year={2023},
+        url={https://openreview.net/forum?id=0Ij9_q567Ma},
+    }
+    ```
+
+    - [Cost-Effective Hyperparameter Optimization for Large Language Model Generation Inference](https://arxiv.org/abs/2303.04673). Chi Wang, Susan Xueqing Liu, Ahmed H. Awadallah. ArXiv preprint arXiv:2303.04673 (2023).
+
+    ```bibtex
+    @inproceedings{wang2023EcoOptiGen,
+        title={Cost-Effective Hyperparameter Optimization for Large Language Model Generation Inference},
+        author={Chi Wang and Susan Xueqing Liu and Ahmed H. Awadallah},
+        year={2023},
+        booktitle={ArXiv preprint arXiv:2303.04673},
+    }
+    ```
+
+    - [An Empirical Study on Challenging Math Problem Solving with GPT-4](https://arxiv.org/abs/2306.01337). Yiran Wu, Feiran Jia, Shaokun Zhang, Hangyu Li, Erkang Zhu, Yue Wang, Yin Tat Lee, Richard Peng, Qingyun Wu, Chi Wang. ArXiv preprint arXiv:2306.01337 (2023).
+
+    ```bibtex
+    @inproceedings{wu2023empirical,
+        title={An Empirical Study on Challenging Math Problem Solving with GPT-4},
+        author={Yiran Wu and Feiran Jia and Shaokun Zhang and Hangyu Li and Erkang Zhu and Yue Wang and Yin Tat Lee and Richard Peng and Qingyun Wu and Chi Wang},
+        year={2023},
+        booktitle={ArXiv preprint arXiv:2306.01337},
+    }
+    ```
+
+
+
+    --------------------------------------------------------------------------------
+    assistant (to ragproxyagent):
+
+    To use FLAML to perform a classification task and use Spark for parallel training with a timeout of 30 seconds and force canceling jobs if the time limit is reached, you can follow the below code snippet:
+
+    ```python
+    import flaml
+    from flaml.automl.spark.utils import to_pandas_on_spark
+    from pyspark.ml.feature import VectorAssembler
+
+    # Prepare your data in pandas-on-spark format
+    data = {
+        "feature1": [val1, val2, val3, val4],
+        "feature2": [val5, val6, val7, val8],
+        "target": [class1, class2, class1, class2],
+    }
+
+    dataframe = pd.DataFrame(data)
+    label = "target"
+    psdf = to_pandas_on_spark(dataframe)
+
+    # Prepare your features using VectorAssembler
+    columns = psdf.columns
+    feature_cols = [col for col in columns if col != label]
+    featurizer = VectorAssembler(inputCols=feature_cols, outputCol="features")
+    psdf = featurizer.transform(psdf)
+
+    # Define AutoML settings and fit the model
+    automl = flaml.AutoML()
+    settings = {
+        "time_budget": 30,
+        "metric": "accuracy",
+        "task": "classification",
+        "estimator_list": ["lgbm_spark"],  # Optional
+    }
+
+    automl.fit(
+        dataframe=psdf,
+        label=label,
+        **settings,
+    )
+    ```
+
+    In the code:
+    - Replace `val1, val2, ..., class1, class2` with your actual data values.
+    - Ensure the features and target columns are correctly specified in the data dictionary.
+    - Set the `time_budget` parameter to 30 to limit the training time.
+    - The `force_cancel` parameter is set to `True` to force cancel Spark jobs if the time limit is exceeded.
+
+    Make sure to adapt the code to your specific dataset and requirements.
+
+    --------------------------------------------------------------------------------
+    ragproxyagent (to assistant):
+
+
+
+    --------------------------------------------------------------------------------
+    assistant (to ragproxyagent):
+
+    UPDATE CONTEXT
+
+    --------------------------------------------------------------------------------
+    Updating context and resetting conversation.
+    VectorDB returns doc_ids:  [['bdfbc921', '7968cf3c']]
+    VectorDB returns doc_ids:  [['bdfbc921', '7968cf3c']]
+    VectorDB returns doc_ids:  [['bdfbc921', '7968cf3c']]
+    VectorDB returns doc_ids:  [['bdfbc921', '7968cf3c']]
+    No more context, will terminate.
+    ragproxyagent (to assistant):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+````

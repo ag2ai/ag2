@@ -1,0 +1,220 @@
+---
+title: "SQL Agent for Spider text-to-SQL benchmark"
+---
+
+This notebook demonstrates a basic SQL agent that translates natural language questions into SQL queries.
+
+## Environment
+
+For this demo, we use a SQLite database environment based on a standard text-to-sql benchmark called [Spider](https://yale-lily.github.io/spider). The environment provides a gym-like interface and can be used as follows.
+
+```python
+# %pip install spider-env
+import json
+import os
+from typing import Annotated, Dict
+
+from spider_env import SpiderEnv
+
+from autogen import ConversableAgent, UserProxyAgent, config_list_from_json
+
+gym = SpiderEnv()
+
+# Randomly select a question from Spider
+observation, info = gym.reset()
+
+    Loading cached Spider dataset from /home/wangdazhang/.cache/spider
+    Schema file not found for /home/wangdazhang/.cache/spider/spider/database/flight_4
+    Schema file not found for /home/wangdazhang/.cache/spider/spider/database/small_bank_1
+    Schema file not found for /home/wangdazhang/.cache/spider/spider/database/icfp_1
+    Schema file not found for /home/wangdazhang/.cache/spider/spider/database/twitter_1
+    Schema file not found for /home/wangdazhang/.cache/spider/spider/database/epinions_1
+    Schema file not found for /home/wangdazhang/.cache/spider/spider/database/chinook_1
+    Schema file not found for /home/wangdazhang/.cache/spider/spider/database/company_1
+
+```
+
+```python
+# The natural language question
+question = observation["instruction"]
+print(question)
+```
+
+    Find the famous titles of artists that do not have any volume.
+
+```python
+# The schema of the corresponding database
+schema = info["schema"]
+print(schema)
+
+    CREATE TABLE "artist" (
+    "Artist_ID" int,
+    "Artist" text,
+    "Age" int,
+    "Famous_Title" text,
+    "Famous_Release_date" text,
+    PRIMARY KEY ("Artist_ID")
+    );
+    CREATE TABLE "volume" (
+    "Volume_ID" int,
+    "Volume_Issue" text,
+    "Issue_Date" text,
+    "Weeks_on_Top" real,
+    "Song" text,
+    "Artist_ID" int,
+    PRIMARY KEY ("Volume_ID"),
+    FOREIGN KEY ("Artist_ID") REFERENCES "artist"("Artist_ID")
+    );
+    CREATE TABLE "music_festival" (
+    "ID" int,
+    "Music_Festival" text,
+    "Date_of_ceremony" text,
+    "Category" text,
+    "Volume" int,
+    "Result" text,
+    PRIMARY KEY ("ID"),
+    FOREIGN KEY ("Volume") REFERENCES "volume"("Volume_ID")
+    );
+```
+
+## Agent Implementation
+
+Using AutoGen, a SQL agent can be implemented with a ConversableAgent. The gym environment executes the generated SQL query and the agent can take execution results as feedback to improve its generation in multiple rounds of conversations.
+
+```python
+os.environ["AUTOGEN_USE_DOCKER"] = "False"
+config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST")
+
+
+def check_termination(msg: Dict):
+    if "tool_responses" not in msg:
+        return False
+    json_str = msg["tool_responses"][0]["content"]
+    obj = json.loads(json_str)
+    return "error" not in obj or obj["error"] is None and obj["reward"] == 1
+
+
+sql_writer = ConversableAgent(
+    "sql_writer",
+    llm_config={"config_list": config_list},
+    system_message="You are good at writing SQL queries. Always respond with a function call to execute_sql().",
+    is_termination_msg=check_termination,
+)
+user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=5)
+
+
+@sql_writer.register_for_llm(description="Function for executing SQL query and returning a response")
+@user_proxy.register_for_execution()
+def execute_sql(
+    reflection: Annotated[str, "Think about what to do"], sql: Annotated[str, "SQL query"]
+) -> Annotated[Dict[str, str], "Dictionary with keys 'result' and 'error'"]:
+    observation, reward, _, _, info = gym.step(sql)
+    error = observation["feedback"]["error"]
+    if not error and reward == 0:
+        error = "The SQL query returned an incorrect result"
+    if error:
+        return {
+            "error": error,
+            "wrong_result": observation["feedback"]["result"],
+            "correct_result": info["gold_result"],
+        }
+    else:
+        return {
+            "result": observation["feedback"]["result"],
+        }
+```
+
+The agent can then take as input the schema and the text question, and generate the SQL query.
+
+```python
+message = f"""Below is the schema for a SQL database:
+{schema}
+Generate a SQL query to answer the following question:
+{question}
+"""
+
+user_proxy.initiate_chat(sql_writer, message=message)
+
+    user_proxy (to sql_writer):
+
+    Below is the schema for a SQL database:
+    CREATE TABLE "artist" (
+    "Artist_ID" int,
+    "Artist" text,
+    "Age" int,
+    "Famous_Title" text,
+    "Famous_Release_date" text,
+    PRIMARY KEY ("Artist_ID")
+    );
+    CREATE TABLE "volume" (
+    "Volume_ID" int,
+    "Volume_Issue" text,
+    "Issue_Date" text,
+    "Weeks_on_Top" real,
+    "Song" text,
+    "Artist_ID" int,
+    PRIMARY KEY ("Volume_ID"),
+    FOREIGN KEY ("Artist_ID") REFERENCES "artist"("Artist_ID")
+    );
+    CREATE TABLE "music_festival" (
+    "ID" int,
+    "Music_Festival" text,
+    "Date_of_ceremony" text,
+    "Category" text,
+    "Volume" int,
+    "Result" text,
+    PRIMARY KEY ("ID"),
+    FOREIGN KEY ("Volume") REFERENCES "volume"("Volume_ID")
+    );
+
+    Generate a SQL query to answer the following question:
+    Find the famous titles of artists that do not have any volume.
+
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    sql_writer (to user_proxy):
+
+    ***** Suggested tool Call (call_eAu0OEzS8l3QvN3jQSn4w0hJ): execute_sql *****
+    Arguments:
+    {"reflection":"Generating SQL to find famous titles of artists without any volume","sql":"SELECT a.Artist, a.Famous_Title FROM artist a WHERE NOT EXISTS (SELECT 1 FROM volume v WHERE v.Artist_ID = a.Artist_ID)"}
+    ****************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION execute_sql...
+    user_proxy (to sql_writer):
+
+    user_proxy (to sql_writer):
+
+    ***** Response from calling tool "call_eAu0OEzS8l3QvN3jQSn4w0hJ" *****
+    {"error": "The SQL query returned an incorrect result", "wrong_result": [["Ophiolatry", "Antievangelistical Process (re-release)"], ["Triumfall", "Antithesis of All Flesh"]], "correct_result": [["Antievangelistical Process (re-release)"], ["Antithesis of All Flesh"]]}
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    sql_writer (to user_proxy):
+
+    ***** Suggested tool Call (call_5LXoKqdZ17kPCOHJbbpSz2yk): execute_sql *****
+    Arguments:
+    {"reflection":"Adjusting SQL to only select famous titles and exclude artist names for artists without any volume.","sql":"SELECT a.Famous_Title FROM artist a WHERE NOT EXISTS (SELECT 1 FROM volume v WHERE v.Artist_ID = a.Artist_ID)"}
+    ****************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION execute_sql...
+    user_proxy (to sql_writer):
+
+    user_proxy (to sql_writer):
+
+    ***** Response from calling tool "call_5LXoKqdZ17kPCOHJbbpSz2yk" *****
+    {"result": [["Antievangelistical Process (re-release)"], ["Antithesis of All Flesh"]]}
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+
+```

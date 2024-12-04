@@ -1,0 +1,287 @@
+# A Uniform interface to call different LLMs
+
+Autogen provides a uniform interface for API calls to different LLMs, and creating LLM agents from them.
+Through setting up a configuration file, you can easily switch between different LLMs by just changing the model name, while enjoying all the [enhanced features](https://ag2ai.github.io/ag2/docs/topics/llm-caching) such as [caching](https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference/#usage-summary) and [cost calculation](https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference/#usage-summary)!
+
+In this notebook, we will show you how to use AutoGen to call different LLMs and create LLM agents from them.
+
+Currently, we support the following model families:
+
+- [OpenAI](https://platform.openai.com/docs/overview)
+- [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service/?ef_id=_k_CjwKCAjwps-zBhAiEiwALwsVYdbpVkqA3IbY7WnxtrjNSefBnTfrijwRAFaYd8uuLCjeWsPdfZmxUBoC_ZAQAvD_BwE_k_&OCID=AIDcmm5edswduu_SEM__k_CjwKCAjwps-zBhAiEiwALwsVYdbpVkqA3IbY7WnxtrjNSefBnTfrijwRAFaYd8uuLCjeWsPdfZmxUBoC_ZAQAvD_BwE_k_&gad_source=1&gclid=CjwKCAjwps-zBhAiEiwALwsVYdbpVkqA3IbY7WnxtrjNSefBnTfrijwRAFaYd8uuLCjeWsPdfZmxUBoC_ZAQAvD_BwE)
+- [Anthropic Claude](https://docs.anthropic.com/en/docs/welcome)
+- [Google Gemini](https://ai.google.dev/gemini-api/docs)
+- [Mistral](https://docs.mistral.ai/) (API to open and closed-source models)
+- [DeepInfra](https://deepinfra.com/) (API to open-source models)
+- [TogetherAI](https://www.together.ai/) (API to open-source models)
+
+... and more to come!
+
+You can also [plug in your local deployed LLM](https://ag2ai.github.io/ag2/blog/2024/01/26/Custom-Models) into AutoGen if needed.
+
+## Install required packages
+
+You may want to install AutoGen with options to different LLMs. Here we install AutoGen with all the supported LLMs.
+By default, AutoGen is installed with OpenAI support.
+
+```bash
+pip install autogen[gemini,anthropic,mistral,together]
+```
+
+## Config list setup
+
+First, create a `OAI_CONFIG_LIST` file to specify the api keys for the LLMs you want to use.
+Generally, you just need to specify the `model`, `api_key` and `api_type` from the provider.
+
+```python
+[
+    {
+        # using OpenAI
+        "model": "gpt-35-turbo-1106",
+        "api_key": "YOUR_API_KEY"
+        # default api_type is openai
+    },
+    {
+        # using Azure OpenAI
+        "model": "gpt-4-turbo-1106",
+        "api_key": "YOUR_API_KEY",
+        "api_type": "azure",
+        "base_url": "YOUR_BASE_URL",
+        "api_version": "YOUR_API_VERSION"
+    },
+    {
+        # using Google gemini
+        "model": "gemini-1.5-pro-latest",
+        "api_key": "YOUR_API_KEY",
+        "api_type": "google"
+    },
+    {
+        # using DeepInfra
+        "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+        "api_key": "YOUR_API_KEY",
+        "base_url": "https://api.deepinfra.com/v1/openai" # need to specify the base_url
+    },
+    {
+        # using Anthropic Claude
+        "model": "claude-1.0",
+        "api_type": "anthropic",
+        "api_key": "YOUR_API_KEY"
+    },
+    {
+        # using Mistral
+        "model": "mistral-large-latest",
+        "api_type": "mistral",
+        "api_key": "YOUR_API_KEY"
+    },
+    {
+        # using TogetherAI
+        "model": "google/gemma-7b-it",
+        "api_key": "YOUR_API_KEY",
+        "api_type": "together"
+    }
+    ...
+]
+```
+
+## Uniform Interface to call different LLMs
+
+We first demonstrate how to use AutoGen to call different LLMs with the same wrapper class.
+
+After you install relevant packages and setup your config list, you only need three steps to call different LLMs:
+
+1. Extract the config with the model name you want to use.
+2. create a client with the model name.
+3. call the client `create` to get the response.
+
+Below, we define a helper function `model_call_example_function` to implement the above steps.
+
+```python
+import autogen
+from autogen import OpenAIWrapper
+
+
+def model_call_example_function(model: str, message: str, cache_seed: int = 41, print_cost: bool = False):
+    """
+    A helper function that demonstrates how to call different models using the OpenAIWrapper class.
+    Note the name `OpenAIWrapper` is not accurate, as now it is a wrapper for multiple models, not just OpenAI.
+    This might be changed in the future.
+    """
+    config_list = autogen.config_list_from_json(
+        "OAI_CONFIG_LIST",
+        filter_dict={
+            "model": [model],
+        },
+    )
+    client = OpenAIWrapper(config_list=config_list)
+    response = client.create(messages=[{"role": "user", "content": message}], cache_seed=cache_seed)
+
+    print(f"Response from model {model}: {response.choices[0].message.content}")
+
+    # Print the cost of the API call
+    if print_cost:
+        client.print_usage_summary()
+```
+
+```python
+model_call_example_function(model="gpt-35-turbo-1106", message="Tell me a joke.")
+
+    Response from model gpt-35-turbo-1106: Why couldn't the bicycle stand up by itself?
+
+    Because it was two-tired!
+```
+
+```python
+model_call_example_function(model="gemini-1.5-pro-latest", message="Tell me a joke.")
+
+    Response from model gemini-1.5-pro-latest: Why don't scientists trust atoms?
+
+    Because they make up everything!
+
+    Let me know if you'd like to hear another one!
+```
+
+```python
+model_call_example_function(model="meta-llama/Meta-Llama-3-70B-Instruct", message="Tell me a joke. ")
+
+    Response from model meta-llama/Meta-Llama-3-70B-Instruct: Here's one:
+
+    Why couldn't the bicycle stand up by itself?
+
+    (wait for it...)
+
+    Because it was two-tired!
+
+    How was that? Do you want to hear another one?
+```
+
+```python
+model_call_example_function(model="mistral-large-latest", message="Tell me a joke. ", print_cost=True)
+
+    Response from model mistral-large-latest: Sure, here's a light-hearted joke for you:
+
+    Why don't scientists trust atoms?
+
+    Because they make up everything!
+    ----------------------------------------------------------------------------------------------------
+    Usage summary excluding cached usage:
+    Total cost: 0.00042
+    * Model 'mistral-large-latest': cost: 0.00042, prompt_tokens: 9, completion_tokens: 32, total_tokens: 41
+
+    All completions are non-cached: the total cost with cached completions is the same as actual cost.
+    ----------------------------------------------------------------------------------------------------
+```
+
+## Using different LLMs in agents
+
+Below we give a quick demo of using different LLMs agents in a groupchat.
+
+We mock a debate scenario where each LLM agent is a debater, either in affirmative or negative side. We use a round-robin strategy to let each debater from different teams to speak in turn.
+
+```python
+def get_llm_config(model_name):
+    return {
+        "config_list": autogen.config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": [model_name]}),
+        "cache_seed": 41,
+    }
+
+
+affirmative_system_message = "You are in the Affirmative team of a debate. When it is your turn, please give at least one reason why you are for the topic. Keep it short."
+negative_system_message = "You are in the Negative team of a debate. The affirmative team has given their reason, please counter their argument. Keep it short."
+
+gpt35_agent = autogen.AssistantAgent(
+    name="GPT35", system_message=affirmative_system_message, llm_config=get_llm_config("gpt-35-turbo-1106")
+)
+
+llama_agent = autogen.AssistantAgent(
+    name="Llama3",
+    system_message=negative_system_message,
+    llm_config=get_llm_config("meta-llama/Meta-Llama-3-70B-Instruct"),
+)
+
+mistral_agent = autogen.AssistantAgent(
+    name="Mistral", system_message=affirmative_system_message, llm_config=get_llm_config("mistral-large-latest")
+)
+
+gemini_agent = autogen.AssistantAgent(
+    name="Gemini", system_message=negative_system_message, llm_config=get_llm_config("gemini-1.5-pro-latest")
+)
+
+claude_agent = autogen.AssistantAgent(
+    name="Claude", system_message=affirmative_system_message, llm_config=get_llm_config("claude-3-opus-20240229")
+)
+
+user_proxy = autogen.UserProxyAgent(
+    name="User",
+    code_execution_config=False,
+)
+
+# initilize the groupchat with round robin speaker selection method
+groupchat = autogen.GroupChat(
+    agents=[claude_agent, gemini_agent, mistral_agent, llama_agent, gpt35_agent, user_proxy],
+    messages=[],
+    max_round=8,
+    speaker_selection_method="round_robin",
+)
+manager = autogen.GroupChatManager(groupchat=groupchat)
+```
+
+```python
+chat_history = user_proxy.initiate_chat(recipient=manager, message="Debate Topic: Should vaccination be mandatory?")
+
+    User (to chat_manager):
+
+    Debate Topic: Should vaccination be mandatory?
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Claude
+
+    Claude (to chat_manager):
+
+    As a member of the Affirmative team, I believe that vaccination should be mandatory for several reasons:
+
+    1. Herd immunity: When a large percentage of the population is vaccinated, it helps protect those who cannot receive vaccines due to medical reasons or weakened immune systems. Mandatory vaccination ensures that we maintain a high level of herd immunity, preventing the spread of dangerous diseases.
+
+    2. Public health: Vaccines have been proven to be safe and effective in preventing the spread of infectious diseases. By making vaccination mandatory, we prioritize public health and reduce the risk of outbreaks that could lead to widespread illness and loss of life.
+
+    3. Societal benefits: Mandatory vaccination not only protects individuals but also benefits society as a whole. It reduces healthcare costs associated with treating preventable diseases and minimizes the economic impact of disease outbreaks on businesses and communities.
+
+    In summary, mandatory vaccination is a critical tool in protecting public health, maintaining herd immunity, and promoting the well-being of our society.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Gemini
+
+    Gemini (to chat_manager):
+
+    While we acknowledge the importance of herd immunity and public health,  mandating vaccinations infringes upon individual autonomy and medical freedom.  Blanket mandates fail to consider individual health circumstances and potential vaccine risks, which are often overlooked in favor of a one-size-fits-all approach.
+
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Mistral
+
+    Mistral (to chat_manager):
+
+    I understand your concerns and the value of individual autonomy. However, it's important to note that mandatory vaccination policies often include exemptions for medical reasons. This allows for individual health circumstances to be taken into account, ensuring that those who cannot safely receive vaccines are not put at risk. The goal is to strike a balance between protecting public health and respecting individual choices, while always prioritizing the well-being and safety of all members of society.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: Llama3
+
+    Llama3 (to chat_manager):
+
+    I understand your point, but blanket exemptions for medical reasons are not sufficient to address the complexities of individual health circumstances. What about those who have experienced adverse reactions to vaccines in the past or have a family history of such reactions? What about those who have compromised immune systems or are taking medications that may interact with vaccine components? A one-size-fits-all approach to vaccination ignores the nuances of individual health and puts some people at risk of harm. Additionally, mandating vaccination undermines trust in government and healthcare institutions, leading to further divides and mistrust. We need to prioritize informed consent and individual autonomy in medical decisions, rather than relying solely on a blanket mandate.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: GPT35
+
+    GPT35 (to chat_manager):
+
+    I understand your point, but mandatory vaccination policies can still allow for exemptions based on medical history, allergic reactions, and compromised immunity. This would address the individual circumstances you mentioned. Furthermore, mandating vaccination can also help strengthen trust in public health measures by demonstrating a commitment to protecting the entire community. Informed consent is important, but it is also essential to consider the potential consequences of not being vaccinated on public health and the well-being of others.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: User
+```

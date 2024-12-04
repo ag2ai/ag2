@@ -1,0 +1,817 @@
+---
+title: "Nested Chats for Tool Use in Conversational Chess"
+---
+
+This notebook demonstrates how to create agents that can play chess with each other
+while communicating in natural language.
+The key concept covered in this notebook is the use of nested chats
+to enable tool use and packaging an LLM-based agent with a tool executor agent
+into a single agent.
+
+Related tutorials:
+
+- [Tool Use](/docs/tutorial/tool-use)
+- [Nested Chats](/docs/tutorial/conversation-patterns#nested-chats)
+
+In this setting, each player is an agent backed by an LLM equipped two tools:
+
+- `get_legal_moves` to get a list of current legal moves.
+- `make_move` to make a move.
+
+A board proxy agent is set up to execute the tools and manage the game.
+It is important to use a board proxy as a non-LLM "guard rail" to ensure the game
+is played correctly and to prevent agents from making illegal moves.
+
+Each time a player agent receives a message from the other player agent,
+it instantiates a nested chat with the board proxy agent to get the legal moves
+and make a move using the tools given.
+The nested chat between the player agent and the board agent
+continues until the a legal move is made by the tool.
+Once the nested chat concludes, the player agent sends a message to the
+other player agent about the move made.
+
+## Installation
+
+First you need to install the `autogen` and `chess` packages to use AutoGen.
+
+```python
+! pip install -qqq autogen chess
+```
+
+## Setting up LLMs
+
+Now you can set up the models you want to use.
+
+```python
+import os
+
+player_white_config_list = [
+    {
+        "model": "gpt-4-turbo-preview",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+    },
+]
+
+player_black_config_list = [
+    {
+        "model": "gpt-4-turbo-preview",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+    },
+]
+```
+
+## Creating tools
+
+Write functions for getting legal moves and making a move.
+
+```python
+from typing import List
+
+import chess
+import chess.svg
+from IPython.display import display
+from typing_extensions import Annotated
+
+# Initialize the board.
+board = chess.Board()
+
+# Keep track of whether a move has been made.
+made_move = False
+
+
+def get_legal_moves() -> Annotated[str, "A list of legal moves in UCI format"]:
+    return "Possible moves are: " + ",".join([str(move) for move in board.legal_moves])
+
+
+def make_move(move: Annotated[str, "A move in UCI format."]) -> Annotated[str, "Result of the move."]:
+    move = chess.Move.from_uci(move)
+    board.push_uci(str(move))
+    global made_move
+    made_move = True
+    # Display the board.
+    display(
+        chess.svg.board(board, arrows=[(move.from_square, move.to_square)], fill={move.from_square: "gray"}, size=200)
+    )
+    # Get the piece name.
+    piece = board.piece_at(move.to_square)
+    piece_symbol = piece.unicode_symbol()
+    piece_name = (
+        chess.piece_name(piece.piece_type).capitalize()
+        if piece_symbol.isupper()
+        else chess.piece_name(piece.piece_type)
+    )
+    return f"Moved {piece_name} ({piece_symbol}) from {chess.SQUARE_NAMES[move.from_square]} to {chess.SQUARE_NAMES[move.to_square]}."
+```
+
+## Creating agents
+
+Let's create the agents. We have three different agents:
+
+- `player_white` is the agent that plays white.
+- `player_black` is the agent that plays black.
+- `board_proxy` is the agent that moves the pieces on the board.
+
+```python
+from autogen import ConversableAgent, register_function
+
+player_white = ConversableAgent(
+    name="Player White",
+    system_message="You are a chess player and you play as white. "
+    "First call get_legal_moves() first, to get list of legal moves. "
+    "Then call make_move(move) to make a move.",
+    llm_config={"config_list": player_white_config_list, "cache_seed": None},
+)
+
+player_black = ConversableAgent(
+    name="Player Black",
+    system_message="You are a chess player and you play as black. "
+    "First call get_legal_moves() first, to get list of legal moves. "
+    "Then call make_move(move) to make a move.",
+    llm_config={"config_list": player_black_config_list, "cache_seed": None},
+)
+
+# Check if the player has made a move, and reset the flag if move is made.
+
+
+def check_made_move(msg):
+    global made_move
+    if made_move:
+        made_move = False
+        return True
+    else:
+        return False
+
+
+board_proxy = ConversableAgent(
+    name="Board Proxy",
+    llm_config=False,
+    # The board proxy will only terminate the conversation if the player has made a move.
+    is_termination_msg=check_made_move,
+    # The auto reply message is set to keep the player agent retrying until a move is made.
+    default_auto_reply="Please make a move.",
+    human_input_mode="NEVER",
+)
+```
+
+Register tools for the agents. See [tutorial chapter on tool use](/docs/tutorial/tool-use)
+for more information.
+
+```python
+register_function(
+    make_move,
+    caller=player_white,
+    executor=board_proxy,
+    name="make_move",
+    description="Call this tool to make a move.",
+)
+
+register_function(
+    get_legal_moves,
+    caller=player_white,
+    executor=board_proxy,
+    name="get_legal_moves",
+    description="Get legal moves.",
+)
+
+register_function(
+    make_move,
+    caller=player_black,
+    executor=board_proxy,
+    name="make_move",
+    description="Call this tool to make a move.",
+)
+
+register_function(
+    get_legal_moves,
+    caller=player_black,
+    executor=board_proxy,
+    name="get_legal_moves",
+    description="Get legal moves.",
+)
+```
+
+Now the agents have their tools ready. You can inspect the auto-generated
+tool schema for each agent.
+
+```python
+player_black.llm_config["tools"]
+
+    [{'type': 'function',
+      'function': {'description': 'Call this tool to make a move.',
+       'name': 'make_move',
+       'parameters': {'type': 'object',
+        'properties': {'move': {'type': 'string',
+          'description': 'A move in UCI format.'}},
+        'required': ['move']}}},
+     {'type': 'function',
+      'function': {'description': 'Get legal moves.',
+       'name': 'get_legal_moves',
+       'parameters': {'type': 'object', 'properties': {}, 'required': []}}}]
+```
+
+Register nested chats for the player agents.
+Nested chats allows each player agent to chat with the board proxy agent
+to make a move, before communicating with the other player agent.
+
+In the code below, in each nested chat, the board proxy agent starts
+a conversation with the player agent using the message recieved from the other
+player agent (e.g., "Your move"). The two agents continue the conversation
+until a legal move is made using the `make_move` tool.
+The last message in the nested chat is a message from the player agent about
+the move made,
+and this message is then sent to the other player agent.
+
+The following diagram illustrates the nested chat between the player agent and the board agent.
+
+![Conversational Chess](https://media.githubusercontent.com/media/microsoft/autogen/main/notebook/nested-chats-chess.png)
+
+See [nested chats tutorial chapter](/docs/tutorial/conversation-patterns#nested-chats)
+for more information.
+
+```python
+player_white.register_nested_chats(
+    trigger=player_black,
+    chat_queue=[
+        {
+            # The initial message is the one received by the player agent from
+            # the other player agent.
+            "sender": board_proxy,
+            "recipient": player_white,
+            # The final message is sent to the player agent.
+            "summary_method": "last_msg",
+        }
+    ],
+)
+
+player_black.register_nested_chats(
+    trigger=player_white,
+    chat_queue=[
+        {
+            # The initial message is the one received by the player agent from
+            # the other player agent.
+            "sender": board_proxy,
+            "recipient": player_black,
+            # The final message is sent to the player agent.
+            "summary_method": "last_msg",
+        }
+    ],
+)
+```
+
+## Playing the game
+
+Start the chess game.
+
+```python
+# Clear the board.
+board = chess.Board()
+
+chat_result = player_black.initiate_chat(
+    player_white,
+    message="Let's play chess! Your move.",
+    max_turns=4,
+)
+
+    Player Black (to Player White):
+
+    Let's play chess! Your move.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    ********************************************************************************
+    Starting a new chat....
+
+    ********************************************************************************
+    Board Proxy (to Player White):
+
+    Let's play chess! Your move.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_8aNbVlbAuH1l4f196x6R5Ccv): get_legal_moves *****
+    Arguments:
+    {}
+    ********************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION get_legal_moves...
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_8aNbVlbAuH1l4f196x6R5Ccv) *****
+    Possible moves are: g1h3,g1f3,b1c3,b1a3,h2h3,g2g3,f2f3,e2e3,d2d3,c2c3,b2b3,a2a3,h2h4,g2g4,f2f4,e2e4,d2d4,c2c4,b2b4,a2a4
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_BT0pL4qOUJNt4tH9JhzUWxa0): make_move *****
+    Arguments:
+    {"move":"e2e4"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_1.svg)
+
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_BT0pL4qOUJNt4tH9JhzUWxa0) *****
+    Moved pawn (♙) from e2 to e4.
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    I've moved the pawn from e2 to e4. Your move!
+
+    --------------------------------------------------------------------------------
+    Player White (to Player Black):
+
+    I've moved the pawn from e2 to e4. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    ********************************************************************************
+    Starting a new chat....
+
+    ********************************************************************************
+    Board Proxy (to Player Black):
+
+    I've moved the pawn from e2 to e4. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    ***** Suggested tool call (call_4kweVDAIgGqvKruWz4PvK01f): get_legal_moves *****
+    Arguments:
+    {}
+    ********************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION get_legal_moves...
+    Board Proxy (to Player Black):
+
+    Board Proxy (to Player Black):
+
+    ***** Response from calling tool (call_4kweVDAIgGqvKruWz4PvK01f) *****
+    Possible moves are: g8h6,g8f6,b8c6,b8a6,h7h6,g7g6,f7f6,e7e6,d7d6,c7c6,b7b6,a7a6,h7h5,g7g5,f7f5,e7e5,d7d5,c7c5,b7b5,a7a5
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    ***** Suggested tool call (call_p3asgsBvtmA7O4aAtgHhYp48): make_move *****
+    Arguments:
+    {"move":"e7e5"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_3.svg)
+
+    Board Proxy (to Player Black):
+
+    Board Proxy (to Player Black):
+
+    ***** Response from calling tool (call_p3asgsBvtmA7O4aAtgHhYp48) *****
+    Moved pawn (♟) from e7 to e5.
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    I've moved my pawn from e7 to e5. Your move!
+
+    --------------------------------------------------------------------------------
+    Player Black (to Player White):
+
+    I've moved my pawn from e7 to e5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    ********************************************************************************
+    Starting a new chat....
+
+    ********************************************************************************
+    Board Proxy (to Player White):
+
+    I've moved my pawn from e7 to e5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_9ynncokEz6NnIAy4RWLoUSb6): get_legal_moves *****
+    Arguments:
+    {}
+    ********************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION get_legal_moves...
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_9ynncokEz6NnIAy4RWLoUSb6) *****
+    Possible moves are: g1h3,g1f3,g1e2,f1a6,f1b5,f1c4,f1d3,f1e2,e1e2,d1h5,d1g4,d1f3,d1e2,b1c3,b1a3,h2h3,g2g3,f2f3,d2d3,c2c3,b2b3,a2a3,h2h4,g2g4,f2f4,d2d4,c2c4,b2b4,a2a4
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_ohlmvsDY5fFi9JaryU2y9IhS): make_move *****
+    Arguments:
+    {"move":"e2e4"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_ohlmvsDY5fFi9JaryU2y9IhS) *****
+    Error: illegal uci: 'e2e4' in rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    It looks like there was an error with my intended move, which seems to be a misunderstanding since the move I tried to make (e2 to e4) is not legal given the board's current state. Since I mistakenly interpreted the board's initial setup and your move, let's proceed correctly based on the actual state of the game.
+
+    Based on the available moves, I will now choose a different move to make. Let's go with d2 to d4.
+    ***** Suggested tool call (call_zNB1QN26j5T0cggskYabBJRs): make_move *****
+    Arguments:
+    {"move":"d2d4"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_5.svg)
+
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_zNB1QN26j5T0cggskYabBJRs) *****
+    Moved pawn (♙) from d2 to d4.
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    I've moved my pawn from d2 to d4. Your move!
+
+    --------------------------------------------------------------------------------
+    Player White (to Player Black):
+
+    I've moved my pawn from d2 to d4. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    ********************************************************************************
+    Starting a new chat....
+
+    ********************************************************************************
+    Board Proxy (to Player Black):
+
+    I've moved my pawn from d2 to d4. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    ***** Suggested tool call (call_NXjSt2zzC6e342henmdTTV6U): get_legal_moves *****
+    Arguments:
+    {}
+    ********************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION get_legal_moves...
+    Board Proxy (to Player Black):
+
+    Board Proxy (to Player Black):
+
+    ***** Response from calling tool (call_NXjSt2zzC6e342henmdTTV6U) *****
+    Possible moves are: g8e7,g8h6,g8f6,f8e7,f8d6,f8c5,f8b4,f8a3,e8e7,d8e7,d8f6,d8g5,d8h4,b8c6,b8a6,e5d4,h7h6,g7g6,f7f6,d7d6,c7c6,b7b6,a7a6,h7h5,g7g5,f7f5,d7d5,c7c5,b7b5,a7a5
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    ***** Suggested tool call (call_yBiZaYTC96uQGwJWYdg1qra0): make_move *****
+    Arguments:
+    {"move":"d7d5"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_7.svg)
+
+    Board Proxy (to Player Black):
+
+    Board Proxy (to Player Black):
+
+    ***** Response from calling tool (call_yBiZaYTC96uQGwJWYdg1qra0) *****
+    Moved pawn (♟) from d7 to d5.
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    I've moved my pawn from d7 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+    Player Black (to Player White):
+
+    I've moved my pawn from d7 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    ********************************************************************************
+    Starting a new chat....
+
+    ********************************************************************************
+    Board Proxy (to Player White):
+
+    I've moved my pawn from d7 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_xl3cbAtWFeOX05gaOdGLnZQk): get_legal_moves *****
+    Arguments:
+    {}
+    ********************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION get_legal_moves...
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_xl3cbAtWFeOX05gaOdGLnZQk) *****
+    Possible moves are: g1h3,g1f3,g1e2,f1a6,f1b5,f1c4,f1d3,f1e2,e1e2,e1d2,d1h5,d1g4,d1f3,d1d3,d1e2,d1d2,c1h6,c1g5,c1f4,c1e3,c1d2,b1c3,b1a3,b1d2,e4d5,d4e5,h2h3,g2g3,f2f3,c2c3,b2b3,a2a3,h2h4,g2g4,f2f4,c2c4,b2b4,a2a4
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_qwjiKCij3YKIdaebFwtSeU4C): make_move *****
+    Arguments:
+    {"move":"e4d5"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_9.svg)
+
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_qwjiKCij3YKIdaebFwtSeU4C) *****
+    Moved pawn (♙) from e4 to d5.
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    I've moved my pawn from e4 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+    Player White (to Player Black):
+
+    I've moved my pawn from e4 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    ********************************************************************************
+    Starting a new chat....
+
+    ********************************************************************************
+    Board Proxy (to Player Black):
+
+    I've moved my pawn from e4 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    ***** Suggested tool call (call_zNB1QN26j5T0cggskYabBJRs): get_legal_moves *****
+    Arguments:
+    {}
+    ********************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION get_legal_moves...
+    Board Proxy (to Player Black):
+
+    Board Proxy (to Player Black):
+
+    ***** Response from calling tool (call_zNB1QN26j5T0cggskYabBJRs) *****
+    Possible moves are: g8e7,g8h6,g8f6,f8e7,f8d6,f8c5,f8b4,f8a3,e8e7,e8d7,d8e7,d8d7,d8f6,d8d6,d8g5,d8d5,d8h4,c8d7,c8e6,c8f5,c8g4,c8h3,b8d7,b8c6,b8a6,e5d4,h7h6,g7g6,f7f6,c7c6,b7b6,a7a6,e5e4,h7h5,g7g5,f7f5,c7c5,b7b5,a7a5
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    ***** Suggested tool call (call_bBbRQByx2cqL1BrHi79qzuUj): make_move *****
+    Arguments:
+    {"move":"d8d5"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_11.svg)
+
+    Board Proxy (to Player Black):
+
+    Board Proxy (to Player Black):
+
+    ***** Response from calling tool (call_bBbRQByx2cqL1BrHi79qzuUj) *****
+    Moved queen (♛) from d8 to d5.
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
+
+    I've moved my queen from d8 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+    Player Black (to Player White):
+
+    I've moved my queen from d8 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    ********************************************************************************
+    Starting a new chat....
+
+    ********************************************************************************
+    Board Proxy (to Player White):
+
+    I've moved my queen from d8 to d5. Your move!
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_p3asgsBvtmA7O4aAtgHhYp48): get_legal_moves *****
+    Arguments:
+    {}
+    ********************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION get_legal_moves...
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_p3asgsBvtmA7O4aAtgHhYp48) *****
+    Possible moves are: g1h3,g1f3,g1e2,f1a6,f1b5,f1c4,f1d3,f1e2,e1e2,e1d2,d1h5,d1g4,d1f3,d1d3,d1e2,d1d2,c1h6,c1g5,c1f4,c1e3,c1d2,b1c3,b1a3,b1d2,d4e5,h2h3,g2g3,f2f3,c2c3,b2b3,a2a3,h2h4,g2g4,f2f4,c2c4,b2b4,a2a4
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    ***** Suggested tool call (call_NXjSt2zzC6e342henmdTTV6U): make_move *****
+    Arguments:
+    {"move":"d2d4"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_NXjSt2zzC6e342henmdTTV6U) *****
+    Error: illegal uci: 'd2d4' in rnb1kbnr/ppp2ppp/8/3qp3/3P4/8/PPP2PPP/RNBQKBNR w KQkq - 0 4
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    It appears I made an error in processing moves, as the move I attempted is invalid based on the current position. Since my previous attempt to move a pawn from d2 to d4 is not legal in the current board setup, let me choose a new move.
+
+    Given the legal moves provided and the error, I will select another move. Let's proceed with a different strategy:
+
+    I will move my knight from g1 to f3.
+    ***** Suggested tool call (call_hj4SR70DRGdP85yRvzFNKx62): make_move *****
+    Arguments:
+    {"move":"g1f3"}
+    **************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION make_move...
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_13.svg)
+
+    Board Proxy (to Player White):
+
+    Board Proxy (to Player White):
+
+    ***** Response from calling tool (call_hj4SR70DRGdP85yRvzFNKx62) *****
+    Moved knight (♘) from g1 to f3.
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
+
+    I've moved my knight from g1 to f3. Your move!
+
+    --------------------------------------------------------------------------------
+    Player White (to Player Black):
+
+    I've moved my knight from g1 to f3. Your move!
+
+    --------------------------------------------------------------------------------
+```
+
+In the output above, you can see "Start a new chat" is displayed
+whenever a new nested chat is started between the board proxy agent and a player agent.
+The "carryover" is empty as it is a new chat in the sequence.

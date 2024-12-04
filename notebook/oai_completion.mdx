@@ -1,0 +1,506 @@
+<a
+  href="https://colab.research.google.com/github/microsoft/autogen/blob/main/notebook/oai_completion.ipynb"
+  target="_parent"
+>
+  <img
+    src="https://colab.research.google.com/assets/colab-badge.svg"
+    alt="Open In Colab"
+  />
+</a>
+
+Contributions to this project, i.e., https://github.com/ag2ai/ag2, are licensed under the Apache License, Version 2.0 (Apache-2.0).
+Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+SPDX-License-Identifier: Apache-2.0
+Portions derived from https://github.com/microsoft/autogen under the MIT License.
+SPDX-License-Identifier: MIT
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Licensed under the MIT License.
+
+# Use AutoGen to Tune OpenAI Models
+
+AutoGen offers a cost-effective hyperparameter optimization technique [EcoOptiGen](https://arxiv.org/abs/2303.04673) for tuning Large Language Models. The research study finds that tuning hyperparameters can significantly improve the utility of LLMs.
+Please find documentation about this feature [here](/docs/Use-Cases/AutoGen#enhanced-inference).
+
+In this notebook, we tune OpenAI models for code generation. We use [the HumanEval benchmark](https://huggingface.co/datasets/openai_humaneval) released by OpenAI for synthesizing programs from docstrings.
+
+## Requirements
+
+AutoGen requires `Python>=3.8`. To run this notebook example, please install with the [blendsearch] option:
+
+```bash
+pip install autogen[blendsearch]
+```
+
+```python
+# %pip install "autogen[blendsearch]~=0.1.0" datasets
+```
+
+## Set your API Endpoint
+
+- The [`config_list_openai_aoai`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_openai_aoai) function tries to create a list of configurations using Azure OpenAI endpoints and OpenAI endpoints. It assumes the api keys and api bases are stored in the corresponding environment variables or local txt files:
+  - OpenAI API key: os.environ["OPENAI_API_KEY"] or `openai_api_key_file="key_openai.txt"`.
+  - Azure OpenAI API key: os.environ["AZURE_OPENAI_API_KEY"] or `aoai_api_key_file="key_aoai.txt"`. Multiple keys can be stored, one per line.
+  - Azure OpenAI API base: os.environ["AZURE_OPENAI_API_BASE"] or `aoai_api_base_file="base_aoai.txt"`. Multiple bases can be stored, one per line.
+- The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file. It first looks for the environment variable `env_or_file`, which must be a valid json string. If that variable is not found, it looks for a json file with the same name. It filters the configs by filter_dict.
+
+It's OK to have only the OpenAI API key, or only the Azure OpenAI API key + base. If you open this notebook in colab, you can upload your files by clicking the file icon on the left panel and then choosing "upload file" icon.
+
+```python
+from functools import partial
+
+import datasets
+
+import autogen
+
+endpoint_list = autogen.config_list_openai_aoai()
+# the endpoint_list looks like this:
+# endpoint_list = [
+#     {
+#         'api_key': '<your OpenAI API key here>',
+#     },  # OpenAI API endpoint for gpt-4
+#     {
+#         'api_key': '<your first Azure OpenAI API key here>',
+#         'base_url': '<your first Azure OpenAI API base here>',
+#         'api_type': 'azure',
+#         'api_version': '2024-02-01',
+#     },  # Azure OpenAI API endpoint for gpt-4
+#     {
+#         'api_key': '<your second Azure OpenAI API key here>',
+#         'base_url': '<your second Azure OpenAI API base here>',
+#         'api_type': 'azure',
+#         'api_version': '2024-02-01',
+#     },  # another Azure OpenAI API endpoint for gpt-4
+# ]
+
+config_list = autogen.config_list_from_json(
+    env_or_file="OAI_CONFIG_LIST",
+    filter_dict={
+        "model": {
+            "gpt-3.5-turbo",
+            "gpt-3.5-turbo-16k",
+            "gpt-3.5-turbo-0301",
+            "chatgpt-35-turbo-0301",
+            "gpt-35-turbo-v0301",
+            "gpt",
+        },
+    },
+)
+# the config_list looks like this:
+# config_list = [
+#     {
+#         'model': 'gpt-3.5-turbo',
+#         'api_key': '<your OpenAI API key here>',
+#     },  # OpenAI API endpoint for gpt-3.5-turbo
+#     {
+#         'model': 'gpt-3.5-turbo',
+#         'api_key': '<your first Azure OpenAI API key here>',
+#         'base_url': '<your first Azure OpenAI API base here>',
+#         'api_type': 'azure',
+#         'api_version': '2024-02-01',
+#     },  # Azure OpenAI API endpoint for gpt-3.5-turbo
+#     {
+#         'model': 'gpt-35-turbo-v0301',
+#         'api_key': '<your second Azure OpenAI API key here>',
+#         'base_url': '<your second Azure OpenAI API base here>',
+#         'api_type': 'azure',
+#         'api_version': '2024-02-01',
+#     },  # another Azure OpenAI API endpoint for gpt-3.5-turbo with deployment name gpt-35-turbo-v0301
+# ]
+```
+
+If you don't use the two provided utility functions above, you can define the lists in other ways you prefer.
+
+## Load dataset
+
+First, we load the humaneval dataset. The dataset contains 164 examples. We use the first 20 for tuning the generation hyperparameters and the remaining for evaluation. In each example, the "prompt" is the prompt string for eliciting the code generation (renamed into "definition"), "test" is the Python code for unit test for the example, and "entry_point" is the function name to be tested.
+
+```python
+seed = 41
+data = datasets.load_dataset("openai_humaneval")["test"].shuffle(seed=seed)
+n_tune_data = 20
+tune_data = [
+    {
+        "definition": data[x]["prompt"],
+        "test": data[x]["test"],
+        "entry_point": data[x]["entry_point"],
+    }
+    for x in range(n_tune_data)
+]
+test_data = [
+    {
+        "definition": data[x]["prompt"],
+        "test": data[x]["test"],
+        "entry_point": data[x]["entry_point"],
+    }
+    for x in range(n_tune_data, len(data))
+]
+
+    Found cached dataset openai_humaneval (/home/vscode/.cache/huggingface/datasets/openai_humaneval/openai_humaneval/1.0.0/2955cebd73602e828fa8c0a424c594e5fab4ec863b316ca98f3d8fdb6a626e75)
+
+
+
+      0%|          | 0/1 [00:00<?, ?it/s]
+
+
+    Loading cached shuffled indices for dataset at /home/vscode/.cache/huggingface/datasets/openai_humaneval/openai_humaneval/1.0.0/2955cebd73602e828fa8c0a424c594e5fab4ec863b316ca98f3d8fdb6a626e75/cache-1e8448101c1b32e8.arrow
+```
+
+Check a tuning example:
+
+```python
+print(tune_data[1]["definition"])
+
+    def compare(game,guess):
+        """I think we all remember that feeling when the result of some long-awaited
+        event is finally known. The feelings and thoughts you have at that moment are
+        definitely worth noting down and comparing.
+        Your task is to determine if a person correctly guessed the results of several matches.
+        You are given two arrays of scores and guesses of equal length, where each index shows a match.
+        Return an array of the same length denoting how far off each guess was. If they have guessed correctly,
+        the value is 0; if not, the value is the absolute difference between the guess and the score.
+
+
+        example:
+
+        compare([1,2,3,4,5,1],[1,2,3,4,2,-2]) -> [0,0,0,0,3,3]
+        compare([0,5,0,0,0,4],[4,1,1,0,0,-2]) -> [4,4,1,0,0,6]
+        """
+```
+
+Here is one example of the unit test code for verifying the correctness of the generated code:
+
+```python
+print(tune_data[1]["test"])
+
+    def check(candidate):
+
+        # Check some simple cases
+        assert candidate([1,2,3,4,5,1],[1,2,3,4,2,-2])==[0,0,0,0,3,3], "This prints if this assert fails 1 (good for debugging!)"
+        assert candidate([0,0,0,0,0,0],[0,0,0,0,0,0])==[0,0,0,0,0,0], "This prints if this assert fails 1 (good for debugging!)"
+        assert candidate([1,2,3],[-1,-2,-3])==[2,4,6], "This prints if this assert fails 1 (good for debugging!)"
+        assert candidate([1,2,3,5],[-1,2,3,4])==[2,0,0,1], "This prints if this assert fails 1 (good for debugging!)"
+
+        # Check some edge cases that are easy to work out by hand.
+        assert True, "This prints if this assert fails 2 (also good for debugging!)"
+```
+
+## Define Success Metric
+
+Before we start tuning, we need to define the success metric we want to optimize. For each code generation task, we can use the model to generate multiple candidates, and then select one from them. If the final selected response can pass a unit test, we consider the task as successfully solved. Then we can define the mean success rate of a collection of tasks.
+
+```python
+eval_with_generated_assertions = partial(
+    autogen.code_utils.eval_function_completions,
+    assertions=partial(autogen.code_utils.generate_assertions, config_list=config_list),
+    use_docker=False,
+    # Please set use_docker=True if docker is available to run the generated code.
+    # Using docker is safer than running the generated code directly.
+)
+```
+
+This function will first generate assertion statements for each problem. Then, it uses the assertions to select the generated responses.
+
+## Use the tuning data to find a good configuration
+
+AutoGen has provided an API for hyperparameter optimization of OpenAI models: `autogen.Completion.tune` and to make a request with the tuned config: `autogen.Completion.create`.
+
+For (local) reproducibility and cost efficiency, we cache responses from OpenAI with a controllable seed.
+
+```python
+autogen.Completion.set_cache(seed)
+```
+
+This will create a disk cache in ".cache/{seed}". You can change `cache_path_root` from ".cache" to a different path in `set_cache()`. The cache for different seeds are stored separately.
+
+### Perform tuning
+
+The tuning will take a while to finish, depending on the optimization budget. The tuning will be performed under the specified optimization budgets.
+
+- `inference_budget` is the target average inference budget per instance in the benchmark. For example, 0.02 means the target inference budget is 0.02 dollars, which translates to 1000 tokens (input + output combined) if the text Davinci model is used.
+- `optimization_budget` is the total budget allowed to perform the tuning. For example, 5 means 5 dollars are allowed in total, which translates to 250K tokens for the text Davinci model.
+- `num_sumples` is the number of different hyperparameter configurations allowed to be tried. The tuning will stop after either num_samples trials or after optimization_budget dollars spent, whichever happens first. -1 means no hard restriction in the number of trials and the actual number is decided by `optimization_budget`.
+
+Users can specify tuning data, optimization metric, optimization mode, evaluation function, search spaces, etc. The default search space is:
+
+```python
+from flaml import tune
+
+default_search_space = {
+    "model": tune.choice([
+        "text-ada-001",
+        "text-babbage-001",
+        "text-davinci-003",
+        "gpt-3.5-turbo",
+        "gpt-4",
+    ]),
+    "temperature_or_top_p": tune.choice(
+        [
+            {"temperature": tune.uniform(0, 1)},
+            {"top_p": tune.uniform(0, 1)},
+        ]
+    ),
+    "max_tokens": tune.lograndint(50, 1000),
+    "n": tune.randint(1, 100),
+    "prompt": "{prompt}",
+}
+```
+
+Users' input can override the default search space.
+For example, the following code specifies three choices for the prompt and two choices of stop sequences. The default search space will be used for hyperparameters that don't appear in users' input. If you don't have access to gpt-4 or would like to modify the choice of models, you can provide a different search space for the model.
+
+```python
+config, analysis = autogen.Completion.tune(
+    data=tune_data,  # the data for tuning
+    metric="success",  # the metric to optimize
+    mode="max",  # the optimization mode
+    eval_func=eval_with_generated_assertions,  # the evaluation function to return the success metrics
+    # log_file_name="logs/humaneval.log",  # the log file name
+    inference_budget=0.05,  # the inference budget (dollar per instance)
+    optimization_budget=1,  # the optimization budget (dollar in total)
+    # num_samples can further limit the number of trials for different hyperparameter configurations;
+    # -1 means decided by the optimization budget only
+    num_samples=-1,
+    prompt=[
+        "{definition}",
+        "# Python 3{definition}",
+        "Complete the following Python function:{definition}",
+    ],  # the prompt templates to choose from
+    stop=[["\nclass", "\ndef", "\nif", "\nprint"], None],  # the stop sequences
+    config_list=endpoint_list,  # optional: a list of endpoints to use
+    allow_format_str_template=True,  # whether to allow format string template
+)
+
+    [I 2023-07-30 04:19:08,150] A new study created in memory with name: optuna
+    [I 2023-07-30 04:19:08,153] A new study created in memory with name: optuna
+
+
+    [flaml.tune.tune: 07-30 04:19:08] {805} INFO - trial 1 config: {'prompt': 1, 'stop': 0, 'subspace': {'model': 'text-ada-001', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}
+    [flaml.tune.tune: 07-30 04:22:35] {197} INFO - result: {'index_selected': 26.0, 'succeed_assertions': 0.0, 'success': 0.0, 'gen_cost': 0.000460625, 'assertions': 'assert vowels_count("abcde") == 2\nassert vowels_count("ACEDY") == 3', 'total_cost': 0.010514800000000003, 'cost': 0.010514800000000003, 'inference_cost': 0.00023534000000000003, 'training_iteration': 0, 'config': {'prompt': 1, 'stop': 0, 'subspace': {'model': 'text-ada-001', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}, 'config/prompt': 1, 'config/stop': 0, 'config/subspace': {'model': 'text-ada-001', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}, 'experiment_tag': 'exp', 'time_total_s': 207.29033374786377}
+    [flaml.tune.tune: 07-30 04:22:35] {805} INFO - trial 2 config: {'prompt': 1, 'stop': 0, 'subspace': {'model': 'text-babbage-001', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}
+    [flaml.tune.tune: 07-30 04:23:18] {197} INFO - result: {'index_selected': 26.0, 'succeed_assertions': 0.0, 'success': 0.0, 'gen_cost': 0.000460625, 'assertions': 'assert vowels_count("abcde") == 2\nassert vowels_count("ACEDY") == 3', 'total_cost': 0.0300243, 'cost': 0.019509500000000003, 'inference_cost': 0.0009754750000000001, 'training_iteration': 0, 'config': {'prompt': 1, 'stop': 0, 'subspace': {'model': 'text-babbage-001', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}, 'config/prompt': 1, 'config/stop': 0, 'config/subspace': {'model': 'text-babbage-001', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}, 'experiment_tag': 'exp', 'time_total_s': 42.417603969573975}
+    [flaml.tune.tune: 07-30 04:23:18] {805} INFO - trial 3 config: {'prompt': 1, 'stop': 0, 'subspace': {'model': 'text-davinci-003', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}
+    [flaml.tune.tune: 07-30 04:24:20] {197} INFO - result: {'index_selected': 2.35, 'succeed_assertions': 0.95, 'success': 0.65, 'gen_cost': 0.000460625, 'assertions': 'assert vowels_count("abcde") == 2\nassert vowels_count("ACEDY") == 3', 'total_cost': 0.8658043000000002, 'cost': 0.8357800000000002, 'inference_cost': 0.04093000000000001, 'training_iteration': 0, 'config': {'prompt': 1, 'stop': 0, 'subspace': {'model': 'text-davinci-003', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}, 'config/prompt': 1, 'config/stop': 0, 'config/subspace': {'model': 'text-davinci-003', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}, 'experiment_tag': 'exp', 'time_total_s': 62.81497287750244}
+    [flaml.tune.tune: 07-30 04:24:20] {805} INFO - trial 4 config: {'prompt': 1, 'stop': 0, 'subspace': {'model': 'gpt-3.5-turbo', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}
+    [flaml.tune.tune: 07-30 04:25:39] {197} INFO - result: {'index_selected': 13.95, 'succeed_assertions': 0.55, 'success': 0.5, 'gen_cost': 0.000460625, 'assertions': 'assert vowels_count("abcde") == 2\nassert vowels_count("ACEDY") == 3', 'total_cost': 0.9462703000000001, 'cost': 0.08046600000000001, 'inference_cost': 0.00399515, 'training_iteration': 0, 'config': {'prompt': 1, 'stop': 0, 'subspace': {'model': 'gpt-3.5-turbo', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}, 'config/prompt': 1, 'config/stop': 0, 'config/subspace': {'model': 'gpt-3.5-turbo', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}, 'experiment_tag': 'exp', 'time_total_s': 79.03474521636963}
+    [flaml.tune.tune: 07-30 04:25:39] {805} INFO - trial 5 config: {'prompt': 1, 'stop': 0, 'subspace': {'model': 'gpt-4', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}
+    [flaml.tune.tune: 07-30 04:25:50] {197} INFO - result: {'success': 0, 'total_cost': 1.0053703, 'cost': 0.0591, 'training_iteration': 0, 'config': {'prompt': 1, 'stop': 0, 'subspace': {'model': 'gpt-4', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}, 'config/prompt': 1, 'config/stop': 0, 'config/subspace': {'model': 'gpt-4', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}, 'experiment_tag': 'exp', 'time_total_s': 10.245523691177368}
+    [flaml.tune.tune: 07-30 04:25:50] {828} WARNING - fail to sample a trial for 100 times in a row, stopping.
+```
+
+### Output tuning results
+
+After the tuning, we can print out the config and the result found by autogen:
+
+```python
+print("optimized config", config)
+print("best result on tuning data", analysis.best_result)
+
+    optimized config {'prompt': '# Python 3{definition}', 'stop': ['\nclass', '\ndef', '\nif', '\nprint'], 'model': 'text-davinci-003', 'max_tokens': 148, 'n': 27, 'top_p': 0.755486898036596}
+    best result on tuning data {'index_selected': 2.35, 'succeed_assertions': 0.95, 'success': 0.65, 'gen_cost': 0.000460625, 'assertions': 'assert vowels_count("abcde") == 2\nassert vowels_count("ACEDY") == 3', 'total_cost': 0.8658043000000002, 'cost': 0.8357800000000002, 'inference_cost': 0.04093000000000001, 'training_iteration': 0, 'config': {'prompt': 1, 'stop': 0, 'subspace': {'model': 'text-davinci-003', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}}, 'config/prompt': 1, 'config/stop': 0, 'config/subspace': {'model': 'text-davinci-003', 'max_tokens': 148, 'temperature_or_top_p': {'top_p': 0.755486898036596}, 'n': 27}, 'experiment_tag': 'exp', 'time_total_s': 62.81497287750244}
+```
+
+### Request with the tuned config
+
+We can apply the tuned config on the request for an example task:
+
+```python
+response = autogen.Completion.create(context=tune_data[1], config_list=endpoint_list, **config)
+print(response)
+print(eval_with_generated_assertions(autogen.Completion.extract_text(response), **tune_data[1]))
+
+    {
+      "id": "cmpl-7hsFhPX6faeWYaT4y3C7IkQAgNbZR",
+      "warning": "This model version is deprecated. Migrate before January 4, 2024 to avoid disruption of service. Learn more https://platform.openai.com/docs/deprecations",
+      "object": "text_completion",
+      "created": 1690691005,
+      "model": "text-davinci-003",
+      "choices": [
+        {
+          "text": "    results = []\n    for i in range(len(game)):\n        if game[i] == guess[i]:\n            results.append(0)\n        else:\n            results.append(abs(game[i]-guess[i]))\n    return results",
+          "index": 0,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 1,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i]-guess[i]))\n    return result",
+          "index": 2,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    res = []\n    for i in range(len(game)):\n        res.append(abs(game[i]-guess[i]))\n    return res",
+          "index": 3,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 4,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 5,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 6,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    results = []\n    for i in range(len(game)):\n        results.append(abs(game[i] - guess[i]))\n    return results",
+          "index": 7,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    res = []\n    for i in range(len(game)):\n        res.append(abs(game[i]-guess[i]))\n    return res",
+          "index": 8,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i]-guess[i]))\n    return result",
+          "index": 9,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 10,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 11,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        if game[i] == guess[i]:\n            result.append(0)\n        else:\n            result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 12,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    # set up empty list to store differences\n    diff = []\n    # iterate through the game list and guess list\n    for i in range(len(game)):\n        # check if the guess is equal to the game\n        if game[i] == guess[i]:\n            # if so, append 0 to the diff list\n            diff.append(0)\n        # otherwise, calculate the difference between the guess and the game\n        else:\n            diff.append(abs(game[i]-guess[i]))\n    # return the diff list\n    return diff",
+          "index": 13,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i]-guess[i]))\n    return result",
+          "index": 14,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        if game[i] == guess[i]:\n            result.append(0)\n        else:\n            result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 15,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 16,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 17,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 18,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 19,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 20,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 21,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 22,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    # your code here\n    result = []\n    for i in range(len(game)):\n        if game[i] == guess[i]:\n            result.append(0)\n        else:\n            result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 23,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    results = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        results.append(diff)\n    return results",
+          "index": 24,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        diff = abs(game[i] - guess[i])\n        result.append(diff)\n    return result",
+          "index": 25,
+          "logprobs": null,
+          "finish_reason": "stop"
+        },
+        {
+          "text": "    result = []\n    for i in range(len(game)):\n        result.append(abs(game[i] - guess[i]))\n    return result",
+          "index": 26,
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 243,
+        "completion_tokens": 1264,
+        "total_tokens": 1507
+      },
+      "cost": 0.03014,
+      "config_id": 0,
+      "pass_filter": true
+    }
+    {'index_selected': 0, 'succeed_assertions': True, 'success': True, 'gen_cost': 0.000702, 'assertions': 'assert compare([1,2,3,4,5,1],[1,2,3,4,2,-2]) == [0,0,0,0,3,3]\nassert compare([0,5,0,0,0,4],[4,1,1,0,0,-2]) == [4,4,1,0,0,6]'}
+
+```
+
+### Evaluate the success rate on the test data
+
+You can use `autogen.Completion.test` to evaluate the performance of an entire dataset with the tuned config. The following code will take a while to evaluate all the 144 test data instances. The cost is about $6 if you uncomment it and run it.
+
+```python
+# result = autogen.Completion.test(test_data, config_list=endpoint_list, **config)
+# print("performance on test data with the tuned config:", result)
+
+    performance on test data with the tuned config: {'index_selected': 5.222222222222222, 'succeed_assertions': 0.8402777777777778, 'success': 0.7569444444444444, 'gen_cost': 0.00044632638888888885, 'cost': 5.704979999999999, 'inference_cost': 0.03961791666666666}
+```
+
+The result will vary with the inference budget and optimization budget.

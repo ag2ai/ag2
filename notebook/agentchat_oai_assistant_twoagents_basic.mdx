@@ -1,0 +1,137 @@
+---
+title: "OpenAI Assistants in AutoGen"
+---
+
+This notebook shows a very basic example of the [`GPTAssistantAgent`](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/gpt_assistant_agent.py), which is an experimental AutoGen agent class that leverages the [OpenAI Assistant API](https://platform.openai.com/docs/assistants/overview) for conversational capabilities, working with
+`UserProxyAgent` in AutoGen.
+
+````python
+import logging
+import os
+
+from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
+from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
+assistant_id = os.environ.get("ASSISTANT_ID", None)
+
+config_list = config_list_from_json("OAI_CONFIG_LIST")
+llm_config = {"config_list": config_list}
+
+assistant_config = {"assistant_id": assistant_id}
+
+gpt_assistant = GPTAssistantAgent(
+    name="assistant",
+    instructions=AssistantAgent.DEFAULT_SYSTEM_MESSAGE,
+    llm_config=llm_config,
+    assistant_config=assistant_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    code_execution_config={
+        "work_dir": "coding",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=1,
+)
+user_proxy.initiate_chat(gpt_assistant, message="Print hello world")
+
+    OpenAI client config of GPTAssistantAgent(assistant) - model: gpt-4-turbo-preview
+    GPT Assistant only supports one OpenAI client. Using the first client in the list.
+    No matching assistant found, creating a new assistant
+
+
+    user_proxy (to assistant):
+
+    Print hello world
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    ```python
+    print("Hello, world!")
+    ```
+
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    Hello, world!
+
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    TERMINATE
+
+
+    --------------------------------------------------------------------------------
+
+
+
+
+
+    ChatResult(chat_id=None, chat_history=[{'content': 'Print hello world', 'role': 'assistant'}, {'content': '```python\nprint("Hello, world!")\n```\n', 'role': 'user'}, {'content': 'exitcode: 0 (execution succeeded)\nCode output: \nHello, world!\n', 'role': 'assistant'}, {'content': 'TERMINATE\n', 'role': 'user'}], summary='\n', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
+
+````
+
+````python
+user_proxy.initiate_chat(gpt_assistant, message="Write py code to eval 2 + 2", clear_history=True)
+
+    user_proxy (to assistant):
+
+    Write py code to eval 2 + 2
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    ```python
+    # Calculate 2+2 and print the result
+    result = 2 + 2
+    print(result)
+    ```
+
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    4
+
+
+    --------------------------------------------------------------------------------
+    assistant (to user_proxy):
+
+    The Python code successfully calculated \(2 + 2\) and printed the result, which is \(4\).
+
+    TERMINATE
+
+
+    --------------------------------------------------------------------------------
+
+
+
+
+
+    ChatResult(chat_id=None, chat_history=[{'content': 'Write py code to eval 2 + 2', 'role': 'assistant'}, {'content': '```python\n# Calculate 2+2 and print the result\nresult = 2 + 2\nprint(result)\n```\n', 'role': 'user'}, {'content': 'exitcode: 0 (execution succeeded)\nCode output: \n4\n', 'role': 'assistant'}, {'content': 'The Python code successfully calculated \\(2 + 2\\) and printed the result, which is \\(4\\).\n\nTERMINATE\n', 'role': 'user'}], summary='The Python code successfully calculated \\(2 + 2\\) and printed the result, which is \\(4\\).\n\n\n', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
+
+````
+
+```python
+gpt_assistant.delete_assistant()
+
+    Permanently deleting assistant...
+
+```

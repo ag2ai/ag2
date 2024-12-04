@@ -1,0 +1,279 @@
+---
+title: "Web Scraping using Apify Tools"
+---
+
+This notebook shows how to use Apify tools with AutoGen agents to
+scrape data from a website and formate the output.
+
+First we need to install the Apify SDK and the AutoGen library.
+
+```python
+! pip install -qqq autogen apify-client
+```
+
+Setting up the LLM configuration and the Apify API key is also required.
+
+```python
+import os
+
+config_list = [
+    {"model": "gpt-4", "api_key": os.getenv("OPENAI_API_KEY")},
+]
+
+apify_api_key = os.getenv("APIFY_API_KEY")
+```
+
+Let's define the tool for scraping data from the website using Apify actor.
+Read more about tool use in this [tutorial chapter](/docs/tutorial/tool-use).
+
+```python
+from apify_client import ApifyClient
+from typing_extensions import Annotated
+
+
+def scrape_page(url: Annotated[str, "The URL of the web page to scrape"]) -> Annotated[str, "Scraped content"]:
+    # Initialize the ApifyClient with your API token
+    client = ApifyClient(token=apify_api_key)
+
+    # Prepare the Actor input
+    run_input = {
+        "startUrls": [{"url": url}],
+        "useSitemaps": False,
+        "crawlerType": "playwright:firefox",
+        "includeUrlGlobs": [],
+        "excludeUrlGlobs": [],
+        "ignoreCanonicalUrl": False,
+        "maxCrawlDepth": 0,
+        "maxCrawlPages": 1,
+        "initialConcurrency": 0,
+        "maxConcurrency": 200,
+        "initialCookies": [],
+        "proxyConfiguration": {"useApifyProxy": True},
+        "maxSessionRotations": 10,
+        "maxRequestRetries": 5,
+        "requestTimeoutSecs": 60,
+        "dynamicContentWaitSecs": 10,
+        "maxScrollHeightPixels": 5000,
+        "removeElementsCssSelector": """nav, footer, script, style, noscript, svg,
+    [role=\"alert\"],
+    [role=\"banner\"],
+    [role=\"dialog\"],
+    [role=\"alertdialog\"],
+    [role=\"region\"][aria-label*=\"skip\" i],
+    [aria-modal=\"true\"]""",
+        "removeCookieWarnings": True,
+        "clickElementsCssSelector": '[aria-expanded="false"]',
+        "htmlTransformer": "readableText",
+        "readableTextCharThreshold": 100,
+        "aggressivePrune": False,
+        "debugMode": True,
+        "debugLog": True,
+        "saveHtml": True,
+        "saveMarkdown": True,
+        "saveFiles": False,
+        "saveScreenshots": False,
+        "maxResults": 9999999,
+        "clientSideMinChangePercentage": 15,
+        "renderingTypeDetectionPercentage": 10,
+    }
+
+    # Run the Actor and wait for it to finish
+    run = client.actor("aYG0l9s7dbB7j3gbS").call(run_input=run_input)
+
+    # Fetch and print Actor results from the run's dataset (if there are any)
+    text_data = ""
+    for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+        text_data += item.get("text", "") + "\n"
+
+    average_token = 0.75
+    max_tokens = 20000  # slightly less than max to be safe 32k
+    text_data = text_data[: int(average_token * max_tokens)]
+    return text_data
+```
+
+Create the agents and register the tool.
+
+```python
+from autogen import ConversableAgent, register_function
+
+# Create web scrapper agent.
+scraper_agent = ConversableAgent(
+    "WebScraper",
+    llm_config={"config_list": config_list},
+    system_message="You are a web scrapper and you can scrape any web page using the tools provided. "
+    "Returns 'TERMINATE' when the scraping is done.",
+)
+
+# Create user proxy agent.
+user_proxy_agent = ConversableAgent(
+    "UserProxy",
+    llm_config=False,  # No LLM for this agent.
+    human_input_mode="NEVER",
+    code_execution_config=False,  # No code execution for this agent.
+    is_termination_msg=lambda x: x.get("content", "") is not None and "terminate" in x["content"].lower(),
+    default_auto_reply="Please continue if not finished, otherwise return 'TERMINATE'.",
+)
+
+# Register the function with the agents.
+register_function(
+    scrape_page,
+    caller=scraper_agent,
+    executor=user_proxy_agent,
+    name="scrape_page",
+    description="Scrape a web page and return the content.",
+)
+```
+
+Start the conversation for scraping web data. We used the
+`reflection_with_llm` option for summary method
+to perform the formatting of the output into a desired format.
+The summary method is called after the conversation is completed
+given the complete history of the conversation.
+
+````python
+chat_result = user_proxy_agent.initiate_chat(
+    scraper_agent,
+    message="Can you scrape agentops.ai for me?",
+    summary_method="reflection_with_llm",
+    summary_args={
+        "summary_prompt": """Summarize the scraped content and format summary EXACTLY as follows:
+---
+*Company name*:
+`Acme Corp`
+---
+*Website*:
+`acmecorp.com`
+---
+*Description*:
+`Company that does things.`
+---
+*Tags*:
+`Manufacturing. Retail. E-commerce.`
+---
+*Takeaways*:
+`Provides shareholders with value by selling products.`
+---
+*Questions*:
+`What products do they sell? How do they make money? What is their market share?`
+---
+"""
+    },
+)
+
+    UserProxy (to WebScraper):
+
+    Can you scrape agentops.ai for me?
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    WebScraper (to UserProxy):
+
+    ***** Suggested tool call (call_0qok2jvCxOfv7HOA0oxPWneM): scrape_page *****
+    Arguments:
+    {
+    "url": "https://www.agentops.ai"
+    }
+    ****************************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION scrape_page...
+    UserProxy (to WebScraper):
+
+    UserProxy (to WebScraper):
+
+    ***** Response from calling tool (call_0qok2jvCxOfv7HOA0oxPWneM) *****
+    START NOW
+    Take your business to the next level with our features
+    AI Agents Suck.
+    We're Fixing That.
+    Build compliant AI agents with observability, evals, and replay analytics. No more black boxes and prompt guessing.
+    New! Introducing AgentOps
+    Three Lines of Code. Unlimited Testing.
+    Instant Testing + Debugging = Compliant AI Agents That Work
+    5
+    # Beginning of program's code (i.e. main.py, __init__.py)
+    6
+    ao_client = agentops.Client(<INSERT YOUR API KEY HERE>)
+    9
+    # (optional: record specific functions)
+    10
+    @ao_client.record_action('sample function being record')
+    11
+    def sample_function(...):
+    15
+    ao_client.end_session('Success')
+    Prototype to Production
+    Generous free limits, upgrade only when you need it.
+
+    **********************************************************************
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    WebScraper (to UserProxy):
+
+    Sure, here's the information from the website agentops.ai:
+
+    - Their main value proposition is to fix bad AI Agents and replace black boxes and prompt guessing with compliant, observable AI agents that come with evals and replay analytics.
+    - Their latest product is AgentOps. The simple and instant testing & debugging offered promises better-performing compliant AI agents.
+    - Integration is easy with just three lines of code.
+    - They let you record specific functions.
+    - They provide generous free limits and you only need to upgrade when necessary.
+
+    Here's a sample of their code:
+    ```python
+    ao_client = agentops.Client(<INSERT YOUR API KEY HERE>)
+
+    # optional: record specific functions
+    @ao_client.record_action('sample function being record')
+    def sample_function(...):
+        ...
+
+    ao_client.end_session('Success')
+    ```
+    This code is for sample usage of their libraries/functions.
+
+    Let me know if you need more specific details.
+
+    --------------------------------------------------------------------------------
+    UserProxy (to WebScraper):
+
+    Please continue if not finished, otherwise return 'TERMINATE'.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    WebScraper (to UserProxy):
+
+    TERMINATE
+
+    --------------------------------------------------------------------------------
+````
+
+The output is stored in the summary.
+
+```python
+print(chat_result.summary)
+
+    ---
+    *Company name*:
+    `AgentOps`
+    ---
+    *Website*:
+    `agentops.ai`
+    ---
+    *Description*:
+    `Company that aims to improve AI agents. They offer observed and evaluable AI agents with replay analytics as an alternative to black box models and blind prompting.`
+    ---
+    *Tags*:
+    `Artificial Intelligence, AI agents, Observability, Analytics.`
+    ---
+    *Takeaways*:
+    `Their product, AgentOps, allows for easy and instant testing and debugging of AI agents. Integration is as simple as writing three lines of code. They also provide generous free limits and mandate upgrades only when necessary.`
+    ---
+    *Questions*:
+    `What differentiates AgentOps from other, similar products? How does their pricing scale with usage? What are the details of their "generous free limits"?`
+    ---
+```

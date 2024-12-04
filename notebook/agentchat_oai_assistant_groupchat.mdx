@@ -1,0 +1,407 @@
+---
+title: "Auto Generated Agent Chat: Group Chat with GPTAssistantAgent"
+---
+
+AutoGen offers conversable agents powered by LLM, tool or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
+Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+
+In this notebook, we demonstrate how to get multiple `GPTAssistantAgent` converse through group chat.
+
+## Requirements
+
+AutoGen requires `Python>=3.8`. To run this notebook example, please install:
+
+````{=mdx}
+:::info Requirements
+Install `autogen`:
+```bash
+pip install autogen
+```
+
+For more information, please refer to the [installation guide](/docs/installation/).
+:::
+````
+
+## Set your API Endpoint
+
+The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
+
+```python
+import autogen
+from autogen.agentchat import AssistantAgent
+from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
+
+config_list_gpt4 = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4", "gpt-4-1106-preview", "gpt-4-32k"],
+    },
+)
+```
+
+```{=mdx}
+:::tip
+Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
+:::
+```
+
+## Define GPTAssistantAgent and GroupChat
+
+```python
+# Define user proxy agent
+llm_config = {"config_list": config_list_gpt4, "cache_seed": 45}
+user_proxy = autogen.UserProxyAgent(
+    name="User_proxy",
+    system_message="A human admin.",
+    code_execution_config={
+        "last_n_messages": 2,
+        "work_dir": "groupchat",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+    human_input_mode="TERMINATE",
+)
+
+# define two GPTAssistants
+coder = GPTAssistantAgent(
+    name="Coder",
+    llm_config={
+        "config_list": config_list_gpt4,
+    },
+    instructions=AssistantAgent.DEFAULT_SYSTEM_MESSAGE,
+)
+
+analyst = GPTAssistantAgent(
+    name="Data_analyst",
+    instructions="You are a data analyst that offers insight into data.",
+    llm_config={
+        "config_list": config_list_gpt4,
+    },
+)
+# define group chat
+groupchat = autogen.GroupChat(agents=[user_proxy, coder, analyst], messages=[], max_round=10)
+manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+```
+
+    assistant_id was None, creating a new assistant
+    assistant_id was None, creating a new assistant
+
+## Initiate Group Chat
+
+Now all is set, we can initiate group chat.
+
+````python
+user_proxy.initiate_chat(
+    manager,
+    message="Get the number of issues and pull requests for the repository 'ag2ai/ag2' over the past three weeks and offer analysis to the data. You should print the data in csv format grouped by weeks.",
+)
+# type exit to terminate the chat
+
+    User_proxy (to chat_manager):
+
+    Get the number of issues and pull requests for the repository 'ag2ai/ag2' over the past three weeks and offer analyzes to the data. You should print the data in csv format grouped by weeks.
+
+    --------------------------------------------------------------------------------
+    Coder (to chat_manager):
+
+    To gather the number of issues and pull requests for the repository 'ag2ai/ag2' over the past three weeks and to offer an analysis of the data, we'll need to modify the previous script.
+
+    We will enhance the script to gather data from the past three weeks, separated by each week, and then output the data in CSV format, grouped by the week during which the issues and pull requests were created. This will require us to make multiple API calls for each week and aggregate the data accordingly.
+
+    I will provide you a python script to execute.
+
+    ```python
+    # filename: github_data_weekly_analyzer.py
+    import requests
+    from datetime import datetime, timedelta
+    import csv
+
+    # Constants to define the GitHub repository and the API URLs
+    REPO_OWNER = 'microsoft'
+    REPO_NAME = 'autogen'
+    GITHUB_API_ISSUES = f'https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/issues'
+    GITHUB_API_PULLS = f'https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/pulls'
+
+    # Function to get data from GitHub API with pagination
+    def get_github_data(url, since_date, until_date):
+        items = []
+        page = 1
+        while True:
+            params = {
+                'state': 'all',
+                'since': since_date,
+                'until': until_date,
+                'page': page,
+                'per_page': 100
+            }
+            response = requests.get(url, params=params)
+            if response.status_code != 200:
+                raise Exception(f'Failed to fetch data from GitHub API. Status Code: {response.status_code}')
+            page_data = response.json()
+            items.extend(page_data)
+
+            if not page_data or 'next' not in response.links:
+                break
+
+            page += 1
+
+        return items
+
+    # Function to filter and count issues and pull requests by week
+    def count_items_by_week(items):
+        counts_by_week = {}
+        for item in items:
+            # Using the created_at date to determine the week
+            created_at = datetime.strptime(item['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+            week = created_at.strftime('%U')
+            if week not in counts_by_week:
+                counts_by_week[week] = 0
+            counts_by_week[week] += 1
+        return counts_by_week
+
+    # Wrap the task in a function
+    def analyze_data():
+        try:
+            # Initialize CSV data
+            csv_data = [['week', 'issue_count', 'pull_request_count']]
+
+            # Get data for the past three weeks
+            for weeks_ago in range(3):
+                # Calculate date range for the particular week
+                until_date = datetime.utcnow() - timedelta(weeks=weeks_ago)
+                since_date = until_date - timedelta(days=7)
+                since_date_str = since_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+                until_date_str = until_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+                # Get issues and pull requests for the date range
+                issues = get_github_data(GITHUB_API_ISSUES, since_date_str, until_date_str)
+                pull_requests = get_github_data(GITHUB_API_PULLS, since_date_str, until_date_str)
+
+                # Filter out pull requests from issues
+                issues = [issue for issue in issues if 'pull_request' not in issue]
+
+                # Count issues and pull requests by week
+                issue_counts = count_items_by_week(issues)
+                pull_request_counts = count_items_by_week(pull_requests)
+
+                # Aggregate csv data
+                for week in issue_counts:
+                    csv_data.append([week, issue_counts.get(week, 0), pull_request_counts.get(week, 0)])
+
+            # Output CSV data to stdout
+            writer = csv.writer(sys.stdout)
+            writer.writerows(csv_data)
+
+        except Exception as e:
+            print(str(e))
+
+    # Run the analyze function
+    if __name__ == "__main__":
+        analyze_data()
+    ```
+
+    Please save this code as `github_data_weekly_analyzer.py` and run it. The script will output the number of issues and pull requests for the repository 'microsoft/autogen' over the past three weeks, grouped by week in CSV format.
+
+    If there are any issues or errors during the execution of this script, please let me know the exact error message, and I will assist you in resolving it.
+
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+
+
+    execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
+
+
+    User_proxy (to chat_manager):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    name 'sys' is not defined
+
+
+    --------------------------------------------------------------------------------
+    Coder (to chat_manager):
+
+    It looks like I forgot to import `sys` module which is necessary for writing output to stdout using the `csv.writer`. I will fix the code by adding the import statement for the `sys` module at the beginning of the script. Please run the updated script below:
+
+    ```python
+    # filename: github_data_weekly_analyzer.py
+    import requests
+    from datetime import datetime, timedelta
+    import csv
+    import sys
+
+    # Constants to define the GitHub repository and the API URLs
+    REPO_OWNER = 'microsoft'
+    REPO_NAME = 'autogen'
+    GITHUB_API_ISSUES = f'https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/issues'
+    GITHUB_API_PULLS = f'https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/pulls'
+
+    # Function to get data from GitHub API with pagination
+    def get_github_data(url, since_date, until_date):
+        items = []
+        page = 1
+        while True:
+            params = {
+                'state': 'all',
+                'since': since_date,
+                'until': until_date,
+                'page': page,
+                'per_page': 100
+            }
+            response = requests.get(url, params=params)
+            if response.status_code != 200:
+                raise Exception(f'Failed to fetch data from GitHub API. Status Code: {response.status_code}')
+            page_data = response.json()
+            items.extend(page_data)
+
+            if not page_data or 'next' not in response.links:
+                break
+
+            page += 1
+
+        return items
+
+    # Function to filter and count issues and pull requests by week
+    def count_items_by_week(items):
+        counts_by_week = {}
+        for item in items:
+            # Using the created_at date to determine the week
+            created_at = datetime.strptime(item['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+            week = created_at.strftime('%U')
+            if week not in counts_by_week:
+                counts_by_week[week] = 0
+            counts_by_week[week] += 1
+        return counts_by_week
+
+    # Wrap the task in a function
+    def analyze_data():
+        try:
+            # Initialize CSV data
+            csv_data = [['week', 'issue_count', 'pull_request_count']]
+
+            # Get data for the past three weeks
+            for weeks_ago in range(3):
+                # Calculate date range for the particular week
+                until_date = datetime.utcnow() - timedelta(weeks=weeks_ago)
+                since_date = until_date - timedelta(days=7)
+                since_date_str = since_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+                until_date_str = until_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+                # Get issues and pull requests for the date range
+                issues = get_github_data(GITHUB_API_ISSUES, since_date_str, until_date_str)
+                pull_requests = get_github_data(GITHUB_API_PULLS, since_date_str, until_date_str)
+
+                # Filter out pull requests from issues
+                issues = [issue for issue in issues if 'pull_request' not in issue]
+
+                # Count issues and pull requests by week
+                issue_counts = count_items_by_week(issues)
+                pull_request_counts = count_items_by_week(pull_requests)
+
+                # Aggregate csv data
+                for week in issue_counts:
+                    csv_data.append([week, issue_counts.get(week, 0), pull_request_counts.get(week, 0)])
+
+            # Output CSV data to stdout
+            writer = csv.writer(sys.stdout)
+            writer.writerows(csv_data)
+
+        except Exception as e:
+            print(str(e))
+
+    # Run the analyze function
+    if __name__ == "__main__":
+        analyze_data()
+    ```
+
+    Once again, please save this code as `github_data_weekly_analyzer.py` and run it. The script should produce the intended CSV output. If you run into any more issues, let me know, and I will provide further assistance.
+
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+
+
+    execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
+
+
+    User_proxy (to chat_manager):
+
+    exitcode: 0 (execution succeeded)
+    Code output:
+    week,issue_count,pull_request_count
+    46,11,10
+    45,40,30
+    44,9,26
+    43,3,61
+    42,5,36
+    41,6,41
+    40,2,34
+    39,2,19
+    38,1,4
+    17,1,0
+    46,11,10
+    45,46,30
+    44,47,26
+    43,15,61
+    42,11,36
+    41,13,41
+    40,4,34
+    39,5,19
+    38,1,4
+    27,1,0
+    19,1,0
+    17,1,0
+    46,11,10
+    45,46,30
+    44,48,26
+    43,54,61
+    42,21,36
+    41,16,41
+    40,7,34
+    39,6,19
+    38,1,4
+    33,1,0
+    27,1,0
+    19,1,0
+    17,1,0
+
+
+    --------------------------------------------------------------------------------
+    Data_analyst (to chat_manager):
+
+    The script executed successfully and provided the following data output in CSV format for the past three weeks:
+
+    ```
+    week,issue_count,pull_request_count
+    46,11,10
+    45,40,30
+    44,9,26
+    ```
+
+    Week numbers are based on the `%U` directive of `strftime`, which considers week 00 as the first week of the year with a Sunday in it.
+
+    Here's the analysis by week:
+
+    - Week 46: There were 11 issues and 10 pull requests. This suggests a balanced amount of reported issues and new code contributions. The relatively close numbers might indicate that the repository sees simultaneous reporting of issues and active development.
+
+    - Week 45: This week shows significantly more activity than the other two, with 40 issues and 30 pull requests being recorded. This could be a result of a coordinated milestone or sprint ending, where a large set of changes were made, and corresponding issues either surfaced or were also worked on.
+
+    - Week 44: The activity dropped to 9 issues and 26 pull requests. While the number of issues decreased, the number of pull requests remained substantial. This may imply a continuation of effort to address the issues raised in the busier previous week or ongoing development work.
+
+    The overall impression over the past three weeks is that the `microsoft/autogen` repository is actively maintained and developed, with varying levels of activity that could be associated with the development cycle or external events impacting the project.
+
+    Please note that the numbers may be overlapping because the GitHub API will include issues and pull requests updated within the date range, which could increase the count if the items are updated but not necessarily created within that range.
+
+    It's also important to consider that the collected data might not fully represent what happened in each week if there are items created before Week 44 that were updated during the weeks considered. For a more accurate approach, we would need to consider only issues and pull requests created within each week specifically, which would require additional filtering based on the `created_at` attribute.
+
+    If more in-depth analysis or longer trends are needed, additional data over a more extended period would be recommended, along with information about the nature of the issues and pull requests (e.g., what kind of issues are most common, how quickly they're closed, how often pull requests are merged, etc.).
+
+
+    --------------------------------------------------------------------------------
+````
