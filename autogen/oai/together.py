@@ -61,7 +61,7 @@ class TogetherClient:
             self.api_key = os.getenv("TOGETHER_API_KEY")
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Together.AI.", UserWarning)
+            warnings.warn("response_format is not supported for Together.AI, it will be ignored.", UserWarning)
 
         assert (
             self.api_key

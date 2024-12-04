@@ -49,17 +49,13 @@ CEREBRAS_PRICING_1K = {
 class CerebrasClient:
     """Client for Cerebras's API."""
 
-    def __init__(self, api_key=None, response_format: Optional[BaseModel] = None, **kwargs):
+    def __init__(self, api_key=None, **kwargs):
         """Requires api_key or environment variable to be set
 
         Args:
             api_key (str): The API key for using Cerebras (or environment variable CEREBRAS_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
-
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Cerebras' API.")
-
         self.api_key = api_key
         if not self.api_key:
             self.api_key = os.getenv("CEREBRAS_API_KEY")

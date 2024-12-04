@@ -72,7 +72,7 @@ class MistralAIClient:
         ), "Please specify the 'api_key' in your config list entry for Mistral or set the MISTRAL_API_KEY env variable."
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Mistral.AI, will be ignored.", UserWarning)
+            warnings.warn("response_format is not supported for Mistral.AI, it will be ignored.", UserWarning)
 
         self._client = Mistral(api_key=self.api_key)
 

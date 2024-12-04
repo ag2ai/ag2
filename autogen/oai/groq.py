@@ -67,7 +67,7 @@ class GroqClient:
         ), "Please include the api_key in your config list entry for Groq or set the GROQ_API_KEY env variable."
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Groq API. Ignoring.", UserWarning)
+            warnings.warn("response_format is not supported for Groq API, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> List:
         """
