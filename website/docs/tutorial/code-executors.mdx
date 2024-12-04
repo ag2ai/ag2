@@ -2,6 +2,33 @@
 title: "Code Executors"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/tutorial/code-executors.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/tutorial/code-executors.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 In the last chapter,
 we used two agents powered by a large language model (LLM) to play a game
 by exchanging messages.
@@ -279,7 +306,7 @@ def fibonacci(n):
         return fib[n-1]
 
 print(fibonacci(14))
-`````
+
 
 This Python code defines a function `fibonacci(n)` which computes the n-th Fibonacci number. The function uses a list `fib` to store the Fibonacci numbers as they are computed, and then returns the (n-1)-th element as the n-th Fibonacci number due to zero-indexing in Python lists.
 
@@ -451,7 +478,7 @@ Please make sure to verify this image file. It should contain two plotted lines,
 TERMINATE
 
 --------------------------------------------------------------------------------
-`````
+````
 
 In the previous conversation, the code writer agent generated a code block
 to install necessary packages and another code block for a script to

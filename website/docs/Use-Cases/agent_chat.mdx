@@ -18,7 +18,7 @@ designed to solve tasks through inter-agent conversations. Specifically, the age
 - Customizable: Agents in AutoGen can be customized to integrate LLMs, humans, tools, or a combination of them.
 
 The figure below shows the built-in agents in AutoGen.
-![Agent Chat Example](images/autogen_agents.png)
+![Agent Chat Example](images/autogen_agents.webp)
 
 We have designed a generic [`ConversableAgent`](../reference/agentchat/conversable_agent.md#conversableagent-objects)
 class for Agents that are capable of conversing with each other through the exchange of messages to jointly finish a task. An agent can communicate with other agents and perform actions. Different agents can differ in what actions they perform after receiving messages. Two representative subclasses are [`AssistantAgent`](../reference/agentchat/assistant_agent.md#assistantagent-objects) and [`UserProxyAgent`](../reference/agentchat/user_proxy_agent.md#userproxyagent-objects)
@@ -62,7 +62,7 @@ user_proxy.initiate_chat(
 ```
 
 After the initialization step, the conversation could proceed automatically. Find a visual illustration of how the user_proxy and assistant collaboratively solve the above task autonomously below:
-![Agent Chat Example](images/agent_example.png)
+![Agent Chat Example](images/agent_example.webp)
 
 1. The assistant receives a message from the user_proxy, which contains the task description.
 2. The assistant then tries to write Python code to solve the task and sends the response to the user_proxy.

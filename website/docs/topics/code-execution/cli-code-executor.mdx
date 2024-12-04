@@ -2,6 +2,33 @@
 title: "Command Line Code Executor"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/code-execution/cli-code-executor.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/code-execution/cli-code-executor.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 Command line code execution is the simplest form of code execution. Generally speaking, it will save each code block to a file and the execute that file. This means that each code block is executed in a new process. There are two forms of this executor:
 
 - Docker ([`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor)) - this is where all commands are executed in a Docker container
@@ -59,11 +86,9 @@ If you need to bind a working directory to the AutoGen container but the directo
 
 ## Local
 
-```{=mdx}
-:::danger
-The local version will run code on your local system. Use it with caution.
-:::
-```
+<Warning>
+  The local version will run code on your local system. Use it with caution.
+</Warning>
 
 To execute code on the host machine, as in the machine running AutoGen, the [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor) can be used.
 
@@ -87,7 +112,9 @@ print(
 )
 ```
 
-    exit_code=0 output='\nHello, World!\n' code_file='coding/065b51a16ee54f3298847518f9e999d7.py'
+```python
+exit_code=0 output='\nHello, World!\n' code_file='coding/065b51a16ee54f3298847518f9e999d7.py'
+```
 
 ## Using a Python virtual environment
 
@@ -172,122 +199,123 @@ chat_result = code_executor_agent.initiate_chat(
 pprint.pprint(chat_result)
 ```
 
-    code_executor_agent (to code_writer):
+````python
+code_executor_agent (to code_writer):
 
-    Write Python code to calculate the 14th Fibonacci number.
+Write Python code to calculate the 14th Fibonacci number.
 
-    --------------------------------------------------------------------------------
-    code_writer (to code_executor_agent):
+--------------------------------------------------------------------------------
+code_writer (to code_executor_agent):
 
-    Sure, we can calculate the Fibonacci series using a few different methods such as recursion, iterative, by using Binet's formula, or by using matrix exponentiation.
+Sure, we can calculate the Fibonacci series using a few different methods such as recursion, iterative, by using Binet's formula, or by using matrix exponentiation.
 
-    But, since we only need to calculate the 14th number, we will simply use the iterative method as it's the most efficient for this case.
+But, since we only need to calculate the 14th number, we will simply use the iterative method as it's the most efficient for this case.
 
-    Here is the Python code that solves the task:
+Here is the Python code that solves the task:
 
-    ```python
-    def fibonacci(n):
-        a, b = 0, 1
-        for _ in range(n):
-            a, b = b, a + b
-        return a
+```python
+def fibonacci(n):
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
 
-    print(fibonacci(14))
+print(fibonacci(14))
+```
+In this script, `fibonacci(n)` is a function that calculates the nth Fibonacci number. Inside the function, two variables `a` and `b` are initialised to `0` and `1` which are the first two numbers in the Fibonacci series. Then, a loop runs `n` times (14 times in your case), and in each iteration `a` is replaced with `b` and `b` is replaced with `a + b`, which generates the next number in the series.
 
-    In this script, `fibonacci(n)` is a function that calculates the nth Fibonacci number. Inside the function, two variables `a` and `b` are initialised to `0` and `1` which are the first two numbers in the Fibonacci series. Then, a loop runs `n` times (14 times in your case), and in each iteration `a` is replaced with `b` and `b` is replaced with `a + b`, which generates the next number in the series.
+The function returns `a`, which is the nth Fibonacci number. The result is then printed to the console.
 
-    The function returns `a`, which is the nth Fibonacci number. The result is then printed to the console.
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
+>>>>>>>> EXECUTING 1 CODE BLOCKS (inferred languages are [python])...
+code_executor_agent (to code_writer):
 
-    >>>>>>>> EXECUTING 1 CODE BLOCKS (inferred languages are [python])...
-    code_executor_agent (to code_writer):
-
-    exitcode: 0 (execution succeeded)
-    Code output: 377
-
-
-    --------------------------------------------------------------------------------
-    code_writer (to code_executor_agent):
-
-    Great! The script has successfully computed the 14th Fibonacci number as 377. If you need to compute other Fibonacci numbers, you can simply change the argument in the `fibonacci()` function call. Please let me know if you need help with anything else.
-
-    --------------------------------------------------------------------------------
-    code_executor_agent (to code_writer):
+exitcode: 0 (execution succeeded)
+Code output: 377
 
 
+--------------------------------------------------------------------------------
+code_writer (to code_executor_agent):
 
-    --------------------------------------------------------------------------------
-    ChatResult(chat_id=None,
-               chat_history=[{'content': 'Write Python code to calculate the 14th '
-                                         'Fibonacci number.',
-                              'role': 'assistant'},
-                             {'content': 'Sure, we can calculate the Fibonacci '
-                                         'series using a few different methods '
-                                         'such as recursion, iterative, by using '
-                                         "Binet's formula, or by using matrix "
-                                         'exponentiation.\n'
-                                         '\n'
-                                         'But, since we only need to calculate the '
-                                         '14th number, we will simply use the '
-                                         "iterative method as it's the most "
-                                         'efficient for this case.\n'
-                                         '\n'
-                                         'Here is the Python code that solves the '
-                                         'task:\n'
-                                         '\n'
-                                         '```python\n'
-                                         'def fibonacci(n):\n'
-                                         '    a, b = 0, 1\n'
-                                         '    for _ in range(n):\n'
-                                         '        a, b = b, a + b\n'
-                                         '    return a\n'
-                                         '\n'
-                                         'print(fibonacci(14))\n'
-                                         '```\n'
-                                         '\n'
-                                         'In this script, `fibonacci(n)` is a '
-                                         'function that calculates the nth '
-                                         'Fibonacci number. Inside the function, '
-                                         'two variables `a` and `b` are '
-                                         'initialised to `0` and `1` which are the '
-                                         'first two numbers in the Fibonacci '
-                                         'series. Then, a loop runs `n` times (14 '
-                                         'times in your case), and in each '
-                                         'iteration `a` is replaced with `b` and '
-                                         '`b` is replaced with `a + b`, which '
-                                         'generates the next number in the '
-                                         'series. \n'
-                                         '\n'
-                                         'The function returns `a`, which is the '
-                                         'nth Fibonacci number. The result is then '
-                                         'printed to the console.',
-                              'role': 'user'},
-                             {'content': 'exitcode: 0 (execution succeeded)\n'
-                                         'Code output: 377\n',
-                              'role': 'assistant'},
-                             {'content': 'Great! The script has successfully '
-                                         'computed the 14th Fibonacci number as '
-                                         '377. If you need to compute other '
-                                         'Fibonacci numbers, you can simply change '
-                                         'the argument in the `fibonacci()` '
-                                         'function call. Please let me know if you '
-                                         'need help with anything else.',
-                              'role': 'user'},
-                             {'content': '', 'role': 'assistant'}],
-               summary='',
-               cost=({'gpt-4-0613': {'completion_tokens': 302,
-                                     'cost': 0.04842,
-                                     'prompt_tokens': 1010,
-                                     'total_tokens': 1312},
-                      'total_cost': 0.04842},
-                     {'gpt-4-0613': {'completion_tokens': 302,
-                                     'cost': 0.04842,
-                                     'prompt_tokens': 1010,
-                                     'total_tokens': 1312},
-                      'total_cost': 0.04842}),
-               human_input=[])
-    ```
+Great! The script has successfully computed the 14th Fibonacci number as 377. If you need to compute other Fibonacci numbers, you can simply change the argument in the `fibonacci()` function call. Please let me know if you need help with anything else.
+
+--------------------------------------------------------------------------------
+code_executor_agent (to code_writer):
+
+
+
+--------------------------------------------------------------------------------
+ChatResult(chat_id=None,
+    chat_history=[{'content': 'Write Python code to calculate the 14th '
+                                'Fibonacci number.',
+                    'role': 'assistant'},
+                    {'content': 'Sure, we can calculate the Fibonacci '
+                                'series using a few different methods '
+                                'such as recursion, iterative, by using '
+                                "Binet's formula, or by using matrix "
+                                'exponentiation.\n'
+                                '\n'
+                                'But, since we only need to calculate the '
+                                '14th number, we will simply use the '
+                                "iterative method as it's the most "
+                                'efficient for this case.\n'
+                                '\n'
+                                'Here is the Python code that solves the '
+                                'task:\n'
+                                '\n'
+                                '```python\n'
+                                'def fibonacci(n):\n'
+                                '    a, b = 0, 1\n'
+                                '    for _ in range(n):\n'
+                                '        a, b = b, a + b\n'
+                                '    return a\n'
+                                '\n'
+                                'print(fibonacci(14))\n'
+                                '```\n'
+                                '\n'
+                                'In this script, `fibonacci(n)` is a '
+                                'function that calculates the nth '
+                                'Fibonacci number. Inside the function, '
+                                'two variables `a` and `b` are '
+                                'initialised to `0` and `1` which are the '
+                                'first two numbers in the Fibonacci '
+                                'series. Then, a loop runs `n` times (14 '
+                                'times in your case), and in each '
+                                'iteration `a` is replaced with `b` and '
+                                '`b` is replaced with `a + b`, which '
+                                'generates the next number in the '
+                                'series. \n'
+                                '\n'
+                                'The function returns `a`, which is the '
+                                'nth Fibonacci number. The result is then '
+                                'printed to the console.',
+                    'role': 'user'},
+                    {'content': 'exitcode: 0 (execution succeeded)\n'
+                                'Code output: 377\n',
+                    'role': 'assistant'},
+                    {'content': 'Great! The script has successfully '
+                                'computed the 14th Fibonacci number as '
+                                '377. If you need to compute other '
+                                'Fibonacci numbers, you can simply change '
+                                'the argument in the `fibonacci()` '
+                                'function call. Please let me know if you '
+                                'need help with anything else.',
+                    'role': 'user'},
+                    {'content': '', 'role': 'assistant'}],
+    summary='',
+    cost=({'gpt-4-0613': {'completion_tokens': 302,
+                            'cost': 0.04842,
+                            'prompt_tokens': 1010,
+                            'total_tokens': 1312},
+            'total_cost': 0.04842},
+            {'gpt-4-0613': {'completion_tokens': 302,
+                            'cost': 0.04842,
+                            'prompt_tokens': 1010,
+                            'total_tokens': 1312},
+            'total_cost': 0.04842}),
+    human_input=[])
+````
 
 Finally, stop the container. Or better yet use a context manager for it to be stopped automatically.
 

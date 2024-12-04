@@ -4,16 +4,31 @@ sidebarTitle: "Chat Termination"
 ---
 
 <div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
-  <a href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
-    <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" style={{ height: "20px", pointerEvents: "none" }} />
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/tutorial/chat-termination.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
   </a>
 </div>
 <div style={{ display: "inline-block", height: "20px" }}>
-  <a href="https://github.com/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
-    <img src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open in GitHub" style={{ height: "20px", pointerEvents: "none" }} />
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/tutorial/chat-termination.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
   </a>
 </div>
-
 
 In this chapter, we will explore how to terminate a conversation between AutoGen agents.
 
@@ -26,17 +41,15 @@ Currently there are two broad mechanism to control the termination of conversati
 
 2. **Configure an agent to trigger termination**: When defining individual agents, you can specify parameters that allow agents to terminate of a conversation based on particular (configurable) conditions.
 
-
 ## Parameters in `initiate_chat`
-In the previous chapter we actually demonstrated this when we used the `max_turns` parameter to limit the number of turns. If we increase `max_turns` to say `3` notice the conversation takes more rounds to terminate:
 
+In the previous chapter we actually demonstrated this when we used the `max_turns` parameter to limit the number of turns. If we increase `max_turns` to say `3` notice the conversation takes more rounds to terminate:
 
 ```
 import os
 
 from autogen import ConversableAgent
 ```
-
 
 ```python
 cathy = ConversableAgent(
@@ -54,10 +67,10 @@ joe = ConversableAgent(
 )
 ```
 
-
 ```python
 result = joe.initiate_chat(cathy, message="Cathy, tell me a joke.", max_turns=2)
 ```
+
 ```python
 joe (to cathy):
 
@@ -75,7 +88,7 @@ Because they make up everything!
 --------------------------------------------------------------------------------
 joe (to cathy):
 
-Haha, that's a good one, Cathy! Okay, my turn. 
+Haha, that's a good one, Cathy! Okay, my turn.
 
 Why don't we ever tell secrets on a farm?
 
@@ -84,7 +97,7 @@ Because the potatoes have eyes, the corn has ears, and the beans stalk.
 --------------------------------------------------------------------------------
 cathy (to joe):
 
-Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again.
 
 Why couldn't the bicycle stand up by itself?
 
@@ -92,8 +105,6 @@ Because it was two-tired!
 
 --------------------------------------------------------------------------------
 ```
-
-
 
 ```python
 result = joe.initiate_chat(
@@ -118,7 +129,7 @@ Because they make up everything!
 --------------------------------------------------------------------------------
 joe (to cathy):
 
-Haha, that's a good one, Cathy! Okay, my turn. 
+Haha, that's a good one, Cathy! Okay, my turn.
 
 Why don't we ever tell secrets on a farm?
 
@@ -127,7 +138,7 @@ Because the potatoes have eyes, the corn has ears, and the beans stalk.
 --------------------------------------------------------------------------------
 cathy (to joe):
 
-Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again.
 
 Why couldn't the bicycle stand up by itself?
 
@@ -154,9 +165,8 @@ Because he was outstanding in his field!
 --------------------------------------------------------------------------------
 ```
 
-
-
 ## Agent-triggered termination
+
 You can also terminate a conversation by configuring parameters of an agent.
 Currently, there are two parameters you can configure:
 
@@ -166,7 +176,6 @@ Currently, there are two parameters you can configure:
 ### Using `max_consecutive_auto_reply`
 
 In the example below lets set `max_consecutive_auto_reply` to `1` and notice how this ensures that Joe only replies once.
-
 
 ```python
 joe = ConversableAgent(
@@ -197,7 +206,7 @@ Because they make up everything!
 --------------------------------------------------------------------------------
 joe (to cathy):
 
-Haha, that's a good one, Cathy! Okay, my turn. 
+Haha, that's a good one, Cathy! Okay, my turn.
 
 Why don't we ever tell secrets on a farm?
 
@@ -206,7 +215,7 @@ Because the potatoes have eyes, the corn has ears, and the beans stalk.
 --------------------------------------------------------------------------------
 cathy (to joe):
 
-Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again.
 
 Why couldn't the bicycle stand up by itself?
 
@@ -219,7 +228,6 @@ Because it was two-tired!
 
 Let's set the termination message to "GOOD BYE" and see how the conversation terminates.
 
-
 ```python
 joe = ConversableAgent(
     "joe",
@@ -231,6 +239,7 @@ joe = ConversableAgent(
 
 result = joe.initiate_chat(cathy, message="Cathy, tell me a joke and then say the words GOOD BYE.")
 ```
+
 ```python
 joe (to cathy):
 
@@ -248,8 +257,6 @@ GOOD BYE!
 --------------------------------------------------------------------------------
 ```
 
-
-
 Notice how the conversation ended based on contents of cathy's message!
 
 ## Summary
@@ -263,4 +270,3 @@ depends on the `human_input_mode` argument of the `ConversableAgent` class.
 For example, when mode is `NEVER` the termination conditions above will end the conversations.
 But when mode is `ALWAYS` or `TERMINATE`, it will not terminate immediately.
 We will describe this behavior and explain why it is important in the next chapter.
-
