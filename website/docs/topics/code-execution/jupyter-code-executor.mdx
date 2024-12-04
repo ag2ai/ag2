@@ -1,4 +1,6 @@
-# Jupyter Code Executor
+---
+title: "Jupyter Code Executor"
+---
 
 AutoGen is able to execute code in a stateful Jupyter kernel, this is in contrast to the command line code executor where each code block is executed in a new process. This means that you can define variables in one code block and use them in another. One of the interesting properties of this is that when an error is encountered, only the failing code needs to be re-executed, and not the entire script.
 
@@ -18,7 +20,6 @@ pip install 'pyautogen[jupyter-executor]'
 
 To run a Docker based Jupyter server, the [`DockerJupyterServer`](/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) can be used.
 
-
 ```python
 from autogen.coding import CodeBlock
 from autogen.coding.jupyter import DockerJupyterServer, JupyterCodeExecutor
@@ -36,29 +37,25 @@ with DockerJupyterServer() as server:
 
     exit_code=0 output='Hello, World!\n' output_files=[]
 
-
 By default the [`DockerJupyterServer`](/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) will build and use a bundled Dockerfile, which can be seen below:
-
 
 ```python
 print(DockerJupyterServer.DEFAULT_DOCKERFILE)
 ```
 
     FROM quay.io/jupyter/docker-stacks-foundation
-    
+
     SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-    
+
     USER ${NB_UID}
     RUN mamba install --yes jupyter_kernel_gateway ipykernel &&     mamba clean --all -f -y &&     fix-permissions "${CONDA_DIR}" &&     fix-permissions "/home/${NB_USER}"
-    
+
     ENV TOKEN="UNSET"
     CMD python -m jupyter kernelgateway --KernelGatewayApp.ip=0.0.0.0     --KernelGatewayApp.port=8888     --KernelGatewayApp.auth_token="${TOKEN}"     --JupyterApp.answer_yes=true     --JupyterWebsocketPersonality.list_kernels=true
-    
-    EXPOSE 8888
-    
-    WORKDIR "${HOME}"
-    
 
+    EXPOSE 8888
+
+    WORKDIR "${HOME}"
 
 #### Custom Docker Image
 
@@ -67,9 +64,8 @@ A custom image can be used by passing the `custom_image_name` parameter to the [
 - The image must have [Jupyer Kernel Gateway](https://jupyter-kernel-gateway.readthedocs.io/en/latest/) installed and running on port 8888 for the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) to be able to connect to it.
 - Respect the `TOKEN` environment variable, which is used to authenticate the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) with the Jupyter server.
 - Ensure the `jupyter kernelgateway` is started with:
-    - `--JupyterApp.answer_yes=true` - this ensures that the kernel gateway does not prompt for confirmation when shut down.
-    - `--JupyterWebsocketPersonality.list_kernels=true` - this ensures that the kernel gateway lists the available kernels.
-
+  - `--JupyterApp.answer_yes=true` - this ensures that the kernel gateway does not prompt for confirmation when shut down.
+  - `--JupyterWebsocketPersonality.list_kernels=true` - this ensures that the kernel gateway lists the available kernels.
 
 If you wanted to add extra dependencies (for example `matplotlib` and `numpy`) to this image you could customize the Dockerfile like so:
 
@@ -97,28 +93,27 @@ EXPOSE 8888
 WORKDIR "${HOME}"
 ```
 
-````{=mdx}
+```{=mdx}
 :::tip
 To learn about how to combine AutoGen in a Docker image while also executing code in a separate image go [here](/docs/topics/code-execution/cli-code-executor#combining-autogen-in-docker-with-a-docker-based-executor).
 :::
-````
+```
 
 ### Local
 
-````mdx-code-block
+```mdx-code-block
 :::danger
 The local version will run code on your local system. Use it with caution.
 :::
-````
+```
 
 To run a local Jupyter server, the [`LocalJupyterServer`](/docs/reference/coding/jupyter/local_jupyter_server#localjupyterserver) can be used.
 
-````{=mdx}
+```{=mdx}
 :::warning
 The [`LocalJupyterServer`](/docs/reference/coding/jupyter/local_jupyter_server#localjupyterserver) does not function on Windows due to a bug. In this case, you can use the [`DockerJupyterServer`](/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) instead or use the [`EmbeddedIPythonCodeExecutor`](/docs/reference/coding/jupyter/embedded_ipython_code_executor). Do note that the intention is to remove the [`EmbeddedIPythonCodeExecutor`](/docs/reference/coding/jupyter/embedded_ipython_code_executor) when the bug is fixed.
 :::
-````
-
+```
 
 ```python
 from autogen.coding import CodeBlock
@@ -155,7 +150,6 @@ When Jupyter outputs an image, this is saved as a file into the `output_dir` of 
 
 A single server can support multiple agents, as each executor will create its own kernel. To assign an executor to an agent it can be done like so:
 
-
 ```python
 from pathlib import Path
 
@@ -179,8 +173,7 @@ code_executor_agent = ConversableAgent(
 
 When using code execution it is critical that you update the system prompt of agents you expect to write code to be able to make use of the executor. For example, for the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) you might setup a code writing agent like so:
 
-
-```python
+````python
 # The code writer agent's system message is to instruct the LLM on how to
 # use the Jupyter code executor with IPython kernel.
 code_writer_system_message = """
@@ -191,12 +184,15 @@ When you write Python code, put the code in a markdown code block with the langu
 For example:
 ```python
 x = 3
-```
+````
+
 You can use the variable `x` in subsequent code blocks.
+
 ```python
 print(x)
 ```
 
+```python
 Write code incrementally and leverage the statefulness of the kernel to avoid repeating code.
 Import libraries in a separate code block.
 Define a function or a class in a separate code block.
@@ -221,8 +217,7 @@ code_writer_agent = ConversableAgent(
 
 Then we can use these two agents to solve a problem:
 
-
-```python
+````python
 import pprint
 
 chat_result = code_executor_agent.initiate_chat(
@@ -230,31 +225,30 @@ chat_result = code_executor_agent.initiate_chat(
 )
 
 pprint.pprint(chat_result)
-```
 
     code_executor_agent (to code_writer):
-    
+
     Write Python code to calculate the 14th Fibonacci number.
-    
+
     --------------------------------------------------------------------------------
     code_writer (to code_executor_agent):
-    
+
     Sure. The Fibonacci sequence is a series of numbers where the next number is found by adding up the two numbers before it. We know that the first two Fibonacci numbers are 0 and 1. After that, the series looks like:
-    
+
     0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, ...
-    
+
     So, let's define a Python function to calculate the nth Fibonacci number.
-    
+
     --------------------------------------------------------------------------------
     code_executor_agent (to code_writer):
-    
-    
-    
+
+
+
     --------------------------------------------------------------------------------
     code_writer (to code_executor_agent):
-    
+
     Here is the Python function to calculate the nth Fibonacci number:
-    
+
     ```python
     def fibonacci(n):
         if n <= 1:
@@ -265,20 +259,20 @@ pprint.pprint(chat_result)
                 a, b = b, a+b
             return b
     ```
-    
+
     Now, let's use this function to calculate the 14th Fibonacci number.
-    
+
     ```python
     fibonacci(14)
     ```
-    
+
     --------------------------------------------------------------------------------
     code_executor_agent (to code_writer):
-    
+
     exitcode: 0 (execution succeeded)
-    Code output: 
+    Code output:
     377
-    
+
     --------------------------------------------------------------------------------
     ChatResult(chat_id=None,
                chat_history=[{'content': 'Write Python code to calculate the 14th '
@@ -335,10 +329,9 @@ pprint.pprint(chat_result)
                                      'total_tokens': 757},
                       'total_cost': 0.028499999999999998}),
                human_input=[])
-
+````
 
 Finally, stop the server. Or better yet use a context manager for it to be stopped automatically.
-
 
 ```python
 server.stop()

@@ -68,8 +68,8 @@
         "website/docs/tutorial/introduction",
         "website/docs/tutorial/chat-termination",
         "website/docs/tutorial/human-in-the-loop",
-        "website/docs/tutorial/tool-use",
         "website/docs/tutorial/code-executors",
+        "website/docs/tutorial/tool-use",
         "website/docs/tutorial/conversation-patterns",
         "website/docs/tutorial/what-next"
       ]

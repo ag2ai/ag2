@@ -1,4 +1,6 @@
-# Multi-agent Conversation Framework
+---
+title: "Multi-agent Conversation Framework"
+---
 
 AutoGen offers a unified multi-agent conversation framework as a high-level abstraction of using foundation models. It features capable, customizable and conversable agents which integrate LLMs, tools, and humans via automated agent chat.
 By automating chat among multiple capable agents, one can easily make them collectively perform tasks autonomously or with human feedback, including tasks that require using tools via code.
@@ -19,7 +21,7 @@ The figure below shows the built-in agents in AutoGen.
 ![Agent Chat Example](images/autogen_agents.png)
 
 We have designed a generic [`ConversableAgent`](../reference/agentchat/conversable_agent.md#conversableagent-objects)
- class for Agents that are capable of conversing with each other through the exchange of messages to jointly finish a task. An agent can communicate with other agents and perform actions. Different agents can differ in what actions they perform after receiving messages. Two representative subclasses are [`AssistantAgent`](../reference/agentchat/assistant_agent.md#assistantagent-objects) and [`UserProxyAgent`](../reference/agentchat/user_proxy_agent.md#userproxyagent-objects)
+class for Agents that are capable of conversing with each other through the exchange of messages to jointly finish a task. An agent can communicate with other agents and perform actions. Different agents can differ in what actions they perform after receiving messages. Two representative subclasses are [`AssistantAgent`](../reference/agentchat/assistant_agent.md#assistantagent-objects) and [`UserProxyAgent`](../reference/agentchat/user_proxy_agent.md#userproxyagent-objects)
 
 - The [`AssistantAgent`](../reference/agentchat/assistant_agent.md#assistantagent-objects) is designed to act as an AI assistant, using LLMs by default but not requiring human input or code execution. It could write Python code (in a Python coding block) for a user to execute when a message (typically a description of a task that needs to be solved) is received. Under the hood, the Python code is written by LLM (e.g., GPT-4). It can also receive the execution results and suggest corrections or bug fixes. Its behavior can be altered by passing a new system message. The LLM [inference](/docs/Use-Cases/enhanced_inference) configuration can be configured via [`llm_config`].
 
@@ -28,7 +30,7 @@ We have designed a generic [`ConversableAgent`](../reference/agentchat/conversab
 The auto-reply capability of [`ConversableAgent`](../reference/agentchat/conversable_agent.md#conversableagent-objects) allows for more autonomous multi-agent communication while retaining the possibility of human intervention.
 One can also easily extend it by registering reply functions with the [`register_reply()`](../reference/agentchat/conversable_agent.md#register_reply) method.
 
-In the following code, we create an [`AssistantAgent`](../reference/agentchat/assistant_agent.md#assistantagent-objects)  named "assistant" to serve as the assistant and a [`UserProxyAgent`](../reference/agentchat/user_proxy_agent.md#userproxyagent-objects) named "user_proxy" to serve as a proxy for the human user. We will later employ these two agents to solve a task.
+In the following code, we create an [`AssistantAgent`](../reference/agentchat/assistant_agent.md#assistantagent-objects) named "assistant" to serve as the assistant and a [`UserProxyAgent`](../reference/agentchat/user_proxy_agent.md#userproxyagent-objects) named "user_proxy" to serve as a proxy for the human user. We will later employ these two agents to solve a task.
 
 ```python
 import os
@@ -80,6 +82,7 @@ AutoGen, by integrating conversation-driven control utilizing both programming a
 1. Registered auto-reply
 
 With the pluggable auto-reply function, one can choose to invoke conversations with other agents depending on the content of the current message and context. For example:
+
 - Hierarchical chat like in [OptiGuide](https://github.com/ag2ai/optiguide).
 - [Dynamic Group Chat](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_groupchat.ipynb) which is a special form of hierarchical chat. In the system, we register a reply function in the group chat manager, which broadcasts messages and decides who the next speaker will be in a group chat setting.
 - [Finite State Machine graphs to set speaker transition constraints](https://ag2ai.github.io/ag2/docs/notebooks/agentchat_groupchat_finite_state_machine) which is a special form of dynamic group chat. In this approach, a directed transition matrix is fed into group chat. Users can specify legal transitions or specify disallowed transitions.
