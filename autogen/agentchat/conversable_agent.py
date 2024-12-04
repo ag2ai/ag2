@@ -138,8 +138,9 @@ class ConversableAgent(LLMAgent):
             silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
                 silent in each function.
             context_variables (dict or None): Context variables that provide a persistent context for the agent.
-                The passed in context variables will be deep-copied, not referenced.
-                Only used in Swarms at this stage.
+                Note: Will maintain a reference to the passed in context variables (enabling a shared context)
+                Only used in Swarms at this stage:
+                https://ag2ai.github.io/ag2/docs/reference/agentchat/contrib/swarm_agent
             response_format (BaseModel): Used to specify structured response format for the agent. Currently only available for the OpenAI client.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
@@ -200,7 +201,7 @@ class ConversableAgent(LLMAgent):
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
 
-        self._context_variables = copy.deepcopy(context_variables) if context_variables is not None else {}
+        self._context_variables = context_variables if context_variables is not None else {}
 
         # Setting up code execution.
         # Do not register code execution reply if code execution is disabled.
