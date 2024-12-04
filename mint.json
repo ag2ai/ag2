@@ -61,7 +61,7 @@
       "pages": ["website/docs/Getting-Started"]
     },
     {
-      "group": "",
+      "group": "Installation",
       "pages": [
         "website/docs/installation/Installation",
         "website/docs/installation/Docker",
@@ -158,12 +158,9 @@
         },
         "website/docs/topics/retrieval_augmentation",
         "website/docs/topics/swarm",
-        "website/docs/topics/task_decomposition"
+        "website/docs/topics/task_decomposition",
+        "website/docs/FAQ"
       ]
-    },
-    {
-      "group": "",
-      "pages": ["website/docs/FAQ"]
     },
     {
       "group": "AutoGen Studio",
@@ -199,16 +196,10 @@
         "website/docs/contributor-guide/file-bug-report",
         "website/docs/contributor-guide/maintainer",
         "website/docs/contributor-guide/pre-commit",
-        "website/docs/contributor-guide/tests"
+        "website/docs/contributor-guide/tests",
+        "website/docs/Research",
+        "website/docs/Migration-Guide"
       ]
-    },
-    {
-      "group": "",
-      "pages": ["website/docs/Research"]
-    },
-    {
-      "group": "",
-      "pages": ["website/docs/Migration-Guide"]
     },
     {
       "group": "Talks",

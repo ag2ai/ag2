@@ -1,9 +1,6 @@
 ---
 title: "Getting Started"
 ---
-import Tabs from "@theme/Tabs";
-import TabItem from "@theme/TabItem";
-
 
 AutoGen is an open-source programming framework for building AI agents and facilitating
 cooperation among multiple agents to solve tasks. AutoGen aims to provide an easy-to-use
@@ -39,9 +36,14 @@ Microsoft, Penn State University, and University of Washington.
 ```
 pip install autogen
 ```
-<Tip>
-You can also install with different [optional dependencies](/docs/installation/Optional-Dependencies).
-</Tip>
+
+<div class="tip">
+  <Tip>
+    You can also install with different [optional
+    dependencies](/docs/installation/Optional-Dependencies).
+  </Tip>
+</div>
+
 <Tabs>
   <Tab title="No code execution">
     ```python
@@ -58,12 +60,15 @@ You can also install with different [optional dependencies](/docs/installation/O
         message="Tell me a joke about NVDA and TESLA stock prices.",
     )
     ```
+
   </Tab>
   
   <Tab title="Local execution">
-    <Warning>
-      When asked, be sure to check the generated code before continuing to ensure it is safe to run.
-    </Warning>
+    <div class="warning">
+      <Warning>
+        When asked, be sure to check the generated code before continuing to ensure it is safe to run.
+      </Warning>
+    </div>
 
     ```python
     import os
@@ -83,6 +88,7 @@ You can also install with different [optional dependencies](/docs/installation/O
         message="Plot a chart of NVDA and TESLA stock price change YTD.",
     )
     ```
+
   </Tab>
   
   <Tab title="Docker execution">
@@ -107,13 +113,16 @@ You can also install with different [optional dependencies](/docs/installation/O
     ```
 
     Open `coding/plot.png` to see the generated plot.
+
   </Tab>
 </Tabs>
 
-
-<Tip>
-Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
-</Tip>
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 #### Multi-Agent Conversation Framework
 
