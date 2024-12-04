@@ -2,9 +2,10 @@ h1,
 h2,
 h3,
 h4 {
-  letter-spacing: 0.1em !important;
+  letter-spacing: 0.01em !important;
   --font-family-headings-custom: "Jersey 10" !important;
   text-transform: uppercase !important;
+  font-weight: 400 !important;
 }
 
 h1 {
