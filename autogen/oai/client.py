@@ -10,7 +10,7 @@ import inspect
 import logging
 import sys
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
 from pydantic import BaseModel, schema_json_of
 
@@ -212,7 +212,7 @@ class ModelClient(Protocol):
     ) -> ModelClientResponseProtocol: ...  # pragma: no cover
 
     def message_retrieval(
-        self, response: ModelClientResponseProtocol
+        self, response: ModelClientResponseProtocol, response_format: Optional[BaseModel] = None
     ) -> Union[List[str], List[ModelClient.ModelClientResponseProtocol.Choice.Message]]:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -239,12 +239,16 @@ class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
     @staticmethod
-    def _convert_to_chat_completion(parsed: ParsedChatCompletion) -> ChatCompletion:
+    def _convert_to_chat_completion(parsed: ParsedChatCompletion, response_format: BaseModel) -> ChatCompletion:
         # Helper function to convert ParsedChatCompletionMessage to ChatCompletionMessage
         def convert_message(parsed_message: ParsedChatCompletionMessage) -> ChatCompletionMessage:
             return ChatCompletionMessage(
                 role=parsed_message.role,
-                content=parsed_message.content,
+                content=(
+                    response_format.model_validate_json(parsed_message.content).format()
+                    if isinstance(response_format, FormatterProtocol)
+                    else parsed_message.content
+                ),
                 function_call=parsed_message.function_call,
             )
 
@@ -321,7 +325,7 @@ class OpenAIClient:
                     kwargs.pop("stream")
                 kwargs["response_format"] = response_format
                 return OpenAIClient._convert_to_chat_completion(
-                    self._oai_client.beta.chat.completions.parse(*args, **kwargs)
+                    self._oai_client.beta.chat.completions.parse(*args, **kwargs), response_format
                 )
 
             create_or_parse = _create_or_parse
@@ -478,6 +482,11 @@ class OpenAIClient:
             "cost": response.cost if hasattr(response, "cost") else 0,
             "model": response.model,
         }
+
+
+@runtime_checkable
+class FormatterProtocol(Protocol):
+    def format(self) -> str: ...
 
 
 class OpenAIWrapper:
@@ -944,6 +953,7 @@ class OpenAIWrapper:
                 actual_usage = client.get_usage(response)
                 total_usage = actual_usage.copy() if actual_usage is not None else total_usage
                 self._update_usage(actual_usage=actual_usage, total_usage=total_usage)
+
                 if cache_client is not None:
                     # Cache the response
                     with cache_client as cache:
