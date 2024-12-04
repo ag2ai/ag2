@@ -212,7 +212,7 @@ class ModelClient(Protocol):
     ) -> ModelClientResponseProtocol: ...  # pragma: no cover
 
     def message_retrieval(
-        self, response: ModelClientResponseProtocol, response_format: Optional[BaseModel] = None
+        self, response: ModelClientResponseProtocol
     ) -> Union[List[str], List[ModelClient.ModelClientResponseProtocol.Choice.Message]]:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
