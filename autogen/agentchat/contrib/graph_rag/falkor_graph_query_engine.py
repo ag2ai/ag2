@@ -6,7 +6,7 @@ import os
 import warnings
 from typing import List
 
-from falkordb import FalkorDB
+from falkordb import FalkorDB, Graph
 from graphrag_sdk import KnowledgeGraph, Source
 from graphrag_sdk.model_config import KnowledgeGraphModelConfig
 from graphrag_sdk.models import GenerativeModel
@@ -62,10 +62,8 @@ class FalkorGraphQueryEngine:
         Connect to an existing knowledge graph.
         """
         if self.name in self.falkordb.list_graphs():
-            graph = self.falkordb.select_graph(self.name)
-
             try:
-                self.ontology = Ontology.from_graph(graph)
+                self.ontology = self._load_ontology_from_db(self.name)
             except Exception:
                 warnings.warn("Graph Ontology is not loaded.")
 
@@ -120,8 +118,7 @@ class FalkorGraphQueryEngine:
             self._chat_session = self.knowledge_graph.chat_session()
 
             # Save Ontology to graph for future access.
-            graph = self.falkordb.select_graph(self.name)
-            self.ontology.save_to_graph(graph)
+            self._save_ontology_to_db(self.name, self.ontology)
         else:
             raise ValueError("No input documents could be loaded.")
 
@@ -149,3 +146,18 @@ class FalkorGraphQueryEngine:
         self._chat_session.last_answer = response["response"]
 
         return GraphStoreQueryResult(answer=response["response"], results=[])
+
+    def __get_ontology_storage_graph(self, graph_name: str) -> Graph:
+        ontology_table_name = graph_name + "_ontology"
+        return self.falkor_db.select_graph(ontology_table_name)
+
+    def _save_ontology_to_db(self, graph_name: str, ontology: Ontology):
+        """
+        Save graph ontology to a separate table with {graph_name}_ontology
+        """
+        graph = self.__get_ontology_storage_graph(graph_name)
+        ontology.save_to_graph(graph)
+
+    def _load_ontology_from_db(self, graph_name: str) -> Ontology:
+        graph = self.__get_ontology_storage_graph(graph_name)
+        return Ontology.from_graph(graph)
