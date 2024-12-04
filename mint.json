@@ -5,6 +5,9 @@
     "dark": "/website/static/img/ag2-white.svg",
     "light": "/website/static/img/ag2.svg"
   },
+  "search": {
+    "prompt": "Search or ask..."
+  },
   "favicon": "/website/static/img/ag2.svg",
   "colors": {
     "primary": "#000000",

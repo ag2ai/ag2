@@ -1,4 +1,6 @@
-# Swarm Ochestration
+---
+title: Swarm Ochestration
+---
 
 With AG2, you can initiate a Swarm Chat similar to OpenAI's [Swarm](https://github.com/openai/swarm). This orchestration offers two main features:
 
@@ -207,13 +209,13 @@ for func_schema in agent_1.llm_config["tools"]:
 print("Agent 3 function schema:")
 for func_schema in agent_3.llm_config["tools"]:
     print(func_schema)
-```
 
     Agent 1 function schema:
     {'type': 'function', 'function': {'description': '', 'name': 'update_context_1', 'parameters': {'type': 'object', 'properties': {}}}}
     {'type': 'function', 'function': {'description': 'Transfer to agent 2', 'name': 'transfer_to_agent_2', 'parameters': {'type': 'object', 'properties': {}}}}
     Agent 3 function schema:
     {'type': 'function', 'function': {'description': 'Transfer to Agent 4', 'name': 'transfer_to_Agent_4', 'parameters': {'type': 'object', 'properties': {}}}}
+```
 
 ### Start Chat
 
@@ -226,7 +228,6 @@ chat_result, context_variables, last_agent = initiate_swarm_chat(
     context_variables=context_variables,
     after_work=AFTER_WORK(AfterWorkOption.TERMINATE),  # this is the default
 )
-```
 
     _User (to chat_manager):
 
@@ -375,12 +376,13 @@ chat_result, context_variables, last_agent = initiate_swarm_chat(
     The random number 27 has been successfully updated in context 3.
 
     --------------------------------------------------------------------------------
+```
 
 ```python
 print(context_variables)
-```
 
     {'1': True, '2': True, '3': 27}
+```
 
 ### Demo with User Agent
 
@@ -418,7 +420,6 @@ chat_result, _, _ = initiate_swarm_chat(
     user_agent=user_agent,
     messages="start",
 )
-```
 
     User (to chat_manager):
 
@@ -498,3 +499,4 @@ chat_result, _, _ = initiate_swarm_chat(
     The skeleton joke works similarly. When it says skeletons "don't have the guts," it plays on the literal fact that skeletons don't have internal organs (guts), and metaphorically, "having guts" means having courage. The humor comes from this clever wordplay.
 
     --------------------------------------------------------------------------------
+```

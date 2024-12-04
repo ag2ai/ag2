@@ -30,11 +30,26 @@ h4 {
   background: #ffffff;
   border: 2px solid #000000;
   box-shadow: 2px 2px 0px rgba(62, 37, 13, 0.24);
+
+  --font-family-headings-custom: "Jersey 10" !important;
+  font-family: var(
+    --font-family-headings-custom,
+    var(--font-inter, sans-serif)
+  );
+  font-size: 18px;
+  color: #000000;
+
+  span {
+    color: #9ea3a2;
+    font-size: 16px;
+    font-weight: 400;
+  }
 }
 
 .dark #search-bar-entry {
   background: #000000;
   border: 2px solid #ffffff;
+  color: #ffffff;
 }
 
 #content-area {
@@ -46,16 +61,26 @@ h4 {
   border-width: 0px 1px;
   border-style: solid;
   border-color: rgb(var(--gray-500) / 0.05);
-  margin-left: 380px;
+  margin-left: 320px;
   margin-top: -2.5rem;
 
-  width: calc(100% - 760px);
+  width: 800px !important;
+  min-width: 800px !important;
 
+  @media screen and (max-width: 1600px) {
+    width: 700px !important;
+    min-width: 700px !important;
+  }
   @media screen and (max-width: 1200px) {
+    width: 100%;
+    min-width: 100% !important;
     margin-top: -2.5rem;
     margin-left: -1rem;
     margin-right: -1rem;
   }
+}
+#table-of-contents {
+  padding-left: 0;
 }
 
 .dark #content-area {
@@ -75,11 +100,17 @@ h4 {
   font-weight: 400;
   color: #ffffff;
 }
+
 #topbar-cta-button > a > span {
   background: #000000 !important;
   border: 2px solid #ffffff !important;
   box-shadow: 2px 2px 0px rgba(62, 37, 13, 0.24) !important;
   border-radius: 0 !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+#topbar-cta-button:hover > a > span {
+  box-shadow: 2px 2px 0px rgba(62, 37, 13, 0.24), 2px 2px 0px #ffffff !important;
 }
 
 #topbar-cta-button * {
