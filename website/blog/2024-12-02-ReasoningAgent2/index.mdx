@@ -77,7 +77,7 @@ from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, visualize_
 config_list = [{"model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]
 
 # Create a reasoning agent with beam search
-reason_agent = ReasoningAgent(
+reasoning_agent = ReasoningAgent(
     name="reason_agent",
     llm_config={"config_list": config_list},
     verbose=False,
@@ -92,6 +92,10 @@ user_proxy = UserProxyAgent(
     code_execution_config={"use_docker": False},
     max_consecutive_auto_reply=10,
 )
+
+question = "What is the expected maximum dice value if you can roll a 6-sided dice three times?"
+
+user_proxy.initiate_chat(reasoning_agent, message=question)
 ```
 
 ## Larger Beam Size for Complex Problems
@@ -99,6 +103,35 @@ user_proxy = UserProxyAgent(
 For more complex problems, we can increase the beam size to explore multiple reasoning paths in parallel:
 
 ```python
+
+def last_meaningful_msg(sender, recipient, summary_args):
+    """
+    This can be modified based on your required summary method.
+    """
+    import warnings
+
+    if sender == recipient:
+        return "TERMINATE"
+
+    summary = ""
+    chat_messages = recipient.chat_messages[sender]
+
+    for msg in reversed(chat_messages):
+        try:
+            content = msg["content"]
+            if isinstance(content, str):
+                summary = content.replace("TERMINATE", "")
+            elif isinstance(content, list):
+                # Remove the `TERMINATE` word in the content list.
+                summary = "\n".join(
+                    x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
+                )
+            if summary.strip().rstrip():
+                return summary
+        except (IndexError, AttributeError) as e:
+            warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
+    return summary
+
 reason_agent = ReasoningAgent(
     name="reason_agent",
     llm_config={"config_list": config_list},
@@ -112,7 +145,7 @@ task = "Design a mixed integer linear program for a coffee roasting supply chain
 response = user_proxy.initiate_chat(
     reason_agent,
     message=task,
-    summary_method=last_meaningful_msg
+    summary_method=last_meaningful_msg # can be default i.e., "last_msg"
 )
 ```
 
@@ -292,4 +325,4 @@ The implementation is flexible and can be customized for different types of prob
 * [Example notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_reasoning_agent.ipynb)
 * [The Original research paper about Tree of Thoughts](https://arxiv.org/abs/2305.10601) from Google DeepMind and Princeton University.
 
-*Do you have interesting use cases for ReasoningAgent? Would you like to see more features or improvements? Please join our [Discord](https://aka.ms/autogen-dc) server for discussion.*
+*Do you have interesting use cases for ReasoningAgent? Would you like to see more features or improvements? Please join our [Discord](https://discord.com/invite/pAbnFJrkgZ) server for discussion.*
