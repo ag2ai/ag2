@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import pathlib
+import random
 import re
 import time
 import traceback
@@ -183,13 +184,21 @@ class MultimodalWebSurfer(ConversableAgent):
         self._playwright = await async_playwright().start()
 
         # Create the context -- are we launching persistent?
-        if browser_data_dir is None:
-            browser = await self._playwright.chromium.launch(**launch_args)
-            self._context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        if browser_data_dir:
+            self._context = await self._playwright.chromium.launch_persistent_context(
+                browser_data_dir, 
+                user_agent=f"{ua} {self._generate_random_string(4)}",
+                **launch_args
             )
         else:
-            self._context = await self._playwright.chromium.launch_persistent_context(browser_data_dir, **launch_args)
+            browser = await self._playwright.chromium.launch(**launch_args)
+            self._context = await browser.new_context(
+                user_agent=f"{ua} {self._generate_random_string(4)}",
+                viewport={'width': 1920 + random.randint(-50, 50), 'height': 1080 + random.randint(-30, 30)},
+                locale=random.choice(['en-US', 'en-GB', 'en-CA']),
+                timezone_id=random.choice(['America/New_York', 'Europe/London', 'Asia/Tokyo'])
+            )
 
         # Create the page
         self._context.set_default_timeout(60000)  # One minute
@@ -1051,6 +1060,20 @@ class MultimodalWebSurfer(ConversableAgent):
         assert is_valid_response
         assert isinstance(response, str)
         return response
+
+    def _generate_random_string(self, length: int) -> str:
+        """Generate a random string of specified length.
+
+        Args:
+            length (int): Length of the random string to generate
+
+        Returns:
+            str: A random string containing letters and numbers
+        """
+        import string
+        import random
+        characters = string.ascii_letters + string.digits
+        return ''.join(random.choice(characters) for _ in range(length))
 
     async def test_set_of_mark(self, url: str) -> Image.Image:
         """
