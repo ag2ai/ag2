@@ -2,14 +2,31 @@
 title: "Allowing Human Feedback in Agents"
 sidebarTitle: "Human in the loop"
 ---
+
 <div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
-  <a href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
-    <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" style={{ height: "20px", pointerEvents: "none" }} />
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/tutorial/human-in-the-loop.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
   </a>
 </div>
 <div style={{ display: "inline-block", height: "20px" }}>
-  <a href="https://github.com/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
-    <img src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open in GitHub" style={{ height: "20px", pointerEvents: "none" }} />
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/tutorial/human-in-the-loop.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
   </a>
 </div>
 
@@ -34,13 +51,13 @@ the `human_input_mode` argument of the `ConversableAgent`. The three modes are:
 
 1. `NEVER`: human input is never requested.
 2. `TERMINATE` (default): human input is only requested when a termination condition is
-    met. Note that in this mode if the human chooses to intercept and reply, the conversation continues
-    and the counter used by `max_consecutive_auto_reply` is reset.
+   met. Note that in this mode if the human chooses to intercept and reply, the conversation continues
+   and the counter used by `max_consecutive_auto_reply` is reset.
 3. `ALWAYS`: human input is always requested and the human can choose to skip and trigger an auto-reply,
-    intercept and provide feedback, or terminate the conversation. Note that in this mode
-    termination based on `max_consecutive_auto_reply` is ignored.
+   intercept and provide feedback, or terminate the conversation. Note that in this mode
+   termination based on `max_consecutive_auto_reply` is ignored.
 
-The previous chapters already showed many examples of the cases when `human_input_mode` is `NEVER`. 
+The previous chapters already showed many examples of the cases when `human_input_mode` is `NEVER`.
 Below we show one such example again and then show the differences when this mode is set to `ALWAYS` and `TERMINATE` instead.
 
 ## Human Input Mode = `NEVER`
@@ -50,9 +67,8 @@ are used to terminate.
 This mode is useful when you want your agents to act fully autonomously.
 
 Here is an example of using this mode to run a simple guess-a-number game between
-two agents, the termination message is set to check for the 
+two agents, the termination message is set to check for the
 number that is the correct guess.
-
 
 ```python
 import os
@@ -83,6 +99,7 @@ result = agent_with_number.initiate_chat(
     message="I have a number between 1 and 100. Guess it!",
 )
 ```
+
 ```python
 agent_with_number (to agent_guess_number):
 
@@ -156,10 +173,10 @@ Is it 53?
 --------------------------------------------------------------------------------
 ```
 
-Yay! The game is over. The guessing agent got the number correctly 
+Yay! The game is over. The guessing agent got the number correctly
 using binary search -- very efficient!
 You can see that the conversation was terminated after the guessing agent
-said the correct number, which triggered 
+said the correct number, which triggered
 the message-based termination condition.
 
 ## Human Input Mode = `ALWAYS`
@@ -170,7 +187,6 @@ Let us see this mode in action by playing the same game as before with the agent
 participating in the game as a human.
 We will be the agent that is guessing the number, and play against the agent
 with the number from before.
-
 
 ```python
 human_proxy = ConversableAgent(
@@ -237,16 +253,15 @@ to give out the number in the end.
 ## Human Input Mode = `TERMINATE`
 
 In this mode, human input is only requested when a termination condition is
-met. **If the human chooses to intercept and reply, the counter will be reset**; if 
+met. **If the human chooses to intercept and reply, the counter will be reset**; if
 the human chooses to skip, the automatic reply mechanism will be used; if the human
 chooses to terminate, the conversation will be terminated.
 
 Let us see this mode in action by playing the same game again, but this time
-the guessing agent will only have two chances to guess the number, and if it 
+the guessing agent will only have two chances to guess the number, and if it
 fails, the human will be asked to provide feedback,
 and the guessing agent gets two more chances.
 If the correct number is guessed eventually, the conversation will be terminated.
-
 
 ```python
 agent_with_number = ConversableAgent(
@@ -275,6 +290,7 @@ result = agent_with_number.initiate_chat(
     message="I have a number between 1 and 100. Guess it!",
 )
 ```
+
 ```
 agent_with_number (to agent_guess_number):
 
@@ -300,7 +316,7 @@ Is it 75?
 --------------------------------------------------------------------------------
 agent_with_number (to agent_guess_number):
 
-It is too high my friend. 
+It is too high my friend.
 
 --------------------------------------------------------------------------------
 agent_guess_number (to agent_with_number):
@@ -344,7 +360,7 @@ Is it 54?
 --------------------------------------------------------------------------------
 agent_with_number (to agent_guess_number):
 
-Almost there! 
+Almost there!
 
 --------------------------------------------------------------------------------
 agent_guess_number (to agent_with_number):

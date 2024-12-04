@@ -4,23 +4,37 @@ sidebarTitle: "Introduction"
 ---
 
 <div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
-  <a href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
-    <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" style={{ height: "20px", pointerEvents: "none" }} />
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/tutorial/introduction.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
   </a>
 </div>
 <div style={{ display: "inline-block", height: "20px" }}>
-  <a href="https://github.com/ag2ai/ag2/blob/main/repo_relative_notebook" target="_blank" style={{ height: "20px", display: "inline-flex", alignItems: "center" }}>
-    <img src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open in GitHub" style={{ height: "20px", pointerEvents: "none" }} />
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/tutorial/introduction.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
   </a>
 </div>
-
 
 Welcome! AutoGen is an open-source framework that leverages multiple _agents_ to enable complex workflows. This tutorial introduces basic concepts and building blocks of AutoGen.
 
 ## Why AutoGen?
 
-> _The whole is greater than the sum of its parts._<br/>
-> -**Aristotle**
+> _The whole is greater than the sum of its parts._<br/> -**Aristotle**
 
 While there are many definitions of agents, in AutoGen, an agent is an entity that can send messages, receive messages and generate a reply using models, tools, human inputs or a mixture of them.
 This abstraction not only allows agents to model real-world and abstract entities, such as people and algorithms, but it also simplifies implementation of complex workflows as collaboration among agents.
@@ -48,7 +62,6 @@ and other pluggable and customizable components.
 
 ![ConversableAgent](./assets/conversable-agent.webp)
 
-
 An example of such agents is the built-in `ConversableAgent` which supports the following components:
 
 1. A list of LLMs
@@ -56,14 +69,13 @@ An example of such agents is the built-in `ConversableAgent` which supports the 
 3. A function and tool executor
 4. A component for keeping human-in-the-loop
 
-You can switch each component on or off and customize it to suit the need of 
+You can switch each component on or off and customize it to suit the need of
 your application. For advanced users, you can add additional components to the agent
-by using [`registered_reply`](../reference/agentchat/conversable_agent/#register_reply). 
+by using [`registered_reply`](../reference/agentchat/conversable_agent/#register_reply).
 
-LLMs, for example, enable agents to converse in natural languages and transform between structured and unstructured text. 
+LLMs, for example, enable agents to converse in natural languages and transform between structured and unstructured text.
 The following example shows a `ConversableAgent` with a GPT-4 LLM switched on and other
 components switched off:
-
 
 ```python
 import os
@@ -84,16 +96,16 @@ See [LLM Configuration](/docs/topics/llm_configuration) for more details.
 
 You can ask this agent to generate a response to a question using the `generate_reply` method:
 
-
 ```python
 reply = agent.generate_reply(messages=[{"content": "Tell me a joke.", "role": "user"}])
 print(reply)
 ```
+
 ```python
 Sure, here's a light-hearted joke for you:
-    
+
 Why don't scientists trust atoms?
-    
+
 Because they make up everything!
 ```
 
@@ -101,7 +113,6 @@ Because they make up everything!
 
 In AutoGen, you can assign roles to agents and have them participate in conversations or chat with each other. A conversation is a sequence of messages exchanged between agents. You can then use these conversations to make progress on a task. For example, in the example below, we assign different roles to two agents by setting their
 `system_message`.
-
 
 ```python
 cathy = ConversableAgent(
@@ -123,10 +134,10 @@ Now that we have two comedian agents, we can ask them to start a comedy show.
 This can be done using the `initiate_chat` method.
 We set the `max_turns` to 2 to keep the conversation short.
 
-
 ```python
 result = joe.initiate_chat(cathy, message="Cathy, tell me a joke.", max_turns=2)
 ```
+
 ```python
 joe (to cathy):
 
@@ -144,7 +155,7 @@ Because they make up everything!
 --------------------------------------------------------------------------------
 joe (to cathy):
 
-Haha, that's a good one, Cathy! Okay, my turn. 
+Haha, that's a good one, Cathy! Okay, my turn.
 
 Why don't we ever tell secrets on a farm?
 
@@ -153,7 +164,7 @@ Because the potatoes have eyes, the corn has ears, and the beans stalk.
 --------------------------------------------------------------------------------
 cathy (to joe):
 
-Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again. 
+Haha, that's a great one! A farm is definitely not the place for secrets. Okay, my turn again.
 
 Why couldn't the bicycle stand up by itself?
 
@@ -167,6 +178,6 @@ The comedians are bouncing off each other!
 ## Summary
 
 In this chapter, we introduced the concept of agents, roles and conversations in AutoGen.
-For simplicity, we only used LLMs and created fully autonomous agents (`human_input_mode` was set to `NEVER`). 
-In the next chapter, 
+For simplicity, we only used LLMs and created fully autonomous agents (`human_input_mode` was set to `NEVER`).
+In the next chapter,
 we will show how you can control when to _terminate_ a conversation between autonomous agents.
