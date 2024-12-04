@@ -104,11 +104,12 @@ async def main() -> None:
             print(f"\nExecuting {tool_name} with args: {tool_args}")
             request_halt, tool_response = await websurfer.manual_tool_execute(
                 tool_name, 
-                tool_args
+                tool_args,
+                use_ocr=False
             )
 
             # Perform set of marks after tool execution
-            som_screenshot = await websurfer.test_set_of_mark(websurfer._page.url)
+            som_screenshot = await websurfer.test_set_of_mark()
             print("\nSet of Marks screenshot generated.")
 
             # Print the tool response

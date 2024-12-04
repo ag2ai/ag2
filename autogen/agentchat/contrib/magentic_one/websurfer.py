@@ -195,7 +195,7 @@ class MultimodalWebSurfer(ConversableAgent):
             browser = await self._playwright.chromium.launch(**launch_args)
             self._context = await browser.new_context(
                 user_agent=f"{ua} {self._generate_random_string(4)}",
-                viewport={'width': 1920 + random.randint(-50, 50), 'height': 1080 + random.randint(-30, 30)},
+                #viewport={'width': 1920 + random.randint(-50, 50), 'height': 1080 + random.randint(-30, 30)},
                 locale=random.choice(['en-US', 'en-GB', 'en-CA']),
                 timezone_id=random.choice(['America/New_York', 'Europe/London', 'Asia/Tokyo'])
             )
@@ -454,8 +454,16 @@ class MultimodalWebSurfer(ConversableAgent):
         else:
             raise ValueError(f"Unknown tool '{name}'. Please choose from:\n\n{tool_names}")
 
-        await self._page.wait_for_load_state()
-        await self._sleep(3)
+        try:
+            await self._page.wait_for_load_state()
+        except TimeoutError:
+            logger.log_event(
+                source=self.name,
+                name="page_load_timeout",
+                data={
+                    "url": self._page.url
+                }
+            )
 
         # Handle downloads
         if self._last_download is not None and self.downloads_folder is not None:
@@ -707,7 +715,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Ensure page is fully loaded
         try:
-            await self._page.wait_for_load_state('networkidle', timeout=5000)
+            await self._page.wait_for_load_state()
         except TimeoutError:
             logger.log_event(
                 source=self.name,
@@ -808,7 +816,16 @@ class MultimodalWebSurfer(ConversableAgent):
         await self._page.add_init_script(
             path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
         )
-        await self._page.wait_for_load_state()
+        try:
+            await self._page.wait_for_load_state()
+        except TimeoutError:
+            logger.log_event(
+                source=self.name,
+                name="page_load_timeout",
+                data={
+                    "url": self._page.url
+                }
+            )
         logger.log_event(
             source=self.name,
             name="new_page",
@@ -829,7 +846,19 @@ class MultimodalWebSurfer(ConversableAgent):
             await self._page.goto(url)
             await self._page.wait_for_load_state()
             self._prior_metadata_hash = None
+            
         except Exception as e_outer:
+            # Log navigation failure
+            logger.log_event(
+                source=self.name,
+                name="page_visit",
+                data={
+                    "url": url,
+                    "status": "failure",
+                    "error": str(e_outer)
+                }
+            )
+            
             # Downloaded file
             if self.downloads_folder and "net::ERR_ABORTED" in str(e_outer):
                 async with self._page.expect_download() as download_info:
@@ -861,15 +890,14 @@ class MultimodalWebSurfer(ConversableAgent):
 
     async def _click_id(self, identifier: str) -> None:
         assert self._page is not None
-                                                             
-                                                                                            
-        # Ensure identifier is a valid integer string                                       
-        try:                                                                                
-            identifier = str(int(identifier.strip()))                                               
-        except ValueError:                                                                  
-            raise ValueError(f"Invalid element identifier: {identifier}")  
+        assert self._context is not None
         
-        # Validate input
+        # Ensure identifier is a valid integer string
+        try:
+            identifier = str(int(identifier.strip()))
+        except ValueError:
+            raise ValueError(f"Invalid element identifier: {identifier}")
+        
         if not identifier:
             raise ValueError("Empty element identifier")
         
@@ -882,32 +910,83 @@ class MultimodalWebSurfer(ConversableAgent):
         for strategy in locator_strategies:
             try:
                 target = self._page.locator(strategy)
-                await target.wait_for(timeout=200)
+                await target.wait_for(timeout=1000)
                 
                 # If found, proceed with click
                 await target.scroll_into_view_if_needed()
                 box = cast(Dict[str, Union[int, float]], await target.bounding_box())
                 
-                try:
-                    async with self._page.expect_event("popup", timeout=1000) as page_info:
-                        await self._page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, delay=10)
-                    
-                    new_page = await page_info.value
-                    assert isinstance(new_page, Page)
-                    await self._on_new_page(new_page)
-                    
-                    logger.log_event(
-                        source=self.name,
-                        name="popup",
-                        data={
-                            "url": self._page.url,
-                            "text": "New tab or window opened"
-                        }
-                    )
-                    return
+                # Track current page state before click
+                current_url = self._page.url
+                current_pages = len(self._context.pages)
                 
+                # Click with a short timeout to catch immediate popups
+                popup_detected = False
+                try:
+                    async with self._context.expect_page(timeout=6000) as page_info:
+                        await target.click(delay=10)
+                        popup_detected = True
+                        try:
+                            new_page = await page_info.value
+                            await new_page.wait_for_load_state('domcontentloaded', timeout=4000)
+                            await self._on_new_page(new_page)
+                            
+                            logger.log_event(
+                                source=self.name,
+                                name="popup",
+                                data={
+                                    "url": new_page.url,
+                                    "text": "New tab or window opened"
+                                }
+                            )
+                            return
+                        except TimeoutError:
+                            logger.log_event(
+                                source=self.name,
+                                name="popup_timeout",
+                                data={
+                                    "text": "Popup detected but timed out waiting for load"
+                                }
+                            )
+                            # Continue to check for delayed popups
                 except TimeoutError:
-                    # No popup, just return after successful click
+                    # No immediate popup, check for navigation or delayed popups
+                    try:
+                        await self._page.wait_for_load_state()
+                    except TimeoutError:
+                        pass
+                    
+                    # Check for any new pages that appeared
+                    if len(self._context.pages) > current_pages:
+                        new_page = self._context.pages[-1]
+                        await new_page.wait_for_load_state('domcontentloaded')
+                        await self._on_new_page(new_page)
+                        
+                        logger.log_event(
+                            source=self.name,
+                            name="delayed_popup",
+                            data={
+                                "url": new_page.url,
+                                "text": "New tab or window opened after delay"
+                            }
+                        )
+                        return
+                    
+                    # Check if current page navigated
+                    new_url = self._page.url
+                    if new_url != current_url:
+                        logger.log_event(
+                            source=self.name,
+                            name="page_navigation",
+                            data={
+                                "old_url": current_url,
+                                "new_url": new_url,
+                                "text": "Page navigated after click"
+                            }
+                        )
+                    
+                    # Update page state
+                    await self._get_interactive_rects()
                     return
             
             except TimeoutError:
@@ -915,7 +994,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 continue
         
         raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
-
+        
     async def _fill_id(self, identifier: str, value: str) -> None:
         assert self._page is not None
         
@@ -928,7 +1007,7 @@ class MultimodalWebSurfer(ConversableAgent):
         for strategy in locator_strategies:
             try:
                 target = self._page.locator(strategy)
-                await target.wait_for(timeout=200)
+                await target.wait_for(timeout=1000)
                 
                 # Fill it
                 await target.scroll_into_view_if_needed()
@@ -1075,7 +1154,7 @@ class MultimodalWebSurfer(ConversableAgent):
         characters = string.ascii_letters + string.digits
         return ''.join(random.choice(characters) for _ in range(length))
 
-    async def test_set_of_mark(self, url: str) -> Image.Image:
+    async def test_set_of_mark(self, url: str | None = None) -> Image.Image:
         """
         Test the set_of_mark functionality by visiting a URL and generating a marked screenshot.
         
@@ -1085,12 +1164,12 @@ class MultimodalWebSurfer(ConversableAgent):
         Returns:
             Image.Image: The screenshot with interactive regions marked
         """
-        assert self._page is not None
         
         # Visit the page
-        await self._visit_page(url)
-        await self._page.wait_for_load_state('networkidle')
-        await asyncio.sleep(2)
+        if url is not None:
+            await self._visit_page(url)
+            await self._page.wait_for_load_state()
+            await asyncio.sleep(2)
         
         
         # Get interactive rects
