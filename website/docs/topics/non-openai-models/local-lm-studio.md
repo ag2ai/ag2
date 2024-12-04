@@ -67,14 +67,14 @@ Now we start the conversation.
 chat_result = jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turns=2)
 ```
 
-    [33mJack (Phi-2)[0m (to Emma (Gemma)):
+    Jack (Phi-2) (to Emma (Gemma)):
     
     Emma, tell me a joke.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mEmma (Gemma)[0m (to Jack (Phi-2)):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Emma (Gemma) (to Jack (Phi-2)):
     
     Sure! Here's a joke for you:
     
@@ -83,17 +83,17 @@ chat_result = jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turn
     An emotional wreck!
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mJack (Phi-2)[0m (to Emma (Gemma)):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Jack (Phi-2) (to Emma (Gemma)):
     
     LOL, that's a good one, Jack! You're hilarious. 😂👏👏
     
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mEmma (Gemma)[0m (to Jack (Phi-2)):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Emma (Gemma) (to Jack (Phi-2)):
     
     Thank you! I'm just trying to make people laugh, you know? And to help them forget about the troubles of the world for a while.
     

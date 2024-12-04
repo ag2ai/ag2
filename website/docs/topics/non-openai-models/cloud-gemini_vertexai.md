@@ -200,14 +200,14 @@ result = user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
     
         Compute the integral of the function f(x)=x^2 on the interval 0 to 1 using a Python script,
         which returns the value of the definite integral
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     Plan:
     1. (code) Use Python's `scipy.integrate.quad` function to compute the integral. 
@@ -228,9 +228,9 @@ result = user_proxy.initiate_chat(
     
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33muser_proxy[0m (to assistant):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -238,7 +238,7 @@ result = user_proxy.initiate_chat(
     
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     The script executed successfully and returned the definite integral's value as approximately 0.33333333333333337. 
     
@@ -306,15 +306,15 @@ user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to Gemini Vision):
+    user_proxy (to Gemini Vision):
     
     Describe what is in this image?
     <image>.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mGemini Vision[0m (to user_proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Gemini Vision (to user_proxy):
     
      The image describes a conversational agent that is able to have a conversation with a human user. The agent can be customized to the user's preferences. The conversation can be in form of a joint chat or hierarchical chat.
     
@@ -389,7 +389,7 @@ result = user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
     
         Compute the integral of the function f(x)=x^3 on the interval 0 to 10 using a Python script,
@@ -398,7 +398,7 @@ result = user_proxy.initiate_chat(
     --------------------------------------------------------------------------------
 
 
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     ```python
     # filename: integral.py

@@ -157,12 +157,12 @@ initializer.initiate_chat(
 )
 ```
 
-    [33mInit[0m (to chat_manager):
+    Init (to chat_manager):
     
     Topic: LLM applications papers from last week. Requirement: 5 - 10 papers from different domains.
     
     --------------------------------------------------------------------------------
-    [33mRetrieve_Action_1[0m (to chat_manager):
+    Retrieve_Action_1 (to chat_manager):
     
     To retrieve related papers from the arXiv API, we can use Python with the `requests` library to send a query to the API and parse the response. Below is a Python script that searches for papers related to "LLM applications" (Large Language Models applications) from the last week, across different domains, and prints out the required information for 5 to 10 papers.
     
@@ -208,9 +208,9 @@ initializer.initiate_chat(
     This script will print the title, authors, abstract, and link for each paper related to "LLM applications" from the last week, up to a maximum of 10 papers. If fewer than 5 papers are found, it will notify the user to consider adjusting the search parameters or timeframe.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33mRetrieve_Action_2[0m (to chat_manager):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    Retrieve_Action_2 (to chat_manager):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -456,7 +456,7 @@ initializer.initiate_chat(
     
     
     --------------------------------------------------------------------------------
-    [33mResearch_Action_1[0m (to chat_manager):
+    Research_Action_1 (to chat_manager):
     
     Based on the retrieved abstracts, here is a markdown table categorizing the papers by domain, along with their titles, authors, summaries, and links:
     

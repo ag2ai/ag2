@@ -178,12 +178,12 @@ chat_result = code_executor_agent.initiate_chat(
 pprint.pprint(chat_result)
 ```
 
-    [33mcode_executor_agent[0m (to code_writer):
+    code_executor_agent (to code_writer):
     
     Write Python code to calculate the 14th Fibonacci number.
     
     --------------------------------------------------------------------------------
-    [33mcode_writer[0m (to code_executor_agent):
+    code_writer (to code_executor_agent):
     
     Sure, we can calculate the Fibonacci series using a few different methods such as recursion, iterative, by using Binet's formula, or by using matrix exponentiation.
     
@@ -206,21 +206,21 @@ pprint.pprint(chat_result)
     The function returns `a`, which is the nth Fibonacci number. The result is then printed to the console.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING 1 CODE BLOCKS (inferred languages are [python])...[0m
-    [33mcode_executor_agent[0m (to code_writer):
+    
+    >>>>>>>> EXECUTING 1 CODE BLOCKS (inferred languages are [python])...
+    code_executor_agent (to code_writer):
     
     exitcode: 0 (execution succeeded)
     Code output: 377
     
     
     --------------------------------------------------------------------------------
-    [33mcode_writer[0m (to code_executor_agent):
+    code_writer (to code_executor_agent):
     
     Great! The script has successfully computed the 14th Fibonacci number as 377. If you need to compute other Fibonacci numbers, you can simply change the argument in the `fibonacci()` function call. Please let me know if you need help with anything else.
     
     --------------------------------------------------------------------------------
-    [33mcode_executor_agent[0m (to code_writer):
+    code_executor_agent (to code_writer):
     
     
     

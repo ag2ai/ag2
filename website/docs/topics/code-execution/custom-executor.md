@@ -92,14 +92,14 @@ chat_result = code_executor_agent.initiate_chat(
 )
 ```
 
-    [33mCodeExecutor[0m (to CodeWriter):
+    CodeExecutor (to CodeWriter):
     
     Create a plot showing the market caps of the top 7 publicly listed companies using data from Yahoo Finance.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeWriter[0m (to CodeExecutor):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeWriter (to CodeExecutor):
     
     To accomplish this task, we would use the `yfinance` library to fetch data from Yahoo Finance, `pandas` library for data manipulation, and `matplotlib` for data visualization.
     
@@ -112,16 +112,16 @@ chat_result = code_executor_agent.initiate_chat(
     Let's start by fetching data for these companies.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeExecutor[0m (to CodeWriter):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeExecutor (to CodeWriter):
     
     
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeWriter[0m (to CodeExecutor):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeWriter (to CodeExecutor):
     
     Great! Before I continue, I need to know if the necessary libraries are installed.
     
@@ -180,10 +180,10 @@ chat_result = code_executor_agent.initiate_chat(
     Also note that the final plot shows the companies in descending order of market cap, with the company with the highest market cap at the top of the chart.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [31m
-    >>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...
 
 
 
@@ -202,7 +202,7 @@ chat_result = code_executor_agent.initiate_chat(
     KeyError: 'marketCap'
 
 
-    [33mCodeExecutor[0m (to CodeWriter):
+    CodeExecutor (to CodeWriter):
     
     exitcode: 0 (execution succeeded)
     Code output: Requirement already satisfied: yfinance in /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages (0.2.36)
@@ -253,9 +253,9 @@ chat_result = code_executor_agent.initiate_chat(
     
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeWriter[0m (to CodeExecutor):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeWriter (to CodeExecutor):
     
     From the error message, it seems that the 'FB' ticker (Facebook) failed to download because it might have been delisted. This is likely due to Facebook's corporate rebranding to Meta Platforms Inc. in late 2021, which resulted in a ticker change from 'FB' to 'META'.
     
@@ -295,10 +295,10 @@ chat_result = code_executor_agent.initiate_chat(
     ```
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
 
 
 
@@ -307,7 +307,7 @@ chat_result = code_executor_agent.initiate_chat(
     
 
 
-    [33mCodeExecutor[0m (to CodeWriter):
+    CodeExecutor (to CodeWriter):
     
     exitcode: 0 (execution succeeded)
     Code output: /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages/yfinance/utils.py:775: FutureWarning: The 'unit' keyword in TimedeltaIndex construction is deprecated and will be removed in a future version. Use pd.to_timedelta instead.
@@ -328,25 +328,25 @@ chat_result = code_executor_agent.initiate_chat(
     
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeWriter[0m (to CodeExecutor):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeWriter (to CodeExecutor):
     
     I see that the fetched data was successfully retrieved and processed. However, it looks like the result of the plot isn't visible, so we don't know whether the plot was generated successfully. Please run the code again and provide the output of the plot.
     
     If there are any issues or any other points you would like me to help with, let me know!
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeExecutor[0m (to CodeWriter):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeExecutor (to CodeWriter):
     
     
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeWriter[0m (to CodeExecutor):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeWriter (to CodeExecutor):
     
     I'm glad we were able to retrieve and process the data successfully. Please try running the last part of the code again to generate and display the plot:
     
@@ -363,10 +363,10 @@ chat_result = code_executor_agent.initiate_chat(
     This section of the code creates a horizontal bar plot of the market capitalizations of the companies. The `plt.gca().invert_yaxis()` line is included to invert the y-axis, so the company with the highest market cap is at the top of the chart.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
 
 
 
@@ -375,15 +375,15 @@ chat_result = code_executor_agent.initiate_chat(
     
 
 
-    [33mCodeExecutor[0m (to CodeWriter):
+    CodeExecutor (to CodeWriter):
     
     exitcode: 0 (execution succeeded)
     Code output: 
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeWriter[0m (to CodeExecutor):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeWriter (to CodeExecutor):
     
     I see that the code has executed successfully, but unfortunately, the generated plot is not visible here. However, given that there are no errors, it's likely that the plot has been created as expected when you executed the code on your end.
     
@@ -392,16 +392,16 @@ chat_result = code_executor_agent.initiate_chat(
     Otherwise, if this completes your initial request, I will end this task. Just let me know your decision.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeExecutor[0m (to CodeWriter):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeExecutor (to CodeWriter):
     
     
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mCodeWriter[0m (to CodeExecutor):
+    
+    >>>>>>>> USING AUTO REPLY...
+    CodeWriter (to CodeExecutor):
     
     Alright. If you have any more questions regarding this task, or if you need help with other tasks in the future, don't hesitate to ask. Have a great day!
     

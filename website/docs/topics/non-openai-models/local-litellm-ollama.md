@@ -136,19 +136,19 @@ res = assistant.initiate_chat(user_proxy, message="How can I help you today?")
 print(assistant)
 ```
 
-    [33magent[0m (to user):
+    agent (to user):
     
     How can I help you today?
     
     --------------------------------------------------------------------------------
-    [33muser[0m (to agent):
+    user (to agent):
     
     Why is the sky blue?
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33magent[0m (to user):
+    
+    >>>>>>>> USING AUTO REPLY...
+    agent (to user):
     
     A classic question!
     
@@ -163,14 +163,14 @@ print(assistant)
     How's that? Do you have any other questions or would you like to explore more topics?
     
     --------------------------------------------------------------------------------
-    [33muser[0m (to agent):
+    user (to agent):
     
     Why is it sometimes red, then?
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33magent[0m (to user):
+    
+    >>>>>>>> USING AUTO REPLY...
+    agent (to user):
     
     Excellent follow-up question!
     
@@ -293,36 +293,36 @@ res = user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to chatbot):
+    user_proxy (to chatbot):
     
     How much is 123.45 EUR in USD?
     
     --------------------------------------------------------------------------------
-    [33mchatbot[0m (to user_proxy):
+    chatbot (to user_proxy):
     
-    [32m***** Suggested tool call (call_d9584223-9af0-4526-ad09-856b03487fd5): currency_calculator *****[0m
+    ***** Suggested tool call (call_d9584223-9af0-4526-ad09-856b03487fd5): currency_calculator *****
     Arguments: 
     {"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
-    [32m************************************************************************************************[0m
+    ************************************************************************************************
     
     --------------------------------------------------------------------------------
-    [35m
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...[0m
-    [33muser_proxy[0m (to chatbot):
     
-    [33muser_proxy[0m (to chatbot):
+    >>>>>>>> EXECUTING FUNCTION currency_calculator...
+    user_proxy (to chatbot):
     
-    [32m***** Response from calling tool (call_d9584223-9af0-4526-ad09-856b03487fd5) *****[0m
+    user_proxy (to chatbot):
+    
+    ***** Response from calling tool (call_d9584223-9af0-4526-ad09-856b03487fd5) *****
     135.80 USD
-    [32m**********************************************************************************[0m
+    **********************************************************************************
     
     --------------------------------------------------------------------------------
-    [33mchatbot[0m (to user_proxy):
+    chatbot (to user_proxy):
     
-    [32m***** Suggested tool call (call_17b07b4d-629f-4314-8a04-97b1537fa486): currency_calculator *****[0m
+    ***** Suggested tool call (call_17b07b4d-629f-4314-8a04-97b1537fa486): currency_calculator *****
     Arguments: 
     {"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
-    [32m************************************************************************************************[0m
+    ************************************************************************************************
     
     --------------------------------------------------------------------------------
 

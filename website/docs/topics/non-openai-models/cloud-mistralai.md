@@ -187,12 +187,12 @@ chat_result = user_proxy_agent.initiate_chat(
 )
 ```
 
-    [33mUser[0m (to Mistral Assistant):
+    User (to Mistral Assistant):
     
     Provide code to count the number of prime numbers from 1 to 10000.
     
     --------------------------------------------------------------------------------
-    [33mMistral Assistant[0m (to User):
+    Mistral Assistant (to User):
     
     To solve this task, I will write a Python function that checks if a number is prime or not. Then, I will iterate through the numbers from 1 to 10000 and count the prime numbers. Here's the plan:
     
@@ -253,20 +253,20 @@ chat_result = user_proxy_agent.initiate_chat(
     ```
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [31m
-    >>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...[0m
-    [33mUser[0m (to Mistral Assistant):
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...
+    User (to Mistral Assistant):
     
     exitcode: 0 (execution succeeded)
     Code output: 1229
     
     
     --------------------------------------------------------------------------------
-    [33mMistral Assistant[0m (to User):
+    Mistral Assistant (to User):
     
     The code executed successfully and the output is 1229.
     
@@ -279,8 +279,8 @@ chat_result = user_proxy_agent.initiate_chat(
     FINISH
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
 
 
 ## Tool Call Example
@@ -434,38 +434,38 @@ chat_result = player_white.initiate_chat(
 )
 ```
 
-    [33mPlayer White[0m (to Player Black):
+    Player White (to Player Black):
     
     Let's play chess! Your move.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....[0m
-    [34m
-    ********************************************************************************[0m
-    [33mBoard Proxy[0m (to Player Black):
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Starting a new chat....
+    
+    ********************************************************************************
+    Board Proxy (to Player Black):
     
     Let's play chess! Your move.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     
-    [32m***** Suggested tool call (AcS1aX4Rl): make_move *****[0m
+    ***** Suggested tool call (AcS1aX4Rl): make_move *****
     Arguments: 
     {}
-    [32m******************************************************[0m
+    ******************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION make_move...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION make_move...
 
 
 
@@ -477,56 +477,56 @@ chat_result = player_white.initiate_chat(
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [32m***** Response from calling tool (AcS1aX4Rl) *****[0m
+    ***** Response from calling tool (AcS1aX4Rl) *****
     g1h3
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     I have made my move. It's g1h3. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [33mPlayer Black[0m (to Player White):
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+    Player Black (to Player White):
     
     I have made my move. It's g1h3. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....[0m
-    [34m
-    ********************************************************************************[0m
-    [33mBoard Proxy[0m (to Player White):
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Starting a new chat....
+    
+    ********************************************************************************
+    Board Proxy (to Player White):
     
     I have made my move. It's g1h3. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer White[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
     
     
-    [32m***** Suggested tool call (tWVXVAujE): make_move *****[0m
+    ***** Suggested tool call (tWVXVAujE): make_move *****
     Arguments: 
     {}
-    [32m******************************************************[0m
+    ******************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION make_move...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION make_move...
 
 
 
@@ -538,56 +538,56 @@ chat_result = player_white.initiate_chat(
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mBoard Proxy[0m (to Player White):
+    Board Proxy (to Player White):
     
-    [33mBoard Proxy[0m (to Player White):
+    Board Proxy (to Player White):
     
-    [32m***** Response from calling tool (tWVXVAujE) *****[0m
+    ***** Response from calling tool (tWVXVAujE) *****
     d7d5
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer White[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
     
     I have made my move. It's d7d5. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [33mPlayer White[0m (to Player Black):
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+    Player White (to Player Black):
     
     I have made my move. It's d7d5. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....[0m
-    [34m
-    ********************************************************************************[0m
-    [33mBoard Proxy[0m (to Player Black):
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Starting a new chat....
+    
+    ********************************************************************************
+    Board Proxy (to Player Black):
     
     I have made my move. It's d7d5. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     
-    [32m***** Suggested tool call (ZOfvRz0B1): make_move *****[0m
+    ***** Suggested tool call (ZOfvRz0B1): make_move *****
     Arguments: 
     {}
-    [32m******************************************************[0m
+    ******************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION make_move...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION make_move...
 
 
 
@@ -599,56 +599,56 @@ chat_result = player_white.initiate_chat(
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [32m***** Response from calling tool (ZOfvRz0B1) *****[0m
+    ***** Response from calling tool (ZOfvRz0B1) *****
     b1c3
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     I have made my move. It's b1c3. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [33mPlayer Black[0m (to Player White):
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+    Player Black (to Player White):
     
     I have made my move. It's b1c3. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....[0m
-    [34m
-    ********************************************************************************[0m
-    [33mBoard Proxy[0m (to Player White):
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Starting a new chat....
+    
+    ********************************************************************************
+    Board Proxy (to Player White):
     
     I have made my move. It's b1c3. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer White[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
     
     
-    [32m***** Suggested tool call (LovRpi6Pq): make_move *****[0m
+    ***** Suggested tool call (LovRpi6Pq): make_move *****
     Arguments: 
     {}
-    [32m******************************************************[0m
+    ******************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION make_move...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION make_move...
 
 
 
@@ -660,54 +660,54 @@ chat_result = player_white.initiate_chat(
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mBoard Proxy[0m (to Player White):
+    Board Proxy (to Player White):
     
-    [33mBoard Proxy[0m (to Player White):
+    Board Proxy (to Player White):
     
-    [32m***** Response from calling tool (LovRpi6Pq) *****[0m
+    ***** Response from calling tool (LovRpi6Pq) *****
     c8g4
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer White[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
     
     I have made my move. It's c8g4. Your turn.
     
     --------------------------------------------------------------------------------
-    [33mPlayer White[0m (to Player Black):
+    Player White (to Player Black):
     
     I have made my move. It's c8g4. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....[0m
-    [34m
-    ********************************************************************************[0m
-    [33mBoard Proxy[0m (to Player Black):
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Starting a new chat....
+    
+    ********************************************************************************
+    Board Proxy (to Player Black):
     
     I have made my move. It's c8g4. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     
-    [32m***** Suggested tool call (RfhC8brG7): make_move *****[0m
+    ***** Suggested tool call (RfhC8brG7): make_move *****
     Arguments: 
     {}
-    [32m******************************************************[0m
+    ******************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION make_move...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION make_move...
 
 
 
@@ -719,54 +719,54 @@ chat_result = player_white.initiate_chat(
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [32m***** Response from calling tool (RfhC8brG7) *****[0m
+    ***** Response from calling tool (RfhC8brG7) *****
     a1b1
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     I have made my move. It's a1b1. Your turn.
     
     --------------------------------------------------------------------------------
-    [33mPlayer Black[0m (to Player White):
+    Player Black (to Player White):
     
     I have made my move. It's a1b1. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....[0m
-    [34m
-    ********************************************************************************[0m
-    [33mBoard Proxy[0m (to Player White):
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Starting a new chat....
+    
+    ********************************************************************************
+    Board Proxy (to Player White):
     
     I have made my move. It's a1b1. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer White[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
     
     
-    [32m***** Suggested tool call (6aVW1t0lm): make_move *****[0m
+    ***** Suggested tool call (6aVW1t0lm): make_move *****
     Arguments: 
     {}
-    [32m******************************************************[0m
+    ******************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION make_move...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION make_move...
 
 
 
@@ -778,54 +778,54 @@ chat_result = player_white.initiate_chat(
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mBoard Proxy[0m (to Player White):
+    Board Proxy (to Player White):
     
-    [33mBoard Proxy[0m (to Player White):
+    Board Proxy (to Player White):
     
-    [32m***** Response from calling tool (6aVW1t0lm) *****[0m
+    ***** Response from calling tool (6aVW1t0lm) *****
     a7a6
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer White[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player White (to Board Proxy):
     
     I have made my move. It's a7a6. Your turn.
     
     --------------------------------------------------------------------------------
-    [33mPlayer White[0m (to Player Black):
+    Player White (to Player Black):
     
     I have made my move. It's a7a6. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....[0m
-    [34m
-    ********************************************************************************[0m
-    [33mBoard Proxy[0m (to Player Black):
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Starting a new chat....
+    
+    ********************************************************************************
+    Board Proxy (to Player Black):
     
     I have made my move. It's a7a6. Your turn.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     
-    [32m***** Suggested tool call (kPTEInlLR): make_move *****[0m
+    ***** Suggested tool call (kPTEInlLR): make_move *****
     Arguments: 
     {}
-    [32m******************************************************[0m
+    ******************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION make_move...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION make_move...
 
 
 
@@ -837,23 +837,23 @@ chat_result = player_white.initiate_chat(
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [33mBoard Proxy[0m (to Player Black):
+    Board Proxy (to Player Black):
     
-    [32m***** Response from calling tool (kPTEInlLR) *****[0m
+    ***** Response from calling tool (kPTEInlLR) *****
     h3f4
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mPlayer Black[0m (to Board Proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Player Black (to Board Proxy):
     
     I have made my move. It's h3f4. Your turn.
     
     --------------------------------------------------------------------------------
-    [33mPlayer Black[0m (to Player White):
+    Player Black (to Player White):
     
     I have made my move. It's h3f4. Your turn.
     

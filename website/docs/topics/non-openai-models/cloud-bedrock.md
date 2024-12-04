@@ -167,12 +167,12 @@ user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
     Write a python program to print the first 10 numbers of the Fibonacci sequence. Just output the python code, no additional information.
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     ```python
     # Define a function to calculate Fibonacci sequence
@@ -195,9 +195,9 @@ user_proxy.initiate_chat(
     ```
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33muser_proxy[0m (to assistant):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -205,7 +205,7 @@ user_proxy.initiate_chat(
     
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     Great, the code executed successfully and printed the first 10 numbers of the Fibonacci sequence correctly.
     
@@ -358,45 +358,45 @@ res = user_proxy.initiate_chat(
 print(res.summary["content"])
 ```
 
-    [33muser_proxy[0m (to chatbot):
+    user_proxy (to chatbot):
     
     What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday?
     
     --------------------------------------------------------------------------------
-    [33mchatbot[0m (to user_proxy):
+    chatbot (to user_proxy):
     
     
-    [32m***** Suggested tool call (tooluse__h3d1AEDR3Sm2XRoGCjc2Q): weather_forecast *****[0m
+    ***** Suggested tool call (tooluse__h3d1AEDR3Sm2XRoGCjc2Q): weather_forecast *****
     Arguments: 
     {"location": "New York"}
-    [32m**********************************************************************************[0m
-    [32m***** Suggested tool call (tooluse_wrdda3wRRO-ugUY4qrv8YQ): currency_calculator *****[0m
+    **********************************************************************************
+    ***** Suggested tool call (tooluse_wrdda3wRRO-ugUY4qrv8YQ): currency_calculator *****
     Arguments: 
     {"base_amount": "123", "base_currency": "EUR", "quote_currency": "USD"}
-    [32m*************************************************************************************[0m
+    *************************************************************************************
     
     --------------------------------------------------------------------------------
-    [35m
-    >>>>>>>> EXECUTING FUNCTION weather_forecast...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...[0m
-    [33muser_proxy[0m (to chatbot):
     
-    [33muser_proxy[0m (to chatbot):
+    >>>>>>>> EXECUTING FUNCTION weather_forecast...
     
-    [32m***** Response from calling tool (tooluse__h3d1AEDR3Sm2XRoGCjc2Q) *****[0m
+    >>>>>>>> EXECUTING FUNCTION currency_calculator...
+    user_proxy (to chatbot):
+    
+    user_proxy (to chatbot):
+    
+    ***** Response from calling tool (tooluse__h3d1AEDR3Sm2XRoGCjc2Q) *****
     New York will be 11 degrees fahrenheit
-    [32m***********************************************************************[0m
+    ***********************************************************************
     
     --------------------------------------------------------------------------------
-    [33muser_proxy[0m (to chatbot):
+    user_proxy (to chatbot):
     
-    [32m***** Response from calling tool (tooluse_wrdda3wRRO-ugUY4qrv8YQ) *****[0m
+    ***** Response from calling tool (tooluse_wrdda3wRRO-ugUY4qrv8YQ) *****
     135.30 USD
-    [32m***********************************************************************[0m
+    ***********************************************************************
     
     --------------------------------------------------------------------------------
-    [33mchatbot[0m (to user_proxy):
+    chatbot (to user_proxy):
     
     
     
@@ -554,33 +554,33 @@ task = "Analyze the potential of Anthropic and Mistral to revolutionize the fiel
 user_proxy.initiate_chat(manager, message=task)
 ```
 
-    [33muser_proxy[0m (to chat_manager):
+    user_proxy (to chat_manager):
     
     Analyze the potential of Anthropic and Mistral to revolutionize the field of AI based on today's headlines. Today is 06202024. Start by selecting 'research_assistant' to get relevant news articles and then ask sonnet_agent and mistral_agent to respond before the judge evaluates the conversation.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: research_assistant
-    [0m
-    [33mresearch_assistant[0m (to chat_manager):
+    
+    research_assistant (to chat_manager):
     
     
-    [32m***** Suggested tool call (tooluse_7lcHbL3TT5WHyTl8Ee0Kmg): get_headlines *****[0m
+    ***** Suggested tool call (tooluse_7lcHbL3TT5WHyTl8Ee0Kmg): get_headlines *****
     Arguments: 
     {"headline_date": "06202024"}
-    [32m*******************************************************************************[0m
+    *******************************************************************************
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: code_interpreter
-    [0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION get_headlines...[0m
-    [33mcode_interpreter[0m (to chat_manager):
     
-    [33mcode_interpreter[0m (to chat_manager):
     
-    [32m***** Response from calling tool (tooluse_7lcHbL3TT5WHyTl8Ee0Kmg) *****[0m
+    >>>>>>>> EXECUTING FUNCTION get_headlines...
+    code_interpreter (to chat_manager):
+    
+    code_interpreter (to chat_manager):
+    
+    ***** Response from calling tool (tooluse_7lcHbL3TT5WHyTl8Ee0Kmg) *****
     Epic Duel of the Titans: Anthropic and Mistral Usher in a New Era of Text Generation Excellence.
             In a groundbreaking revelation that has sent shockwaves through the AI industry, Anthropic has unveiled 
             their state-of-the-art text generation model, Sonnet, hailed as a monumental leap in artificial intelligence. 
@@ -589,13 +589,13 @@ user_proxy.initiate_chat(manager, message=task)
             between two AI behemoths promises to revolutionize the landscape of machine learning, heralding an 
             era of unprecedented creativity and sophistication in text generation that will reshape industries, 
             ignite innovation, and captivate minds worldwide.
-    [32m***********************************************************************[0m
+    ***********************************************************************
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: sonnet_agent
-    [0m
-    [33msonnet_agent[0m (to chat_manager):
+    
+    sonnet_agent (to chat_manager):
     
     I am sonnet_agent:
     
@@ -608,10 +608,10 @@ user_proxy.initiate_chat(manager, message=task)
     I welcome the healthy competition from Mistral, as it will only spur us to continue raising the bar. But make no mistake - with Sonnet, the future of advanced AI belongs to Anthropic. We have crossed a monumental threshold, and will continue our trailblazing work to deliver AI solutions that redefine what is possible. The world is witnessing the dawn of a new era of unfathomable potential.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: mistral_agent
-    [0m
-    [33mmistral_agent[0m (to chat_manager):
+    
+    mistral_agent (to chat_manager):
     
     I am mistral_agent:
     
@@ -626,10 +626,10 @@ user_proxy.initiate_chat(manager, message=task)
     Pass to the judge.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: judge
-    [0m
-    [33mjudge[0m (to chat_manager):
+    
+    judge (to chat_manager):
     
     
     
@@ -648,9 +648,9 @@ user_proxy.initiate_chat(manager, message=task)
     TERMINATE.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: code_interpreter
-    [0m
+    
 
 
 
@@ -728,15 +728,15 @@ result = user_proxy.initiate_chat(
 )
 ```
 
-    [33mUser_proxy[0m (to image-explainer):
+    User_proxy (to image-explainer):
     
     What's happening in this image?
     <image>.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mimage-explainer[0m (to User_proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    image-explainer (to User_proxy):
     
     This image appears to be an advertisement or promotional material for a company called Autogen. The central figure is a stylized robot or android holding up a signboard with the company's name on it. The signboard also features a colorful heart design made up of many smaller hearts, suggesting themes related to love, care, or affection. The robot has a friendly, cartoonish expression with a large blue eye or lens. The overall style and color scheme give it a vibrant, eye-catching look that likely aims to portray Autogen as an innovative, approachable technology brand focused on connecting with people.
     

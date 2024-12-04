@@ -119,7 +119,7 @@ with Cache.disk(cache_seed=43) as cache:
     )
 ```
 
-    [33mUser[0m (to Assistant):
+    User (to Assistant):
     
     
     Answer the following questions as best you can. You have access to tools provided.
@@ -140,36 +140,36 @@ with Cache.disk(cache_seed=43) as cache:
     
     
     --------------------------------------------------------------------------------
-    [33mAssistant[0m (to User):
+    Assistant (to User):
     
     Thought: I don't have this information readily available. I will use the search tool to look it up.
     Action: Use the search_tool from the provided functions to search for the result of the Super Bowl 2024.
     Action Input: { "query": "Super Bowl 2024 result" }
-    [32m***** Suggested tool Call (call_xZ30S6DmmTrIJKUziSAqpkSn): search_tool *****[0m
+    ***** Suggested tool Call (call_xZ30S6DmmTrIJKUziSAqpkSn): search_tool *****
     Arguments: 
     
     {
     "query": "Super Bowl 2024 result"
     }
-    [32m****************************************************************************[0m
+    ****************************************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION search_tool...[0m
-    [33mUser[0m (to Assistant):
     
-    [33mUser[0m (to Assistant):
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
     
-    [32m***** Response from calling tool "call_xZ30S6DmmTrIJKUziSAqpkSn" *****[0m
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION search_tool...
+    User (to Assistant):
+    
+    User (to Assistant):
+    
+    ***** Response from calling tool "call_xZ30S6DmmTrIJKUziSAqpkSn" *****
     "[\"{\\\"url\\\": \\\"https://www.cbsnews.com/live-updates/super-bowl-2024-chiefs-49ers-game-coverage/\\\", \\\"content\\\": \\\"\\\\\\\"\\\\nThe Chiefs reached the Super Bowl the hard way, with back-to-back road playoff wins against the Buffalo Bills in the divisional round and then the Ravens in the conference championship \\\\u2014 the first time in his career Mahomes has been forced to play road playoff games.\\\\n Watch CBS News\\\\nSuper Bowl 2024 live updates as Chiefs and 49ers prepare for today's show down\\\\nBy Faris Tanyos, Aliza Chasan, Joe Ruiz, Gina Martinez, S. Dev\\\\nUpdated on:\\\\nFebruary 11, 2024 / 6:37 PM EST\\\\n/ CBS News\\\\nThe Kansas City Chiefs will look to become the first back-to-back Super Bowl champion in two decades when they take on the San Francisco 49ers today in Las Vegas.\\\\n What to know about San Francisco 49ers quarterback Brock Purdy\\\\nOne of the most improbable stories of Super Bowl LVIII is that of San Francisco 49ers quarterback Brock Purdy, who has gone from being \\\\\\\"Mr. Irrelevant,\\\\\\\" as the final pick of the 2022 NFL Draft, to a bonafide star, leading his team to the cusp of an NFL title in less than two years.\\\\n The 24-year-old, who set records at Iowa State after receiving Player of the Year honors at Perry High School in Gilbert, Arizona, is attempting to become the third quarterback after Joe Montana and Steve Young to lead the 49ers to a Super Bowl victory, and the franchise's sixth Lombardi Trophy.\\\\n \\\\\\\"The more technologically savvy we become: look around the stadium, the scoreboards, the lighting, you know, all of the different technology that makes this a spectacular game, these are all increases in the attack surface that people can target,\\\\\\\" said Cathy Lanier, the NFL's chief security officer.\\\\n\\\"}\", \"{\\\"url\\\": \\\"https://www.cbssports.com/nfl/news/2024-super-bowl-chiefs-vs-49ers-score-patrick-mahomes-leads-ot-comeback-as-k-c-wins-back-to-back-titles/live/\\\", \\\"content\\\": \\\"The championship-winning drive, which included a fourth-and-1 scramble from Mahomes and a clutch 7-yard catch from tight end Travis Kelce, was a must-score for K.C. The NFL's new playoff overtime rules -- both teams are guaranteed at least one possession in the extra period -- were in effect for the first time, and the Chiefs needed to answer the Niners' field goal.\\\\n Held out of the end zone until that point, Kansas City grabbed its first lead of the game at 13-10.\\\\nJennings' touchdown receiving (followed by a missed extra point) concluded a 75-yard drive that put the Niners back on top, 16-13, as the wideout joined former Philadelphia Eagles quarterback Nick Foles as the only players to throw and catch a touchdown in a Super Bowl.\\\\n He spread the ball around -- eight pass-catchers had at least two receptions -- slowly but surely overcoming a threatening 49ers defense that knocked him off his spot consistently in the first half.\\\\nMahomes, with his third Super Bowl MVP, now sits alongside Tom Brady (five) and Joe Montana (three) atop the mountain while becoming just the third player to win the award back-to-back, joining Bart Starr (I-II) and Terry Bradshaw (XIII-XIV).\\\\n The muffed punt that bounced off of cornerback Darrell Luter Jr.'s ankle was also the big break that the Chiefs needed as they scored on the very next play to take the lead for the first time in the game. College Pick'em\\\\nA Daily SportsLine Betting Podcast\\\\nNFL Playoff Time!\\\\n2024 Super Bowl, Chiefs vs. 49ers score: Patrick Mahomes leads OT comeback as K.C. wins back-to-back titles\\\\nCall it a dynasty; the Chiefs are the first team to win consecutive Super Bowls since 2003-04\\\\nThe Kansas City Chiefs are Super Bowl champions, again.\\\"}\", \"{\\\"url\\\": \\\"https://www.espn.com/nfl/story/_/id/39480722/49ers-chiefs-live-super-bowl-lviii-updates-moments-highlights\\\", \\\"content\\\": \\\"With a relentless defense and opportune plays by their star quarterback -- including a pair of gutsy overtime scrambles -- the Chiefs won their third Super Bowl in five years in a 25-22 overtime victory against the San Francisco 49ers in only the second overtime game in Super Bowl history.\\\\n Staff\\\\nTaylor Swift supports Travis Kelce, chugs drink at Super Bowl LVIII10hTory Barron\\\\nAfter posting a losing record in December, the Chiefs embraced an underdog, villain mentality throughout the postseason, upsetting three teams en route to their second consecutive Super Bowl title, becoming the ninth team to repeat as Super Bowl champions and first since the 2004 New England Patriots.\\\\n ESPN\\\\nSuper Bowl 2024 - Highlights from Chiefs' win vs. 49ers\\\\nMike Tannenbaum and Tim Hasselbeck react to the Chiefs' thrilling overtime victory over the 49ers in the Super Bowl. The 49ers had the ball with 2:51 to go in a tied game, but a signature Steve Spagnuolo blitz on third down late in the fourth quarter forced a 49ers field goal. Led by their captains, most of the Chiefs arrived to Allegiant Stadium in Las Vegas on Sunday in all black, signaling a steely resolve to upset Brock Purdy and the NFC's best offensive ensemble.\\\\n\\\"}\", \"{\\\"url\\\": \\\"https://www.sportingnews.com/us/nfl/news/super-bowl-2024-live-score-49ers-chiefs-results-highlights/0c440aa7145b809ed174d8ff\\\", \\\"content\\\": \\\"Super Bowl start time\\\\nSuper Bowl 58 between the Chiefs and 49ers is set to kick off at 6:30 p.m. ET (3:30 p.m. local time) in Las Vegas, Nev.\\\\n6:30 p.m. ET has become the standard start time for Super Bowls and is preceded by performances of \\\\\\\"Lift Every Voice and Sing,\\\\\\\" \\\\\\\"America the Beautiful,\\\\\\\" and \\\\\\\"The Star-Spangled Banner. Brock Purdy drops a dime to Chris Conley on 3rd & 9 \\\\ud83c\\\\udfaf\\\\n\\\\ud83d\\\\udcfa: #SBLVIII on CBS\\\\n\\\\ud83d\\\\udcf1: Stream on #NFLPlus https://t.co/dClcEDViWl pic.twitter.com/Oa10d7khdl\\\\n7:10 p.m. \\\\u2014 The 49ers are relying heavily on McCaffrey, who takes the ball on each of the first three snaps on this drive. \\\\ud83d\\\\udcfa: #SBLVIII on CBS\\\\n\\\\ud83d\\\\udcf1: Stream on #NFLPlus https://t.co/dClcEDViWl pic.twitter.com/yUc00MtP84\\\\n7:24 p.m. \\\\u2014 The 49ers force a 3rd & 1, but Rashee Rice is easily able to pick up the first and one or two more yards.\\\\n49ers 3, Chiefs 0\\\\n7:19 p.m. MORE SUPER BOWL 58:\\\\n\\\\u2022\\\\u00a0 Inside Taylor Swift and Travis Kelce's whirlwind dating timeline\\\\n\\\\u2022. Ranking the thriving Mike and Kyle Shanahan coaching tree\\\\n\\\\u2022. Tracking every Super Bowl 58 commercial\\\\nWhat channel is the Super Bowl on?\\\\nSuper Bowl 58 will be broadcast nationally on CBS. PURDY TO JENNINGS TO CMC FOR SIX \\\\ud83d\\\\udd25\\\\n\\\\ud83d\\\\udcfa: #SBLVIII on CBS\\\\n\\\\ud83d\\\\udcf1: Stream on #NFLPlus https://t.co/dClcEDViWl pic.twitter.com/ktiTXIiHzS\\\\n7:47 p.m. \\\\u2014 L'Jarius Sneed, who was on the other side of this two weeks ago, gets hit with an unsportsmanlike conduct penalty and and gives the 49ers their 11th first down.\\\"}\", \"{\\\"url\\\": \\\"https://apnews.com/live/super-bowl-2024-updates\\\", \\\"content\\\": \\\"Throw in the fact that Chiefs coach Andy Reid will be in his fifth Super Bowl, the third most in NFL history, and has a chance to win a third ring, and the knowledge on the Kansas City sideline will be an advantage too big for the 49ers to overcome.\\\\n She performed in Japan on Saturday night before a flight across nine time zones and the international date line to reach the U.S.\\\\nRihanna performs during halftime of the NFL Super Bowl 57 football game between the Philadelphia Eagles and the Kansas City Chiefs, Sunday, Feb. 12, 2023, in Glendale, Ariz. (AP Photo/David J. Phillip)\\\\n After the teams take the field, Post Malone will perform \\\\u201cAmerica the Beautiful\\\\u201d and Reba McEntire will sing \\\\u201cThe Star-Spangled Banner.\\\\u201d\\\\nSan Francisco 49ers quarterback Brock Purdy (13) warms up before the NFL Super Bowl 58 football game against the Kansas City Chiefs, Sunday, Feb. 11, 2024, in Las Vegas. He was also the referee when the Chiefs beat the 49ers in the Super Bowl four years ago \\\\u2014 and when the Rams beat the Saints in the 2019 NFC championship game after an infamous missed call.\\\\n Purdy\\\\u2019s comeback from the injury to his throwing arm suffered in last season\\\\u2019s NFC championship loss to the Philadelphia Eagles has been part of the storybook start to his career that started as Mr. Irrelevant as the 262nd pick in the 2022 draft.\\\\n\\\"}\"]"
-    [32m**********************************************************************[0m
+    **********************************************************************
     
     --------------------------------------------------------------------------------
-    [33mAssistant[0m (to User):
+    Assistant (to User):
     
     Observation: According to the search results, The Kansas City Chiefs won the Super Bowl 2024 against the San Francisco 49ers with a score of 25-22 in an overtime victory. This victory made the Chiefs the first team to win consecutive Super Bowls since 2003-04.
     
@@ -204,8 +204,8 @@ with Cache.disk(cache_seed=44) as cache:
 ```
 
     [92m
-    CLEARING MEMORY[0m
-    [33mUser[0m (to Assistant):
+    CLEARING MEMORY
+    User (to Assistant):
     
     
     Answer the following questions as best you can. You have access to tools provided.
@@ -226,36 +226,36 @@ with Cache.disk(cache_seed=44) as cache:
     
     
     --------------------------------------------------------------------------------
-    [33mAssistant[0m (to User):
+    Assistant (to User):
     
     Thought: I need to search for the result of Super Bowl 2024.
     Action: Use the search_tool to find the result of Super Bowl 2024.
     Action Input: {"query": "Super Bowl 2024 result"}
-    [32m***** Suggested tool Call (call_zIK7cS9Gluug8D7O9fpEUfwT): search_tool *****[0m
+    ***** Suggested tool Call (call_zIK7cS9Gluug8D7O9fpEUfwT): search_tool *****
     Arguments: 
     
     {
     "query": "Super Bowl 2024 result"
     }
-    [32m****************************************************************************[0m
+    ****************************************************************************
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION search_tool...[0m
-    [33mUser[0m (to Assistant):
     
-    [33mUser[0m (to Assistant):
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
     
-    [32m***** Response from calling tool "call_zIK7cS9Gluug8D7O9fpEUfwT" *****[0m
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING FUNCTION search_tool...
+    User (to Assistant):
+    
+    User (to Assistant):
+    
+    ***** Response from calling tool "call_zIK7cS9Gluug8D7O9fpEUfwT" *****
     "[\"{\\\"url\\\": \\\"https://www.espn.com/nfl/story/_/id/39480722/49ers-chiefs-live-super-bowl-lviii-updates-moments-highlights\\\", \\\"content\\\": \\\"With a relentless defense and opportune plays by their star quarterback -- including a pair of gutsy overtime scrambles -- the Chiefs won their third Super Bowl in five years in a 25-22 overtime victory against the San Francisco 49ers in only the second overtime game in Super Bowl history.\\\\n Staff\\\\nTaylor Swift supports Travis Kelce, chugs drink at Super Bowl LVIII10hTory Barron\\\\nAfter posting a losing record in December, the Chiefs embraced an underdog, villain mentality throughout the postseason, upsetting three teams en route to their second consecutive Super Bowl title, becoming the ninth team to repeat as Super Bowl champions and first since the 2004 New England Patriots.\\\\n ESPN\\\\nSuper Bowl 2024 - Highlights from Chiefs' win vs. 49ers\\\\nMike Tannenbaum and Tim Hasselbeck react to the Chiefs' thrilling overtime victory over the 49ers in the Super Bowl. The 49ers had the ball with 2:51 to go in a tied game, but a signature Steve Spagnuolo blitz on third down late in the fourth quarter forced a 49ers field goal. Led by their captains, most of the Chiefs arrived to Allegiant Stadium in Las Vegas on Sunday in all black, signaling a steely resolve to upset Brock Purdy and the NFC's best offensive ensemble.\\\\n\\\"}\", \"{\\\"url\\\": \\\"https://www.sportingnews.com/us/nfl/news/super-bowl-2024-live-score-49ers-chiefs-results-highlights/0c440aa7145b809ed174d8ff\\\", \\\"content\\\": \\\"Super Bowl start time\\\\nSuper Bowl 58 between the Chiefs and 49ers is set to kick off at 6:30 p.m. ET (3:30 p.m. local time) in Las Vegas, Nev.\\\\n6:30 p.m. ET has become the standard start time for Super Bowls and is preceded by performances of \\\\\\\"Lift Every Voice and Sing,\\\\\\\" \\\\\\\"America the Beautiful,\\\\\\\" and \\\\\\\"The Star-Spangled Banner. Brock Purdy drops a dime to Chris Conley on 3rd & 9 \\\\ud83c\\\\udfaf\\\\n\\\\ud83d\\\\udcfa: #SBLVIII on CBS\\\\n\\\\ud83d\\\\udcf1: Stream on #NFLPlus https://t.co/dClcEDViWl pic.twitter.com/Oa10d7khdl\\\\n7:10 p.m. \\\\u2014 The 49ers are relying heavily on McCaffrey, who takes the ball on each of the first three snaps on this drive. \\\\ud83d\\\\udcfa: #SBLVIII on CBS\\\\n\\\\ud83d\\\\udcf1: Stream on #NFLPlus https://t.co/dClcEDViWl pic.twitter.com/yUc00MtP84\\\\n7:24 p.m. \\\\u2014 The 49ers force a 3rd & 1, but Rashee Rice is easily able to pick up the first and one or two more yards.\\\\n49ers 3, Chiefs 0\\\\n7:19 p.m. MORE SUPER BOWL 58:\\\\n\\\\u2022\\\\u00a0 Inside Taylor Swift and Travis Kelce's whirlwind dating timeline\\\\n\\\\u2022. Ranking the thriving Mike and Kyle Shanahan coaching tree\\\\n\\\\u2022. Tracking every Super Bowl 58 commercial\\\\nWhat channel is the Super Bowl on?\\\\nSuper Bowl 58 will be broadcast nationally on CBS. PURDY TO JENNINGS TO CMC FOR SIX \\\\ud83d\\\\udd25\\\\n\\\\ud83d\\\\udcfa: #SBLVIII on CBS\\\\n\\\\ud83d\\\\udcf1: Stream on #NFLPlus https://t.co/dClcEDViWl pic.twitter.com/ktiTXIiHzS\\\\n7:47 p.m. \\\\u2014 L'Jarius Sneed, who was on the other side of this two weeks ago, gets hit with an unsportsmanlike conduct penalty and and gives the 49ers their 11th first down.\\\"}\", \"{\\\"url\\\": \\\"https://apnews.com/live/super-bowl-2024-updates\\\", \\\"content\\\": \\\"Throw in the fact that Chiefs coach Andy Reid will be in his fifth Super Bowl, the third most in NFL history, and has a chance to win a third ring, and the knowledge on the Kansas City sideline will be an advantage too big for the 49ers to overcome.\\\\n She performed in Japan on Saturday night before a flight across nine time zones and the international date line to reach the U.S.\\\\nRihanna performs during halftime of the NFL Super Bowl 57 football game between the Philadelphia Eagles and the Kansas City Chiefs, Sunday, Feb. 12, 2023, in Glendale, Ariz. (AP Photo/David J. Phillip)\\\\n After the teams take the field, Post Malone will perform \\\\u201cAmerica the Beautiful\\\\u201d and Reba McEntire will sing \\\\u201cThe Star-Spangled Banner.\\\\u201d\\\\nSan Francisco 49ers quarterback Brock Purdy (13) warms up before the NFL Super Bowl 58 football game against the Kansas City Chiefs, Sunday, Feb. 11, 2024, in Las Vegas. He was also the referee when the Chiefs beat the 49ers in the Super Bowl four years ago \\\\u2014 and when the Rams beat the Saints in the 2019 NFC championship game after an infamous missed call.\\\\n Purdy\\\\u2019s comeback from the injury to his throwing arm suffered in last season\\\\u2019s NFC championship loss to the Philadelphia Eagles has been part of the storybook start to his career that started as Mr. Irrelevant as the 262nd pick in the 2022 draft.\\\\n\\\"}\", \"{\\\"url\\\": \\\"https://www.cbsnews.com/live-updates/super-bowl-2024-chiefs-49ers-game-coverage/\\\", \\\"content\\\": \\\"\\\\\\\"\\\\nThe Chiefs reached the Super Bowl the hard way, with back-to-back road playoff wins against the Buffalo Bills in the divisional round and then the Ravens in the conference championship \\\\u2014 the first time in his career Mahomes has been forced to play road playoff games.\\\\n Watch CBS News\\\\nSuper Bowl 2024 live updates as Chiefs and 49ers prepare for today's show down\\\\nBy Faris Tanyos, Aliza Chasan, Joe Ruiz, Gina Martinez, S. Dev\\\\nUpdated on:\\\\nFebruary 11, 2024 / 6:37 PM EST\\\\n/ CBS News\\\\nThe Kansas City Chiefs will look to become the first back-to-back Super Bowl champion in two decades when they take on the San Francisco 49ers today in Las Vegas.\\\\n What to know about San Francisco 49ers quarterback Brock Purdy\\\\nOne of the most improbable stories of Super Bowl LVIII is that of San Francisco 49ers quarterback Brock Purdy, who has gone from being \\\\\\\"Mr. Irrelevant,\\\\\\\" as the final pick of the 2022 NFL Draft, to a bonafide star, leading his team to the cusp of an NFL title in less than two years.\\\\n The 24-year-old, who set records at Iowa State after receiving Player of the Year honors at Perry High School in Gilbert, Arizona, is attempting to become the third quarterback after Joe Montana and Steve Young to lead the 49ers to a Super Bowl victory, and the franchise's sixth Lombardi Trophy.\\\\n \\\\\\\"The more technologically savvy we become: look around the stadium, the scoreboards, the lighting, you know, all of the different technology that makes this a spectacular game, these are all increases in the attack surface that people can target,\\\\\\\" said Cathy Lanier, the NFL's chief security officer.\\\\n\\\"}\", \"{\\\"url\\\": \\\"https://www.cbssports.com/nfl/news/2024-super-bowl-chiefs-vs-49ers-score-patrick-mahomes-leads-ot-comeback-as-k-c-wins-back-to-back-titles/live/\\\", \\\"content\\\": \\\"The championship-winning drive, which included a fourth-and-1 scramble from Mahomes and a clutch 7-yard catch from tight end Travis Kelce, was a must-score for K.C. The NFL's new playoff overtime rules -- both teams are guaranteed at least one possession in the extra period -- were in effect for the first time, and the Chiefs needed to answer the Niners' field goal.\\\\n Held out of the end zone until that point, Kansas City grabbed its first lead of the game at 13-10.\\\\nJennings' touchdown receiving (followed by a missed extra point) concluded a 75-yard drive that put the Niners back on top, 16-13, as the wideout joined former Philadelphia Eagles quarterback Nick Foles as the only players to throw and catch a touchdown in a Super Bowl.\\\\n He spread the ball around -- eight pass-catchers had at least two receptions -- slowly but surely overcoming a threatening 49ers defense that knocked him off his spot consistently in the first half.\\\\nMahomes, with his third Super Bowl MVP, now sits alongside Tom Brady (five) and Joe Montana (three) atop the mountain while becoming just the third player to win the award back-to-back, joining Bart Starr (I-II) and Terry Bradshaw (XIII-XIV).\\\\n The muffed punt that bounced off of cornerback Darrell Luter Jr.'s ankle was also the big break that the Chiefs needed as they scored on the very next play to take the lead for the first time in the game. College Pick'em\\\\nA Daily SportsLine Betting Podcast\\\\nNFL Playoff Time!\\\\n2024 Super Bowl, Chiefs vs. 49ers score: Patrick Mahomes leads OT comeback as K.C. wins back-to-back titles\\\\nCall it a dynasty; the Chiefs are the first team to win consecutive Super Bowls since 2003-04\\\\nThe Kansas City Chiefs are Super Bowl champions, again.\\\"}\"]"
-    [32m**********************************************************************[0m
+    **********************************************************************
     
     --------------------------------------------------------------------------------
-    [33mAssistant[0m (to User):
+    Assistant (to User):
     
     Observation: The Chiefs won Super Bowl 2024 against the San Francisco 49ers with a score of 25-22 in overtime. This was the Chiefs' third Super Bowl victory in five years, and they became the first team to win consecutive Super Bowls since 2004. The game took place at Allegiant Stadium in Las Vegas. The 49ers were leading initially, but the Chiefs came back and won the game in a thrilling overtime victory.
     Thought: I now know the final answer. 
@@ -279,7 +279,7 @@ with Cache.disk(cache_seed=110) as cache:
     )
 ```
 
-    [33mUser[0m (to Assistant):
+    User (to Assistant):
     
     
     Answer the following questions as best you can. You have access to tools provided.
@@ -302,7 +302,7 @@ with Cache.disk(cache_seed=110) as cache:
     --------------------------------------------------------------------------------
 
 
-    [33mAssistant[0m (to User):
+    Assistant (to User):
     
     Thought: The question asks for the result of Super Bowl 2024. No need to use any function tools since the answer is already provided in the memories.
     

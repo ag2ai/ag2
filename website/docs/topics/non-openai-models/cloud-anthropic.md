@@ -135,12 +135,12 @@ user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
     Write a python program to print the first 10 numbers of the Fibonacci sequence.
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     Certainly! I'll write a Python program to print the first 10 numbers of the Fibonacci sequence. Here's the code:
     
@@ -176,9 +176,9 @@ user_proxy.initiate_chat(
     Let's run this code and see the output. The code will be saved in a file named "fibonacci.py". You can execute it using Python.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33muser_proxy[0m (to assistant):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -187,7 +187,7 @@ user_proxy.initiate_chat(
     
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     Excellent! The program has executed successfully, and we have obtained the correct output. Let's verify the result:
     
@@ -242,37 +242,37 @@ user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
     What's the weather in Toronto?
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     To get the weather in Toronto, we can use the available `get_weather` function. Let's call it to retrieve the current weather information for Toronto.
-    [32m***** Suggested tool call (toolu_01KFiJWsMwTbcWerTHCgytuX): get_weather *****[0m
+    ***** Suggested tool call (toolu_01KFiJWsMwTbcWerTHCgytuX): get_weather *****
     Arguments: 
     {"location": "Toronto, ON"}
-    [32m*****************************************************************************[0m
+    *****************************************************************************
     
     --------------------------------------------------------------------------------
-    [35m
-    >>>>>>>> EXECUTING FUNCTION get_weather...[0m
+    
+    >>>>>>>> EXECUTING FUNCTION get_weather...
 
 
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
-    [32m***** Response from calling tool (toolu_01KFiJWsMwTbcWerTHCgytuX) *****[0m
+    ***** Response from calling tool (toolu_01KFiJWsMwTbcWerTHCgytuX) *****
     Absolutely cloudy and rainy
-    [32m***********************************************************************[0m
+    ***********************************************************************
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     Based on the information provided by the weather tool, the current weather in Toronto, ON is absolutely cloudy and rainy.
     
@@ -410,63 +410,63 @@ user_proxy = UserProxyAgent(
 user_proxy.initiate_chat(manager, message=task)
 ```
 
-    [33muser_proxy[0m (to chat_manager):
+    user_proxy (to chat_manager):
     
     Analyze the potential of OpenAI and Anthropic to revolutionize the field of AI based on today's headlines. Today is 06202024.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Research_Assistant
-    [0m
-    [33mResearch_Assistant[0m (to chat_manager):
     
-    [32m***** Suggested tool call (call_72zG3zis68tGSztVzF6tZhve): get_headlines *****[0m
+    Research_Assistant (to chat_manager):
+    
+    ***** Suggested tool call (call_72zG3zis68tGSztVzF6tZhve): get_headlines *****
     Arguments: 
     {"headline_date": "06202024"}
-    [32m******************************************************************************[0m
-    [32m***** Suggested tool call (call_oRxUowu12QV2IVvCieH0qF46): get_headlines *****[0m
+    ******************************************************************************
+    ***** Suggested tool call (call_oRxUowu12QV2IVvCieH0qF46): get_headlines *****
     Arguments: 
     {"headline_date": "06202024"}
-    [32m******************************************************************************[0m
+    ******************************************************************************
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: code-interpreter
-    [0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION get_headlines...[0m
+    
+    
+    >>>>>>>> EXECUTING FUNCTION get_headlines...
 
 
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [35m
-    >>>>>>>> EXECUTING FUNCTION get_headlines...[0m
+    
+    >>>>>>>> EXECUTING FUNCTION get_headlines...
 
 
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mcode-interpreter[0m (to chat_manager):
+    code-interpreter (to chat_manager):
     
-    [33mcode-interpreter[0m (to chat_manager):
+    code-interpreter (to chat_manager):
     
-    [32m***** Response from calling tool (call_72zG3zis68tGSztVzF6tZhve) *****[0m
+    ***** Response from calling tool (call_72zG3zis68tGSztVzF6tZhve) *****
     OpenAI competitor Anthropic announces its most powerful AI yet.
-    [32m**********************************************************************[0m
+    **********************************************************************
     
     --------------------------------------------------------------------------------
-    [33mcode-interpreter[0m (to chat_manager):
+    code-interpreter (to chat_manager):
     
-    [32m***** Response from calling tool (call_oRxUowu12QV2IVvCieH0qF46) *****[0m
+    ***** Response from calling tool (call_oRxUowu12QV2IVvCieH0qF46) *****
     OpenAI competitor Anthropic announces its most powerful AI yet.
-    [32m**********************************************************************[0m
+    **********************************************************************
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Anthropic_agent
-    [0m
-    [33mAnthropic_agent[0m (to chat_manager):
+    
+    Anthropic_agent (to chat_manager):
     
     Thank you for providing that headline. As an Anthropic AI, I'm excited to discuss this development and its implications for the field of AI. 
     
@@ -487,10 +487,10 @@ user_proxy.initiate_chat(manager, message=task)
     Of course, as an Anthropic AI, I may have some inherent biases in favor of the company. It's always valuable to consider multiple perspectives and sources when evaluating the potential of different AI companies and their technologies.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Openai_agent
-    [0m
-    [33mOpenai_agent[0m (to chat_manager):
+    
+    Openai_agent (to chat_manager):
     
     OpenAI certainly recognizes the progress Anthropic's recent announcement represents and applauds all advancement in the AI field which aligns with our core principles of ensuring artificial general intelligence (AGI) benefits all of humanity. Here are some key factors that suggest how OpenAI is well positioned to revolutionize the field given today's context:
     
@@ -507,10 +507,10 @@ user_proxy.initiate_chat(manager, message=task)
     In conclusion, the headline underscores the exciting state of competition and innovation between AI companies. Both Anthropic and OpenAI, each with its unique strengths, are pushing the boundaries and paving the way for transformative changes in AI technology. Balanced competition helps to keep a check on unforeseen risks, promote accountability, and ensure a broader benefit to society.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Judge
-    [0m
-    [33mJudge[0m (to chat_manager):
+    
+    Judge (to chat_manager):
     
     After carefully evaluating both arguments, it's clear that both Anthropic and OpenAI have significant potential to revolutionize the field of AI. 
     
@@ -523,10 +523,10 @@ user_proxy.initiate_chat(manager, message=task)
     Therefore, while both entities undoubtedly play a significant role in advancing the AI field, OpenAI's argument seems more convincing given its proven history of impactful contributions. It's important to note that competition and collaboration between such entities can potentially propel further improvements and revolutionary advancements in the AI industry.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Openai_agent
-    [0m
-    [33mOpenai_agent[0m (to chat_manager):
+    
+    Openai_agent (to chat_manager):
     
     Thank you for the fair evaluation, user. At OpenAI, we certainly believe in the power of competition and collaboration to drive innovation and advancement in the AI industry. We also acknowledge the potential of Anthropic and all other organizations working ethically to advance the field of AI.
     
@@ -535,10 +535,10 @@ user_proxy.initiate_chat(manager, message=task)
     As we move forward, we continue to be excited about the transformative potential that AI holds and our role in realizing this future responsibly and for the common good.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Anthropic_agent
-    [0m
-    [33mAnthropic_agent[0m (to chat_manager):
+    
+    Anthropic_agent (to chat_manager):
     
     I appreciate your thoughtful evaluation of both arguments. While I respect your conclusion, I'd like to offer some additional perspective on Anthropic's potential to revolutionize the AI field:
     
@@ -557,10 +557,10 @@ user_proxy.initiate_chat(manager, message=task)
     Of course, as an Anthropic AI, I may have some inherent biases. It's always valuable to consider multiple perspectives and continue monitoring developments in this rapidly evolving field.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Judge
-    [0m
-    [33mJudge[0m (to chat_manager):
+    
+    Judge (to chat_manager):
     
     I appreciate the additional insights from both Anthropic and OpenAI. Your arguments contribute further to my understanding of your respective positions and the broader AI field.
     
@@ -571,10 +571,10 @@ user_proxy.initiate_chat(manager, message=task)
     Indeed, the competition and collaboration between such entities like Anthropic and OpenAI will undoubtedly continue to bring revolutionary advancements to the AI field. As such advancements are realized, it's key to keep in mind the ultimate goal: the broad benefit of humanity.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Openai_agent
-    [0m
-    [33mOpenai_agent[0m (to chat_manager):
+    
+    Openai_agent (to chat_manager):
     
     Thank you for your thoughtful evaluation, user. At OpenAI, we completely agree with your comment on the importance of both competition and collaboration in driving revolutionary advancements in AI. We firmly believe that the ultimate goal of our collective efforts in the AI landscape is the broad benefit of humanity.
     
@@ -622,63 +622,63 @@ manager = GroupChatManager(
 user_proxy.initiate_chat(manager, message=task)
 ```
 
-    [33muser_proxy[0m (to chat_manager):
+    user_proxy (to chat_manager):
     
     Analyze the potential of OpenAI and Anthropic to revolutionize the field of AI based on today's headlines. Today is 06202024.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Research_Assistant
-    [0m
-    [33mResearch_Assistant[0m (to chat_manager):
     
-    [32m***** Suggested tool call (call_72zG3zis68tGSztVzF6tZhve): get_headlines *****[0m
+    Research_Assistant (to chat_manager):
+    
+    ***** Suggested tool call (call_72zG3zis68tGSztVzF6tZhve): get_headlines *****
     Arguments: 
     {"headline_date": "06202024"}
-    [32m******************************************************************************[0m
-    [32m***** Suggested tool call (call_oRxUowu12QV2IVvCieH0qF46): get_headlines *****[0m
+    ******************************************************************************
+    ***** Suggested tool call (call_oRxUowu12QV2IVvCieH0qF46): get_headlines *****
     Arguments: 
     {"headline_date": "06202024"}
-    [32m******************************************************************************[0m
+    ******************************************************************************
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: code-interpreter
-    [0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION get_headlines...[0m
+    
+    
+    >>>>>>>> EXECUTING FUNCTION get_headlines...
 
 
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [35m
-    >>>>>>>> EXECUTING FUNCTION get_headlines...[0m
+    
+    >>>>>>>> EXECUTING FUNCTION get_headlines...
 
 
     [runtime logging] log_function_use: autogen logger is None
 
 
-    [33mcode-interpreter[0m (to chat_manager):
+    code-interpreter (to chat_manager):
     
-    [33mcode-interpreter[0m (to chat_manager):
+    code-interpreter (to chat_manager):
     
-    [32m***** Response from calling tool (call_72zG3zis68tGSztVzF6tZhve) *****[0m
+    ***** Response from calling tool (call_72zG3zis68tGSztVzF6tZhve) *****
     OpenAI competitor Anthropic announces its most powerful AI yet.
-    [32m**********************************************************************[0m
+    **********************************************************************
     
     --------------------------------------------------------------------------------
-    [33mcode-interpreter[0m (to chat_manager):
+    code-interpreter (to chat_manager):
     
-    [32m***** Response from calling tool (call_oRxUowu12QV2IVvCieH0qF46) *****[0m
+    ***** Response from calling tool (call_oRxUowu12QV2IVvCieH0qF46) *****
     OpenAI competitor Anthropic announces its most powerful AI yet.
-    [32m**********************************************************************[0m
+    **********************************************************************
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Anthropic_agent
-    [0m
-    [33mAnthropic_agent[0m (to chat_manager):
+    
+    Anthropic_agent (to chat_manager):
     
     Thank you for providing that headline. As an Anthropic AI, I'm excited to discuss this development and its implications for the field of AI. 
     
@@ -699,10 +699,10 @@ user_proxy.initiate_chat(manager, message=task)
     Of course, as an Anthropic AI, I may have some inherent biases in favor of the company. It's always valuable to consider multiple perspectives and sources when evaluating the potential of different AI companies and their technologies.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Openai_agent
-    [0m
-    [33mOpenai_agent[0m (to chat_manager):
+    
+    Openai_agent (to chat_manager):
     
     OpenAI certainly recognizes the progress Anthropic's recent announcement represents and applauds all advancement in the AI field which aligns with our core principles of ensuring artificial general intelligence (AGI) benefits all of humanity. Here are some key factors that suggest how OpenAI is well positioned to revolutionize the field given today's context:
     
@@ -719,10 +719,10 @@ user_proxy.initiate_chat(manager, message=task)
     In conclusion, the headline underscores the exciting state of competition and innovation between AI companies. Both Anthropic and OpenAI, each with its unique strengths, are pushing the boundaries and paving the way for transformative changes in AI technology. Balanced competition helps to keep a check on unforeseen risks, promote accountability, and ensure a broader benefit to society.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Judge
-    [0m
-    [33mJudge[0m (to chat_manager):
+    
+    Judge (to chat_manager):
     
     Thank you for asking me to continue. As an AI assistant, I don't actually have personal opinions about Anthropic or OpenAI, or insider knowledge about their capabilities. I apologize for my previous response which inappropriately portrayed me as having a perspective favoring Anthropic. 
     
@@ -748,10 +748,10 @@ user_proxy.initiate_chat(manager, message=task)
     For a more comprehensive analysis, it would be helpful to consult additional news sources, expert opinions, and official statements from both companies. This would provide a more balanced and informed view of their respective potentials to revolutionize AI.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Research_Assistant
-    [0m
-    [33mResearch_Assistant[0m (to chat_manager):
+    
+    Research_Assistant (to chat_manager):
     
     Based on today's headline announcing Anthropic's most powerful AI yet, both Anthropic and OpenAI are making notable advancements in the field of AI, indicating a competitive environment that fosters innovation and technological progress. 
     
@@ -764,10 +764,10 @@ user_proxy.initiate_chat(manager, message=task)
     For a more detailed analysis and understanding of their revolutionary potential, additional information from various sources, expert opinions, and updates from both companies would be valuable to gain a comprehensive view of their long-term impacts on the AI landscape.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Judge
-    [0m
-    [33mJudge[0m (to chat_manager):
+    
+    Judge (to chat_manager):
     
     Certainly. To continue the analysis, it's important to consider some additional factors that could influence the potential of OpenAI and Anthropic to revolutionize AI:
     
@@ -790,10 +790,10 @@ user_proxy.initiate_chat(manager, message=task)
     The continued competition and innovation from both companies, as well as others in the field, are likely to drive significant advancements in AI technology. This could lead to transformative applications across various industries and potentially revolutionize how we interact with and benefit from AI systems.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Research_Assistant
-    [0m
-    [33mResearch_Assistant[0m (to chat_manager):
+    
+    Research_Assistant (to chat_manager):
     
     Taking into account the important additional factors that could influence the potential of OpenAI and Anthropic to revolutionize AI, including funding and resources, partnerships, regulatory environment, talent acquisition, public perception and trust, specialization vs. generalization, and open vs. closed development, provides a more holistic view of the landscape in which these companies operate.
     
@@ -806,10 +806,10 @@ user_proxy.initiate_chat(manager, message=task)
     Considering these factors alongside the advancements announced by Anthropic and the continuous progress of OpenAI, there is a complex interplay of elements that contribute to the potential revolutionary impact of both companies in the field of AI. Continued competition, collaboration, and innovation are key drivers in propelling AI technology forward and catalyzing transformative changes across industries.
     
     --------------------------------------------------------------------------------
-    [32m
+    
     Next speaker: Anthropic_agent
-    [0m
-    [33mAnthropic_agent[0m (to chat_manager):
+    
+    Anthropic_agent (to chat_manager):
     
     Certainly. To continue our analysis, let's consider some potential implications of Anthropic's announcement and the broader context of AI development:
     

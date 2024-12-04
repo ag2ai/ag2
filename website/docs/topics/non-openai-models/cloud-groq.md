@@ -164,12 +164,12 @@ chat_result = user_proxy_agent.initiate_chat(
 )
 ```
 
-    [33mUser[0m (to Groq Assistant):
+    User (to Groq Assistant):
     
     Provide code to count the number of prime numbers from 1 to 10000.
     
     --------------------------------------------------------------------------------
-    [33mGroq Assistant[0m (to User):
+    Groq Assistant (to User):
     
     Here's the plan to count the number of prime numbers from 1 to 10000:
     
@@ -197,26 +197,26 @@ chat_result = user_proxy_agent.initiate_chat(
     Please execute this code, and I'll wait for the result.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...[0m
-    [33mUser[0m (to Groq Assistant):
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
+    User (to Groq Assistant):
     
     exitcode: 0 (execution succeeded)
     Code output: 1229
     
     
     --------------------------------------------------------------------------------
-    [33mGroq Assistant[0m (to User):
+    Groq Assistant (to User):
     
     FINISH
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
 
 
 ## Tool Call Example
@@ -347,49 +347,49 @@ res = user_proxy.initiate_chat(
 print(f"LLM SUMMARY: {res.summary['content']}")
 ```
 
-    [33muser_proxy[0m (to chatbot):
+    user_proxy (to chatbot):
     
     What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
     
     --------------------------------------------------------------------------------
-    [33mchatbot[0m (to user_proxy):
+    chatbot (to user_proxy):
     
-    [32m***** Suggested tool call (call_hg7g): weather_forecast *****[0m
+    ***** Suggested tool call (call_hg7g): weather_forecast *****
     Arguments: 
     {"location":"New York"}
-    [32m*************************************************************[0m
-    [32m***** Suggested tool call (call_hrsf): currency_calculator *****[0m
+    *************************************************************
+    ***** Suggested tool call (call_hrsf): currency_calculator *****
     Arguments: 
     {"base_amount":123.45,"base_currency":"EUR","quote_currency":"USD"}
-    [32m****************************************************************[0m
+    ****************************************************************
     
     --------------------------------------------------------------------------------
-    [35m
-    >>>>>>>> EXECUTING FUNCTION weather_forecast...[0m
-    [35m
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...[0m
-    [33muser_proxy[0m (to chatbot):
     
-    [33muser_proxy[0m (to chatbot):
+    >>>>>>>> EXECUTING FUNCTION weather_forecast...
     
-    [32m***** Response from calling tool (call_hg7g) *****[0m
+    >>>>>>>> EXECUTING FUNCTION currency_calculator...
+    user_proxy (to chatbot):
+    
+    user_proxy (to chatbot):
+    
+    ***** Response from calling tool (call_hg7g) *****
     New York will be 11 degrees fahrenheit
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [33muser_proxy[0m (to chatbot):
+    user_proxy (to chatbot):
     
-    [32m***** Response from calling tool (call_hrsf) *****[0m
+    ***** Response from calling tool (call_hrsf) *****
     135.80 USD
-    [32m**************************************************[0m
+    **************************************************
     
     --------------------------------------------------------------------------------
-    [33mchatbot[0m (to user_proxy):
+    chatbot (to user_proxy):
     
-    [32m***** Suggested tool call (call_ahwk): weather_forecast *****[0m
+    ***** Suggested tool call (call_ahwk): weather_forecast *****
     Arguments: 
     {"location":"New York"}
-    [32m*************************************************************[0m
+    *************************************************************
     
     --------------------------------------------------------------------------------
     LLM SUMMARY: Based on the conversation, it's predicted that New York will be 11 degrees Fahrenheit. You also found out that 123.45 EUR is equal to 135.80 USD. Here are a few holiday tips:

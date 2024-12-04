@@ -160,14 +160,14 @@ result = gcm.initiate_chat(
 )
 ```
 
-    [33mmoderator[0m (to Mark):
+    moderator (to Mark):
     
     Mark, ask us an accounting question. Alexandra and Elizabeth will help you out.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mMark[0m (to moderator):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Mark (to moderator):
     
     I've been trying to understand how to properly capitalize versus expense certain costs in our company's general ledger. Let me give you some background.
     
@@ -178,23 +178,23 @@ result = gcm.initiate_chat(
     --------------------------------------------------------------------------------
     [autogen.oai.client: 10-18 00:20:34] {565} INFO - Detected custom model client in config: MyCustomModelClient, model client can not be used until register_model_client is called.
     CustomModelClient config: {'model_client_cls': 'MyCustomModelClient'}
-    [33mchecking_agent[0m (to speaker_selection_agent):
+    checking_agent (to speaker_selection_agent):
     
     Read the above conversation. Then select the next role from ['Alexandra', 'Elizabeth'] to play. Only return the role.
     
     --------------------------------------------------------------------------------
-    [33mspeaker_selection_agent[0m (to checking_agent):
+    speaker_selection_agent (to checking_agent):
     
     Randomly choosing... Alexandra
     
     --------------------------------------------------------------------------------
-    [32m>>>>>>>> Select speaker attempt 1 of 3 successfully selected: Alexandra[0m
-    [32m
+    >>>>>>>> Select speaker attempt 1 of 3 successfully selected: Alexandra
+    
     Next speaker: Alexandra
-    [0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mAlexandra[0m (to moderator):
+    
+    
+    >>>>>>>> USING AUTO REPLY...
+    Alexandra (to moderator):
     
     A great question that gets to the heart of accounting principles!
     
@@ -222,23 +222,23 @@ result = gcm.initiate_chat(
     --------------------------------------------------------------------------------
     [autogen.oai.client: 10-18 00:20:40] {565} INFO - Detected custom model client in config: MyCustomModelClient, model client can not be used until register_model_client is called.
     CustomModelClient config: {'model_client_cls': 'MyCustomModelClient'}
-    [33mchecking_agent[0m (to speaker_selection_agent):
+    checking_agent (to speaker_selection_agent):
     
     Read the above conversation. Then select the next role from ['Mark', 'Elizabeth'] to play. Only return the role.
     
     --------------------------------------------------------------------------------
-    [33mspeaker_selection_agent[0m (to checking_agent):
+    speaker_selection_agent (to checking_agent):
     
     Randomly choosing... Mark
     
     --------------------------------------------------------------------------------
-    [32m>>>>>>>> Select speaker attempt 1 of 3 successfully selected: Mark[0m
-    [32m
+    >>>>>>>> Select speaker attempt 1 of 3 successfully selected: Mark
+    
     Next speaker: Mark
-    [0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mMark[0m (to moderator):
+    
+    
+    >>>>>>>> USING AUTO REPLY...
+    Mark (to moderator):
     
     Wow, I'm glad you explained this in such detail! I have one more question to clarify: how will we account for the interest expense related to the financed portion of the equipment? Should we recognize it as a separate expense or is it already included in the depreciation calculation?
     
@@ -247,23 +247,23 @@ result = gcm.initiate_chat(
     --------------------------------------------------------------------------------
     [autogen.oai.client: 10-18 00:20:42] {565} INFO - Detected custom model client in config: MyCustomModelClient, model client can not be used until register_model_client is called.
     CustomModelClient config: {'model_client_cls': 'MyCustomModelClient'}
-    [33mchecking_agent[0m (to speaker_selection_agent):
+    checking_agent (to speaker_selection_agent):
     
     Read the above conversation. Then select the next role from ['Alexandra', 'Elizabeth'] to play. Only return the role.
     
     --------------------------------------------------------------------------------
-    [33mspeaker_selection_agent[0m (to checking_agent):
+    speaker_selection_agent (to checking_agent):
     
     Randomly choosing... Elizabeth
     
     --------------------------------------------------------------------------------
-    [32m>>>>>>>> Select speaker attempt 1 of 3 successfully selected: Elizabeth[0m
-    [32m
+    >>>>>>>> Select speaker attempt 1 of 3 successfully selected: Elizabeth
+    
     Next speaker: Elizabeth
-    [0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mElizabeth[0m (to moderator):
+    
+    
+    >>>>>>>> USING AUTO REPLY...
+    Elizabeth (to moderator):
     
     A well-structured question that gets to the heart of accounting principles indeed!
     
@@ -297,18 +297,18 @@ result = gcm.initiate_chat(
     --------------------------------------------------------------------------------
     [autogen.oai.client: 10-18 00:20:48] {565} INFO - Detected custom model client in config: MyCustomModelClient, model client can not be used until register_model_client is called.
     CustomModelClient config: {'model_client_cls': 'MyCustomModelClient'}
-    [33mchecking_agent[0m (to speaker_selection_agent):
+    checking_agent (to speaker_selection_agent):
     
     Read the above conversation. Then select the next role from ['Mark', 'Alexandra'] to play. Only return the role.
     
     --------------------------------------------------------------------------------
-    [33mspeaker_selection_agent[0m (to checking_agent):
+    speaker_selection_agent (to checking_agent):
     
     Randomly choosing... Elizabeth
     
     --------------------------------------------------------------------------------
-    [31m>>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.[0m
-    [33mchecking_agent[0m (to speaker_selection_agent):
+    >>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.
+    checking_agent (to speaker_selection_agent):
     
     You didn't choose a speaker. As a reminder, to determine the speaker use these prioritised rules:
         1. If the context refers to themselves as a speaker e.g. "As the..." , choose that speaker's name
@@ -319,13 +319,13 @@ result = gcm.initiate_chat(
         Respond with ONLY the name of the speaker and DO NOT provide a reason.
     
     --------------------------------------------------------------------------------
-    [33mspeaker_selection_agent[0m (to checking_agent):
+    speaker_selection_agent (to checking_agent):
     
     Randomly choosing... Elizabeth
     
     --------------------------------------------------------------------------------
-    [31m>>>>>>>> Select speaker attempt #2 failed as it did not include any agent names.[0m
-    [33mchecking_agent[0m (to speaker_selection_agent):
+    >>>>>>>> Select speaker attempt #2 failed as it did not include any agent names.
+    checking_agent (to speaker_selection_agent):
     
     You didn't choose a speaker. As a reminder, to determine the speaker use these prioritised rules:
         1. If the context refers to themselves as a speaker e.g. "As the..." , choose that speaker's name
@@ -336,18 +336,18 @@ result = gcm.initiate_chat(
         Respond with ONLY the name of the speaker and DO NOT provide a reason.
     
     --------------------------------------------------------------------------------
-    [33mspeaker_selection_agent[0m (to checking_agent):
+    speaker_selection_agent (to checking_agent):
     
     Randomly choosing... Alexandra
     
     --------------------------------------------------------------------------------
-    [32m>>>>>>>> Select speaker attempt 3 of 3 successfully selected: Alexandra[0m
-    [32m
+    >>>>>>>> Select speaker attempt 3 of 3 successfully selected: Alexandra
+    
     Next speaker: Alexandra
-    [0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mAlexandra[0m (to moderator):
+    
+    
+    >>>>>>>> USING AUTO REPLY...
+    Alexandra (to moderator):
     
     You're not only clever but also enthusiastic about accounting!
     

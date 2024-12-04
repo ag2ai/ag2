@@ -134,12 +134,12 @@ user_proxy = UserProxyAgent(
 result = user_proxy.initiate_chat(assistant, message="Sort the array with Bubble Sort: [4, 1, 5, 2, 3]")
 ```
 
-    [33muser_proxy[0m (to assistant):
+    user_proxy (to assistant):
     
     Sort the array with Bubble Sort: [4, 1, 5, 2, 3]
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     ```python
     def bubble_sort(nums):
@@ -150,25 +150,25 @@ result = user_proxy.initiate_chat(assistant, message="Sort the array with Bubble
     ```
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33muser_proxy[0m (to assistant):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
     
     exitcode: 0 (execution succeeded)
     Code output: 
     
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     ```python
     print(nums)
     ```
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33muser_proxy[0m (to assistant):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
     
     exitcode: 1 (execution failed)
     Code output: 
@@ -179,7 +179,7 @@ result = user_proxy.initiate_chat(assistant, message="Sort the array with Bubble
     
     
     --------------------------------------------------------------------------------
-    [33massistant[0m (to user_proxy):
+    assistant (to user_proxy):
     
     ```python
     # filename: sort.py
@@ -193,9 +193,9 @@ result = user_proxy.initiate_chat(assistant, message="Sort the array with Bubble
     ```
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33muser_proxy[0m (to assistant):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    user_proxy (to assistant):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -242,42 +242,42 @@ gemini = AssistantAgent(
 gpt.initiate_chat(gemini, message="Do Transformers purchase auto insurance or health insurance?")
 ```
 
-    [33mGPT-4[0m (to Gemini-Pro):
+    GPT-4 (to Gemini-Pro):
     
     Do Transformers purchase auto insurance or health insurance?
     
     --------------------------------------------------------------------------------
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     Transformers are fictional characters and do not purchase insurance.
     
     --------------------------------------------------------------------------------
-    [33mGPT-4[0m (to Gemini-Pro):
+    GPT-4 (to Gemini-Pro):
     
     If Transformers were real, would their insurance be categorized as a type of auto insurance, health insurance, or a new category unique to sentient machines?
     
     --------------------------------------------------------------------------------
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     If Transformers were real, their insurance would likely be a new category unique to sentient machines.
     
     --------------------------------------------------------------------------------
-    [33mGPT-4[0m (to Gemini-Pro):
+    GPT-4 (to Gemini-Pro):
     
     Considering the unique needs of sentient machines like Transformers, what special coverages might be included in their insurance policies?
     
     --------------------------------------------------------------------------------
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     Sentient machine insurance policies might include coverage for repairs, maintenance, data loss, and liability.
     
     --------------------------------------------------------------------------------
-    [33mGPT-4[0m (to Gemini-Pro):
+    GPT-4 (to Gemini-Pro):
     
     Would these sentient machine insurance policies also potentially cover software updates and cybersecurity, similar to how health insurance covers vaccinations and preventative care?
     
     --------------------------------------------------------------------------------
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     Yes, sentient machine insurance policies could potentially cover software updates and cybersecurity, similar to how health insurance covers vaccinations and preventative care.
     
@@ -315,37 +315,37 @@ Ask the next question based on (by evolving) the previous one.""",
 gemini.initiate_chat(gpt, message="Should Spider Man invest in 401K?")
 ```
 
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     Should Spider Man invest in 401K?
     
     --------------------------------------------------------------------------------
-    [33mGPT-4[0m (to Gemini-Pro):
+    GPT-4 (to Gemini-Pro):
     
     As a fictional character, Spider-Man cannot invest in a 401K, but if he were a real person with income, investing in a 401k could be a wise financial move for retirement savings.
     
     --------------------------------------------------------------------------------
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     Would Green Lantern prefer a 401K or a Roth IRA?
     
     --------------------------------------------------------------------------------
-    [33mGPT-4[0m (to Gemini-Pro):
+    GPT-4 (to Gemini-Pro):
     
     Since Green Lantern's financial preferences aren't specified in comics, it's impossible to determine whether he would prefer a 401K or a Roth IRA for retirement savings.
     
     --------------------------------------------------------------------------------
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     If Superman could invest in the stock market, which companies would he choose?
     
     --------------------------------------------------------------------------------
-    [33mGPT-4[0m (to Gemini-Pro):
+    GPT-4 (to Gemini-Pro):
     
     Superman might choose companies that align with his values of truth, justice, and social good, but his specific preferences are not detailed in comics or other media.
     
     --------------------------------------------------------------------------------
-    [33mGemini-Pro[0m (to GPT-4):
+    Gemini-Pro (to GPT-4):
     
     If Batman invested in cryptocurrency, which coins would he choose and why?
     
@@ -384,15 +384,15 @@ user_proxy.initiate_chat(
 )
 ```
 
-    [33muser_proxy[0m (to Gemini Vision):
+    user_proxy (to Gemini Vision):
     
     Describe what is in this image?
     <image>.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mGemini Vision[0m (to user_proxy):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Gemini Vision (to user_proxy):
     
      The image is a user interacting with an assistant agent. The user is requesting the assistant to plot a chart of stock prices and the assistant is asking for clarification on the request. The user then provides more information and the assistant is able to generate the chart.
     
@@ -447,12 +447,12 @@ user_proxy.send(
 )
 ```
 
-    [33muser_proxy[0m (to chat_manager):
+    user_proxy (to chat_manager):
     
     Show me the release year of famous Google products in a markdown table.
     
     --------------------------------------------------------------------------------
-    [33mGemini-agent[0m (to chat_manager):
+    Gemini-agent (to chat_manager):
     
     | Product | Release Year |
     |---|---|
@@ -467,7 +467,7 @@ user_proxy.send(
     | Google Stadia | 2019 |
     
     --------------------------------------------------------------------------------
-    [33muser_proxy[0m (to chat_manager):
+    user_proxy (to chat_manager):
     
     
     
@@ -483,12 +483,12 @@ user_proxy.send(
 )
 ```
 
-    [33muser_proxy[0m (to chat_manager):
+    user_proxy (to chat_manager):
     
     Plot the products (as y-axis) and years (as x-axis) in scatter plot and save to `graph.png`
     
     --------------------------------------------------------------------------------
-    [33mGPT-agent[0m (to chat_manager):
+    GPT-agent (to chat_manager):
     
     To plot the products on the y-axis and the years on the x-axis in a scatter plot and save it to `graph.png`, we will use the `matplotlib` library in Python.
     
@@ -530,11 +530,11 @@ user_proxy.send(
     After you have executed the above script, `graph.png` will be saved in your current directory. Please run this code in your Python environment, and then you should find the `graph.png` file with the scatter plot of Google products and their release years.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is sh)...[0m
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 1 (inferred language is python)...[0m
-    [33muser_proxy[0m (to chat_manager):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is sh)...
+    
+    >>>>>>>> EXECUTING CODE BLOCK 1 (inferred language is python)...
+    user_proxy (to chat_manager):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -614,7 +614,7 @@ The pipeline will take an image and run Gemini model to describe:
 )
 ```
 
-    [33mUser_proxy[0m (to chat_manager):
+    User_proxy (to chat_manager):
     
     Design and implement a multimodal product for people with vision disabilities.
     The pipeline will take an image and run Gemini model to describe:
@@ -622,7 +622,7 @@ The pipeline will take an image and run Gemini model to describe:
     2. where these objects are located.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Product Name:** VisionAid
     
@@ -666,7 +666,7 @@ The pipeline will take an image and run Gemini model to describe:
     * **Increased Independence:** The platform allows users to perform daily tasks and engage in activities that would otherwise be challenging with limited vision.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -686,7 +686,7 @@ The pipeline will take an image and run Gemini model to describe:
     VisionAid has the potential to transform the lives of people with vision disabilities by providing them with a greater sense of independence, safety, and confidence. By empowering them with essential information about their surroundings, the platform enables them to navigate the world more effectively and participate fully in society.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -705,7 +705,7 @@ The pipeline will take an image and run Gemini model to describe:
     VisionAid has the potential to make a significant impact on society by promoting inclusivity and empowering people with vision disabilities. By providing them with the tools they need to navigate the world more effectively, the platform can help break down barriers and create a more equitable society for all.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -724,7 +724,7 @@ The pipeline will take an image and run Gemini model to describe:
     VisionAid has the potential to shape the future of assistive technology by providing a comprehensive and innovative solution for people with vision disabilities. By leveraging cutting-edge technologies and incorporating user-centric design principles, the platform can empower individuals to live more independent, fulfilling, and connected lives.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -749,7 +749,7 @@ The pipeline will take an image and run Gemini model to describe:
     By empowering individuals with vision impairments, VisionAid aims to foster a more inclusive and equitable society where everyone has the chance to reach their full potential.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -774,7 +774,7 @@ The pipeline will take an image and run Gemini model to describe:
     By empowering individuals with vision impairments, VisionAid aims to foster a more inclusive and equitable society where everyone has the chance to reach their full potential.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -799,7 +799,7 @@ The pipeline will take an image and run Gemini model to describe:
     By empowering individuals with vision impairments, VisionAid aims to foster a more inclusive and equitable society where everyone has the chance to reach their full potential.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -864,7 +864,7 @@ The pipeline will take an image and run Gemini model to describe:
     By empowering individuals with vision impairments, VisionAid aims to foster a more inclusive and equitable society where everyone has the chance to reach their full potential.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Additional Innovative Features:**
     
@@ -949,7 +949,7 @@ The pipeline will take an image and run Gemini model to describe:
     By empowering individuals with vision impairments, VisionAid aims to foster a more inclusive and equitable society where everyone has the chance to reach their full potential.
     
     --------------------------------------------------------------------------------
-    [33mProduct_manager[0m (to chat_manager):
+    Product_manager (to chat_manager):
     
     **Technical Implementation:**
     

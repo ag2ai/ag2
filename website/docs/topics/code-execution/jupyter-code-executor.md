@@ -232,12 +232,12 @@ chat_result = code_executor_agent.initiate_chat(
 pprint.pprint(chat_result)
 ```
 
-    [33mcode_executor_agent[0m (to code_writer):
+    code_executor_agent (to code_writer):
     
     Write Python code to calculate the 14th Fibonacci number.
     
     --------------------------------------------------------------------------------
-    [33mcode_writer[0m (to code_executor_agent):
+    code_writer (to code_executor_agent):
     
     Sure. The Fibonacci sequence is a series of numbers where the next number is found by adding up the two numbers before it. We know that the first two Fibonacci numbers are 0 and 1. After that, the series looks like:
     
@@ -246,12 +246,12 @@ pprint.pprint(chat_result)
     So, let's define a Python function to calculate the nth Fibonacci number.
     
     --------------------------------------------------------------------------------
-    [33mcode_executor_agent[0m (to code_writer):
+    code_executor_agent (to code_writer):
     
     
     
     --------------------------------------------------------------------------------
-    [33mcode_writer[0m (to code_executor_agent):
+    code_writer (to code_executor_agent):
     
     Here is the Python function to calculate the nth Fibonacci number:
     
@@ -273,7 +273,7 @@ pprint.pprint(chat_result)
     ```
     
     --------------------------------------------------------------------------------
-    [33mcode_executor_agent[0m (to code_writer):
+    code_executor_agent (to code_writer):
     
     exitcode: 0 (execution succeeded)
     Code output: 

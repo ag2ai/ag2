@@ -97,14 +97,14 @@ with Cache.disk(cache_seed=42) as cache:
     )
 ```
 
-    [33muser_proxy[0m (to writing_assistant):
+    user_proxy (to writing_assistant):
     
     Write an engaging blogpost on the recent updates in AI. The blogpost should be engaging and understandable for general audience. Should have more than 3 paragraphes but no longer than 1000 words.
     
     --------------------------------------------------------------------------------
 
 
-    [33mwriting_assistant[0m (to user_proxy):
+    writing_assistant (to user_proxy):
     
     ### The Fascinating World of AI: What's New on the Horizon of Tomorrow?
     
@@ -133,12 +133,12 @@ with Cache.disk(cache_seed=42) as cache:
     So, buckle up and prepare for an exciting ride into the future. AI isn't just a tech trend; it's a revolution that's just getting started. And while it might seem daunting to keep up with the rapid developments, remember – as much as AI is about algorithms and computing, at its core, it's about enhancing human potential and creating a smarter, better world for all.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
+    
+    >>>>>>>> USING AUTO REPLY...
     Reflecting...
-    [34m
-    ********************************************************************************[0m
-    [34mStarting a new chat....
+    
+    ********************************************************************************
+    Starting a new chat....
     
     Message:
     Reflect and provide critique on the following writing. 
@@ -170,10 +170,10 @@ with Cache.disk(cache_seed=42) as cache:
     So, buckle up and prepare for an exciting ride into the future. AI isn't just a tech trend; it's a revolution that's just getting started. And while it might seem daunting to keep up with the rapid developments, remember – as much as AI is about algorithms and computing, at its core, it's about enhancing human potential and creating a smarter, better world for all.
     
     Carryover: 
-    [0m
-    [34m
-    ********************************************************************************[0m
-    [33muser_proxy[0m (to reflection_assistant):
+    
+    
+    ********************************************************************************
+    user_proxy (to reflection_assistant):
     
     Reflect and provide critique on the following writing. 
     
@@ -204,7 +204,7 @@ with Cache.disk(cache_seed=42) as cache:
     So, buckle up and prepare for an exciting ride into the future. AI isn't just a tech trend; it's a revolution that's just getting started. And while it might seem daunting to keep up with the rapid developments, remember – as much as AI is about algorithms and computing, at its core, it's about enhancing human potential and creating a smarter, better world for all.
     
     --------------------------------------------------------------------------------
-    [33mreflection_assistant[0m (to user_proxy):
+    reflection_assistant (to user_proxy):
     
     This piece on AI developments is generally well-written, engaging, and informative. It achieves its purpose of highlighting recent advancements within the sphere of artificial intelligence. However, there's always room for improvement. Below is a critique with recommendations on how to enhance the effectiveness of the writing:
     
@@ -233,7 +233,7 @@ with Cache.disk(cache_seed=42) as cache:
     In terms of length, an expansion to dig deeper into each point would enhance the richness of the content. Aim for about 150-200 more words per section, which should give ample space to provide the desired level of detail without overwhelming the reader. Furthermore, consider introducing a closing section that briefly discusses possible future developments, as this would provide an even stronger end to the piece.
     
     --------------------------------------------------------------------------------
-    [33muser_proxy[0m (to writing_assistant):
+    user_proxy (to writing_assistant):
     
     This piece on AI developments is generally well-written, engaging, and informative. It achieves its purpose of highlighting recent advancements within the sphere of artificial intelligence. However, there's always room for improvement. Below is a critique with recommendations on how to enhance the effectiveness of the writing:
     
@@ -262,7 +262,7 @@ with Cache.disk(cache_seed=42) as cache:
     In terms of length, an expansion to dig deeper into each point would enhance the richness of the content. Aim for about 150-200 more words per section, which should give ample space to provide the desired level of detail without overwhelming the reader. Furthermore, consider introducing a closing section that briefly discusses possible future developments, as this would provide an even stronger end to the piece.
     
     --------------------------------------------------------------------------------
-    [33mwriting_assistant[0m (to user_proxy):
+    writing_assistant (to user_proxy):
     
     ### AI Unveiled: The New Frontiers Shaping Our Tomorrow
     

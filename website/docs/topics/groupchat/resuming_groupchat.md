@@ -135,13 +135,13 @@ last_agent, last_message = manager.resume(messages=previous_state)
 result = last_agent.initiate_chat(recipient=manager, message=last_message, clear_history=False)
 ```
 
-    Prepared group chat with 4 messages, the last speaker is [33mPlanner[0m
-    [33mPlanner[0m (to chat_manager):
+    Prepared group chat with 4 messages, the last speaker is Planner
+    Planner (to chat_manager):
     
     Great! Let's proceed with the plan outlined earlier. I will start by searching for the latest paper on GPT-4 on arXiv. Once I find the paper, the scientist will summarize the key findings and potential applications of GPT-4. We will then proceed with the rest of the steps as outlined. I will keep you updated on our progress.
     
     --------------------------------------------------------------------------------
-    [33mEngineer[0m (to chat_manager):
+    Engineer (to chat_manager):
     
     ```python
     import requests
@@ -170,9 +170,9 @@ result = last_agent.initiate_chat(recipient=manager, message=last_message, clear
     This script searches for the latest paper on GPT-4 on arXiv, extracts the title, authors, abstract, and link to the paper, and prints this information.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33mExecutor[0m (to chat_manager):
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    Executor (to chat_manager):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -188,7 +188,7 @@ result = last_agent.initiate_chat(recipient=manager, message=last_message, clear
     
     
     --------------------------------------------------------------------------------
-    [33mScientist[0m (to chat_manager):
+    Scientist (to chat_manager):
     
     Based on the abstract of the paper titled "Smurfs: Leveraging Multiple Proficiency Agents with Context-Efficiency for Tool Planning," the key findings and potential applications of GPT-4 can be summarized as follows:
     
@@ -207,7 +207,7 @@ result = last_agent.initiate_chat(recipient=manager, message=last_message, clear
     The integration of GPT-4 with the Smurfs framework presents a novel approach to enhancing the capabilities of LLMs in software applications, particularly in areas that require complex task planning, execution, and problem-solving.
     
     --------------------------------------------------------------------------------
-    [33mEngineer[0m (to chat_manager):
+    Engineer (to chat_manager):
     
     Given the scientist's summary on the potential applications of GPT-4 as enhanced by the Smurfs framework, we can identify several software applications where GPT-4 can be utilized effectively:
     
@@ -230,17 +230,17 @@ result = last_agent.initiate_chat(recipient=manager, message=last_message, clear
     These applications demonstrate the versatility and potential impact of integrating GPT-4 into various software solutions, offering opportunities for automation, enhanced efficiency, and improved user experiences across different domains.
     
     --------------------------------------------------------------------------------
-    [33mAdmin[0m (to chat_manager):
+    Admin (to chat_manager):
     
     Approve
     
     --------------------------------------------------------------------------------
-    [33mScientist[0m (to chat_manager):
+    Scientist (to chat_manager):
     
     With the approval from the admin, the plan to explore and integrate GPT-4 into various software applications, leveraging its enhanced capabilities through the Smurfs framework, is set to proceed. This initiative promises to bring significant advancements in automation, efficiency, and user experience across a wide range of software applications, from project management tools to healthcare applications. The next steps involve detailed planning and execution for the development of prototypes or proof of concepts for selected applications, followed by evaluation, feedback, and finalization of GPT-4 integration into these software solutions.
     
     --------------------------------------------------------------------------------
-    [33mEngineer[0m (to chat_manager):
+    Engineer (to chat_manager):
     
     Given the approval and the insights provided, the next steps involve detailed planning for the development and integration of GPT-4 into selected software applications. This process will include:
     
@@ -259,12 +259,12 @@ result = last_agent.initiate_chat(recipient=manager, message=last_message, clear
     This structured approach will ensure that the integration of GPT-4 into software applications is carried out effectively, leading to innovative solutions that harness the full potential of GPT-4 and the Smurfs framework.
     
     --------------------------------------------------------------------------------
-    [33mAdmin[0m (to chat_manager):
+    Admin (to chat_manager):
     
     Approve
     
     --------------------------------------------------------------------------------
-    [33mEngineer[0m (to chat_manager):
+    Engineer (to chat_manager):
     
     With the final approval from the admin, the project to integrate GPT-4 into selected software applications, leveraging its capabilities through the Smurfs framework, is officially set to move forward. This marks the beginning of an innovative journey towards developing advanced software solutions that can automate complex tasks, enhance efficiency, and improve user experiences across various domains. The focus will now shift to the execution phase, where detailed planning, development, and iterative improvements will bring these concepts to life. This initiative promises to showcase the transformative potential of GPT-4 in the software industry, setting new benchmarks for what is possible with artificial intelligence.
     
@@ -386,7 +386,7 @@ last_agent, last_message = manager.resume(messages=previous_state)
     WARNING: Last message meets termination criteria and this may terminate the chat. Set ignore_initial_termination_check=False to avoid checking termination at the start of the chat.
 
 
-    Prepared group chat with 4 messages, the last speaker is [33mDigital_Marketer[0m
+    Prepared group chat with 4 messages, the last speaker is Digital_Marketer
 
 
 
@@ -395,7 +395,7 @@ last_agent, last_message = manager.resume(messages=previous_state)
 result = last_agent.initiate_chat(recipient=manager, message=last_message, clear_history=False)
 ```
 
-    [33mDigital_Marketer[0m (to chat_manager):
+    Digital_Marketer (to chat_manager):
     
     Thank you, Chief_Marketing_Officer!  For 'EcoLux', I propose the following three marketing strategies:  1. 'Green Revolution' Campaign: Highlighting the eco-friendly features of EcoLux through a series of social media ads and influencer partnerships. We can partner with eco-conscious influencers to showcase how EcoLux is not only a luxury car but also an environmentally responsible choice. 2. 'Fuel for Thought' Content Series: Creating a content series that explores the intersection of technology, sustainability, and luxury. This could include blog posts, videos, and podcasts that delve into the innovative features of EcoLux and its impact on the environment. 3. 'EcoLux Experience' Event Marketing: Hosting exclusive events and test drives for potential customers to experience the performance and eco-friendliness of EcoLux firsthand. These events can be held at upscale locations and feature interactive exhibits, product demonstrations, and networking opportunities.  These strategies will help position EcoLux as a leader in the luxury electric-vehicle market while appealing to environmentally conscious consumers who value innovation and sustainability. TERMINATE
     
@@ -410,7 +410,7 @@ This time, we will remove the termination message, by using the `remove_terminat
 last_agent, last_message = manager.resume(messages=previous_state, remove_termination_string="TERMINATE")
 ```
 
-    Prepared group chat with 4 messages, the last speaker is [33mDigital_Marketer[0m
+    Prepared group chat with 4 messages, the last speaker is Digital_Marketer
 
 
 
@@ -419,12 +419,12 @@ last_agent, last_message = manager.resume(messages=previous_state, remove_termin
 result = last_agent.initiate_chat(recipient=manager, message=last_message, clear_history=False)
 ```
 
-    [33mDigital_Marketer[0m (to chat_manager):
+    Digital_Marketer (to chat_manager):
     
     Thank you, Chief_Marketing_Officer!  For 'EcoLux', I propose the following three marketing strategies:  1. 'Green Revolution' Campaign: Highlighting the eco-friendly features of EcoLux through a series of social media ads and influencer partnerships. We can partner with eco-conscious influencers to showcase how EcoLux is not only a luxury car but also an environmentally responsible choice. 2. 'Fuel for Thought' Content Series: Creating a content series that explores the intersection of technology, sustainability, and luxury. This could include blog posts, videos, and podcasts that delve into the innovative features of EcoLux and its impact on the environment. 3. 'EcoLux Experience' Event Marketing: Hosting exclusive events and test drives for potential customers to experience the performance and eco-friendliness of EcoLux firsthand. These events can be held at upscale locations and feature interactive exhibits, product demonstrations, and networking opportunities.  These strategies will help position EcoLux as a leader in the luxury electric-vehicle market while appealing to environmentally conscious consumers who value innovation and sustainability. 
     
     --------------------------------------------------------------------------------
-    [33mChief_Marketing_Officer[0m (to chat_manager):
+    Chief_Marketing_Officer (to chat_manager):
     
     Thank you, Digital_Marketer, for those comprehensive and innovative marketing strategies. Each strategy you've outlined aligns perfectly with our vision for EcoLux, emphasizing its eco-friendly features, technological innovation, and luxury appeal. The 'Green Revolution' Campaign will leverage the power of social media and influencers to reach our target audience effectively. The 'Fuel for Thought' Content Series will educate and engage potential customers on the importance of sustainability in the luxury automotive sector. Lastly, the 'EcoLux Experience' Event Marketing will provide an immersive experience that showcases the unique value proposition of EcoLux. 
     
@@ -473,7 +473,7 @@ last_agent, last_message = manager.resume(messages=groupchat.messages)
     WARNING: Last message meets termination criteria and this may terminate the chat. Set ignore_initial_termination_check=False to avoid checking termination at the start of the chat.
 
 
-    Prepared group chat with 5 messages, the last speaker is [33mChief_Marketing_Officer[0m
+    Prepared group chat with 5 messages, the last speaker is Chief_Marketing_Officer
 
 
 Let's continue the meeting with a new topic.
@@ -488,24 +488,24 @@ result = manager.initiate_chat(
 )
 ```
 
-    [33mchat_manager[0m (to Chief_Marketing_Officer):
+    chat_manager (to Chief_Marketing_Officer):
     
     Team, let's now think of a name for the next vehicle that embodies that idea. Chief_Marketing_Officer and Product_manager can you both suggest one and then we can conclude.
     
     --------------------------------------------------------------------------------
-    [33mChief_Marketing_Officer[0m (to chat_manager):
+    Chief_Marketing_Officer (to chat_manager):
     
     Given the focus on sustainability and luxury, I suggest the name "VerdeVogue" for our next vehicle. "Verde" reflects the green, eco-friendly aspect of the car, while "Vogue" emphasizes its stylish and trendsetting nature in the luxury market. This name encapsulates the essence of combining environmental responsibility with high-end design and performance. 
     
     Now, I'd like to hear the Product_Manager's suggestion.
     
     --------------------------------------------------------------------------------
-    [33mProduct_Manager[0m (to chat_manager):
+    Product_Manager (to chat_manager):
     
     For our next vehicle, I propose the name "EcoPrestige." This name highlights the vehicle's eco-friendly nature and its luxurious, prestigious status in the market. "Eco" emphasizes our commitment to sustainability and environmental responsibility, while "Prestige" conveys the car's high-end quality, sophistication, and the elite status it offers to its owners. This name perfectly blends our goals of offering a sustainable luxury vehicle that doesn't compromise on performance or style.
     
     --------------------------------------------------------------------------------
-    [33mChief_Marketing_Officer[0m (to chat_manager):
+    Chief_Marketing_Officer (to chat_manager):
     
     Thank you, Product_Manager, for your suggestion. Both "VerdeVogue" and "EcoPrestige" capture the essence of our new vehicle's eco-friendly luxury. As we move forward, we'll consider these names carefully to ensure our branding aligns perfectly with our product's unique value proposition and market positioning. 
     

@@ -257,12 +257,12 @@ chat_result = code_executor_agent.initiate_chat(
 )
 ```
 
-    [33mcode_executor_agent[0m (to code_writer):
+    code_executor_agent (to code_writer):
     
     Please use the load_data function to load the data and please calculate the average age of all people.
     
     --------------------------------------------------------------------------------
-    [33mcode_writer[0m (to code_executor_agent):
+    code_writer (to code_executor_agent):
     
     Below is the python code to load the data using the `load_data()` function and calculate the average age of all people. 
     
@@ -283,21 +283,21 @@ chat_result = code_executor_agent.initiate_chat(
     This code starts by importing the `load_data()` function. It then uses this function to load the data into a variable `df`. Afterwards, it calculates the average (mean) of the 'age' column in the DataFrame, before printing the result.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...[0m
-    [33mcode_executor_agent[0m (to code_writer):
+    
+    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
+    code_executor_agent (to code_writer):
     
     exitcode: 0 (execution succeeded)
     Code output: The average age is 30.75
     
     
     --------------------------------------------------------------------------------
-    [33mcode_writer[0m (to code_executor_agent):
+    code_writer (to code_executor_agent):
     
     Great! The code worked fine. So, the average age of all people in the dataset is 30.75 years.
     
     --------------------------------------------------------------------------------
-    [33mcode_executor_agent[0m (to code_writer):
+    code_executor_agent (to code_writer):
     
     
     

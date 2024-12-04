@@ -78,14 +78,14 @@ chat_result = student_agent.initiate_chat(
 )
 ```
 
-    [33mStudent_Agent[0m (to Teacher_Agent):
+    Student_Agent (to Teacher_Agent):
     
     What is triangle inequality?
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mTeacher_Agent[0m (to Student_Agent):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Teacher_Agent (to Student_Agent):
     
     Triangle inequality theorem is a fundamental principle in geometry that states that the sum of the lengths of any two sides of a triangle must always be greater than the length of the third side. In a triangle with sides of lengths a, b, and c, the theorem can be written as:
     
@@ -96,16 +96,16 @@ chat_result = student_agent.initiate_chat(
     Each of these represents the condition for one specific side (a, b, or c). All must be true for a triangle to exist.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mStudent_Agent[0m (to Teacher_Agent):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Student_Agent (to Teacher_Agent):
     
     Thank you for the explanation. This theorem helps in understanding the basic properties of a triangle. It can also be useful when solving geometric problems or proving other mathematical theorems. Can you give me an example of how we can use the triangle inequality theorem?
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [33mTeacher_Agent[0m (to Student_Agent):
+    
+    >>>>>>>> USING AUTO REPLY...
+    Teacher_Agent (to Student_Agent):
     
     Absolutely! Here's an example:
     
@@ -340,77 +340,77 @@ chat_results = number_agent.initiate_chats(
 )
 ```
 
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     14
     
     With the following carryover: 
-    [0m
-    [34m
-    ********************************************************************************[0m
-    [33mNumber_Agent[0m (to Adder_Agent):
+    
+    
+    ********************************************************************************
+    Number_Agent (to Adder_Agent):
     
     14
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to Number_Agent):
+    Adder_Agent (to Number_Agent):
     
     15
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to Adder_Agent):
+    Number_Agent (to Adder_Agent):
     
     15
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to Number_Agent):
+    Adder_Agent (to Number_Agent):
     
     16
     
     --------------------------------------------------------------------------------
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     These are my numbers
     
     With the following carryover: 
-    16[0m
-    [34m
-    ********************************************************************************[0m
-    [33mNumber_Agent[0m (to Multiplier_Agent):
+    16
+    
+    ********************************************************************************
+    Number_Agent (to Multiplier_Agent):
     
     These are my numbers
     Context: 
     16
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to Number_Agent):
+    Multiplier_Agent (to Number_Agent):
     
     32
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to Multiplier_Agent):
+    Number_Agent (to Multiplier_Agent):
     
     32
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to Number_Agent):
+    Multiplier_Agent (to Number_Agent):
     
     64
     
     --------------------------------------------------------------------------------
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     These are my numbers
     
     With the following carryover: 
     16
-    64[0m
-    [34m
-    ********************************************************************************[0m
-    [33mNumber_Agent[0m (to Subtracter_Agent):
+    64
+    
+    ********************************************************************************
+    Number_Agent (to Subtracter_Agent):
     
     These are my numbers
     Context: 
@@ -418,37 +418,37 @@ chat_results = number_agent.initiate_chats(
     64
     
     --------------------------------------------------------------------------------
-    [33mSubtracter_Agent[0m (to Number_Agent):
+    Subtracter_Agent (to Number_Agent):
     
     15
     63
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to Subtracter_Agent):
+    Number_Agent (to Subtracter_Agent):
     
     15
     63
     
     --------------------------------------------------------------------------------
-    [33mSubtracter_Agent[0m (to Number_Agent):
+    Subtracter_Agent (to Number_Agent):
     
     14
     62
     
     --------------------------------------------------------------------------------
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     These are my numbers
     
     With the following carryover: 
     16
     64
     14
-    62[0m
-    [34m
-    ********************************************************************************[0m
-    [33mNumber_Agent[0m (to Divider_Agent):
+    62
+    
+    ********************************************************************************
+    Number_Agent (to Divider_Agent):
     
     These are my numbers
     Context: 
@@ -458,7 +458,7 @@ chat_results = number_agent.initiate_chats(
     62
     
     --------------------------------------------------------------------------------
-    [33mDivider_Agent[0m (to Number_Agent):
+    Divider_Agent (to Number_Agent):
     
     8
     32
@@ -466,7 +466,7 @@ chat_results = number_agent.initiate_chats(
     31
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to Divider_Agent):
+    Number_Agent (to Divider_Agent):
     
     8
     32
@@ -474,7 +474,7 @@ chat_results = number_agent.initiate_chats(
     31
     
     --------------------------------------------------------------------------------
-    [33mDivider_Agent[0m (to Number_Agent):
+    Divider_Agent (to Number_Agent):
     
     4
     16
@@ -629,32 +629,32 @@ chat_result = number_agent.initiate_chat(
 )
 ```
 
-    [33mNumber_Agent[0m (to chat_manager):
+    Number_Agent (to chat_manager):
     
     My number is 3, I want to turn it into 13.
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     6
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     7
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     14
     
     --------------------------------------------------------------------------------
-    [33mSubtracter_Agent[0m (to chat_manager):
+    Subtracter_Agent (to chat_manager):
     
     13
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to chat_manager):
+    Number_Agent (to chat_manager):
     
     13
     
@@ -729,82 +729,82 @@ chat_result = number_agent.initiate_chats(
 )
 ```
 
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     My number is 3, I want to turn it into 13.
     
     With the following carryover: 
-    [0m
-    [34m
-    ********************************************************************************[0m
-    [33mNumber_Agent[0m (to chat_manager):
+    
+    
+    ********************************************************************************
+    Number_Agent (to chat_manager):
     
     My number is 3, I want to turn it into 13.
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     6
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     7
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     14
     
     --------------------------------------------------------------------------------
-    [33mSubtracter_Agent[0m (to chat_manager):
+    Subtracter_Agent (to chat_manager):
     
     13
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to chat_manager):
+    Number_Agent (to chat_manager):
     
     Your number is 13.
     
     --------------------------------------------------------------------------------
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     Turn this number to 32.
     
     With the following carryover: 
-    Your number is 13.[0m
-    [34m
-    ********************************************************************************[0m
-    [33mNumber_Agent[0m (to chat_manager):
+    Your number is 13.
+    
+    ********************************************************************************
+    Number_Agent (to chat_manager):
     
     Turn this number to 32.
     Context: 
     Your number is 13.
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     26
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     14
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     28
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     15
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     30
     
@@ -881,62 +881,62 @@ chat_result = number_agent.initiate_chat(
 )
 ```
 
-    [33mNumber_Agent[0m (to chat_manager):
+    Number_Agent (to chat_manager):
     
     My number is 3, I want to turn it into 10. Once I get to 10, keep it there.
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     4
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     8
     
     --------------------------------------------------------------------------------
-    [33mSubtracter_Agent[0m (to chat_manager):
+    Subtracter_Agent (to chat_manager):
     
     7
     
     --------------------------------------------------------------------------------
-    [33mDivider_Agent[0m (to chat_manager):
+    Divider_Agent (to chat_manager):
     
     3.5
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     4.5
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     9
     
     --------------------------------------------------------------------------------
-    [33mSubtracter_Agent[0m (to chat_manager):
+    Subtracter_Agent (to chat_manager):
     
     8
     
     --------------------------------------------------------------------------------
-    [33mDivider_Agent[0m (to chat_manager):
+    Divider_Agent (to chat_manager):
     
     4
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     5
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     10
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to chat_manager):
+    Number_Agent (to chat_manager):
     
     10
     
@@ -1085,66 +1085,66 @@ reply = arithmetic_agent.generate_reply(
 )
 ```
 
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     I have a number 3 and I want to turn it into 7.
     
     With the following carryover: 
-    [0m
-    [34m
-    ********************************************************************************[0m
-    [33mArithmetic_Agent[0m (to chat_manager):
+    
+    
+    ********************************************************************************
+    Arithmetic_Agent (to chat_manager):
     
     I have a number 3 and I want to turn it into 7.
     
     --------------------------------------------------------------------------------
-    [33mAdder_Agent[0m (to chat_manager):
+    Adder_Agent (to chat_manager):
     
     To give you the result, I'll add 1 to the number you gave me. So your new number is 4.
     
     --------------------------------------------------------------------------------
-    [33mMultiplier_Agent[0m (to chat_manager):
+    Multiplier_Agent (to chat_manager):
     
     8
     
     --------------------------------------------------------------------------------
-    [33mSubtracter_Agent[0m (to chat_manager):
+    Subtracter_Agent (to chat_manager):
     
     7
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to chat_manager):
+    Number_Agent (to chat_manager):
     
     7
     
     --------------------------------------------------------------------------------
-    [33mNumber_Agent[0m (to chat_manager):
+    Number_Agent (to chat_manager):
     
     7
     
     --------------------------------------------------------------------------------
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     Write a Python script to verify the arithmetic operations is correct.
     
     With the following carryover: 
-    First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.[0m
-    [34m
-    ********************************************************************************[0m
-    [33mArithmetic_Agent[0m (to Code_Writer_Agent):
+    First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
+    
+    ********************************************************************************
+    Arithmetic_Agent (to Code_Writer_Agent):
     
     Write a Python script to verify the arithmetic operations is correct.
     Context: 
     First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
     
     --------------------------------------------------------------------------------
-    [33mCode_Writer_Agent[0m (to Arithmetic_Agent):
+    Code_Writer_Agent (to Arithmetic_Agent):
     
     Here is a Python script to verify the aforementioned arithmetic operations:
     
@@ -1169,13 +1169,13 @@ reply = arithmetic_agent.generate_reply(
     In the script, the entire process is broken down into steps. The `assert` function is used to verify the result at every step. If any of the operations doesn't yield the expected result, an `AssertionError` exception will be raised. If all operations pass, the message "All operations were carried out successfully!" will be printed.
     
     --------------------------------------------------------------------------------
-    [31m
-    >>>>>>>> NO HUMAN INPUT RECEIVED.[0m
-    [31m
-    >>>>>>>> USING AUTO REPLY...[0m
-    [31m
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...[0m
-    [33mArithmetic_Agent[0m (to Code_Writer_Agent):
+    
+    >>>>>>>> NO HUMAN INPUT RECEIVED.
+    
+    >>>>>>>> USING AUTO REPLY...
+    
+    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
+    Arithmetic_Agent (to Code_Writer_Agent):
     
     exitcode: 0 (execution succeeded)
     Code output: 
@@ -1183,22 +1183,22 @@ reply = arithmetic_agent.generate_reply(
     
     
     --------------------------------------------------------------------------------
-    [33mCode_Writer_Agent[0m (to Arithmetic_Agent):
+    Code_Writer_Agent (to Arithmetic_Agent):
     
     Certainly, that means the python script was successful and every arithmetic operation performed correctly given the initial input and the steps performed.
     
     --------------------------------------------------------------------------------
-    [34m
-    ********************************************************************************[0m
-    [34mStart a new chat with the following message: 
+    
+    ********************************************************************************
+    Start a new chat with the following message: 
     Write a poem about it.
     
     With the following carryover: 
     First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
-    The Python script successfully performed and verified the arithmetic operations on the initial number provided. The steps included adding 1 to the initial number, multiplying the result by 2, and finally subtracting 1. The assert function was used to check the result at each step, and confirmed that all operations were carried out correctly.[0m
-    [34m
-    ********************************************************************************[0m
-    [33mArithmetic_Agent[0m (to Poetry_Agent):
+    The Python script successfully performed and verified the arithmetic operations on the initial number provided. The steps included adding 1 to the initial number, multiplying the result by 2, and finally subtracting 1. The assert function was used to check the result at each step, and confirmed that all operations were carried out correctly.
+    
+    ********************************************************************************
+    Arithmetic_Agent (to Poetry_Agent):
     
     Write a poem about it.
     Context: 
@@ -1206,7 +1206,7 @@ reply = arithmetic_agent.generate_reply(
     The Python script successfully performed and verified the arithmetic operations on the initial number provided. The steps included adding 1 to the initial number, multiplying the result by 2, and finally subtracting 1. The assert function was used to check the result at each step, and confirmed that all operations were carried out correctly.
     
     --------------------------------------------------------------------------------
-    [33mPoetry_Agent[0m (to Arithmetic_Agent):
+    Poetry_Agent (to Arithmetic_Agent):
     
     From numbers, logic, pure mathematical creation,
     Ponder this tale of numeric manipulation.
