@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from dataclasses import dataclass, field
+import warnings
 from typing import List
 
 from falkordb import FalkorDB
@@ -63,7 +63,12 @@ class FalkorGraphQueryEngine:
         """
         if self.name in self.falkordb.list_graphs():
             graph = self.falkordb.select_graph(self.name)
-            self.ontology = Ontology.from_graph(graph)
+
+            try:
+                self.ontology = Ontology.from_graph(graph)
+            except Exception:
+                warnings.warn("Graph Ontology is not loaded.")
+
             if self.ontology is None:
                 raise ValueError(f"Ontology of the knowledge graph '{self.name}' can't be None.")
 
