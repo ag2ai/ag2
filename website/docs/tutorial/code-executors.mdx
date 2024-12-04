@@ -2,7 +2,7 @@
 title: "Code Executors"
 ---
 
-In the last chapter, 
+In the last chapter,
 we used two agents powered by a large language model (LLM) to play a game
 by exchanging messages.
 In this chapter, we introduce code executors, which enable agents to not just chat
@@ -14,7 +14,7 @@ to interact with an environment and perform useful computations and take actions
 In AutoGen, a code executor is a component that
 takes input messages (e.g., those containing code blocks), performs execution, and outputs messages
 with the results.
-AutoGen provides two types of built-in code executors, one is 
+AutoGen provides two types of built-in code executors, one is
 command line code executor, which runs code in a command line environment
 such as a UNIX shell, and the other is Jupyter executor, which runs code
 in an interactive [Jupyter kernel](https://github.com/jupyter/jupyter/wiki/Jupyter-kernels).
@@ -29,14 +29,14 @@ The other way is to execute code in a Docker container.
 The table below shows the combinations of code executors and execution
 environments.
 
-| Code Executor (`autogen.coding`) | Environment | Platform |
-| ---------------------------- | ----------- | -------- |
-| [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)  | Shell       | Local  |
-| [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) | Shell       | Docker |
-| [`jupyter.JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
+| Code Executor (`autogen.coding`)                                                                                         | Environment                    | Platform     |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------ | ------------ |
+| [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)    | Shell                          | Local        |
+| [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) | Shell                          | Docker       |
+| [`jupyter.JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor)                | Jupyter Kernel (e.g., python3) | Local/Docker |
 
 In this chapter, we will focus on the command line code executors.
-For the Jupyter code executor, please refer to the topic page for 
+For the Jupyter code executor, please refer to the topic page for
 [Jupyter Code Executor](/docs/topics/code-execution/jupyter-code-executor).
 
 ## Local Execution
@@ -44,27 +44,23 @@ For the Jupyter code executor, please refer to the topic page for
 The figure below shows the architecture of the local command line code executor
 ([`autogen.coding.LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)).
 
-
 <Warning>
-Executing LLM-generated code poses a security risk to your host environment.
+  Executing LLM-generated code poses a security risk to your host environment.
 </Warning>
-
-
 
 ![Code Executor No Docker](./assets/code-executor-no-docker.webp)
 
 Upon receiving a message with a code block, the local command line code executor
 first writes the code block to a code file, then starts a new subprocess to
-execute the code file. The executor reads the console output of the 
+execute the code file. The executor reads the console output of the
 code execution and sends it back as a reply message.
 
 Here is an example of using the code executor to run a Python
 code block that prints a random number.
 First we create an agent with the code executor
 that uses a temporary directory to store the code files.
-We specify `human_input_mode="ALWAYS"` to manually validate the safety of the the code being 
+We specify `human_input_mode="ALWAYS"` to manually validate the safety of the the code being
 executed.
-
 
 ```python
 import tempfile
@@ -93,15 +89,13 @@ code_executor_agent = ConversableAgent(
 Before running this example, we need to make sure the `matplotlib` and `numpy`
 are installed.
 
-
 ```python
 ! pip install -qqq matplotlib numpy
 ```
 
 Now we have the agent generate a reply given a message with a Python code block.
 
-
-```python
+````python
 message_with_code_block = """This is a message with code block.
 The code block is below:
   [```python
@@ -119,27 +113,25 @@ This is the end of the message.
 # Generate a reply for the given code.
 reply = code_executor_agent.generate_reply(messages=[{"role": "user", "content": message_with_code_block}])
 print(reply)
-```
+````
 
 ```python
 >>>>>>>> NO HUMAN INPUT RECEIVED.
-    
+
 >>>>>>>> USING AUTO REPLY...
 
 >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
 exitcode: 0 (execution succeeded)
-Code output: 
+Code output:
 Scatter plot saved to scatter.png
 ```
 
-
 During the generation of response, a human input is requested to give an opportunity
 to intercept the code execution.
-In this case, we choose to continue the execution, 
+In this case, we choose to continue the execution,
 and the agent's reply contains the output of the code execution.
 
 We can take a look at the generated plot in the temporary directory.
-
 
 ```python
 import os
@@ -154,34 +146,30 @@ print(os.listdir(temp_dir.name))
 
 Clean up the working directory to avoid affecting future conversations.
 
-
 ```python
 temp_dir.cleanup()
 ```
 
 ## Docker Execution
 
-To mitigate the security risk of running LLM-generated code locally, 
-we can use the docker command line code executor 
+To mitigate the security risk of running LLM-generated code locally,
+we can use the docker command line code executor
 ([`autogen.coding.DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor))
 to execute code in a docker container.
-This way, the generated code can only access resources that are explicitly 
+This way, the generated code can only access resources that are explicitly
 given to it.
 
 The figure below illustrates how does the docker execution works.
 
-
 ![Code Executor Docker](./assets/code-executor-docker.webp)
 
-
-Similar to the local command line code executor, the docker executor 
+Similar to the local command line code executor, the docker executor
 extracts code blocks from input messages, writes them to code files.
 For each code file, it starts a docker container to execute the code file,
 and reads the console output of the code execution.
 
 To use docker execution, you need to [install Docker](https://docs.docker.com/engine/install/) on your machine.
 Once you have Docker installed and running, you can set up your code executor agent as follow:
-
 
 ```python
 from autogen.coding import DockerCommandLineCodeExecutor
@@ -214,24 +202,21 @@ and output to it.
 
 ## Use Code Execution in Conversation
 
-Writing and executing code is necessary for many tasks such as 
+Writing and executing code is necessary for many tasks such as
 data analysis, machine learning, and mathematical modeling.
-In AutoGen, coding can be a conversation between a code writer agent and a 
+In AutoGen, coding can be a conversation between a code writer agent and a
 code executor agent, mirroring the interaction between a programmer and a
 code interpreter.
 
-
 ![Code Writer and Code Executor](./assets/code-execution-in-conversation.webp)
-
 
 The code writer agent can be powered by an LLM such as GPT-4 with code-writing
 capability.
 And the code executor agent is powered by a code executor.
 
-The following is an agent with a code writer role specified 
+The following is an agent with a code writer role specified
 using `system_message`. The system message contains important instruction
 on how to use the code executor in the code executor agent.
-
 
 ```python
 # The code writer agent's system message is to instruct the LLM on how to use
@@ -260,7 +245,6 @@ code_writer_agent = ConversableAgent(
 Here is an example of solving a math problem through a conversation
 between the code writer agent and the code executor agent (created above).
 
-
 ```python
 chat_result = code_executor_agent.initiate_chat(
     code_writer_agent,
@@ -268,19 +252,19 @@ chat_result = code_executor_agent.initiate_chat(
 )
 ```
 
-```python
+`````python
 code_executor_agent (to code_writer_agent):
-    
+
 Write Python code to calculate the 14th Fibonacci number.
-    
+
 --------------------------------------------------------------------------------
 
 >>>>>>>> USING AUTO REPLY...
 code_writer_agent (to code_executor_agent):
-    
+
 Sure, here is a Python code snippet to calculate the 14th Fibonacci number. The Fibonacci series is a sequence of numbers in which each number is the sum of the two preceding ones, usually starting with 0 and 1.
-    
-[```python
+
+````python
 def fibonacci(n):
     if(n <= 0):
         return "Input should be a positive integer."
@@ -293,38 +277,37 @@ def fibonacci(n):
         for i in range(2, n):
             fib.append(fib[i-1] + fib[i-2])
         return fib[n-1]
-    
+
 print(fibonacci(14))
-```]
+`````
 
-    
 This Python code defines a function `fibonacci(n)` which computes the n-th Fibonacci number. The function uses a list `fib` to store the Fibonacci numbers as they are computed, and then returns the (n-1)-th element as the n-th Fibonacci number due to zero-indexing in Python lists.
-    
---------------------------------------------------------------------------------
 
->>>>>>>> NO HUMAN INPUT RECEIVED.
->>>>>>>> USING AUTO REPLY...    
->>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
-code_executor_agent (to code_writer_agent):
-    
+---
+
+> > > > > > > > NO HUMAN INPUT RECEIVED.
+> > > > > > > > USING AUTO REPLY...
+> > > > > > > > EXECUTING CODE BLOCK (inferred language is python)...
+> > > > > > > > code_executor_agent (to code_writer_agent):
+
 exitcode: 0 (execution succeeded)
-Code output: 
+Code output:
 233
-    
-    
---------------------------------------------------------------------------------
 
->>>>>>>> USING AUTO REPLY...
-code_writer_agent (to code_executor_agent):
-    
-Great, the execution was successful and the 14th Fibonacci number is 233. The sequence goes as follows: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233... and so on, where each number is the sum of the previous two. Therefore, the 14th number in the Fibonacci series is 233. 
-    
+---
+
+> > > > > > > > USING AUTO REPLY...
+> > > > > > > > code_writer_agent (to code_executor_agent):
+
+Great, the execution was successful and the 14th Fibonacci number is 233. The sequence goes as follows: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233... and so on, where each number is the sum of the previous two. Therefore, the 14th number in the Fibonacci series is 233.
+
 I hope this meets your expectations. If you have any other concerns or need further computations, feel free to ask.
-    
+
 TERMINATE
-    
---------------------------------------------------------------------------------
-```
+
+---
+
+`````
 
 During the previous chat session, human input was requested each time
 the code executor agent responded to ensure that the code was safe to execute.
@@ -333,8 +316,6 @@ Now we can try a more complex example that involves querying the web.
 Let's say we want to get the the stock price gains year-to-date for
 Tesla and Meta (formerly Facebook). We can also use the two agents
 with several iterations of conversation.
-
-
 
 ```python
 import datetime
@@ -347,72 +328,72 @@ chat_result = code_executor_agent.initiate_chat(
 )
 ```
 
-```python
+````python
 code_executor_agent (to code_writer_agent):
-    
+
 Today is 2024-02-28. Write Python code to plot TSLA's and META's stock price gains YTD, and save the plot to a file named 'stock_gains.png'.
-    
+
 --------------------------------------------------------------------------------
-    
+
 >>>>>>>> USING AUTO REPLY...
 code_writer_agent (to code_executor_agent):
 
-This task requires retrieving the historical data of the stocks from a reliable data source and calculating the Year-To-Date (YTD) gain values, and then plotting them. pandas_datareader library will be used for data retrieval, pandas will be used for data manipulation, and matplotlib for plotting. 
-    
+This task requires retrieving the historical data of the stocks from a reliable data source and calculating the Year-To-Date (YTD) gain values, and then plotting them. pandas_datareader library will be used for data retrieval, pandas will be used for data manipulation, and matplotlib for plotting.
+
 Below is the Python code to achieve this. To start, please install the required libraries by running to the following command:
 [```sh
 pip install yfinance pandas matplotlib
 ```]
 Then run the python code:
-    
+
 []```python
 # filename: stock_gains.py
-    
+
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
-    
+
 # define the tickers
-tickers = ['TSLA', 'META'] 
-    
+tickers = ['TSLA', 'META']
+
 # define the start and end dates
 start_date = datetime(2024, 1, 1)
 end_date = datetime(2024, 2, 28)
-    
+
 # dictionary to hold dataframes
 dfs = {}
-    
+
 for ticker in tickers:
     # get the data for the stocks
     df = yf.download(ticker, start_date, end_date)
-    
+
     # get the close price and calculate the cumulative percentage gain
     df['Gain'] = df['Close'].pct_change().cumsum()
-    
+
     # add to dictionary
-    dfs[ticker] = df    
-    
+    dfs[ticker] = df
+
 # plot
 plt.figure(figsize=(10, 5))
 for ticker, df in dfs.items():
     plt.plot(df.index, df['Gain'], label=ticker)
-    
+
 plt.title('YTD Stock Price Gain')
 plt.xlabel('Date')
 plt.ylabel('Percentage Gain')
 plt.legend()
-    
+
 plt.grid(True)
 plt.savefig('stock_gains.png')
 plt.close()
-    
+
 print("The 'stock_gains.png' file has been successfully saved")
 ```]
 This script will download the historical data for TSLA and META from the start of the year to the specified date and calculates the YTD gains. It then generates the plot showing these gains and saves it to 'stock_gains.png'.
-    
+
 Please save the script to a file named 'stock_gains.py' and run it using Python. Remember to have the correct start and end dates for the YTD value when running the script. If your Python version is below 3.8, you should update it to execute this code perfectly.
-    
+
 --------------------------------------------------------------------------------
 
 >>>>>>>> NO HUMAN INPUT RECEIVED.
@@ -423,9 +404,9 @@ Please save the script to a file named 'stock_gains.py' and run it using Python.
 
 >>>>>>>> EXECUTING CODE BLOCK 1 (inferred language is python)...
 code_executor_agent (to code_writer_agent):
-    
+
 exitcode: 0 (execution succeeded)
-Code output: 
+Code output:
 Requirement already satisfied: yfinance in /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages (0.2.36)
 Requirement already satisfied: pandas in /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages (2.1.4)
 Requirement already satisfied: matplotlib in /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages (3.8.2)
@@ -455,55 +436,47 @@ Requirement already satisfied: charset-normalizer<4,>=2 in /Users/ekzhu/minicond
 Requirement already satisfied: idna<4,>=2.5 in /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages (from requests>=2.31->yfinance) (3.6)
 Requirement already satisfied: urllib3<3,>=1.21.1 in /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages (from requests>=2.31->yfinance) (2.1.0)
 Requirement already satisfied: certifi>=2017.4.17 in /Users/ekzhu/miniconda3/envs/autogen/lib/python3.11/site-packages (from requests>=2.31->yfinance) (2024.2.2)
-    
+
 The 'stock_gains.png' file has been successfully saved
-    
-    
+
+
 --------------------------------------------------------------------------------
-    
+
 >>>>>>>> USING AUTO REPLY...
 code_writer_agent (to code_executor_agent):
-    
-Great! The code executed successfully and the 'stock_gains.png' file has been saved successfully. This file contains the plot of TSLA's and META's stock price gains from the start of the year until February 28, 2024. You should now be able to view this image file in the same directory that you ran the script from. 
-    
+
+Great! The code executed successfully and the 'stock_gains.png' file has been saved successfully. This file contains the plot of TSLA's and META's stock price gains from the start of the year until February 28, 2024. You should now be able to view this image file in the same directory that you ran the script from.
+
 Please make sure to verify this image file. It should contain two plotted lines, each representing the percentage gain over the time for each stock (TSLA and META). The x-axis represents the date, and the y-axis represents the percentage gain. If everything looks correct, this would be the end of the task.
-    
+
 TERMINATE
-    
+
 --------------------------------------------------------------------------------
-```
+`````
 
 In the previous conversation, the code writer agent generated a code block
-to install necessary packages and another code block for a script to 
+to install necessary packages and another code block for a script to
 fetch the stock price and calculate gains year-to-date for Tesla and Meta.
-The code executor agent installed the packages, executed the script, 
+The code executor agent installed the packages, executed the script,
 and returned the results.
 
 Let's take a look at the chart that was generated.
-
 
 ```python
 from IPython.display import Image
 Image(os.path.join(temp_dir, "stock_gains.png"))
 ```
 
-
-    
 ![png](assets/code-executors_23_0.png)
-    
 
-
-
-Because code execution leave traces like code files and output in the file system, 
+Because code execution leave traces like code files and output in the file system,
 we may want to clean up the working directory after each conversation concludes.
-
 
 ```python
 temp_dir.cleanup()
 ```
 
 Stop the docker command line executor to clean up the docker container.
-
 
 ```python
 executor.stop()  # Stop the docker command line code executor.
@@ -534,8 +507,8 @@ the Jupyter code executor is a better choice.
 ### User Proxy Agent
 
 In the previous examples, we create the code executor agent directly using
-the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class. Existing AutoGen examples often create 
-code executor agent using the [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) class, 
+the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class. Existing AutoGen examples often create
+code executor agent using the [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) class,
 which is a subclass of
 [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) with `human_input_mode=ALWAYS` and `llm_config=False` --
 it always requests human input for every message and does not use LLM.
@@ -544,13 +517,12 @@ It also comes with default `description` field for each of the
 This class is a convenient short-cut for creating an agent that is
 intended to be used as a code executor.
 
-
 ### Assistant Agent
 
 In the previous examples, we created the code writer agent directly using
 the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class. Existing AutoGen examples often create the code writer
 agent using the [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent) class, which is a subclass of
-[`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) with `human_input_mode=NEVER` and `code_execution_config=False` 
+[`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) with `human_input_mode=NEVER` and `code_execution_config=False`
 -- it never requests human input and does not use code executor.
 It also comes with default `system_message` and `description` fields.
 This class is a convenient short-cut for creating an agent that is
@@ -560,7 +532,6 @@ In fact, in the previous example we use the default `system_message` field
 of the [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent) class to instruct the code writer agent how to use
 code executor.
 
-
 ```python
 import pprint
 
@@ -568,6 +539,7 @@ from autogen import AssistantAgent
 
 pprint.pprint(AssistantAgent.DEFAULT_SYSTEM_MESSAGE)
 ```
+
 ```python
     ('You are a helpful AI assistant.\n'
      'Solve tasks using your coding and language skills.\n'
@@ -608,9 +580,9 @@ pprint.pprint(AssistantAgent.DEFAULT_SYSTEM_MESSAGE)
 
 It is very important to note that the [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) and [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent)
 are meant to be shortcuts to avoid writing the `system_message` instructions
-for the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class. 
+for the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class.
 They are not suitable for all use cases.
-As we will show in the next chapter, tuning the 
+As we will show in the next chapter, tuning the
 `system_message` field
 is vital for agent to work properly in more complex conversation patterns
 beyond two-agent chat.

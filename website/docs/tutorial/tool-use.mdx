@@ -1,4 +1,6 @@
-# Tool Use
+---
+title: "Tool Use"
+---
 
 In the previous chapter, we explored code executors which give
 agents the super power of programming.
@@ -141,7 +143,7 @@ calculation using the `calculator` tool.
 
 ```python
 chat_result = user_proxy.initiate_chat(assistant, message="What is (44232 + 13312 / (232 - 32)) * 5?")
-```
+
 
     User (to Assistant):
 
@@ -255,14 +257,15 @@ chat_result = user_proxy.initiate_chat(assistant, message="What is (44232 + 1331
     The result of the calculation is 221490. TERMINATE
 
     --------------------------------------------------------------------------------
+```
 
 Let's verify the answer:
 
 ```python
 (44232 + int(13312 / (232 - 32))) * 5
-```
 
     221490
+```
 
 The answer is correct.
 You can see that the assistant is able to understand the tool's usage
@@ -280,7 +283,6 @@ agent.
 
 ```python
 assistant.llm_config["tools"]
-```
 
     [{'type': 'function',
       'function': {'description': 'A simple calculator',
@@ -292,6 +294,7 @@ assistant.llm_config["tools"]
           'type': 'string',
           'description': 'operator'}},
         'required': ['a', 'b', 'operator']}}}]
+```
 
 You can see the tool schema has been automatically generated from the function
 signature and the type hints, as well as the description.
@@ -340,13 +343,14 @@ assistant.register_for_llm(name="calculator", description="A calculator tool tha
 user_proxy.register_for_execution(name="calculator")(calculator)
 ```
 
+```python
     <function __main__.calculator(input: typing.Annotated[__main__.CalculatorInput, 'Input to the calculator.']) -> int>
+```
 
 You can see the tool schema has been updated to reflect the new type schema.
 
 ```python
 assistant.llm_config["tools"]
-```
 
     [{'type': 'function',
       'function': {'description': 'A calculator tool that accepts nested expression as input',
@@ -367,12 +371,12 @@ assistant.llm_config["tools"]
           'type': 'object',
           'description': 'Input to the calculator.'}},
         'required': ['input']}}}]
+```
 
 Let's use the tool in conversation.
 
 ```python
 chat_result = user_proxy.initiate_chat(assistant, message="What is (1423 - 123) / 3 + (32 + 23) * 5?")
-```
 
     User (to Assistant):
 
@@ -551,14 +555,15 @@ chat_result = user_proxy.initiate_chat(assistant, message="What is (1423 - 123) 
     TERMINATE
 
     --------------------------------------------------------------------------------
+```
 
 Let's verify the answer:
 
 ```python
 int((1423 - 123) / 3) + (32 + 23) * 5
-```
 
     708
+```
 
 Again, the answer is correct. You can see that the assistant is able to understand
 the new tool schema and perform calculation correctly.
