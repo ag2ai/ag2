@@ -64,7 +64,11 @@ graph_rag_falkor_db = [
     "graphrag_sdk==0.3.3",
 ]
 
-neo4j_graph_rag = ["llama_index==0.12.2", "llama-index-graph-stores-neo4j=0.4.0", "neo4j==5.27.0"]
+neo4j_graph_rag = [
+    "llama_index==0.12.2",
+    "llama-index-graph-stores-neo4j=0.4.0",
+    "neo4j==5.27.0",
+]
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
