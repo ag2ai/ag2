@@ -32,6 +32,11 @@ h4 {
   box-shadow: 2px 2px 0px rgba(62, 37, 13, 0.24);
 }
 
+.dark #search-bar-entry {
+  background: #000000;
+  border: 2px solid #ffffff;
+}
+
 #content-area {
   padding-top: 38px;
   padding-left: 48px;
@@ -51,6 +56,11 @@ h4 {
     margin-left: -1rem;
     margin-right: -1rem;
   }
+}
+
+.dark #content-area {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgb(var(--gray-300) / 0.06);
 }
 
 #topbar-cta-button {
