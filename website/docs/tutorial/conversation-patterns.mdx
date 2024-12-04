@@ -2,6 +2,33 @@
 title: "Conversation Patterns"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/repo_relative_notebook"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/repo_relative_notebook"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 In the previous chapter we used two-agent conversation, which
 can be started by the `initiate_chat` method.
 Two-agent chat is a useful conversation pattern but AutoGen offers more.
@@ -32,9 +59,7 @@ but we haven't covered the details.
 
 The following figure illustrates how two-agent chat works.
 
-```{=mdx}
-![Two-agent chat](./assets/two-agent-chat.png)
-```
+![Two-agent chat](./assets/two-agent-chat.webp)
 
 A two-agent chats takes two inputs: a message, which is a string provided by
 the caller; a context, which specifies various parameters of the chat.
@@ -79,48 +104,50 @@ chat_result = student_agent.initiate_chat(
 )
 ```
 
-    Student_Agent (to Teacher_Agent):
+```python
+Student_Agent (to Teacher_Agent):
 
-    What is triangle inequality?
+What is triangle inequality?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> USING AUTO REPLY...
-    Teacher_Agent (to Student_Agent):
+>>>>>>>> USING AUTO REPLY...
+Teacher_Agent (to Student_Agent):
 
-    Triangle inequality theorem is a fundamental principle in geometry that states that the sum of the lengths of any two sides of a triangle must always be greater than the length of the third side. In a triangle with sides of lengths a, b, and c, the theorem can be written as:
+Triangle inequality theorem is a fundamental principle in geometry that states that the sum of the lengths of any two sides of a triangle must always be greater than the length of the third side. In a triangle with sides of lengths a, b, and c, the theorem can be written as:
 
-    a + b > c
-    a + c > b
-    b + c > a
+a + b > c
+a + c > b
+b + c > a
 
-    Each of these represents the condition for one specific side (a, b, or c). All must be true for a triangle to exist.
+Each of these represents the condition for one specific side (a, b, or c). All must be true for a triangle to exist.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> USING AUTO REPLY...
-    Student_Agent (to Teacher_Agent):
+>>>>>>>> USING AUTO REPLY...
+Student_Agent (to Teacher_Agent):
 
-    Thank you for the explanation. This theorem helps in understanding the basic properties of a triangle. It can also be useful when solving geometric problems or proving other mathematical theorems. Can you give me an example of how we can use the triangle inequality theorem?
+Thank you for the explanation. This theorem helps in understanding the basic properties of a triangle. It can also be useful when solving geometric problems or proving other mathematical theorems. Can you give me an example of how we can use the triangle inequality theorem?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> USING AUTO REPLY...
-    Teacher_Agent (to Student_Agent):
+>>>>>>>> USING AUTO REPLY...
+Teacher_Agent (to Student_Agent):
 
-    Absolutely! Here's an example:
+Absolutely! Here's an example:
 
-    Suppose you're given three line segments with lengths 10, 7, and 3 units. The question is: "Can these three line segments form a triangle?"
+Suppose you're given three line segments with lengths 10, 7, and 3 units. The question is: "Can these three line segments form a triangle?"
 
-    To answer this, you would use the triangle inequality theorem. Adding any two side lengths together should be greater than the third:
+To answer this, you would use the triangle inequality theorem. Adding any two side lengths together should be greater than the third:
 
-    - For sides 10 and 7: 10 + 7 = 17, which is larger than 3.
-    - For sides 10 and 3: 10 + 3 = 13, which is larger than 7.
-    - For sides 7 and 3: 7 + 3 = 10, which is equal to the length of the third side (10), but not greater.
+- For sides 10 and 7: 10 + 7 = 17, which is larger than 3.
+- For sides 10 and 3: 10 + 3 = 13, which is larger than 7.
+- For sides 7 and 3: 7 + 3 = 10, which is equal to the length of the third side (10), but not greater.
 
-    So, these three lines cannot form a triangle, because not all pairs of sides satisfy the triangle inequality theorem.
+So, these three lines cannot form a triangle, because not all pairs of sides satisfy the triangle inequality theorem.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+```
 
 Let's see what the summary looks like.
 The summary is stored in the `chat_result` object of the type `ChatResult`
@@ -144,7 +171,7 @@ The input prompt for the LLM is the following default prompt:
 print(ConversableAgent.DEFAULT_SUMMARY_PROMPT)
 ```
 
-    Summarize the takeaway from the conversation. Do not add any introductory phrases.
+Summarize the takeaway from the conversation. Do not add any introductory phrases.
 
 You can also use a custom prompt by setting the `summary_prompt` argument
 of `initiate_chat`.
@@ -157,45 +184,48 @@ the conversation history, human input, and token cost.
 import pprint
 
 pprint.pprint(chat_result.chat_history)
+```
 
-    [{'content': 'What is triangle inequality?', 'role': 'assistant'},
-     {'content': 'Triangle inequality theorem is a fundamental principle in '
-                 'geometry that states that the sum of the lengths of any two '
-                 'sides of a triangle must always be greater than the length of '
-                 'the third side. In a triangle with sides of lengths a, b, and c, '
-                 'the theorem can be written as:\n'
-                 '\n'
-                 'a + b > c\n'
-                 'a + c > b\n'
-                 'b + c > a\n'
-                 '\n'
-                 'Each of these represents the condition for one specific side (a, '
-                 'b, or c). All must be true for a triangle to exist.',
-      'role': 'user'},
-     {'content': 'Thank you for the explanation. This theorem helps in '
-                 'understanding the basic properties of a triangle. It can also be '
-                 'useful when solving geometric problems or proving other '
-                 'mathematical theorems. Can you give me an example of how we can '
-                 'use the triangle inequality theorem?',
-      'role': 'assistant'},
-     {'content': "Absolutely! Here's an example:\n"
-                 '\n'
-                 "Suppose you're given three line segments with lengths 10, 7, and "
-                 '3 units. The question is: "Can these three line segments form a '
-                 'triangle?"\n'
-                 '\n'
-                 'To answer this, you would use the triangle inequality theorem. '
-                 'Adding any two side lengths together should be greater than the '
-                 'third:\n'
-                 '\n'
-                 '- For sides 10 and 7: 10 + 7 = 17, which is larger than 3.\n'
-                 '- For sides 10 and 3: 10 + 3 = 13, which is larger than 7.\n'
-                 '- For sides 7 and 3: 7 + 3 = 10, which is equal to the length of '
-                 'the third side (10), but not greater.\n'
-                 '\n'
-                 'So, these three lines cannot form a triangle, because not all '
-                 'pairs of sides satisfy the triangle inequality theorem.',
-      'role': 'user'}]
+```python
+[{'content': 'What is triangle inequality?', 'role': 'assistant'},
+    {'content': 'Triangle inequality theorem is a fundamental principle in '
+                'geometry that states that the sum of the lengths of any two '
+                'sides of a triangle must always be greater than the length of '
+                'the third side. In a triangle with sides of lengths a, b, and c, '
+                'the theorem can be written as:\n'
+                '\n'
+                'a + b > c\n'
+                'a + c > b\n'
+                'b + c > a\n'
+                '\n'
+                'Each of these represents the condition for one specific side (a, '
+                'b, or c). All must be true for a triangle to exist.',
+    'role': 'user'},
+    {'content': 'Thank you for the explanation. This theorem helps in '
+                'understanding the basic properties of a triangle. It can also be '
+                'useful when solving geometric problems or proving other '
+                'mathematical theorems. Can you give me an example of how we can '
+                'use the triangle inequality theorem?',
+    'role': 'assistant'},
+    {'content': "Absolutely! Here's an example:\n"
+                '\n'
+                "Suppose you're given three line segments with lengths 10, 7, and "
+                '3 units. The question is: "Can these three line segments form a '
+                'triangle?"\n'
+                '\n'
+                'To answer this, you would use the triangle inequality theorem. '
+                'Adding any two side lengths together should be greater than the '
+                'third:\n'
+                '\n'
+                '- For sides 10 and 7: 10 + 7 = 17, which is larger than 3.\n'
+                '- For sides 10 and 3: 10 + 3 = 13, which is larger than 7.\n'
+                '- For sides 7 and 3: 7 + 3 = 10, which is equal to the length of '
+                'the third side (10), but not greater.\n'
+                '\n'
+                'So, these three lines cannot form a triangle, because not all '
+                'pairs of sides satisfy the triangle inequality theorem.',
+    'role': 'user'}]
+
 ```
 
 That chat messages in the chat result are from the
@@ -205,13 +235,15 @@ is the "user".
 ```python
 # Get the cost of the chat.
 pprint.pprint(chat_result.cost)
+```
 
-    ({'gpt-4-0613': {'completion_tokens': 399,
-                     'cost': 0.04521,
-                     'prompt_tokens': 709,
-                     'total_tokens': 1108},
-      'total_cost': 0.04521},
-     {'total_cost': 0})
+```python
+({'gpt-4-0613': {'completion_tokens': 399,
+                    'cost': 0.04521,
+                    'prompt_tokens': 709,
+                    'total_tokens': 1108},
+    'total_cost': 0.04521},
+    {'total_cost': 0})
 ```
 
 ## Sequential Chats
@@ -225,9 +257,7 @@ This pattern is useful for complex task that can be broken down into
 interdependent sub-tasks.
 The figure below illustrate how this pattern works.
 
-```{=mdx}
-![initiate_chats](./assets/sequential-two-agent-chat.png)
-```
+![initiate_chats](./assets/sequential-two-agent-chat.webp)
 
 In this pattern, the a pair of agents first start a two-agent chat,
 then the summary of the conversation becomes a _carryover_ for the next
@@ -328,150 +358,151 @@ chat_results = number_agent.initiate_chats(
         },
     ]
 )
+```
+
+```python
+
+********************************************************************************
+Start a new chat with the following message:
+14
+
+With the following carryover:
 
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    14
+********************************************************************************
+Number_Agent (to Adder_Agent):
 
-    With the following carryover:
+14
 
+--------------------------------------------------------------------------------
+Adder_Agent (to Number_Agent):
 
-    ********************************************************************************
-    Number_Agent (to Adder_Agent):
+15
 
-    14
+--------------------------------------------------------------------------------
+Number_Agent (to Adder_Agent):
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to Number_Agent):
+15
 
-    15
+--------------------------------------------------------------------------------
+Adder_Agent (to Number_Agent):
 
-    --------------------------------------------------------------------------------
-    Number_Agent (to Adder_Agent):
+16
 
-    15
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to Number_Agent):
+********************************************************************************
+Start a new chat with the following message:
+These are my numbers
 
-    16
+With the following carryover:
+16
 
-    --------------------------------------------------------------------------------
+********************************************************************************
+Number_Agent (to Multiplier_Agent):
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    These are my numbers
+These are my numbers
+Context:
+16
 
-    With the following carryover:
-    16
+--------------------------------------------------------------------------------
+Multiplier_Agent (to Number_Agent):
 
-    ********************************************************************************
-    Number_Agent (to Multiplier_Agent):
+32
 
-    These are my numbers
-    Context:
-    16
+--------------------------------------------------------------------------------
+Number_Agent (to Multiplier_Agent):
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to Number_Agent):
+32
 
-    32
+--------------------------------------------------------------------------------
+Multiplier_Agent (to Number_Agent):
 
-    --------------------------------------------------------------------------------
-    Number_Agent (to Multiplier_Agent):
+64
 
-    32
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to Number_Agent):
+********************************************************************************
+Start a new chat with the following message:
+These are my numbers
 
-    64
+With the following carryover:
+16
+64
 
-    --------------------------------------------------------------------------------
+********************************************************************************
+Number_Agent (to Subtracter_Agent):
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    These are my numbers
+These are my numbers
+Context:
+16
+64
 
-    With the following carryover:
-    16
-    64
+--------------------------------------------------------------------------------
+Subtracter_Agent (to Number_Agent):
 
-    ********************************************************************************
-    Number_Agent (to Subtracter_Agent):
+15
+63
 
-    These are my numbers
-    Context:
-    16
-    64
+--------------------------------------------------------------------------------
+Number_Agent (to Subtracter_Agent):
 
-    --------------------------------------------------------------------------------
-    Subtracter_Agent (to Number_Agent):
+15
+63
 
-    15
-    63
+--------------------------------------------------------------------------------
+Subtracter_Agent (to Number_Agent):
 
-    --------------------------------------------------------------------------------
-    Number_Agent (to Subtracter_Agent):
+14
+62
 
-    15
-    63
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
-    Subtracter_Agent (to Number_Agent):
+********************************************************************************
+Start a new chat with the following message:
+These are my numbers
 
-    14
-    62
+With the following carryover:
+16
+64
+14
+62
 
-    --------------------------------------------------------------------------------
+********************************************************************************
+Number_Agent (to Divider_Agent):
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    These are my numbers
+These are my numbers
+Context:
+16
+64
+14
+62
 
-    With the following carryover:
-    16
-    64
-    14
-    62
+--------------------------------------------------------------------------------
+Divider_Agent (to Number_Agent):
 
-    ********************************************************************************
-    Number_Agent (to Divider_Agent):
+8
+32
+7
+31
 
-    These are my numbers
-    Context:
-    16
-    64
-    14
-    62
+--------------------------------------------------------------------------------
+Number_Agent (to Divider_Agent):
 
-    --------------------------------------------------------------------------------
-    Divider_Agent (to Number_Agent):
+8
+32
+7
+31
 
-    8
-    32
-    7
-    31
+--------------------------------------------------------------------------------
+Divider_Agent (to Number_Agent):
 
-    --------------------------------------------------------------------------------
-    Number_Agent (to Divider_Agent):
+4
+16
+3.5
+15.5
 
-    8
-    32
-    7
-    31
-
-    --------------------------------------------------------------------------------
-    Divider_Agent (to Number_Agent):
-
-    4
-    16
-    3.5
-    15.5
-
-    --------------------------------------------------------------------------------
-
+--------------------------------------------------------------------------------
 ```
 
 First thing to note is that the `initiate_chats` method takes a list of
@@ -500,15 +531,17 @@ print("First Chat Summary: ", chat_results[0].summary)
 print("Second Chat Summary: ", chat_results[1].summary)
 print("Third Chat Summary: ", chat_results[2].summary)
 print("Fourth Chat Summary: ", chat_results[3].summary)
+```
 
-    First Chat Summary:  16
-    Second Chat Summary:  64
-    Third Chat Summary:  14
-    62
-    Fourth Chat Summary:  4
-    16
-    3.5
-    15.5
+```python
+First Chat Summary:  16
+Second Chat Summary:  64
+Third Chat Summary:  14
+62
+Fourth Chat Summary:  4
+16
+3.5
+15.5
 ```
 
 Besides calling `initiate_chats` from the same sender agent, you can also
@@ -528,9 +561,7 @@ This is useful for tasks that require collaboration among multiple agents.
 
 The figure below illustrates how group chat works.
 
-```{=mdx}
-![group_chat](./assets/group-chat.png)
-```
+![group_chat](./assets/group-chat.webp)
 
 A group chat is orchestrated by a special
 agent type `GroupChatManager`. In the first step of the group chat,
@@ -611,37 +642,39 @@ chat_result = number_agent.initiate_chat(
     message="My number is 3, I want to turn it into 13.",
     summary_method="reflection_with_llm",
 )
+```
 
-    Number_Agent (to chat_manager):
+```python
+Number_Agent (to chat_manager):
 
-    My number is 3, I want to turn it into 13.
+My number is 3, I want to turn it into 13.
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    6
+6
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    7
+7
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    14
+14
 
-    --------------------------------------------------------------------------------
-    Subtracter_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Subtracter_Agent (to chat_manager):
 
-    13
+13
 
-    --------------------------------------------------------------------------------
-    Number_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Number_Agent (to chat_manager):
 
-    13
+13
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 ```
 
@@ -655,9 +688,9 @@ We can take a look at the summary of the group chat, provided by the
 
 ```python
 print(chat_result.summary)
-
-    The agents cooperatively manipulated the initial number (3) through multipliying, adding, and subtracting operations to reach the target number (13).
 ```
+
+The agents cooperatively manipulated the initial number (3) through multipliying, adding, and subtracting operations to reach the target number (13).
 
 ### Send Introductions
 
@@ -707,91 +740,93 @@ chat_result = number_agent.initiate_chats(
         },
     ]
 )
+```
+
+```python
+********************************************************************************
+Start a new chat with the following message:
+My number is 3, I want to turn it into 13.
+
+With the following carryover:
 
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    My number is 3, I want to turn it into 13.
+********************************************************************************
+Number_Agent (to chat_manager):
 
-    With the following carryover:
+My number is 3, I want to turn it into 13.
 
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    ********************************************************************************
-    Number_Agent (to chat_manager):
+6
 
-    My number is 3, I want to turn it into 13.
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+7
 
-    6
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
+14
 
-    7
+--------------------------------------------------------------------------------
+Subtracter_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+13
 
-    14
+--------------------------------------------------------------------------------
+Number_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Subtracter_Agent (to chat_manager):
+Your number is 13.
 
-    13
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
-    Number_Agent (to chat_manager):
+********************************************************************************
+Start a new chat with the following message:
+Turn this number to 32.
 
-    Your number is 13.
+With the following carryover:
+Your number is 13.
 
-    --------------------------------------------------------------------------------
+********************************************************************************
+Number_Agent (to chat_manager):
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    Turn this number to 32.
+Turn this number to 32.
+Context:
+Your number is 13.
 
-    With the following carryover:
-    Your number is 13.
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    ********************************************************************************
-    Number_Agent (to chat_manager):
+26
 
-    Turn this number to 32.
-    Context:
-    Your number is 13.
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+14
 
-    26
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
+28
 
-    14
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+15
 
-    28
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
+30
 
-    15
+--------------------------------------------------------------------------------
+```
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
-
-    30
-
-    --------------------------------------------------------------------------------
-
-
-    /Users/ekzhu/autogen/autogen/agentchat/chat.py:46: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
-      warnings.warn(
+```python
+/Users/ekzhu/autogen/autogen/agentchat/chat.py:46: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
+  warnings.warn(
 ```
 
 In the above example, the Group Chat Manager runs the group chat two times.
@@ -856,67 +891,69 @@ chat_result = number_agent.initiate_chat(
     message="My number is 3, I want to turn it into 10. Once I get to 10, keep it there.",
     summary_method="reflection_with_llm",
 )
+```
 
-    Number_Agent (to chat_manager):
+```python
+Number_Agent (to chat_manager):
 
-    My number is 3, I want to turn it into 10. Once I get to 10, keep it there.
+My number is 3, I want to turn it into 10. Once I get to 10, keep it there.
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    4
+4
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    8
+8
 
-    --------------------------------------------------------------------------------
-    Subtracter_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Subtracter_Agent (to chat_manager):
 
-    7
+7
 
-    --------------------------------------------------------------------------------
-    Divider_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Divider_Agent (to chat_manager):
 
-    3.5
+3.5
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    4.5
+4.5
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    9
+9
 
-    --------------------------------------------------------------------------------
-    Subtracter_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Subtracter_Agent (to chat_manager):
 
-    8
+8
 
-    --------------------------------------------------------------------------------
-    Divider_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Divider_Agent (to chat_manager):
 
-    4
+4
 
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    5
+5
 
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    10
+10
 
-    --------------------------------------------------------------------------------
-    Number_Agent (to chat_manager):
+--------------------------------------------------------------------------------
+Number_Agent (to chat_manager):
 
-    10
+10
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```
 
 This time, the agents are selected following the constraints we have specified.
@@ -954,9 +991,7 @@ component of `ConversableAgent`.
 The figure below illustrates how the nested chats handler triggers
 a sequence of nested chats when a message is received.
 
-```{=mdx}
-![nested_chat](./assets/nested-chats.png)
-```
+![nested_chat](./assets/nested-chats.webp)
 
 When a message comes in and passes the [human-in-the-loop component](./human-in-the-loop),
 the nested chats handler checks if the message should trigger a nested chat
@@ -1057,164 +1092,170 @@ reply = arithmetic_agent.generate_reply(
 )
 ```
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+````python
+>>>>>>>> NO HUMAN INPUT RECEIVED.
 
-    >>>>>>>> USING AUTO REPLY...
+>>>>>>>> USING AUTO REPLY...
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    I have a number 3 and I want to turn it into 7.
+********************************************************************************
+Start a new chat with the following message:
+I have a number 3 and I want to turn it into 7.
 
-    With the following carryover:
-
-
-    ********************************************************************************
-    Arithmetic_Agent (to chat_manager):
-
-    I have a number 3 and I want to turn it into 7.
-
-    --------------------------------------------------------------------------------
-    Adder_Agent (to chat_manager):
-
-    To give you the result, I'll add 1 to the number you gave me. So your new number is 4.
-
-    --------------------------------------------------------------------------------
-    Multiplier_Agent (to chat_manager):
-
-    8
-
-    --------------------------------------------------------------------------------
-    Subtracter_Agent (to chat_manager):
-
-    7
-
-    --------------------------------------------------------------------------------
-    Number_Agent (to chat_manager):
-
-    7
-
-    --------------------------------------------------------------------------------
-    Number_Agent (to chat_manager):
-
-    7
-
-    --------------------------------------------------------------------------------
-
-    ********************************************************************************
-    Start a new chat with the following message:
-    Write a Python script to verify the arithmetic operations is correct.
-
-    With the following carryover:
-    First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
-
-    ********************************************************************************
-    Arithmetic_Agent (to Code_Writer_Agent):
-
-    Write a Python script to verify the arithmetic operations is correct.
-    Context:
-    First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
-
-    --------------------------------------------------------------------------------
-    Code_Writer_Agent (to Arithmetic_Agent):
-
-    Here is a Python script to verify the aforementioned arithmetic operations:
-
-    ```python
-    # defining the initial value
-    initial_number = 3
-
-    # Adding 1 to initial number
-    initial_number += 1
-    assert initial_number == 4, "The first operation failed!"
-
-    # Multiplying the result by 2
-    initial_number *= 2
-    assert initial_number == 8, "The second operation failed!"
-
-    # Subtracting 1 from the result
-    initial_number -= 1
-    assert initial_number == 7, "The final operation failed!"
-
-    print("All operations were carried out successfully!")
-    ```
-    In the script, the entire process is broken down into steps. The `assert` function is used to verify the result at every step. If any of the operations doesn't yield the expected result, an `AssertionError` exception will be raised. If all operations pass, the message "All operations were carried out successfully!" will be printed.
-
-    --------------------------------------------------------------------------------
-
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
-
-    >>>>>>>> USING AUTO REPLY...
-
-    >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
-    Arithmetic_Agent (to Code_Writer_Agent):
-
-    exitcode: 0 (execution succeeded)
-    Code output:
-    All operations were carried out successfully!
+With the following carryover:
 
 
-    --------------------------------------------------------------------------------
-    Code_Writer_Agent (to Arithmetic_Agent):
+********************************************************************************
+Arithmetic_Agent (to chat_manager):
 
-    Certainly, that means the python script was successful and every arithmetic operation performed correctly given the initial input and the steps performed.
+I have a number 3 and I want to turn it into 7.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+Adder_Agent (to chat_manager):
 
-    ********************************************************************************
-    Start a new chat with the following message:
-    Write a poem about it.
+To give you the result, I'll add 1 to the number you gave me. So your new number is 4.
 
-    With the following carryover:
-    First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
-    The Python script successfully performed and verified the arithmetic operations on the initial number provided. The steps included adding 1 to the initial number, multiplying the result by 2, and finally subtracting 1. The assert function was used to check the result at each step, and confirmed that all operations were carried out correctly.
+--------------------------------------------------------------------------------
+Multiplier_Agent (to chat_manager):
 
-    ********************************************************************************
-    Arithmetic_Agent (to Poetry_Agent):
+8
 
-    Write a poem about it.
-    Context:
-    First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
-    The Python script successfully performed and verified the arithmetic operations on the initial number provided. The steps included adding 1 to the initial number, multiplying the result by 2, and finally subtracting 1. The assert function was used to check the result at each step, and confirmed that all operations were carried out correctly.
+--------------------------------------------------------------------------------
+Subtracter_Agent (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    Poetry_Agent (to Arithmetic_Agent):
+7
 
-    From numbers, logic, pure mathematical creation,
-    Ponder this tale of numeric manipulation.
-    In the universe of Python where operations exist,
-    A story of integers and functions persist.
+--------------------------------------------------------------------------------
+Number_Agent (to chat_manager):
 
-    Three was the number from where we began,
-    Oblivious to the journey and its grandiosely plan.
-    Added with 1, the sum it adorned,
-    A sweet quadruple in the dawn was formed.
+7
 
-    The saga continued with a twist of the tale,
-    The four was multiplied, while the winds wail.
-    The duo of four unfolded its wings,
-    An octet presence in our midst it brings.
+--------------------------------------------------------------------------------
+Number_Agent (to chat_manager):
 
-    Then enters subtraction, sly and clever,
-    Removing one to alter the endeavor.
-    From eight, subtracted one in delight,
-    To finally bask in the glow of seven's light.
+7
 
-    Each operation, together they conspired,
-    In this tale of integers, creatively inspired.
-    Through life's equation, the script ran so free,
-    Amidst the language of Python, a symphony, you see.
+--------------------------------------------------------------------------------
 
-    Tested with assert, cross-checked the chain,
-    Confirming accuracy in program's domain.
-    Each move calculated, each step so right,
-    In the maze of coding, found was the light.
+********************************************************************************
+Start a new chat with the following message:
+Write a Python script to verify the arithmetic operations is correct.
 
-    Such is the tale, of numbers and operations,
-    A dance among digits, logical iterations,
-    Just another day, in this AI poet's life,
-    Cutting through ambiguity, like a razor-sharp knife.
+With the following carryover:
+First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
 
-    --------------------------------------------------------------------------------
+********************************************************************************
+Arithmetic_Agent (to Code_Writer_Agent):
+
+Write a Python script to verify the arithmetic operations is correct.
+Context:
+First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
+
+--------------------------------------------------------------------------------
+Code_Writer_Agent (to Arithmetic_Agent):
+
+Here is a Python script to verify the aforementioned arithmetic operations:
+
+```python
+# defining the initial value
+initial_number = 3
+
+# Adding 1 to initial number
+initial_number += 1
+assert initial_number == 4, "The first operation failed!"
+
+# Multiplying the result by 2
+initial_number *= 2
+assert initial_number == 8, "The second operation failed!"
+
+# Subtracting 1 from the result
+initial_number -= 1
+assert initial_number == 7, "The final operation failed!"
+
+print("All operations were carried out successfully!")
+```
+In the script, the entire process is broken down into steps. The `assert` function is used to verify the result at every step. If any of the operations doesn't yield the expected result, an `AssertionError` exception will be raised. If all operations pass, the message "All operations were carried out successfully!" will be printed.
+
+---
+
+> > > > > > > > NO HUMAN INPUT RECEIVED.
+
+> > > > > > > > USING AUTO REPLY...
+
+> > > > > > > > EXECUTING CODE BLOCK 0 (inferred language is python)...
+> > > > > > > > Arithmetic_Agent (to Code_Writer_Agent):
+
+exitcode: 0 (execution succeeded)
+Code output:
+All operations were carried out successfully!
+
+---
+
+Code_Writer_Agent (to Arithmetic_Agent):
+
+Certainly, that means the python script was successful and every arithmetic operation performed correctly given the initial input and the steps performed.
+
+---
+
+---
+
+Start a new chat with the following message:
+Write a poem about it.
+
+With the following carryover:
+First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
+The Python script successfully performed and verified the arithmetic operations on the initial number provided. The steps included adding 1 to the initial number, multiplying the result by 2, and finally subtracting 1. The assert function was used to check the result at each step, and confirmed that all operations were carried out correctly.
+
+---
+
+Arithmetic_Agent (to Poetry_Agent):
+
+Write a poem about it.
+Context:
+First, 1 was added to the initial number 3 to make it 4. Then it was multiplied by 2 which resulted in 8. Finally, 1 was subtracted from 8 to reach the target number 7.
+The Python script successfully performed and verified the arithmetic operations on the initial number provided. The steps included adding 1 to the initial number, multiplying the result by 2, and finally subtracting 1. The assert function was used to check the result at each step, and confirmed that all operations were carried out correctly.
+
+---
+
+Poetry_Agent (to Arithmetic_Agent):
+
+From numbers, logic, pure mathematical creation,
+Ponder this tale of numeric manipulation.
+In the universe of Python where operations exist,
+A story of integers and functions persist.
+
+Three was the number from where we began,
+Oblivious to the journey and its grandiosely plan.
+Added with 1, the sum it adorned,
+A sweet quadruple in the dawn was formed.
+
+The saga continued with a twist of the tale,
+The four was multiplied, while the winds wail.
+The duo of four unfolded its wings,
+An octet presence in our midst it brings.
+
+Then enters subtraction, sly and clever,
+Removing one to alter the endeavor.
+From eight, subtracted one in delight,
+To finally bask in the glow of seven's light.
+
+Each operation, together they conspired,
+In this tale of integers, creatively inspired.
+Through life's equation, the script ran so free,
+Amidst the language of Python, a symphony, you see.
+
+Tested with assert, cross-checked the chain,
+Confirming accuracy in program's domain.
+Each move calculated, each step so right,
+In the maze of coding, found was the light.
+
+Such is the tale, of numbers and operations,
+A dance among digits, logical iterations,
+Just another day, in this AI poet's life,
+Cutting through ambiguity, like a razor-sharp knife.
+
+---
+
+````
 
 A poem is returned as the response, which describes the transformation attempt
 from 3 to 7.
