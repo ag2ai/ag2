@@ -86,5 +86,13 @@
     "city": "Rome",
     "rating": 4.7,
     "food_type": "Italian"
+  },
+  {
+    "id": 12,
+    "name": "Osteria delle Commari",
+    "description": "Local home style Roman restaurant near Vatican Museums.",
+    "city": "Rome",
+    "rating": 4.3,
+    "food_type": "Italian"
   }
 ]
