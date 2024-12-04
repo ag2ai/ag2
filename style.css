@@ -71,7 +71,7 @@ h4 {
     width: 700px !important;
     min-width: 700px !important;
   }
-  @media screen and (max-width: 1200px) {
+  @media screen and (max-width: 1024px) {
     width: 100%;
     min-width: 100% !important;
     margin-top: -2.5rem;
