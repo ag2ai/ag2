@@ -11,7 +11,7 @@ from typing import List
 from unittest.mock import MagicMock
 
 import pytest
-from openai.types.chat.parsed_chat_completion import ParsedChatCompletion, ParsedChatCompletionMessage, ParsedChoice
+from openai.types.chat.parsed_chat_completion import ChatCompletion, ChatCompletionMessage, Choice
 from pydantic import BaseModel, ValidationError
 from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
@@ -37,7 +37,7 @@ def test_structured_output():
         reasoning: str
         difficulty: float
 
-    llm_config = {"config_list": config_list, "cache_seed": 41}
+    llm_config = {"config_list": config_list, "cache_seed": 43}
 
     user_proxy = autogen.UserProxyAgent(
         name="User_proxy",
@@ -85,7 +85,7 @@ class MathReasoning(BaseModel):
 def mock_assistant():
     """Set up a mocked AssistantAgent with a predefined response format."""
     config_list = [{"model": "gpt-4o", "api_key": MOCK_OPEN_AI_API_KEY}]
-    llm_config = {"config_list": config_list, "cache_seed": 41}
+    llm_config = {"config_list": config_list, "cache_seed": 43}
 
     assistant = autogen.AssistantAgent(
         name="Assistant",
@@ -94,16 +94,16 @@ def mock_assistant():
     )
 
     oai_client_mock = MagicMock()
-    oai_client_mock.beta.chat.completions.parse.return_value = ParsedChatCompletion[MathReasoning](
+    oai_client_mock.chat.completions.create.return_value = ChatCompletion(
         id="some-id",
         created=1733302346,
         model="gpt-4o",
         object="chat.completion",
         choices=[
-            ParsedChoice[MathReasoning](
+            Choice(
                 finish_reason="stop",
                 index=0,
-                message=ParsedChatCompletionMessage[MathReasoning](
+                message=ChatCompletionMessage(
                     content='{"steps":[{"explanation":"some explanation","output":"some output"}],"final_answer":"final answer"}',
                     role="assistant",
                 ),

@@ -71,6 +71,9 @@ class MistralAIClient:
             self.api_key
         ), "Please specify the 'api_key' in your config list entry for Mistral or set the MISTRAL_API_KEY env variable."
 
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Mistral.AI, will be ignored.", UserWarning)
+
         self._client = Mistral(api_key=self.api_key)
 
     def message_retrieval(self, response: ChatCompletion) -> Union[List[str], List[ChatCompletionMessage]]:
@@ -170,10 +173,7 @@ class MistralAIClient:
 
         return mistral_params
 
-    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Mistral's API.")
-
+    def create(self, params: Dict[str, Any]) -> ChatCompletion:
         # 1. Parse parameters to Mistral.AI API's parameters
         mistral_params = self.parse_params(params)
 

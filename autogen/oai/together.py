@@ -60,6 +60,9 @@ class TogetherClient:
         if not self.api_key:
             self.api_key = os.getenv("TOGETHER_API_KEY")
 
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Together.AI.", UserWarning)
+
         assert (
             self.api_key
         ), "Please include the api_key in your config list entry for Together.AI or set the TOGETHER_API_KEY env variable."
@@ -130,10 +133,7 @@ class TogetherClient:
 
         return together_params
 
-    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Together AI's API.")
-
+    def create(self, params: Dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Together.AI messages

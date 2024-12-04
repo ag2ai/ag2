@@ -93,6 +93,9 @@ class BedrockClient:
             profile_name=self._aws_profile_name,
         )
 
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Bedrock, it will be ignored.", UserWarning)
+
         self.bedrock_runtime = session.client(service_name="bedrock-runtime", config=bedrock_config)
 
     def message_retrieval(self, response):
@@ -179,12 +182,8 @@ class BedrockClient:
 
         return base_params, additional_params
 
-    def create(self, params, response_format: Optional[BaseModel] = None) -> ChatCompletion:
+    def create(self, params) -> ChatCompletion:
         """Run Amazon Bedrock inference and return AutoGen response"""
-
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Amazon Bedrock's API.")
-
         # Set custom client class settings
         self.parse_custom_params(params)
 

@@ -66,6 +66,9 @@ class GroqClient:
             self.api_key
         ), "Please include the api_key in your config list entry for Groq or set the GROQ_API_KEY env variable."
 
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Groq API. Ignoring.", UserWarning)
+
     def message_retrieval(self, response) -> List:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -126,10 +129,7 @@ class GroqClient:
 
         return groq_params
 
-    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Groq's API.")
-
+    def create(self, params: Dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Groq messages

@@ -114,6 +114,9 @@ class AnthropicClient:
         ):
             raise ValueError("API key or AWS credentials are required to use the Anthropic API.")
 
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Anthropic, it will be ignored.", UserWarning)
+
         if self._api_key is not None:
             self._client = Anthropic(api_key=self._api_key)
         else:
@@ -175,10 +178,7 @@ class AnthropicClient:
     def aws_region(self):
         return self._aws_region
 
-    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Anthropic API.")
-
+    def create(self, params: Dict[str, Any]) -> ChatCompletion:
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions

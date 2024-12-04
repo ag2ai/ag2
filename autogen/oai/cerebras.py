@@ -49,13 +49,17 @@ CEREBRAS_PRICING_1K = {
 class CerebrasClient:
     """Client for Cerebras's API."""
 
-    def __init__(self, api_key=None, **kwargs):
+    def __init__(self, api_key=None, response_format: Optional[BaseModel] = None, **kwargs):
         """Requires api_key or environment variable to be set
 
         Args:
             api_key (str): The API key for using Cerebras (or environment variable CEREBRAS_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
+
+        if response_format is not None:
+            raise NotImplementedError("Response format is not supported by Cerebras' API.")
+
         self.api_key = api_key
         if not self.api_key:
             self.api_key = os.getenv("CEREBRAS_API_KEY")
@@ -63,6 +67,9 @@ class CerebrasClient:
         assert (
             self.api_key
         ), "Please include the api_key in your config list entry for Cerebras or set the CEREBRAS_API_KEY env variable."
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Crebras, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response: ChatCompletion) -> List:
         """
@@ -112,10 +119,7 @@ class CerebrasClient:
 
         return cerebras_params
 
-    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Cerebras' API.")
-
+    def create(self, params: Dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Cerebras messages
