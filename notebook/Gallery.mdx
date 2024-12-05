@@ -3,18 +3,19 @@ title: "Gallery"
 sidebarTitle: "Application Gallery"
 ---
 
-{/* import GalleryPage from "/snippets/GalleryPage.js"; */}
+import { GalleryPage } from "/snippets/gallery-page.mdx";
+import { galleryData } from "/snippets/data/gallery.mdx";
 
 This page contains a list of demos that use AutoGen in various applications from the community.
 
 **Contribution guide:**
 Built something interesting with AutoGen? Submit a PR to add it to the list! See the [Contribution Guide below](#contributing) for more details.
 
-{/* <GalleryPage /> */}
+<GalleryPage items={galleryData} />
 
 ## Contributing
 
-To contribute, please open a PR that adds an entry to the `data/gallery.json` file in the `src` directory. The entry should be an object with the following properties:
+To contribute, please open a PR that adds an entry to the `data/gallery.mdx` file in the `snippets` directory. The entry should be an object with the following properties:
 
 ```js
 {

@@ -28,6 +28,14 @@ h4 {
   }
 }
 
+.card h2 {
+  font-size: 2rem !important;
+
+  code {
+    font-size: 1rem !important;
+  }
+}
+
 h1 {
   font-size: 3rem !important;
 
@@ -297,7 +305,7 @@ table {
     li > div {
       width: 100%;
 
-      svg {
+      & > div + svg {
         margin-left: auto;
       }
     }
