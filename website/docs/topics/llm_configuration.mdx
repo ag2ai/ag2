@@ -12,11 +12,12 @@ llm_config = {
 }
 ```
 
-```{=mdx}
-:::warning
-It is important to never commit secrets into your code, therefore we read the OpenAI API key from an environment variable.
-:::
-```
+<div class="warning">
+  <Warning>
+    It is important to never commit secrets into your code, therefore we read
+    the OpenAI API key from an environment variable.
+  </Warning>
+</div>
 
 This `llm_config` can then be passed to an agent's constructor to enable it to use the LLM.
 
@@ -31,7 +32,7 @@ assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 Different tasks may require different models, and the `config_list` allows specifying the different endpoints and configurations that are to be used. It is a list of dictionaries, each of which contains the following keys depending on the kind of endpoint being used:
 
 <Tabs>
-  <TabItem value="openai" label="OpenAI" default>
+  <Tab title="OpenAI">
     - `model` (str, required): The identifier of the model to be used, such as 'gpt-4', 'gpt-3.5-turbo'.
     - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
     - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
@@ -47,8 +48,9 @@ Different tasks may require different models, and the `config_list` allows speci
     ]
     ```
 
-  </TabItem>
-  <TabItem value="azureopenai" label="Azure OpenAI">
+  </Tab>
+
+  <Tab title="Azure OpenAI">
     - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
     - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
     - `api_type`: `azure`
@@ -69,8 +71,9 @@ Different tasks may require different models, and the `config_list` allows speci
     ]
     ```
 
-  </TabItem>
-  <TabItem value="other" label="Other OpenAI compatible">
+  </Tab>
+
+  <Tab title="Other OpenAI compatible">
     - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
     - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
     - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
@@ -86,16 +89,18 @@ Different tasks may require different models, and the `config_list` allows speci
     ]
     ```
 
-  </TabItem>
+  </Tab>
 </Tabs>
 
 ---
 
-```{=mdx}
-:::tip
-By default this will create a model client which assumes an OpenAI API (or compatible) endpoint. To use custom model clients, see [here](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_custom_model.ipynb).
-:::
-```
+<div class="tip">
+  <Tip>
+    By default this will create a model client which assumes an OpenAI API (or
+    compatible) endpoint. To use custom model clients, see
+    [here](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_custom_model.ipynb).
+  </Tip>
+</div>
 
 ### `OAI_CONFIG_LIST` pattern
 

@@ -2,6 +2,33 @@
 title: Swarm Ochestration
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/swarm.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/swarm.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 With AG2, you can initiate a Swarm Chat similar to OpenAI's [Swarm](https://github.com/openai/swarm). This orchestration offers two main features:
 
 - **Headoffs**: Agents can transfer control to another agent via function calls, enabling smooth transitions within workflows.
@@ -209,12 +236,14 @@ for func_schema in agent_1.llm_config["tools"]:
 print("Agent 3 function schema:")
 for func_schema in agent_3.llm_config["tools"]:
     print(func_schema)
+```
 
-    Agent 1 function schema:
-    {'type': 'function', 'function': {'description': '', 'name': 'update_context_1', 'parameters': {'type': 'object', 'properties': {}}}}
-    {'type': 'function', 'function': {'description': 'Transfer to agent 2', 'name': 'transfer_to_agent_2', 'parameters': {'type': 'object', 'properties': {}}}}
-    Agent 3 function schema:
-    {'type': 'function', 'function': {'description': 'Transfer to Agent 4', 'name': 'transfer_to_Agent_4', 'parameters': {'type': 'object', 'properties': {}}}}
+```python
+Agent 1 function schema:
+{'type': 'function', 'function': {'description': '', 'name': 'update_context_1', 'parameters': {'type': 'object', 'properties': {}}}}
+{'type': 'function', 'function': {'description': 'Transfer to agent 2', 'name': 'transfer_to_agent_2', 'parameters': {'type': 'object', 'properties': {}}}}
+Agent 3 function schema:
+{'type': 'function', 'function': {'description': 'Transfer to Agent 4', 'name': 'transfer_to_Agent_4', 'parameters': {'type': 'object', 'properties': {}}}}
 ```
 
 ### Start Chat
@@ -228,160 +257,164 @@ chat_result, context_variables, last_agent = initiate_swarm_chat(
     context_variables=context_variables,
     after_work=AFTER_WORK(AfterWorkOption.TERMINATE),  # this is the default
 )
+```
 
-    _User (to chat_manager):
+```python
+_User (to chat_manager):
 
-    start
+start
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Agent_1
+Next speaker: Agent_1
 
-    Agent_1 (to chat_manager):
+Agent_1 (to chat_manager):
 
-    ***** Suggested tool call (call_kfcEAY2IeRZww06CQN7lbxOf): update_context_1 *****
-    Arguments:
-    {}
-    *********************************************************************************
-    ***** Suggested tool call (call_izl5eyV8IQ0Wg6XY2SaR1EJM): transfer_to_agent_2 *****
-    Arguments:
-    {}
-    ************************************************************************************
+***** Suggested tool call (call_kfcEAY2IeRZww06CQN7lbxOf): update_context_1 *****
+Arguments:
+{}
+*********************************************************************************
+***** Suggested tool call (call_izl5eyV8IQ0Wg6XY2SaR1EJM): transfer_to_agent_2 *****
+Arguments:
+{}
+************************************************************************************
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Tool_Execution
-
-
-    >>>>>>>> EXECUTING FUNCTION update_context_1...
-
-    >>>>>>>> EXECUTING FUNCTION transfer_to_agent_2...
-    Tool_Execution (to chat_manager):
-
-    ***** Response from calling tool (call_kfcEAY2IeRZww06CQN7lbxOf) *****
-
-    **********************************************************************
-
-    --------------------------------------------------------------------------------
-    ***** Response from calling tool (call_izl5eyV8IQ0Wg6XY2SaR1EJM) *****
-    SwarmAgent --> Agent_2
-    **********************************************************************
-
-    --------------------------------------------------------------------------------
-
-    Next speaker: Agent_2
-
-    Agent_2 (to chat_manager):
-
-    ***** Suggested tool call (call_Yf5DTGaaYkA726ubnfJAvQMq): update_context_2_and_transfer_to_3 *****
-    Arguments:
-    {}
-    ***************************************************************************************************
-
-    --------------------------------------------------------------------------------
-
-    Next speaker: Tool_Execution
+Next speaker: Tool_Execution
 
 
-    >>>>>>>> EXECUTING FUNCTION update_context_2_and_transfer_to_3...
-    Tool_Execution (to chat_manager):
+>>>>>>>> EXECUTING FUNCTION update_context_1...
 
-    ***** Response from calling tool (call_Yf5DTGaaYkA726ubnfJAvQMq) *****
+>>>>>>>> EXECUTING FUNCTION transfer_to_agent_2...
+Tool_Execution (to chat_manager):
 
-    **********************************************************************
+***** Response from calling tool (call_kfcEAY2IeRZww06CQN7lbxOf) *****
 
-    --------------------------------------------------------------------------------
+**********************************************************************
 
-    Next speaker: Agent_3
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_izl5eyV8IQ0Wg6XY2SaR1EJM) *****
+SwarmAgent --> Agent_2
+**********************************************************************
 
-    Agent_3 (to chat_manager):
+--------------------------------------------------------------------------------
 
-    ***** Suggested tool call (call_jqZNHuMtQYeNh5Mq4pV2uwAj): transfer_to_Agent_4 *****
-    Arguments:
-    {}
-    ************************************************************************************
+Next speaker: Agent_2
 
-    --------------------------------------------------------------------------------
+Agent_2 (to chat_manager):
 
-    Next speaker: Tool_Execution
+***** Suggested tool call (call_Yf5DTGaaYkA726ubnfJAvQMq): update_context_2_and_transfer_to_3 *****
+Arguments:
+{}
+***************************************************************************************************
 
+--------------------------------------------------------------------------------
 
-    >>>>>>>> EXECUTING FUNCTION transfer_to_Agent_4...
-    Tool_Execution (to chat_manager):
-
-    ***** Response from calling tool (call_jqZNHuMtQYeNh5Mq4pV2uwAj) *****
-    SwarmAgent --> Agent_4
-    **********************************************************************
-
-    --------------------------------------------------------------------------------
-
-    Next speaker: Agent_4
-
-    Agent_4 (to chat_manager):
-
-    ***** Suggested tool call (call_KeNGv98klvDZsrAX10Ou3I71): get_random_number *****
-    Arguments:
-    {}
-    **********************************************************************************
-
-    --------------------------------------------------------------------------------
-
-    Next speaker: Tool_Execution
+Next speaker: Tool_Execution
 
 
-    >>>>>>>> EXECUTING FUNCTION get_random_number...
-    Tool_Execution (to chat_manager):
+>>>>>>>> EXECUTING FUNCTION update_context_2_and_transfer_to_3...
+Tool_Execution (to chat_manager):
 
-    ***** Response from calling tool (call_KeNGv98klvDZsrAX10Ou3I71) *****
-    27
-    **********************************************************************
+***** Response from calling tool (call_Yf5DTGaaYkA726ubnfJAvQMq) *****
 
-    --------------------------------------------------------------------------------
+**********************************************************************
 
-    Next speaker: Agent_4
+--------------------------------------------------------------------------------
 
-    Agent_4 (to chat_manager):
+Next speaker: Agent_3
 
-    The random number generated is 27.
+Agent_3 (to chat_manager):
 
-    --------------------------------------------------------------------------------
+***** Suggested tool call (call_jqZNHuMtQYeNh5Mq4pV2uwAj): transfer_to_Agent_4 *****
+Arguments:
+{}
+************************************************************************************
 
-    Next speaker: Agent_5
+--------------------------------------------------------------------------------
 
-    Agent_5 (to chat_manager):
-
-    ***** Suggested tool call (call_MlSGNNktah3m3QGssWBEzxCe): update_context_3_with_random_number *****
-    Arguments:
-    {"random_number":27}
-    ****************************************************************************************************
-
-    --------------------------------------------------------------------------------
-
-    Next speaker: Tool_Execution
+Next speaker: Tool_Execution
 
 
-    >>>>>>>> EXECUTING FUNCTION update_context_3_with_random_number...
-    Tool_Execution (to chat_manager):
+>>>>>>>> EXECUTING FUNCTION transfer_to_Agent_4...
+Tool_Execution (to chat_manager):
 
-    ***** Response from calling tool (call_MlSGNNktah3m3QGssWBEzxCe) *****
+***** Response from calling tool (call_jqZNHuMtQYeNh5Mq4pV2uwAj) *****
+SwarmAgent --> Agent_4
+**********************************************************************
 
-    **********************************************************************
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
+Next speaker: Agent_4
 
-    Next speaker: Agent_5
+Agent_4 (to chat_manager):
 
-    Agent_5 (to chat_manager):
+***** Suggested tool call (call_KeNGv98klvDZsrAX10Ou3I71): get_random_number *****
+Arguments:
+{}
+**********************************************************************************
 
-    The random number 27 has been successfully updated in context 3.
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
+Next speaker: Tool_Execution
+
+
+>>>>>>>> EXECUTING FUNCTION get_random_number...
+Tool_Execution (to chat_manager):
+
+***** Response from calling tool (call_KeNGv98klvDZsrAX10Ou3I71) *****
+27
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: Agent_4
+
+Agent_4 (to chat_manager):
+
+The random number generated is 27.
+
+--------------------------------------------------------------------------------
+
+Next speaker: Agent_5
+
+Agent_5 (to chat_manager):
+
+***** Suggested tool call (call_MlSGNNktah3m3QGssWBEzxCe): update_context_3_with_random_number *****
+Arguments:
+{"random_number":27}
+****************************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: Tool_Execution
+
+
+>>>>>>>> EXECUTING FUNCTION update_context_3_with_random_number...
+Tool_Execution (to chat_manager):
+
+***** Response from calling tool (call_MlSGNNktah3m3QGssWBEzxCe) *****
+
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: Agent_5
+
+Agent_5 (to chat_manager):
+
+The random number 27 has been successfully updated in context 3.
+
+--------------------------------------------------------------------------------
 ```
 
 ```python
 print(context_variables)
+```
 
-    {'1': True, '2': True, '3': 27}
+```python
+{'1': True, '2': True, '3': 27}
 ```
 
 ### Demo with User Agent
@@ -420,83 +453,85 @@ chat_result, _, _ = initiate_swarm_chat(
     user_agent=user_agent,
     messages="start",
 )
+```
 
-    User (to chat_manager):
+```python
+User (to chat_manager):
 
-    start
+start
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Agent_6
+Next speaker: Agent_6
 
-    Agent_6 (to chat_manager):
+Agent_6 (to chat_manager):
 
-    Why did the scarecrow win an award?
+Why did the scarecrow win an award?
 
-    Because he was outstanding in his field!
+Because he was outstanding in his field!
 
-    Want to hear another one?
+Want to hear another one?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: User
+Next speaker: User
 
-    User (to chat_manager):
+User (to chat_manager):
 
-    yes
+yes
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Agent_6
+Next speaker: Agent_6
 
-    Agent_6 (to chat_manager):
+Agent_6 (to chat_manager):
 
-    Why don't skeletons fight each other?
+Why don't skeletons fight each other?
 
-    They don't have the guts!
+They don't have the guts!
 
-    How about another?
+How about another?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: User
+Next speaker: User
 
-    User (to chat_manager):
+User (to chat_manager):
 
-    transfer
+transfer
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Agent_6
+Next speaker: Agent_6
 
-    Agent_6 (to chat_manager):
+Agent_6 (to chat_manager):
 
-    ***** Suggested tool call (call_gQ9leFamxgzQp8ZVQB8rUH73): transfer_to_Agent_7 *****
-    Arguments:
-    {}
-    ************************************************************************************
+***** Suggested tool call (call_gQ9leFamxgzQp8ZVQB8rUH73): transfer_to_Agent_7 *****
+Arguments:
+{}
+************************************************************************************
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Tool_Execution
+Next speaker: Tool_Execution
 
 
-    >>>>>>>> EXECUTING FUNCTION transfer_to_Agent_7...
-    Tool_Execution (to chat_manager):
+>>>>>>>> EXECUTING FUNCTION transfer_to_Agent_7...
+Tool_Execution (to chat_manager):
 
-    ***** Response from calling tool (call_gQ9leFamxgzQp8ZVQB8rUH73) *****
-    SwarmAgent --> Agent_7
-    **********************************************************************
+***** Response from calling tool (call_gQ9leFamxgzQp8ZVQB8rUH73) *****
+SwarmAgent --> Agent_7
+**********************************************************************
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Agent_7
+Next speaker: Agent_7
 
-    Agent_7 (to chat_manager):
+Agent_7 (to chat_manager):
 
-    The joke about the scarecrow winning an award is a play on words. It utilizes the term "outstanding," which can mean both exceptionally good (in the context of the scarecrow's performance) and literally being "standing out" in a field (where scarecrows are placed). So, the double meaning creates a pun that makes the joke humorous.
+The joke about the scarecrow winning an award is a play on words. It utilizes the term "outstanding," which can mean both exceptionally good (in the context of the scarecrow's performance) and literally being "standing out" in a field (where scarecrows are placed). So, the double meaning creates a pun that makes the joke humorous.
 
-    The skeleton joke works similarly. When it says skeletons "don't have the guts," it plays on the literal fact that skeletons don't have internal organs (guts), and metaphorically, "having guts" means having courage. The humor comes from this clever wordplay.
+The skeleton joke works similarly. When it says skeletons "don't have the guts," it plays on the literal fact that skeletons don't have internal organs (guts), and metaphorically, "having guts" means having courage. The humor comes from this clever wordplay.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```
