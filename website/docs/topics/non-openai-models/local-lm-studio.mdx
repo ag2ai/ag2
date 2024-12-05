@@ -2,6 +2,33 @@
 title: LM Studio
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/local-lm-studio.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/local-lm-studio.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook shows how to use AutoGen with multiple local models using
 [LM Studio](https://lmstudio.ai/)'s multi-model serving feature, which is available since
 version 0.2.17 of LM Studio.
@@ -66,6 +93,7 @@ Now we start the conversation.
 chat_result = jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turns=2)
 ```
 
+```python
     Jack (Phi-2) (to Emma (Gemma)):
 
     Emma, tell me a joke.
@@ -97,3 +125,4 @@ chat_result = jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turn
     Thank you! I'm just trying to make people laugh, you know? And to help them forget about the troubles of the world for a while.
 
     --------------------------------------------------------------------------------
+```

@@ -2,6 +2,33 @@
 title: Cohere
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-cohere.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-cohere.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 [Cohere](https://cohere.com/) is a cloud based platform serving their own LLMs, in particular the Command family of models.
 
 Cohere's API differs from OpenAI's, which is the native API used by AutoGen, so to use Cohere's LLMs you need to use this library.
@@ -166,8 +193,10 @@ assistant_agent = AssistantAgent(
 )
 ```
 
-    /usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-      from .autonotebook import tqdm as notebook_tqdm
+```python
+ /usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+  from .autonotebook import tqdm as notebook_tqdm
+```
 
 ````python
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
@@ -175,55 +204,57 @@ chat_result = user_proxy_agent.initiate_chat(
     assistant_agent,
     message="Provide code to count the number of prime numbers from 1 to 10000.",
 )
+```
 
-    User (to Cohere Assistant):
+```python
+User (to Cohere Assistant):
 
-    Provide code to count the number of prime numbers from 1 to 10000.
+Provide code to count the number of prime numbers from 1 to 10000.
 
-    --------------------------------------------------------------------------------
-    Cohere Assistant (to User):
+--------------------------------------------------------------------------------
+Cohere Assistant (to User):
 
-    Here's the code to count the number of prime numbers from 1 to 10,000:
-    ```python
-    # Prime Number Counter
-    count = 0
-    for num in range(2, 10001):
-        if num > 1:
-            for div in range(2, num):
-                if (num % div) == 0:
-                    break
-            else:
-                count += 1
-    print(count)
-    ```
+Here's the code to count the number of prime numbers from 1 to 10,000:
+```python
+# Prime Number Counter
+count = 0
+for num in range(2, 10001):
+    if num > 1:
+        for div in range(2, num):
+            if (num % div) == 0:
+                break
+        else:
+            count += 1
+print(count)
+```
 
-    My plan is to use two nested loops. The outer loop iterates through numbers from 2 to 10,000. The inner loop checks if there's any divisor for the current number in the range from 2 to the number itself. If there's no such divisor, the number is prime and the counter is incremented.
+My plan is to use two nested loops. The outer loop iterates through numbers from 2 to 10,000. The inner loop checks if there's any divisor for the current number in the range from 2 to the number itself. If there's no such divisor, the number is prime and the counter is incremented.
 
-    Please execute the code and let me know the output.
+Please execute the code and let me know the output.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+>>>>>>>> NO HUMAN INPUT RECEIVED.
 
-    >>>>>>>> USING AUTO REPLY...
+>>>>>>>> USING AUTO REPLY...
 
-    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
-    User (to Cohere Assistant):
+>>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
+User (to Cohere Assistant):
 
-    exitcode: 0 (execution succeeded)
-    Code output: 1229
+exitcode: 0 (execution succeeded)
+Code output: 1229
 
 
-    --------------------------------------------------------------------------------
-    Cohere Assistant (to User):
+--------------------------------------------------------------------------------
+Cohere Assistant (to User):
 
-    That's correct! The code you executed successfully found 1229 prime numbers within the specified range.
+That's correct! The code you executed successfully found 1229 prime numbers within the specified range.
 
-    FINISH.
+FINISH.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+>>>>>>>> NO HUMAN INPUT RECEIVED.
 ````
 
 ## Tool Call Example
@@ -346,62 +377,64 @@ res = user_proxy.initiate_chat(
     message="What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.",
     summary_method="reflection_with_llm",
 )
+```
 
+```python
 print(f"LLM SUMMARY: {res.summary['content']}")
 
-    user_proxy (to chatbot):
+user_proxy (to chatbot):
 
-    What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
+What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
 
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
 
-    I will use the weather_forecast function to find out the weather in New York, and the currency_calculator function to convert 123.45 EUR to USD. I will then search for 'holiday tips' to find some extra information to include in my answer.
-    ***** Suggested tool call (45212): weather_forecast *****
-    Arguments:
-    {"location": "New York"}
-    *********************************************************
-    ***** Suggested tool call (16564): currency_calculator *****
-    Arguments:
-    {"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
-    ************************************************************
+I will use the weather_forecast function to find out the weather in New York, and the currency_calculator function to convert 123.45 EUR to USD. I will then search for 'holiday tips' to find some extra information to include in my answer.
+***** Suggested tool call (45212): weather_forecast *****
+Arguments:
+{"location": "New York"}
+*********************************************************
+***** Suggested tool call (16564): currency_calculator *****
+Arguments:
+{"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
+************************************************************
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> EXECUTING FUNCTION weather_forecast...
+>>>>>>>> EXECUTING FUNCTION weather_forecast...
 
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...
-    user_proxy (to chatbot):
+>>>>>>>> EXECUTING FUNCTION currency_calculator...
+user_proxy (to chatbot):
 
-    user_proxy (to chatbot):
+user_proxy (to chatbot):
 
-    ***** Response from calling tool (45212) *****
-    New York will be 11 degrees fahrenheit
-    **********************************************
+***** Response from calling tool (45212) *****
+New York will be 11 degrees fahrenheit
+**********************************************
 
-    --------------------------------------------------------------------------------
-    user_proxy (to chatbot):
+--------------------------------------------------------------------------------
+user_proxy (to chatbot):
 
-    ***** Response from calling tool (16564) *****
-    135.80 USD
-    **********************************************
+***** Response from calling tool (16564) *****
+135.80 USD
+**********************************************
 
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
 
-    The weather in New York is 11 degrees Fahrenheit.
+The weather in New York is 11 degrees Fahrenheit.
 
-    €123.45 is worth $135.80.
+€123.45 is worth $135.80.
 
-    Here are some holiday tips:
-    - Make sure to pack layers for the cold weather
-    - Try the local cuisine, New York is famous for its pizza
-    - Visit Central Park and take in the views from the top of the Rockefeller Centre
+Here are some holiday tips:
+- Make sure to pack layers for the cold weather
+- Try the local cuisine, New York is famous for its pizza
+- Visit Central Park and take in the views from the top of the Rockefeller Centre
 
-    HAVE FUN!
+HAVE FUN!
 
-    --------------------------------------------------------------------------------
-    LLM SUMMARY: The weather in New York is 11 degrees Fahrenheit. 123.45 EUR is worth 135.80 USD. Holiday tips: make sure to pack warm clothes and have a great time!
+--------------------------------------------------------------------------------
+LLM SUMMARY: The weather in New York is 11 degrees Fahrenheit. 123.45 EUR is worth 135.80 USD. Holiday tips: make sure to pack warm clothes and have a great time!
 ```
 
 We can see that Command R+ recommended we call both tools and passed through the right parameters. The `user_proxy` executed them and this was passed back to Command R+ to interpret them and respond. Finally, Command R+ was asked to summarise the whole conversation.

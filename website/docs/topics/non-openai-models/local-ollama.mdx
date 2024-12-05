@@ -2,6 +2,33 @@
 title: Ollama
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/local-ollama.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/local-ollama.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 [Ollama](https://ollama.com/) is a local inference engine that enables you to run open-weight LLMs in your environment. It has native support for a large number of models such as Google's Gemma, Meta's Llama 2/3/3.1, Microsoft's Phi 3, Mistral.AI's Mistral/Mixtral, and Cohere's Command R models.
 
 Note: Previously, to use Ollama with AutoGen you required LiteLLM. Now it can be used directly and supports tool calling.
@@ -171,61 +198,66 @@ assistant_agent = AssistantAgent(
 )
 ```
 
-    /usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-      from .autonotebook import tqdm as notebook_tqdm
+```python
+/usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+    from .autonotebook import tqdm as notebook_tqdm
+```
 
 We can now start the chat.
 
-````python
+```python
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
     assistant_agent,
     message="Provide code to count the number of prime numbers from 1 to 10000.",
 )
+```
 
-    User (to Ollama Assistant):
+````python
+User (to Ollama Assistant):
 
-    Provide code to count the number of prime numbers from 1 to 10000.
+Provide code to count the number of prime numbers from 1 to 10000.
 
-    --------------------------------------------------------------------------------
-    Ollama Assistant (to User):
+--------------------------------------------------------------------------------
+Ollama Assistant (to User):
 
-    ```python
-    def is_prime(n):
-        if n <= 1:
+```python
+def is_prime(n):
+    if n <= 1:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
             return False
-        for i in range(2, int(n**0.5) + 1):
-            if n % i == 0:
-                return False
-        return True
+    return True
 
-    count = sum(is_prime(i) for i in range(1, 10001))
-    print(count)
-    ```
+count = sum(is_prime(i) for i in range(1, 10001))
+print(count)
+```
 
-    Please execute this code. I will wait for the result.
+Please execute this code. I will wait for the result.
 
-    --------------------------------------------------------------------------------
+---
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+> > > > > > > > NO HUMAN INPUT RECEIVED.
 
-    >>>>>>>> USING AUTO REPLY...
+> > > > > > > > USING AUTO REPLY...
 
-    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
-    User (to Ollama Assistant):
+> > > > > > > > EXECUTING CODE BLOCK (inferred language is python)...
+> > > > > > > > User (to Ollama Assistant):
 
-    exitcode: 0 (execution succeeded)
-    Code output: 1229
+exitcode: 0 (execution succeeded)
+Code output: 1229
 
+---
 
-    --------------------------------------------------------------------------------
-    Ollama Assistant (to User):
+Ollama Assistant (to User):
 
-    FINISH
+FINISH
 
-    --------------------------------------------------------------------------------
+---
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+> > > > > > > > NO HUMAN INPUT RECEIVED.
+
 ````
 
 ## Tool Calling - Native vs Manual
@@ -422,65 +454,67 @@ res = user_proxy.initiate_chat(
 )
 
 print(f"LLM SUMMARY: {res.summary['content']}")
-
-    user_proxy (to chatbot):
-
-    What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
-
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
-
-
-    ***** Suggested tool call (ollama_func_4506): weather_forecast *****
-    Arguments:
-    {"location": "New York"}
-    ********************************************************************
-    ***** Suggested tool call (ollama_func_4507): currency_calculator *****
-    Arguments:
-    {"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
-    ***********************************************************************
-
-    --------------------------------------------------------------------------------
-
-    >>>>>>>> EXECUTING FUNCTION weather_forecast...
-
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...
-    user_proxy (to chatbot):
-
-    user_proxy (to chatbot):
-
-    ***** Response from calling tool (ollama_func_4506) *****
-    New York will be 11 degrees fahrenheit
-    *********************************************************
-
-    --------------------------------------------------------------------------------
-    user_proxy (to chatbot):
-
-    ***** Response from calling tool (ollama_func_4507) *****
-    135.80 USD
-    *********************************************************
-
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
-
-    Based on the results, it seems that:
-
-    * The weather forecast for New York is expected to be around 11 degrees Fahrenheit.
-    * The exchange rate for EUR to USD is currently 1 EUR = 1.3580 USD, so 123.45 EUR is equivalent to approximately 135.80 USD.
-
-    As a bonus, here are some holiday tips in New York:
-
-    * Be sure to try a classic New York-style hot dog from a street cart or a diner.
-    * Explore the iconic Central Park and take a stroll through the High Line for some great views of the city.
-    * Catch a Broadway show or a concert at one of the many world-class venues in the city.
-
-    And... HAVE FUN!
-
-    --------------------------------------------------------------------------------
 ```
 
-    LLM SUMMARY: The weather forecast for New York is expected to be around 11 degrees Fahrenheit.
-    123.45 EUR is equivalent to approximately 135.80 USD.
-    Try a classic New York-style hot dog, explore Central Park and the High Line, and catch a Broadway show or concert during your visit.
+```python
+user_proxy (to chatbot):
+
+What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
+
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
+
+
+***** Suggested tool call (ollama_func_4506): weather_forecast *****
+Arguments:
+{"location": "New York"}
+********************************************************************
+***** Suggested tool call (ollama_func_4507): currency_calculator *****
+Arguments:
+{"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
+***********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION weather_forecast...
+
+>>>>>>>> EXECUTING FUNCTION currency_calculator...
+user_proxy (to chatbot):
+
+user_proxy (to chatbot):
+
+***** Response from calling tool (ollama_func_4506) *****
+New York will be 11 degrees fahrenheit
+*********************************************************
+
+--------------------------------------------------------------------------------
+user_proxy (to chatbot):
+
+***** Response from calling tool (ollama_func_4507) *****
+135.80 USD
+*********************************************************
+
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
+
+Based on the results, it seems that:
+
+* The weather forecast for New York is expected to be around 11 degrees Fahrenheit.
+* The exchange rate for EUR to USD is currently 1 EUR = 1.3580 USD, so 123.45 EUR is equivalent to approximately 135.80 USD.
+
+As a bonus, here are some holiday tips in New York:
+
+* Be sure to try a classic New York-style hot dog from a street cart or a diner.
+* Explore the iconic Central Park and take a stroll through the High Line for some great views of the city.
+* Catch a Broadway show or a concert at one of the many world-class venues in the city.
+
+And... HAVE FUN!
+
+--------------------------------------------------------------------------------
+
+LLM SUMMARY: The weather forecast for New York is expected to be around 11 degrees Fahrenheit.
+123.45 EUR is equivalent to approximately 135.80 USD.
+Try a classic New York-style hot dog, explore Central Park and the High Line, and catch a Broadway show or concert during your visit.
+```
 
 Great, we can see that Llama 3.1 has helped choose the right functions, their parameters, and then summarised them for us.

@@ -2,6 +2,33 @@
 title: Groq
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-groq.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-groq.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 [Groq](https://groq.com/) is a cloud based platform serving a number of popular open weight models at high inference speeds. Models include Meta's Llama 3, Mistral AI's Mixtral, and Google's Gemma.
 
 Although Groq's API is aligned well with OpenAI's, which is the native API used by AutoGen, this library provides the ability to set specific parameters as well as track API costs.
@@ -153,69 +180,74 @@ assistant_agent = AssistantAgent(
 )
 ```
 
-    /usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-      from .autonotebook import tqdm as notebook_tqdm
+```python
+/usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+  from .autonotebook import tqdm as notebook_tqdm
+```
 
-````python
+```python
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
     assistant_agent,
     message="Provide code to count the number of prime numbers from 1 to 10000.",
 )
+```
 
-    User (to Groq Assistant):
+````python
+User (to Groq Assistant):
 
-    Provide code to count the number of prime numbers from 1 to 10000.
+Provide code to count the number of prime numbers from 1 to 10000.
 
-    --------------------------------------------------------------------------------
-    Groq Assistant (to User):
+--------------------------------------------------------------------------------
+Groq Assistant (to User):
 
-    Here's the plan to count the number of prime numbers from 1 to 10000:
+Here's the plan to count the number of prime numbers from 1 to 10000:
 
-    First, we need to write a helper function to check if a number is prime. A prime number is a number that is divisible only by 1 and itself.
+First, we need to write a helper function to check if a number is prime. A prime number is a number that is divisible only by 1 and itself.
 
-    Then, we can use a loop to iterate through all numbers from 1 to 10000, check if each number is prime using our helper function, and count the number of prime numbers found.
+Then, we can use a loop to iterate through all numbers from 1 to 10000, check if each number is prime using our helper function, and count the number of prime numbers found.
 
-    Here's the Python code to implement this plan:
-    ```python
-    def is_prime(n):
-        if n <= 1:
+Here's the Python code to implement this plan:
+```python
+def is_prime(n):
+    if n <= 1:
+        return False
+    for i in range(2, int(n ** 0.5) + 1):
+        if n % i == 0:
             return False
-        for i in range(2, int(n ** 0.5) + 1):
-            if n % i == 0:
-                return False
-        return True
+    return True
 
-    count = 0
-    for i in range(2, 10001):
-        if is_prime(i):
-            count += 1
+count = 0
+for i in range(2, 10001):
+    if is_prime(i):
+        count += 1
 
-    print(count)
-    ```
-    Please execute this code, and I'll wait for the result.
+print(count)
+```
 
-    --------------------------------------------------------------------------------
+Please execute this code, and I'll wait for the result.
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+---
 
-    >>>>>>>> USING AUTO REPLY...
+> > > > > > > > NO HUMAN INPUT RECEIVED.
 
-    >>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...
-    User (to Groq Assistant):
+> > > > > > > > USING AUTO REPLY...
 
-    exitcode: 0 (execution succeeded)
-    Code output: 1229
+> > > > > > > > EXECUTING CODE BLOCK (inferred language is python)...
+> > > > > > > > User (to Groq Assistant):
 
+exitcode: 0 (execution succeeded)
+Code output: 1229
 
-    --------------------------------------------------------------------------------
-    Groq Assistant (to User):
+---
 
-    FINISH
+Groq Assistant (to User):
 
-    --------------------------------------------------------------------------------
+FINISH
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+---
+
+> > > > > > > > NO HUMAN INPUT RECEIVED.
 ````
 
 ## Tool Call Example
@@ -340,61 +372,63 @@ res = user_proxy.initiate_chat(
 )
 
 print(f"LLM SUMMARY: {res.summary['content']}")
-
-    user_proxy (to chatbot):
-
-    What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
-
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
-
-    ***** Suggested tool call (call_hg7g): weather_forecast *****
-    Arguments:
-    {"location":"New York"}
-    *************************************************************
-    ***** Suggested tool call (call_hrsf): currency_calculator *****
-    Arguments:
-    {"base_amount":123.45,"base_currency":"EUR","quote_currency":"USD"}
-    ****************************************************************
-
-    --------------------------------------------------------------------------------
-
-    >>>>>>>> EXECUTING FUNCTION weather_forecast...
-
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...
-    user_proxy (to chatbot):
-
-    user_proxy (to chatbot):
-
-    ***** Response from calling tool (call_hg7g) *****
-    New York will be 11 degrees fahrenheit
-    **************************************************
-
-    --------------------------------------------------------------------------------
-    user_proxy (to chatbot):
-
-    ***** Response from calling tool (call_hrsf) *****
-    135.80 USD
-    **************************************************
-
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
-
-    ***** Suggested tool call (call_ahwk): weather_forecast *****
-    Arguments:
-    {"location":"New York"}
-    *************************************************************
-
-    --------------------------------------------------------------------------------
 ```
 
-    LLM SUMMARY: Based on the conversation, it's predicted that New York will be 11 degrees Fahrenheit. You also found out that 123.45 EUR is equal to 135.80 USD. Here are a few holiday tips:
+```python
+user_proxy (to chatbot):
 
-    * Pack warm clothing for your visit to New York, as the temperature is expected to be quite chilly.
-    * Consider exchanging your money at a local currency exchange or an ATM since the exchange rate might not be as favorable in tourist areas.
-    * Make sure to check the estimated expenses for your holiday and adjust your budget accordingly.
+What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
 
-    I hope you have a great trip!
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
+
+***** Suggested tool call (call_hg7g): weather_forecast *****
+Arguments:
+{"location":"New York"}
+*************************************************************
+***** Suggested tool call (call_hrsf): currency_calculator *****
+Arguments:
+{"base_amount":123.45,"base_currency":"EUR","quote_currency":"USD"}
+****************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION weather_forecast...
+
+>>>>>>>> EXECUTING FUNCTION currency_calculator...
+user_proxy (to chatbot):
+
+user_proxy (to chatbot):
+
+***** Response from calling tool (call_hg7g) *****
+New York will be 11 degrees fahrenheit
+**************************************************
+
+--------------------------------------------------------------------------------
+user_proxy (to chatbot):
+
+***** Response from calling tool (call_hrsf) *****
+135.80 USD
+**************************************************
+
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
+
+***** Suggested tool call (call_ahwk): weather_forecast *****
+Arguments:
+{"location":"New York"}
+*************************************************************
+
+--------------------------------------------------------------------------------
+
+LLM SUMMARY: Based on the conversation, it's predicted that New York will be 11 degrees Fahrenheit. You also found out that 123.45 EUR is equal to 135.80 USD. Here are a few holiday tips:
+
+* Pack warm clothing for your visit to New York, as the temperature is expected to be quite chilly.
+* Consider exchanging your money at a local currency exchange or an ATM since the exchange rate might not be as favorable in tourist areas.
+* Make sure to check the estimated expenses for your holiday and adjust your budget accordingly.
+
+I hope you have a great trip!
+```
 
 Using its fast inference, Groq required less than 2 seconds for the whole chat!
 

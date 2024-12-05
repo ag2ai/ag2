@@ -2,6 +2,33 @@
 title: LiteLLM with Ollama
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/local-litellm-ollama.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/local-litellm-ollama.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 [LiteLLM](https://litellm.ai/) is an open-source locally run proxy server that provides an
 OpenAI-compatible API. It interfaces with a large number of providers that do the inference.
 To handle the inference, a popular open-source inference engine is [Ollama](https://ollama.com/).
@@ -27,11 +54,12 @@ pip install 'litellm[proxy]'
 
 Note: If using Windows, run LiteLLM and Ollama within a [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install).
 
-```mdx-code-block
-:::tip
-For custom LiteLLM installation instructions, see their [GitHub repository](https://github.com/BerriAI/litellm).
-:::
-```
+<div class="tip">
+  <Tip>
+    For custom LiteLLM installation instructions, see their [GitHub
+    repository](https://github.com/BerriAI/litellm).
+  </Tip>
+</div>
 
 ## Installing Ollama
 
@@ -59,12 +87,13 @@ To view the models you have downloaded and can use:
 ollama list
 ```
 
-```mdx-code-block
-:::tip
-Ollama enables the use of GGUF model files, available readily on Hugging Face. See Ollama`s [GitHub repository](https://github.com/ollama/ollama)
-for examples.
-:::
-```
+<div class="tip">
+  <Tip>
+    Ollama enables the use of GGUF model files, available readily on Hugging
+    Face. See Ollama`s [GitHub repository](https://github.com/ollama/ollama) for
+    examples.
+  </Tip>
+</div>
 
 ## Running LiteLLM proxy server
 
@@ -134,59 +163,61 @@ user_proxy = UserProxyAgent("user", code_execution_config=False)
 
 # Let the assistant start the conversation.  It will end when the user types exit.
 res = assistant.initiate_chat(user_proxy, message="How can I help you today?")
+```
 
+```python
 print(assistant)
 
-    agent (to user):
+agent (to user):
 
-    How can I help you today?
+How can I help you today?
 
-    --------------------------------------------------------------------------------
-    user (to agent):
+--------------------------------------------------------------------------------
+user (to agent):
 
-    Why is the sky blue?
+Why is the sky blue?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> USING AUTO REPLY...
-    agent (to user):
+>>>>>>>> USING AUTO REPLY...
+agent (to user):
 
-    A classic question!
+A classic question!
 
-    The sky appears blue because of a phenomenon called scattering. When sunlight enters Earth's atmosphere, it encounters tiny molecules of gases such as nitrogen (N2) and oxygen (O2). These molecules scatter the light in all directions, but they scatter shorter (blue) wavelengths more than longer (red) wavelengths.
+The sky appears blue because of a phenomenon called scattering. When sunlight enters Earth's atmosphere, it encounters tiny molecules of gases such as nitrogen (N2) and oxygen (O2). These molecules scatter the light in all directions, but they scatter shorter (blue) wavelengths more than longer (red) wavelengths.
 
-    This is known as Rayleigh scattering, named after the British physicist Lord Rayleigh, who first described the phenomenon in the late 19th century. As a result of this scattering, the blue light is distributed throughout the atmosphere, giving the sky its blue appearance.
+This is known as Rayleigh scattering, named after the British physicist Lord Rayleigh, who first described the phenomenon in the late 19th century. As a result of this scattering, the blue light is distributed throughout the atmosphere, giving the sky its blue appearance.
 
-    Additionally, when sunlight passes through more dense atmospheric particles like water vapor, pollutants, and dust, it can also be scattered or absorbed, which affects the color we see. For example, during sunrise and sunset, the light has to travel longer distances through the atmosphere, which scatters the shorter wavelengths even more, making the sky appear more red.
+Additionally, when sunlight passes through more dense atmospheric particles like water vapor, pollutants, and dust, it can also be scattered or absorbed, which affects the color we see. For example, during sunrise and sunset, the light has to travel longer distances through the atmosphere, which scatters the shorter wavelengths even more, making the sky appear more red.
 
-    So, there you have it! The blue sky is a result of the combination of sunlight, atmospheric gases, and the scattering of light.
+So, there you have it! The blue sky is a result of the combination of sunlight, atmospheric gases, and the scattering of light.
 
-    How's that? Do you have any other questions or would you like to explore more topics?
+How's that? Do you have any other questions or would you like to explore more topics?
 
-    --------------------------------------------------------------------------------
-    user (to agent):
+--------------------------------------------------------------------------------
+user (to agent):
 
-    Why is it sometimes red, then?
+Why is it sometimes red, then?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> USING AUTO REPLY...
-    agent (to user):
+>>>>>>>> USING AUTO REPLY...
+agent (to user):
 
-    Excellent follow-up question!
+Excellent follow-up question!
 
-    As I mentioned earlier, the color we see in the sky can be affected by the amount and type of particles in the atmosphere. When the sunlight has to travel longer distances through the air, like during sunrise and sunset, it encounters more atmospheric particles that scatter the shorter blue wavelengths even more than the longer red wavelengths.
+As I mentioned earlier, the color we see in the sky can be affected by the amount and type of particles in the atmosphere. When the sunlight has to travel longer distances through the air, like during sunrise and sunset, it encounters more atmospheric particles that scatter the shorter blue wavelengths even more than the longer red wavelengths.
 
-    This is known as Mie scattering, named after the German physicist Gustav Mie. The larger particles, such as water droplets, pollen, and dust, are responsible for this type of scattering. They scatter the shorter blue wavelengths more efficiently than the longer red wavelengths, which is why we often see more red or orange hues during these times.
+This is known as Mie scattering, named after the German physicist Gustav Mie. The larger particles, such as water droplets, pollen, and dust, are responsible for this type of scattering. They scatter the shorter blue wavelengths more efficiently than the longer red wavelengths, which is why we often see more red or orange hues during these times.
 
-    Additionally, during sunrise and sunset, the sun's rays have to travel through a thicker layer of atmosphere, which contains more particles like water vapor, pollutants, and aerosols. These particles can absorb or scatter certain wavelengths of light, making them appear redder or more orange.
+Additionally, during sunrise and sunset, the sun's rays have to travel through a thicker layer of atmosphere, which contains more particles like water vapor, pollutants, and aerosols. These particles can absorb or scatter certain wavelengths of light, making them appear redder or more orange.
 
-    The combination of Mie scattering and absorption by atmospheric particles can create the warm, golden hues we often see during sunrise and sunset. It's a beautiful reminder that the color of our sky is not just a result of the sun itself but also the complex interactions between sunlight, atmosphere, and particles!
+The combination of Mie scattering and absorption by atmospheric particles can create the warm, golden hues we often see during sunrise and sunset. It's a beautiful reminder that the color of our sky is not just a result of the sun itself but also the complex interactions between sunlight, atmosphere, and particles!
 
-    Would you like to explore more about the Earth's atmosphere or perhaps learn about other fascinating topics?
+Would you like to explore more about the Earth's atmosphere or perhaps learn about other fascinating topics?
 
-    --------------------------------------------------------------------------------
-    <autogen.agentchat.conversable_agent.ConversableAgent object at 0x7fe35da88dd0>
+--------------------------------------------------------------------------------
+<autogen.agentchat.conversable_agent.ConversableAgent object at 0x7fe35da88dd0>
 ```
 
 ## Example with Function Calling
@@ -228,8 +259,10 @@ local_llm_config = {
 }
 ```
 
-    /usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-      from .autonotebook import tqdm as notebook_tqdm
+```python
+/usr/local/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+    from .autonotebook import tqdm as notebook_tqdm
+```
 
 ```python
 # Create the agent and include examples of the function calling JSON in the prompt
@@ -288,45 +321,50 @@ res = user_proxy.initiate_chat(
     message="How much is 123.45 EUR in USD?",
     summary_method="reflection_with_llm",
 )
+```
 
-    user_proxy (to chatbot):
+```python
+user_proxy (to chatbot):
 
-    How much is 123.45 EUR in USD?
+How much is 123.45 EUR in USD?
 
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
 
-    ***** Suggested tool call (call_d9584223-9af0-4526-ad09-856b03487fd5): currency_calculator *****
-    Arguments:
-    {"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
-    ************************************************************************************************
+***** Suggested tool call (call_d9584223-9af0-4526-ad09-856b03487fd5): currency_calculator *****
+Arguments:
+{"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
+************************************************************************************************
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...
-    user_proxy (to chatbot):
+>>>>>>>> EXECUTING FUNCTION currency_calculator...
+user_proxy (to chatbot):
 
-    user_proxy (to chatbot):
+user_proxy (to chatbot):
 
-    ***** Response from calling tool (call_d9584223-9af0-4526-ad09-856b03487fd5) *****
-    135.80 USD
-    **********************************************************************************
+***** Response from calling tool (call_d9584223-9af0-4526-ad09-856b03487fd5) *****
+135.80 USD
+**********************************************************************************
 
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
 
-    ***** Suggested tool call (call_17b07b4d-629f-4314-8a04-97b1537fa486): currency_calculator *****
-    Arguments:
-    {"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
-    ************************************************************************************************
+***** Suggested tool call (call_17b07b4d-629f-4314-8a04-97b1537fa486): currency_calculator *****
+Arguments:
+{"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
+************************************************************************************************
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```
 
 We can see that the currency conversion function was called with the correct values and a result was generated.
 
-```mdx-code-block
-:::tip
-Once functions are included in the conversation it is possible, using LiteLLM and Ollama, that the model may continue to recommend tool calls (as shown above). This is an area of active development and a native Ollama client for AutoGen is planned for a future release.
-:::
-```
+<div class="tip">
+  <Tip>
+    Once functions are included in the conversation it is possible, using
+    LiteLLM and Ollama, that the model may continue to recommend tool calls (as
+    shown above). This is an area of active development and a native Ollama
+    client for AutoGen is planned for a future release.
+  </Tip>
+</div>

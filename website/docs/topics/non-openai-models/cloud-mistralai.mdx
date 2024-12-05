@@ -2,6 +2,33 @@
 title: Mistral AI
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-mistralai.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-mistralai.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 [Mistral AI](https://mistral.ai/) is a cloud based platform serving their own LLMs, like Mistral, Mixtral, and Codestral.
 
 Although AutoGen can be used with Mistral AI's API directly by changing the `base_url` to their url, it does not cater for some differences between messaging and, with their API being more strict than OpenAI's, it is recommended to use the Mistral AI Client class as shown in this notebook.
@@ -188,100 +215,102 @@ chat_result = user_proxy_agent.initiate_chat(
 )
 ```
 
-    User (to Mistral Assistant):
+````python
+User (to Mistral Assistant):
 
-    Provide code to count the number of prime numbers from 1 to 10000.
+Provide code to count the number of prime numbers from 1 to 10000.
 
-    --------------------------------------------------------------------------------
-    Mistral Assistant (to User):
+--------------------------------------------------------------------------------
+Mistral Assistant (to User):
 
-    To solve this task, I will write a Python function that checks if a number is prime or not. Then, I will iterate through the numbers from 1 to 10000 and count the prime numbers. Here's the plan:
+To solve this task, I will write a Python function that checks if a number is prime or not. Then, I will iterate through the numbers from 1 to 10000 and count the prime numbers. Here's the plan:
 
-    1. Write a function `is_prime(n)` that checks if a number `n` is prime.
-    2. Initialize a variable `prime_count` to 0.
-    3. Iterate through numbers from 1 to 10000 using a for loop.
-    4. For each number, call the `is_prime(n)` function.
-    5. If the function returns True, increment the `prime_count` by 1.
-    6. Finally, print the `prime_count`.
+1. Write a function `is_prime(n)` that checks if a number `n` is prime.
+2. Initialize a variable `prime_count` to 0.
+3. Iterate through numbers from 1 to 10000 using a for loop.
+4. For each number, call the `is_prime(n)` function.
+5. If the function returns True, increment the `prime_count` by 1.
+6. Finally, print the `prime_count`.
 
-    Here's the code that implements this plan:
+Here's the code that implements this plan:
 
-    ```python
-    def is_prime(n):
-        if n <= 1:
-            return False
-        if n <= 3:
-            return True
-        if n % 2 == 0 or n % 3 == 0:
-            return False
-        i = 5
-        while i * i <= n:
-            if n % i == 0 or n % (i + 2) == 0:
-                return False
-            i += 6
+```python
+def is_prime(n):
+    if n <= 1:
+        return False
+    if n <= 3:
         return True
-
-    prime_count = 0
-    for num in range(1, 10001):
-        if is_prime(num):
-            prime_count += 1
-
-    print(prime_count)
-    ```
-
-    This code will count the number of prime numbers from 1 to 10000 and print the result. Please execute the code and let me know the output.
-    ```python
-    def is_prime(n):
-        if n <= 1:
+    if n % 2 == 0 or n % 3 == 0:
+        return False
+    i = 5
+    while i * i <= n:
+        if n % i == 0 or n % (i + 2) == 0:
             return False
-        if n <= 3:
-            return True
-        if n % 2 == 0 or n % 3 == 0:
-            return False
-        i = 5
-        while i * i <= n:
-            if n % i == 0 or n % (i + 2) == 0:
-                return False
-            i += 6
+        i += 6
+    return True
+
+prime_count = 0
+for num in range(1, 10001):
+    if is_prime(num):
+        prime_count += 1
+
+print(prime_count)
+```
+
+This code will count the number of prime numbers from 1 to 10000 and print the result. Please execute the code and let me know the output.
+```python
+def is_prime(n):
+    if n <= 1:
+        return False
+    if n <= 3:
         return True
+    if n % 2 == 0 or n % 3 == 0:
+        return False
+    i = 5
+    while i * i <= n:
+        if n % i == 0 or n % (i + 2) == 0:
+            return False
+        i += 6
+    return True
 
-    prime_count = 0
-    for num in range(1, 10001):
-        if is_prime(num):
-            prime_count += 1
+prime_count = 0
+for num in range(1, 10001):
+    if is_prime(num):
+        prime_count += 1
 
-    prime_count
-    ```
+prime_count
+```
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+>>>>>>>> NO HUMAN INPUT RECEIVED.
 
-    >>>>>>>> USING AUTO REPLY...
+>>>>>>>> USING AUTO REPLY...
 
-    >>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...
-    User (to Mistral Assistant):
+>>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...
+User (to Mistral Assistant):
 
-    exitcode: 0 (execution succeeded)
-    Code output: 1229
+exitcode: 0 (execution succeeded)
+Code output: 1229
 
 
-    --------------------------------------------------------------------------------
-    Mistral Assistant (to User):
+--------------------------------------------------------------------------------
+Mistral Assistant (to User):
 
-    The code executed successfully and the output is 1229.
+The code executed successfully and the output is 1229.
 
-    This means there are 1229 prime numbers from 1 to 10000.
+This means there are 1229 prime numbers from 1 to 10000.
 
-    The code defines a function `is_prime(n)` that checks if a number `n` is prime or not. Then, it initializes a variable `prime_count` to 0. It iterates through numbers from 1 to 10000 using a for loop. For each number, it calls the `is_prime(n)` function. If the function returns True, indicating that the number is prime, it increments the `prime_count` by 1. Finally, it prints the `prime_count`.
+The code defines a function `is_prime(n)` that checks if a number `n` is prime or not. Then, it initializes a variable `prime_count` to 0. It iterates through numbers from 1 to 10000 using a for loop. For each number, it calls the `is_prime(n)` function. If the function returns True, indicating that the number is prime, it increments the `prime_count` by 1. Finally, it prints the `prime_count`.
 
-    This code efficiently checks for prime numbers and accurately counts the number of prime numbers from 1 to 10000.
+This code efficiently checks for prime numbers and accurately counts the number of prime numbers from 1 to 10000.
 
-    FINISH
+FINISH
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+>>>>>>>> NO HUMAN INPUT RECEIVED.
+````
 
 ## Tool Call Example
 
@@ -306,8 +335,10 @@ First install the `chess` package by running the following command:
 ! pip install chess
 ```
 
-    Defaulting to user installation because normal site-packages is not writeable
-    Requirement already satisfied: chess in /home/autogen/.local/lib/python3.11/site-packages (1.10.0)
+```python
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: chess in /home/autogen/.local/lib/python3.11/site-packages (1.10.0)
+```
 
 Write the function for making a move.
 
@@ -381,8 +412,10 @@ register_function(
 )
 ```
 
-    /home/autogen/autogen/autogen/agentchat/conversable_agent.py:2408: UserWarning: Function 'make_move' is being overridden.
-      warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
+```python
+/home/autogen/autogen/autogen/agentchat/conversable_agent.py:2408: UserWarning: Function 'make_move' is being overridden.
+    warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
+```
 
 Register nested chats for the player agents.
 Nested chats allows each player agent to chat with the board proxy agent
@@ -425,6 +458,7 @@ chat_result = player_white.initiate_chat(
 )
 ```
 
+```python
     Player White (to Player Black):
 
     Let's play chess! Your move.
@@ -457,11 +491,6 @@ chat_result = player_white.initiate_chat(
     >>>>>>>> USING AUTO REPLY...
 
     >>>>>>>> EXECUTING FUNCTION make_move...
-
-![svg](cloud-mistralai_files/cloud-mistralai_22_1.svg)
-
-    [runtime logging] log_function_use: autogen logger is None
-
 
     Board Proxy (to Player Black):
 
@@ -513,10 +542,6 @@ chat_result = player_white.initiate_chat(
     >>>>>>>> USING AUTO REPLY...
 
     >>>>>>>> EXECUTING FUNCTION make_move...
-
-![svg](cloud-mistralai_files/cloud-mistralai_22_4.svg)
-
-    [runtime logging] log_function_use: autogen logger is None
 
 
     Board Proxy (to Player White):
@@ -570,11 +595,6 @@ chat_result = player_white.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](cloud-mistralai_files/cloud-mistralai_22_7.svg)
-
-    [runtime logging] log_function_use: autogen logger is None
-
-
     Board Proxy (to Player Black):
 
     Board Proxy (to Player Black):
@@ -626,11 +646,6 @@ chat_result = player_white.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](cloud-mistralai_files/cloud-mistralai_22_10.svg)
-
-    [runtime logging] log_function_use: autogen logger is None
-
-
     Board Proxy (to Player White):
 
     Board Proxy (to Player White):
@@ -679,11 +694,6 @@ chat_result = player_white.initiate_chat(
     >>>>>>>> USING AUTO REPLY...
 
     >>>>>>>> EXECUTING FUNCTION make_move...
-
-![svg](cloud-mistralai_files/cloud-mistralai_22_13.svg)
-
-    [runtime logging] log_function_use: autogen logger is None
-
 
     Board Proxy (to Player Black):
 
@@ -734,11 +744,6 @@ chat_result = player_white.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](cloud-mistralai_files/cloud-mistralai_22_16.svg)
-
-    [runtime logging] log_function_use: autogen logger is None
-
-
     Board Proxy (to Player White):
 
     Board Proxy (to Player White):
@@ -788,11 +793,6 @@ chat_result = player_white.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](cloud-mistralai_files/cloud-mistralai_22_19.svg)
-
-    [runtime logging] log_function_use: autogen logger is None
-
-
     Board Proxy (to Player Black):
 
     Board Proxy (to Player Black):
@@ -814,3 +814,28 @@ chat_result = player_white.initiate_chat(
     I have made my move. It's h3f4. Your turn.
 
     --------------------------------------------------------------------------------
+```
+
+![svg](cloud-mistralai_files/cloud-mistralai_22_1.svg)
+
+```python
+[runtime logging] log_function_use: autogen logger is None
+[runtime logging] log_function_use: autogen logger is None
+[runtime logging] log_function_use: autogen logger is None
+[runtime logging] log_function_use: autogen logger is None
+[runtime logging] log_function_use: autogen logger is None
+[runtime logging] log_function_use: autogen logger is None
+[runtime logging] log_function_use: autogen logger is None
+```
+
+![svg](cloud-mistralai_files/cloud-mistralai_22_4.svg)
+
+![svg](cloud-mistralai_files/cloud-mistralai_22_7.svg)
+
+![svg](cloud-mistralai_files/cloud-mistralai_22_10.svg)
+
+![svg](cloud-mistralai_files/cloud-mistralai_22_13.svg)
+
+![svg](cloud-mistralai_files/cloud-mistralai_22_16.svg)
+
+![svg](cloud-mistralai_files/cloud-mistralai_22_19.svg)

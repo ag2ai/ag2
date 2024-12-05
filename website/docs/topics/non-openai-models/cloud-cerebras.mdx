@@ -2,6 +2,33 @@
 title: Cerebras
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-cerebras.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/non-openai-models/cloud-cerebras.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 [Cerebras](https://cerebras.ai) has developed the world's largest and fastest AI processor, the Wafer-Scale Engine-3 (WSE-3). Notably, the CS-3 system can run large language models like Llama-3.1-8B and Llama-3.1-70B at extremely fast speeds, making it an ideal platform for demanding AI workloads.
 
 While it's technically possible to adapt AutoGen to work with Cerebras' API by updating the `base_url`, this approach may not fully account for minor differences in parameter support. Using this library will also allow for tracking of the API costs based on actual token usage.
@@ -126,53 +153,55 @@ assistant_agent = AssistantAgent(
 )
 ```
 
-````python
+```python
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
     assistant_agent,
     message="Provide code to count the number of prime numbers from 1 to 10000.",
 )
+```
 
-    User (to Cerebras Assistant):
+````python
+User (to Cerebras Assistant):
 
-    Provide code to count the number of prime numbers from 1 to 10000.
+Provide code to count the number of prime numbers from 1 to 10000.
 
-    --------------------------------------------------------------------------------
-    Cerebras Assistant (to User):
+--------------------------------------------------------------------------------
+Cerebras Assistant (to User):
 
-    To count the number of prime numbers from 1 to 10000, we will utilize a simple algorithm that checks each number in the range to see if it is prime. A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.
+To count the number of prime numbers from 1 to 10000, we will utilize a simple algorithm that checks each number in the range to see if it is prime. A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.
 
-    Here's how we can do it using a Python script:
+Here's how we can do it using a Python script:
 
-    ```python
-    def count_primes(n):
-        primes = 0
-        for possiblePrime in range(2, n + 1):
-            # Assume number is prime until shown it is not.
-            isPrime = True
-            for num in range(2, int(possiblePrime ** 0.5) + 1):
-                if possiblePrime % num == 0:
-                    isPrime = False
-                    break
-            if isPrime:
-                primes += 1
-        return primes
+```python
+def count_primes(n):
+    primes = 0
+    for possiblePrime in range(2, n + 1):
+        # Assume number is prime until shown it is not.
+        isPrime = True
+        for num in range(2, int(possiblePrime ** 0.5) + 1):
+            if possiblePrime % num == 0:
+                isPrime = False
+                break
+        if isPrime:
+            primes += 1
+    return primes
 
-    # Counting prime numbers from 1 to 10000
-    count = count_primes(10000)
-    print(count)
-    ```
+# Counting prime numbers from 1 to 10000
+count = count_primes(10000)
+print(count)
+```
 
-    Please execute this code. I will respond with "FINISH" after you provide the result.
+Please execute this code. I will respond with "FINISH" after you provide the result.
 
-    --------------------------------------------------------------------------------
-
-
-    Replying as User. Provide feedback to Cerebras Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
-
+--------------------------------------------------------------------------------
 
 
-    >>>>>>>> NO HUMAN INPUT RECEIVED.
+Replying as User. Provide feedback to Cerebras Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
+
+
+
+>>>>>>>> NO HUMAN INPUT RECEIVED.
 ````
 
 ## Tool Call Example
@@ -310,55 +339,57 @@ res = user_proxy.initiate_chat(
 end_time = time.time()
 
 print(f"LLM SUMMARY: {res.summary['content']}\n\nDuration: {(end_time - start_time) * 1000}ms")
+```
 
-    user_proxy (to chatbot):
+```python
+user_proxy (to chatbot):
 
-    What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
+What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.
 
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
 
-    ***** Suggested tool call (210f6ac6d): weather_forecast *****
-    Arguments:
-    {"location": "New York"}
-    *************************************************************
-    ***** Suggested tool call (3c00ac7d5): currency_calculator *****
-    Arguments:
-    {"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
-    ****************************************************************
+***** Suggested tool call (210f6ac6d): weather_forecast *****
+Arguments:
+{"location": "New York"}
+*************************************************************
+***** Suggested tool call (3c00ac7d5): currency_calculator *****
+Arguments:
+{"base_amount": 123.45, "base_currency": "EUR", "quote_currency": "USD"}
+****************************************************************
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> EXECUTING FUNCTION weather_forecast...
+>>>>>>>> EXECUTING FUNCTION weather_forecast...
 
-    >>>>>>>> EXECUTING FUNCTION currency_calculator...
-    user_proxy (to chatbot):
+>>>>>>>> EXECUTING FUNCTION currency_calculator...
+user_proxy (to chatbot):
 
-    user_proxy (to chatbot):
+user_proxy (to chatbot):
 
-    ***** Response from calling tool (210f6ac6d) *****
-    New York will be 11 degrees fahrenheit
-    **************************************************
+***** Response from calling tool (210f6ac6d) *****
+New York will be 11 degrees fahrenheit
+**************************************************
 
-    --------------------------------------------------------------------------------
-    user_proxy (to chatbot):
+--------------------------------------------------------------------------------
+user_proxy (to chatbot):
 
-    ***** Response from calling tool (3c00ac7d5) *****
-    135.80 USD
-    **************************************************
+***** Response from calling tool (3c00ac7d5) *****
+135.80 USD
+**************************************************
 
-    --------------------------------------------------------------------------------
-    chatbot (to user_proxy):
+--------------------------------------------------------------------------------
+chatbot (to user_proxy):
 
-    New York will be 11 degrees fahrenheit.
-    123.45 EUR is equivalent to 135.80 USD.
+New York will be 11 degrees fahrenheit.
+123.45 EUR is equivalent to 135.80 USD.
 
-    For a great holiday, explore the Statue of Liberty, take a walk through Central Park, or visit one of the many world-class museums. Also, you'll find great food ranging from bagels to fine dining experiences. HAVE FUN!
+For a great holiday, explore the Statue of Liberty, take a walk through Central Park, or visit one of the many world-class museums. Also, you'll find great food ranging from bagels to fine dining experiences. HAVE FUN!
 
-    --------------------------------------------------------------------------------
-    LLM SUMMARY: New York will be 11 degrees fahrenheit. 123.45 EUR is equivalent to 135.80 USD. Explore the Statue of Liberty, walk through Central Park, or visit one of the many world-class museums for a great holiday in New York.
+--------------------------------------------------------------------------------
+LLM SUMMARY: New York will be 11 degrees fahrenheit. 123.45 EUR is equivalent to 135.80 USD. Explore the Statue of Liberty, walk through Central Park, or visit one of the many world-class museums for a great holiday in New York.
 
-    Duration: 73.97937774658203ms
+Duration: 73.97937774658203ms
 ```
 
 We can see that the Cerebras Wafer-Scale Engine-3 (WSE-3) completed the query in 74ms -- faster than the blink of an eye!
