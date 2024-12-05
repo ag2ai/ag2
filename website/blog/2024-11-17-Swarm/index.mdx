@@ -8,18 +8,20 @@ tags: [groupchat, swarm]
 
 AG2 now provides an implementation of the swarm orchestration from OpenAI's [Swarm](https://github.com/openai/swarm) framework, with some additional features!
 
-*Background*: the swarm orchestration is a multi-agent collaboration where agents execute tasks and are responsible for handing them off to other agents.
+_Background_: the swarm orchestration is a multi-agent collaboration where agents execute tasks and are responsible for handing them off to other agents.
 
 Here are the key features of the swarm orchestration:
+
 - **Hand-offs**: Agents can transfer control to another agent, enabling smooth and direct transitions within workflows.
 - **Context variables**: Agents can dynamically update a shared memory through function calls, maintaining context and adaptability throughout the process.
 
 Besides these core features, AG2 provides:
+
 - **Simple Interface for Tool Call/Handoff Registration**: When creating a swarm agent, you can pass in a list of functions to be registered directly. We also provide a simple method to register handoffs.
 - **Transition Beyond Tool Calls**: We enable the ability to automatically transfer to a nominated swarm agent when an agent has completed their task. We will extend this to allow other transitions in the future (e.g., use a function to determine the next agent ).
 - **Built-in human-in-the-loop**: Adding a user agent (UserProxyAgent) to your swarm will allow swarm agents to transition back to the user. Provides a means to clarify and confirm with the user without breaking out of the swarm.
 
-This feature builds on GroupChat, offering a simpler interface to use swarm orchestration. For comparison, see two implementations of the same example: one [using swarm orchestration](/docs/notebooks/agentchat_swarm) and another [naive implementation with GroupChat (Legacy)](/docs/notebooks/agentchat_swarm_w_groupchat_legacy).
+This feature builds on GroupChat, offering a simpler interface to use swarm orchestration. For comparison, see two implementations of the same example: one [using swarm orchestration](/notebook/agentchat_swarm) and another [naive implementation with GroupChat (Legacy)](/notebook/agentchat_swarm_w_groupchat_legacy).
 
 ## Handoffs
 
@@ -35,6 +37,7 @@ The following are the prioritized handoffs for each iteration of the swarm.
 4. **Swarm-level: After work handoff**: If the agent does not have an `AFTER_WORK` handoff, the swarm's `AFTER_WORK` handoff will be used.
 
 In the following code sample a `SwarmAgent` named `responder` has:
+
 - Two conditional handoffs registered (`ON_CONDITION`), specifying the agent to hand off to and the condition to trigger the handoff.
 - An after-work handoff (`AFTER_WORK`) nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This could also be a swarm agent.
 
@@ -49,6 +52,7 @@ responder.register_hand_off(
 ```
 
 You can specify the swarm-level after work handoff when initiating the swarm (here we nominate to terminate):
+
 ```python
 history, context, last_agent = initiate_swarm_chat(
     initial_agent=responder,
@@ -63,7 +67,7 @@ history, context, last_agent = initiate_swarm_chat(
 
 1. Define the functions that can be used by your `SwarmAgent`s.
 2. Create your `SwarmAgent`s (which derives from `ConversableAgent`).
-3. For each swarm agent, specify the handoffs (transitions to another agent) and what to do when they have finished their work (termed *After Work*).
+3. For each swarm agent, specify the handoffs (transitions to another agent) and what to do when they have finished their work (termed _After Work_).
 4. Optionally, create your context dictionary.
 5. Call `initiate_swarm_chat`.
 
@@ -333,7 +337,7 @@ Context Variables:
 
 ## For Further Reading
 
-* [Swarm Orchestration Documentation](/docs/topics/swarm)
-* [Swarm Orchestration Notebook](/docs/notebooks/agentchat_swarm)
-* [(Legacy) Implement Swarm-style Orchestration with GroupChat
-](/docs/notebooks/agentchat_swarm_w_groupchat_legacy)
+- [Swarm Orchestration Documentation](/website/docs/topics/swarm)
+- [Swarm Orchestration Notebook](/notebook/agentchat_swarm)
+- [(Legacy) Implement Swarm-style Orchestration with GroupChat
+  ](/notebook/agentchat_swarm_w_groupchat_legacy)

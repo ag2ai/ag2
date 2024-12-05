@@ -140,14 +140,14 @@ Similar to code executors, a tool must be registered with at least two agents
 for it to be useful in conversation.
 The agent registered with the tool's signature
 through
-[`register_for_llm`](/docs/reference/agentchat/conversable_agent#register_for_llm)
+[`register_for_llm`](/website/docs/reference/agentchat/conversable_agent#register_for_llm)
 can call the tool;
 the agent registered with the tool's function object through
-[`register_for_execution`](/docs/reference/agentchat/conversable_agent#register_for_execution)
+[`register_for_execution`](/website/docs/reference/agentchat/conversable_agent#register_for_execution)
 can execute the tool's function.
 
 Alternatively, you can use
-[`autogen.register_function`](/docs/reference/agentchat/conversable_agent#register_function-1)
+[`autogen.register_function`](/website/docs/reference/agentchat/conversable_agent#register_function-1)
 function to register a tool with both agents at once.
 
 ```python
@@ -614,10 +614,10 @@ For example, you might want build an agent that is similar to
 the [OpenAI's Assistant](https://platform.openai.com/docs/assistants/how-it-works)
 which executes built-in tools internally.
 
-To achieve this, you can use [nested chats](/docs/tutorial/conversation-patterns#nested-chats).
+To achieve this, you can use [nested chats](/website/docs/tutorial/conversation-patterns#nested-chats).
 Nested chats allow you to create "internal monologues" within an agent
 to call and execute tools. This works for code execution as well.
-See [nested chats for tool use](/docs/notebooks/agentchat_nested_chats_chess) for an example.
+See [nested chats for tool use](/notebook/agentchat_nested_chats_chess) for an example.
 
 ## Summary
 

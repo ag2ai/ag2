@@ -104,7 +104,7 @@ Different tasks may require different models, and the `config_list` allows speci
 
 ### `OAI_CONFIG_LIST` pattern
 
-A common, useful pattern used is to define this `config_list` via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the [`config_list_from_json`](/docs/reference/oai/openai_utils#config_list_from_json) helper function to load it:
+A common, useful pattern used is to define this `config_list` via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the [`config_list_from_json`](/website/docs/reference/oai/openai_utils#config_list_from_json) helper function to load it:
 
 ```python
 config_list = autogen.config_list_from_json(
@@ -144,13 +144,13 @@ As described above the list can be filtered based on certain criteria. This is d
 filter_dict = {"model": ["gpt-3.5-turbo"]}
 ```
 
-This can then be applied to a config list loaded in Python with [`filter_config`](/docs/reference/oai/openai_utils#filter_config):
+This can then be applied to a config list loaded in Python with [`filter_config`](/website/docs/reference/oai/openai_utils#filter_config):
 
 ```python
 config_list = autogen.filter_config(config_list, filter_dict)
 ```
 
-Or, directly when loading the config list using [`config_list_from_json`](/docs/reference/oai/openai_utils#config_list_from_json):
+Or, directly when loading the config list using [`config_list_from_json`](/website/docs/reference/oai/openai_utils#config_list_from_json):
 
 ```python
 config_list = autogen.config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict=filter_dict)
@@ -337,7 +337,7 @@ Besides the `config_list`, there are other parameters that can be used to config
 
 ### AutoGen specific parameters
 
-- `cache_seed` - This is a legacy parameter and not recommended to be used unless the reason for using it is to disable the default caching behavior. To disable default caching, set this to `None`. Otherwise, by default or if an int is passed the [DiskCache](/docs/reference/cache/disk_cache) will be used. For the new way of using caching, pass a [Cache](/docs/reference/cache/) object into [`initiate_chat`](/docs/reference/agentchat/conversable_agent#initiate_chat).
+- `cache_seed` - This is a legacy parameter and not recommended to be used unless the reason for using it is to disable the default caching behavior. To disable default caching, set this to `None`. Otherwise, by default or if an int is passed the [DiskCache](/website/docs/reference/cache/disk_cache) will be used. For the new way of using caching, pass a [Cache](/website/docs/reference/cache/) object into [`initiate_chat`](/website/docs/reference/agentchat/conversable_agent#initiate_chat).
 
 ### Extra model client parameters
 
@@ -370,9 +370,9 @@ llm_config = {
 
 ## Other helpers for loading a config list
 
-- [`get_config_list`](/docs/reference/oai/openai_utils#get_config_list): Generates configurations for API calls, primarily from provided API keys.
-- [`config_list_openai_aoai`](/docs/reference/oai/openai_utils#config_list_openai_aoai): Constructs a list of configurations using both Azure OpenAI and OpenAI endpoints, sourcing API keys from environment variables or local files.
-- [`config_list_from_models`](/docs/reference/oai/openai_utils#config_list_from_models): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
-- [`config_list_from_dotenv`](/docs/reference/oai/openai_utils#config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
+- [`get_config_list`](/website/docs/reference/oai/openai_utils#get_config_list): Generates configurations for API calls, primarily from provided API keys.
+- [`config_list_openai_aoai`](/website/docs/reference/oai/openai_utils#config_list_openai_aoai): Constructs a list of configurations using both Azure OpenAI and OpenAI endpoints, sourcing API keys from environment variables or local files.
+- [`config_list_from_models`](/website/docs/reference/oai/openai_utils#config_list_from_models): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
+- [`config_list_from_dotenv`](/website/docs/reference/oai/openai_utils#config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
 
 See [this notebook](https://github.com/microsoft/autogen/blob/main/notebook/config_loader_utility_functions.ipynb) for examples of using the above functions.

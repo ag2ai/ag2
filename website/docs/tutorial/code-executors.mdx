@@ -56,20 +56,20 @@ The other way is to execute code in a Docker container.
 The table below shows the combinations of code executors and execution
 environments.
 
-| Code Executor (`autogen.coding`)                                                                                         | Environment                    | Platform     |
-| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------ | ------------ |
-| [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)    | Shell                          | Local        |
-| [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) | Shell                          | Docker       |
-| [`jupyter.JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor)                | Jupyter Kernel (e.g., python3) | Local/Docker |
+| Code Executor (`autogen.coding`)                                                                                                 | Environment                    | Platform     |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------------ |
+| [`LocalCommandLineCodeExecutor`](/website/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)    | Shell                          | Local        |
+| [`DockerCommandLineCodeExecutor`](/website/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) | Shell                          | Docker       |
+| [`jupyter.JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor)                | Jupyter Kernel (e.g., python3) | Local/Docker |
 
 In this chapter, we will focus on the command line code executors.
 For the Jupyter code executor, please refer to the topic page for
-[Jupyter Code Executor](/docs/topics/code-execution/jupyter-code-executor).
+[Jupyter Code Executor](/website/docs/topics/code-execution/jupyter-code-executor).
 
 ## Local Execution
 
 The figure below shows the architecture of the local command line code executor
-([`autogen.coding.LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)).
+([`autogen.coding.LocalCommandLineCodeExecutor`](/website/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)).
 
 <Warning>
   Executing LLM-generated code poses a security risk to your host environment.
@@ -181,7 +181,7 @@ temp_dir.cleanup()
 
 To mitigate the security risk of running LLM-generated code locally,
 we can use the docker command line code executor
-([`autogen.coding.DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor))
+([`autogen.coding.DockerCommandLineCodeExecutor`](/website/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor))
 to execute code in a docker container.
 This way, the generated code can only access resources that are explicitly
 given to it.
@@ -517,7 +517,7 @@ a separate file and executes the code block in a new process.
 Contrast to the command line code executor, the Jupyter code executor
 runs all code blocks in the same Jupyter kernel, which keeps the state
 in memory between executions.
-See the topic page for [Jupyter Code Executor](/docs/topics/code-execution/jupyter-code-executor).
+See the topic page for [Jupyter Code Executor](/website/docs/topics/code-execution/jupyter-code-executor).
 
 The choice between command line and Jupyter code executor depends on the
 nature of the code blocks in agents' conversation.
@@ -533,10 +533,10 @@ the Jupyter code executor is a better choice.
 ### User Proxy Agent
 
 In the previous examples, we create the code executor agent directly using
-the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class. Existing AutoGen examples often create
-code executor agent using the [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) class,
+the [`ConversableAgent`](/website/docs/reference/agentchat/conversable_agent#conversableagent) class. Existing AutoGen examples often create
+code executor agent using the [`UserProxyAgent`](/website/docs/reference/agentchat/user_proxy_agent#userproxyagent) class,
 which is a subclass of
-[`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) with `human_input_mode=ALWAYS` and `llm_config=False` --
+[`ConversableAgent`](/website/docs/reference/agentchat/conversable_agent#conversableagent) with `human_input_mode=ALWAYS` and `llm_config=False` --
 it always requests human input for every message and does not use LLM.
 It also comes with default `description` field for each of the
 `human_input_mode` setting.
@@ -546,16 +546,16 @@ intended to be used as a code executor.
 ### Assistant Agent
 
 In the previous examples, we created the code writer agent directly using
-the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class. Existing AutoGen examples often create the code writer
-agent using the [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent) class, which is a subclass of
-[`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) with `human_input_mode=NEVER` and `code_execution_config=False`
+the [`ConversableAgent`](/website/docs/reference/agentchat/conversable_agent#conversableagent) class. Existing AutoGen examples often create the code writer
+agent using the [`AssistantAgent`](/website/docs/reference/agentchat/assistant_agent#assistantagent) class, which is a subclass of
+[`ConversableAgent`](/website/docs/reference/agentchat/conversable_agent#conversableagent) with `human_input_mode=NEVER` and `code_execution_config=False`
 -- it never requests human input and does not use code executor.
 It also comes with default `system_message` and `description` fields.
 This class is a convenient short-cut for creating an agent that is
 intended to be used as a code writer and does not execute code.
 
 In fact, in the previous example we use the default `system_message` field
-of the [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent) class to instruct the code writer agent how to use
+of the [`AssistantAgent`](/website/docs/reference/agentchat/assistant_agent#assistantagent) class to instruct the code writer agent how to use
 code executor.
 
 ```python
@@ -604,9 +604,9 @@ pprint.pprint(AssistantAgent.DEFAULT_SYSTEM_MESSAGE)
 
 ### Best Practice
 
-It is very important to note that the [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) and [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent)
+It is very important to note that the [`UserProxyAgent`](/website/docs/reference/agentchat/user_proxy_agent#userproxyagent) and [`AssistantAgent`](/website/docs/reference/agentchat/assistant_agent#assistantagent)
 are meant to be shortcuts to avoid writing the `system_message` instructions
-for the [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) class.
+for the [`ConversableAgent`](/website/docs/reference/agentchat/conversable_agent#conversableagent) class.
 They are not suitable for all use cases.
 As we will show in the next chapter, tuning the
 `system_message` field
@@ -614,8 +614,8 @@ is vital for agent to work properly in more complex conversation patterns
 beyond two-agent chat.
 
 As a best practice, always tune your agent's `system_message` instructions
-for your specific use case and avoid subclassing [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) and
-[`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent).
+for your specific use case and avoid subclassing [`UserProxyAgent`](/website/docs/reference/agentchat/user_proxy_agent#userproxyagent) and
+[`AssistantAgent`](/website/docs/reference/agentchat/assistant_agent#assistantagent).
 
 ## Summary
 

@@ -30,16 +30,16 @@ and [Mistral AI](https://mistral.ai/),
 or their own closed models.
 
 When cloud-based proxy servers provide an OpenAI-compatible API, using them in AutoGen
-is straightforward. With [LLM Configuration](/docs/topics/llm_configuration) done in
+is straightforward. With [LLM Configuration](/website/docs/topics/llm_configuration) done in
 the same way as when using OpenAI's models, the primary difference is typically the
 authentication which is usually handled through an API key.
 
 Examples of using cloud-based proxy servers providers that have an OpenAI-compatible API
 are provided below:
 
-- [Together AI example](/docs/topics/non-openai-models/cloud-togetherai)
-- [Mistral AI example](/docs/topics/non-openai-models/cloud-mistralai)
-- [Anthropic Claude example](/docs/topics/non-openai-models/cloud-anthropic)
+- [Together AI example](/website/docs/topics/non-openai-models/cloud-togetherai)
+- [Mistral AI example](/website/docs/topics/non-openai-models/cloud-mistralai)
+- [Anthropic Claude example](/website/docs/topics/non-openai-models/cloud-anthropic)
 
 ### Locally run proxy servers
 
@@ -53,9 +53,9 @@ OpenAI-compatible API, running them in AutoGen is straightforward.
 Examples of using locally run proxy servers that have an OpenAI-compatible API are
 provided below:
 
-- [LiteLLM with Ollama example](/docs/topics/non-openai-models/local-litellm-ollama)
-- [LM Studio](/docs/topics/non-openai-models/local-lm-studio)
-- [vLLM example](/docs/topics/non-openai-models/local-vllm)
+- [LiteLLM with Ollama example](/website/docs/topics/non-openai-models/local-litellm-ollama)
+- [LM Studio](/website/docs/topics/non-openai-models/local-lm-studio)
+- [vLLM example](/website/docs/topics/non-openai-models/local-vllm)
 
 <div class="tip">
   <Tip>
@@ -68,10 +68,10 @@ provided below:
 ### Configuration for Non-OpenAI models
 
 Whether you choose a cloud-based or locally-run proxy server, the configuration is done in
-the same way as using OpenAI's models, see [LLM Configuration](/docs/topics/llm_configuration)
+the same way as using OpenAI's models, see [LLM Configuration](/website/docs/topics/llm_configuration)
 for further information.
 
-You can use [model configuration filtering](/docs/topics/llm_configuration#config-list-filtering)
+You can use [model configuration filtering](/website/docs/topics/llm_configuration#config-list-filtering)
 to assign specific models to agents.
 
 ## Custom Model Client class
@@ -80,4 +80,4 @@ For more advanced users, you can create your own custom model client class, enab
 you to define and load your own models.
 
 See the [AutoGen with Custom Models: Empowering Users to Use Their Own Inference Mechanism](/blog/2024/01/26/Custom-Models)
-blog post and [this notebook](/docs/notebooks/agentchat_custom_model/) for a guide to creating custom model client classes.
+blog post and [this notebook](/notebook/agentchat_custom_model/) for a guide to creating custom model client classes.

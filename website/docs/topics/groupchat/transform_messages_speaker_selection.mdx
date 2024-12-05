@@ -31,13 +31,13 @@ title: Using Transform Messages during Speaker Selection
 
 When using "auto" mode for speaker selection in group chats, a nested-chat is used to determine the next speaker. This nested-chat includes all of the group chat's messages and this can result in a lot of content which the LLM needs to process for determining the next speaker. As conversations progress, it can be challenging to keep the context length within the workable window for the LLM. Furthermore, reducing the number of overall tokens will improve inference time and reduce token costs.
 
-Using [Transform Messages](/docs/topics/handling_long_contexts/intro_to_transform_messages) you gain control over which messages are used for speaker selection and the context length within each message as well as overall.
+Using [Transform Messages](/website/docs/topics/handling_long_contexts/intro_to_transform_messages) you gain control over which messages are used for speaker selection and the context length within each message as well as overall.
 
 All the transforms available for Transform Messages can be applied to the speaker selection nested-chat, such as the `MessageHistoryLimiter`, `MessageTokenLimiter`, and `TextMessageCompressor`.
 
 ## How do I apply them
 
-When instantiating your `GroupChat` object, all you need to do is assign a [TransformMessages](/docs/reference/agentchat/contrib/capabilities/transform_messages#transformmessages) object to the `select_speaker_transform_messages` parameter, and the transforms within it will be applied to the nested speaker selection chats.
+When instantiating your `GroupChat` object, all you need to do is assign a [TransformMessages](/website/docs/reference/agentchat/contrib/capabilities/transform_messages#transformmessages) object to the `select_speaker_transform_messages` parameter, and the transforms within it will be applied to the nested speaker selection chats.
 
 And, as you're passing in a `TransformMessages` object, multiple transforms can be applied to that nested chat.
 

@@ -31,7 +31,7 @@ title: "Jupyter Code Executor"
 
 AutoGen is able to execute code in a stateful Jupyter kernel, this is in contrast to the command line code executor where each code block is executed in a new process. This means that you can define variables in one code block and use them in another. One of the interesting properties of this is that when an error is encountered, only the failing code needs to be re-executed, and not the entire script.
 
-To use the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor) you need a Jupyter server running. This can be in Docker, local, or even a remote server. Then, when constructing the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor) you pass it the server it should connect to.
+To use the [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor) you need a Jupyter server running. This can be in Docker, local, or even a remote server. Then, when constructing the [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor) you pass it the server it should connect to.
 
 ## Dependencies
 
@@ -45,7 +45,7 @@ pip install 'pyautogen[jupyter-executor]'
 
 ### Docker
 
-To run a Docker based Jupyter server, the [`DockerJupyterServer`](/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) can be used.
+To run a Docker based Jupyter server, the [`DockerJupyterServer`](/website/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) can be used.
 
 ```python
 from autogen.coding import CodeBlock
@@ -64,7 +64,7 @@ with DockerJupyterServer() as server:
 
     exit_code=0 output='Hello, World!\n' output_files=[]
 
-By default the [`DockerJupyterServer`](/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) will build and use a bundled Dockerfile, which can be seen below:
+By default the [`DockerJupyterServer`](/website/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) will build and use a bundled Dockerfile, which can be seen below:
 
 ```python
 print(DockerJupyterServer.DEFAULT_DOCKERFILE)
@@ -88,10 +88,10 @@ WORKDIR "${HOME}"
 
 #### Custom Docker Image
 
-A custom image can be used by passing the `custom_image_name` parameter to the [`DockerJupyterServer`](/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) constructor. There are some requirements of the image for it to work correctly:
+A custom image can be used by passing the `custom_image_name` parameter to the [`DockerJupyterServer`](/website/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver) constructor. There are some requirements of the image for it to work correctly:
 
-- The image must have [Jupyer Kernel Gateway](https://jupyter-kernel-gateway.readthedocs.io/en/latest/) installed and running on port 8888 for the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) to be able to connect to it.
-- Respect the `TOKEN` environment variable, which is used to authenticate the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) with the Jupyter server.
+- The image must have [Jupyer Kernel Gateway](https://jupyter-kernel-gateway.readthedocs.io/en/latest/) installed and running on port 8888 for the [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor) to be able to connect to it.
+- Respect the `TOKEN` environment variable, which is used to authenticate the [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor) with the Jupyter server.
 - Ensure the `jupyter kernelgateway` is started with:
   - `--JupyterApp.answer_yes=true` - this ensures that the kernel gateway does not prompt for confirmation when shut down.
   - `--JupyterWebsocketPersonality.list_kernels=true` - this ensures that the kernel gateway lists the available kernels.
@@ -126,7 +126,7 @@ WORKDIR "${HOME}"
   <Tip>
     To learn about how to combine AutoGen in a Docker image while also executing
     code in a separate image go
-    [here](/docs/topics/code-execution/cli-code-executor#combining-autogen-in-docker-with-a-docker-based-executor).
+    [here](/website/docs/topics/code-execution/cli-code-executor#combining-autogen-in-docker-with-a-docker-based-executor).
   </Tip>
 </div>
 
@@ -138,18 +138,18 @@ WORKDIR "${HOME}"
   </Warning>
 </div>
 
-To run a local Jupyter server, the [`LocalJupyterServer`](/docs/reference/coding/jupyter/local_jupyter_server#localjupyterserver) can be used.
+To run a local Jupyter server, the [`LocalJupyterServer`](/website/docs/reference/coding/jupyter/local_jupyter_server#localjupyterserver) can be used.
 
 <div class="warning">
   <Warning>
     The
-    [`LocalJupyterServer`](/docs/reference/coding/jupyter/local_jupyter_server#localjupyterserver)
+    [`LocalJupyterServer`](/website/docs/reference/coding/jupyter/local_jupyter_server#localjupyterserver)
     does not function on Windows due to a bug. In this case, you can use the
-    [`DockerJupyterServer`](/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver)
+    [`DockerJupyterServer`](/website/docs/reference/coding/jupyter/docker_jupyter_server#dockerjupyterserver)
     instead or use the
-    [`EmbeddedIPythonCodeExecutor`](/docs/reference/coding/jupyter/embedded_ipython_code_executor).
+    [`EmbeddedIPythonCodeExecutor`](/website/docs/reference/coding/jupyter/embedded_ipython_code_executor).
     Do note that the intention is to remove the
-    [`EmbeddedIPythonCodeExecutor`](/docs/reference/coding/jupyter/embedded_ipython_code_executor)
+    [`EmbeddedIPythonCodeExecutor`](/website/docs/reference/coding/jupyter/embedded_ipython_code_executor)
     when the bug is fixed.
   </Warning>
 </div>
@@ -171,7 +171,7 @@ with LocalJupyterServer() as server:
 
 ### Remote
 
-The [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) can also connect to a remote Jupyter server. This is done by passing connection information rather than an actual server object into the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) constructor.
+The [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor) can also connect to a remote Jupyter server. This is done by passing connection information rather than an actual server object into the [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor) constructor.
 
 ```python
 from autogen.coding.jupyter import JupyterCodeExecutor, JupyterConnectionInfo
@@ -183,7 +183,7 @@ executor = JupyterCodeExecutor(
 
 ## Image outputs
 
-When Jupyter outputs an image, this is saved as a file into the `output_dir` of the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor), as specified by the constructor. By default this is the current working directory.
+When Jupyter outputs an image, this is saved as a file into the `output_dir` of the [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor), as specified by the constructor. By default this is the current working directory.
 
 ## Assigning to an agent
 
@@ -210,7 +210,7 @@ code_executor_agent = ConversableAgent(
 )
 ```
 
-When using code execution it is critical that you update the system prompt of agents you expect to write code to be able to make use of the executor. For example, for the [`JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor) you might setup a code writing agent like so:
+When using code execution it is critical that you update the system prompt of agents you expect to write code to be able to make use of the executor. For example, for the [`JupyterCodeExecutor`](/website/docs/reference/coding/jupyter/jupyter_code_executor) you might setup a code writing agent like so:
 
 ````python
 # The code writer agent's system message is to instruct the LLM on how to

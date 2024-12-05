@@ -31,14 +31,14 @@ title: "Command Line Code Executor"
 
 Command line code execution is the simplest form of code execution. Generally speaking, it will save each code block to a file and the execute that file. This means that each code block is executed in a new process. There are two forms of this executor:
 
-- Docker ([`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor)) - this is where all commands are executed in a Docker container
-- Local ([`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)) - this is where all commands are executed on the host machine
+- Docker ([`DockerCommandLineCodeExecutor`](/website/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor)) - this is where all commands are executed in a Docker container
+- Local ([`LocalCommandLineCodeExecutor`](/website/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)) - this is where all commands are executed on the host machine
 
 This executor type is similar to the legacy code execution in AutoGen.
 
 ## Docker
 
-The [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) will create a Docker container and run all commands within that container. The default image that is used is `python:3-slim`, this can be customized by passing the `image` parameter to the constructor. If the image is not found locally then the class will try to pull it. Therefore, having built the image locally is enough. The only thing required for this image to be compatible with the executor is to have `sh` and `python` installed. Therefore, creating a custom image is a simple and effective way to ensure required system dependencies are available.
+The [`DockerCommandLineCodeExecutor`](/website/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) will create a Docker container and run all commands within that container. The default image that is used is `python:3-slim`, this can be customized by passing the `image` parameter to the constructor. If the image is not found locally then the class will try to pull it. Therefore, having built the image locally is enough. The only thing required for this image to be compatible with the executor is to have `sh` and `python` installed. Therefore, creating a custom image is a simple and effective way to ensure required system dependencies are available.
 
 You can use the executor as a context manager to ensure the container is cleaned up after use. Otherwise, the `atexit` module will be used to stop the container when the program exits.
 
@@ -92,7 +92,7 @@ If you need to bind a working directory to the AutoGen container but the directo
   </Warning>
 </div>
 
-To execute code on the host machine, as in the machine running AutoGen, the [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor) can be used.
+To execute code on the host machine, as in the machine running AutoGen, the [`LocalCommandLineCodeExecutor`](/website/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor) can be used.
 
 ### Example
 
@@ -162,7 +162,7 @@ code_executor_agent = ConversableAgent(
 )
 ```
 
-When using code execution it is critical that you update the system prompt of agents you expect to write code to be able to make use of the executor. For example, for the [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) you might setup a code writing agent like so:
+When using code execution it is critical that you update the system prompt of agents you expect to write code to be able to make use of the executor. For example, for the [`DockerCommandLineCodeExecutor`](/website/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) you might setup a code writing agent like so:
 
 ```python
 # The code writer agent's system message is to instruct the LLM on how to

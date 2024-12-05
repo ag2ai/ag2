@@ -191,7 +191,7 @@ The figure below shows an example conversation flow with AG2.
 
 
 Alternatively, the [sample code](https://github.com/ag2ai/build-with-ag2/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
-Please find more [code examples](https://ag2ai.github.io/ag2/docs/Examples#automated-multi-agent-chat) for this feature.
+Please find more [code examples](https://ag2ai.github.io/ag2/notebook/Examples#automated-multi-agent-chat) for this feature.
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
@@ -220,7 +220,7 @@ config, analysis = autogen.Completion.tune(
 response = autogen.Completion.create(context=test_instance, **config)
 ```
 
-Please find more [code examples](https://ag2ai.github.io/ag2/docs/Examples#tune-gpt-models) for this feature. -->
+Please find more [code examples](https://ag2ai.github.io/ag2/notebook/Examples#tune-gpt-models) for this feature. -->
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">

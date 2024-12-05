@@ -70,7 +70,7 @@ similarity between agent description and tool description. The tool description 
 
 After candidates are retrieved, the agent's system message will be updated with the tool candidates' information and how to call the tools.
 A user proxy with the ability to execute the code will be added to the nested chat. Under the hood, this is achieved by leveraging the
-[User Defined Functions](/docs/topics/code-execution/user-defined-functions) feature. A `LocalCommandLineCodeExecutor` equipped with all the functions serves as
+[User Defined Functions](/website/docs/topics/code-execution/user-defined-functions) feature. A `LocalCommandLineCodeExecutor` equipped with all the functions serves as
 code executor for the user proxy.
 
 # Building your own Tool Library
@@ -103,7 +103,7 @@ By following these steps, you can easily customize the tools library of CaptainA
 
 ## Note on Adding Customized Tools
 
-Due to the implementation of [User Defined Functions](/docs/topics/code-execution/user-defined-functions), when writing your own tool, you need to write your import statement in the function definition. For example, adding an audio transcription tool:
+Due to the implementation of [User Defined Functions](/website/docs/topics/code-execution/user-defined-functions), when writing your own tool, you need to write your import statement in the function definition. For example, adding an audio transcription tool:
 
 ```python
 def audio_transcription(audio_file):
@@ -113,4 +113,4 @@ def audio_transcription(audio_file):
     return result["text"]
 ```
 
-There is also decorator `with_requirements` that may become handy for [adding dependencies](/docs/topics/code-execution/user-defined-functions).
+There is also decorator `with_requirements` that may become handy for [adding dependencies](/website/docs/topics/code-execution/user-defined-functions).

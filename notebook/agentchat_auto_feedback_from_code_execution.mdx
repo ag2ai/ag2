@@ -11,7 +11,7 @@ Install the following packages before running the code below:
 pip install pyautogen matplotlib yfinance
 ```
 
-For more information, please refer to the [installation guide](/docs/installation/).
+For more information, please refer to the [installation guide](/website/docs/installation/).
 :::
 ````
 
@@ -247,7 +247,7 @@ chat_res = user_proxy.initiate_chat(
 The example above involves code execution. In AutoGen, code execution is triggered automatically by the `UserProxyAgent` when it detects an executable code block in a received message and no human user input is provided.
 Users have the option to specify a different working directory by setting the `work_dir` argument when constructing a new instance of the `LocalCommandLineCodeExecutor`.
 For Docker-based or Jupyter kernel-based code execution, please refer to
-[Code Executors Tutorial](/docs/tutorial/code-executors) for more information.
+[Code Executors Tutorial](/website/docs/tutorial/code-executors) for more information.
 
 #### Check chat results
 

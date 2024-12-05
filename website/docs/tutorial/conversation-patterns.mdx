@@ -45,7 +45,7 @@ more than two agents.
    - We support several strategies to select the next agent: `round_robin`, `random`, `manual` (human selection), and `auto` (Default, using an LLM to decide).
    - We provide a way to constrain the selection of the next speaker (See examples below).
    - We allow you to pass in a function to customize the selection of the next speaker. With this feature, you can build a **StateFlow** model which allows a deterministic workflow among your agents.
-     Please refer to this [guide](/docs/topics/groupchat/customized_speaker_selection) and this [blog post](/blog/2024/02/29/StateFlow) on StateFlow for more details.
+     Please refer to this [guide](/website/docs/topics/groupchat/customized_speaker_selection) and this [blog post](/blog/2024/02/29/StateFlow) on StateFlow for more details.
 4. **Nested Chat**: package a workflow into a single agent for reuse in a larger workflow.
 
 ## Two-Agent Chat and Chat Result
@@ -1261,22 +1261,22 @@ A poem is returned as the response, which describes the transformation attempt
 from 3 to 7.
 
 The implementation of the nested chats handler makes use of the
-[`register_reply`](/docs/reference/agentchat/conversable_agent/#register_reply)
+[`register_reply`](/website/docs/reference/agentchat/conversable_agent/#register_reply)
 method, which allows you to make extensive customization to
 `ConversableAgent`. The GroupChatManager uses the same mechanism to implement the group chat.
 
 Nested chat is a powerful conversation pattern that allows you to package
 complex workflows into a single agent.
-You can hide [tool usages](/docs/tutorial/tool-use) within a single agent by having the tool-caller agent
+You can hide [tool usages](/website/docs/tutorial/tool-use) within a single agent by having the tool-caller agent
 starts a nested chat with a tool-executor agent and then use the result
 of the nested chat to generate a response.
-See the [nested chats for tool use notebook](/docs/notebooks/agentchat_nested_chats_chess) for an example.
+See the [nested chats for tool use notebook](/notebook/agentchat_nested_chats_chess) for an example.
 
 ## Summary
 
 In this chapter, we covered two-agent chat, sequential chat, group chat,
 and nested chat patterns. You can compose these patterns like LEGO blocks to
-create complex workflows. You can also use [`register_reply`](/docs/reference/agentchat/conversable_agent/#register_reply) to create new patterns.
+create complex workflows. You can also use [`register_reply`](/website/docs/reference/agentchat/conversable_agent/#register_reply) to create new patterns.
 
 This is the last chapter on basic AutoGen concepts.
 In the next chatper, we will give you some tips on what to do next.
