@@ -2,6 +2,33 @@
 title: "Writing a software application using function calls"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_function_call_code_writing.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_function_call_code_writing.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 The default way of creating code in Autogen is its built-in code extractor. Although it allows for creating and executing simple scripts fast, that way of creating code is not suitable for developing advanced software applications, according to my experiences. The process of developing an application is mostly the process of introducing changes into existing files rather than creating new files with code. And in my experience, the code extractor is bad at introducing changes as the model often gets lost and can damage existing files.
 
 Properly created functions that can modify code provide us with the ability to have more control over code changes and result in better quality. Additionally, as the scope of possible operations is predefined inside the tools, we can safely use Autogen without Docker, avoiding all the complications related to it.

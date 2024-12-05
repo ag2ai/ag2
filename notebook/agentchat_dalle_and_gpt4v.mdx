@@ -2,6 +2,33 @@
 title: "Agent Chat with Multimodal Models: DALLE  and GPT-4V"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_dalle_and_gpt4v.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_dalle_and_gpt4v.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 Requires: OpenAI V1.
 
 ### Before everything starts, install AutoGen with the `lmm` option
@@ -360,7 +387,6 @@ user_proxy.initiate_chat(
 
     --------------------------------------------------------------------------------
 
-![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_1.png)
 
     Image PLOTTED
     DALLE Creator! (to Critics):
@@ -390,8 +416,6 @@ user_proxy.initiate_chat(
     Create a high-resolution image with a richly detailed, happy robot made of shiny metal, standing center frame against a stark black background. The robot is holding up a large, rectangular sign with rounded corners that reads "I ❤️ AutoGen" in bold, white sans-serif font, with the heart symbol in a vivid red color. The sign should be well-lit with a soft glow that highlights the text and makes it stand out. Ensure the robot's features clearly convey joy, perhaps through a broad smile and posture conveying enthusiasm. The composition should be balanced and visually appealing, with an intelligent use of space that guides the viewer's attention to the robot and the sign.
 
     --------------------------------------------------------------------------------
-
-![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_3.png)
 
     Image 0 PLOTTED
     DALLE Creator! (to Critics):
@@ -423,7 +447,6 @@ user_proxy.initiate_chat(
 
     --------------------------------------------------------------------------------
 
-![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_5.png)
 
     Image 1 PLOTTED
     DALLE Creator! (to User):
@@ -431,6 +454,14 @@ user_proxy.initiate_chat(
     result.jpg
 
     --------------------------------------------------------------------------------
+```
 
+![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_1.png)
+
+![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_3.png)
+
+![png](agentchat_dalle_and_gpt4v_files/agentchat_dalle_and_gpt4v_16_5.png)
+
+```python
     ChatResult(chat_id=None, chat_history=[{'content': 'Create an image with black background, a happy robot is showing a sign with "I Love AutoGen".', 'role': 'assistant'}, {'content': 'result.jpg', 'role': 'user'}], summary='result.jpg', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
 ```

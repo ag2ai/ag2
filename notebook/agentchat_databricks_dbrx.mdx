@@ -2,6 +2,33 @@
 title: "Use AutoGen in Databricks with DBRX"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_databricks_dbrx.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_databricks_dbrx.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 ![DBRX launch](https://www.databricks.com/en-blog-assets/static/2fe1a0af1ee0f6605024a810b604079c/dbrx-blog-header-optimized.png)
 
 In March 2024, Databricks released [DBRX](https://www.databricks.com/blog/introducing-dbrx-new-state-art-open-llm), a general-purpose LLM that sets a new standard for open LLMs. While available as an open-source model on Hugging Face ([databricks/dbrx-instruct](https://huggingface.co/databricks/dbrx-instruct/tree/main) and [databricks/dbrx-base](https://huggingface.co/databricks/dbrx-base) ), customers of Databricks can also tap into the [Foundation Model APIs](https://docs.databricks.com/en/machine-learning/model-serving/score-foundation-models.html#query-a-chat-completion-model), which make DBRX available through an OpenAI-compatible, autoscaling REST API.
@@ -227,12 +254,6 @@ chat_result = user_proxy_agent.initiate_chat(
 
     --------------------------------------------------------------------------------
 
-
-
-    Provide feedback to DBRX Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
-
-
-
     >>>>>>>> NO HUMAN INPUT RECEIVED.
 
     >>>>>>>> USING AUTO REPLY...
@@ -262,7 +283,13 @@ chat_result = user_proxy_agent.initiate_chat(
     --------------------------------------------------------------------------------
 ````
 
-    Provide feedback to DBRX Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:  exit
+```python
+    Provide feedback to DBRX Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
+```
+
+```python
+Provide feedback to DBRX Assistant. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:  exit
+```
 
 We can see the python file that was created in our working directory:
 
@@ -270,7 +297,9 @@ We can see the python file that was created in our working directory:
 %sh ls coding
 ```
 
-    count_primes.py
+```python
+count_primes.py
+```
 
 ```python
 %sh head coding/count_primes.py
