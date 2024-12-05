@@ -38,7 +38,7 @@ def test_structured_output():
         difficulty: float
 
     for config in config_list:
-        config["response_format"] = MathReasoning
+        config["response_format"] = ResponseModel
 
     llm_config = {"config_list": config_list, "cache_seed": 43}
 
