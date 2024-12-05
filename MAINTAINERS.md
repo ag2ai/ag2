@@ -21,14 +21,15 @@
 | Rudy Wu     | [rudyalways](https://github.com/rudyalways)                | Google                | all, group chats, sequential chats                |
 | Haiyang Li  | [ohdearquant](https://github.com/ohdearquant)               | -               | all, sequential chats, structured output, low-level|
 | Eric Moore  | [emooreatx](https://github.com/emooreatx)               | IBM               | all|
+| Evan David    | [evandavid1](https://github.com/evandavid1)                | -                      | all |
 | Tvrtko Sternak  | [sternakt](https://github.com/sternakt)               | airt.ai               | structured output |
+
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |
 |-----------------|------------------------------------------------------------|------------------------|-----------------------------------------|
 | Olaoluwa Ademola Salami * | [olaoluwasalami](https://github.com/olaoluwasalami)  | DevOps Engineer        |                                          |
 | Rajan Chari *    | [rajan-chari](https://github.com/rajan-chari)                | Microsoft Research                | CAP                        |
-| Evan David *    | [evandavid1](https://github.com/evandavid1)                | -                      | gpt assistant, group chat, rag, autobuild |
 
 ## I would like to join this list. How can I help the project?
 > We're always looking for new contributors to join our team and help improve the project. For more information, please refer to our [CONTRIBUTING](https://ag2ai.github.io/ag2/docs/contributor-guide/contributing) guide.
