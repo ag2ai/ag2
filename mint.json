@@ -128,7 +128,8 @@
             "website/docs/topics/non-openai-models/cloud-togetherai",
             "website/docs/topics/non-openai-models/local-litellm-ollama",
             "website/docs/topics/non-openai-models/local-lm-studio",
-            "website/docs/topics/non-openai-models/local-ollama"
+            "website/docs/topics/non-openai-models/local-ollama",
+            "website/docs/topics/non-openai-models/local-vllm"
           ]
         },
         {
