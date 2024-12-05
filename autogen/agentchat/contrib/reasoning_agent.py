@@ -67,7 +67,7 @@ class ThinkNode:
         self.parent = parent
         self.depth = self.parent.depth + 1 if parent else 0
         self.children = []
-        self.visits = 0
+        self.visits = 0  # TODO: remove this line if not used.
         if self.parent:
             self.parent.children.append(self)
 
