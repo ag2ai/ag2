@@ -85,7 +85,6 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
-        response_format: Optional[BaseModel] = None,
     ):
         """
         Args:
@@ -136,7 +135,6 @@ class ConversableAgent(LLMAgent):
                 resume previous had conversations. Defaults to an empty chat history.
             silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
                 silent in each function.
-            response_format(BaseModel): Used to specify structured response format for the agent. Not available for all LLMs.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -159,7 +157,6 @@ class ConversableAgent(LLMAgent):
             else (lambda x: content_str(x.get("content")) == "TERMINATE")
         )
         self.silent = silent
-        self._response_format = response_format
         # Take a copy to avoid modifying the given dict
         if isinstance(llm_config, dict):
             try:
