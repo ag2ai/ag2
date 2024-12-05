@@ -2,15 +2,44 @@
 title: Using Custom Model Client classes with Auto Speaker Selection
 ---
 
-```{=mdx}
-:::tip
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/groupchat/using_custom_model_client_classes.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/groupchat/using_custom_model_client_classes.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
+<div class="tip">
+<Tip>
 This documentation only applies when using the 'auto' speaker selection method for GroupChat **and** your GroupChatManager is using a Custom Model Client class.
 
 You don't need to change your GroupChat if either of these are the case:
+
 - You are using a different speaker selection method, such as 'manual', 'random', 'round_robin', or a Callable
 - Your GroupChatManager doesn't use a Custom Model Client class
-:::
-```
+
+</Tip>
+</div>
 
 During a group chat using the `auto` speaker selection method, an inner conversation between two agents is created to determine the next speaker after each turn. One of the speakers will take the `llm_config` from the `GroupChatManager` (the other inner agent doesn't use an `llm_config`).
 

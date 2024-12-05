@@ -2,9 +2,34 @@
 title: Customize Speaker Selection
 ---
 
-```{=mdx}
-![group_chat](../../../blog/2024-02-29-StateFlow/img/sf_example_1.png)
-```
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/groupchat/customized_speaker_selection.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/groupchat/customized_speaker_selection.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
+![group_chat](/website/docs/topics/groupchat/img/sf_example_1.webp)
 
 In GroupChat, we can customize the speaker selection by passing a function to the `GroupChat` object. With this function, you can build a more **deterministic** agent workflow. We recommend following a **StateFlow** pattern when crafting this function. Please refer to the [StateFlow blog](/blog/2024/02/29/StateFlow) for more details.
 
