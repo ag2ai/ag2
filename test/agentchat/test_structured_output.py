@@ -37,6 +37,9 @@ def test_structured_output():
         reasoning: str
         difficulty: float
 
+    for config in config_list:
+        config["response_format"] = MathReasoning
+
     llm_config = {"config_list": config_list, "cache_seed": 43}
 
     user_proxy = autogen.UserProxyAgent(
@@ -84,13 +87,12 @@ class MathReasoning(BaseModel):
 @pytest.fixture
 def mock_assistant():
     """Set up a mocked AssistantAgent with a predefined response format."""
-    config_list = [{"model": "gpt-4o", "api_key": MOCK_OPEN_AI_API_KEY}]
+    config_list = [{"model": "gpt-4o", "api_key": MOCK_OPEN_AI_API_KEY, "response_format": MathReasoning}]
     llm_config = {"config_list": config_list, "cache_seed": 43}
 
     assistant = autogen.AssistantAgent(
         name="Assistant",
         llm_config=llm_config,
-        response_format=MathReasoning,
     )
 
     oai_client_mock = MagicMock()
