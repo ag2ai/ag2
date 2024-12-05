@@ -41,11 +41,13 @@ performing calculations, reading files, or calling remote APIs.
 Because you can control what tools are available to an agent, you can control what
 actions an agent can perform.
 
+<div class="note">
 <Note>
 Tool use is currently only available for LLMs
 that support OpenAI-compatible tool call API.
 
 </Note>
+</div>
 
 ## Creating Tools
 
@@ -77,10 +79,12 @@ The above function takes three arguments:
 `operator` is the operation to be performed.
 We used type hints to define the types of the arguments and the return value.
 
-<Tip>
-  Always use type hints to define the types of the arguments and the return
-  value as they provide helpful hints to the agent about the tool's usage.
-</Tip>
+<div class="tip">
+  <Tip>
+    Always use type hints to define the types of the arguments and the return
+    value as they provide helpful hints to the agent about the tool's usage.
+  </Tip>
+</div>
 
 ## Registering Tools
 
@@ -125,10 +129,12 @@ In the above code, we registered the `calculator` function as a tool with
 the assistant and user proxy agents. We also provide a name and a description
 for the tool for the assistant agent to understand its usage.
 
-<Tip>
-  Always provide a clear and concise description for the tool as it helps the
-  agent's underlying LLM to understand the tool's usage.
-</Tip>
+<div class="tip">
+  <Tip>
+    Always provide a clear and concise description for the tool as it helps the
+    agent's underlying LLM to understand the tool's usage.
+  </Tip>
+</div>
 
 Similar to code executors, a tool must be registered with at least two agents
 for it to be useful in conversation.
@@ -355,7 +361,9 @@ def calculator(input: Annotated[CalculatorInput, "Input to the calculator."]) ->
 
 Same as before, we register the tool with the agents using the name `"calculator"`.
 
-<Tip>Registering tool to the same name will override the previous tool.</Tip>
+<div class="tip">
+  <Tip>Registering tool to the same name will override the previous tool.</Tip>
+</div>
 
 ```python
 assistant.register_for_llm(name="calculator", description="A calculator tool that accepts nested expression as input")(
