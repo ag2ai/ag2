@@ -149,7 +149,7 @@ class FalkorGraphQueryEngine:
 
     def __get_ontology_storage_graph(self, graph_name: str) -> Graph:
         ontology_table_name = graph_name + "_ontology"
-        return self.falkor_db.select_graph(ontology_table_name)
+        return self.falkordb.select_graph(ontology_table_name)
 
     def _save_ontology_to_db(self, graph_name: str, ontology: Ontology):
         """
