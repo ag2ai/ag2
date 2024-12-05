@@ -22,6 +22,8 @@
 | Haiyang Li  | [ohdearquant](https://github.com/ohdearquant)               | -               | all, sequential chats, structured output, low-level|
 | Eric Moore  | [emooreatx](https://github.com/emooreatx)               | IBM               | all|
 | Evan David    | [evandavid1](https://github.com/evandavid1)                | -                      | all |
+| Tvrtko Sternak  | [sternakt](https://github.com/sternakt)               | airt.ai               | structured output |
+
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |

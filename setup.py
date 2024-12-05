@@ -113,17 +113,8 @@ extra_require = {
     "bedrock": ["boto3>=1.34.149"],
 }
 
-
-if "--name" in sys.argv:
-    index = sys.argv.index("--name")
-    sys.argv.pop(index)  # Removes --name
-    package_name = sys.argv.pop(index)  # Removes the value after --name
-else:
-    package_name = "ag2"
-
-
 setuptools.setup(
-    name=package_name,
+    name="pyautogen",
     version=__version__,
     author="Chi Wang & Qingyun Wu",
     author_email="support@ag2.ai",

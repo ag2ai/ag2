@@ -12,7 +12,7 @@ import sys
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, schema_json_of
 
 from autogen.cache import Cache
 from autogen.io.base import IOStream
@@ -41,6 +41,7 @@ else:
         ChoiceDeltaToolCall,
         ChoiceDeltaToolCallFunction,
     )
+    from openai.types.chat.parsed_chat_completion import ParsedChatCompletion, ParsedChatCompletionMessage
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
 
@@ -206,7 +207,9 @@ class ModelClient(Protocol):
         choices: List[Choice]
         model: str
 
-    def create(self, params: Dict[str, Any]) -> ModelClientResponseProtocol: ...  # pragma: no cover
+    def create(
+        self, params: Dict[str, Any], response_format: Optional[BaseModel] = None
+    ) -> ModelClientResponseProtocol: ...  # pragma: no cover
 
     def message_retrieval(
         self, response: ModelClientResponseProtocol
@@ -234,6 +237,36 @@ class PlaceHolderClient:
 
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
+
+    @staticmethod
+    def _convert_to_chat_completion(parsed: ParsedChatCompletion) -> ChatCompletion:
+        # Helper function to convert ParsedChatCompletionMessage to ChatCompletionMessage
+        def convert_message(parsed_message: ParsedChatCompletionMessage) -> ChatCompletionMessage:
+            return ChatCompletionMessage(
+                role=parsed_message.role,
+                content=parsed_message.content,
+                function_call=parsed_message.function_call,
+            )
+
+        # Convert ParsedChatCompletion to ChatCompletion
+        return ChatCompletion(
+            id=parsed.id,
+            choices=[
+                Choice(
+                    finish_reason=choice.finish_reason,
+                    index=choice.index,
+                    logprobs=choice.logprobs,
+                    message=convert_message(choice.message),  # Parse the message
+                )
+                for choice in parsed.choices
+            ],
+            created=parsed.created,
+            model=parsed.model,
+            object=parsed.object,
+            service_tier=parsed.service_tier,
+            system_fingerprint=parsed.system_fingerprint,
+            usage=parsed.usage,
+        )
 
     def __init__(self, client: Union[OpenAI, AzureOpenAI]):
         self._oai_client = client
@@ -269,7 +302,7 @@ class OpenAIClient:
                 for choice in choices
             ]
 
-    def create(self, params: Dict[str, Any]) -> ChatCompletion:
+    def create(self, params: Dict[str, Any], response_format: Optional[BaseModel] = None) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
 
         Args:
@@ -281,7 +314,21 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        completions: Completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
+        if response_format is not None:
+
+            def _create_or_parse(*args, **kwargs):
+                if "stream" in kwargs:
+                    kwargs.pop("stream")
+                kwargs["response_format"] = response_format
+                return OpenAIClient._convert_to_chat_completion(
+                    self._oai_client.beta.chat.completions.parse(*args, **kwargs)
+                )
+
+            create_or_parse = _create_or_parse
+        else:
+            completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
+            create_or_parse = completions.create
+
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
         if params.get("stream", False) and "messages" in params:
             response_contents = [""] * params.get("n", 1)
@@ -296,7 +343,7 @@ class OpenAIClient:
             full_tool_calls: Optional[List[Optional[Dict[str, Any]]]] = None
 
             # Send the chat completion request to OpenAI's API and process the response in chunks
-            for chunk in completions.create(**params):
+            for chunk in create_or_parse(**params):
                 if chunk.choices:
                     for choice in chunk.choices:
                         content = choice.delta.content
@@ -398,7 +445,7 @@ class OpenAIClient:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
             params["stream"] = False
-            response = completions.create(**params)
+            response = create_or_parse(**params)
 
         return response
 
@@ -700,7 +747,9 @@ class OpenAIWrapper:
             ]
         return params
 
-    def create(self, **config: Any) -> ModelClient.ModelClientResponseProtocol:
+    def create(
+        self, response_format: Optional[BaseModel] = None, **config: Any
+    ) -> ModelClient.ModelClientResponseProtocol:
         """Make a completion for a given config using available clients.
         Besides the kwargs allowed in openai's [or other] client, we allow the following additional kwargs.
         The config in each client will be overridden by the config.
@@ -788,7 +837,11 @@ class OpenAIWrapper:
             if cache_client is not None:
                 with cache_client as cache:
                     # Try to get the response from cache
-                    key = get_key(params)
+                    key = get_key(
+                        {**params, **{"response_format": schema_json_of(response_format)}}
+                        if response_format
+                        else params
+                    )
                     request_ts = get_current_ts()
 
                     response: ModelClient.ModelClientResponseProtocol = cache.get(key, None)
@@ -829,7 +882,7 @@ class OpenAIWrapper:
                         continue  # filter is not passed; try the next config
             try:
                 request_ts = get_current_ts()
-                response = client.create(params)
+                response = client.create(params, response_format=response_format)
             except APITimeoutError as err:
                 logger.debug(f"config {i} timed out", exc_info=True)
                 if i == last:

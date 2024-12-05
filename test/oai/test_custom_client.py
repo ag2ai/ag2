@@ -41,7 +41,7 @@ def test_custom_model_client():
             self.test_hook["other_params"] = self.other_params
             self.test_hook["max_length"] = self.max_length
 
-        def create(self, params):
+        def create(self, params, response_format):
             from types import SimpleNamespace
 
             response = SimpleNamespace()
@@ -177,7 +177,7 @@ def test_registering_with_extra_config_args():
             self.test_hook = test_hook
             self.test_hook["called"] = True
 
-        def create(self, params):
+        def create(self, params, response_format):
             from types import SimpleNamespace
 
             response = SimpleNamespace()

@@ -36,7 +36,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import boto3
 import requests
@@ -44,6 +44,7 @@ from botocore.config import Config
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import validate_parameter
 
@@ -178,8 +179,11 @@ class BedrockClient:
 
         return base_params, additional_params
 
-    def create(self, params):
+    def create(self, params, response_format: Optional[BaseModel] = None) -> ChatCompletion:
         """Run Amazon Bedrock inference and return AutoGen response"""
+
+        if response_format is not None:
+            raise NotImplementedError("Response format is not supported by Amazon Bedrock's API.")
 
         # Set custom client class settings
         self.parse_custom_params(params)
