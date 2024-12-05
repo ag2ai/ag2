@@ -2,18 +2,46 @@
 title: "Task Solving with Code Generation, Execution and Debugging"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_auto_feedback_from_code_execution.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_auto_feedback_from_code_execution.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 In this notebook, we demonstrate how to use `AssistantAgent` and `UserProxyAgent` to write code and execute the code. Here `AssistantAgent` is an LLM-based agent that can write Python code (in a Python coding block) for a user to execute for a given task. `UserProxyAgent` is an agent which serves as a proxy for the human user to execute the code written by `AssistantAgent`, or automatically execute the code. Depending on the setting of `human_input_mode` and `max_consecutive_auto_reply`, the `UserProxyAgent` either solicits feedback from the human user or returns auto-feedback based on the result of code execution (success or failure and corresponding outputs) to `AssistantAgent`. `AssistantAgent` will debug the code and suggest new code if the result contains error. The two agents keep communicating to each other until the task is done.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install the following packages before running the code below:
 ```bash
 pip install pyautogen matplotlib yfinance
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ```python
 from IPython.display import Image, display
@@ -661,25 +689,26 @@ chat_res = user_proxy.initiate_chat(
 
 Let's check the summary of the chat
 
-```python
+````python
 print(chat_res.summary)
+``
+```python
+---
 
-    ---
+# A Comparative Analysis of META and TESLA Stocks in Early 2024
 
-    # A Comparative Analysis of META and TESLA Stocks in Early 2024
+In the first quarter of 2024, the stock market saw some interesting movements in the tech sector. Two companies that stood out during this period were META and TESLA.
 
-    In the first quarter of 2024, the stock market saw some interesting movements in the tech sector. Two companies that stood out during this period were META and TESLA.
+META, the social media giant, had an average stock price of 403.53 during this period. The highest it reached was 519.83, while the lowest was 344.47. The standard deviation, a measure of how spread out the prices were, was 100.72.
 
-    META, the social media giant, had an average stock price of 403.53 during this period. The highest it reached was 519.83, while the lowest was 344.47. The standard deviation, a measure of how spread out the prices were, was 100.72.
+On the other hand, TESLA, the electric vehicle and clean energy company, had an average stock price of 219.54. The stock reached a high of 248.42 and a low of 171.76. The standard deviation for TESLA was 41.68.
 
-    On the other hand, TESLA, the electric vehicle and clean energy company, had an average stock price of 219.54. The stock reached a high of 248.42 and a low of 171.76. The standard deviation for TESLA was 41.68.
+These figures show that both META and TESLA had their ups and downs during this period. However, the higher standard deviation for META indicates that its stock price fluctuated more compared to TESLA.
 
-    These figures show that both META and TESLA had their ups and downs during this period. However, the higher standard deviation for META indicates that its stock price fluctuated more compared to TESLA.
+As we move further into 2024, it will be interesting to see how these trends evolve. Will META and TESLA continue on their current trajectories, or will we see a shift in the market dynamics? Only time will tell.
 
-    As we move further into 2024, it will be interesting to see how these trends evolve. Will META and TESLA continue on their current trajectories, or will we see a shift in the market dynamics? Only time will tell.
-
-    ---
-
+---
+````
 
 This is the blog post that the agents generated.
 
@@ -696,11 +725,11 @@ These figures show that both META and TESLA had their ups and downs during this 
 As we move further into 2024, it will be interesting to see how these trends evolve. Will META and TESLA continue on their current trajectories, or will we see a shift in the market dynamics? Only time will tell.
 
 Let's check how much the above chat cost
-```
 
 ```python
 print(chat_res.cost)
+```
 
-    ({'total_cost': 0.84249, 'gpt-4-0613': {'cost': 0.84249, 'prompt_tokens': 22513, 'completion_tokens': 2785, 'total_tokens': 25298}}, {'total_cost': 0.84249, 'gpt-4-0613': {'cost': 0.84249, 'prompt_tokens': 22513, 'completion_tokens': 2785, 'total_tokens': 25298}})
-
+```python
+({'total_cost': 0.84249, 'gpt-4-0613': {'cost': 0.84249, 'prompt_tokens': 22513, 'completion_tokens': 2785, 'total_tokens': 25298}}, {'total_cost': 0.84249, 'gpt-4-0613': {'cost': 0.84249, 'prompt_tokens': 22513, 'completion_tokens': 2785, 'total_tokens': 25298}})
 ```

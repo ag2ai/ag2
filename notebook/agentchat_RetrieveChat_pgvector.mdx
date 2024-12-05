@@ -2,6 +2,33 @@
 title: "Using RetrieveChat Powered by PGVector for Retrieve Augmented Code Generation and Question Answering"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_pgvector.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_pgvector.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen offers conversable agents powered by LLM, tool or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
 Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
 
@@ -14,8 +41,8 @@ We'll demonstrate six examples of using RetrieveChat for code generation and que
 - [Example 1: Generate code based off docstrings w/o human feedback](#example-1)
 - [Example 2: Answer a question based off docstrings w/o human feedback](#example-2)
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
@@ -23,8 +50,9 @@ pip install autogen[retrievechat-pgvector] flaml[automl]
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 Ensure you have a PGVector instance.
 
@@ -92,6 +120,13 @@ Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_con
 :::
 ```
 
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
+
 ## Construct agents for RetrieveChat
 
 We start by initializing the `AssistantAgent` and `RetrieveUserProxyAgent`. The system message needs to be set to "You are a helpful assistant." for AssistantAgent. The detailed instructions are given in the user message. Later we will use the `RetrieveUserProxyAgent.message_generator` to combine the instructions and a retrieval augmented generation task for an initial prompt to be sent to the LLM assistant.
@@ -101,8 +136,10 @@ print("Accepted file formats for `docs_path`:")
 print(TEXT_FORMATS)
 ```
 
-    Accepted file formats for `docs_path`:
-    ['yaml', 'ppt', 'rst', 'jsonl', 'xml', 'txt', 'yml', 'log', 'rtf', 'msg', 'xlsx', 'htm', 'pdf', 'org', 'pptx', 'md', 'docx', 'epub', 'tsv', 'csv', 'html', 'doc', 'odt', 'json']
+```python
+Accepted file formats for `docs_path`:
+['yaml', 'ppt', 'rst', 'jsonl', 'xml', 'txt', 'yml', 'log', 'rtf', 'msg', 'xlsx', 'htm', 'pdf', 'org', 'pptx', 'md', 'docx', 'epub', 'tsv', 'csv', 'html', 'doc', 'odt', 'json']
+```
 
 ```python
 # 1. create an AssistantAgent instance named "assistant"
@@ -181,18 +218,10 @@ chat_result = ragproxyagent.initiate_chat(
     assistant, message=ragproxyagent.message_generator, problem=code_problem, search_string="spark"
 )
 
+
     Trying to create collection.
-
-
-    2024-06-11 19:57:44,122 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
-    Model gpt4-1106-preview not found. Using cl100k_base encoding.
-
-
     VectorDB returns doc_ids:  [['bdfbc921', '7968cf3c']]
     Adding content of doc bdfbc921 to context.
-
-
-    Model gpt4-1106-preview not found. Using cl100k_base encoding.
 
 
     Adding content of doc 7968cf3c to context.
@@ -767,6 +796,12 @@ chat_result = ragproxyagent.initiate_chat(
 
     --------------------------------------------------------------------------------
 ````
+
+```python
+2024-06-11 19:57:44,122 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
+Model gpt4-1106-preview not found. Using cl100k_base encoding.
+Model gpt4-1106-preview not found. Using cl100k_base encoding.
+```
 
 ### Example 2
 

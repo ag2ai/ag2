@@ -2,6 +2,33 @@
 title: "Using RetrieveChat with Qdrant for Retrieve Augmented Code Generation and Question Answering"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_qdrant.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_qdrant.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 [Qdrant](https://qdrant.tech/) is a high-performance vector search engine/database.
 
 This notebook demonstrates the usage of Qdrant for RAG, based on [agentchat_RetrieveChat.ipynb](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat.ipynb).
@@ -10,8 +37,8 @@ RetrieveChat is a conversational system for retrieve augmented code generation a
 
 We'll demonstrate usage of RetrieveChat with Qdrant for code generation and question answering w/ human feedback.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
@@ -19,14 +46,17 @@ pip install "autogen[retrievechat-qdrant]" "flaml[automl]"
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ```python
 %pip install "autogen[retrievechat-qdrant]" "flaml[automl]" -q
 ```
 
-    Note: you may need to restart the kernel to use updated packages.
+```python
+Note: you may need to restart the kernel to use updated packages.
+```
 
 ## Set your API Endpoint
 
@@ -50,13 +80,16 @@ assert len(config_list) > 0
 print("models to use: ", [config_list[i]["model"] for i in range(len(config_list))])
 ```
 
-    models to use:  ['gpt4-1106-preview', 'gpt-4o', 'gpt-35-turbo', 'gpt-35-turbo-0613']
-
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
+```python
+models to use:  ['gpt4-1106-preview', 'gpt-4o', 'gpt-35-turbo', 'gpt-35-turbo-0613']
 ```
+
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ```python
 print("Accepted file formats for `docs_path`:")
@@ -133,17 +166,10 @@ qa_problem = "Is there a function called tune_automl?"
 chat_results = ragproxyagent.initiate_chat(assistant, message=ragproxyagent.message_generator, problem=qa_problem)
 
     Trying to create collection.
-
-
-    2024-07-15 23:19:34,988 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 3 chunks.
-    Model gpt4-1106-preview not found. Using cl100k_base encoding.
-
-
     VectorDB returns doc_ids:  [['987f060a-4399-b91a-0e51-51b6165ea5bb', '0ecd7192-3761-7d6f-9151-5ff504ca740b', 'ddbaaafc-abdd-30b4-eecd-ec2c32818952']]
     Adding content of doc 987f060a-4399-b91a-0e51-51b6165ea5bb to context.
 
 
-    Model gpt4-1106-preview not found. Using cl100k_base encoding.
 
 
     ragproxyagent (to assistant):
@@ -354,13 +380,12 @@ chat_results = ragproxyagent.initiate_chat(assistant, message=ragproxyagent.mess
     Updating context and resetting conversation.
 
 
-    Model gpt4-1106-preview not found. Using cl100k_base encoding.
+
 
 
     Adding content of doc 0ecd7192-3761-7d6f-9151-5ff504ca740b to context.
 
 
-    Model gpt4-1106-preview not found. Using cl100k_base encoding.
 
 
     Adding content of doc ddbaaafc-abdd-30b4-eecd-ec2c32818952 to context.
@@ -662,6 +687,14 @@ chat_results = ragproxyagent.initiate_chat(assistant, message=ragproxyagent.mess
     --------------------------------------------------------------------------------
 ````
 
+```python
+2024-07-15 23:19:34,988 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 3 chunks.
+Model gpt4-1106-preview not found. Using cl100k_base encoding.
+Model gpt4-1106-preview not found. Using cl100k_base encoding.
+Model gpt4-1106-preview not found. Using cl100k_base encoding.
+Model gpt4-1106-preview not found. Using cl100k_base encoding.
+```
+
 <a id="example-2"></a>
 ### Example 2
 
@@ -679,15 +712,11 @@ qa_problem = "Who is the author of FLAML?"
 chat_results = ragproxyagent.initiate_chat(assistant, message=ragproxyagent.message_generator, problem=qa_problem)
 
     Model gpt4-1106-preview not found. Using cl100k_base encoding.
+    Model gpt4-1106-preview not found. Using cl100k_base encoding.
 
 
     VectorDB returns doc_ids:  [['0ecd7192-3761-7d6f-9151-5ff504ca740b', '987f060a-4399-b91a-0e51-51b6165ea5bb', 'ddbaaafc-abdd-30b4-eecd-ec2c32818952']]
     Adding content of doc 0ecd7192-3761-7d6f-9151-5ff504ca740b to context.
-
-
-    Model gpt4-1106-preview not found. Using cl100k_base encoding.
-
-
     ragproxyagent (to assistant):
 
     You're a retrieve augmented coding assistant. You answer user's questions based on your own knowledge and the
