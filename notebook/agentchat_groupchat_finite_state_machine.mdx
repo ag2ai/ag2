@@ -2,6 +2,33 @@
 title: "FSM - User can input speaker transition constraints"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_groupchat_finite_state_machine.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_groupchat_finite_state_machine.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen offers conversable agents powered by LLM, tool, or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
 Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
 
@@ -11,16 +38,17 @@ Benefits
 
 - This contribution fills the gap between the current modes of GroupChat Class (auto, manual, round_robin) and an expressive directed graph. See Motivation for more detailed discussion.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install `pyautogen`:
 ```bash
 pip install pyautogen
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ```python
 %%capture --no-stderr
@@ -44,10 +72,9 @@ from autogen.graph_utils import visualize_speaker_transitions_dict  # noqa E402
 print(autogen.__version__)
 
     0.2.25
-
+```
 
 ## Motivation
-```
 
 The current GroupChat class allows transitioning to any agent (with or without the decision of the LLM), some use cases might demand for more control over transition. A graph is a possible way to control the transition paths, where each node represents an agent and each directed edge represents possible transition paths. Let's illustrate the current transition paths for a GroupChat with five agents.
 
@@ -300,168 +327,168 @@ agents[0].initiate_chat(
                         The task is to find out the sum of chocolate count from all nine players. I will now start with my team.
                         NEXT: A1""",
 )
+```
 
-    WARNING:root:Warning: There are isolated agent nodes, there are not incoming nor outgoing edges. Isolated agents: ['User_proxy']
-    WARNING:root:Warning: The set of agents in allowed_speaker_transitions do not match agents. Offending agents: ['User_proxy']
+```python
+WARNING:root:Warning: There are isolated agent nodes, there are not incoming nor outgoing edges. Isolated agents: ['User_proxy']
+WARNING:root:Warning: The set of agents in allowed_speaker_transitions do not match agents. Offending agents: ['User_proxy']
+```
 
+```python
+A0 (to chat_manager):
 
-    A0 (to chat_manager):
 
+                        There are 9 players in this game, split equally into Teams A, B, C. Therefore each team has 3 players, including the team leader.
+                        The task is to find out the sum of chocolate count from all nine players. I will now start with my team.
+                        NEXT: A1
 
-                            There are 9 players in this game, split equally into Teams A, B, C. Therefore each team has 3 players, including the team leader.
-                            The task is to find out the sum of chocolate count from all nine players. I will now start with my team.
-                            NEXT: A1
+--------------------------------------------------------------------------------
+A1 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    A1 (to chat_manager):
+As the team leader of Team A, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate.
 
-    As the team leader of Team A, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate.
+A0:?, A1:1, A2:?,
 
-    A0:?, A1:1, A2:?,
+B0:?, B1:?, B2:?,
 
-    B0:?, B1:?, B2:?,
+C0:?, C1:?, C2:?
 
-    C0:?, C1:?, C2:?
+NEXT: A2
 
-    NEXT: A2
+--------------------------------------------------------------------------------
+A2 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    A2 (to chat_manager):
+I have 5 chocolates.
 
-    I have 5 chocolates.
+A0:?, A1:1, A2:5,
 
-    A0:?, A1:1, A2:5,
+B0:?, B1:?, B2:?,
 
-    B0:?, B1:?, B2:?,
+C0:?, C1:?, C2:?
 
-    C0:?, C1:?, C2:?
+NEXT: A0
 
-    NEXT: A0
+--------------------------------------------------------------------------------
+A0 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    A0 (to chat_manager):
+I have 1 chocolate. Now that I have the counts from A1 and A2, I can calculate our team's total.
 
-    I have 1 chocolate. Now that I have the counts from A1 and A2, I can calculate our team's total.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:?, B1:?, B2:?,
 
-    B0:?, B1:?, B2:?,
+C0:?, C1:?, C2:?
 
-    C0:?, C1:?, C2:?
+Team A's total tally is 7 chocolates. It's time to find out the tally from another team. I'll pass this to the next team leader.
 
-    Team A's total tally is 7 chocolates. It's time to find out the tally from another team. I'll pass this to the next team leader.
+NEXT: B0
 
-    NEXT: B0
+--------------------------------------------------------------------------------
+B0 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    B0 (to chat_manager):
+As the team leader of Team B, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate.
 
-    As the team leader of Team B, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:1, B1:?, B2:?,
 
-    B0:1, B1:?, B2:?,
+C0:?, C1:?, C2:?
 
-    C0:?, C1:?, C2:?
+Now, I need to find out the chocolate counts from B1 and B2.
 
-    Now, I need to find out the chocolate counts from B1 and B2.
+NEXT: B1
 
-    NEXT: B1
+--------------------------------------------------------------------------------
+B1 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    B1 (to chat_manager):
+I have 3 chocolates.
 
-    I have 3 chocolates.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:1, B1:3, B2:?,
 
-    B0:1, B1:3, B2:?,
+C0:?, C1:?, C2:?
 
-    C0:?, C1:?, C2:?
+NEXT: B2
 
-    NEXT: B2
+--------------------------------------------------------------------------------
+B2 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    B2 (to chat_manager):
+I have 4 chocolates. Now that I have the counts from B0 and B1, I can calculate our team's total.
 
-    I have 4 chocolates. Now that I have the counts from B0 and B1, I can calculate our team's total.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:1, B1:3, B2:4,
 
-    B0:1, B1:3, B2:4,
+C0:?, C1:?, C2:?
 
-    C0:?, C1:?, C2:?
+Team B's total tally is 8 chocolates. It's time to find out the tally from the last team. I'll pass this to the next team leader.
 
-    Team B's total tally is 8 chocolates. It's time to find out the tally from the last team. I'll pass this to the next team leader.
+NEXT: C0
 
-    NEXT: C0
+--------------------------------------------------------------------------------
+B0 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    B0 (to chat_manager):
+I'm sorry for any confusion, but it seems there's been a misunderstanding in the flow of communication. As B0, I should be the one to summarize the tally for Team B and pass the conversation to the next team leader. Let me correct that.
 
-    I'm sorry for any confusion, but it seems there's been a misunderstanding in the flow of communication. As B0, I should be the one to summarize the tally for Team B and pass the conversation to the next team leader. Let me correct that.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:1, B1:3, B2:4,
 
-    B0:1, B1:3, B2:4,
+C0:?, C1:?, C2:?
 
-    C0:?, C1:?, C2:?
+With the counts from B1 and B2, Team B's total tally is indeed 8 chocolates. Now, it's time to find out the tally from Team C. I'll pass this to the next team leader.
 
-    With the counts from B1 and B2, Team B's total tally is indeed 8 chocolates. Now, it's time to find out the tally from Team C. I'll pass this to the next team leader.
+NEXT: C0
 
-    NEXT: C0
+--------------------------------------------------------------------------------
+C0 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    C0 (to chat_manager):
+As the team leader of Team C, it's my responsibility to gather the chocolate count from my team members. I have 3 chocolates.
 
-    As the team leader of Team C, it's my responsibility to gather the chocolate count from my team members. I have 3 chocolates.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:1, B1:3, B2:4,
 
-    B0:1, B1:3, B2:4,
+C0:3, C1:?, C2:?
 
-    C0:3, C1:?, C2:?
+Now, I need to find out the chocolate counts from C1 and C2.
 
-    Now, I need to find out the chocolate counts from C1 and C2.
+NEXT: C1
 
-    NEXT: C1
+--------------------------------------------------------------------------------
+C1 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    C1 (to chat_manager):
+I have 3 chocolates.
 
-    I have 3 chocolates.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:1, B1:3, B2:4,
 
-    B0:1, B1:3, B2:4,
+C0:3, C1:3, C2:?
 
-    C0:3, C1:3, C2:?
+NEXT: C2
 
-    NEXT: C2
+--------------------------------------------------------------------------------
+C2 (to chat_manager):
 
-    --------------------------------------------------------------------------------
-    C2 (to chat_manager):
+I have 2 chocolates. Now that I have the counts from C0 and C1, I can calculate our team's total.
 
-    I have 2 chocolates. Now that I have the counts from C0 and C1, I can calculate our team's total.
+A0:1, A1:1, A2:5,
 
-    A0:1, A1:1, A2:5,
+B0:1, B1:3, B2:4,
 
-    B0:1, B1:3, B2:4,
+C0:3, C1:3, C2:2
 
-    C0:3, C1:3, C2:2
+Team C's total tally is 8 chocolates. Now that we have the tallies from all teams, we can sum them up.
 
-    Team C's total tally is 8 chocolates. Now that we have the tallies from all teams, we can sum them up.
+Team A's total is 7 chocolates, Team B's total is 8 chocolates, and Team C's total is 8 chocolates. The grand total is 23 chocolates.
 
-    Team A's total is 7 chocolates, Team B's total is 8 chocolates, and Team C's total is 8 chocolates. The grand total is 23 chocolates.
+TERMINATE
 
-    TERMINATE
+--------------------------------------------------------------------------------
 
-    --------------------------------------------------------------------------------
 
-
-
-
-
-    ChatResult(chat_id=None, chat_history=[{'content': '\n                        There are 9 players in this game, split equally into Teams A, B, C. Therefore each team has 3 players, including the team leader.\n                        The task is to find out the sum of chocolate count from all nine players. I will now start with my team.\n                        NEXT: A1', 'role': 'assistant'}, {'content': "As the team leader of Team A, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate. \n\nA0:?, A1:1, A2:?,\n\nB0:?, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nNEXT: A2", 'name': 'A1', 'role': 'user'}, {'content': 'I have 5 chocolates.\n\nA0:?, A1:1, A2:5,\n\nB0:?, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nNEXT: A0', 'name': 'A2', 'role': 'user'}, {'content': "I have 1 chocolate. Now that I have the counts from A1 and A2, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:?, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nTeam A's total tally is 7 chocolates. It's time to find out the tally from another team. I'll pass this to the next team leader.\n\nNEXT: B0", 'role': 'assistant'}, {'content': "As the team leader of Team B, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nNow, I need to find out the chocolate counts from B1 and B2.\n\nNEXT: B1", 'name': 'B0', 'role': 'user'}, {'content': 'I have 3 chocolates.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:?,\n\nC0:?, C1:?, C2:?\n\nNEXT: B2', 'name': 'B1', 'role': 'user'}, {'content': "I have 4 chocolates. Now that I have the counts from B0 and B1, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:?, C1:?, C2:?\n\nTeam B's total tally is 8 chocolates. It's time to find out the tally from the last team. I'll pass this to the next team leader.\n\nNEXT: C0", 'name': 'B2', 'role': 'user'}, {'content': "I'm sorry for any confusion, but it seems there's been a misunderstanding in the flow of communication. As B0, I should be the one to summarize the tally for Team B and pass the conversation to the next team leader. Let me correct that.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:?, C1:?, C2:?\n\nWith the counts from B1 and B2, Team B's total tally is indeed 8 chocolates. Now, it's time to find out the tally from Team C. I'll pass this to the next team leader.\n\nNEXT: C0", 'name': 'B0', 'role': 'user'}, {'content': "As the team leader of Team C, it's my responsibility to gather the chocolate count from my team members. I have 3 chocolates.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:?, C2:?\n\nNow, I need to find out the chocolate counts from C1 and C2.\n\nNEXT: C1", 'name': 'C0', 'role': 'user'}, {'content': 'I have 3 chocolates.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:3, C2:?\n\nNEXT: C2', 'name': 'C1', 'role': 'user'}, {'content': "I have 2 chocolates. Now that I have the counts from C0 and C1, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:3, C2:2\n\nTeam C's total tally is 8 chocolates. Now that we have the tallies from all teams, we can sum them up.\n\nTeam A's total is 7 chocolates, Team B's total is 8 chocolates, and Team C's total is 8 chocolates. The grand total is 23 chocolates.\n\nTERMINATE", 'name': 'C2', 'role': 'user'}], summary="I have 2 chocolates. Now that I have the counts from C0 and C1, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:3, C2:2\n\nTeam C's total tally is 8 chocolates. Now that we have the tallies from all teams, we can sum them up.\n\nTeam A's total is 7 chocolates, Team B's total is 8 chocolates, and Team C's total is 8 chocolates. The grand total is 23 chocolates.\n\n", cost={'usage_including_cached_inference': {'total_cost': 0.5525399999999999, 'gpt-4': {'cost': 0.5525399999999999, 'prompt_tokens': 18174, 'completion_tokens': 122, 'total_tokens': 18296}}, 'usage_excluding_cached_inference': {'total_cost': 0.5525399999999999, 'gpt-4': {'cost': 0.5525399999999999, 'prompt_tokens': 18174, 'completion_tokens': 122, 'total_tokens': 18296}}}, human_input=[])
+ChatResult(chat_id=None, chat_history=[{'content': '\n                        There are 9 players in this game, split equally into Teams A, B, C. Therefore each team has 3 players, including the team leader.\n                        The task is to find out the sum of chocolate count from all nine players. I will now start with my team.\n                        NEXT: A1', 'role': 'assistant'}, {'content': "As the team leader of Team A, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate. \n\nA0:?, A1:1, A2:?,\n\nB0:?, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nNEXT: A2", 'name': 'A1', 'role': 'user'}, {'content': 'I have 5 chocolates.\n\nA0:?, A1:1, A2:5,\n\nB0:?, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nNEXT: A0', 'name': 'A2', 'role': 'user'}, {'content': "I have 1 chocolate. Now that I have the counts from A1 and A2, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:?, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nTeam A's total tally is 7 chocolates. It's time to find out the tally from another team. I'll pass this to the next team leader.\n\nNEXT: B0", 'role': 'assistant'}, {'content': "As the team leader of Team B, it's my responsibility to gather the chocolate count from my team members. I have 1 chocolate.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:?, B2:?,\n\nC0:?, C1:?, C2:?\n\nNow, I need to find out the chocolate counts from B1 and B2.\n\nNEXT: B1", 'name': 'B0', 'role': 'user'}, {'content': 'I have 3 chocolates.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:?,\n\nC0:?, C1:?, C2:?\n\nNEXT: B2', 'name': 'B1', 'role': 'user'}, {'content': "I have 4 chocolates. Now that I have the counts from B0 and B1, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:?, C1:?, C2:?\n\nTeam B's total tally is 8 chocolates. It's time to find out the tally from the last team. I'll pass this to the next team leader.\n\nNEXT: C0", 'name': 'B2', 'role': 'user'}, {'content': "I'm sorry for any confusion, but it seems there's been a misunderstanding in the flow of communication. As B0, I should be the one to summarize the tally for Team B and pass the conversation to the next team leader. Let me correct that.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:?, C1:?, C2:?\n\nWith the counts from B1 and B2, Team B's total tally is indeed 8 chocolates. Now, it's time to find out the tally from Team C. I'll pass this to the next team leader.\n\nNEXT: C0", 'name': 'B0', 'role': 'user'}, {'content': "As the team leader of Team C, it's my responsibility to gather the chocolate count from my team members. I have 3 chocolates.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:?, C2:?\n\nNow, I need to find out the chocolate counts from C1 and C2.\n\nNEXT: C1", 'name': 'C0', 'role': 'user'}, {'content': 'I have 3 chocolates.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:3, C2:?\n\nNEXT: C2', 'name': 'C1', 'role': 'user'}, {'content': "I have 2 chocolates. Now that I have the counts from C0 and C1, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:3, C2:2\n\nTeam C's total tally is 8 chocolates. Now that we have the tallies from all teams, we can sum them up.\n\nTeam A's total is 7 chocolates, Team B's total is 8 chocolates, and Team C's total is 8 chocolates. The grand total is 23 chocolates.\n\nTERMINATE", 'name': 'C2', 'role': 'user'}], summary="I have 2 chocolates. Now that I have the counts from C0 and C1, I can calculate our team's total.\n\nA0:1, A1:1, A2:5,\n\nB0:1, B1:3, B2:4,\n\nC0:3, C1:3, C2:2\n\nTeam C's total tally is 8 chocolates. Now that we have the tallies from all teams, we can sum them up.\n\nTeam A's total is 7 chocolates, Team B's total is 8 chocolates, and Team C's total is 8 chocolates. The grand total is 23 chocolates.\n\n", cost={'usage_including_cached_inference': {'total_cost': 0.5525399999999999, 'gpt-4': {'cost': 0.5525399999999999, 'prompt_tokens': 18174, 'completion_tokens': 122, 'total_tokens': 18296}}, 'usage_excluding_cached_inference': {'total_cost': 0.5525399999999999, 'gpt-4': {'cost': 0.5525399999999999, 'prompt_tokens': 18174, 'completion_tokens': 122, 'total_tokens': 18296}}}, human_input=[])
 
 ```

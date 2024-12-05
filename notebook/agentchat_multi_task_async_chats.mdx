@@ -2,10 +2,37 @@
 title: "Solving Multiple Tasks in a Sequence of Async Chats"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_multi_task_async_chats.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_multi_task_async_chats.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook showcases how to use the new chat interface of conversational agents in AutoGen: a_initiate_chats, to conduct a series of tasks. Similar to "notebook/agentchat_microsoft_fabric.ipynb", this new interface allows one to pass multiple tasks and their corresponding dedicated agents and execute concurrently. Depending on the prerequisite task(s), the tasks will be solved concurrently, with the summaries from prerequisite task(s) provided to subsequent tasks as context, if the `summary_method` argument is specified.
 
-:::info Requirements
-
+<div class="info">
+<Info>
 Install `pyautogen`:
 
 ```bash
@@ -14,7 +41,8 @@ pip install pyautogen
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
 
-:::
+</Info>
+</div>
 
 ```python
 import autogen
@@ -23,11 +51,13 @@ config_list = autogen.config_list_from_json(env_or_file="OAI_CONFIG_LIST")
 llm_config = {"config_list": config_list}
 ```
 
-:::tip
+<div class="tip">
+<Tip>
 
 Learn more about the various ways to configure LLM endpoints [here](/website/docs/topics/llm_configuration).
 
-:::
+</Tip>
+</div>
 
 ### Example Tasks
 
@@ -75,7 +105,7 @@ writer = autogen.AssistantAgent(
 )
 ```
 
-````python
+```python
 user = autogen.UserProxyAgent(
     name="User",
     human_input_mode="NEVER",
@@ -115,7 +145,9 @@ chat_results = await user.a_initiate_chats(  # noqa: F704
         {"chat_id": 4, "prerequisites": [1, 2, 3], "recipient": writer, "silent": False, "message": writing_tasks[0]},
     ]
 )
+```
 
+````python
     ********************************************************************************
     Starting a new chat....
 
@@ -183,10 +215,6 @@ chat_results = await user.a_initiate_chats(  # noqa: F704
     --------------------------------------------------------------------------------
 
     >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
-
-
-    /workspaces/autogen/autogen/agentchat/chat.py:42: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
-      warnings.warn(
 
 
 
@@ -476,6 +504,11 @@ chat_results = await user.a_initiate_chats(  # noqa: F704
     --------------------------------------------------------------------------------
 ````
 
+```python
+/workspaces/autogen/autogen/agentchat/chat.py:42: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
+    warnings.warn(
+```
+
 #### Check chat results
 
 The `initiate_chat` method returns a `ChatResult` object, which is a dataclass object storing information about the chat. Currently, it includes the following attributes:
@@ -558,7 +591,7 @@ Since AutoGen agents support soliciting human inputs during a chat if `human_inp
 
 The example below showcases that even if a task is revised in the middle (for the first task, the human user requests to get Microsoft's stock price information as well, in addition to NVDA and TSLA), the `reflection_with_llm`` summary method can still capture it, as it reflects on the whole conversation instead of just the original request.
 
-````python
+```python
 user = autogen.UserProxyAgent(
     name="User",
     human_input_mode="ALWAYS",  # ask human for input at each step
@@ -598,7 +631,9 @@ chat_results = await user.a_initiate_chats(  # noqa: F704
         {"chat_id": 4, "prerequisites": [1, 2, 3], "recipient": writer, "message": writing_tasks[0]},
     ]
 )
+```
 
+````python
     ********************************************************************************
     Starting a new chat....
 
@@ -664,10 +699,6 @@ chat_results = await user.a_initiate_chats(  # noqa: F704
     This script will output the current stock prices of NVDA and TSLA, along with their performance over the past month in percentage terms.
 
     --------------------------------------------------------------------------------
-
-
-    /workspaces/autogen/autogen/agentchat/chat.py:42: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
-      warnings.warn(
 
 
     User (to Financial_assistant):
@@ -974,6 +1005,11 @@ chat_results = await user.a_initiate_chats(  # noqa: F704
 
     >>>>>>>> NO HUMAN INPUT RECEIVED.
 ````
+
+```python
+/workspaces/autogen/autogen/agentchat/chat.py:42: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
+  warnings.warn(
+```
 
 #### Check chat results
 

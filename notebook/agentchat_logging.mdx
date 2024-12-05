@@ -2,6 +2,33 @@
 title: "Runtime Logging with AutoGen"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_logging.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_logging.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen offers utilities to log data for debugging and performance analysis. This notebook demonstrates how to use them.
 
 we log data in different modes:
@@ -44,20 +71,22 @@ user_proxy.initiate_chat(
     assistant, message="What is the height of the Eiffel Tower? Only respond with the answer and terminate"
 )
 autogen.runtime_logging.stop()
+```
 
-    Logging session ID: 6e08f3e0-392b-434e-8b69-4ab36c4fcf99
-    user_proxy (to assistant):
+```python
+  Logging session ID: 6e08f3e0-392b-434e-8b69-4ab36c4fcf99
+  user_proxy (to assistant):
 
-    What is the height of the Eiffel Tower? Only respond with the answer and terminate
+  What is the height of the Eiffel Tower? Only respond with the answer and terminate
 
-    --------------------------------------------------------------------------------
-    assistant (to user_proxy):
+  --------------------------------------------------------------------------------
+  assistant (to user_proxy):
 
-    The height of the Eiffel Tower is approximately 330 meters.
+  The height of the Eiffel Tower is approximately 330 meters.
 
-    TERMINATE
+  TERMINATE
 
-    --------------------------------------------------------------------------------
+  --------------------------------------------------------------------------------
 ```
 
 ## Getting Data from the SQLite Database
@@ -99,89 +128,11 @@ log_data_df["response"] = log_data_df.apply(
 log_data_df
 ```
 
-```html
-<div>
-  <style scoped>
-    .dataframe tbody tr th:only-of-type {
-      vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-      vertical-align: top;
-    }
-
-    .dataframe thead th {
-      text-align: right;
-    }
-  </style>
-  <table border="1" class="dataframe">
-    <thead>
-      <tr style="text-align: right;">
-        <th></th>
-        <th>id</th>
-        <th>invocation_id</th>
-        <th>client_id</th>
-        <th>wrapper_id</th>
-        <th>session_id</th>
-        <th>request</th>
-        <th>response</th>
-        <th>is_cached</th>
-        <th>cost</th>
-        <th>start_time</th>
-        <th>end_time</th>
-        <th>total_tokens</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <th>0</th>
-        <td>1</td>
-        <td>e8bb00d7-6da5-4407-a949-e19b55d53da8</td>
-        <td>139819167322784</td>
-        <td>139823225568704</td>
-        <td>8821a150-8c78-4d05-a858-8a64f1d18648</td>
-        <td>You are a helpful AI assistant.\nSolve tasks u...</td>
-        <td>The height of the Eiffel Tower is approximatel...</td>
-        <td>1</td>
-        <td>0.01572</td>
-        <td>2024-02-13 15:06:22.082896</td>
-        <td>2024-02-13 15:06:22.083169</td>
-        <td>507</td>
-      </tr>
-      <tr>
-        <th>1</th>
-        <td>2</td>
-        <td>c8522790-0067-484b-bb37-d39ae80db98b</td>
-        <td>139823225568656</td>
-        <td>139823225563040</td>
-        <td>fb0ef547-a2ac-428b-8c20-a5e63263b8e1</td>
-        <td>You are a helpful AI assistant.\nSolve tasks u...</td>
-        <td>The height of the Eiffel Tower is approximatel...</td>
-        <td>1</td>
-        <td>0.01572</td>
-        <td>2024-02-13 15:06:23.498758</td>
-        <td>2024-02-13 15:06:23.499045</td>
-        <td>507</td>
-      </tr>
-      <tr>
-        <th>2</th>
-        <td>3</td>
-        <td>91c3f6c0-c6f7-4306-89cd-f304c9556de4</td>
-        <td>139823225449024</td>
-        <td>139819166072448</td>
-        <td>6e08f3e0-392b-434e-8b69-4ab36c4fcf99</td>
-        <td>You are a helpful AI assistant.\nSolve tasks u...</td>
-        <td>The height of the Eiffel Tower is approximatel...</td>
-        <td>1</td>
-        <td>0.01572</td>
-        <td>2024-02-13 15:06:24.688990</td>
-        <td>2024-02-13 15:06:24.689238</td>
-        <td>507</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-```
+|     | id  | invocation_id                        | client_id       | wrapper_id      | session_id                           | request                                        | response                                           | is_cached | cost    | start_time                 | end_time                   | total_tokens |
+| --- | --- | ------------------------------------ | --------------- | --------------- | ------------------------------------ | ---------------------------------------------- | -------------------------------------------------- | --------- | ------- | -------------------------- | -------------------------- | ------------ |
+| 0   | 1   | e8bb00d7-6da5-4407-a949-e19b55d53da8 | 139819167322784 | 139823225568704 | 8821a150-8c78-4d05-a858-8a64f1d18648 | You are a helpful AI assistant. Solve tasks... | The height of the Eiffel Tower is approximately... | 1         | 0.01572 | 2024-02-13 15:06:22.082896 | 2024-02-13 15:06:22.083169 | 507          |
+| 1   | 2   | c8522790-0067-484b-bb37-d39ae80db98b | 139823225568656 | 139823225563040 | fb0ef547-a2ac-428b-8c20-a5e63263b8e1 | You are a helpful AI assistant. Solve tasks... | The height of the Eiffel Tower is approximately... | 1         | 0.01572 | 2024-02-13 15:06:23.498758 | 2024-02-13 15:06:23.499045 | 507          |
+| 2   | 3   | 91c3f6c0-c6f7-4306-89cd-f304c9556de4 | 139823225449024 | 139819166072448 | 6e08f3e0-392b-434e-8b69-4ab36c4fcf99 | You are a helpful AI assistant. Solve tasks... | The height of the Eiffel Tower is approximately... | 1         | 0.01572 | 2024-02-13 15:06:24.688990 | 2024-02-13 15:06:24.689238 | 507          |
 
 ## Computing Cost
 
@@ -209,8 +160,10 @@ print(
 )
 ```
 
-    Total tokens for all sessions: 1521, total cost: 0.0472
-    Total tokens for session 6e08f3e0-392b-434e-8b69-4ab36c4fcf99: 507, cost: 0.0157
+```python
+Total tokens for all sessions: 1521, total cost: 0.0472
+Total tokens for session 6e08f3e0-392b-434e-8b69-4ab36c4fcf99: 507, cost: 0.0157
+```
 
 ## Log data in File mode
 
@@ -249,19 +202,21 @@ user_proxy.initiate_chat(
     assistant, message="What is the height of the Eiffel Tower? Only respond with the answer and terminate"
 )
 autogen.runtime_logging.stop()
+```
 
-    Logging session ID: ed493ebf-d78e-49f0-b832-69557276d557
-    user_proxy (to assistant):
+```python
+Logging session ID: ed493ebf-d78e-49f0-b832-69557276d557
+user_proxy (to assistant):
 
-    What is the height of the Eiffel Tower? Only respond with the answer and terminate
+What is the height of the Eiffel Tower? Only respond with the answer and terminate
 
-    --------------------------------------------------------------------------------
-    assistant (to user_proxy):
+--------------------------------------------------------------------------------
+assistant (to user_proxy):
 
-    The height of the Eiffel Tower is 330 meters.
-    TERMINATE
+The height of the Eiffel Tower is 330 meters.
+TERMINATE
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```
 
 This should create a `runtime.log` file in your current directory.

@@ -2,6 +2,33 @@
 title: "Agent Chat with Multimodal Models: LLaVA"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_lmm_llava.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_lmm_llava.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook uses **LLaVA** as an example for the multimodal feature. More information about LLaVA can be found in their [GitHub page](https://github.com/haotian-liu/LLaVA)
 
 This notebook contains the following information and examples:
@@ -139,16 +166,18 @@ rst = llava_call(
 )
 
 print(rst)
+```
 
-    The AutoGen framework is a tool for creating and managing conversational agents. It allows for the creation of multiple-agent conversations, enabling complex interactions between different agents. The framework is designed to be flexible and scalable, allowing for the addition of new agents and conversations as needed.
+```python
+The AutoGen framework is a tool for creating and managing conversational agents. It allows for the creation of multiple-agent conversations, enabling complex interactions between different agents. The framework is designed to be flexible and scalable, allowing for the addition of new agents and conversations as needed.
 
-    The framework consists of three main components:
+The framework consists of three main components:
 
-    1. Agents: These are the individual conversational entities that can be created and managed within the framework. Each agent has its own unique set of conversational capabilities and can engage in conversations with other agents.
+1. Agents: These are the individual conversational entities that can be created and managed within the framework. Each agent has its own unique set of conversational capabilities and can engage in conversations with other agents.
 
-    2. Conversations: These are the interactions between agents, which can be managed and directed by the framework. Conversations can be structured and organized to facilitate efficient communication between agents.
+2. Conversations: These are the interactions between agents, which can be managed and directed by the framework. Conversations can be structured and organized to facilitate efficient communication between agents.
 
-    3. Flexibility: The framework is designed to be flexible, allowing for the addition of new agents and conversations as needed. This flexibility enables the framework to adapt to changing requirements and facilitate the development of more complex conversational systems.
+3. Flexibility: The framework is designed to be flexible, allowing for the addition of new agents and conversations as needed. This flexibility enables the framework to adapt to changing requirements and facilitate the development of more complex conversational systems.
 ```
 
 <a id="app-1"></a>
@@ -464,12 +493,6 @@ I want to show both temperature high and low.
     --------------------------------------------------------------------------------
 
 
-
-
-![png](agentchat_lmm_llava_files/agentchat_lmm_llava_17_1.png)
-
-
-
     Commander (to Critics):
 
     Improve <image>
@@ -584,12 +607,6 @@ I want to show both temperature high and low.
     --------------------------------------------------------------------------------
 
 
-
-
-![png](agentchat_lmm_llava_files/agentchat_lmm_llava_17_3.png)
-
-
-
     Commander (to Critics):
 
     Improve <image>
@@ -670,18 +687,18 @@ I want to show both temperature high and low.
     --------------------------------------------------------------------------------
 
 
-
-
-![png](agentchat_lmm_llava_files/agentchat_lmm_llava_17_5.png)
-
-
-
     Figure Creator~ (to User):
 
     result.jpg
 
     --------------------------------------------------------------------------------
 ````
+
+![png](agentchat_lmm_llava_files/agentchat_lmm_llava_17_1.png)
+
+![png](agentchat_lmm_llava_files/agentchat_lmm_llava_17_3.png)
+
+![png](agentchat_lmm_llava_files/agentchat_lmm_llava_17_5.png)
 
 ```python
 if os.path.exists("result.jpg"):

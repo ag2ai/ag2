@@ -2,18 +2,46 @@
 title: "StateFlow: Build Workflows through State-Oriented Actions"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_groupchat_stateflow.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_groupchat_stateflow.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen offers conversable agents powered by LLM, tool or human, which can be used to perform tasks collectively via automated chat. In this notebook, we introduce how to use groupchat to build workflows with AutoGen agents from a state-oriented perspective.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install `pyautogen`:
 ```bash
 pip install pyautogen
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Set your API Endpoint
 
@@ -30,21 +58,23 @@ config_list = autogen.config_list_from_json(
 )
 ```
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ## A workflow for research
 
-<figure>
-  <img
-    src="https://media.githubusercontent.com/media/ag2ai/ag2/main/website/blog/2024-02-29-StateFlow/img/sf_example_1.png"
-    width="700"
-    alt="SF_Example_1"
-  ></img>
-</figure>
+{" "}
+
+<img
+  src="https://media.githubusercontent.com/media/ag2ai/ag2/main/website/blog/2024-02-29-StateFlow/img/sf_example_1.png"
+  alt="Open in GitHub"
+  style={{ width: "700px" }}
+  alt="SF_Example_1"
+/>
 
 We define the following agents:
 

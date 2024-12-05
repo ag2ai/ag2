@@ -2,6 +2,33 @@
 title: "Engaging with Multimodal Models: GPT-4V in AutoGen"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_lmm_gpt-4v.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_lmm_gpt-4v.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 In AutoGen, leveraging multimodal models can be done through two different methodologies:
 
 1. **MultimodalAgent**: Supported by GPT-4V and other LMMs, this agent is endowed with visual cognitive abilities, allowing it to engage in interactions comparable to those of other ConversableAgents.
@@ -382,12 +409,6 @@ I want to show both temperature high and low.
     --------------------------------------------------------------------------------
 
 
-
-
-![png](agentchat_lmm_gpt-4v_files/agentchat_lmm_gpt-4v_13_1.png)
-
-
-
     Commander (to Critics):
 
     Improve <image>
@@ -526,12 +547,6 @@ I want to show both temperature high and low.
     --------------------------------------------------------------------------------
 
 
-
-
-![png](agentchat_lmm_gpt-4v_files/agentchat_lmm_gpt-4v_13_3.png)
-
-
-
     Commander (to Critics):
 
     Improve <image>
@@ -565,26 +580,22 @@ I want to show both temperature high and low.
     TERMINATE
 
     --------------------------------------------------------------------------------
-
-
-
-
-![png](agentchat_lmm_gpt-4v_files/agentchat_lmm_gpt-4v_13_5.png)
-
-
-
     Figure Creator~ (to User):
 
     tmp/result.jpg
 
     --------------------------------------------------------------------------------
-
-
-
-
-
-    ChatResult(chat_id=None, chat_history=[{'content': '\nPlot a figure by using the data from:\nhttps://raw.githubusercontent.com/vega/vega/main/docs/data/seattle-weather.csv\n\nI want to show both temperature high and low.\n', 'role': 'assistant'}, {'content': 'tmp/result.jpg', 'role': 'user'}], summary='tmp/result.jpg', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
 ````
+
+![png](agentchat_lmm_gpt-4v_files/agentchat_lmm_gpt-4v_13_1.png)
+
+![png](agentchat_lmm_gpt-4v_files/agentchat_lmm_gpt-4v_13_3.png)
+
+![png](agentchat_lmm_gpt-4v_files/agentchat_lmm_gpt-4v_13_5.png)
+
+```python
+ChatResult(chat_id=None, chat_history=[{'content': '\nPlot a figure by using the data from:\nhttps://raw.githubusercontent.com/vega/vega/main/docs/data/seattle-weather.csv\n\nI want to show both temperature high and low.\n', 'role': 'assistant'}, {'content': 'tmp/result.jpg', 'role': 'user'}], summary='tmp/result.jpg', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
+```
 
 ## Vision Capability: Group Chat Example with Multimodal Agent
 
@@ -725,64 +736,68 @@ message = """Write a poet for my image:
 
 ```python
 user.send(message=message, recipient=agent_no_vision, request_reply=True)
+```
 
-    User (to Regular LLM Agent):
+```python
+User (to Regular LLM Agent):
 
-    Write a poet for my image:
-                            <img https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0>.
+Write a poet for my image:
+                        <img https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0>.
 
-    --------------------------------------------------------------------------------
-    Regular LLM Agent (to User):
+--------------------------------------------------------------------------------
+Regular LLM Agent (to User):
 
-    As an AI, I can't directly view images or web content. However, I can help you generate a poem by gathering information about the image. Please describe the image for me, including details such as the setting, prominent colors, the mood it evokes, and any specific elements like animals, nature, cityscapes, or people that you want to be highlighted in the poem. Once you provide a description of the image, I can compose a poem based on that description.
+As an AI, I can't directly view images or web content. However, I can help you generate a poem by gathering information about the image. Please describe the image for me, including details such as the setting, prominent colors, the mood it evokes, and any specific elements like animals, nature, cityscapes, or people that you want to be highlighted in the poem. Once you provide a description of the image, I can compose a poem based on that description.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```
 
 ```python
 user.send(message=message, recipient=agent_with_vision, request_reply=True)
+```
 
-    User (to Regular LLM Agent with Vision Capability):
+```python
+User (to Regular LLM Agent with Vision Capability):
 
-    Write a poet for my image:
-                            <img https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0>.
+Write a poet for my image:
+                        <img https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0>.
 
-    --------------------------------------------------------------------------------
-    Regular LLM Agent with Vision Capability (to User):
+--------------------------------------------------------------------------------
+Regular LLM Agent with Vision Capability (to User):
 
-    In apricot hues, a curl-coated pup reclines,
-    With Westphal's name upon his tag that shines.
-    A bow tie blooms in a brilliant blue sky,
-    Amid a light-drenched floor where soft paws lie.
+In apricot hues, a curl-coated pup reclines,
+With Westphal's name upon his tag that shines.
+A bow tie blooms in a brilliant blue sky,
+Amid a light-drenched floor where soft paws lie.
 
-    Possessor of gazes, tender and deep,
-    In the quiet foyer, his watch he keeps.
-    Beneath black rubber guards of rainy days,
-    He stirs a comfort, a homely embrace.
+Possessor of gazes, tender and deep,
+In the quiet foyer, his watch he keeps.
+Beneath black rubber guards of rainy days,
+He stirs a comfort, a homely embrace.
 
-    His lineage drawn from the poodles' grace,
-    Or maybe a mix, with a doodle's face,
-    Gold or Lab, his curls are just as sweet,
-    In each bouncing step, in each heartbeat.
+His lineage drawn from the poodles' grace,
+Or maybe a mix, with a doodle's face,
+Gold or Lab, his curls are just as sweet,
+In each bouncing step, in each heartbeat.
 
-    A picture of love, in a tiny frame,
-    A heartbeat wrapped in an apricot mane.
-    The pup in his calm, an invite to cheer,
-    A whisper of joy in a pet-lover's ear.
+A picture of love, in a tiny frame,
+A heartbeat wrapped in an apricot mane.
+The pup in his calm, an invite to cheer,
+A whisper of joy in a pet-lover's ear.
 
-    Around him, life's simple clutter does unfold,
-    Yet untouched by worry, untouched by cold.
-    With every breath, he claims this slice of earth,
-    A master of mirth, from the moment of his birth.
+Around him, life's simple clutter does unfold,
+Yet untouched by worry, untouched by cold.
+With every breath, he claims this slice of earth,
+A master of mirth, from the moment of his birth.
 
-    Paws outstretched on the soft, forgiving ground,
-    His soulful eyes speak, without a sound.
-    For in the sweet stillness of his gentle rest,
-    Lies the simple truth that we are blessed.
+Paws outstretched on the soft, forgiving ground,
+His soulful eyes speak, without a sound.
+For in the sweet stillness of his gentle rest,
+Lies the simple truth that we are blessed.
 
-    TERMINATE
+TERMINATE
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```
 
 ## Custom Caption Function for Vision Capability
@@ -865,48 +880,50 @@ vision_capability_with_func = VisionCapability(
 vision_capability_with_func.add_to_agent(agent_with_vision_and_func)
 
 user.send(message=message, recipient=agent_with_vision_and_func, request_reply=True)
+```
 
-    User (to Regular LLM Agent with Custom Func and LMM):
+```python
+User (to Regular LLM Agent with Custom Func and LMM):
 
-    Write a poet for my image:
-                            <img https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0>.
+Write a poet for my image:
+                        <img https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0>.
 
-    --------------------------------------------------------------------------------
-    image_url https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0
-    image_data <PIL.Image.Image image mode=RGB size=1920x1080 at 0x7F599DA4CCA0>
-    lmm_client <autogen.oai.client.OpenAIWrapper object at 0x7f599da3ab20>
-    The image is from https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0
-        It is about: Cute brown curly-haired puppy with blue collar indoors.
-        The average color of the image is RGB:
-            (170, 155, 137)
-    Regular LLM Agent with Custom Func and LMM (to User):
+--------------------------------------------------------------------------------
+image_url https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0
+image_data <PIL.Image.Image image mode=RGB size=1920x1080 at 0x7F599DA4CCA0>
+lmm_client <autogen.oai.client.OpenAIWrapper object at 0x7f599da3ab20>
+The image is from https://th.bing.com/th/id/R.422068ce8af4e15b0634fe2540adea7a?rik=y4OcXBE%2fqutDOw&pid=ImgRaw&r=0
+    It is about: Cute brown curly-haired puppy with blue collar indoors.
+    The average color of the image is RGB:
+        (170, 155, 137)
+Regular LLM Agent with Custom Func and LMM (to User):
 
-    Beneath a sky of homely hue,
-    Where RGB blends a gentle stew,
-    Lies a pup of curls and capers,
-    Bound by blue, his neck in drapers.
+Beneath a sky of homely hue,
+Where RGB blends a gentle stew,
+Lies a pup of curls and capers,
+Bound by blue, his neck in drapers.
 
-    Soft in gaze, his eyes implore,
-    Warming hearts down to the core,
-    Coat of brown, with tangles sweet,
-    Whispers of play in each petite feet.
+Soft in gaze, his eyes implore,
+Warming hearts down to the core,
+Coat of brown, with tangles sweet,
+Whispers of play in each petite feet.
 
-    In a world quite vast and wide,
-    Indoors he sits, with pride inside.
-    A silent wish, a breath, a start,
-    Curly companion, a work of art.
+In a world quite vast and wide,
+Indoors he sits, with pride inside.
+A silent wish, a breath, a start,
+Curly companion, a work of art.
 
-    Within the frame, he's captured still,
-    Yet, through the lens, his charm does spill.
-    A tiny heartbeat in the quiet room,
-    His presence banishes all gloom.
+Within the frame, he's captured still,
+Yet, through the lens, his charm does spill.
+A tiny heartbeat in the quiet room,
+His presence banishes all gloom.
 
-    A puppy's joy, in sepia tone,
-    With collar blue, he reigns alone.
-    A picture's worth, this moment's glee,
-    Cute curly friend, for all to see.
+A puppy's joy, in sepia tone,
+With collar blue, he reigns alone.
+A picture's worth, this moment's glee,
+Cute curly friend, for all to see.
 
-    This poem encapsulates the essence of the cute brown curly-haired puppy wearing a blue collar, blending an emotional portrayal with the aesthetic elements you provided.
+This poem encapsulates the essence of the cute brown curly-haired puppy wearing a blue collar, blending an emotional portrayal with the aesthetic elements you provided.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```

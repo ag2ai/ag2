@@ -2,11 +2,38 @@
 title: "Group Chat with Retrieval Augmented Generation"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_groupchat_RAG.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_groupchat_RAG.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen supports conversable agents powered by LLMs, tools, or humans, performing tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
 Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
@@ -14,8 +41,9 @@ pip install pyautogen[retrievechat]
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Set your API Endpoint
 
@@ -36,11 +64,12 @@ print("LLM models: ", [config_list[i]["model"] for i in range(len(config_list))]
     LLM models:  ['gpt-35-turbo', 'gpt4-1106-preview', 'gpt-4o']
 ```
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ## Construct Agents
 
@@ -346,15 +375,6 @@ rag_chat()
 # type exit to terminate the chat
 
     Trying to create collection.
-
-
-    2024-08-14 06:59:09,583 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Use the existing collection `groupchat`.
-
-
-    2024-08-14 06:59:09,902 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
-    2024-08-14 06:59:09,912 - autogen.agentchat.contrib.vectordb.chromadb - INFO - No content embedding is provided. Will use the VectorDB's embedding function to generate the content embedding.
-
-
     VectorDB returns doc_ids:  [['bdfbc921', 'b2c1ec51', '0e57e70f']]
     Adding content of doc bdfbc921 to context.
     Adding content of doc b2c1ec51 to context.
@@ -915,6 +935,12 @@ rag_chat()
     --------------------------------------------------------------------------------
 ````
 
+```python
+2024-08-14 06:59:09,583 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Use the existing collection `groupchat`.
+2024-08-14 06:59:09,902 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
+2024-08-14 06:59:09,912 - autogen.agentchat.contrib.vectordb.chromadb - INFO - No content embedding is provided. Will use the VectorDB's embedding function to generate the content embedding.
+```
+
 ### Call RetrieveUserProxyAgent while init chat with another user proxy agent
 
 Sometimes, there might be a need to use RetrieveUserProxyAgent in group chat without initializing the chat with it. In such scenarios, it becomes essential to create a function that wraps the RAG agents and allows them to be called from other agents.
@@ -945,12 +971,6 @@ call_rag_chat()
 
 
     >>>>>>>> EXECUTING FUNCTION retrieve_content...
-
-
-    2024-08-14 07:09:05,717 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Use the existing collection `groupchat`.
-    2024-08-14 07:09:05,845 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
-
-
     Trying to create collection.
     VectorDB returns doc_ids:  [['bdfbc921', 'b2c1ec51', '0e57e70f']]
     Adding content of doc bdfbc921 to context.
@@ -1308,3 +1328,8 @@ call_rag_chat()
 
     Next speaker: Senior_Python_Engineer
 ````
+
+```python
+2024-08-14 07:09:05,717 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Use the existing collection `groupchat`.
+2024-08-14 07:09:05,845 - autogen.agentchat.contrib.retrieve_user_proxy_agent - INFO - Found 2 chunks.
+```
