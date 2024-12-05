@@ -86,7 +86,6 @@ class ConversableAgent(LLMAgent):
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
         context_variables: Optional[Dict[str, Any]] = None,
-        response_format: Optional[BaseModel] = None,
     ):
         """
         Args:
@@ -141,7 +140,6 @@ class ConversableAgent(LLMAgent):
                 Note: Will maintain a reference to the passed in context variables (enabling a shared context)
                 Only used in Swarms at this stage:
                 https://ag2ai.github.io/ag2/docs/reference/agentchat/contrib/swarm_agent
-            response_format (BaseModel): Used to specify structured response format for the agent. Currently only available for the OpenAI client.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -164,7 +162,6 @@ class ConversableAgent(LLMAgent):
             else (lambda x: content_str(x.get("content")) == "TERMINATE")
         )
         self.silent = silent
-        self._response_format = response_format
         # Take a copy to avoid modifying the given dict
         if isinstance(llm_config, dict):
             try:
@@ -1498,7 +1495,6 @@ class ConversableAgent(LLMAgent):
             messages=all_messages,
             cache=cache,
             agent=self,
-            response_format=self._response_format,
         )
         extracted_response = llm_client.extract_text_or_completion_object(response)[0]
 
