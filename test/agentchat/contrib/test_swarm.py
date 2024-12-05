@@ -79,8 +79,8 @@ def test_on_condition():
 
     # Test with a ConversableAgent
     test_conversable_agent = ConversableAgent("test_conversable_agent")
-    with pytest.raises(AssertionError, match="Agent must be a SwarmAgent"):
-        _ = ON_CONDITION(agent=test_conversable_agent, condition="test condition")
+    with pytest.raises(AssertionError, match="'target' must be a SwarmAgent or a Dict"):
+        _ = ON_CONDITION(target=test_conversable_agent, condition="test condition")
 
 
 def test_receiving_agent():
@@ -245,7 +245,7 @@ def test_on_condition_handoff():
     agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
     agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
 
-    agent1.register_hand_off(hand_to=ON_CONDITION(agent2, "always take me to agent 2"))
+    agent1.register_hand_off(hand_to=ON_CONDITION(target=agent2, condition="always take me to agent 2"))
 
     # Fake generate_oai_reply
     def mock_generate_oai_reply(*args, **kwargs):
@@ -428,8 +428,8 @@ def test_non_swarm_in_hand_off():
     with pytest.raises(AssertionError, match="Invalid After Work value"):
         agent1.register_hand_off(hand_to=AFTER_WORK(bad_agent))
 
-    with pytest.raises(AssertionError, match="Agent must be a SwarmAgent"):
-        agent1.register_hand_off(hand_to=ON_CONDITION(bad_agent, "Testing"))
+    with pytest.raises(AssertionError, match="'target' must be a SwarmAgent or a Dict"):
+        agent1.register_hand_off(hand_to=ON_CONDITION(target=bad_agent, condition="Testing"))
 
     with pytest.raises(ValueError, match="hand_to must be a list of ON_CONDITION or AFTER_WORK"):
         agent1.register_hand_off(0)
