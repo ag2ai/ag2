@@ -51,7 +51,6 @@ def test_structured_output():
     assistant = autogen.AssistantAgent(
         name="Assistant",
         llm_config=llm_config,
-        response_format=ResponseModel,
     )
 
     chat_result = user_proxy.initiate_chat(
