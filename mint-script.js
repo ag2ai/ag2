@@ -1,4 +1,5 @@
 const setTexts = () => {
+  console.log("setTexts");
   const navigationItems = document.getElementById("navigation-items");
 
   const navigationH5 = navigationItems.querySelectorAll("h5");
@@ -8,3 +9,7 @@ const setTexts = () => {
 };
 
 setTexts();
+
+setInterval(() => {
+  setTexts();
+}, 150);
