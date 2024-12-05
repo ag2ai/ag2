@@ -2,6 +2,33 @@
 title: "Nested Chats for Tool Use in Conversational Chess"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_nested_chats_chess.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_nested_chats_chess.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook demonstrates how to create agents that can play chess with each other
 while communicating in natural language.
 The key concept covered in this notebook is the use of nested chats
@@ -323,8 +350,6 @@ chat_result = player_black.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_1.svg)
-
     Board Proxy (to Player White):
 
     Board Proxy (to Player White):
@@ -391,8 +416,6 @@ chat_result = player_black.initiate_chat(
     --------------------------------------------------------------------------------
 
     >>>>>>>> EXECUTING FUNCTION make_move...
-
-![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_3.svg)
 
     Board Proxy (to Player Black):
 
@@ -485,8 +508,6 @@ chat_result = player_black.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_5.svg)
-
     Board Proxy (to Player White):
 
     Board Proxy (to Player White):
@@ -553,8 +574,6 @@ chat_result = player_black.initiate_chat(
     --------------------------------------------------------------------------------
 
     >>>>>>>> EXECUTING FUNCTION make_move...
-
-![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_7.svg)
 
     Board Proxy (to Player Black):
 
@@ -623,8 +642,6 @@ chat_result = player_black.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_9.svg)
-
     Board Proxy (to Player White):
 
     Board Proxy (to Player White):
@@ -691,8 +708,6 @@ chat_result = player_black.initiate_chat(
     --------------------------------------------------------------------------------
 
     >>>>>>>> EXECUTING FUNCTION make_move...
-
-![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_11.svg)
 
     Board Proxy (to Player Black):
 
@@ -787,8 +802,6 @@ chat_result = player_black.initiate_chat(
 
     >>>>>>>> EXECUTING FUNCTION make_move...
 
-![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_13.svg)
-
     Board Proxy (to Player White):
 
     Board Proxy (to Player White):
@@ -811,6 +824,20 @@ chat_result = player_black.initiate_chat(
 
     --------------------------------------------------------------------------------
 ```
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_1.svg)
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_3.svg)
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_5.svg)
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_7.svg)
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_9.svg)
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_11.svg)
+
+![svg](agentchat_nested_chats_chess_files/agentchat_nested_chats_chess_16_13.svg)
 
 In the output above, you can see "Start a new chat" is displayed
 whenever a new nested chat is started between the board proxy agent and a player agent.

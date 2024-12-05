@@ -2,6 +2,33 @@
 title: "OpenAI Assistants in AutoGen"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_oai_assistant_twoagents_basic.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_oai_assistant_twoagents_basic.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook shows a very basic example of the [`GPTAssistantAgent`](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/gpt_assistant_agent.py), which is an experimental AutoGen agent class that leverages the [OpenAI Assistant API](https://platform.openai.com/docs/assistants/overview) for conversational capabilities, working with
 `UserProxyAgent` in AutoGen.
 
@@ -120,18 +147,16 @@ user_proxy.initiate_chat(gpt_assistant, message="Write py code to eval 2 + 2", c
 
 
     --------------------------------------------------------------------------------
+````
 
-
-
-
-
-    ChatResult(chat_id=None, chat_history=[{'content': 'Write py code to eval 2 + 2', 'role': 'assistant'}, {'content': '```python\n# Calculate 2+2 and print the result\nresult = 2 + 2\nprint(result)\n```\n', 'role': 'user'}, {'content': 'exitcode: 0 (execution succeeded)\nCode output: \n4\n', 'role': 'assistant'}, {'content': 'The Python code successfully calculated \\(2 + 2\\) and printed the result, which is \\(4\\).\n\nTERMINATE\n', 'role': 'user'}], summary='The Python code successfully calculated \\(2 + 2\\) and printed the result, which is \\(4\\).\n\n\n', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
-
+````python
+ChatResult(chat_id=None, chat_history=[{'content': 'Write py code to eval 2 + 2', 'role': 'assistant'}, {'content': '```python\n# Calculate 2+2 and print the result\nresult = 2 + 2\nprint(result)\n```\n', 'role': 'user'}, {'content': 'exitcode: 0 (execution succeeded)\nCode output: \n4\n', 'role': 'assistant'}, {'content': 'The Python code successfully calculated \\(2 + 2\\) and printed the result, which is \\(4\\).\n\nTERMINATE\n', 'role': 'user'}], summary='The Python code successfully calculated \\(2 + 2\\) and printed the result, which is \\(4\\).\n\n\n', cost=({'total_cost': 0}, {'total_cost': 0}), human_input=[])
 ````
 
 ```python
 gpt_assistant.delete_assistant()
+```
 
-    Permanently deleting assistant...
-
+```python
+Permanently deleting assistant...
 ```

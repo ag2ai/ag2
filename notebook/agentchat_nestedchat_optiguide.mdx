@@ -2,12 +2,39 @@
 title: "OptiGuide with Nested Chats in AutoGen"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_nestedchat_optiguide.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_nestedchat_optiguide.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This is a nested chat re-implementation of [OptiGuide](https://github.com/microsoft/OptiGuide), which is an LLM-based supply chain optimization framework.
 
 In addition to AutoGen, this notebook also requires eventlet and Gurobipy. The eventlet package is used in this notebook to constrain code execution with a timeout, and the gurobipy package is a mathematical optimization software library for solving mixed-integer linear and quadratic optimization problems.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
@@ -15,8 +42,9 @@ pip install pyautogen eventlet gurobipy
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ```python
 import re
@@ -42,11 +70,12 @@ config_list_gpt4 = autogen.config_list_from_json(
 llm_config = {"config_list": config_list_gpt4}
 ```
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 Intended agent orchestration in OptiGuide.
 
@@ -195,7 +224,7 @@ This cell introduces the Writer and OptiGuide agent classes and their instances 
 
 Each agent is associted with a corresponding system message. Those system messages are adopted directly from [OptiGuide](https://github.com/microsoft/OptiGuide).
 
-````python
+`````python
 # %% System Messages
 WRITER_SYSTEM_MSG = """You are a chatbot to:
 (1) write Python code to answer users questions for supply chain-related coding
@@ -337,10 +366,11 @@ safeguard = autogen.AssistantAgent("safeguard", llm_config=llm_config)
 optiguide_commander = OptiGuide("commander", llm_config=llm_config)
 
 user = autogen.UserProxyAgent(
-"user", max_consecutive_auto_reply=0, human_input_mode="NEVER", code_execution_config=False
+"user", max_consecutive_auto_reply=0,
+human_input_mode="NEVER", code_execution_config=False
 )
 
-````
+`````
 
 ```python
     import time
@@ -368,19 +398,18 @@ user = autogen.UserProxyAgent(
         print("Not solved to optimality. Optimization status:", m.status)
 ```
 
-
 ## Step 2. Orchestrate Nested Chats
 
 These three agent instances are orchestrated in the following way with the `writer` and `safeguard` nested into the `commander` agent as the inner monologue.
 
-This next cell defines critical functions that manage the interactions between the `OptiGuide` system, the user, and the internal logic for processing and responding to queries. Each function plays a specific role in guiding the conversation, handling code generation requests, ensuring code safety, and summarizing outcomes.  This ensures that agents receive clear instructions, immediate feedback, and a secure environment for exploring supply chain optimization problems through code.
+This next cell defines critical functions that manage the interactions between the `OptiGuide` system, the user, and the internal logic for processing and responding to queries. Each function plays a specific role in guiding the conversation, handling code generation requests, ensuring code safety, and summarizing outcomes. This ensures that agents receive clear instructions, immediate feedback, and a secure environment for exploring supply chain optimization problems through code.
 
 Information about the sequence of chats can be specified in the `chat_queue` argument of the `register_nested_chats` function. The following fields are especially useful:
+
 - `recipient` (required) specifies the nested agent;
 - `message` specifies what message to send to the nested recipient agent. In a sequence of nested chats, if the `message` field is not specified, we will use the last message the registering agent received as the initial message in the first chat and will skip any subsequent chat in the queue that does not have the `message` field. You can either provide a string or define a callable that returns a string.
 - `summary_method` decides what to get out of the nested chat. You can either select from existing options including "last_msg" and "reflection_with_llm", or or define your own way on what to get from the nested chat with a Callable.
 - `max_turns` determines how many turns of conversation to have between the concerned agent pairs.
-
 
 ```python
 def writer_init_messsage(recipient, messages, sender, config):
@@ -463,570 +492,574 @@ safeguard_chat_queue = [
 optiguide_commander.register_nested_chats(safeguard_chat_queue, trigger="writer")
 # writer is triggered only when receiving a message from the user
 optiguide_commander.register_nested_chats(writer_chat_queue, trigger="user")
-````
+```
 
 ### Let the agents talk
 
-````python
+```python
 chat_res = user.initiate_chat(
     optiguide_commander, message="What if we prohibit shipping from supplier 1 to roastery 2?"
 )
+```
+
+````python
+user (to commander):
+
+What if we prohibit shipping from supplier 1 to roastery 2?
+
+--------------------------------------------------------------------------------
+
+********************************************************************************
+Start a new chat with the following message:
+You are a chatbot to:
+(1) write Python code to answer users questions for supply chain-related coding
+project;
+(2) explain solutions from a Gurobi/Python solver.
+
+--- SOURCE CODE ---
+import time
+
+from gurobipy import GRB, Model
+
+# Example data
+
+capacity_in_supplier = {'supplier1': 150, 'supplier2': 50, 'supplier3': 100}
+
+shipping_cost_from_supplier_to_roastery = {
+    ('supplier1', 'roastery1'): 5,
+    ('supplier1', 'roastery2'): 4,
+    ('supplier2', 'roastery1'): 6,
+    ('supplier2', 'roastery2'): 3,
+    ('supplier3', 'roastery1'): 2,
+    ('supplier3', 'roastery2'): 7
+}
+
+roasting_cost_light = {'roastery1': 3, 'roastery2': 5}
+
+roasting_cost_dark = {'roastery1': 5, 'roastery2': 6}
+
+shipping_cost_from_roastery_to_cafe = {
+    ('roastery1', 'cafe1'): 5,
+    ('roastery1', 'cafe2'): 3,
+    ('roastery1', 'cafe3'): 6,
+    ('roastery2', 'cafe1'): 4,
+    ('roastery2', 'cafe2'): 5,
+    ('roastery2', 'cafe3'): 2
+}
+
+light_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 30, 'cafe3': 40}
+
+dark_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 20, 'cafe3': 100}
+
+cafes = list(set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()))
+roasteries = list(
+    set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()))
+suppliers = list(
+    set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()))
+
+# Create a new model
+model = Model("coffee_distribution")
+
+# OPTIGUIDE DATA CODE GOES HERE
+
+# Create variables
+x = model.addVars(shipping_cost_from_supplier_to_roastery.keys(),
+                    vtype=GRB.INTEGER,
+                    name="x")
+y_light = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
+                        vtype=GRB.INTEGER,
+                        name="y_light")
+y_dark = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
+                        vtype=GRB.INTEGER,
+                        name="y_dark")
+
+# Set objective
+model.setObjective(
+    sum(x[i] * shipping_cost_from_supplier_to_roastery[i]
+        for i in shipping_cost_from_supplier_to_roastery.keys()) +
+    sum(roasting_cost_light[r] * y_light[r, c] +
+        roasting_cost_dark[r] * y_dark[r, c]
+        for r, c in shipping_cost_from_roastery_to_cafe.keys()) + sum(
+            (y_light[j] + y_dark[j]) * shipping_cost_from_roastery_to_cafe[j]
+            for j in shipping_cost_from_roastery_to_cafe.keys()), GRB.MINIMIZE)
+
+# Conservation of flow constraint
+for r in set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()):
+    model.addConstr(
+        sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
+            if i[1] == r) == sum(
+                y_light[j] + y_dark[j]
+                for j in shipping_cost_from_roastery_to_cafe.keys()
+                if j[0] == r), f"flow_{r}")
 
-    user (to commander):
-
-    What if we prohibit shipping from supplier 1 to roastery 2?
-
-    --------------------------------------------------------------------------------
-
-    ********************************************************************************
-    Start a new chat with the following message:
-    You are a chatbot to:
-    (1) write Python code to answer users questions for supply chain-related coding
-    project;
-    (2) explain solutions from a Gurobi/Python solver.
-
-    --- SOURCE CODE ---
-    import time
-
-    from gurobipy import GRB, Model
-
-    # Example data
-
-    capacity_in_supplier = {'supplier1': 150, 'supplier2': 50, 'supplier3': 100}
-
-    shipping_cost_from_supplier_to_roastery = {
-        ('supplier1', 'roastery1'): 5,
-        ('supplier1', 'roastery2'): 4,
-        ('supplier2', 'roastery1'): 6,
-        ('supplier2', 'roastery2'): 3,
-        ('supplier3', 'roastery1'): 2,
-        ('supplier3', 'roastery2'): 7
-    }
-
-    roasting_cost_light = {'roastery1': 3, 'roastery2': 5}
-
-    roasting_cost_dark = {'roastery1': 5, 'roastery2': 6}
-
-    shipping_cost_from_roastery_to_cafe = {
-        ('roastery1', 'cafe1'): 5,
-        ('roastery1', 'cafe2'): 3,
-        ('roastery1', 'cafe3'): 6,
-        ('roastery2', 'cafe1'): 4,
-        ('roastery2', 'cafe2'): 5,
-        ('roastery2', 'cafe3'): 2
-    }
-
-    light_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 30, 'cafe3': 40}
-
-    dark_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 20, 'cafe3': 100}
-
-    cafes = list(set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()))
-    roasteries = list(
-        set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()))
-    suppliers = list(
-        set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()))
-
-    # Create a new model
-    model = Model("coffee_distribution")
-
-    # OPTIGUIDE DATA CODE GOES HERE
-
-    # Create variables
-    x = model.addVars(shipping_cost_from_supplier_to_roastery.keys(),
-                      vtype=GRB.INTEGER,
-                      name="x")
-    y_light = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
-                            vtype=GRB.INTEGER,
-                            name="y_light")
-    y_dark = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
-                           vtype=GRB.INTEGER,
-                           name="y_dark")
-
-    # Set objective
-    model.setObjective(
-        sum(x[i] * shipping_cost_from_supplier_to_roastery[i]
-            for i in shipping_cost_from_supplier_to_roastery.keys()) +
-        sum(roasting_cost_light[r] * y_light[r, c] +
-            roasting_cost_dark[r] * y_dark[r, c]
-            for r, c in shipping_cost_from_roastery_to_cafe.keys()) + sum(
-                (y_light[j] + y_dark[j]) * shipping_cost_from_roastery_to_cafe[j]
-                for j in shipping_cost_from_roastery_to_cafe.keys()), GRB.MINIMIZE)
+# Add supply constraints
+for s in set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()):
+    model.addConstr(
+        sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
+            if i[0] == s) <= capacity_in_supplier[s], f"supply_{s}")
+
+# Add demand constraints
+for c in set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()):
+    model.addConstr(
+        sum(y_light[j] for j in shipping_cost_from_roastery_to_cafe.keys()
+            if j[1] == c) >= light_coffee_needed_for_cafe[c],
+        f"light_demand_{c}")
+    model.addConstr(
+        sum(y_dark[j] for j in shipping_cost_from_roastery_to_cafe.keys()
+            if j[1] == c) >= dark_coffee_needed_for_cafe[c],
+        f"dark_demand_{c}")
 
-    # Conservation of flow constraint
-    for r in set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()):
-        model.addConstr(
-            sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
-                if i[1] == r) == sum(
-                    y_light[j] + y_dark[j]
-                    for j in shipping_cost_from_roastery_to_cafe.keys()
-                    if j[0] == r), f"flow_{r}")
+# Optimize model
+model.optimize()
+m = model
 
-    # Add supply constraints
-    for s in set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()):
-        model.addConstr(
-            sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
-                if i[0] == s) <= capacity_in_supplier[s], f"supply_{s}")
+# OPTIGUIDE CONSTRAINT CODE GOES HERE
 
-    # Add demand constraints
-    for c in set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()):
-        model.addConstr(
-            sum(y_light[j] for j in shipping_cost_from_roastery_to_cafe.keys()
-                if j[1] == c) >= light_coffee_needed_for_cafe[c],
-            f"light_demand_{c}")
-        model.addConstr(
-            sum(y_dark[j] for j in shipping_cost_from_roastery_to_cafe.keys()
-                if j[1] == c) >= dark_coffee_needed_for_cafe[c],
-            f"dark_demand_{c}")
+# Solve
+m.update()
+model.optimize()
 
-    # Optimize model
-    model.optimize()
-    m = model
+print(time.ctime())
+if m.status == GRB.OPTIMAL:
+    print(f'Optimal cost: {m.objVal}')
+else:
+    print("Not solved to optimality. Optimization status:", m.status)
 
-    # OPTIGUIDE CONSTRAINT CODE GOES HERE
 
-    # Solve
-    m.update()
-    model.optimize()
+--- DOC STR ---
 
-    print(time.ctime())
-    if m.status == GRB.OPTIMAL:
-        print(f'Optimal cost: {m.objVal}')
-    else:
-        print("Not solved to optimality. Optimization status:", m.status)
+---
 
+Here are some example questions and their answers and codes:
+--- EXAMPLES ---
 
-    --- DOC STR ---
+----------
+Question: Why is it not recommended to use just one supplier for roastery 2?
+Answer Code:
+```python
+z = m.addVars(suppliers, vtype=GRB.BINARY, name="z")
+m.addConstr(sum(z[s] for s in suppliers) <= 1, "_")
+for s in suppliers:
+    m.addConstr(x[s,'roastery2'] <= capacity_in_supplier[s] * z[s], "_")
+```
 
-    ---
+----------
+Question: What if there's a 13% jump in the demand for light coffee at cafe1?
+Answer Code:
+```python
+light_coffee_needed_for_cafe["cafe1"] = light_coffee_needed_for_cafe["cafe1"] * (1 + 13/100)
+```
+
+
+---
+
+The execution result of the original source code is below.
+--- Original Result ---
+What if we prohibit shipping from supplier 1 to roastery 2?
+
+Note that your written code will be added to the lines with substring:
+"# OPTIGUIDE *** CODE GOES HERE"
+So, you don't need to write other code, such as m.optimize() or m.update().
+You just need to write code snippet in ```python ...``` block.
+
+Here are the history of discussions:
+[{'content': 'What if we prohibit shipping from supplier 1 to roastery 2?', 'role': 'user'}]
+
+Answer Code:
+
+
+With the following carryover:
+
+
+********************************************************************************
+commander (to writer):
+
+You are a chatbot to:
+(1) write Python code to answer users questions for supply chain-related coding
+project;
+(2) explain solutions from a Gurobi/Python solver.
+
+--- SOURCE CODE ---
+import time
+
+from gurobipy import GRB, Model
+
+# Example data
+
+capacity_in_supplier = {'supplier1': 150, 'supplier2': 50, 'supplier3': 100}
+
+shipping_cost_from_supplier_to_roastery = {
+    ('supplier1', 'roastery1'): 5,
+    ('supplier1', 'roastery2'): 4,
+    ('supplier2', 'roastery1'): 6,
+    ('supplier2', 'roastery2'): 3,
+    ('supplier3', 'roastery1'): 2,
+    ('supplier3', 'roastery2'): 7
+}
+
+roasting_cost_light = {'roastery1': 3, 'roastery2': 5}
+
+roasting_cost_dark = {'roastery1': 5, 'roastery2': 6}
+
+shipping_cost_from_roastery_to_cafe = {
+    ('roastery1', 'cafe1'): 5,
+    ('roastery1', 'cafe2'): 3,
+    ('roastery1', 'cafe3'): 6,
+    ('roastery2', 'cafe1'): 4,
+    ('roastery2', 'cafe2'): 5,
+    ('roastery2', 'cafe3'): 2
+}
+
+light_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 30, 'cafe3': 40}
+
+dark_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 20, 'cafe3': 100}
+
+cafes = list(set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()))
+roasteries = list(
+    set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()))
+suppliers = list(
+    set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()))
+
+# Create a new model
+model = Model("coffee_distribution")
+
+# OPTIGUIDE DATA CODE GOES HERE
+
+# Create variables
+x = model.addVars(shipping_cost_from_supplier_to_roastery.keys(),
+                    vtype=GRB.INTEGER,
+                    name="x")
+y_light = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
+                        vtype=GRB.INTEGER,
+                        name="y_light")
+y_dark = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
+                        vtype=GRB.INTEGER,
+                        name="y_dark")
+
+# Set objective
+model.setObjective(
+    sum(x[i] * shipping_cost_from_supplier_to_roastery[i]
+        for i in shipping_cost_from_supplier_to_roastery.keys()) +
+    sum(roasting_cost_light[r] * y_light[r, c] +
+        roasting_cost_dark[r] * y_dark[r, c]
+        for r, c in shipping_cost_from_roastery_to_cafe.keys()) + sum(
+            (y_light[j] + y_dark[j]) * shipping_cost_from_roastery_to_cafe[j]
+            for j in shipping_cost_from_roastery_to_cafe.keys()), GRB.MINIMIZE)
 
-    Here are some example questions and their answers and codes:
-    --- EXAMPLES ---
+# Conservation of flow constraint
+for r in set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()):
+    model.addConstr(
+        sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
+            if i[1] == r) == sum(
+                y_light[j] + y_dark[j]
+                for j in shipping_cost_from_roastery_to_cafe.keys()
+                if j[0] == r), f"flow_{r}")
 
-    ----------
-    Question: Why is it not recommended to use just one supplier for roastery 2?
-    Answer Code:
-    ```python
-    z = m.addVars(suppliers, vtype=GRB.BINARY, name="z")
-    m.addConstr(sum(z[s] for s in suppliers) <= 1, "_")
-    for s in suppliers:
-        m.addConstr(x[s,'roastery2'] <= capacity_in_supplier[s] * z[s], "_")
-    ```
+# Add supply constraints
+for s in set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()):
+    model.addConstr(
+        sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
+            if i[0] == s) <= capacity_in_supplier[s], f"supply_{s}")
 
-    ----------
-    Question: What if there's a 13% jump in the demand for light coffee at cafe1?
-    Answer Code:
-    ```python
-    light_coffee_needed_for_cafe["cafe1"] = light_coffee_needed_for_cafe["cafe1"] * (1 + 13/100)
-    ```
+# Add demand constraints
+for c in set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()):
+    model.addConstr(
+        sum(y_light[j] for j in shipping_cost_from_roastery_to_cafe.keys()
+            if j[1] == c) >= light_coffee_needed_for_cafe[c],
+        f"light_demand_{c}")
+    model.addConstr(
+        sum(y_dark[j] for j in shipping_cost_from_roastery_to_cafe.keys()
+            if j[1] == c) >= dark_coffee_needed_for_cafe[c],
+        f"dark_demand_{c}")
 
+# Optimize model
+model.optimize()
+m = model
 
-    ---
-
-    The execution result of the original source code is below.
-    --- Original Result ---
-    What if we prohibit shipping from supplier 1 to roastery 2?
-
-    Note that your written code will be added to the lines with substring:
-    "# OPTIGUIDE *** CODE GOES HERE"
-    So, you don't need to write other code, such as m.optimize() or m.update().
-    You just need to write code snippet in ```python ...``` block.
-
-    Here are the history of discussions:
-    [{'content': 'What if we prohibit shipping from supplier 1 to roastery 2?', 'role': 'user'}]
-
-    Answer Code:
-
-
-    With the following carryover:
-
-
-    ********************************************************************************
-    commander (to writer):
-
-    You are a chatbot to:
-    (1) write Python code to answer users questions for supply chain-related coding
-    project;
-    (2) explain solutions from a Gurobi/Python solver.
-
-    --- SOURCE CODE ---
-    import time
-
-    from gurobipy import GRB, Model
-
-    # Example data
-
-    capacity_in_supplier = {'supplier1': 150, 'supplier2': 50, 'supplier3': 100}
-
-    shipping_cost_from_supplier_to_roastery = {
-        ('supplier1', 'roastery1'): 5,
-        ('supplier1', 'roastery2'): 4,
-        ('supplier2', 'roastery1'): 6,
-        ('supplier2', 'roastery2'): 3,
-        ('supplier3', 'roastery1'): 2,
-        ('supplier3', 'roastery2'): 7
-    }
-
-    roasting_cost_light = {'roastery1': 3, 'roastery2': 5}
-
-    roasting_cost_dark = {'roastery1': 5, 'roastery2': 6}
-
-    shipping_cost_from_roastery_to_cafe = {
-        ('roastery1', 'cafe1'): 5,
-        ('roastery1', 'cafe2'): 3,
-        ('roastery1', 'cafe3'): 6,
-        ('roastery2', 'cafe1'): 4,
-        ('roastery2', 'cafe2'): 5,
-        ('roastery2', 'cafe3'): 2
-    }
-
-    light_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 30, 'cafe3': 40}
-
-    dark_coffee_needed_for_cafe = {'cafe1': 20, 'cafe2': 20, 'cafe3': 100}
-
-    cafes = list(set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()))
-    roasteries = list(
-        set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()))
-    suppliers = list(
-        set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()))
-
-    # Create a new model
-    model = Model("coffee_distribution")
-
-    # OPTIGUIDE DATA CODE GOES HERE
-
-    # Create variables
-    x = model.addVars(shipping_cost_from_supplier_to_roastery.keys(),
-                      vtype=GRB.INTEGER,
-                      name="x")
-    y_light = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
-                            vtype=GRB.INTEGER,
-                            name="y_light")
-    y_dark = model.addVars(shipping_cost_from_roastery_to_cafe.keys(),
-                           vtype=GRB.INTEGER,
-                           name="y_dark")
-
-    # Set objective
-    model.setObjective(
-        sum(x[i] * shipping_cost_from_supplier_to_roastery[i]
-            for i in shipping_cost_from_supplier_to_roastery.keys()) +
-        sum(roasting_cost_light[r] * y_light[r, c] +
-            roasting_cost_dark[r] * y_dark[r, c]
-            for r, c in shipping_cost_from_roastery_to_cafe.keys()) + sum(
-                (y_light[j] + y_dark[j]) * shipping_cost_from_roastery_to_cafe[j]
-                for j in shipping_cost_from_roastery_to_cafe.keys()), GRB.MINIMIZE)
+# OPTIGUIDE CONSTRAINT CODE GOES HERE
 
-    # Conservation of flow constraint
-    for r in set(i[1] for i in shipping_cost_from_supplier_to_roastery.keys()):
-        model.addConstr(
-            sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
-                if i[1] == r) == sum(
-                    y_light[j] + y_dark[j]
-                    for j in shipping_cost_from_roastery_to_cafe.keys()
-                    if j[0] == r), f"flow_{r}")
+# Solve
+m.update()
+model.optimize()
 
-    # Add supply constraints
-    for s in set(i[0] for i in shipping_cost_from_supplier_to_roastery.keys()):
-        model.addConstr(
-            sum(x[i] for i in shipping_cost_from_supplier_to_roastery.keys()
-                if i[0] == s) <= capacity_in_supplier[s], f"supply_{s}")
+print(time.ctime())
+if m.status == GRB.OPTIMAL:
+    print(f'Optimal cost: {m.objVal}')
+else:
+    print("Not solved to optimality. Optimization status:", m.status)
 
-    # Add demand constraints
-    for c in set(i[1] for i in shipping_cost_from_roastery_to_cafe.keys()):
-        model.addConstr(
-            sum(y_light[j] for j in shipping_cost_from_roastery_to_cafe.keys()
-                if j[1] == c) >= light_coffee_needed_for_cafe[c],
-            f"light_demand_{c}")
-        model.addConstr(
-            sum(y_dark[j] for j in shipping_cost_from_roastery_to_cafe.keys()
-                if j[1] == c) >= dark_coffee_needed_for_cafe[c],
-            f"dark_demand_{c}")
 
-    # Optimize model
-    model.optimize()
-    m = model
+--- DOC STR ---
 
-    # OPTIGUIDE CONSTRAINT CODE GOES HERE
+---
 
-    # Solve
-    m.update()
-    model.optimize()
+Here are some example questions and their answers and codes:
+--- EXAMPLES ---
 
-    print(time.ctime())
-    if m.status == GRB.OPTIMAL:
-        print(f'Optimal cost: {m.objVal}')
-    else:
-        print("Not solved to optimality. Optimization status:", m.status)
+----------
+Question: Why is it not recommended to use just one supplier for roastery 2?
+Answer Code:
+```python
+z = m.addVars(suppliers, vtype=GRB.BINARY, name="z")
+m.addConstr(sum(z[s] for s in suppliers) <= 1, "_")
+for s in suppliers:
+    m.addConstr(x[s,'roastery2'] <= capacity_in_supplier[s] * z[s], "_")
+```
 
+----------
+Question: What if there's a 13% jump in the demand for light coffee at cafe1?
+Answer Code:
+```python
+light_coffee_needed_for_cafe["cafe1"] = light_coffee_needed_for_cafe["cafe1"] * (1 + 13/100)
+```
 
-    --- DOC STR ---
 
-    ---
+---
 
-    Here are some example questions and their answers and codes:
-    --- EXAMPLES ---
+The execution result of the original source code is below.
+--- Original Result ---
+What if we prohibit shipping from supplier 1 to roastery 2?
 
-    ----------
-    Question: Why is it not recommended to use just one supplier for roastery 2?
-    Answer Code:
-    ```python
-    z = m.addVars(suppliers, vtype=GRB.BINARY, name="z")
-    m.addConstr(sum(z[s] for s in suppliers) <= 1, "_")
-    for s in suppliers:
-        m.addConstr(x[s,'roastery2'] <= capacity_in_supplier[s] * z[s], "_")
-    ```
+Note that your written code will be added to the lines with substring:
+"# OPTIGUIDE *** CODE GOES HERE"
+So, you don't need to write other code, such as m.optimize() or m.update().
+You just need to write code snippet in ```python ...``` block.
 
-    ----------
-    Question: What if there's a 13% jump in the demand for light coffee at cafe1?
-    Answer Code:
-    ```python
-    light_coffee_needed_for_cafe["cafe1"] = light_coffee_needed_for_cafe["cafe1"] * (1 + 13/100)
-    ```
+Here are the history of discussions:
+[{'content': 'What if we prohibit shipping from supplier 1 to roastery 2?', 'role': 'user'}]
 
+Answer Code:
 
-    ---
 
-    The execution result of the original source code is below.
-    --- Original Result ---
-    What if we prohibit shipping from supplier 1 to roastery 2?
+--------------------------------------------------------------------------------
+writer (to commander):
 
-    Note that your written code will be added to the lines with substring:
-    "# OPTIGUIDE *** CODE GOES HERE"
-    So, you don't need to write other code, such as m.optimize() or m.update().
-    You just need to write code snippet in ```python ...``` block.
+To answer the user's question regarding the prohibition of shipping from supplier 1 to roastery 2, we need to add a constraint to the optimization model that sets the shipping quantity `x` for the (`supplier1`, `roastery2`) route to zero. This will effectively disallow any shipping from supplier 1 to roastery 2. The code to do this should be placed in the section of the source code that is indicated by the comment "# OPTIGUIDE DATA CODE GOES HERE".
 
-    Here are the history of discussions:
-    [{'content': 'What if we prohibit shipping from supplier 1 to roastery 2?', 'role': 'user'}]
+Here's the Python code snippet to add this constraint:
 
-    Answer Code:
+```python
+# filename: supply_chain_code.py
+model.addConstr(x[('supplier1', 'roastery2')] == 0, "prohibit_supplier1_roastery2")
+```
 
+Adding this constraint will prevent the optimizer from selecting any transport from `supplier1` to `roastery2`, which is what the prohibition is intended to achieve.
 
-    --------------------------------------------------------------------------------
-    writer (to commander):
+Instruct the user to add this code snippet in the appropriate place in the source code that they have provided. After adding this code, the `m.optimize()` function will solve the modified version of the problem that includes the new constraint.
 
-    To answer the user's question regarding the prohibition of shipping from supplier 1 to roastery 2, we need to add a constraint to the optimization model that sets the shipping quantity `x` for the (`supplier1`, `roastery2`) route to zero. This will effectively disallow any shipping from supplier 1 to roastery 2. The code to do this should be placed in the section of the source code that is indicated by the comment "# OPTIGUIDE DATA CODE GOES HERE".
+--------------------------------------------------------------------------------
 
-    Here's the Python code snippet to add this constraint:
+********************************************************************************
+Start a new chat with the following message:
 
-    ```python
-    # filename: supply_chain_code.py
-    model.addConstr(x[('supplier1', 'roastery2')] == 0, "prohibit_supplier1_roastery2")
-    ```
+Given the source code:
+# filename: supply_chain_code.py
+model.addConstr(x[('supplier1', 'roastery2')] == 0, "prohibit_supplier1_roastery2")
 
-    Adding this constraint will prevent the optimizer from selecting any transport from `supplier1` to `roastery2`, which is what the prohibition is intended to achieve.
+Is the source code safe (not malicious code to break security
+and privacy) to run?
+Answer only one word.
+If not safe, answer `DANGER`; else, answer `SAFE`.
 
-    Instruct the user to add this code snippet in the appropriate place in the source code that they have provided. After adding this code, the `m.optimize()` function will solve the modified version of the problem that includes the new constraint.
 
-    --------------------------------------------------------------------------------
+With the following carryover:
 
-    ********************************************************************************
-    Start a new chat with the following message:
 
-    Given the source code:
-    # filename: supply_chain_code.py
-    model.addConstr(x[('supplier1', 'roastery2')] == 0, "prohibit_supplier1_roastery2")
+********************************************************************************
+commander (to safeguard):
 
-    Is the source code safe (not malicious code to break security
-    and privacy) to run?
-    Answer only one word.
-    If not safe, answer `DANGER`; else, answer `SAFE`.
 
+Given the source code:
+# filename: supply_chain_code.py
+model.addConstr(x[('supplier1', 'roastery2')] == 0, "prohibit_supplier1_roastery2")
 
-    With the following carryover:
+Is the source code safe (not malicious code to break security
+and privacy) to run?
+Answer only one word.
+If not safe, answer `DANGER`; else, answer `SAFE`.
 
 
-    ********************************************************************************
-    commander (to safeguard):
+--------------------------------------------------------------------------------
+safeguard (to commander):
 
+SAFE
 
-    Given the source code:
-    # filename: supply_chain_code.py
-    model.addConstr(x[('supplier1', 'roastery2')] == 0, "prohibit_supplier1_roastery2")
+--------------------------------------------------------------------------------
+Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
 
-    Is the source code safe (not malicious code to break security
-    and privacy) to run?
-    Answer only one word.
-    If not safe, answer `DANGER`; else, answer `SAFE`.
+CPU model: Apple M3 Max
+Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
 
+Optimize a model with 11 rows, 18 columns and 36 nonzeros
+Model fingerprint: 0x8aa2c280
+Variable types: 0 continuous, 18 integer (0 binary)
+Coefficient statistics:
+    Matrix range     [1e+00, 1e+00]
+    Objective range  [2e+00, 1e+01]
+    Bounds range     [0e+00, 0e+00]
+    RHS range        [2e+01, 2e+02]
+Found heuristic solution: objective 2900.0000000
+Presolve time: 0.00s
+Presolved: 11 rows, 18 columns, 36 nonzeros
+Variable types: 0 continuous, 18 integer (0 binary)
+Found heuristic solution: objective 2896.0000000
 
-    --------------------------------------------------------------------------------
-    safeguard (to commander):
+Root relaxation: objective 2.470000e+03, 11 iterations, 0.00 seconds (0.00 work units)
 
-    SAFE
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+    Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
 
-    --------------------------------------------------------------------------------
-    Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
+*    0     0               0    2470.0000000 2470.00000  0.00%     -    0s
 
-    CPU model: Apple M3 Max
-    Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
+Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
+Thread count was 14 (of 14 available processors)
 
-    Optimize a model with 11 rows, 18 columns and 36 nonzeros
-    Model fingerprint: 0x8aa2c280
-    Variable types: 0 continuous, 18 integer (0 binary)
-    Coefficient statistics:
-      Matrix range     [1e+00, 1e+00]
-      Objective range  [2e+00, 1e+01]
-      Bounds range     [0e+00, 0e+00]
-      RHS range        [2e+01, 2e+02]
-    Found heuristic solution: objective 2900.0000000
-    Presolve time: 0.00s
-    Presolved: 11 rows, 18 columns, 36 nonzeros
-    Variable types: 0 continuous, 18 integer (0 binary)
-    Found heuristic solution: objective 2896.0000000
+Solution count 3: 2470 2896 2900
 
-    Root relaxation: objective 2.470000e+03, 11 iterations, 0.00 seconds (0.00 work units)
+Optimal solution found (tolerance 1.00e-04)
+Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
+Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
 
-        Nodes    |    Current Node    |     Objective Bounds      |     Work
-     Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+CPU model: Apple M3 Max
+Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
 
-    *    0     0               0    2470.0000000 2470.00000  0.00%     -    0s
+Optimize a model with 11 rows, 18 columns and 36 nonzeros
+Model fingerprint: 0x8aa2c280
+Variable types: 0 continuous, 18 integer (0 binary)
+Coefficient statistics:
+    Matrix range     [1e+00, 1e+00]
+    Objective range  [2e+00, 1e+01]
+    Bounds range     [0e+00, 0e+00]
+    RHS range        [2e+01, 2e+02]
+Found heuristic solution: objective 2900.0000000
+Presolve time: 0.00s
+Presolved: 11 rows, 18 columns, 36 nonzeros
+Variable types: 0 continuous, 18 integer (0 binary)
+Found heuristic solution: objective 2896.0000000
 
-    Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
-    Thread count was 14 (of 14 available processors)
+Root relaxation: objective 2.470000e+03, 11 iterations, 0.00 seconds (0.00 work units)
 
-    Solution count 3: 2470 2896 2900
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+    Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
 
-    Optimal solution found (tolerance 1.00e-04)
-    Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
-    Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
+*    0     0               0    2470.0000000 2470.00000  0.00%     -    0s
 
-    CPU model: Apple M3 Max
-    Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
+Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
+Thread count was 14 (of 14 available processors)
 
-    Optimize a model with 11 rows, 18 columns and 36 nonzeros
-    Model fingerprint: 0x8aa2c280
-    Variable types: 0 continuous, 18 integer (0 binary)
-    Coefficient statistics:
-      Matrix range     [1e+00, 1e+00]
-      Objective range  [2e+00, 1e+01]
-      Bounds range     [0e+00, 0e+00]
-      RHS range        [2e+01, 2e+02]
-    Found heuristic solution: objective 2900.0000000
-    Presolve time: 0.00s
-    Presolved: 11 rows, 18 columns, 36 nonzeros
-    Variable types: 0 continuous, 18 integer (0 binary)
-    Found heuristic solution: objective 2896.0000000
+Solution count 3: 2470 2896 2900
 
-    Root relaxation: objective 2.470000e+03, 11 iterations, 0.00 seconds (0.00 work units)
+Optimal solution found (tolerance 1.00e-04)
+Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
+Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
 
-        Nodes    |    Current Node    |     Objective Bounds      |     Work
-     Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+CPU model: Apple M3 Max
+Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
 
-    *    0     0               0    2470.0000000 2470.00000  0.00%     -    0s
+Optimize a model with 11 rows, 18 columns and 36 nonzeros
+Model fingerprint: 0x8aa2c280
+Variable types: 0 continuous, 18 integer (0 binary)
+Coefficient statistics:
+    Matrix range     [1e+00, 1e+00]
+    Objective range  [2e+00, 1e+01]
+    Bounds range     [0e+00, 0e+00]
+    RHS range        [2e+01, 2e+02]
+Presolved: 11 rows, 18 columns, 36 nonzeros
 
-    Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
-    Thread count was 14 (of 14 available processors)
+Continuing optimization...
 
-    Solution count 3: 2470 2896 2900
 
-    Optimal solution found (tolerance 1.00e-04)
-    Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
-    Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
+Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
+Thread count was 14 (of 14 available processors)
 
-    CPU model: Apple M3 Max
-    Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
+Solution count 3: 2470 2896 2900
 
-    Optimize a model with 11 rows, 18 columns and 36 nonzeros
-    Model fingerprint: 0x8aa2c280
-    Variable types: 0 continuous, 18 integer (0 binary)
-    Coefficient statistics:
-      Matrix range     [1e+00, 1e+00]
-      Objective range  [2e+00, 1e+01]
-      Bounds range     [0e+00, 0e+00]
-      RHS range        [2e+01, 2e+02]
-    Presolved: 11 rows, 18 columns, 36 nonzeros
+Optimal solution found (tolerance 1.00e-04)
+Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
+Sun Feb 25 18:56:45 2024
+Optimal cost: 2470.0
+Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
 
-    Continuing optimization...
+CPU model: Apple M3 Max
+Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
 
+Optimize a model with 11 rows, 18 columns and 36 nonzeros
+Model fingerprint: 0x8aa2c280
+Variable types: 0 continuous, 18 integer (0 binary)
+Coefficient statistics:
+    Matrix range     [1e+00, 1e+00]
+    Objective range  [2e+00, 1e+01]
+    Bounds range     [0e+00, 0e+00]
+    RHS range        [2e+01, 2e+02]
+Presolved: 11 rows, 18 columns, 36 nonzeros
 
-    Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
-    Thread count was 14 (of 14 available processors)
+Continuing optimization...
 
-    Solution count 3: 2470 2896 2900
 
-    Optimal solution found (tolerance 1.00e-04)
-    Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
-    Sun Feb 25 18:56:45 2024
-    Optimal cost: 2470.0
-    Gurobi Optimizer version 11.0.0 build v11.0.0rc2 (mac64[arm] - Darwin 23.2.0 23C71)
+Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
+Thread count was 14 (of 14 available processors)
 
-    CPU model: Apple M3 Max
-    Thread count: 14 physical cores, 14 logical processors, using up to 14 threads
+Solution count 3: 2470 2896 2900
 
-    Optimize a model with 11 rows, 18 columns and 36 nonzeros
-    Model fingerprint: 0x8aa2c280
-    Variable types: 0 continuous, 18 integer (0 binary)
-    Coefficient statistics:
-      Matrix range     [1e+00, 1e+00]
-      Objective range  [2e+00, 1e+01]
-      Bounds range     [0e+00, 0e+00]
-      RHS range        [2e+01, 2e+02]
-    Presolved: 11 rows, 18 columns, 36 nonzeros
+Optimal solution found (tolerance 1.00e-04)
+Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
+Sun Feb 25 18:56:45 2024
+Optimal cost: 2470.0
+Optimization problem solved. The objective value is: 2470.0
+commander (to writer):
 
-    Continuing optimization...
+Here are the execution results: Optimization problem solved. The objective value is: 2470.0
 
+Can you organize these information to a human readable answer?
+Remember to compare the new results to the original results you obtained in the
+beginning.
 
-    Explored 1 nodes (11 simplex iterations) in 0.00 seconds (0.00 work units)
-    Thread count was 14 (of 14 available processors)
+--- HUMAN READABLE ANSWER ---
 
-    Solution count 3: 2470 2896 2900
 
-    Optimal solution found (tolerance 1.00e-04)
-    Best objective 2.470000000000e+03, best bound 2.470000000000e+03, gap 0.0000%
-    Sun Feb 25 18:56:45 2024
-    Optimal cost: 2470.0
-    Optimization problem solved. The objective value is: 2470.0
-    commander (to writer):
+--------------------------------------------------------------------------------
+writer (to commander):
 
-    Here are the execution results: Optimization problem solved. The objective value is: 2470.0
+Certainly! Here's a human-readable answer:
 
-    Can you organize these information to a human readable answer?
-    Remember to compare the new results to the original results you obtained in the
-    beginning.
+After integrating the constraint to prohibit shipping from supplier 1 to roastery 2, the optimization problem was solved with a total cost of $2470.0.
 
-    --- HUMAN READABLE ANSWER ---
+To provide context to this result, we need to compare it with the original total cost prior to the implementation of the new constraint. However, the original total cost was not provided in the information given to me. If the original total cost was known, we would compare the two to understand the financial impact of this constraint on the supply chain.
 
+If prohibiting shipping from supplier 1 to roastery 2 results in a higher cost than the original scenario, it suggests that the previous ability to ship from supplier 1 to roastery 2 had been cost-effective and beneficial for minimizing overall expenses. On the other hand, if the cost is the same or lower, then shipping from supplier 1 to roastery 2 may not have been crucial for the cost optimization of the supply chain, or other routes may have been able to compensate effectively for this restriction.
 
-    --------------------------------------------------------------------------------
-    writer (to commander):
+Without the original cost for comparison, we can't conclusively say how the prohibition impacted the cost of operation. But the new total cost of $2470.0 will be the baseline for future changes or optimizations done following this new restriction.
 
-    Certainly! Here's a human-readable answer:
+--------------------------------------------------------------------------------
+commander (to user):
 
-    After integrating the constraint to prohibit shipping from supplier 1 to roastery 2, the optimization problem was solved with a total cost of $2470.0.
+Certainly! Here's a human-readable answer:
 
-    To provide context to this result, we need to compare it with the original total cost prior to the implementation of the new constraint. However, the original total cost was not provided in the information given to me. If the original total cost was known, we would compare the two to understand the financial impact of this constraint on the supply chain.
+After integrating the constraint to prohibit shipping from supplier 1 to roastery 2, the optimization problem was solved with a total cost of $2470.0.
 
-    If prohibiting shipping from supplier 1 to roastery 2 results in a higher cost than the original scenario, it suggests that the previous ability to ship from supplier 1 to roastery 2 had been cost-effective and beneficial for minimizing overall expenses. On the other hand, if the cost is the same or lower, then shipping from supplier 1 to roastery 2 may not have been crucial for the cost optimization of the supply chain, or other routes may have been able to compensate effectively for this restriction.
+To provide context to this result, we need to compare it with the original total cost prior to the implementation of the new constraint. However, the original total cost was not provided in the information given to me. If the original total cost was known, we would compare the two to understand the financial impact of this constraint on the supply chain.
 
-    Without the original cost for comparison, we can't conclusively say how the prohibition impacted the cost of operation. But the new total cost of $2470.0 will be the baseline for future changes or optimizations done following this new restriction.
+If prohibiting shipping from supplier 1 to roastery 2 results in a higher cost than the original scenario, it suggests that the previous ability to ship from supplier 1 to roastery 2 had been cost-effective and beneficial for minimizing overall expenses. On the other hand, if the cost is the same or lower, then shipping from supplier 1 to roastery 2 may not have been crucial for the cost optimization of the supply chain, or other routes may have been able to compensate effectively for this restriction.
 
-    --------------------------------------------------------------------------------
-    commander (to user):
+Without the original cost for comparison, we can't conclusively say how the prohibition impacted the cost of operation. But the new total cost of $2470.0 will be the baseline for future changes or optimizations done following this new restriction.
 
-    Certainly! Here's a human-readable answer:
-
-    After integrating the constraint to prohibit shipping from supplier 1 to roastery 2, the optimization problem was solved with a total cost of $2470.0.
-
-    To provide context to this result, we need to compare it with the original total cost prior to the implementation of the new constraint. However, the original total cost was not provided in the information given to me. If the original total cost was known, we would compare the two to understand the financial impact of this constraint on the supply chain.
-
-    If prohibiting shipping from supplier 1 to roastery 2 results in a higher cost than the original scenario, it suggests that the previous ability to ship from supplier 1 to roastery 2 had been cost-effective and beneficial for minimizing overall expenses. On the other hand, if the cost is the same or lower, then shipping from supplier 1 to roastery 2 may not have been crucial for the cost optimization of the supply chain, or other routes may have been able to compensate effectively for this restriction.
-
-    Without the original cost for comparison, we can't conclusively say how the prohibition impacted the cost of operation. But the new total cost of $2470.0 will be the baseline for future changes or optimizations done following this new restriction.
-
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ````
 
 ### Get Final Results from the Returned ChatResult Object
 
 ```python
 print(chat_res.summary)
+```
 
-    Certainly! Here's a human-readable answer:
+```python
+Certainly! Here's a human-readable answer:
 
-    After integrating the constraint to prohibit shipping from supplier 1 to roastery 2, the optimization problem was solved with a total cost of $2470.0.
+After integrating the constraint to prohibit shipping from supplier 1 to roastery 2, the optimization problem was solved with a total cost of $2470.0.
 
-    To provide context to this result, we need to compare it with the original total cost prior to the implementation of the new constraint. However, the original total cost was not provided in the information given to me. If the original total cost was known, we would compare the two to understand the financial impact of this constraint on the supply chain.
+To provide context to this result, we need to compare it with the original total cost prior to the implementation of the new constraint. However, the original total cost was not provided in the information given to me. If the original total cost was known, we would compare the two to understand the financial impact of this constraint on the supply chain.
 
-    If prohibiting shipping from supplier 1 to roastery 2 results in a higher cost than the original scenario, it suggests that the previous ability to ship from supplier 1 to roastery 2 had been cost-effective and beneficial for minimizing overall expenses. On the other hand, if the cost is the same or lower, then shipping from supplier 1 to roastery 2 may not have been crucial for the cost optimization of the supply chain, or other routes may have been able to compensate effectively for this restriction.
+If prohibiting shipping from supplier 1 to roastery 2 results in a higher cost than the original scenario, it suggests that the previous ability to ship from supplier 1 to roastery 2 had been cost-effective and beneficial for minimizing overall expenses. On the other hand, if the cost is the same or lower, then shipping from supplier 1 to roastery 2 may not have been crucial for the cost optimization of the supply chain, or other routes may have been able to compensate effectively for this restriction.
 
-    Without the original cost for comparison, we can't conclusively say how the prohibition impacted the cost of operation. But the new total cost of $2470.0 will be the baseline for future changes or optimizations done following this new restriction.
+Without the original cost for comparison, we can't conclusively say how the prohibition impacted the cost of operation. But the new total cost of $2470.0 will be the baseline for future changes or optimizations done following this new restriction.
 ```

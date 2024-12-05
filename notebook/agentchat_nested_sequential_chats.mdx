@@ -2,10 +2,37 @@
 title: "Solving Complex Tasks with A Sequence of Nested Chats"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_nested_sequential_chats.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_nested_sequential_chats.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook shows how you can leverage **nested chats** to solve complex task with AutoGen. Nested chats is a sequence of chats created by a receiver agent after receiving a message from a sender agent and finished before the receiver agent replies to this message. Nested chats allow AutoGen agents to use other agents as their inner monologue to accomplish tasks. This abstraction is powerful as it allows you to compose agents in rich ways. This notebook shows how you can nest a pretty complex sequence of chats among _inner_ agents inside an _outer_ agent.
 
-:::info Requirements
-
+<div class="info">
+<Info>
 Install `autogen`:
 
 ```bash
@@ -14,7 +41,8 @@ pip install autogen
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
 
-:::
+</Info>
+</div>
 
 ```python
 import autogen
@@ -23,11 +51,13 @@ config_list = autogen.config_list_from_json(env_or_file="OAI_CONFIG_LIST")
 llm_config = {"config_list": config_list}
 ```
 
-:::tip
+<div class="tip">
+<Tip>
 
 Learn more about the various ways to configure LLM endpoints [here](/website/docs/topics/llm_configuration).
 
-:::
+</Tip>
+</div>
 
 ### Example Task
 
@@ -263,11 +293,6 @@ res = user.initiate_chats(
     --------------------------------------------------------------------------------
 
     >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
-
-
-    /Users/qingyunwu/Documents/github/autogen/autogen/agentchat/chat.py:46: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
-      warnings.warn(
-
 
     Inner-code-interpreter (to chat_manager):
 
@@ -735,3 +760,8 @@ res = user.initiate_chats(
 
     --------------------------------------------------------------------------------
 ````
+
+```python
+/Users/qingyunwu/Documents/github/autogen/autogen/agentchat/chat.py:46: UserWarning: Repetitive recipients detected: The chat history will be cleared by default if a recipient appears more than once. To retain the chat history, please set 'clear_history=False' in the configuration of the repeating agent.
+    warnings.warn(
+```

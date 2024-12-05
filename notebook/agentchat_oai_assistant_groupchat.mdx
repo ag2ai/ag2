@@ -2,6 +2,33 @@
 title: "Auto Generated Agent Chat: Group Chat with GPTAssistantAgent"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_oai_assistant_groupchat.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_oai_assistant_groupchat.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen offers conversable agents powered by LLM, tool or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
 Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
 
@@ -11,16 +38,17 @@ In this notebook, we demonstrate how to get multiple `GPTAssistantAgent` convers
 
 AutoGen requires `Python>=3.8`. To run this notebook example, please install:
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install `autogen`:
 ```bash
 pip install autogen
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Set your API Endpoint
 
@@ -39,11 +67,12 @@ config_list_gpt4 = autogen.config_list_from_json(
 )
 ```
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ## Define GPTAssistantAgent and GroupChat
 
@@ -82,8 +111,10 @@ groupchat = autogen.GroupChat(agents=[user_proxy, coder, analyst], messages=[], 
 manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 ```
 
-    assistant_id was None, creating a new assistant
-    assistant_id was None, creating a new assistant
+```python
+assistant_id was None, creating a new assistant
+assistant_id was None, creating a new assistant
+```
 
 ## Initiate Group Chat
 
@@ -210,10 +241,6 @@ user_proxy.initiate_chat(
 
     >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
 
-
-    execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
-
-
     User_proxy (to chat_manager):
 
     exitcode: 0 (execution succeeded)
@@ -326,10 +353,6 @@ user_proxy.initiate_chat(
 
     >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
 
-
-    execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
-
-
     User_proxy (to chat_manager):
 
     exitcode: 0 (execution succeeded)
@@ -405,3 +428,8 @@ user_proxy.initiate_chat(
 
     --------------------------------------------------------------------------------
 ````
+
+```python
+execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
+execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
+```
