@@ -488,7 +488,6 @@ class OpenAIWrapper:
         self,
         *,
         config_list: Optional[List[Dict[str, Any]]] = None,
-        response_format: Optional[BaseModel] = None,
         **base_config: Any,
     ):
         """
@@ -531,7 +530,6 @@ class OpenAIWrapper:
 
         self._clients: List[ModelClient] = []
         self._config_list: List[Dict[str, Any]] = []
-        self.response_format = response_format
 
         if config_list:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
@@ -594,6 +592,7 @@ class OpenAIWrapper:
         openai_config = {**openai_config, **{k: v for k, v in config.items() if k in self.openai_kwargs}}
         api_type = config.get("api_type")
         model_client_cls_name = config.get("model_client_cls")
+        response_format = config.get("response_format")
         if model_client_cls_name is not None:
             # a config for a custom client is set
             # adding placeholder until the register_model_client is called with the appropriate class
@@ -606,58 +605,58 @@ class OpenAIWrapper:
             if api_type is not None and api_type.startswith("azure"):
                 self._configure_azure_openai(config, openai_config)
                 client = AzureOpenAI(**openai_config)
-                self._clients.append(OpenAIClient(client, response_format=self.response_format))
+                self._clients.append(OpenAIClient(client, response_format=response_format))
             elif api_type is not None and api_type.startswith("cerebras"):
                 if cerebras_import_exception:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
-                client = CerebrasClient(response_format=self.response_format, **openai_config)
+                client = CerebrasClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("google"):
                 if gemini_import_exception:
                     raise ImportError("Please install `google-generativeai` and 'vertexai' to use Google's API.")
-                client = GeminiClient(response_format=self.response_format, **openai_config)
+                client = GeminiClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("anthropic"):
                 if "api_key" not in config:
                     self._configure_openai_config_for_bedrock(config, openai_config)
                 if anthropic_import_exception:
                     raise ImportError("Please install `anthropic` to use Anthropic API.")
-                client = AnthropicClient(response_format=self.response_format, **openai_config)
+                client = AnthropicClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("mistral"):
                 if mistral_import_exception:
                     raise ImportError("Please install `mistralai` to use the Mistral.AI API.")
-                client = MistralAIClient(response_format=self.response_format, **openai_config)
+                client = MistralAIClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("together"):
                 if together_import_exception:
                     raise ImportError("Please install `together` to use the Together.AI API.")
-                client = TogetherClient(response_format=self.response_format, **openai_config)
+                client = TogetherClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("groq"):
                 if groq_import_exception:
                     raise ImportError("Please install `groq` to use the Groq API.")
-                client = GroqClient(response_format=self.response_format, **openai_config)
+                client = GroqClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("cohere"):
                 if cohere_import_exception:
                     raise ImportError("Please install `cohere` to use the Cohere API.")
-                client = CohereClient(response_format=self.response_format, **openai_config)
+                client = CohereClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("ollama"):
                 if ollama_import_exception:
                     raise ImportError("Please install `ollama` and `fix-busted-json` to use the Ollama API.")
-                client = OllamaClient(response_format=self.response_format, **openai_config)
+                client = OllamaClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("bedrock"):
                 self._configure_openai_config_for_bedrock(config, openai_config)
                 if bedrock_import_exception:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
-                client = BedrockClient(response_format=self.response_format, **openai_config)
+                client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             else:
                 client = OpenAI(**openai_config)
-                self._clients.append(OpenAIClient(client, self.response_format))
+                self._clients.append(OpenAIClient(client, response_format))
 
             if logging_enabled():
                 log_new_client(client, self, openai_config)
@@ -825,8 +824,8 @@ class OpenAIWrapper:
                 with cache_client as cache:
                     # Try to get the response from cache
                     key = get_key(
-                        {**params, **{"response_format": schema_json_of(self.response_format)}}
-                        if self.response_format
+                        {**params, **{"response_format": schema_json_of(params["response_format"])}}
+                        if "response_format" in params
                         else params
                     )
                     request_ts = get_current_ts()

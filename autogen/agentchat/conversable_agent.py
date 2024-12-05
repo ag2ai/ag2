@@ -274,11 +274,7 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'."
             )
-        self.client = (
-            None
-            if self.llm_config is False
-            else OpenAIWrapper(response_format=self._response_format, **self.llm_config)
-        )
+        self.client = None if self.llm_config is False else OpenAIWrapper(**self.llm_config)
 
     @staticmethod
     def _is_silent(agent: Agent, silent: Optional[bool] = False) -> bool:
@@ -2552,7 +2548,7 @@ class ConversableAgent(LLMAgent):
         if len(self.llm_config["functions"]) == 0:
             del self.llm_config["functions"]
 
-        self.client = OpenAIWrapper(**self.llm_config, response_format=self._response_format)
+        self.client = OpenAIWrapper(**self.llm_config)
 
     def update_tool_signature(self, tool_sig: Union[str, Dict], is_remove: None):
         """update a tool_signature in the LLM configuration for tool_call.
@@ -2596,7 +2592,7 @@ class ConversableAgent(LLMAgent):
         if len(self.llm_config["tools"]) == 0:
             del self.llm_config["tools"]
 
-        self.client = OpenAIWrapper(**self.llm_config, response_format=self._response_format)
+        self.client = OpenAIWrapper(**self.llm_config)
 
     def can_execute_function(self, name: Union[List[str], str]) -> bool:
         """Whether the agent can execute the function."""
