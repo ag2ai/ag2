@@ -205,62 +205,52 @@
     {
       "group": "Talks",
       "pages": [
-        {
-          "group": "Community Talks",
-          "pages": [
-            "website/talks/future_talks/index",
-            "website/talks/2024-11-28/index",
-            "website/talks/2024-11-25/index",
-            "website/talks/2024-11-18/index",
-            "website/talks/2024-11-12/index",
-            "website/talks/2024-11-11/index",
-            "website/talks/2024-11-04/index",
-            "website/talks/2024-10-15/index",
-            "website/talks/2024-10-14/index",
-            "website/talks/2024-09-30/index",
-            "website/talks/2024-09-23/index",
-            "website/talks/2024-08-26/index"
-          ]
-        }
+        "website/talks/future_talks/index",
+        "website/talks/2024-11-28/index",
+        "website/talks/2024-11-25/index",
+        "website/talks/2024-11-18/index",
+        "website/talks/2024-11-12/index",
+        "website/talks/2024-11-11/index",
+        "website/talks/2024-11-04/index",
+        "website/talks/2024-10-15/index",
+        "website/talks/2024-10-14/index",
+        "website/talks/2024-09-30/index",
+        "website/talks/2024-09-23/index",
+        "website/talks/2024-08-26/index"
       ]
     },
     {
       "group": "Posts",
       "pages": [
-        {
-          "group": "Blog Posts",
-          "pages": [
-            "website/blog/2024-11-17-Swarm/index",
-            "website/blog/2024-11-15-CaptainAgent/index",
-            "website/blog/2024-10-23-NOVA/index",
-            "website/blog/2024-07-25-AgentOps/index",
-            "website/blog/2024-06-24-AltModels-Classes/index",
-            "website/blog/2024-06-21-AgentEval/index",
-            "website/blog/2024-05-24-Agent/index",
-            "website/blog/2024-03-11-AutoDefense/Defending LLMs Against Jailbreak Attacks with AutoDefense",
-            "website/blog/2024-03-03-AutoGen-Update/index",
-            "website/blog/2024-02-29-StateFlow/index",
-            "website/blog/2024-02-11-FSM-GroupChat/index",
-            "website/blog/2024-02-02-AutoAnny/index",
-            "website/blog/2024-01-26-Custom-Models/index",
-            "website/blog/2024-01-25-AutoGenBench/index",
-            "website/blog/2024-01-23-Code-execution-in-docker/index",
-            "website/blog/2023-12-29-AgentDescriptions/index",
-            "website/blog/2023-12-23-AgentOptimizer/index",
-            "website/blog/2023-12-01-AutoGenStudio/index",
-            "website/blog/2023-11-26-Agent-AutoBuild/index",
-            "website/blog/2023-11-20-AgentEval/index",
-            "website/blog/2023-11-13-OAI-assistants/index",
-            "website/blog/2023-11-09-EcoAssistant/index",
-            "website/blog/2023-11-06-LMM-Agent/index",
-            "website/blog/2023-10-26-TeachableAgent/index",
-            "website/blog/2023-10-18-RetrieveChat/index",
-            "website/blog/2023-07-14-Local-LLMs/index",
-            "website/blog/2023-06-28-MathChat/index",
-            "website/blog/2023-05-18-GPT-adaptive-humaneval/index",
-            "website/blog/2023-04-21-LLM-tuning-math/index"
-          ]
-        }
+        "website/blog/2024-11-17-Swarm/index",
+        "website/blog/2024-11-15-CaptainAgent/index",
+        "website/blog/2024-10-23-NOVA/index",
+        "website/blog/2024-07-25-AgentOps/index",
+        "website/blog/2024-06-24-AltModels-Classes/index",
+        "website/blog/2024-06-21-AgentEval/index",
+        "website/blog/2024-05-24-Agent/index",
+        "website/blog/2024-03-11-AutoDefense/Defending LLMs Against Jailbreak Attacks with AutoDefense",
+        "website/blog/2024-03-03-AutoGen-Update/index",
+        "website/blog/2024-02-29-StateFlow/index",
+        "website/blog/2024-02-11-FSM-GroupChat/index",
+        "website/blog/2024-02-02-AutoAnny/index",
+        "website/blog/2024-01-26-Custom-Models/index",
+        "website/blog/2024-01-25-AutoGenBench/index",
+        "website/blog/2024-01-23-Code-execution-in-docker/index",
+        "website/blog/2023-12-29-AgentDescriptions/index",
+        "website/blog/2023-12-23-AgentOptimizer/index",
+        "website/blog/2023-12-01-AutoGenStudio/index",
+        "website/blog/2023-11-26-Agent-AutoBuild/index",
+        "website/blog/2023-11-20-AgentEval/index",
+        "website/blog/2023-11-13-OAI-assistants/index",
+        "website/blog/2023-11-09-EcoAssistant/index",
+        "website/blog/2023-11-06-LMM-Agent/index",
+        "website/blog/2023-10-26-TeachableAgent/index",
+        "website/blog/2023-10-18-RetrieveChat/index",
+        "website/blog/2023-07-14-Local-LLMs/index",
+        "website/blog/2023-06-28-MathChat/index",
+        "website/blog/2023-05-18-GPT-adaptive-humaneval/index",
+        "website/blog/2023-04-21-LLM-tuning-math/index"
       ]
     },
     {
