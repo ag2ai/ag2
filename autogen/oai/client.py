@@ -422,8 +422,6 @@ class OpenAIClient:
             params["stream"] = False
             response = create_or_parse(**params)
 
-        print("!" * 100)
-        print(response)
         return response
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
