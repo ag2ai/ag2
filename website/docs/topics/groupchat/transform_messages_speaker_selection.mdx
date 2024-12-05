@@ -2,6 +2,33 @@
 title: Using Transform Messages during Speaker Selection
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/groupchat/transform_messages_speaker_selection.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/groupchat/transform_messages_speaker_selection.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 When using "auto" mode for speaker selection in group chats, a nested-chat is used to determine the next speaker. This nested-chat includes all of the group chat's messages and this can result in a lot of content which the LLM needs to process for determining the next speaker. As conversations progress, it can be challenging to keep the context length within the workable window for the LLM. Furthermore, reducing the number of overall tokens will improve inference time and reduce token costs.
 
 Using [Transform Messages](/docs/topics/handling_long_contexts/intro_to_transform_messages) you gain control over which messages are used for speaker selection and the context length within each message as well as overall.

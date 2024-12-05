@@ -2,14 +2,41 @@
 title: "User Defined Functions"
 ---
 
-```{=mdx}
-:::note
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/website/docs/topics/code-execution/user-defined-functions.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/website/docs/topics/code-execution/user-defined-functions.ipynb"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
+<div class="note">
+<Note>
 This is experimental and not *yet* supported by all executors. At this stage only [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor) is supported.
 
-
 Currently, the method of registering tools and using this feature are different. We would like to unify them. See Github issue [here](https://github.com/microsoft/autogen/issues/2101)
-:::
-```
+
+</Note>
+</div>
 
 User defined functions allow you to define Python functions in your AutoGen program and then provide these to be used by your executor. This allows you to provide your agents with tools without using traditional tool calling APIs. Currently only Python is supported for this feature.
 
@@ -21,11 +48,14 @@ There are several steps involved:
 
 ## Define the function
 
-```{=mdx}
-:::warning
-Keep in mind that the entire source code of these functions will be available to the executor. This means that you should not include any sensitive information in the function as an LLM agent may be able to access it.
-:::
-```
+<div class="warning">
+  <Warning>
+    Keep in mind that the entire source code of these functions will be
+    available to the executor. This means that you should not include any
+    sensitive information in the function as an LLM agent may be able to access
+    it.
+  </Warning>
+</div>
 
 If the function does not require any external imports or dependencies then you can simply use the function. For example:
 
@@ -37,11 +67,13 @@ def add_two_numbers(a: int, b: int) -> int:
 
 This would be a valid standalone function.
 
-```{=mdx}
-:::tip
-Using type hints and docstrings are not required but are highly recommended. They will help the code writing agent understand the function and how to use it.
-:::
-```
+<div class="tip">
+  <Tip>
+    Using type hints and docstrings are not required but are highly recommended.
+    They will help the code writing agent understand the function and how to use
+    it.
+  </Tip>
+</div>
 
 If the function requires external imports or dependencies then you can use the `@with_requirements` decorator to specify the requirements. For example:
 
@@ -121,7 +153,9 @@ print(
 )
 ```
 
-    exit_code=0 output='3\n' code_file='/Users/jackgerrits/w/autogen/website/docs/topics/code-execution/coding/tmp_code_1958fe3aea3e8e3c6e907fe951b5f6ab.py'
+```python
+exit_code=0 output='3\n' code_file='/Users/jackgerrits/w/autogen/website/docs/topics/code-execution/coding/tmp_code_1958fe3aea3e8e3c6e907fe951b5f6ab.py'
+```
 
 And we can try the function that required a dependency and import too.
 
@@ -141,11 +175,13 @@ result = executor.execute_code_blocks(
 print(result.output)
 ```
 
+```python
         name  location  age
     0   John  New York   24
     1   Anna     Paris   13
     2  Peter    Berlin   53
     3  Linda    London   33
+```
 
 ### Limitations
 
@@ -287,13 +323,14 @@ chat_result = code_executor_agent.initiate_chat(
 
 
     --------------------------------------------------------------------------------
-
+````
 
 We can see the summary of the calculation:
 
-
+```python
 print(chat_result.summary)
+```
 
-    The average age of all people in the dataset is 30.75 years.
-
-````
+```python
+The average age of all people in the dataset is 30.75 years.
+```
