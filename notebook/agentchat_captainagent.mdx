@@ -2,20 +2,48 @@
 title: CaptainAgent
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_captainagent.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_captainagent.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 By: Jiale Liu, Linxin Song, Jieyu Zhang, Shaokun Zhang
 
 In this notebook, we introduce CaptainAgent, an agent enhanced with the capability to call AutoBuild to break down and solve complex tasks. AutoBuild can initiate a group chat between a group of experts and converse to solve the task. The experts in nested chat can be retrieved from agent library. The agents can be equipped with tools for advanced coding.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install `ag2` with CaptainAgent:
 ```bash
 pip install ag2[captainagent]
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Setup API endpoint
 
@@ -44,11 +72,12 @@ config_list = [
 ]
 ```
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ```python
 import autogen
