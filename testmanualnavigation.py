@@ -43,7 +43,7 @@ async def main() -> None:
 
     # Initialize the browser
     await websurfer.init(
-        headless=False,  # Set to False to see browser interactions
+        headless=True,  # Set to False to see browser interactions
         downloads_folder="./downloads",
         start_page="https://www.bing.com",
         browser_channel="chromium",

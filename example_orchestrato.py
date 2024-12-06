@@ -103,7 +103,7 @@ async def main() -> None:
         description="An orchestrator that manages conversation flow and handles errors."
     )
 
-    task = """Go to zeit.de. Accept the cookie banner. After the cookie banner is successfully accepted, click on the first article."""
+    task = """Find out some detailed informtion about the magentic one agent from microsoft"""
     #task = """Go to amazon.com and find a good beginner 3d printer, pick any good one for under 300 dollars. """
     massages = [
         {"role": "user", "content": task}]

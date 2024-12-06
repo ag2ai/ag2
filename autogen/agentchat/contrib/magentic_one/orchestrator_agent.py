@@ -3,6 +3,7 @@ import traceback
 import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
+from .messages import BroadcastMessage
 from .orchestrator_prompts import (
     ORCHESTRATOR_SYSTEM_MESSAGE,
     ORCHESTRATOR_CLOSED_BOOK_PROMPT,
@@ -98,12 +99,18 @@ class OrchestratorAgent(ConversableAgent):
         self._return_final_answer = return_final_answer
         self._max_rounds = max_rounds
         self._current_round = 0
-        self._agent_whole_history = agent_whole_history
 
         self._team_description = ""
         self._task = ""
         self._facts = ""
         self._plan = ""
+
+    def broadcast_message(self, message: Dict, sender: Optional[ConversableAgent] = None) -> None:
+        """Broadcast a message to all agents."""
+        broadcast_msg = BroadcastMessage(content=message)
+        for agent in self._agents:
+            if agent != sender:  # Don't send to the sender
+                agent._append_oai_message(broadcast_msg.content, "assistant", sender or self, is_sending=False)
 
     def _get_plan_prompt(self, team: str) -> str:
         return self._plan_prompt.format(team_description=team)  
@@ -422,25 +429,28 @@ class OrchestratorAgent(ConversableAgent):
                     # Update our plan.
                     self._update_facts_and_plan()
 
-                    # Reset chat history but preserve initial task
+                    # Preserve initial task message
                     initial_task = self._oai_messages[self][0]
                     
+                    # Reset orchestrator history
                     self._oai_messages[self] = [initial_task]
                     
-                    # Reset all agents
+                    # Reset all agents while preserving system messages
                     for agent in self._agents:
-                        agent.reset()
+                        if agent._oai_system_message:
+                            system_msg = agent._oai_system_message[0]
+                            agent.reset()
+                            agent._oai_system_message = [system_msg]
 
                     # Send everyone the NEW plan
                     synthesized_prompt = self._get_synthesize_prompt(
                         self._task, self._team_description, self._facts, self._plan
                     )
                     
-                    # Share new plan with all agents if whole history enabled
-                    if self._agent_whole_history:
-                        for agent in self._agents:
-                            # TODO: confirm this is correct
-                            agent._append_oai_message({"role": "assistant", "content": synthesized_prompt}, "assistant", self, True)
+                    # Broadcast new plan to all agents
+                    self.broadcast_message(
+                        {"role": "assistant", "content": synthesized_prompt}
+                    )
 
                     logger.log_event(
                         source=self.name,
@@ -477,16 +487,8 @@ class OrchestratorAgent(ConversableAgent):
                 instruction_msg = {"role": "assistant", "content": instruction}
                 self._append_oai_message(instruction_msg, "assistant", self, True)
                 
-                # Share instruction with all agents if enabled
-                if self._agent_whole_history:
-                    for agent in self._agents:
-                        # TODO: confirm this is correct
-                        agent._append_oai_message(instruction_msg, "assistant", self, True)
-
-                else:
-                    # Otherwise just send to next agent
-                    # TODO: confirm this is correct
-                    self._oai_messages[self].append(instruction_msg)
+                # Broadcast instruction to all agents
+                self.broadcast_message(instruction_msg)
                 return agent
 
         return None
@@ -547,11 +549,8 @@ class OrchestratorAgent(ConversableAgent):
                 break
             response_msg = {"role": "user", "content": response}
 
-            #if self._agent_whole_history:
-            #    for agent in self._agents:
-            #        if agent != next_agent:  # Don't send to the agent who just responded
-            #            agent._append_oai_message(response_msg, "assistant", next_agent, is_sending=False)
-            #            #TODO: can i handle this better?
+            # Broadcast response to all agents
+            self.broadcast_message(response_msg, sender=next_agent)
 
             was_appended = self._append_oai_message(response_msg, "user", self, is_sending=False)
             if not was_appended:
