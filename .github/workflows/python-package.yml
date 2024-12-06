@@ -43,17 +43,21 @@ jobs:
       # - name: Conda list
       #   shell: pwsh
       #   run: conda list
-      - name: Build autogen
+      - name: Build pyautogen
         shell: pwsh
         run: |
           pip install twine
-          python setup_autogen.py sdist bdist_wheel
+          python setup.py sdist bdist_wheel
       - name: Publish pyautogen to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYAUTOGEN_PYPI_PASSWORD }}
         shell: pwsh
         run: twine upload dist/*pyautogen*
+      - name: Build autogen
+        shell: pwsh
+        run: |
+          python setup_autogen.py sdist bdist_wheel
       - name: Publish autogen to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.AUTOGEN_PYPI_USERNAME }}
@@ -63,7 +67,6 @@ jobs:
       - name: Build ag2
         shell: pwsh
         run: |
-          pip install twine
           python setup_ag2.py sdist bdist_wheel
       - name: Publish ag2 to PyPI
         env:
@@ -71,7 +74,3 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.AUTOGEN_PYPI_PASSWORD }}
         shell: pwsh
         run: twine upload dist/ag2*
-      - name: Build pyautogen
-        shell: pwsh
-        run: |
-          python setup.py sdist bdist_wheel

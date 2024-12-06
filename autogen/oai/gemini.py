@@ -136,6 +136,9 @@ class GeminiClient:
                 "location" not in kwargs
             ), "Google Cloud project and compute location cannot be set when using an API Key!"
 
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
+
     def message_retrieval(self, response) -> List:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -160,10 +163,7 @@ class GeminiClient:
             "model": response.model,
         }
 
-    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Gemini's API.")
-
+    def create(self, params: Dict) -> ChatCompletion:
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:

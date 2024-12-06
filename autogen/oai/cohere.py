@@ -80,6 +80,9 @@ class CohereClient:
             self.api_key
         ), "Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable."
 
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Cohere, it will be ignored.", UserWarning)
+
     def message_retrieval(self, response) -> List:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -148,10 +151,7 @@ class CohereClient:
 
         return cohere_params
 
-    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Cohere's API.")
-
+    def create(self, params: Dict) -> ChatCompletion:
         messages = params.get("messages", [])
         client_name = params.get("client_name") or "autogen-cohere"
         # Parse parameters to the Cohere API's parameters

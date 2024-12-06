@@ -85,6 +85,8 @@ class OllamaClient:
         Args:
             None
         """
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Ollama, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> List:
         """
@@ -178,10 +180,7 @@ class OllamaClient:
 
         return ollama_params
 
-    def create(self, params: Dict, response_format: Optional[BaseModel] = None) -> ChatCompletion:
-        if response_format is not None:
-            raise NotImplementedError("Response format is not supported by Ollama's API.")
-
+    def create(self, params: Dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Are tools involved in this conversation?
