@@ -2,6 +2,33 @@
 title: "Agent with memory using Mem0"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_with_memory.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_with_memory.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook demonstrates an intelligent customer service chatbot system that combines:
 
 - AutoGen for conversational agents
@@ -13,8 +40,8 @@ The implementation showcases how to initialize agents, manage conversation memor
 
 ## Requirements
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
@@ -22,8 +49,9 @@ pip install autogen mem0ai
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Get API Keys
 
@@ -159,26 +187,28 @@ Question: {data}
 
 ```python
 result = manager.send(prompt, customer_bot, request_reply=True)
+```
 
-    manager (to customer_bot):
-
-
-    Context:
-    Scheduled an appointment for a home repair for tomorrow
-    Order number is 112217629
-    TV model is Sony - 77" Class BRAVIA XR A80K OLED 4K UHD Smart Google TV
-    User's email address is dd@gmail.com
+```python
+manager (to customer_bot):
 
 
+Context:
+Scheduled an appointment for a home repair for tomorrow
+Order number is 112217629
+TV model is Sony - 77" Class BRAVIA XR A80K OLED 4K UHD Smart Google TV
+User's email address is dd@gmail.com
 
-    Question: When is the appointment?
 
 
-    --------------------------------------------------------------------------------
-    customer_bot (to manager):
+Question: When is the appointment?
 
-    The appointment is scheduled for tomorrow.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+customer_bot (to manager):
+
+The appointment is scheduled for tomorrow.
+
+--------------------------------------------------------------------------------
 
 ```

@@ -2,6 +2,33 @@
 title: "Automatically Build Multi-agent System from Agent Library"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/autobuild_agent_library.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/autobuild_agent_library.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 By: [Linxin Song](https://linxins97.github.io/), [Jieyu Zhang](https://jieyuz2.github.io/)
 
 In this notebook, we introduce a new feature for AutoBuild, `build_from_library`, which help users build an automatic task-solving process powered by a multi-agent system from a pre-defined agent library.
@@ -204,7 +231,7 @@ building_task = "Find a paper on arxiv by programming, and analyze its applicati
 
 Then, we can call the `build_from_library` from the AgentBuilder to generate a list of agents from the library and let them complete the user's `execution_task` in a group chat.
 
-````python
+```python
 new_builder = AgentBuilder(
     config_file_or_env=config_file_or_env, builder_model="gpt-4-1106-preview", agent_model="gpt-4-1106-preview"
 )
@@ -214,7 +241,9 @@ start_task(
     agent_list=agent_list,
 )
 new_builder.clear_all_agents()
+```
 
+````python
     ==> Looking for suitable agents in the library...
 
 
@@ -410,7 +439,7 @@ new_builder.clear_all_agents()
 
 We also support using embedding similarity to select agents. You can use a [Sentence-Transformers model](https://www.sbert.net/docs/pretrained_models.html) as an embedding extractor, and AgentBuilder will select agents with profiles that are the most similar to the building task from the library by comparing their embedding similarity. This will reduce the use of LLMs but may have less accuracy.
 
-````python
+```python
 new_builder = AgentBuilder(
     config_file_or_env=config_file_or_env, builder_model="gpt-4-1106-preview", agent_model="gpt-4-1106-preview"
 )
@@ -422,7 +451,9 @@ start_task(
     agent_list=agent_list,
 )
 new_builder.clear_all_agents()
+```
 
+````python
     ==> Looking for suitable agents in the library...
 
 

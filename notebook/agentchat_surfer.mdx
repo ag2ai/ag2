@@ -2,6 +2,33 @@
 title: "WebSurferAgent"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_surfer.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_surfer.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen provides a proof-of-concept WebSurferAgent that can command a simple text-based browser (similar to [Lynx](<https://en.wikipedia.org/wiki/Lynx_(web_browser)>)) to search the web, visit pages, navigate within pages, download files, etc. The browsing is stateful, meaning that browsing history, viewport state, and other details are maintained throughout the conversation.
 
 This work was largely inspired by OpenAI's [WebGPT](https://openai.com/research/webgpt) project from December 2021.
@@ -312,19 +339,21 @@ user_proxy.initiate_chat(web_surfer, message=task2, clear_history=False)
 ```python
 task3 = """Where was the first office location, and when did they move to Redmond?"""
 user_proxy.initiate_chat(web_surfer, message=task3, clear_history=False)
+```
 
-    user_proxy (to web_surfer):
+```python
+user_proxy (to web_surfer):
 
-    Where was the first office location, and when did they move to Redmond?
+Where was the first office location, and when did they move to Redmond?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    >>>>>>>> USING AUTO REPLY...
+>>>>>>>> USING AUTO REPLY...
 
-    >>>>>>>> EXECUTING FUNCTION answer_from_page...
-    web_surfer (to user_proxy):
+>>>>>>>> EXECUTING FUNCTION answer_from_page...
+web_surfer (to user_proxy):
 
-    Microsoft's first office location was in Albuquerque, New Mexico, where it was founded on April 4, 1975. However, Microsoft later moved its headquarters to Redmond, Washington in January 1979. Since then, Redmond has been the main office location for Microsoft.
+Microsoft's first office location was in Albuquerque, New Mexico, where it was founded on April 4, 1975. However, Microsoft later moved its headquarters to Redmond, Washington in January 1979. Since then, Redmond has been the main office location for Microsoft.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 ```

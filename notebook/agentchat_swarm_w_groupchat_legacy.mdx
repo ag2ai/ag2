@@ -2,13 +2,41 @@
 title: "(Legacy) Implement Swarm-style orchestration with GroupChat"
 ---
 
-```{=mdx}
-:::tip
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_swarm_w_groupchat_legacy.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_swarm_w_groupchat_legacy.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
+<div class="tip">
+<Tip>
 This notebook shows you how to implement a swarm-like orchestration using AG2's group chat.
 
 If you want to get up and running with a swarm faster, we have implemented swarm within AG2, see [this notebook](/notebook/agentchat_swarm).
-:::
-```
+
+</Tip>
+</div>
 
 AG2 offers conversable agents, powered by LLMs, tools or a human, that can perform tasks collectively via an automated chat. Recently, OpenAI has released a [Swarm](https://github.com/openai/swarm) framework that focuses on making agent coordination and execution lightweight.
 
@@ -16,16 +44,17 @@ In AG2, the groupchat allows customized speaker selection, which can be used to 
 
 In this notebook, we implement OpenAI's [airline customer service example](https://github.com/openai/swarm/tree/main/examples/airline) in AG2 using group chat.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install `ag2`:
 ```bash
 pip install ag2
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Set your API Endpoint
 
@@ -313,13 +342,11 @@ user = UserProxyAgent(
 We define a customized agent transition function to decide which agent to call based on the user input.
 See the overall architecture of the example in the image below:
 
-<figure>
-  <img
-    src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/stateflow-swarm-example.png"
-    width="700"
-    alt="stateflow-swarm-example"
-  ></img>
-</figure>
+<img
+  src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/stateflow-swarm-example.png"
+  width="700"
+  alt="stateflow-swarm-example"
+></img>
 
 A human user is trying to contact the aline custom serivce. Given a request, we will also call `triage_agent` to determin whether it is lost of baggage or flight modification and route the request to the corresponding agent. The `Flight_Modificaiton_Agent` is a pure router that decides whether to call `Flight_Cancel_Traversal` or `Flight_Change_Traversal` based on the user input.
 

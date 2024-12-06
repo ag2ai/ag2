@@ -1,4 +1,33 @@
-# A Uniform interface to call different LLMs
+---
+title: A Uniform interface to call different LLMs
+---
+
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/autogen_uniformed_api_calling.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/autogen_uniformed_api_calling.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
 
 Autogen provides a uniform interface for API calls to different LLMs, and creating LLM agents from them.
 Through setting up a configuration file, you can easily switch between different LLMs by just changing the model name, while enjoying all the [enhanced features](https://ag2ai.github.io/ag2/docs/topics/llm-caching) such as [caching](https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference/#usage-summary) and [cost calculation](https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference/#usage-summary)!
@@ -124,7 +153,9 @@ def model_call_example_function(model: str, message: str, cache_seed: int = 41, 
 
 ```python
 model_call_example_function(model="gpt-35-turbo-1106", message="Tell me a joke.")
+```
 
+```python
     Response from model gpt-35-turbo-1106: Why couldn't the bicycle stand up by itself?
 
     Because it was two-tired!
@@ -132,7 +163,9 @@ model_call_example_function(model="gpt-35-turbo-1106", message="Tell me a joke."
 
 ```python
 model_call_example_function(model="gemini-1.5-pro-latest", message="Tell me a joke.")
+```
 
+```python
     Response from model gemini-1.5-pro-latest: Why don't scientists trust atoms?
 
     Because they make up everything!
@@ -142,7 +175,9 @@ model_call_example_function(model="gemini-1.5-pro-latest", message="Tell me a jo
 
 ```python
 model_call_example_function(model="meta-llama/Meta-Llama-3-70B-Instruct", message="Tell me a joke. ")
+```
 
+```python
     Response from model meta-llama/Meta-Llama-3-70B-Instruct: Here's one:
 
     Why couldn't the bicycle stand up by itself?
@@ -156,7 +191,9 @@ model_call_example_function(model="meta-llama/Meta-Llama-3-70B-Instruct", messag
 
 ```python
 model_call_example_function(model="mistral-large-latest", message="Tell me a joke. ", print_cost=True)
+```
 
+```python
     Response from model mistral-large-latest: Sure, here's a light-hearted joke for you:
 
     Why don't scientists trust atoms?
@@ -227,61 +264,63 @@ manager = autogen.GroupChatManager(groupchat=groupchat)
 
 ```python
 chat_history = user_proxy.initiate_chat(recipient=manager, message="Debate Topic: Should vaccination be mandatory?")
+```
 
-    User (to chat_manager):
+```python
+User (to chat_manager):
 
-    Debate Topic: Should vaccination be mandatory?
+Debate Topic: Should vaccination be mandatory?
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Claude
+Next speaker: Claude
 
-    Claude (to chat_manager):
+Claude (to chat_manager):
 
-    As a member of the Affirmative team, I believe that vaccination should be mandatory for several reasons:
+As a member of the Affirmative team, I believe that vaccination should be mandatory for several reasons:
 
-    1. Herd immunity: When a large percentage of the population is vaccinated, it helps protect those who cannot receive vaccines due to medical reasons or weakened immune systems. Mandatory vaccination ensures that we maintain a high level of herd immunity, preventing the spread of dangerous diseases.
+1. Herd immunity: When a large percentage of the population is vaccinated, it helps protect those who cannot receive vaccines due to medical reasons or weakened immune systems. Mandatory vaccination ensures that we maintain a high level of herd immunity, preventing the spread of dangerous diseases.
 
-    2. Public health: Vaccines have been proven to be safe and effective in preventing the spread of infectious diseases. By making vaccination mandatory, we prioritize public health and reduce the risk of outbreaks that could lead to widespread illness and loss of life.
+2. Public health: Vaccines have been proven to be safe and effective in preventing the spread of infectious diseases. By making vaccination mandatory, we prioritize public health and reduce the risk of outbreaks that could lead to widespread illness and loss of life.
 
-    3. Societal benefits: Mandatory vaccination not only protects individuals but also benefits society as a whole. It reduces healthcare costs associated with treating preventable diseases and minimizes the economic impact of disease outbreaks on businesses and communities.
+3. Societal benefits: Mandatory vaccination not only protects individuals but also benefits society as a whole. It reduces healthcare costs associated with treating preventable diseases and minimizes the economic impact of disease outbreaks on businesses and communities.
 
-    In summary, mandatory vaccination is a critical tool in protecting public health, maintaining herd immunity, and promoting the well-being of our society.
+In summary, mandatory vaccination is a critical tool in protecting public health, maintaining herd immunity, and promoting the well-being of our society.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Gemini
+Next speaker: Gemini
 
-    Gemini (to chat_manager):
+Gemini (to chat_manager):
 
-    While we acknowledge the importance of herd immunity and public health,  mandating vaccinations infringes upon individual autonomy and medical freedom.  Blanket mandates fail to consider individual health circumstances and potential vaccine risks, which are often overlooked in favor of a one-size-fits-all approach.
+While we acknowledge the importance of herd immunity and public health,  mandating vaccinations infringes upon individual autonomy and medical freedom.  Blanket mandates fail to consider individual health circumstances and potential vaccine risks, which are often overlooked in favor of a one-size-fits-all approach.
 
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Mistral
+Next speaker: Mistral
 
-    Mistral (to chat_manager):
+Mistral (to chat_manager):
 
-    I understand your concerns and the value of individual autonomy. However, it's important to note that mandatory vaccination policies often include exemptions for medical reasons. This allows for individual health circumstances to be taken into account, ensuring that those who cannot safely receive vaccines are not put at risk. The goal is to strike a balance between protecting public health and respecting individual choices, while always prioritizing the well-being and safety of all members of society.
+I understand your concerns and the value of individual autonomy. However, it's important to note that mandatory vaccination policies often include exemptions for medical reasons. This allows for individual health circumstances to be taken into account, ensuring that those who cannot safely receive vaccines are not put at risk. The goal is to strike a balance between protecting public health and respecting individual choices, while always prioritizing the well-being and safety of all members of society.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: Llama3
+Next speaker: Llama3
 
-    Llama3 (to chat_manager):
+Llama3 (to chat_manager):
 
-    I understand your point, but blanket exemptions for medical reasons are not sufficient to address the complexities of individual health circumstances. What about those who have experienced adverse reactions to vaccines in the past or have a family history of such reactions? What about those who have compromised immune systems or are taking medications that may interact with vaccine components? A one-size-fits-all approach to vaccination ignores the nuances of individual health and puts some people at risk of harm. Additionally, mandating vaccination undermines trust in government and healthcare institutions, leading to further divides and mistrust. We need to prioritize informed consent and individual autonomy in medical decisions, rather than relying solely on a blanket mandate.
+I understand your point, but blanket exemptions for medical reasons are not sufficient to address the complexities of individual health circumstances. What about those who have experienced adverse reactions to vaccines in the past or have a family history of such reactions? What about those who have compromised immune systems or are taking medications that may interact with vaccine components? A one-size-fits-all approach to vaccination ignores the nuances of individual health and puts some people at risk of harm. Additionally, mandating vaccination undermines trust in government and healthcare institutions, leading to further divides and mistrust. We need to prioritize informed consent and individual autonomy in medical decisions, rather than relying solely on a blanket mandate.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: GPT35
+Next speaker: GPT35
 
-    GPT35 (to chat_manager):
+GPT35 (to chat_manager):
 
-    I understand your point, but mandatory vaccination policies can still allow for exemptions based on medical history, allergic reactions, and compromised immunity. This would address the individual circumstances you mentioned. Furthermore, mandating vaccination can also help strengthen trust in public health measures by demonstrating a commitment to protecting the entire community. Informed consent is important, but it is also essential to consider the potential consequences of not being vaccinated on public health and the well-being of others.
+I understand your point, but mandatory vaccination policies can still allow for exemptions based on medical history, allergic reactions, and compromised immunity. This would address the individual circumstances you mentioned. Furthermore, mandating vaccination can also help strengthen trust in public health measures by demonstrating a commitment to protecting the entire community. Informed consent is important, but it is also essential to consider the potential consequences of not being vaccinated on public health and the well-being of others.
 
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-    Next speaker: User
+Next speaker: User
 ```

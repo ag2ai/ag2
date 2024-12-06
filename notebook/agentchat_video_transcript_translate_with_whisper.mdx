@@ -2,13 +2,40 @@
 title: "Translating Video audio using Whisper and GPT-3.5-turbo"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_video_transcript_translate_with_whisper.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_video_transcript_translate_with_whisper.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 In this notebook, we demonstrate how to use whisper and GPT-3.5-turbo with `AssistantAgent` and `UserProxyAgent` to recognize and translate
 the speech sound from a video file and add the timestamp like a subtitle file based on [agentchat_function_call.ipynb](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_function_call.ipynb)
 
 ## Requirements
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
@@ -16,8 +43,9 @@ pip install autogen openai openai-whisper
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Set your API Endpoint
 
@@ -34,11 +62,12 @@ config_list = [
 ]
 ```
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ## Example and Output
 
