@@ -72,7 +72,7 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11"]
     services:
-      falkordb:
+      neo4j:
         image: neo4j:latest
         ports:
           - 7687:7687

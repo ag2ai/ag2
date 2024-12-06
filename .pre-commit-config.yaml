@@ -40,7 +40,6 @@ repos:
         args: ["-L", "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic"]
         exclude: |
             (?x)^(
-              test/agentchat/contrib/graph_rag/paul_graham_essay.txt |
               pyproject.toml |
               website/static/img/ag.svg |
               website/static/img/ag2.svg |
@@ -49,7 +48,9 @@ repos:
               website/docs/topics/code-execution/custom-executor.ipynb |
               website/docs/topics/non-openai-models/cloud-gemini.ipynb |
               notebook/.* |
-              test/agentchat/contrib/graph_rag/trip_planner_data/.*
+              test/agentchat/contrib/graph_rag/trip_planner_data/.* |
+              test/agentchat/contrib/graph_rag/paul_graham_essay.txt
+
             )$
   # See https://jaredkhan.com/blog/mypy-pre-commit
   - repo: local

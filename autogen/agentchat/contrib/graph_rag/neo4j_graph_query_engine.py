@@ -18,7 +18,7 @@ from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
 class Neo4jGraphQueryEngine(GraphQueryEngine):
     """
     This is a wrapper for Neo4j PropertyGraphIndex query engine.
-    It creates a PropertyGraph Index form input documents and allows querying the graph.
+    It creates a PropertyGraph Index from input documents and allows querying the graph.
 
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
     """
