@@ -376,8 +376,12 @@ class SwarmAgent(ConversableAgent):
 
         self.after_work = None
 
-        # use in the tool execution agent to transfer to the next agent
+        # Used in the tool execution agent to transfer to the next agent
         self._next_agent = None
+
+        # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
+        # List of Dictionaries containing the nested_chats and condition
+        self._nested_chat_handoffs = []
 
         self.register_update_agent_before_reply(update_agent_before_reply)
 
