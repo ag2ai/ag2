@@ -572,51 +572,6 @@ class ConversableAgent(LLMAgent):
         """Return the system message."""
         return self._oai_system_message[0]["content"]
 
-    def get_context_value(self, key: str, default: Any = None) -> Any:
-        """
-        Get a context variable by key.
-
-        Args:
-            key: The key to look up
-            default: Value to return if key doesn't exist
-
-        Returns:
-            The value associated with the key, or default if not found
-        """
-        return self._context_variables.get(key, default)
-
-    def set_context_value(self, key: str, value: Any) -> None:
-        """
-        Set a context variable.
-
-        Args:
-            key: The key to set
-            value: The value to associate with the key
-        """
-        self._context_variables[key] = value
-
-    def set_context_values(self, context_variables: Dict[str, Any]) -> None:
-        """
-        Update multiple context variables at once.
-
-        Args:
-            context_variables: Dictionary of variables to update/add
-        """
-        self._context_variables.update(context_variables)
-
-    def pop_context_key(self, key: str, default: Any = None) -> Any:
-        """
-        Remove and return a context variable.
-
-        Args:
-            key: The key to remove
-            default: Value to return if key doesn't exist
-
-        Returns:
-            The value that was removed, or default if key not found
-        """
-        return self._context_variables.pop(key, default)
-
     def update_system_message(self, system_message: str) -> None:
         """Update the system message.
 
