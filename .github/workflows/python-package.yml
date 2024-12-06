@@ -57,7 +57,6 @@ jobs:
       - name: Build autogen
         shell: pwsh
         run: |
-          pip install twine
           python setup_autogen.py sdist bdist_wheel
       - name: Publish autogen to PyPI
         env:
@@ -68,7 +67,6 @@ jobs:
       - name: Build ag2
         shell: pwsh
         run: |
-          pip install twine
           python setup_ag2.py sdist bdist_wheel
       - name: Publish ag2 to PyPI
         env:
