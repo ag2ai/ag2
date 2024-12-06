@@ -76,9 +76,9 @@ jobs:
         image: neo4j:latest
         ports:
           - 7687:7687
-        credentials:
-          username: neo4j
-          password: neo4j
+          - 7474:7474
+        env:
+          NEO4J_AUTH: neo4j/password
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
