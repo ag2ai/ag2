@@ -54,8 +54,9 @@ class Neo4jGraphCapability(GraphRagCapability):
         config: Optional[Any] = None,
     ) -> Tuple[bool, Union[str, Dict, None]]:
         """
-        Query neo4j and return the message. Internally, it utilises OpenAI to generate a reply based on the given messages.
-        The performance will be improved in future releases.
+        Query neo4j and return the message. Internally, it queries the Property graph
+        and returns the answer from the graph query engine.
+        TODO: reply with a dictionary including both the answer and semantic source triplets.
 
         Args:
             recipient: The agent instance that will receive the message.

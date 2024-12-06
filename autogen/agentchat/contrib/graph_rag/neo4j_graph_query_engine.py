@@ -5,8 +5,10 @@ import os
 from typing import Dict, List, Optional, TypeAlias, Union
 
 from llama_index.core import PropertyGraphIndex, SimpleDirectoryReader
+from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
 from llama_index.core.indices.property_graph.transformations.schema_llm import Triple
+from llama_index.core.llms import LLM
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.graph_stores.neo4j import Neo4jPropertyGraphStore
 from llama_index.llms.openai import OpenAI
@@ -36,9 +38,8 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         database: str = "neo4j",
         username: str = "neo4j",
         password: str = "neo4j",
-        model: str = "gpt-3.5-turbo",
-        temperature: float = 0.0,
-        embed_model: str = "text-embedding-3-small",
+        llm: LLM = OpenAI(model="gpt-3.5-turbo", temperature=0.0),
+        embedding: BaseEmbedding = OpenAIEmbedding(model_name="text-embedding-3-small"),
         entities: Optional[TypeAlias] = None,
         relations: Optional[TypeAlias] = None,
         validation_schema: Optional[Union[Dict[str, str], List[Triple]]] = None,
@@ -55,9 +56,8 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             database (str): Neo4j database name.
             username (str): Neo4j username.
             password (str): Neo4j password.
-            model (str): LLM model to use for Neo4j to build and retrieve from the graph, default to use OAI gpt-3.5-turbo.
-            temperature (float): LLM temperature.
-            include_embeddings (bool): Whether to include embeddings in the graph.
+            llm (LLM): Language model to use for extracting tripletss.
+            embedding (BaseEmbedding): Embedding model to use constructing index and query
             entities (Optional[TypeAlias]): Custom possible entities to include in the graph.
             relations (Optional[TypeAlias]): Custom poissble relations to include in the graph.
             validation_schema (Optional[Union[Dict[str, str], List[Triple]]): Custom schema to validate the extracted triplets
@@ -68,9 +68,8 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         self.database = database
         self.username = username
         self.password = password
-        self.model = model
-        self.temperature = temperature
-        self.embed_model = embed_model
+        self.llm = llm
+        self.embedding = embedding
         self.entities = entities
         self.relations = relations
         self.validation_schema = validation_schema
@@ -94,7 +93,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             database=self.database,
         )
 
-        # delete all entities and relationships if a graph pre-exists
+        # delete all entities and relationships in case a graph pre-exists
         self._clear()
 
         self.documents = SimpleDirectoryReader(input_files=self.input_files).load_data()
@@ -103,7 +102,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
         self.kg_extractors = [
             SchemaLLMPathExtractor(
-                llm=OpenAI(model=self.model, temperature=self.temperature),
+                llm=self.llm,
                 possible_entities=self.entities,
                 possible_relations=self.relations,
                 kg_validation_schema=self.validation_schema,
@@ -113,7 +112,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
         self.index = PropertyGraphIndex.from_documents(
             self.documents,
-            embed_model=OpenAIEmbedding(model_name=self.embed_model),
+            embed_model=self.embedding,
             kg_extractors=self.kg_extractors,
             property_graph_store=self.graph_store,
             show_progress=True,
@@ -180,8 +179,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
     def _clear(self) -> None:
         """
         Delete all entities and relationships in the graph.
-        # TODO: Delete all the data in the database including indexes and constraints.
+        TODO: Delete all the data in the database including indexes and constraints.
         """
-        # %%
         with self.graph_store._driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n;")
