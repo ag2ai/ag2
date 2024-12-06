@@ -2,6 +2,33 @@
 title: "SocietyOfMindAgent"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_society_of_mind.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_society_of_mind.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 TODO: reimplement the society of mind agent using `register_nested_chat` and move to the core library.
 
 This notebook demonstrates the SocietyOfMindAgent, which runs a group chat as an internal monologue, but appears to the external world as a single agent. This confers three distinct advantages:
@@ -10,16 +37,17 @@ This notebook demonstrates the SocietyOfMindAgent, which runs a group chat as an
 2. It provides a consistent way of extracting an answer from a lengthy group chat (normally, it is not clear which message is the final response, and the response itself may not always be formatted in a way that makes sense when extracted as a standalone message).
 3. It provides a way of recovering when agents exceed their context window constraints (the inner monologue is protected by try-catch blocks)
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install `autogen`:
 ```bash
 pip install autogen
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ```python
 import autogen  # noqa: E402
@@ -35,11 +63,12 @@ llm_config = {
 }
 ```
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ### Example Group Chat with Two Agents
 

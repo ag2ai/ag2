@@ -2,10 +2,37 @@
 title: "Solving Multiple Tasks in a Sequence of Chats with Different Conversable Agent Pairs"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchats_sequential_chats.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchats_sequential_chats.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook showcases how to use the new chat interface `autogen.initiate_chats` to solve a set of tasks with a sequence of chats.
 
-:::info Requirements
-
+<div class="info">
+<Info>
 Install `pyautogen`:
 
 ```bash
@@ -14,20 +41,23 @@ pip install pyautogen
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
 
-:::
+</Info>
+</div>
 
 ```python
 import autogen
 
 config_list = autogen.config_list_from_json(env_or_file="OAI_CONFIG_LIST")
 llm_config = {"config_list": config_list}
+
 ```
 
-:::tip
-
+<div class="tip">
+<Tip>
 Learn more about the various ways to configure LLM endpoints [here](/website/docs/topics/llm_configuration).
 
-:::
+</Tip>
+</div>
 
 ### Example Tasks
 

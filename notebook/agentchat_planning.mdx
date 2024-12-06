@@ -2,6 +2,33 @@
 title: "Auto Generated Agent Chat: Collaborative Task Solving with Coding and Planning Agent"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_planning.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_planning.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AutoGen offers conversable agents powered by LLM, tool, or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
 Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
 
@@ -183,10 +210,6 @@ user_proxy.initiate_chat(
 
     >>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...
 
-
-    execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
-
-
     user_proxy (to assistant):
 
     exitcode: 0 (execution succeeded)
@@ -332,6 +355,10 @@ user_proxy.initiate_chat(
 
     >>>>>>>> NO HUMAN INPUT RECEIVED.
 ````
+
+```python
+execute_code was called without specifying a value for use_docker. Since the python docker package is not available, code will be run natively. Note: this fallback behavior is subject to change
+```
 
 When the assistant needs to consult the planner, it suggests a function call to `ask_planner`. When this happens, a line like the following will be displayed:
 

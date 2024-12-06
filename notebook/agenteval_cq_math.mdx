@@ -2,6 +2,33 @@
 title: "Demonstrating the `AgentEval` framework using the task of solving math problems as an example"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agenteval_cq_math.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agenteval_cq_math.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 This notebook aims to demonstrate how `AgentEval` works in an offline scenario, where we use a math problem-solving task as an example.
 `AgentEval` consists of two key steps:
 
@@ -2487,24 +2514,27 @@ for criterion in criteria:
 
     conf_interval_s[criterion.name] = stats.norm.interval(0.95, loc=np.mean(task["s"]), scale=stats.sem(task["s"]))
     conf_interval_f[criterion.name] = stats.norm.interval(0.95, loc=np.mean(task["f"]), scale=stats.sem(task["f"]))
+```
 
-    {'completely off': 0, 'slightly relevant': 1, 'relevant': 2, 'mostly accurate': 3, 'completely accurate': 4, 'inappropriate': 0, 'barely adequate': 1, 'adequate': 2, 'mostly effective': 3, 'completely effective': 4, 'completely incorrect': 0, 'mostly incorrect': 1, 'neither': 2, 'mostly correct': 3, 'completely correct': 4, 'not at all clear': 0, 'slightly clear': 1, 'moderately clear': 2, 'very clear': 3, 'completely clear': 4, 'not at all efficient': 0, 'slightly efficient': 1, 'moderately efficient': 2, 'very efficient': 3, 'extremely efficient': 4, 'partly correct': 2}
+```python
+{'completely off': 0, 'slightly relevant': 1, 'relevant': 2, 'mostly accurate': 3, 'completely accurate': 4, 'inappropriate': 0, 'barely adequate': 1, 'adequate': 2, 'mostly effective': 3, 'completely effective': 4, 'completely incorrect': 0, 'mostly incorrect': 1, 'neither': 2, 'mostly correct': 3, 'completely correct': 4, 'not at all clear': 0, 'slightly clear': 1, 'moderately clear': 2, 'very clear': 3, 'completely clear': 4, 'not at all efficient': 0, 'slightly efficient': 1, 'moderately efficient': 2, 'very efficient': 3, 'extremely efficient': 4, 'partly correct': 2}
+```
 
-
-    /home/vscode/.local/lib/python3.10/site-packages/numpy/core/fromnumeric.py:3504: RuntimeWarning: Mean of empty slice.
-      return _methods._mean(a, axis=axis, dtype=dtype,
-    /home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:129: RuntimeWarning: invalid value encountered in scalar divide
-      ret = ret.dtype.type(ret / rcount)
-    /home/vscode/.local/lib/python3.10/site-packages/scipy/stats/_distn_infrastructure.py:2244: RuntimeWarning: invalid value encountered in multiply
-      lower_bound = _a * scale + loc
-    /home/vscode/.local/lib/python3.10/site-packages/scipy/stats/_distn_infrastructure.py:2245: RuntimeWarning: invalid value encountered in multiply
-      upper_bound = _b * scale + loc
-    /home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:206: RuntimeWarning: Degrees of freedom <= 0 for slice
-      ret = _var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
-    /home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:163: RuntimeWarning: invalid value encountered in divide
-      arrmean = um.true_divide(arrmean, div, out=arrmean,
-    /home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:198: RuntimeWarning: invalid value encountered in scalar divide
-      ret = ret.dtype.type(ret / rcount)
+```python
+/home/vscode/.local/lib/python3.10/site-packages/numpy/core/fromnumeric.py:3504: RuntimeWarning: Mean of empty slice.
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:129: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+/home/vscode/.local/lib/python3.10/site-packages/scipy/stats/_distn_infrastructure.py:2244: RuntimeWarning: invalid value encountered in multiply
+  lower_bound = _a * scale + loc
+/home/vscode/.local/lib/python3.10/site-packages/scipy/stats/_distn_infrastructure.py:2245: RuntimeWarning: invalid value encountered in multiply
+  upper_bound = _b * scale + loc
+/home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:206: RuntimeWarning: Degrees of freedom <= 0 for slice
+  ret = _var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+/home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:163: RuntimeWarning: invalid value encountered in divide
+  arrmean = um.true_divide(arrmean, div, out=arrmean,
+/home/vscode/.local/lib/python3.10/site-packages/numpy/core/_methods.py:198: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
 ```
 
 The final plot would be saved in `../test/test_files/agenteval-in-out/estimated_performance.png`
@@ -2547,9 +2577,11 @@ plt.tight_layout()  # Adjust subplot parameters to fit the labels
 plt.ylim(0, 5)
 plt.savefig("../test/test_files/agenteval-in-out/estimated_performance.png")
 plt.show()
+```
 
-    /tmp/ipykernel_394256/2108490914.py:34: UserWarning: Tight layout not applied. The left and right margins cannot be made large enough to accommodate all axes decorations.
-      plt.tight_layout()  # Adjust subplot parameters to fit the labels
+```python
+/tmp/ipykernel_394256/2108490914.py:34: UserWarning: Tight layout not applied. The left and right margins cannot be made large enough to accommodate all axes decorations.
+  plt.tight_layout()  # Adjust subplot parameters to fit the labels
 ```
 
 ![png](agenteval_cq_math_files/agenteval_cq_math_21_1.png)

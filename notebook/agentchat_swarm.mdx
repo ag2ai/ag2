@@ -2,22 +2,50 @@
 title: "Swarm Orchestration with AG2"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_swarm.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_swarm.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 AG2 offers conversable agents, powered by LLMs, tools or a human, that can perform tasks collectively via an automated chat. Recently, OpenAI released a [Swarm](https://github.com/openai/swarm) framework that focuses on making agent coordination and execution lightweight.
 
 Now, AG2 offers a simple programming interface to build and orchestrate a swarm of agents. Please check the [Documentation](https://ag2ai.github.io/ag2/docs/topics/swarm) and [Blog](https://ag2ai.github.io/ag2/blog/2024/11/17/Swarm) for more details.
 
 In this notebook, we implement OpenAI's [airline customer service example](https://github.com/openai/swarm/tree/main/examples/airline) in AG2.
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Install `ag2`:
 ```bash
 pip install ag2
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Set your API Endpoint
 

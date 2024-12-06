@@ -2,6 +2,33 @@
 title: "From Dad Jokes To Sad Jokes: Function Calling with GPTAssistantAgent"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/gpt_assistant_agent_function_call.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/gpt_assistant_agent_function_call.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 Autogen allows `GPTAssistantAgent` to be augmented with "tools" — pre-defined functions or capabilities — that extend its ability to handle specific tasks, similar to how one might natively utilize tools in the [OpenAI Assistant's API](https://platform.openai.com/docs/assistants/tools).
 
 In this notebook, we create a basic Multi-Agent System using Autogen's `GPTAssistantAgent` to convert Dad jokes on a specific topic into Sad jokes. It consists of a "Dad" agent which has the ability to search the [Dad Joke API](https://icanhazdadjoke.com/api) and a "Sad Joker" agent which converts the Dad jokes into Sad jokes. The Sad Joker then writes the sad jokes into a txt file.
@@ -117,7 +144,9 @@ write_to_txt_schema = get_function_schema(
 )
 ```
 
-    The return type of the function 'write_to_txt' is not annotated. Although annotating it is optional, the function should return either a string, a subclass of 'pydantic.BaseModel'.
+```python
+The return type of the function 'write_to_txt' is not annotated. Although annotating it is optional, the function should return either a string, a subclass of 'pydantic.BaseModel'.
+```
 
 ## Creating the Agents
 
@@ -158,9 +187,11 @@ the_dad = GPTAssistantAgent(
         "tools": [get_dad_jokes_schema],
     },
 )
+```
 
-    OpenAI client config of GPTAssistantAgent(the_dad) - model: gpt-4-1106-preview
-    Matching assistant found, using the first matching assistant: {'id': 'asst_BLBUwYPugb1UR2jQMGAA7RtU', 'created_at': 1714660644, 'description': None, 'file_ids': [], 'instructions': "\n    As 'The Dad', your primary role is to entertain by fetching dad jokes which the sad joker will transform into 'sad jokes' based on a given theme. When provided with a theme, such as 'plants' or 'animals', your task is as follows:\n\n    1. Use the 'get_dad_jokes' function to search for dad jokes related to the provided theme by providing a search term related to the theme. Fetch a list of jokes that are relevant to the theme.\n    2. Present these jokes to the sad joker in a format that is clear and easy to read, preparing them for transformation.\n\n    Remember, the team's goal is to creatively adapt the essence of each dad joke to fit the 'sad joke' format, all while staying true to the theme provided by the user.\n    ", 'metadata': {}, 'model': 'gpt-4-1106-preview', 'name': 'the_dad', 'object': 'assistant', 'tools': [ToolFunction(function=FunctionDefinition(name='get_dad_jokes', description='Fetches a list of dad jokes based on a search term. Allows pagination with page and limit parameters.', parameters={'type': 'object', 'properties': {'search_term': {'type': 'string', 'description': 'search_term'}, 'page': {'type': 'integer', 'default': 1, 'description': 'page'}, 'limit': {'type': 'integer', 'default': 10, 'description': 'limit'}}, 'required': ['search_term']}), type='function')]}
+```python
+OpenAI client config of GPTAssistantAgent(the_dad) - model: gpt-4-1106-preview
+Matching assistant found, using the first matching assistant: {'id': 'asst_BLBUwYPugb1UR2jQMGAA7RtU', 'created_at': 1714660644, 'description': None, 'file_ids': [], 'instructions': "\n    As 'The Dad', your primary role is to entertain by fetching dad jokes which the sad joker will transform into 'sad jokes' based on a given theme. When provided with a theme, such as 'plants' or 'animals', your task is as follows:\n\n    1. Use the 'get_dad_jokes' function to search for dad jokes related to the provided theme by providing a search term related to the theme. Fetch a list of jokes that are relevant to the theme.\n    2. Present these jokes to the sad joker in a format that is clear and easy to read, preparing them for transformation.\n\n    Remember, the team's goal is to creatively adapt the essence of each dad joke to fit the 'sad joke' format, all while staying true to the theme provided by the user.\n    ", 'metadata': {}, 'model': 'gpt-4-1106-preview', 'name': 'the_dad', 'object': 'assistant', 'tools': [ToolFunction(function=FunctionDefinition(name='get_dad_jokes', description='Fetches a list of dad jokes based on a search term. Allows pagination with page and limit parameters.', parameters={'type': 'object', 'properties': {'search_term': {'type': 'string', 'description': 'search_term'}, 'page': {'type': 'integer', 'default': 1, 'description': 'page'}, 'limit': {'type': 'integer', 'default': 10, 'description': 'limit'}}, 'required': ['search_term']}), type='function')]}
 ```
 
 Next, we register the `get_dad_jokes` function with the Dad `GPTAssistantAgent`
@@ -257,6 +288,8 @@ user_proxy.initiate_chat(group_chat_manager, message="Jokes about cats")
     user_proxy (to chat_manager):
 
     --------------------------------------------------------------------------------
+```
 
-    ChatResult(chat_id=None, chat_history=[{'content': 'Jokes about cats', 'role': 'assistant'}, {'content': "Here are some cat-themed dad jokes for the sad joker to transform:\n\n1. Where do cats write notes? Scratch Paper!\n2. It was raining cats and dogs the other day. I almost stepped in a poodle.\n3. What do you call a group of disorganized cats? A cat-tastrophe.\n4. I accidentally took my cat's meds last night. Don’t ask meow.\n5. What do you call a pile of cats? A Meowtain.\n6. Animal Fact #25: Most bobcats are not named Bob.\n", 'name': 'the_dad', 'role': 'user'}, {'content': 'The cat-themed sad jokes have been transformed and saved to a text file named "sad_cat_jokes.txt".\n', 'name': 'the_sad_joker', 'role': 'user'}, {'content': '', 'role': 'assistant'}], summary='', cost=({'total_cost': 0.0278, 'gpt-4-1106-preview': {'cost': 0.0278, 'prompt_tokens': 2744, 'completion_tokens': 12, 'total_tokens': 2756}}, {'total_cost': 0.02194, 'gpt-4-1106-preview': {'cost': 0.02194, 'prompt_tokens': 2167, 'completion_tokens': 9, 'total_tokens': 2176}}), human_input=[])
+```python
+ChatResult(chat_id=None, chat_history=[{'content': 'Jokes about cats', 'role': 'assistant'}, {'content': "Here are some cat-themed dad jokes for the sad joker to transform:\n\n1. Where do cats write notes? Scratch Paper!\n2. It was raining cats and dogs the other day. I almost stepped in a poodle.\n3. What do you call a group of disorganized cats? A cat-tastrophe.\n4. I accidentally took my cat's meds last night. Don’t ask meow.\n5. What do you call a pile of cats? A Meowtain.\n6. Animal Fact #25: Most bobcats are not named Bob.\n", 'name': 'the_dad', 'role': 'user'}, {'content': 'The cat-themed sad jokes have been transformed and saved to a text file named "sad_cat_jokes.txt".\n', 'name': 'the_sad_joker', 'role': 'user'}, {'content': '', 'role': 'assistant'}], summary='', cost=({'total_cost': 0.0278, 'gpt-4-1106-preview': {'cost': 0.0278, 'prompt_tokens': 2744, 'completion_tokens': 12, 'total_tokens': 2756}}, {'total_cost': 0.02194, 'gpt-4-1106-preview': {'cost': 0.02194, 'prompt_tokens': 2167, 'completion_tokens': 9, 'total_tokens': 2176}}), human_input=[])
 ```

@@ -2,6 +2,33 @@
 title: "Chatting with a teachable agent"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_teachability.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_teachability.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 Conversational assistants based on LLMs can remember the current chat with the user, and can even demonstrate in-context learning of things that the user teaches the assistant during the chat. But these memories and learnings are lost once the chat is over, or when a single chat grows too long for the LLM to handle effectively. In subsequent chats, the user is forced to repeat any necessary instructions over and over.
 
 The optional agent capability called `Teachability` addresses these limitations by persisting user teachings across chat boundaries in long-term memory (a vector database). Memories (called memos) are created and saved to disk throughout a conversation, then loaded from disk later. Instead of copying all the memos into the context window, which would eat up valuable space, individual memos are retrieved into context only as needed. This allows the user to teach many facts, preferences and skills to the teachable agent just once, and have it remember them in later chats.
@@ -12,8 +39,8 @@ This notebook demonstrates how `Teachability` can be added to an agent so that i
 
 ## Requirements
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
@@ -21,8 +48,9 @@ pip install autogen[teachable]
 ```
 
 For more information, please refer to the [installation guide](/website/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ## Set your API Endpoint
 
@@ -46,11 +74,12 @@ print(config_list[0]["model"])
 
     gpt-4-1106-preview
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/website/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ## Construct Agents
 
@@ -84,9 +113,11 @@ user = UserProxyAgent(
         "use_docker": False
     },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
 )
+```
 
-    CLEARING MEMORY
+```python
 
+CLEARING MEMORY
 ```
 
 ## Learning new facts

@@ -2,6 +2,33 @@
 title: "AutoBuild"
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/autobuild_basic.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/autobuild_basic.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 By: [Linxin Song](https://linxins97.github.io/), [Jieyu Zhang](https://jieyuz2.github.io/)
 Reference: [Agent AutoBuild](https://ag2ai.github.io/autogen/blog/2023/11/26/Agent-AutoBuild/)
 
@@ -98,13 +125,15 @@ agent_list, agent_configs = builder.build(building_task, llm_config)
 
 Let agents generated in `build()` to complete the task collaboratively in a group chat.
 
-````python
+```python
 start_task(
     execution_task="Find a recent paper about gpt-4 on arxiv and find its potential applications in software.",
     agent_list=agent_list,
     coding=agent_configs["coding"],
 )
+```
 
+````python
     DataMining_Expert (to chat_manager):
     Find a recent paper about gpt-4 on arxiv and find its potential applications in software.
 
@@ -429,7 +458,9 @@ You can clear all agents generated in this task by the following code if your ta
 builder.clear_all_agents(recycle_endpoint=True)
 ```
 
-    All agents have been cleared.
+```python
+All agents have been cleared.
+```
 
 ## Save & load configs
 
@@ -489,7 +520,9 @@ These information will be saved in JSON format. You can provide a specific filen
 saved_path = builder.save()
 ```
 
-    Building config saved to ./save_config_c52224ebd16a2e60b348f3f04ac15e79.json
+```python
+Building config saved to ./save_config_c52224ebd16a2e60b348f3f04ac15e79.json
+```
 
 After that, you can load the saved config and skip the building process. AgentBuilder will create agents with those information without prompting the builder manager.
 
