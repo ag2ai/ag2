@@ -161,7 +161,6 @@ class OrchestratorAgent(ConversableAgent):
         is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
 
         assert is_valid_response
-        # TODO: response dict ? 
         assert isinstance(response, str)
         self._facts = response
         planning_conversation.append(
@@ -179,7 +178,6 @@ class OrchestratorAgent(ConversableAgent):
         )
 
         assert is_valid_response
-        # TODO: response dict ?
         assert isinstance(response, str)
         self._plan = response
 
@@ -197,7 +195,6 @@ class OrchestratorAgent(ConversableAgent):
         is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
 
         assert is_valid_response
-        # TODO: response dict ? 
         assert isinstance(response, str)
 
         self._facts = response
@@ -213,7 +210,6 @@ class OrchestratorAgent(ConversableAgent):
         is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
 
         assert is_valid_response
-        # TODO: response dict ? 
         assert isinstance(response, str)
 
         self._plan = response
@@ -240,11 +236,9 @@ class OrchestratorAgent(ConversableAgent):
             )
 
             assert is_valid_response
-            # TODO: response dict ? 
             assert isinstance(ledger_str, str)
 
             try:
-                assert isinstance(ledger_str, str)
                 ledger_dict: Dict[str, Any] = self._clean_and_parse_json(ledger_str)
 
                 required_keys = [
@@ -278,10 +272,11 @@ class OrchestratorAgent(ConversableAgent):
             except json.JSONDecodeError as e:
                 logger.log_event(
                     source=self.name,
-                    name="error",
+                    name="thought",
                     data={
-                        "error_type": "JSONDecodeError",
-                        "error_message": str(e),
+                        "stage": "error",
+                        "error_type": "JSONDecodeError", 
+                        "message": str(e),
                         "traceback": traceback.format_exc(),
                         "ledger_str": ledger_str
                     }
@@ -299,32 +294,33 @@ class OrchestratorAgent(ConversableAgent):
             )
 
         assert is_valid_response
-        # TODO: response dict ? 
         assert isinstance(response, str)
         
         return response
 
 
-    def _select_next_agent(self, task: str) -> Optional[ConversableAgent]:
+    def _select_next_agent(self, task: dict | str) -> Optional[ConversableAgent]:
         """Select the next agent to act based on the current state."""
-        if isinstance(task, List):  # TODO: fix type
-            if task[0]["type"] == "text":
-                task = task[0]["text"]
-            elif task[1]["type"] == "text":
-                task = task[1]["text"]
+        taskstr: str = ""
+        if isinstance(task, dict): 
+
+            if isinstance(task["content"], str):
+                taskstr = task["content"]
+            elif isinstance(task["content"], list) and task["content"][0]["type"] == "text" and isinstance(task["content"][0]["text"], str):
+                taskstr = task["content"][0]["text"]
+            elif isinstance(task["content"], list) and task["content"][1]["type"] == "text" and isinstance(task["content"][1]["text"], str):
+                taskstr = task["content"][1]["text"]
             else:
                 raise ValueError(f"Invalid task format: {task}")
+        elif isinstance(task, str):
+            taskstr = task
 
-        if not task or task.strip() == "":
-            logger.log_event(
-                source=self.name,
-                name="error",
-                data={"error": "Invalid task: Empty task content."}
-            )
+        if taskstr.strip() == "":
+            # Task validation
             return None
 
         if len(self._task) == 0:
-            self._initialize_task(task)
+            self._initialize_task(taskstr)
             # Verify initialization
             assert len(self._task) > 0
             assert len(self._facts) > 0
@@ -343,12 +339,12 @@ class OrchestratorAgent(ConversableAgent):
             # Log the initial plan
             logger.log_event(
                 source=self.name,
-                name="initial_plan",
-                data={"plan": synthesized_prompt}
+                name="thought",
+                data={"stage": "initial_plan", "plan": synthesized_prompt}
             )
 
             # Add to chat history
-            self._append_oai_message({"role": "assistant", "content": synthesized_prompt}, "assistant", self, True)
+            self._append_oai_message(synthesized_prompt, "assistant", self, True)
 
             # Add initial plan to chat history only
             return self._select_next_agent(synthesized_prompt)
@@ -357,16 +353,22 @@ class OrchestratorAgent(ConversableAgent):
         ledger_dict = self.update_ledger()
         logger.log_event(
             source=self.name,
-            name="ledger_update",
-            data={"ledger": ledger_dict}
+            name="thought",
+            data={
+                "stage": "ledger_update",
+                "content": json.dumps(ledger_dict, indent=2)
+            }
         )
 
         # Task is complete
         if ledger_dict["is_request_satisfied"]["answer"] is True:
             logger.log_event(
                 source=self.name,
-                name="task_complete",
-                data={"message": "Request satisfied"}
+                name="thought",
+                data={
+                    "stage": "task_complete",
+                    "message": "Request satisfied"
+                }
             )
             
             if self._return_final_answer:
@@ -382,10 +384,7 @@ class OrchestratorAgent(ConversableAgent):
                 final_msg = {"role": "assistant", "content": final_answer}
                 self._append_oai_message(final_msg, "assistant", self, True)
                 
-                # Share final answer with all agents if enabled
-                if self._agent_whole_history:
-                    for agent in self._agents:
-                        self.send(final_answer, agent)
+
             return None
 
         # Stalled or stuck in a loop
@@ -402,16 +401,22 @@ class OrchestratorAgent(ConversableAgent):
                 if self._replan_counter > self._max_replans:
                     logger.log_event(
                         source=self.name,
-                        name="termination",
-                        data={"reason": "Replan counter exceeded"}
+                        name="thought",
+                        data={
+                            "stage": "termination",
+                            "reason": "Replan counter exceeded"
+                        }
                     )
                     return None
                 # Let's create a new plan
                 else:
                     logger.log_event(
                         source=self.name,
-                        name="replan",
-                        data={"reason": "Stalled ... Replanning .."}
+                        name="thought",
+                        data={
+                            "stage": "replan",
+                            "reason": "Stalled ... Replanning .."
+                        }
                     )
 
                     # Update our plan.
@@ -434,12 +439,16 @@ class OrchestratorAgent(ConversableAgent):
                     # Share new plan with all agents if whole history enabled
                     if self._agent_whole_history:
                         for agent in self._agents:
-                            self.send(synthesized_prompt, agent)
+                            # TODO: confirm this is correct
+                            agent._append_oai_message({"role": "assistant", "content": synthesized_prompt}, "assistant", self, True)
 
                     logger.log_event(
                         source=self.name,
-                        name="new_plan",
-                        data={"plan": synthesized_prompt}
+                        name="thought",
+                        data={
+                            "stage": "new_plan",
+                            "plan": synthesized_prompt
+                        }
                     )
 
                     synthesized_message = {"role": "assistant", "content": synthesized_prompt}
@@ -457,10 +466,9 @@ class OrchestratorAgent(ConversableAgent):
                 # Log the instruction
                 logger.log_event(
                     source=self.name,
-                    name="instruction",
+                    name="thought",
                     data={
-                        "from_agent": self.name,
-                        "to_agent": next_agent_name,
+                        "stage": f"-> {next_agent_name}",
                         "instruction": instruction
                     }
                 )
@@ -472,10 +480,13 @@ class OrchestratorAgent(ConversableAgent):
                 # Share instruction with all agents if enabled
                 if self._agent_whole_history:
                     for agent in self._agents:
-                        self.send(instruction, agent)
+                        # TODO: confirm this is correct
+                        agent._append_oai_message(instruction_msg, "assistant", self, True)
+
                 else:
                     # Otherwise just send to next agent
-                    self.send(instruction, agent)
+                    # TODO: confirm this is correct
+                    self._oai_messages[self].append(instruction_msg)
                 return agent
 
         return None
@@ -508,33 +519,62 @@ class OrchestratorAgent(ConversableAgent):
             
             instructions = self._oai_messages[self][-1] if self._oai_messages[self] else None
             if not instructions:
-                logger.log_event(self.name, "error", error="No message found in chat history")
+                logger.log_event(
+                    source=self.name,
+                    name="thought",
+                    data={
+                        "stage": "error",
+                        "message": "No message found in chat history"
+                    }
+                )
                 break
                 
-            # Execute through executor agent 
             response = await next_agent.a_generate_reply(messages=[instructions], sender=self)
+
             if isinstance(response, str):
-                task = response
+                response = response
             elif isinstance(response, dict):
-                task = response["content"]
+                response = response["content"]
             else:
-                logger.log_event(self.name, "error", error=f"Invalid response type: {type(response)}")
+                logger.log_event(
+                    source=self.name,
+                    name="thought",
+                    data={
+                        "stage": "error",
+                        "message": f"Invalid response type: {type(response)}"
+                    }
+                )
                 break
-            response_msg = {"role": "user", "content": task}
-            self._append_oai_message(task, "user", self, False)
+            response_msg = {"role": "user", "content": response}
 
-            if self._agent_whole_history:
-                for agent in self._agents:
-                    if agent != next_agent:  # Don't send to the agent who just responded
-                        self.send(response_msg, agent)
+            #if self._agent_whole_history:
+            #    for agent in self._agents:
+            #        if agent != next_agent:  # Don't send to the agent who just responded
+            #            agent._append_oai_message(response_msg, "assistant", next_agent, is_sending=False)
+            #            #TODO: can i handle this better?
 
-            next_agent = self._select_next_agent(task)
+            was_appended = self._append_oai_message(response_msg, "user", self, is_sending=False)
+            if not was_appended:
+                logger.log_event(
+                    source=self.name,
+                    name="thought",
+                    data={
+                        "stage": "error",
+                        "message": "Failed to append message to OAI messages"
+                    }
+                )
+                break
+
+            next_agent = self._select_next_agent(response_msg)
                     
             if self._current_round >= self._max_rounds:
                 logger.log_event(
                     source=self.name,
-                    name="max_rounds_reached",
-                    data={"max_rounds": self._max_rounds}
+                    name="thought",
+                    data={
+                        "stage": "max_rounds_reached",
+                        "max_rounds": self._max_rounds
+                    }
                 )
                 
         # Track final state
@@ -546,8 +586,11 @@ class OrchestratorAgent(ConversableAgent):
         }
         logger.log_event(
             source=self.name,
-            name="final_state",
-            data=final_state
+            name="thought",
+            data={
+                "stage": "final_state",
+                "state": final_state
+            }
         )
         
         # Return chat result with all relevant info
@@ -594,13 +637,12 @@ class OrchestratorAgent(ConversableAgent):
             except json.JSONDecodeError as e:
                 logger.log_event(
                     source=self.name,
-                    name="json_error",
+                    name="thought",
                     data={
+                        "stage": "json_error",
                         "original_content": content,
                         "cleaned_content": cleaned_content,
-                        "error": str(e)
+                        "message": str(e)
                     }
                 )
                 raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
-
-

@@ -146,7 +146,7 @@ class MultimodalWebSurfer(ConversableAgent):
         browser_data_dir: str | None = None,
         start_page: str | None = None,
         downloads_folder: str | None = None,
-        debug_dir: str | None = os.getcwd(),
+        debug_dir: str = os.getcwd(),
         to_save_screenshots: bool = False,
         # navigation_allow_list=lambda url: True,
         markdown_converter: Any | None = None,  # TODO: Fixme
@@ -230,10 +230,10 @@ class MultimodalWebSurfer(ConversableAgent):
         assert self._page is not None
         await self._page.wait_for_timeout(duration * 1000)
 
-    async def _set_debug_dir(self, debug_dir: str | None) -> None:
+    async def _set_debug_dir(self, debug_dir: str) -> None:
         assert self._page is not None
         self.debug_dir = debug_dir
-        if self.debug_dir is None:
+        if self.debug_dir == "":
             return
 
         if not os.path.isdir(self.debug_dir):
@@ -681,7 +681,6 @@ class MultimodalWebSurfer(ConversableAgent):
             else:
                 self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
-        # Call the parent class's generate_reply instead of our own to avoid recursion
         response = await super().a_generate_reply(messages=history + [message]) # system massage
 
         self._last_download = None
@@ -717,50 +716,17 @@ class MultimodalWebSurfer(ConversableAgent):
         try:
             await self._page.wait_for_load_state()
         except TimeoutError:
-            logger.log_event(
-                source=self.name,
-                name="page_load_timeout",
-                data={
-                    "url": self._page.url
-                }
-            )
+            pass
 
         # Read the regions from the DOM
         try:
             await self._page.evaluate(self._page_script)
-        except Exception as e:
-            logger.log_event(
-                source=self.name,
-                name="page_script_error",
-                data={
-                    "error": str(e),
-                    "url": self._page.url
-                }
-            )
+        except Exception:
+            pass
 
         result = cast(
             Dict[str, Dict[str, Any]], await self._page.evaluate("MultimodalWebSurfer.getInteractiveRects();")
         )
-
-        # Log the number of interactive regions found
-        logger.log_event(
-            source=self.name,
-            name="interactive_rects",
-            data={
-                "count": len(result),
-                "url": self._page.url
-            }
-        )
-
-        # Fallback if no interactive regions
-        if not result:
-            logger.log_event(
-                source=self.name,
-                name="no_interactive_regions",
-                data={
-                    "url": self._page.url
-                }
-            )
 
         # Convert the results into appropriate types
         assert isinstance(result, dict)
@@ -819,21 +785,7 @@ class MultimodalWebSurfer(ConversableAgent):
         try:
             await self._page.wait_for_load_state()
         except TimeoutError:
-            logger.log_event(
-                source=self.name,
-                name="page_load_timeout",
-                data={
-                    "url": self._page.url
-                }
-            )
-        logger.log_event(
-            source=self.name,
-            name="new_page",
-            data={
-                "url": self._page.url,
-                "text": "New tab or window opened"
-            }
-        )
+            pass
 
     async def _back(self) -> None:
         assert self._page is not None
@@ -848,17 +800,6 @@ class MultimodalWebSurfer(ConversableAgent):
             self._prior_metadata_hash = None
             
         except Exception as e_outer:
-            # Log navigation failure
-            logger.log_event(
-                source=self.name,
-                name="page_visit",
-                data={
-                    "url": url,
-                    "status": "failure",
-                    "error": str(e_outer)
-                }
-            )
-            
             # Downloaded file
             if self.downloads_folder and "net::ERR_ABORTED" in str(e_outer):
                 async with self._page.expect_download() as download_info:
@@ -1168,10 +1109,11 @@ class MultimodalWebSurfer(ConversableAgent):
         # Visit the page
         if url is not None:
             await self._visit_page(url)
+            assert self._page is not None
             await self._page.wait_for_load_state()
             await asyncio.sleep(2)
         
-        
+        assert self._page is not None
         # Get interactive rects
         rects = await self._get_interactive_rects()
         
