@@ -48,7 +48,8 @@ repos:
               website/docs/tutorial/code-executors.ipynb |
               website/docs/topics/code-execution/custom-executor.ipynb |
               website/docs/topics/non-openai-models/cloud-gemini.ipynb |
-              notebook/.*
+              notebook/.* |
+              test/agentchat/contrib/graph_rag/trip_planner_data/.*
             )$
   # See https://jaredkhan.com/blog/mypy-pre-commit
   - repo: local

@@ -36,11 +36,18 @@ Links to notebook examples:
 - OptiGuide for Solving a Supply Chain Optimization Problem with Nested Chats with a Coding Agent and a Safeguard Agent - [View Notebook](/docs/notebooks/agentchat_nestedchat_optiguide)
 - Conversational Chess with Nested Chats and Tool Use - [View Notebook](/docs/notebooks/agentchat_nested_chats_chess)
 
+### Swarms
+- Orchestrating agents in a Swarm - [View Notebook](/docs/notebooks/agentchat_swarm)
+
 ### Applications
 
 - Automated Continual Learning from New Data - [View Notebook](/docs/notebooks/agentchat_stream)
 <!-- - [OptiGuide](https://github.com/microsoft/optiguide) - Coding, Tool Using, Safeguarding & Question Answering for Supply Chain Optimization -->
 - [AutoAnny](https://github.com/ag2ai/build-with-ag2/tree/main/samples/apps/auto-anny) - A Discord bot built using AutoGen
+
+### RAG
+
+- GraphRAG agent using FalkorDB (feat. swarms and Google Maps API) - [View Notebook](/docs/notebooks/agentchat_swarm_graphrag_trip_planner)
 
 ### Tool Use
 

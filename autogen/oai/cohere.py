@@ -33,13 +33,14 @@ import random
 import sys
 import time
 import warnings
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from cohere import Client as Cohere
 from cohere.types import ToolParameterDefinitionsValue, ToolResult
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import logging_formatter, validate_parameter
 
@@ -78,6 +79,9 @@ class CohereClient:
         assert (
             self.api_key
         ), "Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable."
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Cohere, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> List:
         """
@@ -148,7 +152,6 @@ class CohereClient:
         return cohere_params
 
     def create(self, params: Dict) -> ChatCompletion:
-
         messages = params.get("messages", [])
         client_name = params.get("client_name") or "autogen-cohere"
         # Parse parameters to the Cohere API's parameters
