@@ -17,8 +17,14 @@ from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
 
 class Neo4jGraphQueryEngine(GraphQueryEngine):
     """
-    This is a wrapper for Neo4j PropertyGraphIndex query engine.
-    It creates a PropertyGraph Index from input documents and allows querying the graph.
+    This class serves as a wrapper for a Neo4j database-backed PropertyGraphIndex query engine,
+    facilitating the creation, updating, and querying of graphs.
+
+    It builds a PropertyGraph Index from input documents,
+    storing and retrieving data from a property graph in the Neo4j database.
+
+    Using SchemaLLMPathExtractor, it defines schemas with entities, relationships, and other properties based on the input,
+    which are added into the preprty graph.
 
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
     """
@@ -139,14 +145,14 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
         """
-        Query the knowledge graph with a question and optional message history.
+        Query the knowledge graph with a question.
 
         Args:
         question: a human input question.
         n_results: number of results to return.
 
         Returns:
-        Neo4j GrapStorehQueryResult
+        A GrapStoreQueryResult object containing the answer and related triplets.
         """
         if self.graph_store is None:
             raise ValueError("Knowledge graph is not created.")
@@ -168,10 +174,11 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
     def clear(self) -> None:
         """
-        delete all entities and relationships in the graph.
+        Delete all entities and relationships in the graph.
+        Indexes and Constraints won't be dropped.
         """
         if self.graph_store is None:
-            raise ValueError("Knowledge graph is not created.")
+            raise ValueError("Property graph is not created.")
         # %%
         with self.graph_store._driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n;")
