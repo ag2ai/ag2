@@ -4,10 +4,12 @@ authors:
   - Hk669
   - skzhang1
   - sonichi
+  - BabyCNM
+  - qingyunwu
 tags: [LLM, GPT, research]
 ---
 
-![Tree of Thoughts](img/tree-of-thoughts.png)
+![Tree of Thoughts](img/reasoningagent_1.png)
 
 **TL;DR:**
 * We introduce **ReasoningAgent**, an AG2 agent that implements tree-of-thought reasoning with beam search to solve complex problems.
@@ -40,6 +42,8 @@ The process works as follows:
 2. The grader agent evaluates each path and assigns a score
 3. Beam search selects the top-k paths based on these scores
 4. The process repeats until a solution is found or maximum depth is reached
+
+![Beam Search](img/reasoningagent_2.png)
 
 ## O1-Style Reasoning with Beam Size 1
 
