@@ -65,9 +65,9 @@ graph_rag_falkor_db = [
 ]
 
 neo4j_graph_rag = [
-    "llama_index==0.12.2",
-    "llama-index-graph-stores-neo4j=0.4.0",
-    "neo4j==5.27.0",
+    "llama_index==0.11.8",
+    "llama-index-graph-stores-neo4j=0.3.0",
+    "llma-index-core==0.11.8",
 ]
 
 if current_os in ["Windows", "Darwin"]:

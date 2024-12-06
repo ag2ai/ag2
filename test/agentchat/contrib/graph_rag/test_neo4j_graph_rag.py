@@ -59,7 +59,7 @@ def test_neo4j_query_engine():
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
-        host="bolt://172.17.0.4",  # Change
+        host="bolt://172.17.0.2",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database
         entities=entities,  # possible entities
@@ -78,4 +78,4 @@ def test_neo4j_query_engine():
 
     print(query_result.answer)
 
-    assert query_result.answer.find("Interleaf") >= 0
+    assert query_result.answer.find("Y Combinator") >= 0

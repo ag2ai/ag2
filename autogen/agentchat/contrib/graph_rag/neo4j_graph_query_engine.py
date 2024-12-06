@@ -17,7 +17,10 @@ from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
 
 class Neo4jGraphQueryEngine(GraphQueryEngine):
     """
-    This is a wrapper for Neo4j KnowledgeGraph.
+    This is a wrapper for Neo4j PropertyGraphIndex query engine.
+    It creates a PropertyGraph Index form input documents and allows querying the graph.
+
+    For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
     """
 
     def __init__(
@@ -84,13 +87,16 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             url=self.host + ":" + str(self.port),
             database=self.database,
         )
+        # delete all entities and relationships if a graph pre-exists
+        self.clear()
+
         self.documents = SimpleDirectoryReader(input_files=self.input_files).load_data()
 
         # Extract paths following a strict schema of allowed entities, relationships, and which entities can be connected to which relationships.
         # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
         self.kg_extractors = [
             SchemaLLMPathExtractor(
-                llm=OpenAI(model=self.model, temperature=0.0),
+                llm=OpenAI(model=self.model, temperature=self.temperature),
                 possible_entities=self.entities,
                 possible_relations=self.relations,
                 kg_validation_schema=self.validation_schema,
@@ -100,7 +106,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
         self.index = PropertyGraphIndex.from_documents(
             self.documents,
-            embed_model=OpenAIEmbedding(model_name="text-embedding-3-small"),
+            embed_model=OpenAIEmbedding(model_name=self.embed_model),
             kg_extractors=self.kg_extractors,
             property_graph_store=self.graph_store,
             show_progress=True,
@@ -108,7 +114,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
     def add_records(self, new_records: List) -> bool:
         """
-        Add new records to the knowledge graph.
+        Add new records to the knowledge graph. Must be local files.
 
         Args:
             new_records (List[Document]): List of new documents to add.
@@ -149,8 +155,23 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         query_engine = self.index.as_query_engine(include_text=True)
         response = str(query_engine.query(question))
 
-        # retrieve source chunks that are semantically related to the question
+        # retrieve source triplets that are semantically related to the question
         retriever = self.index.as_retriever(include_text=False)
         nodes = retriever.retrieve(question)
+        triplets = []
+        for node in nodes:
+            entities = [sub.split("(")[0].strip() for sub in node.text.split("->")]
+            triplet = " -> ".join(entities)
+            triplets.append(triplet)
 
-        return GraphStoreQueryResult(answer=response, results=nodes)
+        return GraphStoreQueryResult(answer=response, results=triplets)
+
+    def clear(self) -> None:
+        """
+        delete all entities and relationships in the graph.
+        """
+        if self.graph_store is None:
+            raise ValueError("Knowledge graph is not created.")
+        # %%
+        with self.graph_store._driver.session() as session:
+            session.run("MATCH (n) DETACH DELETE n;")

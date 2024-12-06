@@ -16,6 +16,7 @@ class Neo4jGraphCapability(GraphRagCapability):
     The Neo4j graph capability integrates Neo4j Property graph
     Ref: https://neo4j.com/labs/genai-ecosystem/llamaindex/?utm_source=GSearch&utm_medium=PaidSearch&utm_campaign=Evergreen&utm_content=AMS-Search-SEMCE-DSA-None-SEM-SEM-NonABM&utm_term=&utm_adgroup=DSA&gad_source=1&gclid=Cj0KCQiAr7C6BhDRARIsAOUKifhzCrn5py9WlgkJP5sT3ABlD-qb2-FPSWCcO5GDcrkNuCYpOQjxh5AaAvdYEALw_wcB#_property_graph_constructing_modules
 
+
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
     """
 
@@ -54,8 +55,7 @@ class Neo4jGraphCapability(GraphRagCapability):
     ) -> Tuple[bool, Union[str, Dict, None]]:
         """
         Query neo4j and return the message. Internally, it utilises OpenAI to generate a reply based on the given messages.
-
-        If no results are found, a default message is returned: "I'm sorry, I don't have an answer for that."
+        The performance will be improved in future releases.
 
         Args:
             recipient: The agent instance that will receive the message.
