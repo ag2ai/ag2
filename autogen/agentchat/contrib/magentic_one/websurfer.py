@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import base64
 import hashlib
@@ -10,8 +12,19 @@ import random
 import re
 import time
 import traceback
-from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union, cast,Callable,Literal  # Any, Callable, Dict, List, Literal, Tuple
-from urllib.parse import quote_plus  # parse_qs, quote, unquote, urlparse, urlunparse
+from typing import (
+    Any,
+    BinaryIO,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    TypeAlias,
+)
+from urllib.parse import quote_plus
 
 import aiofiles
 
@@ -1009,18 +1022,15 @@ class MultimodalWebSurfer(ConversableAgent):
         #image_tokens = img_utils.num_tokens_from_gpt_image(scaled_screenshot, model=self.client.)
         #token_limit = max(token_limit - image_tokens, 1000)  # Reserve space for image tokens
         
-        # Convert image to data URI
+        # Convert image to data URI and clean up
         img_uri = img_utils.pil_to_data_uri(scaled_screenshot)
-        scaled_screenshot.close()  # Move the close() call after using the image
+        scaled_screenshot.close()
 
-        # Prepare the system prompt
-        messages: List[Dict[str,Any]] = []
-        messages.append(
-            {
-                "role": "system",
-                "content": "You are a helpful assistant that can summarize long documents to answer question.",
-            }
-        )
+        # Prepare messages for summarization
+        messages: List[Dict[str,Any]] = [{
+            "role": "system", 
+            "content": "You are a helpful assistant that can summarize long documents to answer questions."
+        }]
 
         # Prepare the main prompt
         prompt = f"We are visiting the webpage '{title}'. Its full-text content are pasted below, along with a screenshot of the page's current viewport."
@@ -1056,24 +1066,19 @@ class MultimodalWebSurfer(ConversableAgent):
         if len(buffer) == 0:
             return "Nothing to summarize."
 
-        # Append the message
-        messages.append(
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt + buffer
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": img_uri
-                        }
-                    }
-                ]
-            }
-        )
+        messages.append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt + buffer
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": img_uri}
+                }
+            ]
+        })
 
         # Generate the response
         is_valid_response, response = await self.a_generate_oai_reply(messages=messages)
@@ -1091,7 +1096,6 @@ class MultimodalWebSurfer(ConversableAgent):
             str: A random string containing letters and numbers
         """
         import string
-        import random
         characters = string.ascii_letters + string.digits
         return ''.join(random.choice(characters) for _ in range(length))
 
@@ -1196,7 +1200,8 @@ class MultimodalWebSurfer(ConversableAgent):
         return request_halt, tool_response
 
     async def _get_ocr_text(
-        self, image: bytes | io.BufferedIOBase | Image.Image
+        self, 
+        image: bytes | io.BufferedIOBase | Image.Image
     ) -> str:
         scaled_screenshot = None
         if isinstance(image, Image.Image):

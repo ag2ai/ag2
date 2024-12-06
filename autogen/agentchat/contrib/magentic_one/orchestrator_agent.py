@@ -13,14 +13,14 @@ from .orchestrator_prompts import (
     ORCHESTRATOR_UPDATE_PLAN_PROMPT,
     ORCHESTRATOR_GET_FINAL_ANSWER,
     ORCHESTRATOR_REPLAN_PROMPT,
-    ORCHESTRATOR_SYNTHESIZE_PROMPT
+    ORCHESTRATOR_SYNTHESIZE_PROMPT,
 )
 
 
 from autogen.agentchat import Agent, ConversableAgent, UserProxyAgent, ChatResult
 from autogen.logger import FileLogger
 
-logger = FileLogger(config={})
+logger: FileLogger = FileLogger(config={})
 
 
 class OrchestratorAgent(ConversableAgent):
@@ -105,23 +105,24 @@ class OrchestratorAgent(ConversableAgent):
         self._facts = ""
         self._plan = ""
 
-    def broadcast_message(self, message: Dict, sender: Optional[ConversableAgent] = None) -> None:
-        """Broadcast a message to all agents."""
+    def broadcast_message(self, message: Dict[str, Any], sender: Optional[ConversableAgent] = None) -> None:
+        """Broadcast a message to all agents except the sender."""
         broadcast_msg = BroadcastMessage(content=message)
         for agent in self._agents:
-            if agent != sender:  # Don't send to the sender
+            if agent != sender:
                 agent._append_oai_message(broadcast_msg.content, "assistant", sender or self, is_sending=False)
 
     def _get_plan_prompt(self, team: str) -> str:
-        return self._plan_prompt.format(team_description=team)  
+        return self._plan_prompt.format(team_description=team)
 
     def _get_synthesize_prompt(self, task: str, team: str, facts: str, plan: str) -> str:
         return self._synthesize_prompt.format(
-            task=task, 
-            team=team, 
-            facts=facts, 
-            plan=plan
-        )  
+            task=task,
+            team=team,
+            facts=facts,
+            plan=plan,
+        )
+
     def _get_ledger_prompt(self, task: str, team: str, names: List[str]) -> str:
         return self._ledger_prompt.format(
             task=task, 
@@ -323,10 +324,9 @@ class OrchestratorAgent(ConversableAgent):
             taskstr = task
 
         if taskstr.strip() == "":
-            # Task validation
-            return None
+            return None  # Empty task
 
-        if len(self._task) == 0:
+        if not self._task:
             self._initialize_task(taskstr)
             # Verify initialization
             assert len(self._task) > 0
@@ -615,7 +615,11 @@ class OrchestratorAgent(ConversableAgent):
         if not content.strip().startswith('{'):
             json_match = re.search(r'\{[\s\S]*\}', content)
             if not json_match:
-                raise ValueError(f"No JSON structure found in content: {content}")
+                raise ValueError(
+                    f"Could not find valid JSON structure in content. "
+                    f"Content must contain a JSON object enclosed in curly braces. "
+                    f"Received: {content}"
+                )
             content = json_match.group(0)
 
         # Now clean for parsing
