@@ -45,11 +45,11 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         strict: Optional[bool] = True,
     ):
         """
-        Initialize a Neo4j knowledge graph.
-        Please also refer to https://neo4j.com/docs/
+        Initialize a Neo4j Property graph.
+        Please also refer to https://docs.llamaindex.ai/en/stable/examples/property_graph/graph_store/
 
         Args:
-            name (str): Knowledge graph name.
+            name (str): Property graph name.
             host (str): Neo4j hostname.
             port (int): Neo4j port number.
             database (str): Neo4j database name.
@@ -93,8 +93,9 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             url=self.host + ":" + str(self.port),
             database=self.database,
         )
+
         # delete all entities and relationships if a graph pre-exists
-        self.clear()
+        self._clear()
 
         self.documents = SimpleDirectoryReader(input_files=self.input_files).load_data()
 
@@ -132,7 +133,11 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             raise ValueError("Knowledge graph is not initialized. Please call init_db first.")
 
         try:
-            # Load new documents
+            """
+            SimpleDirectoryReader will select the best file reader based on the file extensions, including:
+            [DocxReader, EpubReader, HWPReader, ImageReader, IPYNBReader, MarkdownReader, MboxReader,
+            PandasCSVReader, PandasExcelReader,PDFReader,PptxReader, VideoAudioReader]
+            """
             new_documents = SimpleDirectoryReader(input_files=[doc.path_or_url for doc in new_records]).load_data()
 
             for doc in new_documents:
@@ -172,13 +177,11 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
         return GraphStoreQueryResult(answer=response, results=triplets)
 
-    def clear(self) -> None:
+    def _clear(self) -> None:
         """
         Delete all entities and relationships in the graph.
-        Indexes and Constraints won't be dropped.
+        # TODO: Delete all the data in the database including indexes and constraints.
         """
-        if self.graph_store is None:
-            raise ValueError("Property graph is not created.")
         # %%
         with self.graph_store._driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n;")
