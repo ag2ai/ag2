@@ -1,5 +1,5 @@
 ---
-title: ReasoningAgent - Tree of Thoughts with Beam Search in AutoGen
+title: ReasoningAgent - Tree of Thoughts with Beam Search in AG2
 authors:
   - Hk669
   - skzhang1
@@ -10,13 +10,13 @@ tags: [LLM, GPT, research]
 ![Tree of Thoughts](img/tree-of-thoughts.png)
 
 **TL;DR:**
-* We introduce **ReasoningAgent**, an AutoGen agent that implements tree-of-thought reasoning with beam search to solve complex problems.
+* We introduce **ReasoningAgent**, an AG2 agent that implements tree-of-thought reasoning with beam search to solve complex problems.
 * ReasoningAgent explores multiple reasoning paths in parallel and uses a grader agent to evaluate and select the most promising paths.
 * The exploration trajectory and thought tree can be saved locally for further analysis. These logs can even be saved as SFT dataset and preference dataset for DPO and PPO training.
 
 ## Introduction
 
-Large language models (LLMs) have shown impressive capabilities in various tasks, but they can still struggle with complex reasoning problems that require exploring multiple solution paths. To address this limitation, we introduce ReasoningAgent, an AutoGen agent that implements tree-of-thought reasoning with beam search.
+Large language models (LLMs) have shown impressive capabilities in various tasks, but they can still struggle with complex reasoning problems that require exploring multiple solution paths. To address this limitation, we introduce ReasoningAgent, an AG2 agent that implements tree-of-thought reasoning with beam search.
 
 The key idea behind ReasoningAgent is to:
 1. Generate multiple possible reasoning steps at each point
