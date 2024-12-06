@@ -2,6 +2,33 @@
 title: Trip planning with a FalkorDB GraphRAG agent using a Swarm
 ---
 
+<div style={{ display: "inline-block", marginRight: "0px", height: "20px" }}>
+  <a
+    href="https://colab.research.google.com/github/ag2ai/ag2/blob/main/notebook/agentchat_swarm_graphrag_trip_planner.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://colab.research.google.com/assets/colab-badge.svg"
+      alt="Open in Colab"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+<div style={{ display: "inline-block", height: "20px" }}>
+  <a
+    href="https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_swarm_graphrag_trip_planner.mdx"
+    target="_blank"
+    style={{ height: "20px", display: "inline-flex", alignItems: "center" }}
+  >
+    <img
+      src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"
+      alt="Open in GitHub"
+      style={{ height: "20px", pointerEvents: "none" }}
+    />
+  </a>
+</div>
+
 In this notebook, we're building a trip planning swarm which has an objective to create an itinerary together with a customer. The end result will be an itinerary that has route times and distances calculated between activities.
 
 The following diagram outlines the key components of the Swarm, with highlights being:
@@ -11,8 +38,8 @@ The following diagram outlines the key components of the Swarm, with highlights 
 - Routing agent that utilises the Google Maps API to calculate distances between activites
 - Swarm orchestration utilising context variables
 
-````{=mdx}
-:::info Requirements
+<div class="info">
+<Info>
 FalkorDB's GraphRAG-SDK is a dependency for this notebook, which can be installed with ag2 via pip:
 
 ```bash
@@ -20,8 +47,9 @@ pip install ag2[graph_rag_falkor_db]
 ```
 
 For more information, please refer to the [installation guide](/docs/installation/).
-:::
-````
+
+</Info>
+</div>
 
 ### Pydantic
 
@@ -51,11 +79,12 @@ You can utilise an OAI_CONFIG_LIST file and extract the OpenAI API key and put i
 
 Alternatively, you can load the environment variable yourself.
 
-```{=mdx}
-:::tip
-Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
-:::
-```
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 ```python
 import os
@@ -906,82 +935,85 @@ if "timed_itinerary" in context_variables:
     print_itinerary(context_variables["timed_itinerary"])
 else:
     print("No itinerary available to print.")
+```
 
-                                    █             █
-                                     █           █
-                                      █  █████  █
-                                       ██     ██
-                                      █         █
-                                     █  ███████  █
-                                     █ ██ ███ ██ █
-                                       █████████
+```python
 
-                                     ██   ███ ███
-                                    █  █ █       █
-                                    ████ █ ██  ██
-                                    █  █ █  █ █
-                                    █  █  ██  ████
+                                █             █
+                                    █           █
+                                    █  █████  █
+                                    ██     ██
+                                    █         █
+                                    █  ███████  █
+                                    █ ██ ███ ██ █
+                                    █████████
 
-                                   Itinerary for Rome
-    ================================================================================
+                                    ██   ███ ███
+                                █  █ █       █
+                                ████ █ ██  ██
+                                █  █ █  █ █
+                                █  █  ██  ████
 
-    Day 1
-    --------------------------------------------------------------------------------
+                                Itinerary for Rome
+================================================================================
 
-      🏛️ Colosseum
-        Explore the ancient amphitheater known for gladiatorial contests and
-        public spectacles.
+Day 1
+--------------------------------------------------------------------------------
 
-      🚶 walking from Colosseum to Trattoria da Enzo
-        24 mins, (1.8 km)
+    🏛️ Colosseum
+    Explore the ancient amphitheater known for gladiatorial contests and
+    public spectacles.
 
-      🍽️ Trattoria da Enzo
-        Enjoy traditional Roman dishes in a cozy and welcoming atmosphere.
+    🚶 walking from Colosseum to Trattoria da Enzo
+    24 mins, (1.8 km)
 
-      🚶 walking from Trattoria da Enzo to Vatican Museums
-        50 mins, (3.5 km)
+    🍽️ Trattoria da Enzo
+    Enjoy traditional Roman dishes in a cozy and welcoming atmosphere.
 
-      🏛️ Vatican Museums
-        Visit a complex of museums and galleries showcasing works of art
-        collected by Popes over centuries.
+    🚶 walking from Trattoria da Enzo to Vatican Museums
+    50 mins, (3.5 km)
 
-      🚶 walking from Vatican Museums to Armando al Pantheon
-        36 mins, (2.6 km)
+    🏛️ Vatican Museums
+    Visit a complex of museums and galleries showcasing works of art
+    collected by Popes over centuries.
 
-      🍽️ Armando al Pantheon
-        Experience traditional Roman cuisine since 1961, located near the
-        Pantheon.
+    🚶 walking from Vatican Museums to Armando al Pantheon
+    36 mins, (2.6 km)
 
-    --------------------------------------------------------------------------------
+    🍽️ Armando al Pantheon
+    Experience traditional Roman cuisine since 1961, located near the
+    Pantheon.
 
-    Day 2
-    --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-      🏛️ Trevi Fountain
-        Marvel at the stunning sculptures of the Baroque fountain and join the
-        tradition of tossing coins.
+Day 2
+--------------------------------------------------------------------------------
 
-      🚶 walking from Trevi Fountain to Tonnarello
-        31 mins, (2.2 km)
+    🏛️ Trevi Fountain
+    Marvel at the stunning sculptures of the Baroque fountain and join the
+    tradition of tossing coins.
 
-      🍽️ Tonnarello
-        Relish in simple Roman dishes such as pasta and meatballs in a casual
-        setting with patio seating.
+    🚶 walking from Trevi Fountain to Tonnarello
+    31 mins, (2.2 km)
 
-      🚶 walking from Tonnarello to Basilica di Santa Maria Maggiore
-        46 mins, (3.2 km)
+    🍽️ Tonnarello
+    Relish in simple Roman dishes such as pasta and meatballs in a casual
+    setting with patio seating.
 
-      🏛️ Basilica di Santa Maria Maggiore
-        Visit a major basilica known for its rich history and impressive
-        architecture.
+    🚶 walking from Tonnarello to Basilica di Santa Maria Maggiore
+    46 mins, (3.2 km)
 
-      🚶 walking from Basilica di Santa Maria Maggiore to Tonnarello
-        44 mins, (3.2 km)
+    🏛️ Basilica di Santa Maria Maggiore
+    Visit a major basilica known for its rich history and impressive
+    architecture.
 
-      🍽️ Tonnarello
-        Return to Tonnarello for a delightful dining experience with a variety
-        of Roman specialties.
+    🚶 walking from Basilica di Santa Maria Maggiore to Tonnarello
+    44 mins, (3.2 km)
 
-    --------------------------------------------------------------------------------
+    🍽️ Tonnarello
+    Return to Tonnarello for a delightful dining experience with a variety
+    of Roman specialties.
+
+--------------------------------------------------------------------------------
 
 ```
