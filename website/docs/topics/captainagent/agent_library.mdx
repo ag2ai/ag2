@@ -1,6 +1,11 @@
-# Agent Library
+---
+title: Agent Library
+---
+
 ## Library Structure
+
 A simple agent in agent library requires three fields:
+
 - description: This describes the functionality of the agent.
 - system_message: This provides the system message of the agent for initialization.
 - name: The name of the agent.
@@ -8,6 +13,7 @@ A simple agent in agent library requires three fields:
 - tags (optional): The tag of the backbone model to use.
 
 An example of the agent library is as follows.
+
 ```
 [
     "description": "The Python_Programming_Expert specializes in using Python's pandas and numpy libraries to manipulate large data sets, particularly focusing on creating and analyzing a new 'STEM' feature from educational datasets, and works collaboratively in a multidisciplinary team.",
@@ -19,6 +25,7 @@ An example of the agent library is as follows.
 We provide a predefined agent library in `notebook/captainagent_expert_library.json`.
 
 ## Adding advanced agents
+
 We also support adding agents with advanced capability to the library, aside from agents with customized system message. Just need to add a `agent_path` field and any other arguments that needs to pass while initialization. For example, to add a WebSurferAgent:
 
 ```
@@ -42,6 +49,7 @@ We also support adding agents with advanced capability to the library, aside fro
 ```
 
 Under the hood, the code will import the module according to the `agent_path`. The core code that implements this feature is:
+
 ```
 module_path, model_class_name = agent_path.replace("/", ".").rsplit(".", 1)
 module = importlib.import_module(module_path)

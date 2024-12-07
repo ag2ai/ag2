@@ -1,0 +1,19 @@
+export const GalleryPage = ({ items }) => (
+  <CardGroup cols={2}>
+    {items.map((e) => (
+      <Card key={e.title} title={e.title} img={e.image} href={e.link}>
+        {e.description}
+        <div className="flex flex-wrap gap-2 mt-4">
+          {e?.tags?.map((tag, index) => (
+            <span
+              className="text-xs font-semibold me-2 px-2 py-0.5 rounded border inline-flex items-center justify-center"
+              key={index}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </Card>
+    ))}
+  </CardGroup>
+);

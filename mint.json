@@ -1,0 +1,350 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "AG2.ai",
+  "logo": {
+    "dark": "/website/static/img/ag2-white.svg",
+    "light": "/website/static/img/ag2.svg"
+  },
+  "search": {
+    "prompt": "Search or ask..."
+  },
+  "favicon": "/website/static/img/ag2.svg",
+  "colors": {
+    "primary": "#000000",
+    "light": "#ffffff",
+    "dark": "#000000",
+    "anchors": {
+      "from": "#000000",
+      "to": "#ffffff"
+    }
+  },
+  "font": {
+    "headings": {
+      "family": "Jersey 10"
+    },
+    "body": {
+      "family": "Inter"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Support",
+      "url": "mailto:support@ag2.ai"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "AG2.ai",
+    "url": "https://ag2.ai/"
+  },
+  "tabs": [
+    {
+      "name": "Documentation",
+      "url": "website/docs"
+    },
+    {
+      "name": "Examples",
+      "url": "notebook"
+    },
+    {
+      "name": "Community Talks",
+      "url": "website/talks"
+    },
+    {
+      "name": "Blog",
+      "url": "website/blog"
+    }
+  ],
+  "anchors": [],
+  "navigation": [
+    {
+      "group": "",
+      "pages": ["website/docs/Getting-Started"]
+    },
+    {
+      "group": "Installation",
+      "pages": [
+        "website/docs/installation/Installation",
+        "website/docs/installation/Docker",
+        "website/docs/installation/Optional-Dependencies"
+      ]
+    },
+    {
+      "group": "Tutorials",
+      "pages": [
+        "website/docs/tutorial/introduction",
+        "website/docs/tutorial/chat-termination",
+        "website/docs/tutorial/human-in-the-loop",
+        "website/docs/tutorial/code-executors",
+        "website/docs/tutorial/tool-use",
+        "website/docs/tutorial/conversation-patterns",
+        "website/docs/tutorial/what-next"
+      ]
+    },
+    {
+      "group": "Use Cases",
+      "pages": [
+        "website/docs/Use-Cases/agent_chat",
+        "website/docs/Use-Cases/enhanced_inference"
+      ]
+    },
+    {
+      "group": "User Guide",
+      "pages": [
+        {
+          "group": "Code Execution",
+          "pages": [
+            "website/docs/topics/code-execution/cli-code-executor",
+            "website/docs/topics/code-execution/custom-executor",
+            "website/docs/topics/code-execution/jupyter-code-executor",
+            "website/docs/topics/code-execution/user-defined-functions"
+          ]
+        },
+        {
+          "group": "OpenAI Assistant",
+          "pages": ["website/docs/topics/openai-assistant/gpt_assistant_agent"]
+        },
+        {
+          "group": "GroupChat",
+          "pages": [
+            "website/docs/topics/groupchat/customized_speaker_selection",
+            "website/docs/topics/groupchat/resuming_groupchat",
+            "website/docs/topics/groupchat/transform_messages_speaker_selection",
+            "website/docs/topics/groupchat/using_custom_model_client_classes"
+          ]
+        },
+        {
+          "group": "Using Non-OpenAI Models",
+          "pages": [
+            "website/docs/topics/non-openai-models/about-using-nonopenai-models",
+            "website/docs/topics/non-openai-models/best-tips-for-nonopenai-models",
+            "website/docs/topics/non-openai-models/cloud-anthropic",
+            "website/docs/topics/non-openai-models/cloud-bedrock",
+            "website/docs/topics/non-openai-models/cloud-cerebras",
+            "website/docs/topics/non-openai-models/cloud-cohere",
+            "website/docs/topics/non-openai-models/cloud-gemini",
+            "website/docs/topics/non-openai-models/cloud-gemini_vertexai",
+            "website/docs/topics/non-openai-models/cloud-groq",
+            "website/docs/topics/non-openai-models/cloud-mistralai",
+            "website/docs/topics/non-openai-models/cloud-togetherai",
+            "website/docs/topics/non-openai-models/local-litellm-ollama",
+            "website/docs/topics/non-openai-models/local-lm-studio",
+            "website/docs/topics/non-openai-models/local-ollama",
+            "website/docs/topics/non-openai-models/local-vllm"
+          ]
+        },
+        {
+          "group": "CaptainAgent",
+          "pages": [
+            "website/docs/topics/captainagent/agent_library",
+            "website/docs/topics/captainagent/configurations",
+            "website/docs/topics/captainagent/tool_library"
+          ]
+        },
+        {
+          "group": "Handling Long Contexts",
+          "pages": [
+            "website/docs/topics/handling_long_contexts/compressing_text_w_llmligua",
+            "website/docs/topics/handling_long_contexts/intro_to_transform_messages"
+          ]
+        },
+        "website/docs/topics/llm-caching",
+        "website/docs/topics/llm-observability",
+        "website/docs/topics/llm_configuration",
+        {
+          "group": "Prompting and Reasoning",
+          "pages": [
+            "website/docs/topics/prompting-and-reasoning/react",
+            "website/docs/topics/prompting-and-reasoning/reflection"
+          ]
+        },
+        "website/docs/topics/retrieval_augmentation",
+        "website/docs/topics/swarm",
+        "website/docs/topics/task_decomposition",
+        "website/docs/FAQ"
+      ]
+    },
+    {
+      "group": "AutoGen Studio",
+      "pages": [
+        "website/docs/autogen-studio/getting-started",
+        "website/docs/autogen-studio/usage",
+        "website/docs/autogen-studio/faqs"
+      ]
+    },
+    {
+      "group": "Ecosystem",
+      "pages": [
+        "website/docs/ecosystem/agentops",
+        "website/docs/ecosystem/azure_cosmos_db",
+        "website/docs/ecosystem/composio",
+        "website/docs/ecosystem/databricks",
+        "website/docs/ecosystem/llamaindex",
+        "website/docs/ecosystem/mem0",
+        "website/docs/ecosystem/memgpt",
+        "website/docs/ecosystem/microsoft-fabric",
+        "website/docs/ecosystem/ollama",
+        "website/docs/ecosystem/pgvector",
+        "website/docs/ecosystem/portkey",
+        "website/docs/ecosystem/promptflow"
+      ]
+    },
+    {
+      "group": "Contributor Guide",
+      "pages": [
+        "website/docs/contributor-guide/contributing",
+        "website/docs/contributor-guide/docker",
+        "website/docs/contributor-guide/documentation",
+        "website/docs/contributor-guide/file-bug-report",
+        "website/docs/contributor-guide/maintainer",
+        "website/docs/contributor-guide/pre-commit",
+        "website/docs/contributor-guide/tests",
+        "website/docs/Research",
+        "website/docs/Migration-Guide"
+      ]
+    },
+    {
+      "group": "Talks",
+      "pages": [
+        "website/talks/future_talks/index",
+        "website/talks/2024-11-28/index",
+        "website/talks/2024-11-25/index",
+        "website/talks/2024-11-18/index",
+        "website/talks/2024-11-12/index",
+        "website/talks/2024-11-11/index",
+        "website/talks/2024-11-04/index",
+        "website/talks/2024-10-15/index",
+        "website/talks/2024-10-14/index",
+        "website/talks/2024-09-30/index",
+        "website/talks/2024-09-23/index",
+        "website/talks/2024-08-26/index"
+      ]
+    },
+    {
+      "group": "Posts",
+      "pages": [
+        "website/blog/2024-11-17-Swarm/index",
+        "website/blog/2024-11-15-CaptainAgent/index",
+        "website/blog/2024-10-23-NOVA/index",
+        "website/blog/2024-07-25-AgentOps/index",
+        "website/blog/2024-06-24-AltModels-Classes/index",
+        "website/blog/2024-06-21-AgentEval/index",
+        "website/blog/2024-05-24-Agent/index",
+        "website/blog/2024-03-11-AutoDefense/index",
+        "website/blog/2024-03-03-AutoGen-Update/index",
+        "website/blog/2024-02-29-StateFlow/index",
+        "website/blog/2024-02-11-FSM-GroupChat/index",
+        "website/blog/2024-02-02-AutoAnny/index",
+        "website/blog/2024-01-26-Custom-Models/index",
+        "website/blog/2024-01-25-AutoGenBench/index",
+        "website/blog/2024-01-23-Code-execution-in-docker/index",
+        "website/blog/2023-12-29-AgentDescriptions/index",
+        "website/blog/2023-12-23-AgentOptimizer/index",
+        "website/blog/2023-12-01-AutoGenStudio/index",
+        "website/blog/2023-11-26-Agent-AutoBuild/index",
+        "website/blog/2023-11-20-AgentEval/index",
+        "website/blog/2023-11-13-OAI-assistants/index",
+        "website/blog/2023-11-09-EcoAssistant/index",
+        "website/blog/2023-11-06-LMM-Agent/index",
+        "website/blog/2023-10-26-TeachableAgent/index",
+        "website/blog/2023-10-18-RetrieveChat/index",
+        "website/blog/2023-07-14-Local-LLMs/index",
+        "website/blog/2023-06-28-MathChat/index",
+        "website/blog/2023-05-18-GPT-adaptive-humaneval/index",
+        "website/blog/2023-04-21-LLM-tuning-math/index"
+      ]
+    },
+    {
+      "group": "Examples",
+      "pages": [
+        "notebook/Examples",
+        "notebook/Gallery",
+        {
+          "group": "Notebooks",
+          "pages": [
+            "notebook/JSON_mode_example",
+            "notebook/agentchat_RetrieveChat",
+            "notebook/agentchat_RetrieveChat_mongodb",
+            "notebook/agentchat_RetrieveChat_pgvector",
+            "notebook/agentchat_RetrieveChat_qdrant",
+            "notebook/agentchat_agentops",
+            "notebook/agentchat_agentoptimizer",
+            "notebook/agentchat_auto_feedback_from_code_execution",
+            "notebook/agentchat_azr_ai_search",
+            "notebook/agentchat_captainagent",
+            "notebook/agentchat_cost_token_tracking",
+            "notebook/agentchat_custom_model",
+            "notebook/agentchat_dalle_and_gpt4v",
+            "notebook/agentchat_databricks_dbrx",
+            "notebook/agentchat_function_call",
+            "notebook/agentchat_function_call_async",
+            "notebook/agentchat_function_call_code_writing",
+            "notebook/agentchat_function_call_currency_calculator",
+            "notebook/agentchat_group_chat_with_llamaindex_agents",
+            "notebook/agentchat_groupchat",
+            "notebook/agentchat_groupchat_RAG",
+            "notebook/agentchat_groupchat_customized",
+            "notebook/agentchat_groupchat_finite_state_machine",
+            "notebook/agentchat_groupchat_research",
+            "notebook/agentchat_groupchat_stateflow",
+            "notebook/agentchat_groupchat_vis",
+            "notebook/agentchat_guidance",
+            "notebook/agentchat_human_feedback",
+            "notebook/agentchat_image_generation_capability",
+            "notebook/agentchat_inception_function",
+            "notebook/agentchat_langchain",
+            "notebook/agentchat_lmm_gpt-4v",
+            "notebook/agentchat_lmm_llava",
+            "notebook/agentchat_logging",
+            "notebook/agentchat_memory_using_mem0",
+            "notebook/agentchat_multi_task_async_chats",
+            "notebook/agentchat_multi_task_chats",
+            "notebook/agentchat_nested_chats_chess",
+            "notebook/agentchat_nested_chats_chess_altmodels",
+            "notebook/agentchat_nested_sequential_chats",
+            "notebook/agentchat_nestedchat",
+            "notebook/agentchat_nestedchat_optiguide",
+            "notebook/agentchat_oai_assistant_function_call",
+            "notebook/agentchat_oai_assistant_groupchat",
+            "notebook/agentchat_oai_assistant_retrieval",
+            "notebook/agentchat_oai_assistant_twoagents_basic",
+            "notebook/agentchat_oai_code_interpreter",
+            "notebook/agentchat_openlit",
+            "notebook/agentchat_planning",
+            "notebook/agentchat_reasoning_agent",
+            "notebook/agentchat_society_of_mind",
+            "notebook/agentchat_sql_spider",
+            "notebook/agentchat_stream",
+            "notebook/agentchat_structured_outputs",
+            "notebook/agentchat_surfer",
+            "notebook/agentchat_swarm",
+            "notebook/agentchat_swarm_graphrag_trip_planner",
+            "notebook/agentchat_swarm_w_groupchat_legacy",
+            "notebook/agentchat_teachability",
+            "notebook/agentchat_teachable_oai_assistants",
+            "notebook/agentchat_teaching",
+            "notebook/agentchat_transform_messages",
+            "notebook/agentchat_two_users",
+            "notebook/agentchat_video_transcript_translate_with_whisper",
+            "notebook/agentchat_web_info",
+            "notebook/agentchat_webscraping_with_apify",
+            "notebook/agentchat_websockets",
+            "notebook/agentchat_with_memory",
+            "notebook/agentchats_sequential_chats",
+            "notebook/agenteval_cq_math",
+            "notebook/async_human_input",
+            "notebook/autobuild_agent_library",
+            "notebook/autobuild_basic",
+            "notebook/autogen_uniformed_api_calling",
+            "notebook/gpt_assistant_agent_function_call",
+            "notebook/lats_search"
+          ]
+        }
+      ]
+    }
+  ],
+  "footerSocials": {
+    "x": "https://x.com/ag2ai",
+    "github": "https://github.com/ag2ai",
+    "discord": "https://discord.gg/pAbnFJrkgZ"
+  }
+}

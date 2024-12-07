@@ -1,0 +1,764 @@
+---
+title: "Making OpenAI Assistants Teachable"
+---
+
+Conversational assistants based on LLMs can remember the current chat with the user, and can even demonstrate in-context learning of things that the user teaches the assistant during the chat. But these memories and learnings are lost once the chat is over, or when a single chat grows too long for the LLM to handle effectively. In subsequent chats, the user is forced to repeat any necessary instructions over and over.
+
+The optional agent capability called `Teachability` addresses these limitations by persisting user teachings across chat boundaries in long-term memory (a vector database). Memories (called memos) are created and saved to disk throughout a conversation, then loaded from disk later. Instead of copying all the memos into the context window, which would eat up valuable space, individual memos are retrieved into context only as needed. This allows the user to teach many facts, preferences and skills to the teachable agent just once, and have it remember them in later chats.
+
+In making decisions about memo storage and retrieval, `Teachability` calls an instance of `TextAnalyzerAgent` to analyze pieces of text in several different ways. This adds extra LLM calls involving a relatively small number of tokens. These calls can add a few seconds to the time a user waits for a response.
+
+This notebook demonstrates how `Teachability` can be added to instances of `GPTAssistantAgent`
+so that they can learn facts, preferences, and skills from users. As explained [here](https://ag2ai.github.io/ag2/docs/topics/openai-assistant/gpt_assistant_agent), each instance of `GPTAssistantAgent` wraps an OpenAI Assistant that can be given a set of tools including functions, code interpreter, and retrieval. Assistants with these tools are demonstrated in separate standalone sections below, which can be run independently.
+
+## Requirements
+
+AutoGen requires `Python>=3.8`. To run this notebook example, please install the [teachable] option.
+
+```bash
+pip install "autogen[teachable]"
+```
+
+```python
+%%capture --no-stderr
+# %pip install "autogen[teachable]"
+```
+
+## Set your API Endpoint
+
+The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
+
+```python
+import logging
+import os
+
+import requests
+
+import autogen
+from autogen import UserProxyAgent, config_list_from_json
+
+# from autogen.agentchat import UserProxyAgent
+from autogen.agentchat.contrib.capabilities.teachability import Teachability
+from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
+
+config_list = autogen.config_list_from_json(
+    env_or_file="OAI_CONFIG_LIST",
+    file_location=".",
+    filter_dict={
+        "model": ["gpt-4", "gpt-4-1106-preview", "gpt4", "gpt-4-32k"],
+    },
+)
+
+print(config_list[0]["model"])
+
+    gpt-4-1106-preview
+
+
+It first looks for environment variable "OAI_CONFIG_LIST" which needs to be a valid json string. If that variable is not found, it then looks for a json file named "OAI_CONFIG_LIST". It filters the configs by models (you can filter by other keys as well). After application of the filter shown above, only the gpt-4 models are considered.
+
+The config list may look like the following:
+```
+
+```python
+config_list = [
+    {
+        'model': 'gpt-4-1106-preview',
+        'api_key': '<your OpenAI API key here>',
+    },
+    {
+        'model': 'gpt-4',
+        'api_key': '<your OpenAI API key here>',
+    },
+    {
+        'model': 'gpt-4',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+    },
+    {
+        'model': 'gpt-4-32k',
+        'api_key': '<your Azure OpenAI API key here>',
+        'base_url': '<your Azure OpenAI API base here>',
+        'api_type': 'azure',
+        'api_version': '2024-02-01',
+    },
+]
+```
+
+If you open this notebook in colab, you can upload your files by clicking the file icon on the left panel and then choose "upload file" icon.
+
+You can set the value of config_list in other ways if you prefer, e.g., loading from a YAML file.
+
+---
+
+## Teachable OpenAI Assistant with Functions
+
+This section is based on [agentchat_oai_assistant_function_call.ipynb](https://github.com/microsoft/autogen/blob/teach_cap/notebook/agentchat_oai_assistant_function_call.ipynb), which demonstrates an assistant accomplishing a task through **function calling**.
+
+### Function schema and implementation
+
+This example leverages OSS Insight (Open Source Software Insight) for advanced GitHub data analysis.
+
+```python
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
+ossinsight_api_schema = {
+    "name": "ossinsight_data_api",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": (
+                    "Enter your GitHub data question in the form of a clear and specific question to ensure the returned data is accurate and valuable. "
+                    "For optimal results, specify the desired format for the data table in your request."
+                ),
+            }
+        },
+        "required": ["question"],
+    },
+    "description": "This is an API endpoint allowing users (analysts) to input question about GitHub in text format to retrieve the realted and structured data.",
+}
+
+
+def get_ossinsight(question):
+    """
+    Retrieve the top 10 developers with the most followers on GitHub.
+    """
+    url = "https://api.ossinsight.io/explorer/answer"
+    headers = {"Content-Type": "application/json"}
+    data = {"question": question, "ignoreCache": True}
+
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code == 200:
+        answer = response.json()
+    else:
+        return f"Request to {url} failed with status code: {response.status_code}"
+
+    report_components = []
+    report_components.append(f"Question: {answer['question']['title']}")
+    if answer["query"]["sql"] != "":
+        report_components.append(f"querySQL: {answer['query']['sql']}")
+
+    if answer.get("result", None) is None or len(answer["result"]["rows"]) == 0:
+        result = "Result: N/A"
+    else:
+        result = "Result:\n  " + "\n  ".join([str(row) for row in answer["result"]["rows"]])
+    report_components.append(result)
+
+    if answer.get("error", None) is not None:
+        report_components.append(f"Error: {answer['error']}")
+    return "\n\n".join(report_components) + "\n\n"
+```
+
+### Create the OpenAI Assistant with function calling as a tool
+
+```python
+assistant_id = os.environ.get("ASSISTANT_ID", None)
+config_list = config_list_from_json("OAI_CONFIG_LIST")
+llm_config = {
+    "config_list": config_list,
+    "assistant_id": assistant_id,
+    "tools": [
+        {
+            "type": "function",
+            "function": ossinsight_api_schema,
+        }
+    ],
+}
+
+oss_analyst = GPTAssistantAgent(
+    name="OSS_Analyst",
+    instructions=(
+        "Hello, Open Source Project Analyst. You'll conduct comprehensive evaluations of open source projects or organizations on the GitHub platform, "
+        "analyzing project trajectories, contributor engagements, open source trends, and other vital parameters. "
+        "Please carefully read the context of the conversation to identify the current analysis question or problem that needs addressing."
+    ),
+    llm_config=llm_config,
+    verbose=True,
+)
+oss_analyst.register_function(
+    function_map={
+        "ossinsight_data_api": get_ossinsight,
+    }
+)
+
+    GPT Assistant only supports one OpenAI client. Using the first client in the list.
+    No matching assistant found, creating a new assistant
+```
+
+### Give the assistant a task involving function calls
+
+```python
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    code_execution_config={
+        "work_dir": "coding",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=0,
+)
+
+user_proxy.initiate_chat(oss_analyst, message="Top 10 developers with the most followers")
+
+    user_proxy (to OSS_Analyst):
+
+    Top 10 developers with the most followers
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION ossinsight_data_api...
+
+    Input arguments: {'question': 'Who are the top 10 developers with the most followers on GitHub?'}
+    Output:
+    Question: Who are the top 10 developers with the most followers on GitHub?
+
+    querySQL: SELECT `login` AS `user_login`, `followers` AS `followers` FROM `github_users` ORDER BY `followers` DESC LIMIT 10
+
+    Result:
+      {'followers': 196404, 'user_login': 'torvalds'}
+      {'followers': 96850, 'user_login': 'yyx990803'}
+      {'followers': 85337, 'user_login': 'gaearon'}
+      {'followers': 77032, 'user_login': 'ruanyf'}
+      {'followers': 76251, 'user_login': 'gustavoguanabara'}
+      {'followers': 68210, 'user_login': 'bradtraversy'}
+      {'followers': 66512, 'user_login': 'JakeWharton'}
+      {'followers': 60972, 'user_login': 'peng-zhihui'}
+      {'followers': 60311, 'user_login': 'sindresorhus'}
+      {'followers': 59046, 'user_login': 'karpathy'}
+
+
+    OSS_Analyst (to user_proxy):
+
+    The top 10 developers with the most followers on GitHub are:
+
+    1. Linus Torvalds (`torvalds`) - 196,404 followers
+    2. Evan You (`yyx990803`) - 96,850 followers
+    3. Dan Abramov (`gaearon`) - 85,337 followers
+    4. Ruan YiFeng (`ruanyf`) - 77,032 followers
+    5. Gustavo Guanabara (`gustavoguanabara`) - 76,251 followers
+    6. Brad Traversy (`bradtraversy`) - 68,210 followers
+    7. Jake Wharton (`JakeWharton`) - 66,512 followers
+    8. Peng Zhihui (`peng-zhihui`) - 60,972 followers
+    9. Sindre Sorhus (`sindresorhus`) - 60,311 followers
+    10. Andrej Karpathy (`karpathy`) - 59,046 followers
+
+    These are the developers with the largest number of followers on GitHub as of the latest data.
+
+
+    --------------------------------------------------------------------------------
+```
+
+### Make the assistant teachable
+
+We can make any `ConversableAgent` teachable by adding a `Teachability` object to it.
+
+```python
+teachability = Teachability(reset_db=True, llm_config={"config_list": config_list})
+teachability.add_to_agent(oss_analyst)
+
+
+    CLEARING MEMORY
+```
+
+### Test the teachable assistant
+
+This time let's teach the assistant a more specific way of formatting lists.
+
+```python
+user_proxy.initiate_chat(
+    oss_analyst,
+    message="List the top 10 developers with the most followers. When listing things, please put them in a table.",
+)
+
+    user_proxy (to OSS_Analyst):
+
+    List the top 10 developers with the most followers. When listing things, please put them in a table.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION ossinsight_data_api...
+
+    Input arguments: {'question': 'Who are the top 10 developers with the most followers on GitHub?'}
+    Output:
+    Question: Who are the top 10 developers with the most followers on GitHub?
+
+    querySQL: SELECT `login` AS `user_login`, `followers` AS `followers` FROM `github_users` ORDER BY `followers` DESC LIMIT 10
+
+    Result:
+      {'followers': 196404, 'user_login': 'torvalds'}
+      {'followers': 96850, 'user_login': 'yyx990803'}
+      {'followers': 85337, 'user_login': 'gaearon'}
+      {'followers': 77032, 'user_login': 'ruanyf'}
+      {'followers': 76251, 'user_login': 'gustavoguanabara'}
+      {'followers': 68210, 'user_login': 'bradtraversy'}
+      {'followers': 66512, 'user_login': 'JakeWharton'}
+      {'followers': 60972, 'user_login': 'peng-zhihui'}
+      {'followers': 60311, 'user_login': 'sindresorhus'}
+      {'followers': 59046, 'user_login': 'karpathy'}
+
+
+    OSS_Analyst (to user_proxy):
+
+    Here are the top 10 developers with the most followers on GitHub:
+
+    | Rank | User Login          | Followers |
+    |------|---------------------|-----------|
+    | 1    | torvalds            | 196,404   |
+    | 2    | yyx990803           | 96,850    |
+    | 3    | gaearon             | 85,337    |
+    | 4    | ruanyf              | 77,032    |
+    | 5    | gustavoguanabara    | 76,251    |
+    | 6    | bradtraversy        | 68,210    |
+    | 7    | JakeWharton         | 66,512    |
+    | 8    | peng-zhihui         | 60,972    |
+    | 9    | sindresorhus        | 60,311    |
+    | 10   | karpathy            | 59,046    |
+
+
+    --------------------------------------------------------------------------------
+```
+
+Finally, let's clear the chat history to see whether the assistant can remember to use our preferred formatting in a new chat without having to be told again.
+
+```python
+user_proxy.initiate_chat(oss_analyst, message="List the top 10 developers with the most followers.", clear_history=True)
+
+    user_proxy (to OSS_Analyst):
+
+    List the top 10 developers with the most followers.
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> EXECUTING FUNCTION ossinsight_data_api...
+
+    Input arguments: {'question': 'List the top 10 developers with the most followers on GitHub. Please present the results in a table format.'}
+    Output:
+    Question: List the top 10 developers with the most followers on GitHub. Please present the results in a table format.
+
+    querySQL: SELECT `login` AS `user_login`, `followers` AS `followers` FROM `github_users` ORDER BY `followers` DESC LIMIT 10
+
+    Result:
+      {'followers': 196404, 'user_login': 'torvalds'}
+      {'followers': 96850, 'user_login': 'yyx990803'}
+      {'followers': 85337, 'user_login': 'gaearon'}
+      {'followers': 77032, 'user_login': 'ruanyf'}
+      {'followers': 76251, 'user_login': 'gustavoguanabara'}
+      {'followers': 68210, 'user_login': 'bradtraversy'}
+      {'followers': 66512, 'user_login': 'JakeWharton'}
+      {'followers': 60972, 'user_login': 'peng-zhihui'}
+      {'followers': 60311, 'user_login': 'sindresorhus'}
+      {'followers': 59046, 'user_login': 'karpathy'}
+
+
+    OSS_Analyst (to user_proxy):
+
+    Here are the top 10 developers on GitHub with the most followers, presented in a table format:
+
+    | User Login         | Followers |
+    |--------------------|-----------|
+    | torvalds           | 196,404   |
+    | yyx990803          | 96,850    |
+    | gaearon            | 85,337    |
+    | ruanyf             | 77,032    |
+    | gustavoguanabara   | 76,251    |
+    | bradtraversy       | 68,210    |
+    | JakeWharton        | 66,512    |
+    | peng-zhihui        | 60,972    |
+    | sindresorhus       | 60,311    |
+    | karpathy           | 59,046    |
+
+    These numbers indicate the significant influence and reach these developers have within the GitHub community.
+
+
+    --------------------------------------------------------------------------------
+```
+
+### Delete the teachable assistant
+
+All OpenAI Assistants can be created, viewed and deleted manually through OpenAI's [website](https://platform.openai.com/assistants). They can also be deleted through the `GPTAssistantAgent` instance.
+
+```python
+oss_analyst.delete_assistant()
+
+    Permanently deleting assistant...
+
+```
+
+## Teachable OpenAI Assistant with Code Interpreter
+
+This section is based on [agentchat_oai_code_interpreter.ipynb](https://github.com/microsoft/autogen/blob/teach_cap/notebook/agentchat_oai_code_interpreter.ipynb), which demonstrates an assistant accomplishing a task by **writing code and executing it** in a sandbox.
+
+### Create the OpenAI Assistant with code interpreter as a tool
+
+```python
+# Initiate an agent equipped with code interpreter
+coder_assistant = GPTAssistantAgent(
+    name="Coder_Assistant",
+    llm_config={
+        "tools": [{"type": "code_interpreter"}],
+        "config_list": config_list,
+    },
+    instructions="You are an expert at solving math questions. Write code and run it to solve math problems. Reply TERMINATE when the task is solved and there is no problem.",
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
+    code_execution_config={
+        "work_dir": "coding",
+        "use_docker": False,  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+    },
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=0,
+)
+
+    GPT Assistant only supports one OpenAI client. Using the first client in the list.
+    No matching assistant found, creating a new assistant
+```
+
+### Give the assistant a task involving code execution
+
+```python
+user_proxy.initiate_chat(
+    coder_assistant, message="If $725x + 727y = 1500$ and $729x+ 731y = 1508$, what is the value of $x - y$ ?"
+)
+
+    user_proxy (to Coder_Assistant):
+
+    If $725x + 727y = 1500$ and $729x+ 731y = 1508$, what is the value of $x - y$ ?
+
+    --------------------------------------------------------------------------------
+    Coder_Assistant (to user_proxy):
+
+    The value of \( x - y \) is \(-48\).
+
+    TERMINATE
+
+
+    --------------------------------------------------------------------------------
+```
+
+### Make the assistant teachable
+
+We can make any `ConversableAgent` teachable by adding a `Teachability` object to it.
+
+```python
+teachability = Teachability(reset_db=True, llm_config={"config_list": config_list})
+teachability.add_to_agent(coder_assistant)
+
+    CLEARING MEMORY
+```
+
+### Test the teachable assistant
+
+This time let's teach the assistant to show its work.
+
+```python
+user_proxy.initiate_chat(
+    coder_assistant,
+    message="If $725x + 727y = 1500$ and $729x+ 731y = 1508$, what is the value of $x - y$ ? After finding the values of variables, always explain how to find the solution.",
+)
+
+    user_proxy (to Coder_Assistant):
+
+    If $725x + 727y = 1500$ and $729x+ 731y = 1508$, what is the value of $x - y$ ? After finding the values of variables, always explain how to find the solution.
+
+    --------------------------------------------------------------------------------
+    Coder_Assistant (to user_proxy):
+
+    To find the value of $x - y$ given the system of linear equations:
+
+    \[
+    \begin{align*}
+    725x + 727y &= 1500 \\
+    729x + 731y &= 1508
+    \end{align*}
+    \]
+
+    we will use the method of elimination to solve for $x$ and $y$. The steps are as follows:
+
+    1. Multiply each equation by a suitable number to make the coefficients of either $x$ or $y$ the same in both equations.
+    2. Subtract one equation from the other to eliminate one of the variables.
+    3. Solve the resulting equation for the remaining variable.
+    4. Substitute the value of the found variable back into one of the original equations to find the value of the other variable.
+    5. Calculate $x - y$ using the values of $x$ and $y$ you've found.
+
+    Let's apply these steps to our given system of equations. We'll start by multiplying the first equation by $731$ and the second equation by $727$ in order to have the same coefficients for $y$ in both equations and then subtract the second resulting equation from the first.
+
+
+    It looks like I made a mistake while trying to multiply the entire equation by a constant. In SymPy, to perform arithmetic operations on both sides of an equation, we should operate on the left-hand side (lhs) and right-hand side (rhs) separately, not on the Eq object directly. Let's correct this by multiplying both the lhs and rhs of each equation by the appropriate constants and try again.
+
+
+    I encountered another error here. The solution `solve` function returns for `x` is actually a list, not a dictionary, so I should not be trying to index into it with a symbol. Instead, I need to extract the first (and only) element from the list of solutions for `x` before using it to solve for `y`. Let's correct this and solve it step by step.
+
+    First, I will correct the calculation of the resulting equation after eliminating $y$. Then I'll solve this equation for $x$, and afterwards I'll solve for $y$ using the value of $x$ we get. Then we'll calculate $x - y$.
+
+
+    The solution to the system of equations is $x = -23$ and $y = 25$. Therefore, the value of $x - y$ is $-48$.
+
+    To summarize the solution:
+
+    1. We multiplied the first equation by $731$ and the second equation by $727$ to make the coefficients of $y$ the same in both equations.
+    2. We then subtracted the second equation from the first to eliminate $y$ and obtained a single equation in terms of $x$.
+    3. We solved this resulting equation to find the value of $x$.
+    4. With the value of $x$ known, we substituted it back into one of the original equations to solve for $y$.
+    5. Finally, we computed $x - y$ using the values of $x$ and $y$ we found.
+
+
+    --------------------------------------------------------------------------------
+```
+
+Finally, let's clear the chat history to see whether the assistant can remember to show its work in a new chat without having to be told again.
+
+```python
+user_proxy.initiate_chat(
+    coder_assistant,
+    message="If $725x + 727y = 1500$ and $729x+ 731y = 1508$, what is the value of $x - y$ ?",
+    clear_history=True,
+)
+
+    user_proxy (to Coder_Assistant):
+
+    If $725x + 727y = 1500$ and $729x+ 731y = 1508$, what is the value of $x - y$ ?
+
+    --------------------------------------------------------------------------------
+    Coder_Assistant (to user_proxy):
+
+    These equations describe a system of linear equations. To find the value of $x - y$, we can use the method of elimination or substitution.
+
+    First, let's write down the given system:
+    \[\begin{align*}
+    725x + 727y & = 1500 \quad (1)\\
+    729x + 731y & = 1508 \quad (2)\\
+    \end{align*}\]
+
+    To eliminate one of the variables, we can subtract equation (1) from equation (2), which gives us:
+    \[4x + 4y = 8\]
+
+    This simplifies to:
+    \[x + y = 2\quad (3)\]
+
+    Now we have a simplified equation with both $x$ and $y$. We can solve this system of equations (1) and (3) to find the values of $x$ and $y$, and then calculate $x - y$. Let's do this next.
+
+
+    The value of \( x - y \) is \(-48\).
+
+    Here's a brief explanation of how we found the solution:
+
+    1. We started with two equations given in the problem statement:
+    \[\begin{align*}
+    725x + 727y &= 1500 \quad (1)\\
+    729x + 731y &= 1508 \quad (2)\\
+    \end{align*}\]
+
+    2. We subtracted equation (1) from (2) to get a new equation with \(4x + 4y\), noticing that the subtraction would create a pair of coefficients that are the same for each variable:
+    \[\begin{align*}
+    (729x + 731y) - (725x + 727y) &= (1508 - 1500) \\
+    4x + 4y &= 8
+    \end{align*}\]
+
+    3. Simplifying the new equation gave us the equation \(x + y = 2\), which we label as equation (3).
+
+    4. With equation (3) and the original equation (1), we formed a system of two equations with two unknowns. We then solved this system to find values for \(x\) and \(y\).
+
+    5. After solving for \(x\) and \(y\), we found that \(x - y = -48\).
+
+    Therefore, the answer to the provided problem is that \(x - y\) equals \(-48\).
+
+    TERMINATE
+
+
+    --------------------------------------------------------------------------------
+```
+
+### Delete the teachable assistant
+
+All OpenAI Assistants can be created, viewed and deleted manually through OpenAI's [website](https://platform.openai.com/assistants). They can also be deleted through the `GPTAssistantAgent` instance.
+
+```python
+coder_assistant.delete_assistant()
+
+    Permanently deleting assistant...
+
+```
+
+## Teachable OpenAI Assistant with Retrieval
+
+This section is based on [agentchat_oai_assistant_retrieval.ipynb](https://github.com/microsoft/autogen/blob/teach_cap/notebook/agentchat_oai_assistant_retrieval.ipynb), which demonstrates an assistant accomplishing a task through **retrieval augmented generation (RAG)**.
+
+### Create the OpenAI Assistant with retrieval as a tool
+
+For this example, first upload the [conversable_agent.py](https://github.com/microsoft/autogen/blob/main/autogen/agentchat/conversable_agent.py) file to your OpenAI API account. This can be done manually through the [website](https://platform.openai.com/assistants). Then find the uploaded File ID on the [Files page](https://platform.openai.com/files), and paste that ID into the `file_ids` list in the code below.
+
+```python
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
+assistant_id = os.environ.get("ASSISTANT_ID", None)
+
+config_list = config_list_from_json("OAI_CONFIG_LIST")
+llm_config = {
+    "config_list": config_list,
+    "assistant_id": assistant_id,
+    "tools": [{"type": "retrieval"}],
+    "file_ids": ["file-HPDOsp8k4dz95QRx9bnfNJHp"],
+}
+
+rag_assistant = GPTAssistantAgent(
+    name="RAG_Assistant", instructions="You are adapt at question answering", llm_config=llm_config
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    code_execution_config=False,
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
+    human_input_mode="ALWAYS",
+)
+
+    GPT Assistant only supports one OpenAI client. Using the first client in the list.
+    No matching assistant found, creating a new assistant
+```
+
+### Give the assistant a task involving file retrieval
+
+When prompted, type "Does the file contain any bugs?". On the next prompt, type "exit" to end the chat.
+
+```python
+user_proxy.initiate_chat(rag_assistant, message="What is the name of the class of agents in the file I gave you?")
+
+    user_proxy (to RAG_Assistant):
+
+    What is the name of the class of agents in the file I gave you?
+
+    --------------------------------------------------------------------------------
+    RAG_Assistant (to user_proxy):
+
+    The name of the class of agents in the provided file is `ConversableAgent`.
+
+
+    --------------------------------------------------------------------------------
+    user_proxy (to RAG_Assistant):
+
+    Does the file contain any bugs?
+
+    --------------------------------------------------------------------------------
+    RAG_Assistant (to user_proxy):
+
+    The file you provided does not contain any obvious references to bugs, errors, or exceptions outside what would be expected in a normal programming context. Below are a couple of instances where exceptions are handled or mentioned but not indicative of existing bugs within the file:
+
+    1. There's code designed to catch and handle `Exception`s by reporting an error with the message `f"Error: {e}"` which indicates resilience in error handling but not necessarily a bug【1†source】【2†source】.
+    2. An `AssertionError` is raised with an error message if certain conditions are not met, which is a form of input validation to ensure the state of the application is as expected【3†source】.
+    3. Another example is raising a `RuntimeError` if an attempt is made to register a function for LLM (Language Learning Model) without a proper configuration set up, again more of a failsafe than a bug【5†source】.
+    4. A `ValueError` is raised if a message cannot be converted into a valid ChatCompletion message, which seems to be a part of the normal validation process when generating messages【6†source】.
+
+    These instances are typical of robust software that is designed to handle unexpected conditions gracefully. However, the absence of a reference to the word "bug" in the search does not guarantee that the file is bug-free, as bugs may not be explicitly commented or easy to detect without a deep analysis or testing of the code. If you wish for a deeper code review, that would require a detailed analysis of the code logic and execution, including potentially running the code in question.
+
+
+    --------------------------------------------------------------------------------
+```
+
+### Make the assistant teachable
+
+We can make any `ConversableAgent` teachable by adding a `Teachability` object to it.
+
+```python
+teachability = Teachability(reset_db=True, llm_config={"config_list": config_list})
+teachability.add_to_agent(rag_assistant)
+
+    CLEARING MEMORY
+```
+
+### Test the teachable assistant
+
+This time let's teach the assistant to report its confidence.
+
+```python
+user_proxy.initiate_chat(
+    rag_assistant,
+    message="What is the name of the class of agents in the file I gave you? When you answer a question based on a file, always report your confidence in the answer as a percentage.",
+)
+
+    user_proxy (to RAG_Assistant):
+
+    What is the name of the class of agents in the file I gave you? When you answer a question based on a file, always report your confidence in the answer as a percentage.
+
+    --------------------------------------------------------------------------------
+    RAG_Assistant (to user_proxy):
+
+    The class of agents defined in the file is called `ConversableAgent`. This class is for generic conversable agents which can be configured as an assistant or user proxy and has several methods for customizing its behavior.
+
+    My confidence in this answer is 100%.
+
+
+    --------------------------------------------------------------------------------
+    user_proxy (to RAG_Assistant):
+
+    Does the file contain any bugs?
+
+    --------------------------------------------------------------------------------
+    RAG_Assistant (to user_proxy):
+
+    Determining the presence of bugs in a file requires detailed code analysis which includes understanding the code logic, testing, and reviewing by an expert. Due to the limitations of the tools available, I cannot definitively check for logical bugs or runtime errors in the code. My search in the available portion of the file has not shown explicit instances of the term "bug," but this does not guarantee that the code is bug-free.
+
+    There are several assertions in the code, which suggests that the code includes certain checks to ensure expected behaviors or values. However, the mere presence of assertions does not necessarily indicate that there are bugs; rather, it might indicate robustness as the developer probably has placed checks to prevent the code from running under incorrect assumptions.
+
+    Based on the information provided and without running or testing the code, my confidence level in stating the presence or absence of bugs cannot be more than a hypothesis. Therefore, my confidence in saying there are no evident bugs based on the static analysis of the code is about 50%, which essentially means that without additional testing or code review, it is unclear if bugs exist.
+
+    If you can provide more specific criteria for what should be considered a bug or more information about the kind of issues you are expecting, I could potentially perform a more targeted search.
+
+
+    --------------------------------------------------------------------------------
+```
+
+Finally, let's clear the chat history to see whether the assistant can remember to report its confidence in a new chat without having to be told again.
+
+```python
+user_proxy.initiate_chat(
+    rag_assistant, message="What is the name of the class of agents in the file I gave you?", clear_history=True
+)
+
+    user_proxy (to RAG_Assistant):
+
+    What is the name of the class of agents in the file I gave you?
+
+    --------------------------------------------------------------------------------
+    RAG_Assistant (to user_proxy):
+
+    The name of the class of agents in the file is `ConversableAgent` [0]. My confidence in this answer is 100%.
+             super().__init__(name)pChatManager) to decide when to call upon this agent. (Default: system_message)reply is generated.ecution. Default to 1. If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke (typically this is the last time execution was attempted).
+
+    --------------------------------------------------------------------------------
+    user_proxy (to RAG_Assistant):
+
+    Does the file contain any bugs?
+
+    --------------------------------------------------------------------------------
+    RAG_Assistant (to user_proxy):
+
+    Based on the search results I obtained, there are no explicit mentions of bugs in the source file provided. Typically, for bugs to be identified in a source file, one would need to run the code and observe its behavior or have a detailed inspection report that specifies identified bugs.
+
+    Since we are not able to run actual code or have such a report, the only way to indirectly infer potential issues would be to look for common error handling patterns or mentions of unexpected behavior in comments, neither of which seems to be present in the search results.
+
+    Thus, at this stage, I cannot confirm the presence of any bugs with confidence. If you would like, I can attempt a more thorough search by examining more of the file content or look for specific programming concepts that can sometimes be associated with buggy behavior (like exception handling, for instance).
+
+    My confidence in stating that there are no explicitly mentioned bugs in the parts of the file I have searched is high, roughly around 90%. However, my confidence in stating that the file is bug-free overall cannot be as high due to the limitations of this method of analysis.
+
+
+    --------------------------------------------------------------------------------
+```
+
+### Delete the teachable assistant
+
+All OpenAI Assistants can be created, viewed and deleted manually through OpenAI's [website](https://platform.openai.com/assistants). They can also be deleted through the `GPTAssistantAgent` instance.
+
+```python
+rag_assistant.delete_assistant()
+
+    Permanently deleting assistant...
+
+```
