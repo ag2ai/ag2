@@ -473,8 +473,8 @@ def test_update_system_message():
     message_container = MessageContainer()
 
     # 1. Test with a callable function
-    def custom_update_function(context_variables: Dict[str, Any], messages: List[Dict]) -> str:
-        return f"System message with {context_variables['test_var']} and {len(messages)} messages"
+    def custom_update_function(agent: ConversableAgent, messages: List[Dict]) -> str:
+        return f"System message with {agent.get_context('test_var')} and {len(messages)} messages"
 
     # 2. Test with a string template
     template_message = "Template message with {test_var}"

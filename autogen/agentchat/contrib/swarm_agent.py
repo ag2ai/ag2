@@ -73,7 +73,9 @@ class UPDATE_SYSTEM_MESSAGE:
         elif isinstance(self.update_function, Callable):
             sig = signature(self.update_function)
             if len(sig.parameters) != 2:
-                raise ValueError("Update function must accept two parameters, context_variables and messages")
+                raise ValueError(
+                    "Update function must accept two parameters of type ConversableAgent and List[Dict[str Any]], respectively"
+                )
             if sig.return_annotation != str:
                 raise ValueError("Update function must return a string")
         else:
@@ -421,7 +423,7 @@ class SwarmAgent(ConversableAgent):
                                 allow_format_str_template=True,
                             )
                         else:
-                            sys_message = update_func.update_function(agent._context_variables, messages)
+                            sys_message = update_func.update_function(agent, messages)
 
                         agent.update_system_message(sys_message)
                         return messages
