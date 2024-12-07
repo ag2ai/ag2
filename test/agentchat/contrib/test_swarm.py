@@ -79,8 +79,8 @@ def test_on_condition():
 
     # Test with a ConversableAgent
     test_conversable_agent = ConversableAgent("test_conversable_agent")
-    with pytest.raises(AssertionError, match="Agent must be a SwarmAgent"):
-        _ = ON_CONDITION(agent=test_conversable_agent, condition="test condition")
+    with pytest.raises(AssertionError, match="'target' must be a SwarmAgent or a Dict"):
+        _ = ON_CONDITION(target=test_conversable_agent, condition="test condition")
 
 
 def test_receiving_agent():
@@ -245,7 +245,7 @@ def test_on_condition_handoff():
     agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
     agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
 
-    agent1.register_hand_off(hand_to=ON_CONDITION(agent2, "always take me to agent 2"))
+    agent1.register_hand_off(hand_to=ON_CONDITION(target=agent2, condition="always take me to agent 2"))
 
     # Fake generate_oai_reply
     def mock_generate_oai_reply(*args, **kwargs):
@@ -428,8 +428,8 @@ def test_non_swarm_in_hand_off():
     with pytest.raises(AssertionError, match="Invalid After Work value"):
         agent1.register_hand_off(hand_to=AFTER_WORK(bad_agent))
 
-    with pytest.raises(AssertionError, match="Agent must be a SwarmAgent"):
-        agent1.register_hand_off(hand_to=ON_CONDITION(bad_agent, "Testing"))
+    with pytest.raises(AssertionError, match="'target' must be a SwarmAgent or a Dict"):
+        agent1.register_hand_off(hand_to=ON_CONDITION(target=bad_agent, condition="Testing"))
 
     with pytest.raises(ValueError, match="hand_to must be a list of ON_CONDITION or AFTER_WORK"):
         agent1.register_hand_off(0)
@@ -458,6 +458,104 @@ def test_initialization():
     with pytest.raises(AssertionError, match="Agent in hand-off must be in the agents list"):
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2], max_rounds=3
+        )
+
+
+def test_string_agent_params_for_transfer():
+    """Test that string agent parameters are handled correctly without using real LLMs."""
+    # Define test configuration
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    # Define a simple function for testing
+    def hello_world(context_variables: dict) -> SwarmResult:
+        value = "Hello, World!"
+        return SwarmResult(values=value, context_variables=context_variables, agent="agent_2")
+
+    # Create SwarmAgent instances
+    agent_1 = SwarmAgent(
+        name="agent_1",
+        system_message="Your task is to call hello_world() function.",
+        llm_config=testing_llm_config,
+        functions=[hello_world],
+    )
+    agent_2 = SwarmAgent(
+        name="agent_2",
+        system_message="Your task is to let the user know what the previous agent said.",
+        llm_config=testing_llm_config,
+    )
+
+    # Mock LLM responses
+    def mock_generate_oai_reply_agent1(*args, **kwargs):
+        return True, {
+            "role": "assistant",
+            "name": "agent_1",
+            "tool_calls": [{"type": "function", "function": {"name": "hello_world", "arguments": "{}"}}],
+            "content": "I will call the hello_world function.",
+        }
+
+    def mock_generate_oai_reply_agent2(*args, **kwargs):
+        return True, {
+            "role": "assistant",
+            "name": "agent_2",
+            "content": "The previous agent called hello_world and got: Hello, World!",
+        }
+
+    # Register mock responses
+    agent_1.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent1)
+    agent_2.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent2)
+
+    # Initiate the swarm chat
+    chat_result, final_context, last_active_agent = initiate_swarm_chat(
+        initial_agent=agent_1,
+        agents=[agent_1, agent_2],
+        context_variables={},
+        messages="Begin by calling the hello_world() function.",
+        after_work=AFTER_WORK(AfterWorkOption.TERMINATE),
+        max_rounds=5,
+    )
+
+    # Assertions to verify the behavior
+    assert chat_result.chat_history[3]["name"] == "agent_2"
+    assert last_active_agent.name == "agent_2"
+
+    # Define a simple function for testing
+    def hello_world(context_variables: dict) -> SwarmResult:
+        value = "Hello, World!"
+        return SwarmResult(values=value, context_variables=context_variables, agent="agent_unknown")
+
+    agent_1 = SwarmAgent(
+        name="agent_1",
+        system_message="Your task is to call hello_world() function.",
+        llm_config=testing_llm_config,
+        functions=[hello_world],
+    )
+    agent_2 = SwarmAgent(
+        name="agent_2",
+        system_message="Your task is to let the user know what the previous agent said.",
+        llm_config=testing_llm_config,
+    )
+
+    # Register mock responses
+    agent_1.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent1)
+    agent_2.register_reply([ConversableAgent, None], mock_generate_oai_reply_agent2)
+
+    with pytest.raises(
+        ValueError, match="No agent found with the name 'agent_unknown'. Ensure the agent exists in the swarm."
+    ):
+        chat_result, final_context, last_active_agent = initiate_swarm_chat(
+            initial_agent=agent_1,
+            agents=[agent_1, agent_2],
+            context_variables={},
+            messages="Begin by calling the hello_world() function.",
+            after_work=AFTER_WORK(AfterWorkOption.TERMINATE),
+            max_rounds=5,
         )
 
 

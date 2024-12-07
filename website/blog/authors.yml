@@ -6,7 +6,7 @@ sonichi:
 
 qingyunwu:
   name: Qingyun Wu
-  title: Assistant Professor at the Pennsylvania State University
+  title: Co-Founder of AutoGen/AG2 & FLAML, Assistant Professor at Penn State University
   url: https://qingyun-wu.github.io/
   image_url: https://github.com/qingyun-wu.png
 
@@ -137,7 +137,7 @@ Hk669:
 
 marklysze:
   name: Mark Sze
-  title: AI Freelancer
+  title: Software Engineer at AG2.ai
   url: https://github.com/marklysze
   image_url: https://github.com/marklysze.png
 
@@ -164,3 +164,27 @@ ameydesai:
   title: Head of AI at Nexla
   url: https://github.com/ameyitis
   image_url: https://github.com/ameyitis.png
+
+sternakt:
+  name: Tvrtko Sternak
+  title: Machine Learning Engineer at Airt
+  url: https://github.com/sternakt
+  image_url: https://github.com/sternakt.png
+
+davorrunje:
+  name: Davor Runje
+  title: CTO at Airt
+  url: https://github.com/davorrunje
+  image_url: https://github.com/davorrunje.png
+
+BabyCNM:
+  name: BabyCNM
+  title: AG2 Contributor
+  url: https://github.com/BabyCNM
+  image_url: https://github.com/BabyCNM.png
+
+AgentGenie:
+  name: AgentGenie
+  title: AG2 Contributor
+  url: https://github.com/AgentGenie
+  image_url: https://github.com/AgentGenie.png

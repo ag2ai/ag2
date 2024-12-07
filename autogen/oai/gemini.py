@@ -45,7 +45,7 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Dict, List, Mapping, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 import google.generativeai as genai
 import requests
@@ -56,6 +56,7 @@ from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from PIL import Image
+from pydantic import BaseModel
 from vertexai.generative_models import Content as VertexAIContent
 from vertexai.generative_models import GenerativeModel
 from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
@@ -134,6 +135,9 @@ class GeminiClient:
             assert ("project_id" not in kwargs) and (
                 "location" not in kwargs
             ), "Google Cloud project and compute location cannot be set when using an API Key!"
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> List:
         """

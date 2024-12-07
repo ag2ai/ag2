@@ -21,6 +21,8 @@ setuptools.setup(
     name="ag2",
     version=__version__,
     description="Alias package for pyautogen",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     install_requires=["pyautogen==" + __version__],
     url="https://github.com/ag2ai/ag2",
     author="Chi Wang & Qingyun Wu",
