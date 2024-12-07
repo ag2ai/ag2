@@ -2,7 +2,7 @@
 
 ## Different LLMs
 
-AutoGen installs OpenAI package by default. To use LLMs by other providers, you can install the following packages:
+AG2 installs OpenAI package by default. To use LLMs by other providers, you can install the following packages:
 
 ```bash
 pip install autogen[gemini,anthropic,mistral,together,groq,cohere]
@@ -86,7 +86,7 @@ Example notebooks:
 
 ## Teachability
 
-To use Teachability, please install AutoGen with the [teachable] option.
+To use Teachability, please install AG2 with the [teachable] option.
 
 ```bash
 pip install "autogen[teachable]"
@@ -126,7 +126,7 @@ Example notebook: [Finite State Machine graphs to set speaker transition constra
 
 ## Long Context Handling
 
-AutoGen includes support for handling long textual contexts by leveraging the LLMLingua library for text compression. To enable this functionality, please install AutoGen with the `[long-context]` option:
+AG2 includes support for handling long textual contexts by leveraging the LLMLingua library for text compression. To enable this functionality, please install AutoGen with the `[long-context]` option:
 
 ```bash
 pip install "autogen[long-context]"
