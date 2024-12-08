@@ -142,7 +142,7 @@ def test_model_aliases():
     assert get_max_token_limit("gpt4") == get_max_token_limit("gpt-4")
     assert get_max_token_limit("gpt4-32k") == get_max_token_limit("gpt-4-32k")
     assert get_max_token_limit("gpt4o") == get_max_token_limit("gpt-4o")
-    assert get_max_token_limit("gpt4omini") == get_max_token_limit("gpt-4o-mini")
+    assert get_max_token_limit("gpt4o-mini") == get_max_token_limit("gpt-4o-mini")
 
 
 if __name__ == "__main__":
