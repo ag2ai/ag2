@@ -55,7 +55,7 @@ async def test_function_call_groupchat(key, value, sync):
     config_list_35 = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-3.5-turbo", "gpt-3.5-turbo-16k"]},
+        filter_dict={"tags": ["gpt-4o-mini"]},
     )
     llm_config_no_function = {"config_list": config_list_35}
     config_list_tool = autogen.filter_config(config_list_35, {"tags": ["tool"]})

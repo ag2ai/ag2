@@ -33,7 +33,7 @@ def test_ai_user_proxy_agent():
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-3.5-turbo"]},
+        filter_dict={"tags": ["gpt-4o-mini"]},
     )
     assistant = AssistantAgent(
         "assistant",
@@ -72,7 +72,7 @@ def test_gpt35(human_input_mode="NEVER", max_consecutive_auto_reply=5):
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-3.5-turbo", "gpt-3.5-turbo-16k"]},
+        filter_dict={"tags": ["gpt-4o-mini"]},
     )
     llm_config = {
         "cache_seed": 42,
@@ -116,7 +116,7 @@ def test_create_execute_script(human_input_mode="NEVER", max_consecutive_auto_re
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-3.5-turbo"]},
+        filter_dict={"tags": ["gpt-4o-mini"]},
     )
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
@@ -170,7 +170,7 @@ def test_tsp(human_input_mode="NEVER", max_consecutive_auto_reply=2):
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
         filter_dict={
-            "tags": ["gpt-4", "gpt-4-32k"],
+            "tags": ["gpt-4o"],
         },
     )
     hard_questions = [
