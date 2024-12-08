@@ -74,8 +74,13 @@ Here's a simple example of using ReasoningAgent:
 
 ```python
 import os
-from autogen import AssistantAgent, UserProxyAgent
-from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, visualize_tree
+from autogen import (
+    AssistantAgent,
+    UserProxyAgent,
+    ReasoningAgent,
+    ThinkNode,
+    visualize_tree
+)
 
 # Configure the model
 config_list = [{"model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]
