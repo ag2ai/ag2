@@ -26,7 +26,7 @@ async def test_async_chats():
     config_list_35 = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-3.5-turbo"]},
+        filter_dict={"tags": ["gpt-4o-mini"]},
     )
 
     financial_tasks = [
