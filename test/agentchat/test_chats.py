@@ -30,7 +30,7 @@ config_list = (
     )
 )
 
-config_list_35 = (
+config_list_4omini = (
     []
     if skip_openai
     else autogen.config_list_from_json(
@@ -39,8 +39,6 @@ config_list_35 = (
         filter_dict={"tags": ["gpt-4o-mini"]},
     )
 )
-
-config_list_tool = filter_config(config_list_35, {"tags": ["tool"]})
 
 
 def test_chat_messages_for_summary():
@@ -87,12 +85,12 @@ def test_chats_group():
 
     financial_assistant = AssistantAgent(
         name="Financial_assistant",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
     )
 
     writer = AssistantAgent(
         name="Writer",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         system_message="""
         You are a professional writer, known for
         your insightful and engaging articles.
@@ -106,7 +104,7 @@ def test_chats_group():
         system_message="""Critic. Double check plan, claims, code from other agents and provide feedback. Check whether the plan includes adding verifiable info such as source URL.
         Reply "TERMINATE" in the end when everything is done.
         """,
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
     )
 
     groupchat_1 = GroupChat(agents=[user_proxy, financial_assistant, critic], messages=[], max_round=3)
@@ -116,7 +114,7 @@ def test_chats_group():
     manager_1 = GroupChatManager(
         groupchat=groupchat_1,
         name="Research_manager",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         code_execution_config={
             "last_n_messages": 1,
             "work_dir": "groupchat",
@@ -127,7 +125,7 @@ def test_chats_group():
     manager_2 = GroupChatManager(
         groupchat=groupchat_2,
         name="Writing_manager",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         code_execution_config={
             "last_n_messages": 1,
             "work_dir": "groupchat",
@@ -201,17 +199,17 @@ def test_chats():
     func = Function()
     financial_assistant_1 = AssistantAgent(
         name="Financial_assistant_1",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         function_map={"get_random_number": func.get_random_number},
     )
     financial_assistant_2 = AssistantAgent(
         name="Financial_assistant_2",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         function_map={"get_random_number": func.get_random_number},
     )
     writer = AssistantAgent(
         name="Writer",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         system_message="""
             You are a professional writer, known for
@@ -315,15 +313,15 @@ def test_chats_general():
 
     financial_assistant_1 = AssistantAgent(
         name="Financial_assistant_1",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
     )
     financial_assistant_2 = AssistantAgent(
         name="Financial_assistant_2",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
     )
     writer = AssistantAgent(
         name="Writer",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         system_message="""
             You are a professional writer, known for
@@ -494,7 +492,7 @@ def test_chats_exceptions():
 @pytest.mark.skipif(skip_openai, reason=reason)
 def test_chats_w_func():
     llm_config = {
-        "config_list": config_list_tool,
+        "config_list": config_list_4omini,
         "timeout": 120,
     }
 
@@ -549,7 +547,7 @@ def test_chats_w_func():
 
 @pytest.mark.skipif(skip_openai, reason=reason)
 def test_udf_message_in_chats():
-    llm_config_35 = {"config_list": config_list_35}
+    llm_config_35 = {"config_list": config_list_4omini}
 
     research_task = """
     ## NVDA (NVIDIA Corporation)
