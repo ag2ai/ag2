@@ -52,6 +52,14 @@ async def test_function_call_groupchat(key, value, sync):
             return random.randint(0, 100)
 
     # llm_config without functions
+    config_list_4omini_no_tools = autogen.config_list_from_json(
+        OAI_CONFIG_LIST,
+        file_location=KEY_LOC,
+        filter_dict={"tags": ["gpt-4o-mini"]},
+    )
+    llm_config_no_function = {"config_list": config_list_4omini_no_tools}
+
+    # llm_config with functions
     config_list_4omini = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
@@ -79,7 +87,7 @@ async def test_function_call_groupchat(key, value, sync):
         name="Observer",
         system_message="You observe the the player's actions and results. Summarize in 1 sentence.",
         description="An observer.",
-        llm_config=llm_config,
+        llm_config=llm_config_no_function,
     )
     groupchat = autogen.GroupChat(
         agents=[player, user_proxy, observer], messages=[], max_round=7, speaker_selection_method="round_robin"
@@ -92,7 +100,7 @@ async def test_function_call_groupchat(key, value, sync):
     ):
         manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
-    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config_no_function)
 
     if sync:
         res = observer.initiate_chat(manager, message="Let's start the game!", summary_method="reflection_with_llm")
