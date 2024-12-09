@@ -222,6 +222,9 @@
     {
       "group": "Posts",
       "pages": [
+        "website/blog/2024-12-06-FalkorDB-Structured/index",
+        "website/blog/2024-12-02-ReasoningAgent2/index",
+        "website/blog/2024-11-27-Prompt-Leakage-Probing/index",
         "website/blog/2024-11-17-Swarm/index",
         "website/blog/2024-11-15-CaptainAgent/index",
         "website/blog/2024-10-23-NOVA/index",
