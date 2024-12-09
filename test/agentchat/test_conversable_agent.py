@@ -589,8 +589,8 @@ def test__wrap_function_sync():
     CurrencySymbol = Literal["USD", "EUR"]
 
     class Currency(BaseModel):
-        currency: Annotated[CurrencySymbol, Field(..., description="Currency code")]
-        amount: Annotated[float, Field(100.0, description="Amount of money in the currency")]
+        currency: CurrencySymbol = Field(description="Currency code")
+        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
 
     Currency(currency="USD", amount=100.0)
 
@@ -627,8 +627,8 @@ async def test__wrap_function_async():
     CurrencySymbol = Literal["USD", "EUR"]
 
     class Currency(BaseModel):
-        currency: Annotated[CurrencySymbol, Field(..., description="Currency code")]
-        amount: Annotated[float, Field(100.0, description="Amount of money in the currency")]
+        currency: CurrencySymbol = Field(description="Currency code")
+        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
 
     Currency(currency="USD", amount=100.0)
 
@@ -934,7 +934,7 @@ def test_function_registration_e2e_sync() -> None:
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         filter_dict={
-            "tags": ["tool"],
+            "tags": ["gpt-4o-mini"],
         },
         file_location=KEY_LOC,
     )
