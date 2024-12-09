@@ -91,7 +91,7 @@ config_list = autogen.config_list_from_json(
 
 ## Using CaptainAgent without libraries
 
-We begin with demonstrating how to use CaptainAgent without retrieving from libaries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
+We begin with demonstrating how to use CaptainAgent without retrieving from libaries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](/website/docs/topics/captainagent/configurations).
 
 ```python
 from autogen import UserProxyAgent
@@ -514,7 +514,7 @@ result = captain_user_proxy.initiate_chat(
 
 One significant feature of CaptainAgent is that the agents and tools can be retrieved from a dedicated library. When CaptainAgent starts building experts for group chat, it will retrieve and select from agent library, then assign tools retreived from tool library to the experts.
 
-For agent library, refer to [`captainagent_expert_library.json`](https://github.com/ag2ai/ag2/blob/main/notebook/captainagent_expert_library.json) for samples. You can refer to [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/agent_library) on how to customize your own expert library.
+For agent library, refer to [`captainagent_expert_library.json`](https://github.com/ag2ai/ag2/blob/main/notebook/captainagent_expert_library.json) for samples. You can refer to [docs](/website/docs/topics/captainagent/agent_library) on how to customize your own expert library.
 
 For tool library, we provide a set of tools [here](https://github.com/ag2ai/ag2/tree/main/autogen/agentchat/contrib/captainagent/tools/README.md), the tools are categorized into three types: data analysis, information_retrieval, math. If you are using the tools, you should [install the requirements](https://github.com/ag2ai/ag2/tree/main/autogen/agentchat/contrib/captainagent/tools/README.md#how-to-use) for them.
 
@@ -1430,7 +1430,7 @@ result = captain_user_proxy.initiate_chat(captain_agent, message=query)
 
 Now let's retrieve from both agent library and tool library while building experts for nested chat.
 
-To run the following demo, it is required to install the dependencies from the tool library and obtain BING search api and Rapid API key for tools in library to fully function. Please follow the instructions [here](https://ag2ai.github.io/ag2/docs/topics/captainagent/tool_library).
+To run the following demo, it is required to install the dependencies from the tool library and obtain BING search api and Rapid API key for tools in library to fully function. Please follow the instructions [here](/website/docs/topics/captainagent/tool_library).
 
 ````python
 # The function requires BING api key and Rapid API key to work. You can follow the instructions from docs to get one.
@@ -1830,8 +1830,8 @@ The ground truth answer to the question is 'Extremely', which the CaptainAgent a
 
 # Further Reading
 
-For a full list of the configurables and the functionalities in CaptainAgent, please refer [here](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
+For a full list of the configurables and the functionalities in CaptainAgent, please refer [here](/website/docs/topics/captainagent/configurations).
 
-For how to customize your own agent library, check [here](https://ag2ai.github.io/ag2/docs/topics/captainagent/agent_library).
+For how to customize your own agent library, check [here](/website/docs/topics/captainagent/agent_library).
 
-For how to implement your own tool library that suits your need, check the documents [here](https://ag2ai.github.io/ag2/docs/topics/captainagent/tool_library).
+For how to implement your own tool library that suits your need, check the documents [here](/website/docs/topics/captainagent/tool_library).

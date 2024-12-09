@@ -119,7 +119,7 @@ How we handle messages:
 - Case 1: If you pass in one single message
   - If there is a name in that message, we will assume this message is from that agent. (It will be error if that name doesn't match any agent you passed in.)
   - If there is no name, 1. User agent passed in: we assume this message is from the user agent. 2. No user agent passed in: we will create a temporary user agent just to start the chat.
-- Case 2: We will use the [Resume GroupChat](https://ag2ai.github.io/ag2/docs/topics/groupchat/resuming_groupchat) feature to resume the chat. The `name` fields in these messages must be one of the names of the agents you passed in, otherwise, it will be an error.
+- Case 2: We will use the [Resume GroupChat](/website/docs/topics/groupchat/resuming_groupchat) feature to resume the chat. The `name` fields in these messages must be one of the names of the agents you passed in, otherwise, it will be an error.
 
 ## Q&As
 

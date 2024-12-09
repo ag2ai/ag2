@@ -30,7 +30,7 @@ title: "Using RetrieveChat for Retrieve Augmented Code Generation and Question A
 </div>
 
 AutoGen offers conversable agents powered by LLM, tool or human, which can be used to perform tasks collectively via automated chat. This framework allows tool use and human participation through multi-agent conversation.
-Please find documentation about this feature [here](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat).
+Please find documentation about this feature [here](/website/docs/Use-Cases/agent_chat).
 
 RetrieveChat is a conversational system for retrieval-augmented code generation and question answering. In this notebook, we demonstrate how to utilize RetrieveChat to generate code and answer questions based on customized documentations that are not present in the LLM's training dataset. RetrieveChat uses the `AssistantAgent` and `RetrieveUserProxyAgent`, which is similar to the usage of `AssistantAgent` and `UserProxyAgent` in other notebooks (e.g., [Automated Task Solving with Code Generation, Execution & Debugging](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_auto_feedback_from_code_execution.ipynb)). Essentially, `RetrieveUserProxyAgent` implement a different auto-reply mechanism corresponding to the RetrieveChat prompts.
 
@@ -60,7 +60,7 @@ For more information, please refer to the [installation guide](/website/docs/ins
 
 ## Set your API Endpoint
 
-The [`config_list_from_json`](https://ag2ai.github.io/ag2/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
+The [`config_list_from_json`](/website/docs/reference/oai/openai_utils#config_list_from_json) function loads a list of configurations from an environment variable or a json file.
 
 ```python
 import json
@@ -115,8 +115,8 @@ assistant = AssistantAgent(
 )
 
 # 2. create the RetrieveUserProxyAgent instance named "ragproxyagent"
-# Refer to https://ag2ai.github.io/ag2/docs/reference/agentchat/contrib/retrieve_user_proxy_agent
-# and https://ag2ai.github.io/ag2/docs/reference/agentchat/contrib/vectordb/chromadb
+# Refer to /website/docs/reference/agentchat/contrib/retrieve_user_proxy_agent
+# and /website/docs/reference/agentchat/contrib/vectordb/chromadb
 # for more information on the RetrieveUserProxyAgent and ChromaVectorDB
 ragproxyagent = RetrieveUserProxyAgent(
     name="ragproxyagent",

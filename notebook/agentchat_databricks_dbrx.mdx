@@ -33,7 +33,7 @@ title: "Use AutoGen in Databricks with DBRX"
 
 In March 2024, Databricks released [DBRX](https://www.databricks.com/blog/introducing-dbrx-new-state-art-open-llm), a general-purpose LLM that sets a new standard for open LLMs. While available as an open-source model on Hugging Face ([databricks/dbrx-instruct](https://huggingface.co/databricks/dbrx-instruct/tree/main) and [databricks/dbrx-base](https://huggingface.co/databricks/dbrx-base) ), customers of Databricks can also tap into the [Foundation Model APIs](https://docs.databricks.com/en/machine-learning/model-serving/score-foundation-models.html#query-a-chat-completion-model), which make DBRX available through an OpenAI-compatible, autoscaling REST API.
 
-[Autogen](https://ag2ai.github.io/ag2/docs/Use-Cases/agent_chat) is becoming a popular standard for agent creation. Built to support any "LLM as a service" that implements the OpenAI SDK, it can easily be extended to integrate with powerful open source models.
+[Autogen](/website/docs/Use-Cases/agent_chat) is becoming a popular standard for agent creation. Built to support any "LLM as a service" that implements the OpenAI SDK, it can easily be extended to integrate with powerful open source models.
 
 This notebook will demonstrate a few basic examples of Autogen with DBRX, including the use of `AssistantAgent`, `UserProxyAgent`, and `ConversableAgent`. These demos are not intended to be exhaustive - feel free to use them as a base to build upon!
 
@@ -70,7 +70,7 @@ It is recommended to restart the Python kernel after installs - uncomment and ru
 
 ## Setup DBRX config list
 
-See Autogen docs for more inforation on the use of `config_list`: [LLM Configuration](https://ag2ai.github.io/ag2/docs/topics/llm_configuration#why-is-it-a-list)
+See Autogen docs for more inforation on the use of `config_list`: [LLM Configuration](/website/docs/topics/llm_configuration#why-is-it-a-list)
 
 ```python
 import os
@@ -100,7 +100,7 @@ llm_config = {
 
 ## Hello World Example
 
-Our first example will be with a simple `UserProxyAgent` asking a question to an `AssistantAgent`. This is based on the tutorial demo [here](https://ag2ai.github.io/ag2/docs/tutorial/introduction).
+Our first example will be with a simple `UserProxyAgent` asking a question to an `AssistantAgent`. This is based on the tutorial demo [here](/website/docs/tutorial/introduction).
 
 After sending the question and seeing a response, you can type `exit` to end the chat or continue to converse.
 
@@ -168,7 +168,7 @@ chat_result = user_proxy.initiate_chat(assistant, message="What is MLflow?")
 
 ## Simple Coding Agent
 
-In this example, we will implement a "coding agent" that can execute code. You will see how this code is run alongside your notebook in your current workspace, taking advantage of the performance benefits of Databricks clusters. This is based off the demo [here](https://ag2ai.github.io/ag2/docs/topics/non-openai-models/cloud-mistralai/).
+In this example, we will implement a "coding agent" that can execute code. You will see how this code is run alongside your notebook in your current workspace, taking advantage of the performance benefits of Databricks clusters. This is based off the demo [here](/website/docs/topics/non-openai-models/cloud-mistralai/).
 
 First, set up a directory:
 
@@ -318,7 +318,7 @@ count_primes.py
 
 ## Conversable Bots
 
-We can also implement the [two-agent chat pattern](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns/#two-agent-chat-and-chat-result) using DBRX to "talk to itself" in a teacher/student exchange:
+We can also implement the [two-agent chat pattern](/website/docs/tutorial/conversation-patterns/#two-agent-chat-and-chat-result) using DBRX to "talk to itself" in a teacher/student exchange:
 
 ```python
 from autogen import ConversableAgent
@@ -370,7 +370,7 @@ chat_result = student_agent.initiate_chat(
 
 It can be useful to display chat logs to the notebook for debugging, and then persist those logs to a Delta table. The following section demonstrates how to extend the default AutoGen logging libraries.
 
-First, we will implement a Python `class` that extends the capabilities of `autogen.runtime_logging` [docs](https://ag2ai.github.io/ag2/docs/notebooks/agentchat_logging):
+First, we will implement a Python `class` that extends the capabilities of `autogen.runtime_logging` [docs](/notebook/agentchat_logging):
 
 ```python
 class Databricks_AutoGenLogger:
