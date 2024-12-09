@@ -200,8 +200,8 @@ ragproxyagent = RetrieveUserProxyAgent(
 
 
 ### Customizing Vector Database
-We are using chromadb as the default vector database, you can also use mongodb, pgvectordb and qdrantdb
-by simply set `vector_db` to `mongodb`, `pgvector` and `qdrant` in `retrieve_config`, respectively.
+We are using chromadb as the default vector database, you can also use mongodb, pgvectordb, qdrantdb and couchbase
+by simply set `vector_db` to `mongodb`, `pgvector`, `qdrant` and `couchbase` in `retrieve_config`, respectively.
 
 To plugin any other dbs, you can also extend class `agentchat.contrib.vectordb.base`,
 check out the code [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/vectordb/base.py).
@@ -404,3 +404,4 @@ You can check out more example notebooks for RAG use cases:
 - [Using RetrieveChat with Qdrant for Retrieve Augmented Code Generation and Question Answering](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_qdrant.ipynb)
 - [Using RetrieveChat Powered by PGVector for Retrieve Augmented Code Generation and Question Answering](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_pgvector.ipynb)
 - [Using RetrieveChat Powered by MongoDB Atlas for Retrieve Augmented Code Generation and Question Answering](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_mongodb.ipynb)
+- [Using RetrieveChat Powered by Couchbase for Retrieve Augmented Code Generation and Question Answering](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_RetrieveChat_couchbase.ipynb)
