@@ -23,7 +23,7 @@ from conftest import reason, skip_openai  # noqa: E402
 @pytest.mark.skipif(skip_openai, reason=reason)
 @pytest.mark.asyncio
 async def test_async_get_human_input():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]})
+    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -50,7 +50,7 @@ async def test_async_get_human_input():
 @pytest.mark.skipif(skip_openai, reason=reason)
 @pytest.mark.asyncio
 async def test_async_max_turn():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo"]})
+    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(

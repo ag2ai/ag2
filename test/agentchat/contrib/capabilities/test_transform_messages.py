@@ -33,7 +33,7 @@ def test_transform_messages_capability():
             OAI_CONFIG_LIST,
             KEY_LOC,
             filter_dict={
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
             },
         )
 

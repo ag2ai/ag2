@@ -51,8 +51,8 @@ def test_build():
     builder = AgentBuilder(
         config_file_or_env=OAI_CONFIG_LIST,
         config_file_location=KEY_LOC,
-        builder_model_tags=["gpt-4"],
-        agent_model_tags=["gpt-4"],
+        builder_model_tags=["gpt-4o"],
+        agent_model_tags=["gpt-4o"],
     )
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -83,8 +83,8 @@ def test_build_from_library():
     builder = AgentBuilder(
         config_file_or_env=OAI_CONFIG_LIST,
         config_file_location=KEY_LOC,
-        builder_model_tags=["gpt-4"],
-        agent_model_tags=["gpt-4"],
+        builder_model_tags=["gpt-4o"],
+        agent_model_tags=["gpt-4o"],
     )
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -136,8 +136,8 @@ def test_save():
     builder = AgentBuilder(
         config_file_or_env=OAI_CONFIG_LIST,
         config_file_location=KEY_LOC,
-        builder_model_tags=["gpt-4"],
-        agent_model_tags=["gpt-4"],
+        builder_model_tags=["gpt-4o"],
+        agent_model_tags=["gpt-4o"],
     )
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -175,8 +175,8 @@ def test_load():
         config_file_location=KEY_LOC,
         # builder_model=["gpt-4", "gpt-4-1106-preview"],
         # agent_model=["gpt-4", "gpt-4-1106-preview"],
-        builder_model_tags=["gpt-4"],
-        agent_model_tags=["gpt-4"],
+        builder_model_tags=["gpt-4o"],
+        agent_model_tags=["gpt-4o"],
     )
 
     config_save_path = f"{here}/example_test_agent_builder_config.json"
@@ -204,8 +204,8 @@ def test_clear_agent():
     builder = AgentBuilder(
         config_file_or_env=OAI_CONFIG_LIST,
         config_file_location=KEY_LOC,
-        builder_model_tags=["gpt-4"],
-        agent_model_tags=["gpt-4"],
+        builder_model_tags=["gpt-4o"],
+        agent_model_tags=["gpt-4o"],
     )
 
     config_save_path = f"{here}/example_test_agent_builder_config.json"

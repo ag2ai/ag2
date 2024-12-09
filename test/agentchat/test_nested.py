@@ -41,10 +41,10 @@ class MockAgentReplies(AgentCapability):
 @pytest.mark.skipif(skip_openai, reason=reason)
 def test_nested():
     config_list = autogen.config_list_from_json(env_or_file=OAI_CONFIG_LIST, file_location=KEY_LOC)
-    config_list_35 = autogen.config_list_from_json(
+    config_list_4omini = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-3.5-turbo"]},
+        filter_dict={"tags": ["gpt-4o-mini"]},
     )
     llm_config = {"config_list": config_list}
 
@@ -96,7 +96,7 @@ def test_nested():
 
     assistant_2 = autogen.AssistantAgent(
         name="Assistant",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         # is_termination_msg=lambda x: x.get("content", "") == "",
     )
 
@@ -124,7 +124,7 @@ def test_nested():
 
     writer = autogen.AssistantAgent(
         name="Writer",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         system_message="""
         You are a professional writer, known for
         your insightful and engaging articles.
@@ -135,7 +135,7 @@ def test_nested():
 
     autogen.AssistantAgent(
         name="Reviewer",
-        llm_config={"config_list": config_list_35},
+        llm_config={"config_list": config_list_4omini},
         system_message="""
         You are a compliance reviewer, known for your thoroughness and commitment to standards.
         Your task is to scrutinize content for any harmful elements or regulatory violations, ensuring
