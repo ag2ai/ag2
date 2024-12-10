@@ -1,0 +1,43 @@
+// Tree of Thoughts
+digraph {
+	rankdir=TB
+	0 [label="Design a mixed integer linear program for a coffee...
+ visits: 9
+ value: 0.9166666666666666"]
+	"0_0" [label="Identify and define key parameters for the coffee ...
+ visits: 4
+ value: 0.875"]
+	"0_0_0" [label="Formulate the objective function of the MILP consi...
+ visits: 1
+ value: 1.0"]
+	"0_0" -> "0_0_0"
+	"0_0_1" [label="Outline the constraints of the MILP based on the d...
+ visits: 1
+ value: 1.0"]
+	"0_0" -> "0_0_1"
+	"0_0_2" [label="Create a visual representation (such as a flowchar...
+ visits: 1
+ value: 0.75"]
+	"0_0" -> "0_0_2"
+	0 -> "0_0"
+	"0_1" [label="Reiterate and clarify the user's objectives and re...
+ visits: 4
+ value: 1.0"]
+	"0_1_0" [label="Identify specific parameters that need to be inclu...
+ visits: 1
+ value: 1.0"]
+	"0_1" -> "0_1_0"
+	"0_1_1" [label="Construct a list of potential variables, objective...
+ visits: 1
+ value: 1.0"]
+	"0_1" -> "0_1_1"
+	"0_1_2" [label="Develop a preliminary MILP framework with hypothet...
+ visits: 1
+ value: 1.0"]
+	"0_1" -> "0_1_2"
+	0 -> "0_1"
+	"0_2" [label="Develop an initial model by outlining a basic form...
+ visits: 1
+ value: 0.75"]
+	0 -> "0_2"
+}
