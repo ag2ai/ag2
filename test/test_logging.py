@@ -5,8 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import json
+import os
 import sqlite3
 import uuid
+from pathlib import Path
 from typing import Any, Callable
 from unittest.mock import Mock, patch
 
@@ -232,12 +234,16 @@ def test_log_oai_client(db_connection):
 
 def test_to_dict():
     from autogen import Agent
+    from autogen.coding import LocalCommandLineCodeExecutor
+
+    agent_executor = LocalCommandLineCodeExecutor(work_dir=Path("."))
 
     agent1 = autogen.ConversableAgent(
         "alice",
         human_input_mode="NEVER",
         llm_config=False,
         default_auto_reply="This is alice speaking.",
+        code_execution_config={"executor": agent_executor},
     )
 
     agent2 = autogen.ConversableAgent(
@@ -256,6 +262,7 @@ def test_to_dict():
             self.d = None
             self.test_function = lambda x, y: x + y
             self.extra_key = "remove this key"
+            self.path = Path("/to/something")
 
     class Bar(object):
         def init(self):
@@ -270,6 +277,7 @@ def test_to_dict():
     bar = Bar()
     bar.build()
 
+    expected_path = "\\to\\something" if os.name == "nt" else "/to/something"
     expected_foo_val_field = [
         {
             "a": 1.234,
@@ -277,6 +285,7 @@ def test_to_dict():
             "c": {"some_key": [7, 8, 9]},
             "d": None,
             "test_function": "self.test_function = lambda x, y: x + y",
+            "path": expected_path,
         }
     ]
 

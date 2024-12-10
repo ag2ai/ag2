@@ -53,7 +53,7 @@ import json
 import os
 import time
 import warnings
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic import __version__ as anthropic_version
@@ -61,6 +61,7 @@ from anthropic.types import Completion, Message, TextBlock, ToolUseBlock
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 from typing_extensions import Annotated
 
 from autogen.oai.client_utils import validate_parameter
@@ -73,6 +74,8 @@ if TOOL_ENABLED:
 
 
 ANTHROPIC_PRICING_1k = {
+    "claude-3-5-sonnet-20241022": (0.003, 0.015),
+    "claude-3-5-haiku-20241022": (0.0008, 0.004),
     "claude-3-5-sonnet-20240620": (0.003, 0.015),
     "claude-3-sonnet-20240229": (0.003, 0.015),
     "claude-3-opus-20240229": (0.015, 0.075),
@@ -112,6 +115,9 @@ class AnthropicClient:
             self._aws_access_key is None or self._aws_secret_key is None or self._aws_region is None
         ):
             raise ValueError("API key or AWS credentials are required to use the Anthropic API.")
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Anthropic, it will be ignored.", UserWarning)
 
         if self._api_key is not None:
             self._client = Anthropic(api_key=self._api_key)
@@ -174,7 +180,7 @@ class AnthropicClient:
     def aws_region(self):
         return self._aws_region
 
-    def create(self, params: Dict[str, Any]) -> Completion:
+    def create(self, params: Dict[str, Any]) -> ChatCompletion:
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions

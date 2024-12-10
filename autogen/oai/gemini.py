@@ -1,8 +1,8 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 """Create a OpenAI-compatible client for Gemini features.
 
@@ -47,7 +47,7 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import google.generativeai as genai
 import PIL
@@ -61,12 +61,11 @@ from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from PIL import Image
+from pydantic import BaseModel
 from vertexai.generative_models import (
     Content as VertexAIContent,
 )
-from vertexai.generative_models import (
-    FunctionDeclaration as vaiFunctionDeclaration,
-)
+from vertexai.generative_models import FunctionDeclaration as vaiFunctionDeclaration
 from vertexai.generative_models import GenerativeModel
 from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
 from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -148,6 +147,9 @@ class GeminiClient:
             assert ("project_id" not in kwargs) and (
                 "location" not in kwargs
             ), "Google Cloud project and compute location cannot be set when using an API Key!"
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> List:
         """

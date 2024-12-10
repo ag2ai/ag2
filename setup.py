@@ -60,8 +60,12 @@ retrieve_chat = [
 
 retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 
-graph_rag_falkor_db = [
-    "graphrag_sdk==0.3.3",
+graph_rag_falkor_db = ["graphrag_sdk==0.3.3", "falkordb>=1.0.10"]
+
+neo4j_graph_rag = [
+    "llama_index==0.11.8",
+    "llama-index-graph-stores-neo4j=0.3.0",
+    "llma-index-core==0.11.8",
 ]
 
 if current_os in ["Windows", "Darwin"]:
@@ -113,17 +117,8 @@ extra_require = {
     "bedrock": ["boto3>=1.34.149"],
 }
 
-
-if "--name" in sys.argv:
-    index = sys.argv.index("--name")
-    sys.argv.pop(index)  # Removes --name
-    package_name = sys.argv.pop(index)  # Removes the value after --name
-else:
-    package_name = "ag2"
-
-
 setuptools.setup(
-    name=package_name,
+    name="pyautogen",
     version=__version__,
     author="Chi Wang & Qingyun Wu",
     author_email="support@ag2.ai",
