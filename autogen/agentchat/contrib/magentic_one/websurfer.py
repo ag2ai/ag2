@@ -23,6 +23,7 @@ from typing import (
     Tuple,
     Union,
     TypeAlias,
+    cast,
 )
 from urllib.parse import quote_plus
 
