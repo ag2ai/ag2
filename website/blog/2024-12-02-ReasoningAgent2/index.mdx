@@ -5,7 +5,6 @@ authors:
   - BabyCNM
   - skzhang1
   - sonichi
-  - BabyCNM
   - qingyunwu
 tags: [LLM, GPT, research]
 ---
@@ -82,6 +81,7 @@ from autogen import (
     ThinkNode,
     visualize_tree
 )
+
 
 # Configure the model
 config_list = [{"model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]
@@ -186,6 +186,7 @@ After asking a question to the `ReasoningAgent`, you only need to simply call th
 
 ```python
 import json
+
 data = reasoning_agent._root.to_dict()
 with open("reasoning_tree.json", "w") as f:
     json.dump(data, f)
@@ -208,43 +209,7 @@ new_node = pickle.load(open("reasoning_tree.pkl", "rb"))
 This step finds the best trajectory in the thought tree and converts it to a SFT dataset as a sequence of strings. The best trajectory is determined by following the highest-scoring path from root to leaf.
 
 ```python
-def extract_sft_dataset(root):
-    """
-    Extract the best trajectory or multiple equally good trajectories
-    for SFT training.
-
-    Args:
-        root: The root node of the tree.
-
-    Returns:
-        List of best trajectories, where each trajectory is a pair of instruction and response.
-    """
-    instruction = root.content
-    idx = len("# Question: ") + len(root.content) + 1
-
-    def find_leaf_nodes(node):
-        """Recursively find all leaf nodes."""
-        if not node.children:
-            return [node]
-        leafs = []
-        for child in node.children:
-            leafs.extend(find_leaf_nodes(child))
-        return leafs
-
-    # Step 1: Find all leaf nodes
-    leaf_nodes = find_leaf_nodes(root)
-
-    # Step 2: Determine the highest score among leaf nodes
-    max_value = max(leaf_nodes, key=lambda x: x.value).value
-
-    # Step 3: Collect all leaf nodes with the highest score
-    best_leafs = [leaf for leaf in leaf_nodes if leaf.value == max_value]
-
-    # Step 4: Collect trajectories for all the best leaf nodes
-    best_trajectories = [{"instruction": instruction, "response": leaf.trajectory[idx:]} for leaf in best_leafs]
-
-    return best_trajectories
-
+from autogen.agentchat.contrib.reasoning_agent import extract_sft_dataset
 
 # Example usage
 sft_data = extract_sft_dataset(reason_agent._root)
@@ -255,52 +220,7 @@ json.dump(sft_data, open("sft_data.json", "w"), indent=2)
 This step generates preference pairs by comparing sibling nodes in the tree. For each parent node with multiple children, we create training pairs where the higher-scored response is marked as preferred over the lower-scored one.
 
 ```python
-def extract_rlhf_preference_dataset(root, contrastive_threshold=0.2):
-    """
-    Extract and generate preference pairs for RLHF training by comparing sibling nodes.
-
-    Args:
-        root: The root node of the tree.
-        contrastive_threshold (float): between (0, 1), a distance measure that we are confidence to call
-            one is positive and another is negative.
-
-    Returns:
-        A list of preference pairs, where each pair contains two responses and
-        indicates which one is preferred.
-    """
-    preference_pairs = []
-
-    assert contrastive_threshold > 0
-    assert contrastive_threshold < 1
-
-    def traverse_tree(node):
-        """Traverse the tree to compare sibling nodes and collect preferences."""
-        if not node.children:
-            return  # Leaf node, no comparisons needed
-
-        # Step 1: Compare all sibling nodes
-        for i in range(len(node.children)):
-            for j in range(len(node.children)):
-                if i == j:
-                    continue
-                child_a, child_b = node.children[i], node.children[j]
-                if child_a.value - child_b.value > contrastive_threshold:
-                    preference_pairs.append({
-                        "instruction": node.trajectory,
-                        "preferred_response": f"Step {child_a.depth}: {child_a.content}",
-                        "dispreferred_response": f"Step {child_b.depth}: {child_b.content}",
-                    })
-
-
-        # Step 2: Recurse into child nodes
-        for child in node.children:
-            traverse_tree(child)
-
-    # Start traversal from the root
-    traverse_tree(root)
-
-    return preference_pairs
-
+from autogen.agentchat.contrib.reasoning_agent import extract_rlhf_preference_dataset
 
 # Example usage
 rlhf_data = extract_rlhf_preference_dataset(reason_agent._root)
