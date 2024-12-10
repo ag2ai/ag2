@@ -93,6 +93,7 @@ extra_require = {
     "retrievechat-pgvector": retrieve_chat_pgvector,
     "retrievechat-mongodb": [*retrieve_chat, "pymongo>=4.0.0"],
     "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
+    "retrievechat-couchbase": [*retrieve_chat, "couchbase>=4.3.0"],
     "graph_rag_falkor_db": graph_rag_falkor_db,
     "autobuild": autobuild,
     "captainagent": autobuild + ["pandas"],

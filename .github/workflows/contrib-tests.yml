@@ -87,6 +87,12 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+      couchbase:
+        image: couchbase:enterprise-7.6.3
+        ports:
+          - "8091-8095:8091-8095"
+          - "11210:11210"
+          - "9102:9102"
       mongodb:
         image: mongodb/mongodb-atlas-local:latest
         ports:
@@ -111,6 +117,9 @@ jobs:
       - name: Install mongodb when on linux
         run: |
           pip install -e .[retrievechat-mongodb]
+      - name: Install couchbase when on linux
+        run: |
+          pip install -e .[retrievechat-couchbase]
       - name: Install unstructured when python-version is 3.9 and on linux
         if: matrix.python-version == '3.9'
         run: |
