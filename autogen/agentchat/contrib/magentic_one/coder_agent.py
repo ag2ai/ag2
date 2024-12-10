@@ -1,8 +1,9 @@
-from typing import Optional, Union, Literal, Callable                                                                                                                                             
+from typing import Optional, Union, Literal, Callable, Dict                                                                                                                                             
 from autogen.agentchat import ConversableAgent                                                                                                                                                         
                                                                                                                                                                                                    
 def create_coder_agent(                                                                                                                                                                           
-    name: str,                                                                                                                                                                                    
+    name: str,    
+    llm_config: Optional[Union[Dict, Literal[False]]] = None,                                                                                                                                                                          
     system_message: Optional[str] = """You are a helpful AI assistant.                                                                                                                            
     Solve tasks using your coding and language skills.                                                                                                                                                
     In the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.                                                            
@@ -25,22 +26,11 @@ def create_coder_agent(
                                                                                                                                                                                                    
     agent = ConversableAgent(                                                                                                                                                                     
         name=name,                                                                                                                                                                                
-        system_message=system_message,                                                                                                                                                            
+        system_message=system_message,
+        llm_config=llm_config,                                                                                                                                                            
         description=description,                                                                                                                                                                  
-        code_execution_config=False,  # Disable code execution                                                                                                                       
+        code_execution_config=False,  # Disable code execution                                                                                                                   
         **kwargs                                                                                                                                                                                  
     )                                                                                                                                                                                             
-                                                                                                                                                                                                   
-    # Clear existing reply functions and register new ones in specific order                                                                                                                      
-    agent._reply_func_list = []                                                                                                                                                                   
-                                                                                                                                                                                                
-    # Register reply functions in order:                                                                                                                                                          
-    # 1. Check for termination/human input                                                                                                                                                                                                                                                                                                                           
-    # 2. Try function/tool calls                                                                                                                                                                  
-    # 3. Fall back to LLM response                                                                                                                                                                
-    agent.register_reply([ConversableAgent, None], agent.check_termination_and_human_reply)                                                                                                                                                                                                            
-    agent.register_reply([ConversableAgent, None], agent.generate_function_call_reply)                                                                                                            
-    agent.register_reply([ConversableAgent, None], agent.generate_tool_calls_reply)                                                                                                               
-    agent.register_reply([ConversableAgent, None], agent.generate_oai_reply)                                                                                                                      
-                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                                                                                                          
     return agent       

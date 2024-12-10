@@ -1,61 +1,153 @@
-from typing import Any, Callable, Dict, List, Optional, Union
-from typing_extensions import Literal
+from typing import Dict, Optional, Union, Literal
 from autogen.agentchat import ConversableAgent
-from .markdown_browser import RequestsMarkdownBrowser  # type: ignore
-from . import file_tools
-from .file_tools import FILE_TOOL_SCHEMA
+from .markdown_browser import RequestsMarkdownBrowser
 
-
-class FileSurferAgent(ConversableAgent):
-    """An agent that can navigate and read local files using a text-based browser."""
-
-    DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI Assistant that can navigate and read local files."
+def create_file_surfer(
+    name: str = "file_surfer",
+    #TODO: adjust system massage
+    system_message: str = "You are a helpful AI Assistant that can navigate and read local files.",
+    llm_config: Optional[Union[Dict, Literal[False]]] = None,
+    browser: Optional[RequestsMarkdownBrowser] = None,
+) -> ConversableAgent:
+    """Create a ConversableAgent configured for file surfing capabilities."""
     
-    def __init__(
-        self,
-        name: str = "file_surfer",
-        system_message: Optional[str] = DEFAULT_SYSTEM_MESSAGE,
-        is_termination_msg: Optional[Callable[[Dict], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
-        human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        code_execution_config: Union[Dict, Literal[False]] = False,
-        llm_config: Optional[Union[Dict, Literal[False]]] = None,
-        browser: Optional[RequestsMarkdownBrowser] = None,
-    ):
-        super().__init__(
-            name=name,
-            system_message=system_message,
-            is_termination_msg=is_termination_msg,
-            max_consecutive_auto_reply=max_consecutive_auto_reply,
-            human_input_mode=human_input_mode,
-            code_execution_config=code_execution_config,
-            llm_config=llm_config,
-        )
+    # Initialize browser
+    browser = browser or RequestsMarkdownBrowser(viewport_size=1024 * 5, downloads_folder="coding")
+    
+    # Create agent
+    agent = ConversableAgent(
+        name=name,
+        system_message=system_message,
+        human_input_mode="NEVER",
+        code_execution_config=False,
+        llm_config=llm_config,
+    )
 
-        # Initialize browser
-        self._browser = browser or RequestsMarkdownBrowser(viewport_size=1024 * 5, downloads_folder="coding")
+    # Define file navigation functions
+    def open_local_file(path: str) -> Dict:
+        """Open a local file at a path in the text-based browser."""
+        browser.open_local_file(path)
+        return {"content": f"Opened file: {path}"}
 
-        # Register file navigation functions
-        self.register_function({
-            "open_local_file": lambda path: file_tools.open_local_file(self._browser, path),
-            "page_up": lambda: file_tools.page_up(self._browser),
-            "page_down": lambda: file_tools.page_down(self._browser),
-            "find_on_page": lambda search_string: file_tools.find_on_page(self._browser, search_string),
-            "find_next": lambda: file_tools.find_next(self._browser),
-            "get_browser_state": lambda: file_tools.get_browser_state(self._browser)
-        })
+    def page_up() -> Dict:
+        """Scroll the viewport UP one page-length."""
+        browser.page_up()
+        return {"content": "Scrolled up one page"}
 
-        # Register function schemas for LLM
-        if self.llm_config:
-            
-            self.update_tool_signature(FILE_TOOL_SCHEMA[0], is_remove=False)
-            self.update_tool_signature(FILE_TOOL_SCHEMA[1], is_remove=False) 
-            self.update_tool_signature(FILE_TOOL_SCHEMA[2], is_remove=False)
-            self.update_tool_signature(FILE_TOOL_SCHEMA[3], is_remove=False)
-            self.update_tool_signature(FILE_TOOL_SCHEMA[4], is_remove=False)
-            self.update_tool_signature(FILE_TOOL_SCHEMA[5], is_remove=False)
+    def page_down() -> Dict:
+        """Scroll the viewport DOWN one page-length."""
+        browser.page_down() 
+        return {"content": "Scrolled down one page"}
 
-    @property
-    def browser(self) -> RequestsMarkdownBrowser:
-        """Get the browser instance."""
-        return self._browser
+    def find_on_page(search_string: str) -> Dict:
+        """Find first occurrence of search string on page."""
+        browser.find_on_page(search_string)
+        return {"content": f"Found first occurrence of: {search_string}"}
+
+    def find_next() -> Dict:
+        """Find next occurrence of search string."""
+        browser.find_next()
+        return {"content": "Found next occurrence"}
+
+    def get_browser_state() -> Dict:
+        """Get current browser state including header and content."""
+        header = f"Address: {browser.address}\n"
+        
+        if browser.page_title:
+            header += f"Title: {browser.page_title}\n"
+
+        current_page = browser.viewport_current_page
+        total_pages = len(browser.viewport_pages)
+        header += f"Viewport position: Showing page {current_page+1} of {total_pages}.\n"
+
+        content = browser.viewport
+        return {
+            "content": header.strip() + "\n=======================\n" + content
+        }
+
+    # Register functions with agent
+    agent.register_function({
+        "open_local_file": open_local_file,
+        "page_up": page_up,
+        "page_down": page_down,
+        "find_on_page": find_on_page,
+        "find_next": find_next,
+        "get_browser_state": get_browser_state
+    })
+
+    # Register function schemas if LLM config is provided
+    if llm_config:
+        for schema in FILE_TOOL_SCHEMA:
+            agent.update_tool_signature(schema, is_remove=False)
+
+    return agent
+
+# Tool schemas for LLM
+FILE_TOOL_SCHEMA = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "open_local_file",
+                        "description": "Open a local file at a path in the text-based browser",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "The relative or absolute path of a local file to visit"
+                                }
+                            },
+                            "required": ["path"]
+                        }
+                    }
+                },
+                {
+                    "type": "function", 
+                    "function": {
+                        "name": "page_up",
+                        "description": "Scroll the viewport UP one page-length",
+                        "parameters": {"type": "object", "properties": {}}
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "page_down", 
+                        "description": "Scroll the viewport DOWN one page-length",
+                        "parameters": {"type": "object", "properties": {}}
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "find_on_page",
+                        "description": "Find first occurrence of search string on page",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "search_string": {
+                                    "type": "string",
+                                    "description": "The string to search for on the page"
+                                }
+                            },
+                            "required": ["search_string"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "find_next",
+                        "description": "Find next occurrence of search string",
+                        "parameters": {"type": "object", "properties": {}}
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_browser_state",
+                        "description": "Get current browser state including header and content",
+                        "parameters": {"type": "object", "properties": {}}
+                    }
+                }
+            ]

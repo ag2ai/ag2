@@ -56,7 +56,7 @@ Available Team:
 
 Based on our current state, please provide a JSON response with the following structure:
 
-{{"is_request_satisfied": {{"reason": "Explain why the task is or is not complete", "answer": boolean}}, "is_in_loop": {{"reason": "Explain if we're repeating actions without progress", "answer": boolean}}, "is_progress_being_made": {{"reason": "Explain if we're moving toward our goal", "answer": boolean}}, "next_speaker": {{"reason": "Explain why this agent should act next", "answer": "Agent role name"}}, "instruction_or_question": {{"reason": "Explain why this is the appropriate next action", "answer": "Specific instruction for the next agent"}}}}
+{{"is_request_satisfied": {{"reason": "Explain why the task is or is not complete", "answer": boolean}}, "is_in_loop": {{"reason": "Explain if we're repeating actions without progress", "answer": boolean}}, "is_progress_being_made": {{"reason": "Explain if we're moving toward our goal", "answer": boolean}}, "next_speaker": {{"reason": "Explain why this agent should act next", "answer": "Agent role name"}}, "instruction_or_question": {{"reason": "Explain why this is the appropriate next action. Include all information the agent needs to execute the action", "answer": "Specific instruction for the next agent"}}}}
 
 Ensure your response is valid JSON and uses the exact agent role names: {agent_roles}"""
 

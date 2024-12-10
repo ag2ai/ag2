@@ -4,6 +4,8 @@ information about Python programming through an embedded browser."""
 import asyncio
 import os
 from autogen.agentchat.contrib.magentic_one.websurfer import MultimodalWebSurfer
+from autogen.agentchat.contrib.magentic_one.coder_agent import create_coder_agent
+from autogen.agentchat.contrib.magentic_one.filesurfer_agent import create_file_surfer
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
 import logging
@@ -42,6 +44,12 @@ sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
 from autogen.agentchat.contrib.magentic_one.orchestrator_agent import OrchestratorAgent
 from autogen.agentchat import AssistantAgent, UserProxyAgent
+import tempfile
+from autogen.coding import DockerCommandLineCodeExecutor
+
+
+from autogen import ConversableAgent
+
 import json
 
 async def main() -> None:
@@ -60,6 +68,21 @@ async def main() -> None:
     }
 
 
+    temp_dir = tempfile.TemporaryDirectory()
+
+    executorENV = DockerCommandLineCodeExecutor(
+        image="python:3.12-slim",  
+        timeout=10,  
+        work_dir=temp_dir.name, 
+    )
+
+    executor = ConversableAgent(
+        name="executor",
+        description="""A computer terminal that performs no other action than running Python scripts (provided to it quoted in ```python code blocks), or sh shell scripts (provided to it quoted in ```sh code blocks)""",
+        llm_config=False,  
+        code_execution_config={"executor": executorENV}, 
+        human_input_mode="NEVER",  
+    )
 
     # Create the web surfer agent
     websurfer = MultimodalWebSurfer(
@@ -76,26 +99,13 @@ async def main() -> None:
         browser_channel="chromium",
         to_save_screenshots=True
     )
-
-    coder = AssistantAgent(
-        name="coder",
-        llm_config=llm_config,
-        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        system_message="You are a helpful AI coding assistant. You write clean, efficient code and explain your solutions clearly. Return the code to the user. ",
-        max_consecutive_auto_reply=10,
-        human_input_mode="NEVER",
-        code_execution_config={
-                "work_dir": "coding",
-                "use_docker": False,
-            },
-        description="coder. Writes and executes code to solve tasks.",
-    )
-
+    coder = create_coder_agent("Coder",llm_config=llm_config)
+    filesurfer = create_file_surfer("FileSurfer",llm_config=llm_config)
 
     orchestrator = OrchestratorAgent(
         name="Orchestrator",
         llm_config=llm_config,
-        agents=[websurfer],
+        agents=[coder, filesurfer, executor], #websurfer, 
         max_consecutive_auto_reply=10,
         max_stalls_before_replan=3,  
         max_replans=3, 
@@ -105,9 +115,19 @@ async def main() -> None:
 
     task = """Find out some detailed informtion about the magentic one agent from microsoft"""
     #task = """Go to amazon.com and find a good beginner 3d printer, pick any good one for under 300 dollars. """
-    massages = [
+    #task = """write the game sname in python """
+    task = """can you generate the python call to run all return all the prime numbers bewteen 1 and 1000 and return the prime numbers ? (give the code to the Executor to run it, don't ask the user to run it. If it does not work with the executor, tell the user.)"""
+
+    messages = [
         {"role": "user", "content": task}]
-    result = await orchestrator.a_generate_reply(messages=massages)
+    
+    #result = await coder.a_generate_reply(messages)
+    #result = await executor.a_generate_reply(messages)
+    
+    result = await orchestrator.a_generate_reply(messages=messages)
+
+    print(result)
+    
         
 
 

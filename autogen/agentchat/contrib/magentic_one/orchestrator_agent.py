@@ -166,7 +166,7 @@ class OrchestratorAgent(ConversableAgent):
         planning_conversation.append(
             {"role": "user", "content": self._get_closed_book_prompt(self._task)}
         )
-        is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
+        is_valid_response, response = self.generate_oai_reply(self._system_messages + planning_conversation)
 
         assert is_valid_response
         assert isinstance(response, str)
@@ -182,7 +182,7 @@ class OrchestratorAgent(ConversableAgent):
         )
 
         is_valid_response, response = self.generate_oai_reply(
-            messages=self._system_messages + planning_conversation
+            self._system_messages + planning_conversation
         )
 
         assert is_valid_response
@@ -200,7 +200,7 @@ class OrchestratorAgent(ConversableAgent):
             {"role": "user", "content": self._get_update_facts_prompt(self._task, self._facts)}
         )
 
-        is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
+        is_valid_response, response = self.generate_oai_reply(self._system_messages + planning_conversation)
 
         assert is_valid_response
         assert isinstance(response, str)
@@ -215,7 +215,7 @@ class OrchestratorAgent(ConversableAgent):
             {"role": "user", "content": self._get_update_plan_prompt(self._team_description)}
         )
 
-        is_valid_response, response = self.generate_oai_reply(messages=self._system_messages + planning_conversation)
+        is_valid_response, response = self.generate_oai_reply(self._system_messages + planning_conversation)
 
         assert is_valid_response
         assert isinstance(response, str)
@@ -240,7 +240,7 @@ class OrchestratorAgent(ConversableAgent):
             messages = self._system_messages + self._oai_messages[self] + ledger_user_messages
 
             is_valid_response, ledger_str = self.generate_oai_reply(
-                messages=messages,
+                messages,
             )
 
             assert is_valid_response
@@ -298,7 +298,7 @@ class OrchestratorAgent(ConversableAgent):
 
         final_message = {"role": "user", "content": ORCHESTRATOR_GET_FINAL_ANSWER.format(task=self._task)}
         is_valid_response, response = self.generate_oai_reply(
-            messages=self._system_messages + self._oai_messages[self] + [final_message]
+            self._system_messages + self._oai_messages[self] + [final_message]
             )
 
         assert is_valid_response
@@ -603,13 +603,19 @@ class OrchestratorAgent(ConversableAgent):
 
         # Extract JSON from markdown code blocks if present
         if "```json" in content:
-            parts = content.split("```json")
-            if len(parts) > 1:
-                content = parts[1].split("```")[0].strip()
+            # Find the start of the JSON block
+            start_idx = content.find("```json") + 6
+            # Find the last ``` in the string
+            end_idx = content.rfind("```")
+            if end_idx > start_idx:
+                content = content[start_idx:end_idx].strip()
         elif "```" in content:  # Handle cases where json block might not be explicitly marked
-            parts = content.split("```")
-            if len(parts) > 1:
-                content = parts[1].strip()  # Take first code block content
+            # Find the start of the first code block
+            start_idx = content.find("```") + 3
+            # Find the last ``` in the string
+            end_idx = content.rfind("```")
+            if end_idx > start_idx:
+                content = content[start_idx:end_idx].strip()
         
         # Find JSON-like structure if not in code block
         if not content.strip().startswith('{'):
@@ -648,4 +654,4 @@ class OrchestratorAgent(ConversableAgent):
                         "message": str(e)
                     }
                 )
-                raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
+                raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)} Original content: {content}")

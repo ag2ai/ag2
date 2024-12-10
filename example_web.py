@@ -64,7 +64,7 @@ async def main() -> None:
     messages = [
         {
             "role": "user",
-            "content": "Go to zeit.de and give me the titles of the first 10 news articles.  "
+            "content": "find detailed informtion for the magentic one ai agent "
         }
     ]
 
