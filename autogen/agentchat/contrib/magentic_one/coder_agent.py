@@ -27,10 +27,7 @@ def create_coder_agent(
         name=name,                                                                                                                                                                                
         system_message=system_message,                                                                                                                                                            
         description=description,                                                                                                                                                                  
-        code_execution_config={
-                "work_dir": "coding",
-                "use_docker": False,
-            },                                                                                                                        
+        code_execution_config=False,  # Disable code execution                                                                                                                       
         **kwargs                                                                                                                                                                                  
     )                                                                                                                                                                                             
                                                                                                                                                                                                    
@@ -38,12 +35,10 @@ def create_coder_agent(
     agent._reply_func_list = []                                                                                                                                                                   
                                                                                                                                                                                                 
     # Register reply functions in order:                                                                                                                                                          
-    # 1. Check for termination/human input                                                                                                                                                        
-    # 2. Try code execution                                                                                                                                                                       
-    # 3. Try function/tool calls                                                                                                                                                                  
-    # 4. Fall back to LLM response                                                                                                                                                                
-    agent.register_reply([ConversableAgent, None], agent.check_termination_and_human_reply)                                                                                                       
-    agent.register_reply([ConversableAgent, None], agent.generate_code_execution_reply)                                                                                                           
+    # 1. Check for termination/human input                                                                                                                                                                                                                                                                                                                           
+    # 2. Try function/tool calls                                                                                                                                                                  
+    # 3. Fall back to LLM response                                                                                                                                                                
+    agent.register_reply([ConversableAgent, None], agent.check_termination_and_human_reply)                                                                                                                                                                                                            
     agent.register_reply([ConversableAgent, None], agent.generate_function_call_reply)                                                                                                            
     agent.register_reply([ConversableAgent, None], agent.generate_tool_calls_reply)                                                                                                               
     agent.register_reply([ConversableAgent, None], agent.generate_oai_reply)                                                                                                                      

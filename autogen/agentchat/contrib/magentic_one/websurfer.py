@@ -350,7 +350,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         return targets
 
-    async def _execute_tool( # TODO: replace with ag2 ? 
+    async def _execute_tool( # TODO: replace with ag2 function execution ? 
         self,
         message: Dict[str, Any],
         rects: Dict[str, InteractiveRegion],
