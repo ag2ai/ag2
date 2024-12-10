@@ -51,7 +51,7 @@ def reasoning_agent():
 def test_think_node_init(think_node):
     """Test ThinkNode initialization"""
     assert think_node.content == TEST_CONTENT
-    assert think_node.value is None
+    assert think_node.value == 0
     assert think_node.parent is None
     assert think_node.depth == 0
     assert think_node.children == []
@@ -66,7 +66,7 @@ def test_think_node_trajectory(think_node):
 
 def test_think_node_str_repr(think_node):
     """Test ThinkNode string representation"""
-    expected = f"{TEST_CONTENT} -> Depth: 0 Value: None Visits: 0"
+    expected = f"{TEST_CONTENT} -> Depth: 0 Value: 0 Visits: 0"
     assert str(think_node) == expected
     assert repr(think_node) == expected
 
@@ -75,7 +75,7 @@ def test_think_node_to_dict(think_node):
     """Test ThinkNode to_dict method"""
     node_dict = think_node.to_dict()
     assert node_dict["content"] == TEST_CONTENT
-    assert node_dict["value"] is None
+    assert node_dict["value"] == 0
     assert node_dict["depth"] == 0
     assert node_dict["visits"] == 0
     assert node_dict["children"] == []
@@ -198,7 +198,7 @@ Option 3: Another option"""
 
         print("OAI REPLY:", agent.thinker.generate_oai_reply)
 
-        success, response = agent.generate_response(
+        success, response = agent.generate_beam_response(
             messages=[{"role": "user", "content": "Test question"}], sender=None
         )
 
@@ -249,8 +249,8 @@ def test_visualize_tree_successful_case(mock_digraph):
     expected_calls = [
         call("0", "Root\n visits: 1\n value: 0.5"),
         call("0_0", "Child 1\n visits: 2\n value: 0.7"),
-        call("0_1", "Child 2\n visits: 0\n value: None"),
-        call("0_0_0", "Grandchild with very long content that should be t...\n visits: 0\n value: None"),
+        call("0_1", "Child 2\n visits: 0\n value: 0"),
+        call("0_0_0", "Grandchild with very long content that should be t...\n visits: 0\n value: 0"),
     ]
     mock_graph.node.assert_has_calls(expected_calls, any_order=True)
 
