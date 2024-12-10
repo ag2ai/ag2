@@ -1,13 +1,13 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+import math
+import random
 import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from ..agent import Agent
-from ..assistant_agent  import AssistantAgent
-import random
-import math
+from ..assistant_agent import AssistantAgent
 
 EPSILON = 1e-6
 
@@ -39,6 +39,9 @@ Option 2: Reiterate and understand the user's question.
 Option 3: Analyze and validate the results based on the previous steps.
 Option 4: Perform Y.
 """
+
+
+GRADER_message = "Rate the thinking trajectories for score 1 - 5 (1: worst, 5: best)."
 
 
 class ThinkNode:
@@ -180,7 +183,6 @@ def visualize_tree(root: ThinkNode) -> None:
         print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
 
 
-
 def extract_sft_dataset(root):
     """
     Extract the best trajectory or multiple equally good trajectories
@@ -252,16 +254,20 @@ def extract_rlhf_preference_dataset(root, contrastive_threshold=0.2):
                 is_a_better = False
                 if child_a.visits > 0 and child_b.visits > 0:
                     # for MCTS
-                    is_a_better = child_a.value / child_a.visits - child_b.value / child_b.visits > contrastive_threshold
+                    is_a_better = (
+                        child_a.value / child_a.visits - child_b.value / child_b.visits > contrastive_threshold
+                    )
                 else:
                     # for Beam Search
                     is_a_better = child_a.value - child_b.value > contrastive_threshold
                 if is_a_better:
-                    preference_pairs.append({
-                        "instruction": node.trajectory,
-                        "preferred_response": f"Step {child_a.depth}: {child_a.content}",
-                        "dispreferred_response": f"Step {child_b.depth}: {child_b.content}",
-                    })
+                    preference_pairs.append(
+                        {
+                            "instruction": node.trajectory,
+                            "preferred_response": f"Step {child_a.depth}: {child_a.content}",
+                            "dispreferred_response": f"Step {child_b.depth}: {child_b.content}",
+                        }
+                    )
 
         # Step 2: Recurse into child nodes
         for child in node.children:
@@ -272,9 +278,18 @@ def extract_rlhf_preference_dataset(root, contrastive_threshold=0.2):
 
     return preference_pairs
 
+
 class ReasoningAgent(AssistantAgent):
     def __init__(
-        self, name, llm_config, max_depth=4, beam_size=3, answer_approach="pool", verbose=True, reason_config: dict=None, **kwargs
+        self,
+        name,
+        llm_config,
+        max_depth=4,
+        beam_size=3,
+        answer_approach="pool",
+        verbose=True,
+        reason_config: dict = None,
+        **kwargs,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.,
 
@@ -296,7 +311,7 @@ class ReasoningAgent(AssistantAgent):
 
         self.grader = AssistantAgent(
             name="tot_grader",
-            system_message="Rate the thinking trajectories for score 1 - 5 (1: worst, 5: best).",
+            system_message=GRADER_message,
             llm_config=llm_config,
         )
 
@@ -315,7 +330,7 @@ class ReasoningAgent(AssistantAgent):
 
         self._root = None
 
-    def rate_node(self, node: ThinkNode) -> float:
+    def rate_node(self, node: ThinkNode, ground_truth: str = None) -> float:
         """Rate the quality of a reasoning path using the grader agent.
 
         Args:
@@ -324,8 +339,18 @@ class ReasoningAgent(AssistantAgent):
         Returns:
             float: Normalized score between 0 and 1 indicating trajectory quality
         """
+        if ground_truth:
+            # override the system message
+            self.grader.update_system_message(
+                f"Rate the trajectory or answer for score 1 - 5 (1: worst, 5: best). The Ground Truth is:\n{ground_truth}"
+            )
+        else:
+            self.grader.update_system_message(GRADER_message)
+
         self.send(
-            message=f"Rate:\n{node.trajectory}", recipient=self.grader, request_reply=True, 
+            message=f"Rate:\n{node.trajectory}",
+            recipient=self.grader,
+            request_reply=True,
             silent=not self.verbose,
         )
         rating = self.grader.last_message()["content"].strip()
@@ -335,6 +360,35 @@ class ReasoningAgent(AssistantAgent):
         except (IndexError, ValueError):
             reward = 0.0  # Default reward if parsing fails
         return reward
+
+    def _process_prompt(self, messages, sender):
+        """
+        Process the incoming messages to extract the prompt and ground truth.
+
+        This method checks if the provided messages are None and retrieves the last message's content.
+        It also looks for a specific keyword "GROUND_TRUTH" in the prompt to separate the main prompt
+        from the ground truth for evaluation purposes.
+
+        Args:
+            messages (List[Dict[str, Any]]): A list of message dictionaries containing the content to process.
+
+        Returns:
+            Tuple[Optional[str], Optional[str]]: A tuple containing the processed prompt and the ground truth.
+            If the prompt is empty, returns (None, None).
+        """
+        messages = self._oai_messages[sender] if messages is None else messages
+        prompt = messages[-1]["content"].strip()
+        if not prompt:
+            return None, None
+
+        # Extract the ground truth for more accurate evaluation.
+        # TODO: in the future, allow user to pass a callable (func) to calculate reward.
+        if "GROUND_TRUTH" in prompt:
+            idx = prompt.find("GROUND_TRUTH")
+            prompt, ground_truth = prompt[:idx].rstrip(), prompt[idx:]
+        else:
+            ground_truth = None
+        return prompt, ground_truth
 
     def generate_beam_response(self, messages, sender, config=None):
         """Generate a response using tree-of-thought reasoning.
@@ -352,9 +406,7 @@ class ReasoningAgent(AssistantAgent):
         """
         if sender == self:
             return False, ""  # Defer the LLM call to next reply functions.
-
-        messages = self._oai_messages[sender] if messages is None else messages
-        prompt = messages[-1]["content"].strip()
+        prompt, ground_truth = self._process_prompt(messages, sender)
         if not prompt:
             return True, "TERMINATE"
 
@@ -370,7 +422,7 @@ class ReasoningAgent(AssistantAgent):
                 if self.is_terminal(node):
                     # Reached max depth; collect possible answers
                     if node.value is None:
-                        node.value = self.rate_node(node)
+                        node.value = self.rate_node(node, ground_truth)
                     final_answers.add(node)
                     continue
 
@@ -385,7 +437,7 @@ class ReasoningAgent(AssistantAgent):
 
                 # Rate
                 for node in prev_leafs:
-                    node.value = self.rate_node(node)
+                    node.value = self.rate_node(node, ground_truth)
                 # Beam search: keep top beam_size leaf nodes
                 prev_leafs = sorted(prev_leafs, key=lambda x: x.value if x.value else 0, reverse=True)[
                     : self.beam_size - len(final_answers)
@@ -420,19 +472,9 @@ class ReasoningAgent(AssistantAgent):
     def generate_mcts_response(self, messages, sender, config=None):
         if sender == self:
             return False, ""  # Defer the LLM call to next reply functions.
-
-        messages = self._oai_messages[sender] if messages is None else messages
-        prompt = messages[-1]["content"].strip()
+        prompt, ground_truth = self._process_prompt(messages, sender)
         if not prompt:
             return True, "TERMINATE"
-
-        # Extract the ground truth for more accurate evaluation.
-        # TODO: in the future, allow user to pass a callable (func) to calculate reward.
-        if "GROUND_TRUTH" in prompt:
-            idx = prompt.find("GROUND_TRUTH")
-            prompt, ground_truth = prompt[:idx].rstrip(), prompt[idx:]
-        else:
-            ground_truth = None
 
         root = ThinkNode(content=prompt, parent=None)
         self._root = root
@@ -446,9 +488,10 @@ class ReasoningAgent(AssistantAgent):
             while not self.is_terminal(node) and len(node.children) > 0:
                 choices_weights = [
                     # exploitation term +
-                    (child.value / (child.visits + EPSILON)) + 
+                    (child.value / (child.visits + EPSILON)) +
                     # exploration term
-                    self.exploration_constant * math.sqrt((2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON)))
+                    self.exploration_constant
+                    * math.sqrt((2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON)))
                     for child in node.children
                 ]
                 node = node.children[choices_weights.index(max(choices_weights))]
@@ -458,25 +501,22 @@ class ReasoningAgent(AssistantAgent):
                 if len(node.children) == 0:
                     self.expand(node)
                 node = random.choice(node.children)
-                
+
             # Add answer (leaf) node and evaluate answer
             self.send(
                 message=f"Answer the question {prompt}. Here is my thinking process:\n{node.trajectory}",
                 recipient=self,
-                request_reply=True,            
-                silent=not self.verbose)
-            _answer  = self.last_message(self)["content"].strip()
+                request_reply=True,
+                silent=not self.verbose,
+            )
+            _answer = self.last_message(self)["content"].strip()
             # We add the answer (as a node) to the leaf to help
             # future logging and debugging.
             _ans_node = ThinkNode(content=_answer, parent=node)
-            if ground_truth:
-                # override the system message
-                self.grader.update_system_message(f"Rate the answer for score 1 - 5 (1: worst, 5: best). The Ground Truth is:\n{ground_truth}")
-
-            reward = self.rate_node(_ans_node)
+            reward = self.rate_node(_ans_node, ground_truth)
             _ans_node.value = reward
             answer_nodes.append(_ans_node)
-            
+
             # Backpropagation
             while node is not None:
                 node.visits += 1
@@ -489,7 +529,6 @@ class ReasoningAgent(AssistantAgent):
         # Best action
         best_ans_node = max(answer_nodes, key=lambda node: node.value)
         return True, best_ans_node.content
-
 
     def expand(self, node: ThinkNode) -> List:
         """
@@ -511,7 +550,8 @@ class ReasoningAgent(AssistantAgent):
             message=f"{node.trajectory}\n---\nWhat are the possible next steps?",
             recipient=self.thinker,
             request_reply=True,
-            silent=not self.verbose)
+            silent=not self.verbose,
+        )
         reply = self.thinker.last_message()["content"].strip()
 
         # Extract options from reply using regex:
@@ -522,7 +562,5 @@ class ReasoningAgent(AssistantAgent):
 
         return [ThinkNode(content=option.strip().rstrip(), parent=node) for option in options]
 
-
     def is_terminal(self, node):
         return node.depth >= self.max_depth or "TERMINATE" in node.content
-
