@@ -76,6 +76,9 @@ elif current_os == "Linux":
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
+# NOTE: underscores in pip install, e.g. pip install ag2[graph_rag_falkor_db], will automatically
+# convert to hyphens. So, do not include underscores in the name of extras.
+
 extra_require = {
     "test": [
         "ipykernel",
