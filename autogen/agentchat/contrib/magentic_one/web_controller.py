@@ -5,7 +5,7 @@ import random
 import time
 import pathlib
 import aiofiles
-from typing import Any, Dict, Optional, Union, cast, TYPE_CHECKING
+from typing import Any, Dict, Union, cast
 
 from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
 from playwright._impl._errors import TimeoutError, Error as PlaywrightError
@@ -16,7 +16,6 @@ VIEWPORT_HEIGHT = 900
 
 from .types import InteractiveRegion, VisualViewport, visualviewport_from_dict, interactiveregion_from_dict
 from .markdown_browser import MarkdownConverter
-from .set_of_mark import add_set_of_mark
 
 from autogen.logger import FileLogger
 
