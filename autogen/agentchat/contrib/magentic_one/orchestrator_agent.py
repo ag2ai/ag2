@@ -4,6 +4,7 @@ import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
 from .messages import BroadcastMessage
+from .utils import clean_and_parse_json
 from .orchestrator_prompts import (
     ORCHESTRATOR_SYSTEM_MESSAGE,
     ORCHESTRATOR_CLOSED_BOOK_PROMPT,
@@ -247,7 +248,7 @@ class OrchestratorAgent(ConversableAgent):
             assert isinstance(ledger_str, str)
 
             try:
-                ledger_dict: Dict[str, Any] = self._clean_and_parse_json(ledger_str)
+                ledger_dict: Dict[str, Any] = clean_and_parse_json(ledger_str)
 
                 required_keys = [
                     "is_request_satisfied",
@@ -595,63 +596,3 @@ class OrchestratorAgent(ConversableAgent):
         # Return chat result with all relevant info
         return self._oai_messages[self][-1]["content"]
 
-
-    def _clean_and_parse_json(self, content: str) -> Dict[str, Any]:
-        """Clean and parse JSON content from various formats."""
-        if not content or not isinstance(content, str):
-            raise ValueError("Content must be a non-empty string")
-
-        # Extract JSON from markdown code blocks if present
-        if "```json" in content:
-            # Find the start of the JSON block
-            start_idx = content.find("```json") + 6
-            # Find the last ``` in the string
-            end_idx = content.rfind("```")
-            if end_idx > start_idx:
-                content = content[start_idx:end_idx].strip()
-        elif "```" in content:  # Handle cases where json block might not be explicitly marked
-            # Find the start of the first code block
-            start_idx = content.find("```") + 3
-            # Find the last ``` in the string
-            end_idx = content.rfind("```")
-            if end_idx > start_idx:
-                content = content[start_idx:end_idx].strip()
-        
-        # Find JSON-like structure if not in code block
-        if not content.strip().startswith('{'):
-            json_match = re.search(r'\{[\s\S]*\}', content)
-            if not json_match:
-                raise ValueError(
-                    f"Could not find valid JSON structure in content. "
-                    f"Content must contain a JSON object enclosed in curly braces. "
-                    f"Received: {content}"
-                )
-            content = json_match.group(0)
-
-        # Now clean for parsing
-        try:
-            # First try parsing the cleaned but formatted content
-            return json.loads(content)
-        except json.JSONDecodeError:
-            # If that fails, try more aggressive cleaning
-            cleaned_content = re.sub(r'[\n\r\t]', ' ', content)  # Replace newlines/tabs with spaces
-            cleaned_content = re.sub(r'\s+', ' ', cleaned_content)  # Normalize whitespace
-            cleaned_content = re.sub(r'\\(?!["\\/bfnrt])', '', cleaned_content)  # Remove invalid escapes
-            cleaned_content = re.sub(r',(\s*[}\]])', r'\1', cleaned_content)  # Remove trailing commas
-            cleaned_content = re.sub(r'([{,]\s*)(\w+)(?=\s*:)', r'\1"\2"', cleaned_content)  # Quote unquoted keys
-            cleaned_content = cleaned_content.replace("'", '"')  # Standardize quotes
-            
-            try:
-                return json.loads(cleaned_content)
-            except json.JSONDecodeError as e:
-                logger.log_event(
-                    source=self.name,
-                    name="thought",
-                    data={
-                        "stage": "json_error",
-                        "original_content": content,
-                        "cleaned_content": cleaned_content,
-                        "message": str(e)
-                    }
-                )
-                raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)} Original content: {content}")
