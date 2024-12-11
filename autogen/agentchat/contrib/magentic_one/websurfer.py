@@ -40,7 +40,7 @@ from .web_controller import WebController, DEFAULT_CHANNEL
 from .utils import clean_and_parse_json
 
 from .set_of_mark import add_set_of_mark
-from .tool_definitions import (
+from .web_tool_definitions import (
     TOOL_CLICK,
     TOOL_HISTORY_BACK,
     TOOL_PAGE_DOWN,
