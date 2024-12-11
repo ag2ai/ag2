@@ -53,6 +53,7 @@ from .tool_definitions import (
     TOOL_TYPE,
     TOOL_VISIT_URL,
     TOOL_WEB_SEARCH,
+    TOOL_INPUT_TEXT,
 )
 
 from .types import (
@@ -110,6 +111,7 @@ class MultimodalWebSurfer(ConversableAgent):
         self._chat_history: List[Dict[str,Any]] = [] 
         self.screenshot_tool_prompt = screenshot_tool_prompt
 
+
     async def init(
         self,
         headless: bool = True,
@@ -150,7 +152,106 @@ class MultimodalWebSurfer(ConversableAgent):
         self.downloads_folder = downloads_folder
         self.to_save_screenshots = to_save_screenshots
         self.debug_dir = debug_dir
+
+        if self.llm_config and self.web_controller:
+            self.register_tools()
         
+    def register_tools(self):
+        async def visit_url(reasoning: str, url: str) -> str:
+            """Navigate directly to a provided URL."""
+            await self.web_controller._visit_page(url)
+            return f"Visited URL: {url}"
+
+        async def web_search(reasoning: str, query: str) -> str:
+            """Performs a web search."""
+            # Placeholder implementation - replace with actual web search logic using the controller
+            print(f"Performing web search: {query} (Reasoning: {reasoning})")
+            return f"Search results for: {query}"
+        
+        async def history_back(reasoning: str) -> str:
+            """Navigates back one page in the browser's history."""
+            await self.web_controller._back()
+            return f"Navigated back."
+
+        async def page_up(reasoning: str) -> str:
+            """Scrolls the entire browser viewport one page UP towards the beginning."""
+            await self.web_controller._page_up()
+            return f"Scrolled page up."
+
+        async def page_down(reasoning: str) -> str:
+            """Scrolls the entire browser viewport one page DOWN towards the end."""
+            await self.web_controller._page_down()
+            return f"Scrolled page down."
+
+        async def click(reasoning: str, target_id: int) -> str:
+            """Clicks the mouse on the target with the given id."""
+            await self.web_controller._click_id(str(target_id))
+            return f"Clicked on target: {target_id}"
+
+        async def input_text(reasoning: str, input_field_id: int, text_value: str) -> str:
+            """Types the given text value into the specified field."""
+            await self.web_controller._fill_id(str(input_field_id), text_value)
+            return f"Inputted text into field: {input_field_id}"
+
+        async def scroll_element_down(reasoning: str, target_id: int) -> str:
+            """Scrolls a given html element (e.g., a div or a menu) DOWN."""
+            await self.web_controller._scroll_id(str(target_id), "down")
+            return f"Scrolled element down: {target_id}"
+
+        async def scroll_element_up(reasoning: str, target_id: int) -> str:
+            """Scrolls a given html element (e.g., a div or a menu) UP."""
+            await self.web_controller._scroll_id(str(target_id), "up")
+            return f"Scrolled element up: {target_id}"
+
+        async def answer_question(reasoning: str, question: str) -> str:
+            """answer a question about the current webpage's content."""
+            return await self._summarize_page(question=question)
+
+        async def summarize_page(reasoning: str) -> str:
+            """summarize the entire page."""
+            return await self._summarize_page()
+
+        async def sleep(reasoning: str) -> str:
+            """Wait a short period of time."""
+            await self.web_controller._sleep(2)
+            return f"Slept."
+
+        # Register functions with the agent
+        self.register_for_llm(name="visit_url", description=TOOL_VISIT_URL["function"]["description"])(visit_url)
+        self.register_for_llm(name="web_search", description=TOOL_WEB_SEARCH["function"]["description"])(web_search)
+        self.register_for_llm(name="history_back", description=TOOL_HISTORY_BACK["function"]["description"])(history_back)
+        self.register_for_llm(name="page_up", description=TOOL_PAGE_UP["function"]["description"])(page_up)
+        self.register_for_llm(name="page_down", description=TOOL_PAGE_DOWN["function"]["description"])(page_down)
+        self.register_for_llm(name="click", description=TOOL_CLICK["function"]["description"])(click)
+        self.register_for_llm(name="input_text", description=TOOL_INPUT_TEXT["function"]["description"])(input_text)
+        #self.register_for_llm(name="scroll_element_down", description=TOOL_SCROLL_ELEMENT_DOWN["function"]["description"])(scroll_element_down)
+        #self.register_for_llm(name="scroll_element_up", description=TOOL_SCROLL_ELEMENT_UP["function"]["description"])(scroll_element_up)
+        self.register_for_llm(name="answer_question", description=TOOL_READ_PAGE_AND_ANSWER["function"]["description"])(answer_question)
+        self.register_for_llm(name="summarize_page", description=TOOL_SUMMARIZE_PAGE["function"]["description"])(summarize_page)
+        self.register_for_llm(name="sleep", description=TOOL_SLEEP["function"]["description"])(sleep)
+        
+        # Register the same functions for execution
+        self.register_for_execution(name="visit_url")(visit_url)
+        self.register_for_execution(name="web_search")(web_search)
+        self.register_for_execution(name="history_back")(history_back)
+        self.register_for_execution(name="page_up")(page_up)
+        self.register_for_execution(name="page_down")(page_down)
+        self.register_for_execution(name="click")(click)
+        self.register_for_execution(name="input_text")(input_text)
+        #self.register_for_execution(name="scroll_element_down")(scroll_element_down)
+        #self.register_for_execution(name="scroll_element_up")(scroll_element_up)
+        self.register_for_execution(name="answer_question")(answer_question)
+        self.register_for_execution(name="summarize_page")(summarize_page)
+        self.register_for_execution(name="sleep")(sleep)
+
+        # Update tool signatures using the provided schemas
+        for tool_schema in [
+            TOOL_VISIT_URL, TOOL_WEB_SEARCH, TOOL_HISTORY_BACK, TOOL_PAGE_UP,
+            TOOL_PAGE_DOWN, TOOL_CLICK, TOOL_INPUT_TEXT, #TOOL_SCROLL_ELEMENT_DOWN, TOOL_SCROLL_ELEMENT_UP,
+            TOOL_READ_PAGE_AND_ANSWER, TOOL_SUMMARIZE_PAGE, 
+            TOOL_SLEEP
+        ]:
+            self.update_tool_signature(tool_schema, is_remove=False)
 
     def _get_screenshot_selection_prompt(self, page_url, visible_targets, other_targets_str, focused_hint, tool_names) -> str:
         return self.screenshot_tool_prompt.format(page_url=page_url,
@@ -205,12 +306,13 @@ class MultimodalWebSurfer(ConversableAgent):
         #    # New tool calls format
 
         function = message["tool_calls"][0]["function"]
-        args = function["arguments"]
-        if isinstance(args, str):
-            args = clean_and_parse_json(args) 
+        tool_args = function["arguments"]
+        if isinstance(tool_args, str):
+            tool_args = clean_and_parse_json(tool_args) 
 
-        name = function["name"]
-        assert name is not None
+        tool_name = function["name"]
+        assert tool_name is not None
+        tool_id = message["tool_calls"][0]["id"]
 
         action_description = ""
         logger.log_event(
@@ -218,97 +320,22 @@ class MultimodalWebSurfer(ConversableAgent):
             name="tool_execution",
             data={
                 "url": await self.web_controller.get_url(),
-                "tool_name": name,
-                "args": args
+                "tool_name": tool_name,
+                "args": tool_args
             }
         )
 
-        if name == "visit_url":
-            url = args["url"]
-            action_description = f"I typed '{url}' into the browser address bar."
-            # Check if the argument starts with a known protocol
-            if url.startswith(("https://", "http://", "file://", "about:")):
-                await self.web_controller._visit_page(url)
-            # If the argument contains a space, treat it as a search query
-            elif " " in url:
-                await self.web_controller._visit_page(f"https://www.bing.com/search?q={quote_plus(url)}&FORM=QBLH")
-            # Otherwise, prefix with https://
-            else:
-                await self.web_controller._visit_page("https://" + url)
-
-        elif name == "history_back":
-            action_description = "I clicked the browser back button."
-            await self.web_controller._back()
-
-        elif name == "web_search":
-            query = args["query"]
-            action_description = f"I typed '{query}' into the browser search bar."
-            await self.web_controller._visit_page(f"https://www.bing.com/search?q={quote_plus(query)}&FORM=QBLH")
-
-        elif name == "page_up":
-            action_description = "I scrolled up one page in the browser."
-            await self.web_controller._page_up()
-
-        elif name == "page_down":
-            action_description = "I scrolled down one page in the browser."
-            await self.web_controller._page_down()
-
-        elif name == "click":
-            target_id = str(args["target_id"]) 
-            target_name = self._target_name(target_id, rects)
-            if target_name:
-                action_description = f"I clicked '{target_name}'."
-            else:
-                action_description = "I clicked the control."
-            await self.web_controller._click_id(target_id)
-
-        elif name == "input_text":
-            input_field_id = str(args["input_field_id"])
-            text_value = str(args["text_value"])
-            input_field_name = self._target_name(input_field_id, rects)
-            if input_field_name:
-                action_description = f"I typed '{text_value}' into '{input_field_name}'."
-            else:
-                action_description = f"I input '{text_value}'."
-            await self.web_controller._fill_id(input_field_id, text_value)
-
-        elif name == "scroll_element_up":
-            target_id = str(args["target_id"])
-            target_name = self._target_name(target_id, rects)
-
-            if target_name:
-                action_description = f"I scrolled '{target_name}' up."
-            else:
-                action_description = "I scrolled the control up."
-
-            await self.web_controller._scroll_id(target_id, "up")
-
-        elif name == "scroll_element_down":
-            target_id = str(args["target_id"])
-            target_name = self._target_name(target_id, rects)
-
-            if target_name:
-                action_description = f"I scrolled '{target_name}' down."
-            else:
-                action_description = "I scrolled the control down."
-
-            await self.web_controller._scroll_id(target_id, "down")
-
-        elif name == "answer_question":
-            question = str(args["question"])
-            # Do Q&A on the DOM. No need to take further action. Browser state does not change.
-            return False, await self._summarize_page(question=question)
-
-        elif name == "summarize_page":
-            # Summarize the DOM. No need to take further action. Browser state does not change.
-            return False, await self._summarize_page()
-
-        elif name == "sleep":
-            action_description = "I am waiting a short period of time before taking further action."
-            await self.web_controller._sleep(3)  # There's a 2s sleep below too
-
+        if tool_name in self._function_map:
+            await self._function_map[tool_name](**tool_args)
         else:
-            raise ValueError(f"Unknown tool '{name}'. Please choose from:\n\n{tool_names}")
+            logger.log_event(
+                source=self.name,
+                name="unknown_tool",
+                data={
+                    "tool_name": tool_name,
+                    "args": tool_args
+                }
+            )
 
         await self.web_controller.wait_for_load_state()
 
@@ -511,13 +538,6 @@ class MultimodalWebSurfer(ConversableAgent):
                 }
             ]
         }
-        
-        # Register the tools for this interaction
-        for tool in tools:
-            if isinstance(tool, dict) and "function" in tool:
-                self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=False)
-            else:
-                self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
         response = await super().a_generate_reply(messages=history + [message]) # system massage
 
@@ -526,22 +546,9 @@ class MultimodalWebSurfer(ConversableAgent):
         if isinstance(response, str): #TODO: response format
             # Direct text response
             return response
-        elif isinstance(response, dict):
-            if "tool_calls" in response:
-                request_halt, tool_response = await self._execute_tool(response, rects, tool_names)
-            elif "function_call" in response:
-                # Legacy function call handling
-                #success, func_response = await self.a_generate_function_call_reply(messages=[response])
-                #if success:
-                raise Exception("Legacy function call handling not implemented")
-                #return await self._execute_tool(response, rects, tool_names)
-        
-        # Clean up registered tools
-        for tool in tools:
-            if isinstance(tool, dict) and "function" in tool:
-                self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
-            else:
-                self.update_tool_signature({"type": "function", "function": tool}, is_remove=True)
+        elif isinstance(response, dict) and "tool_calls" in response:
+            # Execute the tool calls
+            request_halt, tool_response = await self._execute_tool(response, rects, tool_names)
         
         if tool_response is not None:
             return tool_response
