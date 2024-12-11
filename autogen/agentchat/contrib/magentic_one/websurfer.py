@@ -46,6 +46,7 @@ from .websurfer_prompts import (
 
 # TODO: Fix mdconvert (I think i saw a new pull request)
 from .markdown_browser import MarkdownConverter  # type: ignore
+from .web_controller import WebController, DEFAULT_CHANNEL
 from .utils import SentinelMeta
 
 #from ...utils import message_content_to_str
@@ -91,12 +92,6 @@ from autogen.logger import FileLogger
 # Initialize logger with config
 logger = FileLogger(config={})
 
-# Sentinels
-class DEFAULT_CHANNEL(metaclass=SentinelMeta):
-    pass
-
-
-#@default_subscription
 class MultimodalWebSurfer(ConversableAgent):
     """(In preview) A multimodal agent that acts as a web surfer that can search the web and visit web pages."""
 
@@ -133,24 +128,8 @@ class MultimodalWebSurfer(ConversableAgent):
             chat_messages=chat_messages,
             silent=silent
         )
-        # Call init to set these
-        self._playwright: Playwright | None = None
-        self._context: BrowserContext | None = None
-        self._page: Page | None = None
-        self._last_download: Download | None = None
-        self._prior_metadata_hash: str | None = None
-
-        # Read page_script
-        self._page_script: str = ""
-        with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js"), "rt") as fh:
-            self._page_script = fh.read()
-
-        # Define the download handler
-        def _download_handler(download: Download) -> None:
-            self._last_download = download
-
-        self._download_handler = _download_handler
-
+        self.web_controller = WebController()
+        self._chat_history: List[Dict[str,Any]] = [] 
         self.screenshot_tool_prompt = screenshot_tool_prompt
 
     async def init(
@@ -178,149 +157,35 @@ class MultimodalWebSurfer(ConversableAgent):
             to_save_screenshots (bool): Whether to save screenshots. Defaults to False.
             markdown_converter (Any | None): The markdown converter to use. Defaults to None.
         """
+        await self.web_controller.init(
+            headless=headless,
+            browser_channel=browser_channel,
+            browser_data_dir=browser_data_dir,
+            start_page=start_page,
+            downloads_folder=downloads_folder,
+            debug_dir=debug_dir,
+            to_save_screenshots=to_save_screenshots,
+            markdown_converter=markdown_converter,
+            agent_name=self.name,
+        )
         self.start_page = start_page or self.DEFAULT_START_PAGE
         self.downloads_folder = downloads_folder
         self.to_save_screenshots = to_save_screenshots
-        self._chat_history: List[Dict[str,Any]] = [] 
-        self._last_download = None
-        self._prior_metadata_hash = None
-
-        ## Create or use the provided MarkdownConverter
-        if markdown_converter is None:
-            self._markdown_converter = MarkdownConverter()  # type: ignore
-        else:
-            self._markdown_converter = markdown_converter  # type: ignore
-
-        # Create the playwright self
-        launch_args: Dict[str, Any] = {"headless": headless}
-        if browser_channel is not DEFAULT_CHANNEL: 
-            launch_args["channel"] = browser_channel
-        self._playwright = await async_playwright().start()
-
-        # Create the context -- are we launching persistent?
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        if browser_data_dir:
-            self._context = await self._playwright.chromium.launch_persistent_context(
-                browser_data_dir, 
-                user_agent=f"{ua} {self._generate_random_string(4)}",
-                **launch_args
-            )
-        else:
-            browser = await self._playwright.chromium.launch(**launch_args)
-            self._context = await browser.new_context(
-                user_agent=f"{ua} {self._generate_random_string(4)}",
-                #viewport={'width': 1920 + random.randint(-50, 50), 'height': 1080 + random.randint(-30, 30)},
-                locale=random.choice(['en-US', 'en-GB', 'en-CA']),
-                timezone_id=random.choice(['America/New_York', 'Europe/London', 'Asia/Tokyo'])
-            )
-
-        # Create the page
-        self._context.set_default_timeout(60000)  # One minute
-        self._page = await self._context.new_page()
-        assert self._page is not None
-        # self._page.route(lambda x: True, self._route_handler)
-        self._page.on("download", self._download_handler)
-        await self._page.set_viewport_size({"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
-        await self._page.add_init_script(
-            path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
-        )
-        await self._page.goto(self.start_page)
-        await self._page.wait_for_load_state()
-
-        # Prepare the debug directory -- which stores the screenshots generated throughout the process
-        await self._set_debug_dir(debug_dir)
+        self.debug_dir = debug_dir
         
 
     def _get_screenshot_selection_prompt(self, page_url, visible_targets, other_targets_str, focused_hint, tool_names) -> str:
-        assert self._page is not None
-        return self.screenshot_tool_prompt.format(page_url=self._page.url,
+        return self.screenshot_tool_prompt.format(page_url=page_url,
         visible_targets=visible_targets,
         other_targets_str=other_targets_str,
         focused_hint=focused_hint,
         tool_names=tool_names
         )  
 
-    async def _sleep(self, duration: Union[int, float]) -> None:
-        assert self._page is not None
-        await self._page.wait_for_timeout(duration * 1000)
-
-    async def _set_debug_dir(self, debug_dir: str) -> None:
-        assert self._page is not None
-        self.debug_dir = debug_dir
-        if self.debug_dir == "":
-            return
-
-        if not os.path.isdir(self.debug_dir):
-            os.mkdir(self.debug_dir)
-        current_timestamp = "_" + int(time.time()).__str__()
-        screenshot_png_name = "screenshot" + current_timestamp + ".png"
-        debug_html = os.path.join(self.debug_dir, "screenshot" + current_timestamp + ".html")
-        if self.to_save_screenshots:
-            async with aiofiles.open(debug_html, "wt") as file:
-                await file.write(
-                    f"""
-    <html style="width:100%; margin: 0px; padding: 0px;">
-    <body style="width: 100%; margin: 0px; padding: 0px;">
-        <img src= {screenshot_png_name} id="main_image" style="width: 100%; max-width: {VIEWPORT_WIDTH}px; margin: 0px; padding: 0px;">
-        <script language="JavaScript">
-    var counter = 0;
-    setInterval(function() {{
-    counter += 1;
-    document.getElementById("main_image").src = "screenshot.png?bc=" + counter;
-    }}, 300);
-        </script>
-    </body>
-    </html>
-    """.strip(),
-                )
-        if self.to_save_screenshots:
-            await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
-            logger.log_event(
-                source=self.name,
-                name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
-            )
-
-            logger.log_event(
-                source=self.name,
-                name="debug_screens",
-                data={
-                    "text": "Multimodal Web Surfer debug screens",
-                    "url": pathlib.Path(os.path.abspath(debug_html)).as_uri()
-                }
-            )
-
-
     async def _reset(self) -> None: 
-        assert self._page is not None
         self.chat_messages[self] = []
-        
-        await self._visit_page(self.start_page)
-        if self.to_save_screenshots:
-            current_timestamp = "_" + int(time.time()).__str__()
-            screenshot_png_name = "screenshot" + current_timestamp + ".png"
-            await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
-            
-            logger.log_event(
-                source=self.name,
-                name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
-            )
-
-        logger.log_event(
-            source=self.name,
-            name="reset",
-            data={
-                "text": "Resetting browser.",
-                "url": self._page.url
-            }
-        )
+        await self.web_controller._reset()
+    
 
     def _target_name(self, target: str, rects: Dict[str, InteractiveRegion]) -> str | None:
         try:
@@ -370,12 +235,11 @@ class MultimodalWebSurfer(ConversableAgent):
         assert name is not None
 
         action_description = ""
-        assert self._page is not None
         logger.log_event(
             source=self.name,
             name="tool_execution",
             data={
-                "url": self._page.url,
+                "url": await self.web_controller.get_url(),
                 "tool_name": name,
                 "args": args
             }
@@ -386,30 +250,30 @@ class MultimodalWebSurfer(ConversableAgent):
             action_description = f"I typed '{url}' into the browser address bar."
             # Check if the argument starts with a known protocol
             if url.startswith(("https://", "http://", "file://", "about:")):
-                await self._visit_page(url)
+                await self.web_controller._visit_page(url)
             # If the argument contains a space, treat it as a search query
             elif " " in url:
-                await self._visit_page(f"https://www.bing.com/search?q={quote_plus(url)}&FORM=QBLH")
+                await self.web_controller._visit_page(f"https://www.bing.com/search?q={quote_plus(url)}&FORM=QBLH")
             # Otherwise, prefix with https://
             else:
-                await self._visit_page("https://" + url)
+                await self.web_controller._visit_page("https://" + url)
 
         elif name == "history_back":
             action_description = "I clicked the browser back button."
-            await self._back()
+            await self.web_controller._back()
 
         elif name == "web_search":
             query = args["query"]
             action_description = f"I typed '{query}' into the browser search bar."
-            await self._visit_page(f"https://www.bing.com/search?q={quote_plus(query)}&FORM=QBLH")
+            await self.web_controller._visit_page(f"https://www.bing.com/search?q={quote_plus(query)}&FORM=QBLH")
 
         elif name == "page_up":
             action_description = "I scrolled up one page in the browser."
-            await self._page_up()
+            await self.web_controller._page_up()
 
         elif name == "page_down":
             action_description = "I scrolled down one page in the browser."
-            await self._page_down()
+            await self.web_controller._page_down()
 
         elif name == "click":
             target_id = str(args["target_id"]) 
@@ -418,7 +282,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 action_description = f"I clicked '{target_name}'."
             else:
                 action_description = "I clicked the control."
-            await self._click_id(target_id)
+            await self.web_controller._click_id(target_id)
 
         elif name == "input_text":
             input_field_id = str(args["input_field_id"])
@@ -428,7 +292,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 action_description = f"I typed '{text_value}' into '{input_field_name}'."
             else:
                 action_description = f"I input '{text_value}'."
-            await self._fill_id(input_field_id, text_value)
+            await self.web_controller._fill_id(input_field_id, text_value)
 
         elif name == "scroll_element_up":
             target_id = str(args["target_id"])
@@ -439,7 +303,7 @@ class MultimodalWebSurfer(ConversableAgent):
             else:
                 action_description = "I scrolled the control up."
 
-            await self._scroll_id(target_id, "up")
+            await self.web_controller._scroll_id(target_id, "up")
 
         elif name == "scroll_element_down":
             target_id = str(args["target_id"])
@@ -450,7 +314,7 @@ class MultimodalWebSurfer(ConversableAgent):
             else:
                 action_description = "I scrolled the control down."
 
-            await self._scroll_id(target_id, "down")
+            await self.web_controller._scroll_id(target_id, "down")
 
         elif name == "answer_question":
             question = str(args["question"])
@@ -463,46 +327,29 @@ class MultimodalWebSurfer(ConversableAgent):
 
         elif name == "sleep":
             action_description = "I am waiting a short period of time before taking further action."
-            await self._sleep(3)  # There's a 2s sleep below too
+            await self.web_controller._sleep(3)  # There's a 2s sleep below too
 
         else:
             raise ValueError(f"Unknown tool '{name}'. Please choose from:\n\n{tool_names}")
 
-        try:
-            await self._page.wait_for_load_state()
-        except TimeoutError:
-            logger.log_event(
-                source=self.name,
-                name="page_load_timeout",
-                data={
-                    "url": self._page.url
-                }
-            )
+        await self.web_controller.wait_for_load_state()
 
         # Handle downloads
-        if self._last_download is not None and self.downloads_folder is not None:
-            fname = os.path.join(self.downloads_folder, self._last_download.suggested_filename)
-            # TOODO: Fix this type
-            await self._last_download.save_as(fname)  # type: ignore
-            page_body = f"<html><head><title>Download Successful</title></head><body style=\"margin: 20px;\"><h1>Successfully downloaded '{self._last_download.suggested_filename}' to local path:<br><br>{fname}</h1></body></html>"
-            await self._page.goto(
-                "data:text/html;base64," + base64.b64encode(page_body.encode("utf-8")).decode("utf-8")
-            )
-            await self._page.wait_for_load_state()
-
+        if self.web_controller._last_download is not None and self.downloads_folder is not None:
+            await self.web_controller.handle_download(self.downloads_folder)
         # Handle metadata
-        page_metadata = json.dumps(await self._get_page_metadata(), indent=4)
+        page_metadata = json.dumps(await self.web_controller._get_page_metadata(), indent=4)
         metadata_hash = hashlib.md5(page_metadata.encode("utf-8")).hexdigest()
-        if metadata_hash != self._prior_metadata_hash:
+        if metadata_hash != self.web_controller._prior_metadata_hash:
             page_metadata = (
                 "\nThe following metadata was extracted from the webpage:\n\n" + page_metadata.strip() + "\n"
             )
         else:
             page_metadata = ""
-        self._prior_metadata_hash = metadata_hash
+        self.web_controller._prior_metadata_hash = metadata_hash
 
         # Describe the viewport of the new page in words
-        viewport = await self._get_visual_viewport()
+        viewport = await self.web_controller._get_visual_viewport()
         percent_visible = int(viewport["height"] * 100 / viewport["scrollHeight"])
         percent_scrolled = int(viewport["pageTop"] * 100 / viewport["scrollHeight"])
         if percent_scrolled < 1:  # Allow some rounding error
@@ -512,7 +359,7 @@ class MultimodalWebSurfer(ConversableAgent):
         else:
             position_text = str(percent_scrolled) + "% down from the top of the page"
 
-        new_screenshot = await self._page.screenshot()
+        new_screenshot = await self.web_controller.take_screenshot()
         if self.to_save_screenshots:
             current_timestamp = "_" + int(time.time()).__str__()
             screenshot_png_name = "screenshot" + current_timestamp + ".png"
@@ -522,7 +369,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 source=self.name,
                 name="screenshot",
                 data={
-                    "url": self._page.url,
+                    "url": await self.web_controller.get_url(),
                     "screenshot": screenshot_png_name
                 }
             )
@@ -533,7 +380,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Return the complete observation
         message_content = ""  # message.content or ""
-        page_title = await self._page.title()
+        page_title = await self.web_controller.get_title()
         encoded_string = base64.b64encode(new_screenshot).decode('utf-8')
 
         return False, {
@@ -541,7 +388,7 @@ class MultimodalWebSurfer(ConversableAgent):
             "content": [
                 {
                     "type": "text",
-                    "text": f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({self._page.url}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip()
+                    "text": f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({await self.web_controller.get_url()}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip()
                 },
                 {
                     "type": "image_url",
@@ -563,7 +410,6 @@ class MultimodalWebSurfer(ConversableAgent):
         Returns:
             Union[str, Dict, None]: The response content which may be a string, dict or None
         """
-        assert self._page is not None
         assert messages is not None
 
         history = messages
@@ -573,9 +419,9 @@ class MultimodalWebSurfer(ConversableAgent):
         #    history.extend(msg)
 
         # Ask the page for interactive elements, then prepare the state-of-mark screenshot
-        rects = await self._get_interactive_rects() 
-        viewport = await self._get_visual_viewport()
-        screenshot = await self._page.screenshot()
+        rects = await self.web_controller._get_interactive_rects() 
+        viewport = await self.web_controller._get_visual_viewport()
+        screenshot = await self.web_controller.take_screenshot()
         som_screenshot, visible_rects, rects_above, rects_below = add_set_of_mark(screenshot, rects)
 
         if self.to_save_screenshots:
@@ -586,7 +432,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 source=self.name,
                 name="screenshot",
                 data={
-                    "url": self._page.url,
+                    "url": await self.web_controller.get_url(),
                     "screenshot": screenshot_png_name
                 }
             )
@@ -614,7 +460,7 @@ class MultimodalWebSurfer(ConversableAgent):
             tools.append(TOOL_PAGE_DOWN)
 
         # Focus hint
-        focused = await self._get_focused_rect_id()
+        focused = await self.web_controller._get_focused_rect_id()
         focused_hint = ""
         if focused:
             name = self._target_name(focused, rects)
@@ -652,7 +498,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         tool_names = "\n".join([t["function"]["name"] for t in tools])
 
-        text_prompt = self._get_screenshot_selection_prompt(self._page.url, 
+        text_prompt = self._get_screenshot_selection_prompt(await self.web_controller.get_url(), 
         visible_targets, 
         other_targets_str, 
         focused_hint, 
@@ -697,7 +543,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         response = await super().a_generate_reply(messages=history + [message]) # system massage
 
-        self._last_download = None
+        self.web_controller._last_download = None
 
         if isinstance(response, str): #TODO: response format
             # Direct text response
@@ -723,298 +569,22 @@ class MultimodalWebSurfer(ConversableAgent):
             return tool_response
         return None
 
-    async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
-        assert self._page is not None
-
-        # Ensure page is fully loaded
-        try:
-            await self._page.wait_for_load_state()
-        except TimeoutError:
-            pass
-
-        # Read the regions from the DOM
-        try:
-            await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
-
-        result = cast(
-            Dict[str, Dict[str, Any]], await self._page.evaluate("MultimodalWebSurfer.getInteractiveRects();")
-        )
-
-        # Convert the results into appropriate types
-        assert isinstance(result, dict)
-        typed_results: Dict[str, InteractiveRegion] = {}
-        for k in result:
-            assert isinstance(k, str)
-            typed_results[k] = interactiveregion_from_dict(result[k])
-
-        return typed_results
-
-    async def _get_visual_viewport(self) -> VisualViewport:
-        assert self._page is not None
-        try:
-            await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
-        return visualviewport_from_dict(await self._page.evaluate("MultimodalWebSurfer.getVisualViewport();"))
-
-    async def _get_focused_rect_id(self) -> str:
-        assert self._page is not None
-        try:
-            await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
-        result = await self._page.evaluate("MultimodalWebSurfer.getFocusedElementId();")
-        return str(result)
-
-    async def _get_page_metadata(self) -> Dict[str, Any]:
-        assert self._page is not None
-        try:
-            await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
-        result = await self._page.evaluate("MultimodalWebSurfer.getPageMetadata();")
-        assert isinstance(result, dict)
-        return cast(Dict[str, Any], result)
-
-    async def _get_page_markdown(self) -> str:
-        assert self._page is not None
-        html = await self._page.evaluate("document.documentElement.outerHTML;")
-        # TOODO: fix types
-        res = self._markdown_converter.convert_stream(io.StringIO(html), file_extension=".html", url=self._page.url)  # type: ignore
-        return res.text_content  # type: ignore
-
-    async def _on_new_page(self, page: Page) -> None:
-        self._page = page
-        assert self._page is not None
-        # self._page.route(lambda x: True, self._route_handler)
-        self._page.on("download", self._download_handler)
-        await self._page.set_viewport_size({"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
-        await self._sleep(0.2)
-        self._prior_metadata_hash = None
-        await self._page.add_init_script(
-            path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
-        )
-        try:
-            await self._page.wait_for_load_state()
-        except TimeoutError:
-            pass
-
-    async def _back(self) -> None:
-        assert self._page is not None
-        await self._page.go_back()
-
-    async def _visit_page(self, url: str) -> None:
-        assert self._page is not None
-        try:
-            # Regular webpage
-            await self._page.goto(url)
-            await self._page.wait_for_load_state()
-            self._prior_metadata_hash = None
-            
-        except Exception as e_outer:
-            # Downloaded file
-            if self.downloads_folder and "net::ERR_ABORTED" in str(e_outer):
-                async with self._page.expect_download() as download_info:
-                    try:
-                        await self._page.goto(url)
-                    except Exception as e_inner:
-                        if "net::ERR_ABORTED" in str(e_inner):
-                            pass
-                        else:
-                            raise e_inner
-                    download = await download_info.value
-                    fname = os.path.join(self.downloads_folder, download.suggested_filename)
-                    await download.save_as(fname)
-                    message = f"<body style=\"margin: 20px;\"><h1>Successfully downloaded '{download.suggested_filename}' to local path:<br><br>{fname}</h1></body>"
-                    await self._page.goto(
-                        "data:text/html;base64," + base64.b64encode(message.encode("utf-8")).decode("utf-8")
-                    )
-                    self._last_download = None  # Since we already handled it
-            else:
-                raise e_outer
-
-    async def _page_down(self) -> None:
-        assert self._page is not None
-        await self._page.evaluate(f"window.scrollBy(0, {VIEWPORT_HEIGHT-50});")
-
-    async def _page_up(self) -> None:
-        assert self._page is not None
-        await self._page.evaluate(f"window.scrollBy(0, -{VIEWPORT_HEIGHT-50});")
-
-    async def _click_id(self, identifier: str) -> None:
-        assert self._page is not None
-        assert self._context is not None
-        
-        # Ensure identifier is a valid integer string
-        try:
-            identifier = str(int(identifier.strip()))
-        except ValueError:
-            raise ValueError(f"Invalid element identifier: {identifier}")
-        
-        if not identifier:
-            raise ValueError("Empty element identifier")
-        
-        # Try multiple locator strategies
-        locator_strategies = [
-            f"[__elementId='{identifier}']",
-            f"[__elementId={identifier}]",
-        ]
-        
-        for strategy in locator_strategies:
-            try:
-                target = self._page.locator(strategy)
-                await target.wait_for(timeout=1000)
-                
-                # If found, proceed with click
-                await target.scroll_into_view_if_needed()
-                box = cast(Dict[str, Union[int, float]], await target.bounding_box())
-                
-                # Track current page state before click
-                current_url = self._page.url
-                current_pages = len(self._context.pages)
-                
-                # Click with a short timeout to catch immediate popups
-                popup_detected = False
-                try:
-                    async with self._context.expect_page(timeout=6000) as page_info:
-                        await target.click(delay=10)
-                        popup_detected = True
-                        try:
-                            new_page = await page_info.value
-                            await new_page.wait_for_load_state('domcontentloaded', timeout=4000)
-                            await self._on_new_page(new_page)
-                            
-                            logger.log_event(
-                                source=self.name,
-                                name="popup",
-                                data={
-                                    "url": new_page.url,
-                                    "text": "New tab or window opened"
-                                }
-                            )
-                            return
-                        except TimeoutError:
-                            logger.log_event(
-                                source=self.name,
-                                name="popup_timeout",
-                                data={
-                                    "text": "Popup detected but timed out waiting for load"
-                                }
-                            )
-                            # Continue to check for delayed popups
-                except TimeoutError:
-                    # No immediate popup, check for navigation or delayed popups
-                    try:
-                        await self._page.wait_for_load_state()
-                    except TimeoutError:
-                        pass
-                    
-                    # Check for any new pages that appeared
-                    if len(self._context.pages) > current_pages:
-                        new_page = self._context.pages[-1]
-                        await new_page.wait_for_load_state('domcontentloaded')
-                        await self._on_new_page(new_page)
-                        
-                        logger.log_event(
-                            source=self.name,
-                            name="delayed_popup",
-                            data={
-                                "url": new_page.url,
-                                "text": "New tab or window opened after delay"
-                            }
-                        )
-                        return
-                    
-                    # Check if current page navigated
-                    new_url = self._page.url
-                    if new_url != current_url:
-                        logger.log_event(
-                            source=self.name,
-                            name="page_navigation",
-                            data={
-                                "old_url": current_url,
-                                "new_url": new_url,
-                                "text": "Page navigated after click"
-                            }
-                        )
-                    
-                    # Update page state
-                    await self._get_interactive_rects()
-                    return
-            
-            except TimeoutError:
-                # Try next strategy
-                continue
-        
-        raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
-        
-    async def _fill_id(self, identifier: str, value: str) -> None:
-        assert self._page is not None
-        
-        # Try multiple locator strategies
-        locator_strategies = [
-            f"[__elementId='{identifier}']",
-            f"[__elementId={identifier}]",
-        ]
-        
-        for strategy in locator_strategies:
-            try:
-                target = self._page.locator(strategy)
-                await target.wait_for(timeout=1000)
-                
-                # Fill it
-                await target.scroll_into_view_if_needed()
-                await target.focus()
-                try:
-                    await target.fill(value)
-                except PlaywrightError:
-                    await target.press_sequentially(value)
-                await target.press("Enter")
-                return
-            
-            except TimeoutError:
-                # Try next strategy
-                continue
-        
-        raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
-
-    async def _scroll_id(self, identifier: str, direction: str) -> None:
-        assert self._page is not None
-        await self._page.evaluate(
-            f"""
-        (function() {{
-            let elm = document.querySelector("[__elementId='{identifier}']");
-            if (elm) {{
-                if ("{direction}" == "up") {{
-                    elm.scrollTop = Math.max(0, elm.scrollTop - elm.clientHeight);
-                }}
-                else {{
-                    elm.scrollTop = Math.min(elm.scrollHeight - elm.clientHeight, elm.scrollTop + elm.clientHeight);
-                }}
-            }}
-        }})();
-    """
-        )
-
     async def _summarize_page(
         self,
         question: str | None = None,
         token_limit: int = 100000
     ) -> str:
-        assert self._page is not None
 
-        page_markdown: str = await self._get_page_markdown()
+        page_markdown: str = await self.web_controller._get_page_markdown()
 
-        title: str = self._page.url
+        title: str = await self.web_controller.get_url()
         try:
-            title = await self._page.title()
+            title = await self.web_controller.get_title()
         except Exception:
             pass
 
         # Take a screenshot and scale it
-        screenshot = Image.open(io.BytesIO(await self._page.screenshot()))
+        screenshot = Image.open(io.BytesIO(await self.web_controller.take_screenshot()))
         scaled_screenshot = screenshot.resize((MLM_WIDTH, MLM_HEIGHT))
         screenshot.close()
         
@@ -1039,7 +609,6 @@ class MultimodalWebSurfer(ConversableAgent):
             prompt += f" Please summarize the webpage into one or two paragraphs with respect to '{question}':\n\n"
         else:
             prompt += " Please summarize the webpage into one or two paragraphs:\n\n"
-
 
         # Grow the buffer (which is added to the prompt) until we overflow the context window or run out of lines
         buffer = ""
@@ -1087,19 +656,6 @@ class MultimodalWebSurfer(ConversableAgent):
         assert isinstance(response, str)
         return response
 
-    def _generate_random_string(self, length: int) -> str:
-        """Generate a random string of specified length.
-
-        Args:
-            length (int): Length of the random string to generate
-
-        Returns:
-            str: A random string containing letters and numbers
-        """
-        import string
-        characters = string.ascii_letters + string.digits
-        return ''.join(random.choice(characters) for _ in range(length))
-
     async def test_set_of_mark(self, url: str | None = None) -> Image.Image:
         """
         Test the set_of_mark functionality by visiting a URL and generating a marked screenshot.
@@ -1113,17 +669,15 @@ class MultimodalWebSurfer(ConversableAgent):
         
         # Visit the page
         if url is not None:
-            await self._visit_page(url)
-            assert self._page is not None
-            await self._page.wait_for_load_state()
+            await self.web_controller._visit_page(url)
+            await self.web_controller.wait_for_load_state()
             await asyncio.sleep(2)
         
-        assert self._page is not None
         # Get interactive rects
-        rects = await self._get_interactive_rects()
+        rects = await self.web_controller._get_interactive_rects()
         
         # Take screenshot
-        screenshot = await self._page.screenshot()
+        screenshot = await self.web_controller.take_screenshot()
         
         # Apply set of mark
         som_screenshot, visible_rects, rects_above, rects_below = add_set_of_mark(screenshot, rects)
@@ -1138,7 +692,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 source=self.name,
                 name="screenshot",
                 data={
-                    "url": self._page.url,
+                    "url": await self.web_controller.get_url(),
                     "screenshot": screenshot_png_name
                 }
             )
@@ -1162,10 +716,9 @@ class MultimodalWebSurfer(ConversableAgent):
         Returns:
             Tuple[bool, Union[str, Dict, None]]: Result of tool execution
         """
-        assert self._page is not None
 
         # Get interactive rects for context
-        rects = await self._get_interactive_rects()
+        rects = await self.web_controller._get_interactive_rects()
 
         # Prepare a tool call dictionary similar to what would be generated by the LLM
         tool_call = {

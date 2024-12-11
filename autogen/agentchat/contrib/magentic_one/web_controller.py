@@ -2,6 +2,9 @@ import base64
 import io
 import os
 import random
+import time
+import pathlib
+import aiofiles
 from typing import Any, Dict, Optional, Union, cast, TYPE_CHECKING
 
 from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
@@ -28,62 +31,50 @@ class DEFAULT_CHANNEL(metaclass=SentinelMeta):
     pass
 
 
-class BaseBrowserController:
-    def __init__(self):
-        self._page = None
-        self._browser = None
+class WebController:
+    """
+    A class to encapsulate the browser capabilities and interactions using Playwright.
+    """
+    DEFAULT_START_PAGE = "https://www.bing.com/"
 
-    async def init(
+    def __init__(
         self,
         headless: bool = True,
-        browser_channel: str | type["DEFAULT_CHANNEL"] = "chrome",
+        browser_channel: str | type[DEFAULT_CHANNEL] = DEFAULT_CHANNEL,
         browser_data_dir: str | None = None,
-        start_page: str | None = None
-    ) -> None:
-        raise NotImplementedError("Subclass must implement init method")
-
-    async def visit_page(self, url: str):
-        raise NotImplementedError("Subclass must implement visit_page method")
-
-    async def click_element(self, selector: str):
-        raise NotImplementedError("Subclass must implement click_element method")
-
-    async def fill_input(self, selector: str, text: str):
-        raise NotImplementedError("Subclass must implement fill_input method")
-
-    async def scroll_page(self, direction: str, amount: int):
-        raise NotImplementedError("Subclass must implement scroll_page method")
-
-    async def take_screenshot(self):
-        raise NotImplementedError("Subclass must implement take_screenshot method")
-
-    async def get_page_metadata(self):
-        raise NotImplementedError("Subclass must implement get_page_metadata method")
-
-    async def get_interactive_rects(self):
-        raise NotImplementedError("Subclass must implement get_interactive_rects method")
-
-class PlaywrightBrowserController(BaseBrowserController):
-    def __init__(
-        self, 
-        downloads_folder: Optional[str] = None, 
-        markdown_converter: Optional[Any] = None,
+        start_page: str | None = None,
+        downloads_folder: str | None = None,
         debug_dir: str = os.getcwd(),
         to_save_screenshots: bool = False,
-        agent_name: str = ""
-    ):
-        super().__init__()
+        # navigation_allow_list=lambda url: True,
+        markdown_converter: Any | None = None,  # TODO: Fixme
+    ) -> None:
+        """
+        Initialize the WebController.
+
+        Args:
+            headless (bool): Whether to run the browser in headless mode. Defaults to True.
+            browser_channel (str | type[DEFAULT_CHANNEL]): The browser channel to use. Defaults to DEFAULT_CHANNEL.
+            browser_data_dir (str | None): The directory to store browser data. Defaults to None.
+            start_page (str | None): The initial page to visit. Defaults to DEFAULT_START_PAGE.
+            downloads_folder (str | None): The folder to save downloads. Defaults to None.
+            debug_dir (str | None): The directory to save debug information. Defaults to the current working directory.
+            to_save_screenshots (bool): Whether to save screenshots. Defaults to False.
+            markdown_converter (Any | None): The markdown converter to use. Defaults to None.
+        """
+        self.start_page = start_page or self.DEFAULT_START_PAGE
         self.downloads_folder = downloads_folder
-        self.debug_dir = debug_dir
         self.to_save_screenshots = to_save_screenshots
-        self._markdown_converter = markdown_converter or MarkdownConverter()
-        self._playwright: Optional[Playwright] = None
-        self._context: Optional[BrowserContext] = None
-        self._page: Optional[Page] = None
-        self._last_download: Optional[Download] = None
-        self._prior_metadata_hash: Optional[str] = None
-        self.name = agent_name # TODO: should this just be passed with the method ? 
-        
+        self.debug_dir = debug_dir
+        self._last_download: Download | None = None
+        self._prior_metadata_hash: str | None = None
+
+        ## Create or use the provided MarkdownConverter
+        if markdown_converter is None:
+            self._markdown_converter = MarkdownConverter()  # type: ignore
+        else:
+            self._markdown_converter = markdown_converter  # type: ignore
+
         # Read page_script
         self._page_script: str = ""
         with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js"), "rt") as fh:
@@ -95,22 +86,23 @@ class PlaywrightBrowserController(BaseBrowserController):
 
         self._download_handler = _download_handler
 
+        self._playwright: Playwright | None = None
+        self._context: BrowserContext | None = None
+        self._page: Page | None = None
+        self.agent_name: str = ""
+
     async def init(
         self,
         headless: bool = True,
         browser_channel: str | type[DEFAULT_CHANNEL] = DEFAULT_CHANNEL,
         browser_data_dir: str | None = None,
-        start_page: str | None = None
+        start_page: str | None = None,
+        downloads_folder: str | None = None,
+        debug_dir: str = os.getcwd(),
+        to_save_screenshots: bool = False,
+        markdown_converter: Any | None = None,  # TODO: Fixme
+        agent_name: str = ""
     ) -> None:
-        """
-        Initialize the Playwright browser context.
-
-        Args:
-            headless (bool): Whether to run the browser in headless mode. Defaults to True.
-            browser_channel (str | type[DEFAULT_CHANNEL]): The browser channel to use. Defaults to DEFAULT_CHANNEL.
-            browser_data_dir (str | None): The directory to store browser data. Defaults to None.
-            start_page (str | None): The initial page to visit. Defaults to None.
-        """
         # Create the playwright self
         launch_args: Dict[str, Any] = {"headless": headless}
         if browser_channel is not DEFAULT_CHANNEL: 
@@ -129,6 +121,7 @@ class PlaywrightBrowserController(BaseBrowserController):
             browser = await self._playwright.chromium.launch(**launch_args)
             self._context = await browser.new_context(
                 user_agent=f"{ua} {self._generate_random_string(4)}",
+                #viewport={'width': 1920 + random.randint(-50, 50), 'height': 1080 + random.randint(-30, 30)},
                 locale=random.choice(['en-US', 'en-GB', 'en-CA']),
                 timezone_id=random.choice(['America/New_York', 'Europe/London', 'Asia/Tokyo'])
             )
@@ -137,92 +130,113 @@ class PlaywrightBrowserController(BaseBrowserController):
         self._context.set_default_timeout(60000)  # One minute
         self._page = await self._context.new_page()
         assert self._page is not None
+        # self._page.route(lambda x: True, self._route_handler)
         self._page.on("download", self._download_handler)
         await self._page.set_viewport_size({"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
         await self._page.add_init_script(
             path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
         )
-        
-        if start_page:
-            await self._page.goto(start_page)
-            await self._page.wait_for_load_state()
+        await self._page.goto(self.start_page)
+        await self._page.wait_for_load_state()
 
+        # Prepare the debug directory -- which stores the screenshots generated throughout the process
+        await self._set_debug_dir(debug_dir)
+    
     def _generate_random_string(self, length: int) -> str:
-        """Generate a random string of specified length."""
+        """Generate a random string of specified length.
+
+        Args:
+            length (int): Length of the random string to generate
+
+        Returns:
+            str: A random string containing letters and numbers
+        """
         import string
         characters = string.ascii_letters + string.digits
         return ''.join(random.choice(characters) for _ in range(length))
 
-    #async def close(self) -> None:
-    #    """Close the browser and clean up resources."""
-    #    await self._browser_controller.close()
-
-    async def _get_visual_viewport(self) -> VisualViewport:
+    async def _set_debug_dir(self, debug_dir: str) -> None:
         assert self._page is not None
-        try:
-            await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
-        return visualviewport_from_dict(await self._page.evaluate("MultimodalWebSurfer.getVisualViewport();"))
+        self.debug_dir = debug_dir
+        if self.debug_dir == "":
+            return
 
-    async def _get_focused_rect_id(self) -> str:
-        assert self._page is not None
-        try:
-            await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
-        result = await self._page.evaluate("MultimodalWebSurfer.getFocusedElementId();")
-        return str(result)
+        if not os.path.isdir(self.debug_dir):
+            os.mkdir(self.debug_dir)
+        current_timestamp = "_" + int(time.time()).__str__()
+        screenshot_png_name = "screenshot" + current_timestamp + ".png"
+        debug_html = os.path.join(self.debug_dir, "screenshot" + current_timestamp + ".html")
+        if self.to_save_screenshots:
+            async with aiofiles.open(debug_html, "wt") as file:
+                await file.write(
+                    f"""
+    <html style="width:100%; margin: 0px; padding: 0px;">
+    <body style="width: 100%; margin: 0px; padding: 0px;">
+        <img src= {screenshot_png_name} id="main_image" style="width: 100%; max-width: {VIEWPORT_WIDTH}px; margin: 0px; padding: 0px;">
+        <script language="JavaScript">
+    var counter = 0;
+    setInterval(function() {{
+    counter += 1;
+    document.getElementById("main_image").src = "screenshot.png?bc=" + counter;
+    }}, 300);
+        </script>
+    </body>
+    </html>
+    """.strip(),
+                )
+        if self.to_save_screenshots:
+            await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
+            logger.log_event(
+                source=self.agent_name,
+                name="screenshot",
+                data={
+                    "url": self._page.url,
+                    "screenshot": screenshot_png_name
+                }
+            )
 
-    async def _get_page_metadata(self) -> Dict[str, Any]:
+            logger.log_event(
+                source=self.agent_name,
+                name="debug_screens",
+                data={
+                    "text": "Multimodal Web Surfer debug screens",
+                    "url": pathlib.Path(os.path.abspath(debug_html)).as_uri()
+                }
+            )
+    
+    async def _sleep(self, duration: Union[int, float]) -> None:
         assert self._page is not None
-        try:
-            await self._page.evaluate(self._page_script)
-        except Exception:
-            pass
-        result = await self._page.evaluate("MultimodalWebSurfer.getPageMetadata();")
-        assert isinstance(result, dict)
-        return cast(Dict[str, Any], result)
+        await self._page.wait_for_timeout(duration * 1000)
+    
+    async def _reset(self) -> None:
+        assert self._page is not None        
+        await self._visit_page(self.start_page)
+        if self.to_save_screenshots:
+            current_timestamp = "_" + int(time.time()).__str__()
+            screenshot_png_name = "screenshot" + current_timestamp + ".png"
+            await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
+            
+            logger.log_event(
+                source=self.agent_name,
+                name="screenshot",
+                data={
+                    "url": self._page.url,
+                    "screenshot": screenshot_png_name
+                }
+            )
 
-    async def _get_page_markdown(self) -> str:
-        assert self._page is not None
-        html = await self._page.evaluate("document.documentElement.outerHTML;")
-        # TOODO: fix types
-        res = self._markdown_converter.convert_stream(io.StringIO(html), file_extension=".html", url=self._page.url)  # type: ignore
-        return res.text_content  # type: ignore
-
-    async def _on_new_page(self, page: Page) -> None:
-        self._page = page
-        assert self._page is not None
-        # self._page.route(lambda x: True, self._route_handler)
-        self._page.on("download", self._download_handler)
-        await self._page.set_viewport_size({"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
-        await self._sleep(0.2)
-        self._prior_metadata_hash = None
-        await self._page.add_init_script(
-            path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
+        logger.log_event(
+            source=self.agent_name,
+            name="reset",
+            data={
+                "text": "Resetting browser.",
+                "url": self._page.url
+            }
         )
-        try:
-            await self._page.wait_for_load_state()
-        except TimeoutError:
-            pass
 
     async def _back(self) -> None:
         assert self._page is not None
         await self._page.go_back()
-
-    async def _show_download_success_page(self, filename: str, filepath: str) -> None:
-        """Show a success page after download completion."""
-        assert self._page is not None
-        page_body = f"""<html>
-            <head><title>Download Successful</title></head>
-            <body style="margin: 20px;">
-                <h1>Successfully downloaded '{filename}' to local path:<br><br>{filepath}</h1>
-            </body>
-        </html>"""
-        await self._page.goto(
-            "data:text/html;base64," + base64.b64encode(page_body.encode("utf-8")).decode("utf-8")
-        )
 
     async def _visit_page(self, url: str) -> None:
         assert self._page is not None
@@ -246,7 +260,10 @@ class PlaywrightBrowserController(BaseBrowserController):
                     download = await download_info.value
                     fname = os.path.join(self.downloads_folder, download.suggested_filename)
                     await download.save_as(fname)
-                    await self._show_download_success_page(download.suggested_filename, fname)
+                    message = f"<body style=\"margin: 20px;\"><h1>Successfully downloaded '{download.suggested_filename}' to local path:<br><br>{fname}</h1></body>"
+                    await self._page.goto(
+                        "data:text/html;base64," + base64.b64encode(message.encode("utf-8")).decode("utf-8")
+                    )
                     self._last_download = None  # Since we already handled it
             else:
                 raise e_outer
@@ -303,7 +320,7 @@ class PlaywrightBrowserController(BaseBrowserController):
                             await self._on_new_page(new_page)
                             
                             logger.log_event(
-                                source=self.name,
+                                source=self.agent_name,
                                 name="popup",
                                 data={
                                     "url": new_page.url,
@@ -313,7 +330,7 @@ class PlaywrightBrowserController(BaseBrowserController):
                             return
                         except TimeoutError:
                             logger.log_event(
-                                source=self.name,
+                                source=self.agent_name,
                                 name="popup_timeout",
                                 data={
                                     "text": "Popup detected but timed out waiting for load"
@@ -334,7 +351,7 @@ class PlaywrightBrowserController(BaseBrowserController):
                         await self._on_new_page(new_page)
                         
                         logger.log_event(
-                            source=self.name,
+                            source=self.agent_name,
                             name="delayed_popup",
                             data={
                                 "url": new_page.url,
@@ -347,7 +364,7 @@ class PlaywrightBrowserController(BaseBrowserController):
                     new_url = self._page.url
                     if new_url != current_url:
                         logger.log_event(
-                            source=self.name,
+                            source=self.agent_name,
                             name="page_navigation",
                             data={
                                 "old_url": current_url,
@@ -365,7 +382,7 @@ class PlaywrightBrowserController(BaseBrowserController):
                 continue
         
         raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
-        
+    
     async def _fill_id(self, identifier: str, value: str) -> None:
         assert self._page is not None
         
@@ -414,17 +431,11 @@ class PlaywrightBrowserController(BaseBrowserController):
     """
         )
 
-    async def _sleep(self, duration: Union[int, float]) -> None:
-        assert self._page is not None
-        await self._page.wait_for_timeout(duration * 1000)
-
-
     async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
-        """Get all interactive regions from the current page."""
         assert self._page is not None
 
+        # Ensure page is fully loaded
         try:
-            # Ensure page is loaded and script is injected
             await self._page.wait_for_load_state()
         except TimeoutError:
             pass
@@ -448,19 +459,93 @@ class PlaywrightBrowserController(BaseBrowserController):
 
         return typed_results
 
-    async def take_screenshot(self, path=None):
+    async def _get_visual_viewport(self) -> VisualViewport:
         assert self._page is not None
-        return await self._page.screenshot(path=path)
+        try:
+            await self._page.evaluate(self._page_script)
+        except Exception:
+            pass
+        return visualviewport_from_dict(await self._page.evaluate("MultimodalWebSurfer.getVisualViewport();"))
 
-    def get_url(self) -> str:
-        """Get the current page URL synchronously."""
+    async def _get_focused_rect_id(self) -> str:
+        assert self._page is not None
+        try:
+            await self._page.evaluate(self._page_script)
+        except Exception:
+            pass
+        result = await self._page.evaluate("MultimodalWebSurfer.getFocusedElementId();")
+        return str(result)
+
+    async def _get_page_metadata(self) -> Dict[str, Any]:
+        assert self._page is not None
+        try:
+            await self._page.evaluate(self._page_script)
+        except Exception:
+            pass
+        result = await self._page.evaluate("MultimodalWebSurfer.getPageMetadata();")
+        assert isinstance(result, dict)
+        return cast(Dict[str, Any], result)
+
+    async def _get_page_markdown(self) -> str:
+        assert self._page is not None
+        html = await self._page.evaluate("document.documentElement.outerHTML;")
+        # TOODO: fix types
+        res = self._markdown_converter.convert_stream(io.StringIO(html), file_extension=".html", url=self._page.url)  # type: ignore
+        return res.text_content  # type: ignore
+
+    async def _on_new_page(self, page: Page) -> None:
+        self._page = page
+        assert self._page is not None
+        # self._page.route(lambda x: True, self._route_handler)
+        self._page.on("download", self._download_handler)
+        await self._page.set_viewport_size({"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
+        await self._sleep(0.2)
+        self._prior_metadata_hash = None
+        await self._page.add_init_script(
+            path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js")
+        )
+        try:
+            await self._page.wait_for_load_state()
+        except TimeoutError:
+            pass
+    
+    async def take_screenshot(self) -> bytes:
+        """Takes a screenshot of the current page."""
+        assert self._page is not None
+        return await self._page.screenshot()
+
+    async def get_url(self) -> str:
+        """Returns the current URL of the page."""
         assert self._page is not None
         return self._page.url
-
-    async def get_title(self):
+    
+    async def get_title(self) -> str:
+        """Returns the title of the current page."""
         assert self._page is not None
         return await self._page.title()
 
-    async def wait_for_load_state(self):
+    async def wait_for_load_state(self) -> None:
         assert self._page is not None
-        await self._page.wait_for_load_state()
+        try:
+            await self._page.wait_for_load_state()
+        except TimeoutError:
+            logger.log_event(
+                source=self.agent_name,
+                name="page_load_timeout",
+                data={
+                    "url": self._page.url
+                }
+            )
+
+    async def handle_download(self, downloads_folder: str) -> None:
+        """Handles the download of a file initiated by the browser."""
+        assert self._page is not None
+        if self._last_download is not None:
+            fname = os.path.join(downloads_folder, self._last_download.suggested_filename)
+            await self._last_download.save_as(fname)  # type: ignore
+            page_body = f"<html><head><title>Download Successful</title></head><body style=\"margin: 20px;\"><h1>Successfully downloaded '{self._last_download.suggested_filename}' to local path:<br><br>{fname}</h1></body></html>"
+            await self._page.goto(
+                "data:text/html;base64," + base64.b64encode(page_body.encode("utf-8")).decode("utf-8")
+            )
+            await self._page.wait_for_load_state()
+            self._last_download = None # Reset last download
