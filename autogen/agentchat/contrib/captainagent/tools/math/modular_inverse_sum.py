@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def modular_inverse_sum(expressions, modulus):
     """
     Calculates the sum of modular inverses of the given expressions modulo the specified modulus.

@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def perform_web_search(query, count=10, offset=0):
     """
     Perform a web search using Bing API.

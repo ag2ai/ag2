@@ -56,6 +56,7 @@ def get_max_token_limit(model: str = "gpt-3.5-turbo-0613") -> int:
         "gpt-4o": 128000,
         "gpt-4o-2024-05-13": 128000,
         "gpt-4o-2024-08-06": 128000,
+        "gpt-4o-2024-11-20": 128000,
         "gpt-4o-mini": 128000,
         "gpt-4o-mini-2024-07-18": 128000,
     }
@@ -131,6 +132,7 @@ def _num_token_from_messages(messages: Union[List, Dict], model="gpt-3.5-turbo-0
         "gpt-4o",
         "gpt-4o-2024-05-13",
         "gpt-4o-2024-08-06",
+        "gpt-4o-2024-11-20",
         "gpt-4o-mini",
         "gpt-4o-mini-2024-07-18",
     }:

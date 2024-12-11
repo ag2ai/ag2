@@ -1,3 +1,9 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 """Create an OpenAI-compatible client using Cerebras's API.
 
 Example:
@@ -23,12 +29,13 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from cerebras.cloud.sdk import Cerebras, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
@@ -56,6 +63,9 @@ class CerebrasClient:
         assert (
             self.api_key
         ), "Please include the api_key in your config list entry for Cerebras or set the CEREBRAS_API_KEY env variable."
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Crebras, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response: ChatCompletion) -> List:
         """
@@ -106,7 +116,6 @@ class CerebrasClient:
         return cerebras_params
 
     def create(self, params: Dict) -> ChatCompletion:
-
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Cerebras messages

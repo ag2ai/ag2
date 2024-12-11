@@ -14,6 +14,7 @@ docs/reference
 docs/tutorial/*.mdx
 docs/tutorial/**/*.png
 !docs/tutorial/assets/*.png
+docs/topics/swarm.mdx
 docs/topics/llm_configuration.mdx
 docs/topics/code-execution/*.mdx
 docs/topics/task_decomposition.mdx
@@ -23,6 +24,9 @@ docs/topics/non-openai-models/**/*.py
 docs/topics/non-openai-models/**/*.svg
 docs/topics/code-execution/*.mdx
 docs/topics/groupchat/customized_speaker_selection.mdx
+docs/topics/groupchat/resuming_groupchat.mdx
+docs/topics/groupchat/transform_messages_speaker_selection.mdx
+docs/topics/groupchat/using_custom_model_client_classes.mdx
 cell-*-output-*.png
 
 # Misc

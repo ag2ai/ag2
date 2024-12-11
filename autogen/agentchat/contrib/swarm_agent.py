@@ -1,6 +1,8 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+import copy
+import inspect
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -41,8 +43,18 @@ class AFTER_WORK:
 
 @dataclass
 class ON_CONDITION:
-    agent: "SwarmAgent"
+    target: Union["SwarmAgent", Dict[str, Any]] = None
     condition: str = ""
+
+    def __post_init__(self):
+        # Ensure valid types
+        if self.target is not None:
+            assert isinstance(self.target, SwarmAgent) or isinstance(
+                self.target, Dict
+            ), "'target' must be a SwarmAgent or a Dict"
+
+        # Ensure they have a condition
+        assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
 
 
 def initiate_swarm_chat(
@@ -80,23 +92,22 @@ def initiate_swarm_chat(
         SwarmAgent:     Last speaker.
     """
     assert isinstance(initial_agent, SwarmAgent), "initial_agent must be a SwarmAgent"
-    assert all(isinstance(agent, SwarmAgent) for agent in agents), "agents must be a list of SwarmAgents"
+    assert all(isinstance(agent, SwarmAgent) for agent in agents), "Agents must be a list of SwarmAgents"
+    # Ensure all agents in hand-off after-works are in the passed in agents list
+    for agent in agents:
+        if agent.after_work is not None:
+            if isinstance(agent.after_work.agent, SwarmAgent):
+                assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
 
     context_variables = context_variables or {}
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]
-
-    swarm_agent_names = [agent.name for agent in agents]
 
     tool_execution = SwarmAgent(
         name="Tool_Execution",
         system_message="Tool Execution",
     )
     tool_execution._set_to_tool_execution(context_variables=context_variables)
-
-    # Update tool execution agent with all the functions from all the agents
-    for agent in agents:
-        tool_execution._function_map.update(agent._function_map)
 
     INIT_AGENT_USED = False
 
@@ -112,6 +123,17 @@ def initiate_swarm_chat(
         if tool_execution._next_agent is not None:
             next_agent = tool_execution._next_agent
             tool_execution._next_agent = None
+
+            # Check for string, access agent from group chat.
+
+            if isinstance(next_agent, str):
+                if next_agent in swarm_agent_names:
+                    next_agent = groupchat.agent_by_name(name=next_agent)
+                else:
+                    raise ValueError(
+                        f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm."
+                    )
+
             return next_agent
 
         # get the last swarm agent
@@ -152,6 +174,43 @@ def initiate_swarm_chat(
         else:
             raise ValueError("Invalid After Work condition")
 
+    def create_nested_chats(agent: SwarmAgent, nested_chat_agents: List[SwarmAgent]):
+        """Create nested chat agents and register nested chats"""
+        for i, nested_chat_handoff in enumerate(agent._nested_chat_handoffs):
+            nested_chats: Dict[str, Any] = nested_chat_handoff["nested_chats"]
+            condition = nested_chat_handoff["condition"]
+
+            # Create a nested chat agent specifically for this nested chat
+            nested_chat_agent = SwarmAgent(name=f"nested_chat_{agent.name}_{i + 1}")
+
+            nested_chat_agent.register_nested_chats(
+                nested_chats["chat_queue"],
+                reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
+                or "summary_from_nested_chats",
+                config=nested_chats.get("config", None),
+                trigger=lambda sender: True,
+                position=0,
+                use_async=nested_chats.get("use_async", False),
+            )
+
+            # After the nested chat is complete, transfer back to the parent agent
+            nested_chat_agent.register_hand_off(AFTER_WORK(agent=agent))
+
+            nested_chat_agents.append(nested_chat_agent)
+
+            # Nested chat is triggered through an agent transfer to this nested chat agent
+            agent.register_hand_off(ON_CONDITION(nested_chat_agent, condition))
+
+    nested_chat_agents = []
+    for agent in agents:
+        create_nested_chats(agent, nested_chat_agents)
+
+    # Update tool execution agent with all the functions from all the agents
+    for agent in agents + nested_chat_agents:
+        tool_execution._function_map.update(agent._function_map)
+
+    swarm_agent_names = [agent.name for agent in agents + nested_chat_agents]
+
     # If there's only one message and there's no identified swarm agent
     # Start with a user proxy agent, creating one if they haven't passed one in
     if len(messages) == 1 and "name" not in messages[0] and not user_agent:
@@ -160,7 +219,10 @@ def initiate_swarm_chat(
         temp_user_proxy = []
 
     groupchat = GroupChat(
-        agents=[tool_execution] + agents + ([user_agent] if user_agent is not None else temp_user_proxy),
+        agents=[tool_execution]
+        + agents
+        + nested_chat_agents
+        + ([user_agent] if user_agent is not None else temp_user_proxy),
         messages=[],  # Set to empty. We will resume the conversation with the messages
         max_round=max_rounds,
         speaker_selection_method=swarm_transition,
@@ -175,9 +237,12 @@ def initiate_swarm_chat(
         last_message = messages[0]
 
         if "name" in last_message:
-            if "name" in swarm_agent_names:
+            if last_message["name"] in swarm_agent_names:
                 # If there's a name in the message and it's a swarm agent, use that
                 last_agent = groupchat.agent_by_name(name=last_message["name"])
+            elif user_agent and last_message["name"] == user_agent.name:
+                # If the user agent is passed in and is the first message
+                last_agent = user_agent
             else:
                 raise ValueError(f"Invalid swarm agent name in last message: {last_message['name']}")
         else:
@@ -215,7 +280,7 @@ class SwarmResult(BaseModel):
     """
 
     values: str = ""
-    agent: Optional["SwarmAgent"] = None
+    agent: Optional[Union["SwarmAgent", str]] = None
     context_variables: Dict[str, Any] = {}
 
     class Config:  # Add this inner class
@@ -260,15 +325,24 @@ class SwarmAgent(ConversableAgent):
         )
 
         if isinstance(functions, list):
+            if not all(isinstance(func, Callable) for func in functions):
+                raise TypeError("All elements in the functions list must be callable")
             self.add_functions(functions)
         elif isinstance(functions, Callable):
             self.add_single_function(functions)
+        elif functions is not None:
+            raise TypeError("Functions must be a callable or a list of callables")
 
         self.after_work = None
 
-        # use in the tool execution agent to transfer to the next agent
+        # Used only in the tool execution agent for context and transferring to the next agent
+        # Note: context variables are not stored for each agent
         self._context_variables = {}
         self._next_agent = None
+
+        # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
+        # List of Dictionaries containing the nested_chats and condition
+        self._nested_chat_handoffs = []
 
     def _set_to_tool_execution(self, context_variables: Optional[Dict[str, Any]] = None):
         """Set to a special instance of SwarmAgent that is responsible for executing tool calls from other swarm agents.
@@ -299,24 +373,40 @@ class SwarmAgent(ConversableAgent):
         1. register the function with the agent
         2. register the schema with the agent, description set to the condition
         """
+        # Ensure that hand_to is a list or ON_CONDITION or AFTER_WORK
+        if not isinstance(hand_to, (list, ON_CONDITION, AFTER_WORK)):
+            raise ValueError("hand_to must be a list of ON_CONDITION or AFTER_WORK")
+
         if isinstance(hand_to, (ON_CONDITION, AFTER_WORK)):
             hand_to = [hand_to]
 
         for transit in hand_to:
             if isinstance(transit, AFTER_WORK):
+                assert isinstance(
+                    transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)
+                ), "Invalid After Work value"
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
 
-                # Create closure with current loop transit value
-                # to ensure the condition matches the one in the loop
-                def make_transfer_function(current_transit):
-                    def transfer_to_agent() -> "SwarmAgent":
-                        return current_transit.agent
+                if isinstance(transit.target, SwarmAgent):
+                    # Transition to agent
 
-                    return transfer_to_agent
+                    # Create closure with current loop transit value
+                    # to ensure the condition matches the one in the loop
+                    def make_transfer_function(current_transit: ON_CONDITION):
+                        def transfer_to_agent() -> "SwarmAgent":
+                            return current_transit.target
 
-                transfer_func = make_transfer_function(transit)
-                self.add_single_function(transfer_func, f"transfer_to_{transit.agent.name}", transit.condition)
+                        return transfer_to_agent
+
+                    transfer_func = make_transfer_function(transit)
+                    self.add_single_function(transfer_func, f"transfer_to_{transit.target.name}", transit.condition)
+
+                elif isinstance(transit.target, Dict):
+                    # Transition to a nested chat
+                    # We will store them here and establish them in the initiate_swarm_chat
+                    self._nested_chat_handoffs.append({"nested_chats": transit.target, "condition": transit.condition})
+
             else:
                 raise ValueError("Invalid hand off condition, must be either ON_CONDITION or AFTER_WORK")
 
@@ -340,8 +430,21 @@ class SwarmAgent(ConversableAgent):
 
         message = messages[-1]
         if "tool_calls" in message:
-            # 1. add context_variables to the tool call arguments
-            for tool_call in message["tool_calls"]:
+
+            tool_call_count = len(message["tool_calls"])
+
+            # Loop through tool calls individually (so context can be updated after each function call)
+            next_agent = None
+            tool_responses_inner = []
+            contents = []
+            for index in range(tool_call_count):
+
+                # Deep copy to ensure no changes to messages when we insert the context variables
+                message_copy = copy.deepcopy(message)
+
+                # 1. add context_variables to the tool call arguments
+                tool_call = message_copy["tool_calls"][index]
+
                 if tool_call["type"] == "function":
                     function_name = tool_call["function"]["name"]
 
@@ -349,28 +452,40 @@ class SwarmAgent(ConversableAgent):
                     if function_name in self._function_map:
                         func = self._function_map[function_name]  # Get the original function
 
-                        # Check if function has context_variables parameter
+                        # Inject the context variables into the tool call if it has the parameter
                         sig = signature(func)
                         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
+
                             current_args = json.loads(tool_call["function"]["arguments"])
                             current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = self._context_variables
-                            # Update the tool call with new arguments
                             tool_call["function"]["arguments"] = json.dumps(current_args)
 
-            # 2. generate tool calls reply
-            _, tool_message = self.generate_tool_calls_reply([message])
+                # Ensure we are only executing the one tool at a time
+                message_copy["tool_calls"] = [tool_call]
 
-            # 3. update context_variables and next_agent, convert content to string
-            for tool_response in tool_message["tool_responses"]:
-                content = tool_response.get("content")
-                if isinstance(content, SwarmResult):
-                    if content.context_variables != {}:
-                        self._context_variables.update(content.context_variables)
-                    if content.agent is not None:
-                        self._next_agent = content.agent
-                elif isinstance(content, Agent):
-                    self._next_agent = content
-                tool_response["content"] = str(tool_response["content"])
+                # 2. generate tool calls reply
+                _, tool_message = self.generate_tool_calls_reply([message_copy])
+
+                # 3. update context_variables and next_agent, convert content to string
+                for tool_response in tool_message["tool_responses"]:
+                    content = tool_response.get("content")
+                    if isinstance(content, SwarmResult):
+                        if content.context_variables != {}:
+                            self._context_variables.update(content.context_variables)
+                        if content.agent is not None:
+                            next_agent = content.agent
+                    elif isinstance(content, Agent):
+                        next_agent = content
+
+                    tool_responses_inner.append(tool_response)
+                    contents.append(str(tool_response["content"]))
+
+            self._next_agent = next_agent
+
+            # Put the tool responses and content strings back into the response message
+            # Caters for multiple tool calls
+            tool_message["tool_responses"] = tool_responses_inner
+            tool_message["content"] = "\n".join(contents)
 
             return True, tool_message
         return False, None
@@ -408,6 +523,127 @@ class SwarmAgent(ConversableAgent):
     def add_functions(self, func_list: List[Callable]):
         for func in func_list:
             self.add_single_function(func)
+
+    @staticmethod
+    def process_nested_chat_carryover(
+        chat: Dict[str, Any],
+        recipient: ConversableAgent,
+        messages: List[Dict[str, Any]],
+        sender: ConversableAgent,
+        trim_n_messages: int = 0,
+    ) -> None:
+        """Process carryover messages for a nested chat (typically for the first chat of a swarm)
+
+        The carryover_config key is a dictionary containing:
+            "summary_method": The method to use to summarise the messages, can be "all", "last_msg", "reflection_with_llm" or a Callable
+            "summary_args": Optional arguments for the summary method
+
+        Supported carryover 'summary_methods' are:
+            "all" - all messages will be incorporated
+            "last_msg" - the last message will be incorporated
+            "reflection_with_llm" - an llm will summarise all the messages and the summary will be incorporated as a single message
+            Callable - a callable with the signature: my_method(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+
+        Args:
+            chat: The chat dictionary containing the carryover configuration
+            recipient: The recipient agent
+            messages: The messages from the parent chat
+            sender: The sender agent
+            trim_n_messages: The number of latest messages to trim from the messages list
+        """
+
+        def concat_carryover(chat_message: str, carryover_message: Union[str, List[Dict[str, Any]]]) -> str:
+            """Concatenate the carryover message to the chat message."""
+            prefix = f"{chat_message}\n" if chat_message else ""
+
+            if isinstance(carryover_message, str):
+                content = carryover_message
+            elif isinstance(carryover_message, list):
+                content = "\n".join(
+                    msg["content"] for msg in carryover_message if "content" in msg and msg["content"] is not None
+                )
+            else:
+                raise ValueError("Carryover message must be a string or a list of dictionaries")
+
+            return f"{prefix}Context:\n{content}"
+
+        carryover_config = chat["carryover_config"]
+
+        if "summary_method" not in carryover_config:
+            raise ValueError("Carryover configuration must contain a 'summary_method' key")
+
+        carryover_summary_method = carryover_config["summary_method"]
+        carryover_summary_args = carryover_config.get("summary_args") or {}
+
+        chat_message = chat.get("message", "")
+
+        # deep copy and trim the latest messages
+        content_messages = copy.deepcopy(messages)
+        content_messages = content_messages[:-trim_n_messages]
+
+        if carryover_summary_method == "all":
+            # Put a string concatenated value of all parent messages into the first message
+            # (e.g. message = <first nested chat message>\nContext: \n<swarm message 1>\n<swarm message 2>\n...)
+            carry_over_message = concat_carryover(chat_message, content_messages)
+
+        elif carryover_summary_method == "last_msg":
+            # (e.g. message = <first nested chat message>\nContext: \n<last swarm message>)
+            carry_over_message = concat_carryover(chat_message, content_messages[-1]["content"])
+
+        elif carryover_summary_method == "reflection_with_llm":
+            # (e.g. message = <first nested chat message>\nContext: \n<llm summary>)
+
+            # Add the messages to the nested chat agent for reflection (we'll clear after reflection)
+            chat["recipient"]._oai_messages[sender] = content_messages
+
+            carry_over_message_llm = ConversableAgent._reflection_with_llm_as_summary(
+                sender=sender,
+                recipient=chat["recipient"],  # Chat recipient LLM config will be used for the reflection
+                summary_args=carryover_summary_args,
+            )
+
+            recipient._oai_messages[sender] = []
+
+            carry_over_message = concat_carryover(chat_message, carry_over_message_llm)
+
+        elif isinstance(carryover_summary_method, Callable):
+            # (e.g. message = <first nested chat message>\nContext: \n<function's return string>)
+            carry_over_message_result = carryover_summary_method(recipient, content_messages, carryover_summary_args)
+
+            carry_over_message = concat_carryover(chat_message, carry_over_message_result)
+
+        chat["message"] = carry_over_message
+
+    @staticmethod
+    def _summary_from_nested_chats(
+        chat_queue: List[Dict[str, Any]], recipient: Agent, messages: Union[str, Callable], sender: Agent, config: Any
+    ) -> Tuple[bool, Union[str, None]]:
+        """Overridden _summary_from_nested_chats method from ConversableAgent.
+        This function initiates one or a sequence of chats between the "recipient" and the agents in the chat_queue.
+
+        It extracts and returns a summary from the nested chat based on the "summary_method" in each chat in chat_queue.
+
+        Swarm Updates:
+        - the 'messages' parameter contains the parent chat's messages
+        - the first chat in the queue can contain a 'carryover_config' which is a dictionary that denotes how to carryover messages from the swarm chat into the first chat of the nested chats). Only applies to the first chat.
+            e.g.: carryover_summarize_chat_config = {"summary_method": "reflection_with_llm", "summary_args": None}
+            summary_method can be "last_msg", "all", "reflection_with_llm", Callable
+            The Callable signature: my_method(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+            The summary will be concatenated to the message of the first chat in the queue.
+
+        Returns:
+            Tuple[bool, str]: A tuple where the first element indicates the completion of the chat, and the second element contains the summary of the last chat if any chats were initiated.
+        """
+
+        # Carryover configuration allowed on the first chat in the queue only, trim the last two messages specifically for swarm nested chat carryover as these are the messages for the transition to the nested chat agent
+        if len(chat_queue) > 0 and "carryover_config" in chat_queue[0]:
+            SwarmAgent.process_nested_chat_carryover(chat_queue[0], recipient, messages, sender, 2)
+
+        chat_to_run = ConversableAgent._get_chats_to_run(chat_queue, recipient, messages, sender, config)
+        if not chat_to_run:
+            return True, None
+        res = sender.initiate_chats(chat_to_run)
+        return True, res[-1].summary
 
 
 # Forward references for SwarmAgent in SwarmResult

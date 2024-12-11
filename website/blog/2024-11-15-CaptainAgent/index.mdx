@@ -5,6 +5,7 @@ authors:
   - LinxinS97
   - jieyuz2
   - skzhang1
+  - qingyunwu
 tags: [LLM, GPT, AutoBuild]
 ---
 ![Illustration of how CaptainAgent build a team](img/overall.png)
@@ -24,17 +25,23 @@ CaptainAgent iterates over the following two steps until the problem is successf
 
 The design of CaptainAgent allows it to leverage agents and tools from a pre-specified agent library and tool library. In the following section, we demonstrate how to use CaptainAgent with or without the provided library.
 
+To install AG2 with CaptainAgent:
+
+```bash
+pip install ag2[captainagent]
+```
+
 # Using CaptainAgent without pre-specified agent/tool libraries
-CaptainAgent can serve as a drop-in replacement for the general `AssistantAgent` class in AG2. To do that we just need to add a few lines of configurations for the group chat involved.
-Without the agent library and tool library, CaptainAgent will automatically generate a set of agents into a group chat.
+CaptainAgent can serve as a drop-in replacement for the general `AssistantAgent` class in AG2. It also allows customization such as agent/tool libraries. When the libraries are provided, CaptainAgent will try to leverage them when solving a task.
+Without them, CaptainAgent will automatically generate new agents.
 
 ```python
-from autogen.agentchat.contrib.captain_agent import CaptainAgent
-from autogen import UserProxyAgent
+from autogen.agentchat.contrib.captainagent import CaptainAgent
+from autogen import UserProxyAgent, config_list_from_json
 
 llm_config = {
     "temperature": 0,
-    "config_list": autogen.config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4o-mini"]}),
+    "config_list": config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4o"]}),
 }
 
 ## build agents
@@ -58,19 +65,19 @@ The tool library we provide requires subscribing to specific APIs, please refer 
 To use agents from an agent library, you just need to specify a `library_path` sub-field or a `autobuild_tool_config` field in CaptainAgent's configuration.
 
 ```python
-from autogen.agentchat.contrib.captain_agent import CaptainAgent
-from autogen import UserProxyAgent
+from autogen.agentchat.contrib.captainagent import CaptainAgent
+from autogen import UserProxyAgent, config_list_from_json
 
 llm_config = {
     "temperature": 0,
-    "config_list": autogen.config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4-1106-preview"]}),
+    "config_list": config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4o"]}),
 }
 
 ## build agents
 captain_agent = CaptainAgent(
     name="captain_agent",
     llm_config=llm_config,
-    nested_mode_config=nested_mode_config,
+    nested_config=nested_mode_config,
     agent_lib="captainagent_expert_library.json",
     tool_lib="default",
     code_execution_config={"use_docker": False, "work_dir": "groupchat"},
@@ -84,9 +91,13 @@ result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
 
 # Further Reading
-For a detailed description of how to configure the CaptainAgent, please refer to the [document](https://ag2ai.github.io/ag2/docs/topics/captainagent).
+For a detailed description of how to configure the CaptainAgent, please refer to
+- [document](https://ag2ai.github.io/ag2/docs/topics/captainagent/agent_library).
+- [Notebook example](https://ag2ai.github.io/ag2/docs/notebooks/agentchat_captainagent/)
 
-Please refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
+Please also refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
+
+
 
 If you find this blog useful, please consider citing:
 ```

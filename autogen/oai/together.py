@@ -33,13 +33,14 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Dict, List, Mapping, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import requests
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from PIL import Image
+from pydantic import BaseModel
 from together import Together, error
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
@@ -58,6 +59,9 @@ class TogetherClient:
         self.api_key = kwargs.get("api_key", None)
         if not self.api_key:
             self.api_key = os.getenv("TOGETHER_API_KEY")
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Together.AI, it will be ignored.", UserWarning)
 
         assert (
             self.api_key
@@ -130,7 +134,6 @@ class TogetherClient:
         return together_params
 
     def create(self, params: Dict) -> ChatCompletion:
-
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Together.AI messages

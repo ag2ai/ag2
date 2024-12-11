@@ -1,3 +1,9 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 """Create an OpenAI-compatible client using Ollama's API.
 
 Example:
@@ -25,7 +31,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import ollama
 from fix_busted_json import repair_json
@@ -33,6 +39,7 @@ from ollama import Client
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
@@ -78,6 +85,8 @@ class OllamaClient:
         Args:
             None
         """
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Ollama, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> List:
         """
@@ -172,7 +181,6 @@ class OllamaClient:
         return ollama_params
 
     def create(self, params: Dict) -> ChatCompletion:
-
         messages = params.get("messages", [])
 
         # Are tools involved in this conversation?

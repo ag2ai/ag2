@@ -14,17 +14,17 @@ customPostCssPlugin = () => {
 
 module.exports = {
   title: "AG2",
-  tagline: "An Open-Source Programming Framework for Agentic AI",
+  tagline: "The Open Source Agent OS",
   url: "https://ag2ai.github.io",
   baseUrl: "/ag2/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
-  favicon: "img/ag.ico",
+  favicon: "img/ag2.ico",
   organizationName: "ag2ai", // Usually your GitHub org/user name.
   projectName: "ag2", // Usually your repo name.
   scripts: [
     {
-      src: "/autogen/js/custom.js",
+      src: "/js/custom.js",
       async: true,
       defer: true,
     },
@@ -47,7 +47,7 @@ module.exports = {
       title: "AG2",
       logo: {
         alt: "AG2",
-        src: "img/ag.svg",
+        src: "img/ag2.svg",
       },
       items: [
         {
@@ -151,6 +151,11 @@ module.exports = {
           position: "left",
         },
         {
+          href: "https://ag2.ai/",
+          label: "AG2.ai",
+          position: "right",
+        },
+        {
           href: "https://github.com/ag2ai/ag2",
           label: "GitHub",
           position: "right",
@@ -242,7 +247,7 @@ module.exports = {
         routeBasePath: 'talks',
         path: './talks',
         showReadingTime: true,
-        postsPerPage: 'ALL',
+        blogSidebarCount: "ALL",
       },
     ],
     [

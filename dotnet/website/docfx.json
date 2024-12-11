@@ -57,9 +57,9 @@
     "globalMetadata":{
       "_appTitle": "AutoGen for .NET",
       "_appName": "AutoGen for .NET",
-      "_appLogoPath": "images/ag.ico",
+      "_appLogoPath": "images/ag2.ico",
       "_appFooter": "AutoGen for .NET",
-      "_appFaviconPath": "images/ag.ico",
+      "_appFaviconPath": "images/ag2.ico",
       "_gitContribute": {
         "repo": "https://github.com/ag2ai/ag2.git",
         "branch": "dotnet"

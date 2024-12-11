@@ -1,3 +1,9 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 """
 Create a compatible client for the Amazon Bedrock Converse API.
 
@@ -30,7 +36,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import boto3
 import requests
@@ -38,6 +44,7 @@ from botocore.config import Config
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import validate_parameter
 
@@ -85,6 +92,9 @@ class BedrockClient:
             aws_session_token=self._aws_session_token,
             profile_name=self._aws_profile_name,
         )
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Bedrock, it will be ignored.", UserWarning)
 
         self.bedrock_runtime = session.client(service_name="bedrock-runtime", config=bedrock_config)
 
@@ -172,9 +182,8 @@ class BedrockClient:
 
         return base_params, additional_params
 
-    def create(self, params):
+    def create(self, params) -> ChatCompletion:
         """Run Amazon Bedrock inference and return AutoGen response"""
-
         # Set custom client class settings
         self.parse_custom_params(params)
 

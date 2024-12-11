@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def find_continuity_point(f_leq, f_gt, x_value):
     """
     Find the value 'a' that ensures the continuity of a piecewise function at a given point.

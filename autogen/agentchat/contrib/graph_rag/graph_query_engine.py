@@ -1,3 +1,9 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 from dataclasses import dataclass, field
 from typing import List, Optional, Protocol
 
@@ -20,7 +26,7 @@ class GraphStoreQueryResult:
 class GraphQueryEngine(Protocol):
     """An abstract base class that represents a graph query engine on top of a underlying graph database.
 
-    This interface defines the basic methods for graph rag.
+    This interface defines the basic methods for graph-based RAG.
     """
 
     def init_db(self, input_doc: List[Document] | None = None):

@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def scrape_wikipedia_tables(url: str, header_keyword: str):
     """
     Scrapes Wikipedia tables based on a given URL and header keyword.

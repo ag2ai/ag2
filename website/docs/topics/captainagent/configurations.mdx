@@ -1,5 +1,5 @@
 # Configurations in `nested_config`
-Captain Agent requires `nested_config` for configuration. Below is an example, we will break it down and provide a detailed explanation.
+CaptainAgent requires `nested_config` for configuration. Below is an example, we will break it down and provide a detailed explanation.
 
 ```
 nested_config = {
@@ -23,6 +23,15 @@ nested_config = {
 }
 ```
 
+:::info Requirements
+If you run CaptainAgent without specifying a `nested_config`, a default is used and this **requires an OAI_CONFIG_LIST**.
+
+**The default model used is OpenAI's GPT-4o**.
+
+To see the default configuration and the OpenAI model used, see the [captainagent.py](https://github.com/ag2ai/ag2/blob/ceb75d865d0a7eb2b7c0bc51776e093681e0970e/autogen/agentchat/contrib/captainagent.py) file.
+
+For advice on using OAI_CONFIG_LIST, [see the documentation](https://ag2ai.github.io/ag2/docs/topics/llm_configuration#oai_config_list-pattern).
+:::
 
 ## `autobuild_init_config`
 This section is used to configure the initial setup of autobuild. `autobuild_init_config` takes in arguments from `AgentBuilder.__init__()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/agent_builder.py#L181).
@@ -31,10 +40,10 @@ This section is used to configure the initial setup of autobuild. `autobuild_ini
 Configures the path to API key config. Defaults to `OAI_CONFIG_LIST`.
 
 ### `builder_model`
-Configures the backbone of agent builder. The builder is used for agent selection from the library. Defaults to `gpt-4o-mini`.
+Configures the backbone of agent builder. The builder is used for agent selection from the library. Defaults to `gpt-4o`.
 
 ### `agent_model`
-Configures the backbone of agents in the group chat. Defaults to `gpt-4o-mini`.
+Configures the backbone of agents in the group chat. Defaults to `gpt-4o`.
 
 ### Other `kwargs`
 `autobuild_init_config` takes in arguments from `AgentBuilder.__init__()`. Check the full list of arguments [here](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/agent_builder.py#L181).

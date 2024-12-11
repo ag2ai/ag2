@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def sum_of_digit_factorials(number):
     """
     Calculates the sum of the factorial of each digit in a number, often used in problems involving curious numbers like 145.

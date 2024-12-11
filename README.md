@@ -1,5 +1,6 @@
 <a name="readme-top"></a>
 
+![Pypi Downloads](https://img.shields.io/pypi/dm/pyautogen?label=PyPI%20downloads)
 [![PyPI version](https://badge.fury.io/py/autogen.svg)](https://badge.fury.io/py/autogen)
 [![Build](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg)](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml)
 ![Python Version](https://img.shields.io/badge/3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
@@ -16,24 +17,19 @@
     <br>
 </p> -->
 
-> [!IMPORTANT]
+> **:tada: IMPORTANT**
 >
-> :fire: :tada: Nov 11, 2024: We are evolving AutoGen into AG2! A new organization [ag2ai](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. We invite collaborators from all organizations and individuals to join the development.
+> :fire: :tada: **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
+> A new organization [AG2ai](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
+>
+> We invite collaborators from all organizations and individuals to join the development.
 
 
-:fire: :tada: AG2 is available via `ag2` (or its alias  `autogen` or  `pyautogen`)  on PyPI! Starting with version 0.3.2, you can now install AG2 using:
-```
-pip install ag2
-```
-or
+:fire: :tada: AG2 is available via `pyautogen` (or its alias  `autogen` or  `ag2`)  on PyPI!
+
 ```
 pip install pyautogen
 ```
-or
-```
-pip install autogen
-```
-
 
 📄 **License:**
 We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
@@ -91,8 +87,7 @@ AG2 (formerly AutoGen) is an open-source programming framework for building AI a
 The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
 
 
-![AutoGen Overview](./website/static/img/autogen_agentchat.png)
-
+![AutoGen Overview](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png)
 
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
@@ -192,7 +187,7 @@ python test/twoagent.py
 After the repo is cloned.
 The figure below shows an example conversation flow with AG2.
 
-![Agent Chat Example](./website/static/img/chat_example.png)
+![Agent Chat Example](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/chat_example.png)
 
 
 Alternatively, the [sample code](https://github.com/ag2ai/build-with-ag2/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.

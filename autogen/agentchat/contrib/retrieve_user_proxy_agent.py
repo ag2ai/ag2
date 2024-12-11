@@ -261,9 +261,6 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self._task = self._retrieve_config.get("task", "default")
         self._vector_db = self._retrieve_config.get("vector_db", "chroma")
         self._db_config = self._retrieve_config.get("db_config", {})
-        self._client = self._retrieve_config.get("client", None)
-        if self._client is None:
-            self._client = chromadb.Client()
         self._docs_path = self._retrieve_config.get("docs_path", None)
         self._extra_docs = self._retrieve_config.get("extra_docs", False)
         self._new_docs = self._retrieve_config.get("new_docs", True)
@@ -311,6 +308,13 @@ class RetrieveUserProxyAgent(UserProxyAgent):
             if "embedding_function" in self._retrieve_config:
                 self._db_config["embedding_function"] = self._embedding_function
             self._vector_db = VectorDBFactory.create_vector_db(db_type=self._vector_db, **self._db_config)
+        self._client = self._retrieve_config.get("client", None)
+        if self._client is None and hasattr(self._vector_db, "client"):
+            # Since the client arg is deprecated, let's check
+            # if the `vector_db` instance has a 'client' attribute.
+            self._client = getattr(self._vector_db, "client", None)
+        if self._client is None:
+            self._client = chromadb.Client()
         self.register_reply(Agent, RetrieveUserProxyAgent._generate_retrieve_user_reply, position=2)
         self.register_hook(
             hookable_method="process_message_before_send",

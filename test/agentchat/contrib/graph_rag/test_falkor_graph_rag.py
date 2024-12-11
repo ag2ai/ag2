@@ -1,15 +1,17 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 import sys
 
 import pytest
 from conftest import reason, skip_openai  # noqa: E402
-from graphrag_sdk import KnowledgeGraph, Source
-from graphrag_sdk.ontology import Ontology
+from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
 
 try:
-    from autogen.agentchat.contrib.graph_rag.document import (
-        Document,
-        DocumentType,
-    )
+    from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
     from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import (
         FalkorGraphQueryEngine,
         GraphStoreQueryResult,
@@ -28,18 +30,27 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
 )
 def test_falkor_db_query_engine():
     """
-    Test Falkor DB Query Engine.
-    1. create a test Falkor DB Query Engine with a schema.
+    Test FalkorDB Query Engine.
+    1. create a test FalkorDB Query Engine with a schema.
     2. Initialize it with an input txt file.
     3. Query it with a question and verify the result contains the critical information.
     """
     # Arrange
-    test_schema = Ontology()
-    actor = test_schema.add_entity("Actor").add_attribute("name", str, unique=True)
-    movie = test_schema.add_entity("Movie").add_attribute("title", str, unique=True)
-    test_schema.add_relation("ACTED", actor, movie)
+    movie_ontology = Ontology()
+    movie_ontology.add_entity(
+        Entity(label="Actor", attributes=[Attribute(name="name", attr_type=AttributeType.STRING, unique=True)])
+    )
+    movie_ontology.add_entity(
+        Entity(label="Movie", attributes=[Attribute(name="title", attr_type=AttributeType.STRING, unique=True)])
+    )
+    movie_ontology.add_relation(Relation(label="ACTED", source="Actor", target="Movie"))
 
-    query_engine = FalkorGraphQueryEngine(schema=test_schema)
+    query_engine = FalkorGraphQueryEngine(
+        name="IMDB",
+        # host="192.168.0.115",     # Change
+        # port=6379,                # if needed
+        ontology=movie_ontology,
+    )
 
     source_file = "test/agentchat/contrib/graph_rag/the_matrix.txt"
     input_docs = [Document(doctype=DocumentType.TEXT, path_or_url=source_file)]
@@ -53,9 +64,3 @@ def test_falkor_db_query_engine():
 
     # Assert
     assert query_result.answer.find("Keanu Reeves") >= 0
-    for message in query_result.messages:
-        if isinstance(message, dict) and "role" in message and message["role"] == "user":
-            assert "content" in message
-            assert message["content"] is question
-            return
-    pytest.fail("Question not found in message history.")

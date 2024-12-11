@@ -29,12 +29,13 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from groq import Groq, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
@@ -64,6 +65,10 @@ class GroqClient:
         assert (
             self.api_key
         ), "Please include the api_key in your config list entry for Groq or set the GROQ_API_KEY env variable."
+
+        if "response_format" in kwargs and kwargs["response_format"] is not None:
+            warnings.warn("response_format is not supported for Groq API, it will be ignored.", UserWarning)
+        self.base_url = kwargs.get("base_url", None)
 
     def message_retrieval(self, response) -> List:
         """
@@ -126,7 +131,6 @@ class GroqClient:
         return groq_params
 
     def create(self, params: Dict) -> ChatCompletion:
-
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Groq messages
@@ -146,7 +150,7 @@ class GroqClient:
         groq_params["messages"] = groq_messages
 
         # We use chat model by default, and set max_retries to 5 (in line with typical retries loop)
-        client = Groq(api_key=self.api_key, max_retries=5)
+        client = Groq(api_key=self.api_key, max_retries=5, base_url=self.base_url)
 
         # Token counts will be returned
         prompt_tokens = 0

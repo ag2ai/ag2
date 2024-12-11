@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
 def calculate_fraction_sum(
     fraction1_numerator: int, fraction1_denominator: int, fraction2_numerator: int, fraction2_denominator: int
 ):

@@ -117,6 +117,7 @@ Suggest no more than {max_agents} experts with their name according to the follo
 # Task requirement
 - Expert's name should follow the format: [skill]_Expert.
 - Only reply the names of the experts, separated by ",".
+- If coding skills are required, they should be limited to Python and Shell.
 For example: Python_Expert, Math_Expert, ... """
 
     AGENT_SYS_MSG_PROMPT = """# Your goal
