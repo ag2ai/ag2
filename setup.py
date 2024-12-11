@@ -79,6 +79,9 @@ autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-
 # NOTE: underscores in pip install, e.g. pip install ag2[graph_rag_falkor_db], will automatically
 # convert to hyphens. So, do not include underscores in the name of extras.
 
+# ** IMPORTANT: IF ADDING EXTRAS **
+# PLEASE add them in the setup_ag2.py and setup_autogen.py files
+
 extra_require = {
     "test": [
         "ipykernel",
