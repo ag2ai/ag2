@@ -3,7 +3,6 @@ import traceback
 import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
-from .messages import BroadcastMessage
 from .utils import clean_and_parse_json
 from .orchestrator_prompts import (
     ORCHESTRATOR_SYSTEM_MESSAGE,
@@ -108,10 +107,9 @@ class OrchestratorAgent(ConversableAgent):
 
     def broadcast_message(self, message: Dict[str, Any], sender: Optional[ConversableAgent] = None) -> None:
         """Broadcast a message to all agents except the sender."""
-        broadcast_msg = BroadcastMessage(content=message)
         for agent in self._agents:
             if agent != sender:
-                agent._append_oai_message(broadcast_msg.content, "assistant", sender or self, is_sending=False)
+                agent._append_oai_message(message, "assistant", sender or self, is_sending=False)
 
     def _get_plan_prompt(self, team: str) -> str:
         return self._plan_prompt.format(team_description=team)
