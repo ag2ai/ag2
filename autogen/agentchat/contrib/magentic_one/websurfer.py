@@ -4,14 +4,11 @@ import asyncio
 import base64
 import hashlib
 import io
-import json
-import logging
 import os
-import pathlib
 import random
 import re
+import json
 import time
-import traceback
 from typing import (
     Any,
     BinaryIO,
@@ -22,7 +19,6 @@ from typing import (
     Optional,
     Tuple,
     Union,
-    TypeAlias,
     cast,
 )
 from urllib.parse import quote_plus
@@ -30,14 +26,8 @@ from urllib.parse import quote_plus
 import aiofiles
 
 from PIL import Image
-from playwright._impl._errors import Error as PlaywrightError
-from playwright._impl._errors import TimeoutError
 from autogen.agentchat import ConversableAgent, Agent
 from autogen.agentchat.contrib import img_utils
-
-
-# from playwright._impl._async_base.AsyncEventInfo
-from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
 
 from .websurfer_prompts import (
     DEFAULT_DESCRIPTION,
@@ -47,9 +37,7 @@ from .websurfer_prompts import (
 # TODO: Fix mdconvert (I think i saw a new pull request)
 from .markdown_browser import MarkdownConverter  # type: ignore
 from .web_controller import WebController, DEFAULT_CHANNEL
-from .utils import SentinelMeta
-
-#from ...utils import message_content_to_str
+from .utils import clean_and_parse_json
 
 from .set_of_mark import add_set_of_mark
 from .tool_definitions import (
@@ -69,14 +57,7 @@ from .tool_definitions import (
 
 from .types import (
     InteractiveRegion,
-    VisualViewport,
-    interactiveregion_from_dict,
-    visualviewport_from_dict,
 )
-
-# Viewport dimensions
-VIEWPORT_HEIGHT = 900
-VIEWPORT_WIDTH = 1440
 
 # Size of the image we send to the MLM
 # Current values represent a 0.85 scaling to fit within the GPT-4v short-edge constraints (768px)
@@ -85,11 +66,8 @@ MLM_WIDTH = 1224
 
 SCREENSHOT_TOKENS = 1105
 
-import logging
-
 from autogen.logger import FileLogger
 
-# Initialize logger with config
 logger = FileLogger(config={})
 
 class MultimodalWebSurfer(ConversableAgent):
@@ -229,7 +207,7 @@ class MultimodalWebSurfer(ConversableAgent):
         function = message["tool_calls"][0]["function"]
         args = function["arguments"]
         if isinstance(args, str):
-            args = self._clean_and_parse_json(args) 
+            args = clean_and_parse_json(args) 
 
         name = function["name"]
         assert name is not None
@@ -765,7 +743,6 @@ class MultimodalWebSurfer(ConversableAgent):
             if isinstance(image, bytes):
                 pil_image = Image.open(io.BytesIO(image))
             else:
-                # TOODO: Not sure why this cast was needed, but by this point screenshot is a binary file-like object
                 pil_image = Image.open(cast(BinaryIO, image))
             scaled_screenshot = pil_image.resize((MLM_WIDTH, MLM_HEIGHT))
             pil_image.close()
@@ -804,55 +781,3 @@ class MultimodalWebSurfer(ConversableAgent):
         assert is_valid_response
         assert isinstance(response, str)
         return response
-
-    def _clean_and_parse_json(self, content: str) -> Dict[str, Any]:
-        """Clean and parse JSON content from various formats."""
-        if not content or not isinstance(content, str):
-            raise ValueError("Content must be a non-empty string")
-
-        # Extract JSON from markdown code blocks if present
-        if "```json" in content:
-            parts = content.split("```json")
-            if len(parts) > 1:
-                content = parts[1].split("```")[0].strip()
-        elif "```" in content:  # Handle cases where json block might not be explicitly marked
-            parts = content.split("```")
-            if len(parts) > 1:
-                content = parts[1].strip()  # Take first code block content
-        
-        # Find JSON-like structure if not in code block
-        if not content.strip().startswith('{'):
-            json_match = re.search(r'\{[\s\S]*\}', content)
-            if not json_match:
-                raise ValueError(f"No JSON structure found in content: {content}")
-            content = json_match.group(0)
-
-        # Preserve newlines for readability in error messages
-        formatted_content = content
-        
-        # Now clean for parsing
-        try:
-            # First try parsing the cleaned but formatted content
-            return json.loads(formatted_content)
-        except json.JSONDecodeError:
-            # If that fails, try more aggressive cleaning
-            cleaned_content = re.sub(r'[\n\r\t]', ' ', content)  # Replace newlines/tabs with spaces
-            cleaned_content = re.sub(r'\s+', ' ', cleaned_content)  # Normalize whitespace
-            cleaned_content = re.sub(r'\\(?!["\\/bfnrt])', '', cleaned_content)  # Remove invalid escapes
-            cleaned_content = re.sub(r',(\s*[}\]])', r'\1', cleaned_content)  # Remove trailing commas
-            cleaned_content = re.sub(r'([{,]\s*)(\w+)(?=\s*:)', r'\1"\2"', cleaned_content)  # Quote unquoted keys
-            cleaned_content = cleaned_content.replace("'", '"')  # Standardize quotes
-            
-            try:
-                return json.loads(cleaned_content)
-            except json.JSONDecodeError as e:
-                logger.log_event(
-                    source=self.name,
-                    name="json_error",
-                    data={
-                        "original_content": formatted_content,
-                        "cleaned_content": cleaned_content,
-                        "error": str(e)
-                    }
-                )
-                raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")

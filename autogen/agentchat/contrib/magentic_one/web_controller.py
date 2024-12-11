@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional, Union, cast, TYPE_CHECKING
 from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
 from playwright._impl._errors import TimeoutError, Error as PlaywrightError
 
-
 # Viewport dimensions
 VIEWPORT_WIDTH = 1440
 VIEWPORT_HEIGHT = 900
@@ -24,12 +23,11 @@ from autogen.logger import FileLogger
 # Initialize logger with config
 logger = FileLogger(config={})
 
-from .utils import SentinelMeta
+from .types import SentinelMeta
 
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
     pass
-
 
 class WebController:
     """
