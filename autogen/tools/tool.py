@@ -16,14 +16,10 @@ __all__ = ["Tool"]
 
 
 class Tool:
-    def __init__(self, name: str, description: str, func: Callable[..., Any], kwargs: Dict[str, Any]):
+    def __init__(self, name: str, description: str, func: Callable[..., Any]):
         self._name = name
         self._description = description
         self._func = func
-        self._kwargs = kwargs
-
-    def run(self, **kwargs: Any) -> Any:
-        return self._func(**self._kwargs, **kwargs)
 
     @classmethod
     def from_crewai_tool(self, tool: CrewAITool) -> "Tool":
@@ -41,7 +37,7 @@ class Tool:
         )
 
     def register_for_llm(self, agent: ConversableAgent) -> None:
-        agent.register_for_llm(name=self._name, description=self._description)(self.run)
+        agent.register_for_llm(name=self._name, description=self._description)(self._func)
 
     def register_for_execution(self, agent: ConversableAgent) -> None:
-        agent.register_for_execution(name=self._name, description=self._description)(self.run)
+        agent.register_for_execution(name=self._name, description=self._description)(self._func)
