@@ -65,7 +65,7 @@
   "anchors": [],
   "navigation": [
     {
-      "group": "Get Started",
+      "group": "",
       "pages": [
         "docs/Getting-Started"
       ]
