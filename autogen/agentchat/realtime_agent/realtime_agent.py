@@ -66,9 +66,21 @@ class RealtimeAgent(LLMAgent):
         for observer in self.observers:
             await observer.update(message)
 
-    async def _read_from_client(self, openai_ws):
+    async def function_result(self, call_id, result):
+        result_item = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": result,
+            },
+        }
+        await self.openai_ws.send(json.dumps(result_item))
+        await self.openai_ws.send(json.dumps({"type": "response.create"}))
+
+    async def _read_from_client(self):
         try:
-            async for openai_message in openai_ws:
+            async for openai_message in self.openai_ws:
                 response = json.loads(openai_message)
                 await self.notify_observers(response)
         except Exception as e:
@@ -82,20 +94,26 @@ class RealtimeAgent(LLMAgent):
             self.openai_ws = openai_ws
             await self.initialize_session()
             await asyncio.gather(
-                self._read_from_client(openai_ws), *[observer.run(openai_ws) for observer in self.observers]
+                self._read_from_client(), *[observer.run() for observer in self.observers]
             )
 
     async def initialize_session(self):
         """Control initial session with OpenAI."""
         session_update = {
-            "type": "session.update",
-            "session": {
-                "turn_detection": {"type": "server_vad"},
-                "voice": self.voice,
-                "instructions": self.system_message,
-                "modalities": ["text", "audio"],
-                "temperature": 0.8,
-            },
+            "turn_detection": {"type": "server_vad"},
+            "voice": self.voice,
+            "instructions": self.system_message,
+            "modalities": ["text", "audio"],
+            "temperature": 0.8,
+            "input_audio_format": "g711_ulaw",
+            "output_audio_format": "g711_ulaw",
         }
-        print("Sending session update:", json.dumps(session_update))
-        await self.openai_ws.send(json.dumps(session_update))
+        await self.session_update(session_update)
+
+    async def session_update(self, session_options):
+        update = {
+            "type": "session.update",
+            "session": session_options
+        }
+        print("Sending session update:", json.dumps(update))
+        await self.openai_ws.send(json.dumps(update))
