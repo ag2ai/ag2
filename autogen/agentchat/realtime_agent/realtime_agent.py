@@ -51,7 +51,7 @@ class RealtimeAgent(LLMAgent):
         voice: str = "alloy",
     ):
         self.llm_config = llm_config
-        self.system_message = system_message
+        self._oai_system_message = [{"content": system_message, "role": "system"}]
         self.voice = voice
         self.observers = []
         self.openai_ws = None
@@ -77,10 +77,10 @@ class RealtimeAgent(LLMAgent):
     async def run(self):
         async with websockets.connect(
             "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
-            extra_headers={"Authorization": f"Bearer {self.llm_config[0]['api_key']}", "OpenAI-Beta": "realtime=v1"},
+            additional_headers={"Authorization": f"Bearer {self.llm_config['config_list'][0]['api_key']}", "OpenAI-Beta": "realtime=v1"},
         ) as openai_ws:
             self.openai_ws = openai_ws
-            self.initialize_session()
+            await self.initialize_session()
             await asyncio.gather(
                 self._read_from_client(openai_ws), *[observer.run(openai_ws) for observer in self.observers]
             )
@@ -91,8 +91,6 @@ class RealtimeAgent(LLMAgent):
             "type": "session.update",
             "session": {
                 "turn_detection": {"type": "server_vad"},
-                "input_audio_format": "g711_ulaw",
-                "output_audio_format": "g711_ulaw",
                 "voice": self.voice,
                 "instructions": self.system_message,
                 "modalities": ["text", "audio"],

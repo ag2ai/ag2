@@ -12,12 +12,7 @@ from fastapi import WebSocketDisconnect
 
 from .realtime_agent import RealtimeObserver
 
-SYSTEM_MESSAGE = (
-    "You are a helpful and bubbly AI assistant who loves to chat about weather"
-    "when the user queries about the waether at some location, call the get_weather tool"
-    "to get the current weather at that location."
-)
-VOICE = "alloy"
+
 LOG_EVENT_TYPES = [
     "error",
     "response.content.done",
@@ -107,41 +102,32 @@ class TwilioAudioAdapter(RealtimeObserver):
             self.mark_queue.append("responsePart")
 
     async def run(self, openai_ws):
-        # await self.initialize_session(openai_ws)
+        await self.initialize_session(openai_ws)
 
-        try:
-            async for message in self.websocket.iter_text():
-                data = json.loads(message)
-                if data["event"] == "media" and openai_ws.open:
-                    self.latest_media_timestamp = int(data["media"]["timestamp"])
-                    audio_append = {"type": "input_audio_buffer.append", "audio": data["media"]["payload"]}
-                    await openai_ws.send(json.dumps(audio_append))
-                elif data["event"] == "start":
-                    self.stream_sid = data["start"]["streamSid"]
-                    print(f"Incoming stream has started {self.stream_sid}")
-                    self.response_start_timestamp_twilio = None
-                    self.latest_media_timestamp = 0
-                    self.last_assistant_item = None
-                elif data["event"] == "mark":
-                    if self.mark_queue:
-                        self.mark_queue.pop(0)
-        except WebSocketDisconnect:
-            print("Client disconnected.")
-            if openai_ws.open:
-                await openai_ws.close()
+        async for message in self.websocket.iter_text():
+            data = json.loads(message)
+            if data["event"] == "media":
+                self.latest_media_timestamp = int(data["media"]["timestamp"])
+                audio_append = {"type": "input_audio_buffer.append", "audio": data["media"]["payload"]}
+                await openai_ws.send(json.dumps(audio_append))
+            elif data["event"] == "start":
+                self.stream_sid = data["start"]["streamSid"]
+                print(f"Incoming stream has started {self.stream_sid}")
+                self.response_start_timestamp_twilio = None
+                self.latest_media_timestamp = 0
+                self.last_assistant_item = None
+            elif data["event"] == "mark":
+                if self.mark_queue:
+                    self.mark_queue.pop(0)
+
 
     async def initialize_session(self, openai_ws):
         """Control initial session with OpenAI."""
         session_update = {
             "type": "session.update",
             "session": {
-                "turn_detection": {"type": "server_vad"},
                 "input_audio_format": "g711_ulaw",
                 "output_audio_format": "g711_ulaw",
-                "voice": VOICE,
-                "instructions": SYSTEM_MESSAGE,
-                "modalities": ["text", "audio"],
-                "temperature": 0.8,
             },
         }
         print("Sending session update:", json.dumps(session_update))
