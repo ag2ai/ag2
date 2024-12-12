@@ -1,7 +1,6 @@
-import Tabs from "@theme/Tabs";
-import TabItem from "@theme/TabItem";
-
-# Getting Started
+---
+title: "Getting Started"
+---
 
 AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating
 cooperation among multiple agents to solve tasks. AG2 aims to provide an easy-to-use
@@ -10,7 +9,7 @@ like PyTorch for Deep Learning. It offers features such as agents that can conve
 with other agents, LLM and tool use support, autonomous and human-in-the-loop workflows,
 and multi-agent conversation patterns.
 
-![AG2 Overview](/img/autogen_agentchat.png)
+![AG2 Overview](/static/img/autogen_agentchat.png)
 
 ### Main Features
 
@@ -37,12 +36,15 @@ Microsoft, Penn State University, and University of Washington.
 ```sh
 pip install autogen
 ```
-:::tip
-You can also install with different [optional dependencies](/docs/installation/Optional-Dependencies).
-:::
+<div class="tip">
+  <Tip>
+    You can also install with different [optional
+    dependencies](/website/docs/installation/Optional-Dependencies).
+  </Tip>
+</div>
 
 <Tabs>
-    <TabItem value="nocode" label="No code execution" default>
+    <Tab title="No code execution">
 
 ```python
 import os
@@ -59,12 +61,14 @@ user_proxy.initiate_chat(
 )
 ```
 
-    </TabItem>
-    <TabItem value="local" label="Local execution" default>
+    </Tab>
+    <Tab title="Local execution">
 
-:::warning
-When asked, be sure to check the generated code before continuing to ensure it is safe to run.
-:::
+<div class="warning">
+    <Warning>
+    When asked, be sure to check the generated code before continuing to ensure it is safe to run.
+    </Warning>
+</div>
 
 ```python
 import os
@@ -85,8 +89,8 @@ user_proxy.initiate_chat(
 )
 ```
 
-    </TabItem>
-    <TabItem value="docker" label="Docker execution" default>
+    </Tab>
+    <Tab title="Docker execution">
 
 ```python
 import os
@@ -110,13 +114,16 @@ with autogen.coding.DockerCommandLineCodeExecutor(work_dir="coding") as code_exe
 
 Open `coding/plot.png` to see the generated plot.
 
-    </TabItem>
+    </Tab>
 
 </Tabs>
 
-:::tip
-Learn more about configuring LLMs for agents [here](/docs/topics/llm_configuration).
-:::
+<div class="tip">
+  <Tip>
+    Learn more about configuring LLMs for agents
+    [here](/website/docs/topics/llm_configuration).
+  </Tip>
+</div>
 
 #### Multi-Agent Conversation Framework
 
@@ -125,7 +132,7 @@ By automating chat among multiple capable agents, one can easily make them colle
 
 The figure below shows an example conversation flow with AG2.
 
-![Agent Chat Example](/img/chat_example.png)
+![Agent Chat Example](/static/img/chat_example.png)
 
 ### Where to Go Next?
 

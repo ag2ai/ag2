@@ -1,40 +1,13 @@
-# Website
+## Development
 
-This website is built using [Docusaurus 3](https://docusaurus.io/), a modern static website generator.
+Install the [Mintlify CLI](https://www.npmjs.com/package/mintlify) to preview the documentation changes locally. To install, use the following command
 
-## Prerequisites
-
-To build and test documentation locally, begin by downloading and installing [Node.js](https://nodejs.org/en/download/), and then installing [Yarn](https://classic.yarnpkg.com/en/).
-On Windows, you can install via the npm package manager (npm) which comes bundled with Node.js:
-
-```console
-npm install --global yarn
+```
+npm install
 ```
 
-## Installation
+Run the following command at the root of your documentation (where mint.json is)
 
-```console
-pip install pydoc-markdown pyyaml colored
-cd website
-yarn install
 ```
-
-### Install Quarto
-
-`quarto` is used to render notebooks.
-
-Install it [here](https://github.com/quarto-dev/quarto-cli/releases).
-
-> Note: Ensure that your `quarto` version is `1.5.23` or higher.
-
-## Local Development
-
-Navigate to the `website` folder and run:
-
-```console
-pydoc-markdown
-python ./process_notebooks.py render
-yarn start
+npm run mintlify:dev
 ```
-
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.

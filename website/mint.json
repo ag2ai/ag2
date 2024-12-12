@@ -1,0 +1,80 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "AG2",
+  "logo": {
+    "dark": "/logo/ag2-white.svg",
+    "light": "/logo/ag2.svg"
+  },
+  "favicon": "/logo/ag2.svg",
+  "search": {
+    "prompt": "Search or ask..."
+  },
+  "colors": {
+    "primary": "#000000",
+    "light": "#ffffff",
+    "dark": "#000000",
+    "anchors": {
+      "from": "#000000",
+      "to": "#ffffff"
+    }
+  },
+  "font": {
+    "headings": {
+      "family": "Jersey 10"
+    },
+    "body": {
+      "family": "Inter"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "AG2.ai",
+      "url": "https://ag2.ai/"
+    },
+    {
+      "name": "GitHub",
+      "url": "https://github.com/ag2ai/ag2"
+    },
+    {
+      "name": "Discord",
+      "url": "https://discord.gg/pAbnFJrkgZ"
+    },
+    {
+      "name": "Twitter",
+      "url": "https://twitter.com/Chi_Wang_"
+    }
+  ],
+  "tabs": [
+    {
+      "name": "Documentation",
+      "url": "docs"
+    },
+    {
+      "name": "Examples",
+      "url": "notebook"
+    },
+    {
+      "name": "Community Talks",
+      "url": "talks"
+    },
+    {
+      "name": "Blog",
+      "url": "blog"
+    }
+  ],
+  "anchors": [],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "docs/Getting-Started"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "x": "https://x.com/Chi_Wang_",
+    "github": "https://github.com/ag2ai/ag2",
+    "linkedin": "https://www.linkedin.com/company/ag2ai",
+    "discord": "https://discord.gg/pAbnFJrkgZ"
+  }
+}
