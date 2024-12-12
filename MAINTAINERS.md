@@ -23,7 +23,7 @@
 | Eric Moore  | [emooreatx](https://github.com/emooreatx)               | IBM               | all|
 | Evan David    | [evandavid1](https://github.com/evandavid1)                | -                      | all |
 | Tvrtko Sternak  | [sternakt](https://github.com/sternakt)               | airt.ai               | structured output |
-
+| Jiacheng Shang  | [Eric-Shang](https://github.com/Eric-Shang)               | Toast              | Rag |
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |
