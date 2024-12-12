@@ -63,7 +63,7 @@ retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 graph_rag_falkor_db = ["graphrag_sdk==0.3.3", "falkordb>=1.0.10"]
 
 neo4j_graph_rag = [
-    "docx2txt",
+    "docx2txt==0.8",
     "llama_index==0.12.5",
     "llama-index-graph-stores-neo4j=0.4.2",
     "llma-index-core==0.12.5",
