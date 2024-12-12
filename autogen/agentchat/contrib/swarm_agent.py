@@ -88,9 +88,9 @@ def initiate_swarm_chat(
                 - REVERT_TO_USER : Revert to the user agent if a user agent is provided. If not provided, terminate the conversation.
                 - STAY : Stay with the last speaker.
 
-            Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a SwarmAgent.
+            Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a SwarmAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, SwarmAgent]:
+                def custom_afterwork_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, SwarmAgent, str]:
                 ```
     Returns:
         ChatResult:     Conversations chat history.
