@@ -121,6 +121,8 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
+    "realtime": ["websockets>=13.1"],
+    "realtime-twilio": ["fastapi>=0.115.0", "uvicorn==0.30.6", "twilio==9.3.2"],
 }
 
 setuptools.setup(
