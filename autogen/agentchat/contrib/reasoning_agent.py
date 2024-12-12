@@ -41,7 +41,7 @@ Option 4: Perform Y.
 """
 
 
-GRADER_message = "Rate the thinking trajectories for score 1 - 5 (1: worst, 5: best)."
+GRADER_message = "Rate the response on a scale of 1 to 10 (1 being the worst and 10 being the best)."
 
 
 class ThinkNode:
@@ -386,7 +386,7 @@ class ReasoningAgent(AssistantAgent):
         if ground_truth:
             # override the system message
             self.grader.update_system_message(
-                f"Rate the trajectory or answer for score 1 - 5 (1: worst, 5: best). The Ground Truth is:\n{ground_truth}"
+                f"Rate the response on a scale of 1 to 10 (1 being the worst and 10 being the best). Use the following as the evaluation criteria: Ground Truth is:\n{ground_truth}"
             )
         else:
             self.grader.update_system_message(GRADER_message)
@@ -624,7 +624,7 @@ class ReasoningAgent(AssistantAgent):
 
         # Helper function to determine if we should continue searching
         def should_continue(node, iteration):
-            if self.is_solved():
+            if self._root.is_solved():
                 return False
             if iteration >= self.lats_max_iterations:
                 return False
@@ -654,8 +654,8 @@ class ReasoningAgent(AssistantAgent):
                     request_reply=True,
                     silent=not self.verbose,
                 )
-                # TODO: the candidate generation should be done by the assistant agent refer: https://ag2ai.github.io/ag2/docs/notebooks/lats_search/#candidate-generation,
-                # and im not sure how to do that, so for now we will just use the last message of the thinker
+                # TODO: the candidate generation should be done different, refer: https://ag2ai.github.io/ag2/docs/notebooks/lats_search/#candidate-generation,
+                # and im not sure how to approach, so for now we will just use the last message.
                 candidates = re.findall(
                     r"Option \d+:(.+?)(?=Option \d+:|$)", self.thinker.last_message()["content"].strip(), re.DOTALL
                 )
