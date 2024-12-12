@@ -153,8 +153,11 @@ class FalkorGraphQueryEngine:
         """
         Delete graph and its data from database.
         """
-        self.falkordb.select_graph(self.name).delete()
-        self.falkordb.select_graph(self.ontology_table_name).delete()
+        all_graphs = self.falkordb.list_graphs()
+        if self.name in all_graphs:
+            self.falkordb.select_graph(self.name).delete()
+        if self.ontology_table_name in all_graphs:
+            self.falkordb.select_graph(self.ontology_table_name).delete()
         return True
 
     def __get_ontology_storage_graph(self) -> Graph:

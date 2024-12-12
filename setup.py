@@ -77,6 +77,12 @@ elif current_os == "Linux":
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
+# NOTE: underscores in pip install, e.g. pip install ag2[graph_rag_falkor_db], will automatically
+# convert to hyphens. So, do not include underscores in the name of extras.
+
+# ** IMPORTANT: IF ADDING EXTRAS **
+# PLEASE add them in the setup_ag2.py and setup_autogen.py files
+
 extra_require = {
     "test": [
         "ipykernel",
@@ -94,7 +100,7 @@ extra_require = {
     "retrievechat-pgvector": retrieve_chat_pgvector,
     "retrievechat-mongodb": [*retrieve_chat, "pymongo>=4.0.0"],
     "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
-    "graph_rag_falkor_db": graph_rag_falkor_db,
+    "graph-rag-falkor-db": graph_rag_falkor_db,
     "autobuild": autobuild,
     "captainagent": autobuild + ["pandas"],
     "teachable": ["chromadb"],
