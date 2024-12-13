@@ -129,9 +129,10 @@ class RealtimeAgent(LLMAgent):
             # get JSON schema for the function
             name = name or func.__name__
 
-            schema = get_function_schema(func, name=name, description=description)
+            schema = get_function_schema(func, name=name, description=description)["function"]
+            schema["type"] = "function"
 
-            self.registered_functions["name"] = (schema, func)
+            self.registered_functions[name] = (schema, func)
 
             return func
 
