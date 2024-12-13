@@ -60,7 +60,7 @@ def neo4j_query_engine():
         "RESPONSIBILITY": ["ASSIGNED_TO", "REQUIRES", "DEFINED_AS"],
     }
 
-    # Create FalkorGraphQueryEngine
+    # Create Neo4jGraphQueryEngine
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
