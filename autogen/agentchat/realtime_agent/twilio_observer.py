@@ -28,7 +28,6 @@ SHOW_TIMING_MATH = False
 class TwilioAudioAdapter(RealtimeObserver):
     def __init__(self, websocket):
         super().__init__()
-        self.client = None
         self.websocket = websocket
 
         # Connection specific state
@@ -86,7 +85,7 @@ class TwilioAudioAdapter(RealtimeObserver):
                     "content_index": 0,
                     "audio_end_ms": elapsed_time,
                 }
-                await self.client.openai_ws.send(json.dumps(truncate_event))
+                await self._client.openai_ws.send(json.dumps(truncate_event))
 
             await self.websocket.send_json({"event": "clear", "streamSid": self.stream_sid})
 
@@ -101,7 +100,7 @@ class TwilioAudioAdapter(RealtimeObserver):
             self.mark_queue.append("responsePart")
 
     async def run(self):
-        openai_ws = self.client.openai_ws
+        openai_ws = self._client._openai_ws
         await self.initialize_session()
 
         async for message in self.websocket.iter_text():
@@ -126,4 +125,4 @@ class TwilioAudioAdapter(RealtimeObserver):
             "input_audio_format": "g711_ulaw",
             "output_audio_format": "g711_ulaw",
         }
-        await self.client.session_update(session_update)
+        await self._client.session_update(session_update)
