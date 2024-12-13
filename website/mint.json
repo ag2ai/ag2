@@ -69,6 +69,54 @@
       "pages": [
         "docs/Getting-Started"
       ]
+    },
+    {
+      "group": "Installation",
+      "pages": [
+        "docs/installation/Installation",
+        "docs/installation/Docker",
+        "docs/installation/Optional-Dependencies"
+      ]
+    },
+    {
+      "group": "Use Cases",
+      "pages": [
+        "docs/Use-Cases/agent_chat",
+        "docs/Use-Cases/enhanced_inference"
+      ]
+    },
+    {
+      "group": "User Guide",
+      "pages": [
+        {
+          "group": "OpenAI Assistant",
+          "pages": ["docs/topics/openai-assistant/gpt_assistant_agent"]
+        },
+        {
+          "group": "Using Non-OpenAI Models",
+          "pages": [
+            "docs/topics/non-openai-models/about-using-nonopenai-models",
+            "docs/topics/non-openai-models/best-tips-for-nonopenai-models"
+          ]
+        },
+        {
+          "group": "CaptainAgent",
+          "pages": [
+            "docs/topics/captainagent/agent_library",
+            "docs/topics/captainagent/configurations",
+            "docs/topics/captainagent/tool_library"
+          ]
+        },
+        {
+          "group": "Handling Long Contexts",
+          "pages": [
+            "docs/topics/handling_long_contexts/compressing_text_w_llmligua",
+            "docs/topics/handling_long_contexts/intro_to_transform_messages"
+          ]
+        },
+        "docs/topics/retrieval_augmentation",
+        "docs/FAQ"
+      ]
     }
   ],
   "footerSocials": {
