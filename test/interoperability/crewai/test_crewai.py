@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from tempfile import TemporaryDirectory
 from typing import Protocol
 
@@ -9,6 +10,7 @@ import pytest
 from conftest import reason, skip_openai
 from crewai_tools import FileReadTool
 
+from autogen import AssistantAgent, UserProxyAgent
 from autogen.interoperability import Interoperable
 from autogen.interoperability.crewai import CrewAIInteroperability
 
@@ -17,6 +19,10 @@ class TestCrewAIInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         self.crewai_interop = CrewAIInteroperability()
+
+        crewai_tool = FileReadTool()
+        self.model_type = crewai_tool.args_schema
+        self.tool = self.crewai_interop.convert_tool(crewai_tool)
 
     def test_type_checks(self) -> None:
         # mypy should fail if the type checks are not correct
@@ -33,18 +39,41 @@ class TestCrewAIInteroperability:
             with open(file_path, "w") as file:
                 file.write("Hello, World!")
 
-            crewai_tool = FileReadTool()
-            model_type = crewai_tool.args_schema
+            assert self.tool.name == "Read_a_file_s_content"
+            assert self.tool.description == "A tool that can be used to read a file's content."
 
-            tool = self.crewai_interop.convert_tool(crewai_tool)
+            args = self.model_type(file_path=file_path)
 
-            assert tool.name == "Read_a_file_s_content"
-            assert tool.description == "A tool that can be used to read a file's content."
-
-            args = model_type(file_path=file_path)
-
-            assert tool.func(args=args) == "Hello, World!"
+            assert self.tool.func(args=args) == "Hello, World!"
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        assert False, "Test not implemented"
+        config_list = [{"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]
+        user_proxy = UserProxyAgent(
+            name="User",
+            human_input_mode="NEVER",
+        )
+
+        chatbot = AssistantAgent(
+            name="chatbot",
+            llm_config={"config_list": config_list},
+        )
+
+        self.tool.register_for_execution(user_proxy)
+        self.tool.register_for_llm(chatbot)
+
+        with TemporaryDirectory() as tmp_dir:
+            file_path = f"{tmp_dir}/test.txt"
+            with open(file_path, "w") as file:
+                file.write("Hello, World!")
+
+            user_proxy.initiate_chat(
+                recipient=chatbot, message=f"Read the content of the file at {file_path}", max_turns=2
+            )
+
+        for message in user_proxy.chat_messages[chatbot]:
+            if "tool_responses" in message:
+                assert message["tool_responses"][0]["content"] == "Hello, World!"
+                return
+
+        assert False, "Tool response not found in chat messages"
