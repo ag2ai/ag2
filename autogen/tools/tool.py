@@ -16,26 +16,22 @@ __all__ = ["Tool"]
 
 
 class Tool:
-    def __init__(self, name: str, description: str, func: Callable[..., Any], kwargs: Dict[str, Any]):
+    def __init__(self, name: str, description: str, func: Callable[..., Any]) -> None:
         self._name = name
         self._description = description
         self._func = func
-        self._kwargs = kwargs
 
-    @classmethod
-    def from_crewai_tool(cls, tool: CrewAITool) -> "Tool":
-        name = tool.name.replace(" ", "_")
-        description = tool.description.split("Tool Description: ")[-1]
+    @property
+    def name(self) -> str:
+        return self._name
 
-        def func(args: tool.args_schema) -> Any:
-            return tool.run(**args.model_dump())
+    @property
+    def description(self) -> str:
+        return self._description
 
-        return Tool(
-            name=name,
-            description=description,
-            func=func,
-            kwargs={},
-        )
+    @property
+    def func(self) -> Callable[..., Any]:
+        return self._func
 
     def register_for_llm(self, agent: ConversableAgent) -> None:
         agent.register_for_llm(name=self._name, description=self._description)(self._func)
