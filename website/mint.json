@@ -10,12 +10,12 @@
     "prompt": "Search or ask..."
   },
   "colors": {
-    "primary": "#000000",
-    "light": "#ffffff",
-    "dark": "#000000",
+    "primary": "#4b9cd6",
+    "light": "#63a9db",
+    "dark": "#338fd1",
     "anchors": {
-      "from": "#000000",
-      "to": "#ffffff"
+      "from": "#338fd1",
+      "to": "#63a9db"
     }
   },
   "font": {
@@ -116,6 +116,31 @@
         },
         "docs/topics/retrieval_augmentation",
         "docs/FAQ"
+      ]
+    },
+    {
+      "group": "AutoGen Studio",
+      "pages": [
+        "docs/autogen-studio/getting-started",
+        "docs/autogen-studio/usage",
+        "docs/autogen-studio/faqs"
+      ]
+    },
+    {
+      "group": "Ecosystem",
+      "pages": [
+        "docs/ecosystem/agentops",
+        "docs/ecosystem/azure_cosmos_db",
+        "docs/ecosystem/composio",
+        "docs/ecosystem/databricks",
+        "docs/ecosystem/llamaindex",
+        "docs/ecosystem/mem0",
+        "docs/ecosystem/memgpt",
+        "docs/ecosystem/microsoft-fabric",
+        "docs/ecosystem/ollama",
+        "docs/ecosystem/pgvector",
+        "docs/ecosystem/portkey",
+        "docs/ecosystem/promptflow"
       ]
     }
   ],

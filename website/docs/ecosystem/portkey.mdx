@@ -1,5 +1,9 @@
-# Portkey Integration with AutoGen
- <img src="https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Autogen.png?raw=true" alt="Portkey Metrics Visualization" width="70%" />
+---
+title: Portkey Integration with AutoGen
+---
+
+
+<img src="https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Autogen.png?raw=true" alt="Portkey Metrics Visualization"  />
 
 [Portkey](https://portkey.ai) is a 2-line upgrade to make your AutoGen agents reliable, cost-efficient, and fast.
 
@@ -41,7 +45,7 @@ And, that's it! With just this, you can start logging all of your AutoGen reques
 
 3. **Let's Run your Agent**
 
-``` python
+```python
 import autogen
 
 # Create user proxy agent, coder, product manager
@@ -74,7 +78,7 @@ user_proxy.initiate_chat(
 ```
 <br />
 Here’s the output from your Agent’s run on Portkey's dashboard<br />
-<img src="https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Dashboard.png?raw=true" width="70%" alt="Portkey Dashboard" />
+<img src="https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Dashboard.png?raw=true" alt="Portkey Dashboard" />
 
 ## Key Features
 Portkey offers a range of advanced features to enhance your AutoGen agents. Here’s an overview
@@ -157,24 +161,27 @@ Be Careful to Load-Balance/Fallback to providers that don't support tool calling
 
 Agent runs are complex. Portkey automatically logs **40+ comprehensive metrics** for your AI agents, including cost, tokens used, latency, etc. Whether you need a broad overview or granular insights into your agent runs, Portkey's customizable filters provide the metrics you need.
 
-<details>
-  <summary><b>Portkey's Observability Dashboard</b></summary>
-<img src="https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Dashboard.png?raw=true" width="70%" alt="Portkey Dashboard" />
-</details>
+<AccordionGroup>
+  <Accordion title="Portkey's Observability Dashboard" defaultOpen>
+    [![Portkey's Observability
+    Dashboard](https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Dashboard.png?raw=true)](https://app.portkey.ai/)
+  </Accordion>
+</AccordionGroup>
 
 ### Comprehensive Logging
 
 Access detailed logs and traces of agent activities, function calls, and errors. Filter logs based on multiple parameters for in-depth analysis.
 
-<details>
-  <summary><b>Traces</b></summary>
-  <img src="https://raw.githubusercontent.com/siddharthsambharia-portkey/Portkey-Product-Images/main/Portkey-Traces.png" alt="Portkey Logging Interface" width="70%" />
-</details>
+<AccordionGroup>
+  <Accordion title="Traces" defaultOpen>
+    ![Portkey Traces](https://raw.githubusercontent.com/siddharthsambharia-portkey/Portkey-Product-Images/main/Portkey-Traces.png)
+  </Accordion>
 
-<details>
-  <summary><b>Logs</b></summary>
-  <img src="https://raw.githubusercontent.com/siddharthsambharia-portkey/Portkey-Product-Images/main/Portkey-Logs.png" alt="Portkey Metrics Visualization" width="70%" />
-</details>
+  <Accordion title="Logs">
+    [![Portkey
+    Logs](https://raw.githubusercontent.com/siddharthsambharia-portkey/Portkey-Product-Images/main/Portkey-Logs.png)](https://app.portkey.ai/)
+  </Accordion>
+</AccordionGroup>
 
 ### Guardrails
 AutoGen agents, while powerful, can sometimes produce unexpected or undesired outputs. Portkey's Guardrails feature helps enforce agent behavior in real-time, ensuring your AutoGen agents operate within specified parameters. Verify both the **inputs** to and *outputs* from your agents to ensure they adhere to specified formats and content guidelines. Learn more about Portkey's Guardrails [here](https://docs.portkey.ai/product/guardrails)
