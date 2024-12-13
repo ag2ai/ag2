@@ -438,7 +438,7 @@ class SwarmAgent(ConversableAgent):
 
                     # Store function to add/remove later based on it being 'available'
                     # Function names are made unique and allow multiple ON_CONDITIONS to the same agent
-                    base_func_name = f"transfer_from_{self.name}_to_{transit.target.name}"
+                    base_func_name = f"transfer_{self.name}_to_{transit.target.name}"
                     func_name = base_func_name
                     count = 2
                     while func_name in self._conditional_functions:

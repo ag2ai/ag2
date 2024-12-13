@@ -217,7 +217,7 @@ def test_after_work_options():
     # 4. Test Callable
 
     # Transfer to agent2
-    def test_callable(last_speaker, messages, groupchat, context_variables):
+    def test_callable(last_speaker, messages, groupchat):
         return agent2
 
     agent1.after_work = AFTER_WORK(test_callable)
@@ -256,7 +256,7 @@ def test_on_condition_handoff():
         return True, {
             "role": "assistant",
             "name": "agent1",
-            "tool_calls": [{"type": "function", "function": {"name": "transfer_to_agent2"}}],
+            "tool_calls": [{"type": "function", "function": {"name": "transfer_agent1_to_agent2"}}],
         }
 
     # Mock LLM responses
