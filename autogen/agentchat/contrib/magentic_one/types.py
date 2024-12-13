@@ -1,4 +1,12 @@
-from typing import Any, Dict, List, TypedDict, Union, Literal
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
+
+
+from typing import Any, Dict, List, Literal, TypedDict, Union
 
 
 class DOMRectangle(TypedDict):
@@ -96,6 +104,7 @@ def visualviewport_from_dict(viewport: Dict[str, Any]) -> VisualViewport:
         scrollWidth=_get_number(viewport, "scrollWidth"),
         scrollHeight=_get_number(viewport, "scrollHeight"),
     )
+
 
 class SentinelMeta(type):
     """
