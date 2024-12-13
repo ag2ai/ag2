@@ -10,10 +10,10 @@ from abc import ABC, abstractmethod
 
 class RealtimeObserver(ABC):
     def __init__(self):
-        self.client = None
+        self._client = None
 
     def register_client(self, client):
-        self.client = client
+        self._client = client
 
     @abstractmethod
     async def run(self, openai_ws):

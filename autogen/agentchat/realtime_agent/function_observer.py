@@ -11,9 +11,9 @@ from .realtime_observer import RealtimeObserver
 
 
 class FunctionObserver(RealtimeObserver):
-    def __init__(self, registered_functions):
+    def __init__(self, agent):
         super().__init__()
-        self.registered_functions = registered_functions
+        self._agent = agent
 
     async def update(self, response):
         if response.get("type") == "response.function_call_arguments.done":
@@ -24,8 +24,8 @@ class FunctionObserver(RealtimeObserver):
             )
 
     async def call_function(self, call_id, name, kwargs):
-        _, func = self.registered_functions[name]
-        await self.client.function_result(call_id, func(**kwargs))
+        _, func = self._agent.registered_functions[name]
+        await self._client.function_result(call_id, func(**kwargs))
 
     async def run(self):
         await self.initialize_session()
@@ -33,7 +33,7 @@ class FunctionObserver(RealtimeObserver):
     async def initialize_session(self):
         """Add tool to OpenAI."""
         session_update = {
-            "tools": [schema for schema, _ in self.registered_functions.values()],
+            "tools": [schema for schema, _ in self._agent.registered_functions.values()],
             "tool_choice": "auto",
         }
-        await self.client.session_update(session_update)
+        await self._client.session_update(session_update)
