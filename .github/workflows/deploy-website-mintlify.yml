@@ -1,0 +1,35 @@
+name: Deploy Mintlify Website
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'autogen/**'
+      - 'website/**'
+      - '.github/workflows/deploy-website-mintlify.yml'
+
+jobs:
+  deploy-website-mintlify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Prepare website content
+        run: |
+          # Create a temporary directory for filtered content
+          mkdir -p temp_website
+          
+          # Copy all files except .ipynb and node_modules
+          find website -type f -not -path "*/node_modules/*" -not -name "*.ipynb" -exec cp --parents {} temp_website/ \;
+
+      - name: Deploy to mintlify-pages branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: mintlify-pages
+          folder: temp_website/website
+          clean: true # Automatically remove deleted files from the deploy branch
