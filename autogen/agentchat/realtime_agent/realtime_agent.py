@@ -8,27 +8,17 @@
 import asyncio
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Literal, Optional, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, TypeVar, Union
 
 import websockets
 
 from autogen.agentchat.agent import Agent, LLMAgent
+from autogen.function_utils import get_function_schema
 
+from .function_observer import FunctionObserver
+from .realtime_observer import RealtimeObserver
 
-class RealtimeObserver(ABC):
-    def __init__(self):
-        self.client = None
-
-    def register_client(self, client):
-        self.client = client
-
-    @abstractmethod
-    async def run(self, openai_ws):
-        pass
-
-    @abstractmethod
-    async def update(self, message):
-        pass
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class RealtimeAgent(LLMAgent):
@@ -55,6 +45,7 @@ class RealtimeAgent(LLMAgent):
         self.voice = voice
         self.observers = []
         self.openai_ws = None
+        self.registered_functions = {}
 
         self.register(audio_adapter)
 
@@ -75,6 +66,7 @@ class RealtimeAgent(LLMAgent):
             print(f"Error in _read_from_client: {e}")
 
     async def run(self):
+        self.register(FunctionObserver(registered_functions=self.registered_functions))
         async with websockets.connect(
             "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
             extra_headers={"Authorization": f"Bearer {self.llm_config[0]['api_key']}", "OpenAI-Beta": "realtime=v1"},
@@ -101,3 +93,34 @@ class RealtimeAgent(LLMAgent):
         }
         print("Sending session update:", json.dumps(session_update))
         await self.openai_ws.send(json.dumps(session_update))
+
+    def register_handover(
+        self,
+        *,
+        description: str,
+        name: Optional[str] = None,
+    ) -> Callable[[F], F]:
+        def _decorator(func: F, name=name) -> F:
+            """Decorator for registering a function to be used by an agent.
+
+            Args:
+                func: the function to be registered.
+
+            Returns:
+                The function to be registered, with the _description attribute set to the function description.
+
+            Raises:
+                ValueError: if the function description is not provided and not propagated by a previous decorator.
+                RuntimeError: if the LLM config is not set up before registering a function.
+
+            """
+            # get JSON schema for the function
+            name = name or func.__name__
+
+            schema = get_function_schema(func, name=name, description=description)
+
+            self.registered_functions["name"] = (schema, func)
+
+            return func
+
+        return _decorator

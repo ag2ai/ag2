@@ -7,26 +7,27 @@
 
 import json
 
-from .realtime_agent import RealtimeObserver
+from .realtime_observer import RealtimeObserver
 
 
 class FunctionObserver(RealtimeObserver):
-    def __init__(self):
+    def __init__(self, registered_functions):
         super().__init__()
+        self.registered_functions = registered_functions
 
     async def update(self, response):
         if response.get("type") == "response.function_call_arguments.done":
             print("!" * 50)
             print(f"Received event: {response['type']}", response)
-            await self.call_function(response["call_id"], **json.loads(response["arguments"]))
+            await self.call_function(response["call_id"], response["name"], json.loads(response["arguments"]))
 
-    async def call_function(self, call_id, location):
+    async def call_function(self, call_id, name, arguments):
         function_result = {
             "type": "conversation.item.create",
             "item": {
                 "type": "function_call_output",
                 "call_id": call_id,
-                "output": "The weather is cloudy." if location == "Seattle" else "The weather is sunny.",
+                "output": self.registered_functions[name](**arguments),
             },
         }
         await self.client.openai_ws.send(json.dumps(function_result))
@@ -40,14 +41,7 @@ class FunctionObserver(RealtimeObserver):
         session_update = {
             "type": "session.update",
             "session": {
-                "tools": [
-                    {
-                        "name": "get_weather",
-                        "description": "Get the current weather",
-                        "parameters": {"type": "object", "properties": {"location": {"type": "string"}}},
-                        "type": "function",
-                    }
-                ],
+                "tools": [schema for schema, _ in self.registered_functions.values()],
                 "tool_choice": "auto",
             },
         }

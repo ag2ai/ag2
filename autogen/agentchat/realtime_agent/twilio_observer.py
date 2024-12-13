@@ -10,7 +10,7 @@ import json
 
 from fastapi import WebSocketDisconnect
 
-from .realtime_agent import RealtimeObserver
+from .realtime_observer import RealtimeObserver
 
 SYSTEM_MESSAGE = (
     "You are a helpful and bubbly AI assistant who loves to chat about weather"
