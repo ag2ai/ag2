@@ -32,7 +32,7 @@ For each step, we create a corresponding state. Also, we define an error state t
 In the figure, execution outcomes are indicated by red arrows for failures and green for successes.
 Transition to different states is based on specific rules. For example, at a successful "Submit" command, the model transits to the _End_ state.
 When reaching a state, a sequence of output functions defined is executed (e.g., M_i -> E means to first call the model and then execute the SQL command).
-![Intercode Example](./img/intercode.png)
+![Intercode Example](./img/intercode.webp)
 
 ## Experiments
 
@@ -75,7 +75,7 @@ We present an example of how to build a state-oriented workflow using GroupChat.
 We define a custom speaker selection function to be passed into the `speaker_selection_method` parameter of the GroupChat.
 Here, the task is to retrieve research papers related to a given topic and create a markdown table for these papers.
 
-![StateFlow Example](./img/sf_example_1.png)
+![StateFlow Example](./img/sf_example_1.webp)
 
 We define the following agents:
 
