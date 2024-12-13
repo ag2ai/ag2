@@ -28,18 +28,36 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
 # Test fixture for creating and initializing a query engine
 @pytest.fixture(scope="module")
 def neo4j_query_engine():
-    input_path = "./test/agentchat/contrib/graph_rag/paul_graham_essay.txt"
+    input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.docx"
     input_documents = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
 
     # best practice to use upper-case
-    entities = Literal["PERSON", "PLACE", "ORGANIZATION"]  #
-    relations = Literal["HAS", "PART_OF", "WORKED_ON", "WORKED_WITH", "WORKED_AT"]
+    entities = Literal[
+        "EMPLOYEE", "EMPLOYER", "POLICY", "BENEFIT", "POSITION", "DEPARTMENT", "CONTRACT", "RESPONSIBILITY"
+    ]
+    relations = Literal[
+        "FOLLOWS",
+        "PROVIDES",
+        "APPLIES_TO",
+        "DEFINED_AS",
+        "ASSIGNED_TO",
+        "PART_OF",
+        "MANAGES",
+        "REQUIRES",
+        "ENTITLED_TO",
+        "REPORTS_TO",
+    ]
 
     # define which entities can have which relations
     validation_schema = {
-        "PERSON": ["HAS", "PART_OF", "WORKED_ON", "WORKED_WITH", "WORKED_AT"],
-        "PLACE": ["HAS", "PART_OF", "WORKED_AT"],
-        "ORGANIZATION": ["HAS", "PART_OF", "WORKED_WITH"],
+        "EMPLOYEE": ["FOLLOWS", "APPLIES_TO", "ASSIGNED_TO", "ENTITLED_TO", "REPORTS_TO"],
+        "EMPLOYER": ["PROVIDES", "DEFINED_AS", "MANAGES", "REQUIRES"],
+        "POLICY": ["APPLIES_TO", "DEFINED_AS", "REQUIRES"],
+        "BENEFIT": ["PROVIDES", "ENTITLED_TO"],
+        "POSITION": ["DEFINED_AS", "PART_OF", "ASSIGNED_TO"],
+        "DEPARTMENT": ["PART_OF", "MANAGES", "REQUIRES"],
+        "CONTRACT": ["PROVIDES", "REQUIRES", "APPLIES_TO"],
+        "RESPONSIBILITY": ["ASSIGNED_TO", "REQUIRES", "DEFINED_AS"],
     }
 
     # Create Neo4jGraphQueryEngine
@@ -48,14 +66,14 @@ def neo4j_query_engine():
         password="password",  # Change if you reset password
         host="bolt://172.17.0.3",  # Change
         port=7687,  # if needed
-        database="neo4j",  # Change if you want to store the graph in your custom database
+        database="neo4j",  # Change if you want to store the graphh in your custom database
         entities=entities,  # possible entities
         relations=relations,  # possible relations
         validation_schema=validation_schema,  # schema to validate the extracted triplets
-        strict=True,  # enforce the extracted triplets to be in the schema
+        strict=True,  # enofrce the extracted triplets to be in the schema
     )
 
-    # Initialize the database
+    # Ingest data and initialize the database
     query_engine.init_db(input_doc=input_documents)
     return query_engine
 
@@ -68,14 +86,14 @@ def test_neo4j_query_engine(neo4j_query_engine):
     """
     Test querying functionality of the Neo4j Query Engine.
     """
-    question = "Which companies did Paul Graham work for?"
+    question = "Which company is the employer?"
 
     # Query the database
     query_result: GraphStoreQueryResult = neo4j_query_engine.query(question=question)
 
     print(query_result.answer)
 
-    assert query_result.answer.find("Y Combinator") >= 0
+    assert query_result.answer.find("BUZZ") >= 0
 
 
 @pytest.mark.skipif(
