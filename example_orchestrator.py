@@ -105,7 +105,7 @@ async def main() -> None:
     orchestrator = OrchestratorAgent(
         name="Orchestrator",
         llm_config=llm_config,
-        agents=[coder, filesurfer, executor], #websurfer, 
+        agents=[websurfer],  #coder, filesurfer, executor, 
         max_consecutive_auto_reply=10,
         max_stalls_before_replan=3,  
         max_replans=3, 
@@ -116,7 +116,7 @@ async def main() -> None:
     task = """Find out some detailed informtion about the magentic one agent from microsoft"""
     #task = """Go to amazon.com and find a good beginner 3d printer, pick any good one for under 300 dollars. """
     #task = """write the game sname in python """
-    task = """can you generate the python call to run all return all the prime numbers bewteen 1 and 1000 and return the prime numbers ? (give the code to the Executor to run it, don't ask the user to run it. If it does not work with the executor, tell the user.)"""
+    #task = """can you generate the python call to run all return all the prime numbers bewteen 1 and 1000 and return the prime numbers ? (give the code to the Executor to run it, don't ask the user to run it. If it does not work with the executor, tell the user.)"""
 
     messages = [
         {"role": "user", "content": task}]

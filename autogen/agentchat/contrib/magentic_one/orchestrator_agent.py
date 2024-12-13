@@ -1,4 +1,5 @@
 import json
+from operator import le
 import traceback
 import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
@@ -13,7 +14,6 @@ from .orchestrator_prompts import (
     ORCHESTRATOR_UPDATE_FACTS_PROMPT,
     ORCHESTRATOR_UPDATE_PLAN_PROMPT,
     ORCHESTRATOR_GET_FINAL_ANSWER,
-    ORCHESTRATOR_REPLAN_PROMPT,
     ORCHESTRATOR_SYNTHESIZE_PROMPT,
 )
 
@@ -47,7 +47,6 @@ class OrchestratorAgent(ConversableAgent):
         ledger_prompt: str = ORCHESTRATOR_LEDGER_PROMPT,
         update_facts_prompt: str = ORCHESTRATOR_UPDATE_FACTS_PROMPT,
         update_plan_prompt: str = ORCHESTRATOR_UPDATE_PLAN_PROMPT,
-        replan_prompt: str = ORCHESTRATOR_REPLAN_PROMPT,
         chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
         silent: Optional[bool] = None,
         agents: Optional[List[ConversableAgent]] = [],
@@ -85,7 +84,7 @@ class OrchestratorAgent(ConversableAgent):
             # Copy existing messages into defaultdict
             for agent, messages in chat_messages.items():
                 for message in messages:
-                    self._oai_messages[agent]._append_oai_message([message])
+                    self.send(message["content"], agent)
         self._agents = agents if agents is not None else []
             
         self._should_replan = True
@@ -104,13 +103,12 @@ class OrchestratorAgent(ConversableAgent):
 
     def broadcast_message(self, message: Dict[str, Any], sender: Optional[ConversableAgent] = None) -> None:
         """Broadcast a message to all agents except the sender."""
-        broadcast_msg = BroadcastMessage(content=message)
         for agent in self._agents:
             if agent != sender:
-                agent._append_oai_message(broadcast_msg.content, "assistant", sender or self, is_sending=False)
+                self.send(message, agent)
 
     def _get_plan_prompt(self, team: str) -> str:
-        return self._plan_prompt.format(team_description=team)
+        return self._plan_prompt.format(team=team)
 
     def _get_synthesize_prompt(self, task: str, team: str, facts: str, plan: str) -> str:
         return self._synthesize_prompt.format(
@@ -123,18 +121,18 @@ class OrchestratorAgent(ConversableAgent):
     def _get_ledger_prompt(self, task: str, team: str, names: List[str]) -> str:
         return self._ledger_prompt.format(
             task=task, 
-            team_description=team,  
-            agent_roles=names 
+            team=team,  
+            names=names 
         )
 
     def _get_update_facts_prompt(self, task: str, facts: str) -> str:
         return self._update_facts_prompt.format(
             task=task, 
-            previous_facts=facts  
+            facts=facts  
         )
 
     def _get_update_plan_prompt(self, team: str) -> str:
-        return self._update_plan_prompt.format(team_description=team)  
+        return self._update_plan_prompt.format(team=team)  
 
 
     def _get_closed_book_prompt(self, task: str) -> str:
@@ -236,12 +234,19 @@ class OrchestratorAgent(ConversableAgent):
         for _ in range(max_json_retries):
             messages = self._system_messages + self._oai_messages[self] + ledger_user_messages
 
-            is_valid_response, ledger_str = self.generate_oai_reply(
+            is_valid_response, response = self.generate_oai_reply(
                 messages,
             )
 
             assert is_valid_response
-            assert isinstance(ledger_str, str)
+            assert isinstance(response, str) or isinstance(response, dict)
+
+            if isinstance(response, dict):
+                assert "content" in response and isinstance(response["content"], str)
+                ledger_str = response["content"]
+            else:
+                assert isinstance(response, str)
+                ledger_str = response
 
             try:
                 ledger_dict: Dict[str, Any] = clean_and_parse_json(ledger_str)
@@ -346,7 +351,6 @@ class OrchestratorAgent(ConversableAgent):
                 name="thought",
                 data={"stage": "initial_plan", "plan": synthesized_prompt}
             )
-
             # Add to chat history
             self._append_oai_message(synthesized_prompt, "assistant", self, True)
 
