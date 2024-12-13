@@ -90,7 +90,7 @@ extra_require = {
         "pre-commit",
         "pytest-cov>=5",
         "pytest-asyncio",
-        "pytest>=6.1.1,<8",
+        "pytest>=8.0.0,<9",
         "pandas",
     ],
     "blendsearch": ["flaml[blendsearch]"],

@@ -71,7 +71,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           python -m pip install --upgrade pip wheel
-          pip install -e .[cosmosdb]
+          pip install -e .[cosmosdb,interop-crewai]
           python -c "import autogen"
           pip install pytest-cov>=5 mock
       - name: Install optional dependencies for code executors
