@@ -14,7 +14,7 @@ class TestTool:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         def f(x: str) -> str:
-            return x
+            return x + "!"
 
         self.tool = Tool(name="test_tool", description="A test tool", func=f)
 
@@ -48,3 +48,12 @@ class TestTool:
         ]
 
         assert agent.llm_config["tools"] == expected_tools  # type: ignore[index]
+
+    def test_register_for_execution(self) -> None:
+        user_proxy = UserProxyAgent(
+            name="user",
+        )
+
+        self.tool.register_for_execution(user_proxy)
+        assert user_proxy.can_execute_function("test_tool")
+        assert user_proxy.function_map["test_tool"]("Hello") == "Hello!"
