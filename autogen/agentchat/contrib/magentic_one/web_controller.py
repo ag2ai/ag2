@@ -24,14 +24,17 @@ logger = FileLogger(config={})
 
 from .types import SentinelMeta
 
+
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
     pass
+
 
 class WebController:
     """
     A class to encapsulate the browser capabilities and interactions using Playwright.
     """
+
     DEFAULT_START_PAGE = "https://www.bing.com/"
 
     def __init__(
@@ -98,11 +101,11 @@ class WebController:
         debug_dir: str = os.getcwd(),
         to_save_screenshots: bool = False,
         markdown_converter: Any | None = None,  # TODO: Fixme
-        agent_name: str = ""
+        agent_name: str = "",
     ) -> None:
         # Create the playwright self
         launch_args: Dict[str, Any] = {"headless": headless}
-        if browser_channel is not DEFAULT_CHANNEL: 
+        if browser_channel is not DEFAULT_CHANNEL:
             launch_args["channel"] = browser_channel
         self._playwright = await async_playwright().start()
 
@@ -110,17 +113,15 @@ class WebController:
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         if browser_data_dir:
             self._context = await self._playwright.chromium.launch_persistent_context(
-                browser_data_dir, 
-                user_agent=f"{ua} {self._generate_random_string(4)}",
-                **launch_args
+                browser_data_dir, user_agent=f"{ua} {self._generate_random_string(4)}", **launch_args
             )
         else:
             browser = await self._playwright.chromium.launch(**launch_args)
             self._context = await browser.new_context(
                 user_agent=f"{ua} {self._generate_random_string(4)}",
-                #viewport={'width': 1920 + random.randint(-50, 50), 'height': 1080 + random.randint(-30, 30)},
-                locale=random.choice(['en-US', 'en-GB', 'en-CA']),
-                timezone_id=random.choice(['America/New_York', 'Europe/London', 'Asia/Tokyo'])
+                # viewport={'width': 1920 + random.randint(-50, 50), 'height': 1080 + random.randint(-30, 30)},
+                locale=random.choice(["en-US", "en-GB", "en-CA"]),
+                timezone_id=random.choice(["America/New_York", "Europe/London", "Asia/Tokyo"]),
             )
 
         # Create the page
@@ -138,7 +139,7 @@ class WebController:
 
         # Prepare the debug directory -- which stores the screenshots generated throughout the process
         await self._set_debug_dir(debug_dir)
-    
+
     def _generate_random_string(self, length: int) -> str:
         """Generate a random string of specified length.
 
@@ -149,8 +150,9 @@ class WebController:
             str: A random string containing letters and numbers
         """
         import string
+
         characters = string.ascii_letters + string.digits
-        return ''.join(random.choice(characters) for _ in range(length))
+        return "".join(random.choice(characters) for _ in range(length))
 
     async def _set_debug_dir(self, debug_dir: str) -> None:
         assert self._page is not None
@@ -186,10 +188,7 @@ class WebController:
             logger.log_event(
                 source=self.agent_name,
                 name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
+                data={"url": self._page.url, "screenshot": screenshot_png_name},
             )
 
             logger.log_event(
@@ -197,38 +196,30 @@ class WebController:
                 name="debug_screens",
                 data={
                     "text": "Multimodal Web Surfer debug screens",
-                    "url": pathlib.Path(os.path.abspath(debug_html)).as_uri()
-                }
+                    "url": pathlib.Path(os.path.abspath(debug_html)).as_uri(),
+                },
             )
-    
+
     async def _sleep(self, duration: Union[int, float]) -> None:
         assert self._page is not None
         await self._page.wait_for_timeout(duration * 1000)
-    
+
     async def _reset(self) -> None:
-        assert self._page is not None        
+        assert self._page is not None
         await self._visit_page(self.start_page)
         if self.to_save_screenshots:
             current_timestamp = "_" + int(time.time()).__str__()
             screenshot_png_name = "screenshot" + current_timestamp + ".png"
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
-            
+
             logger.log_event(
                 source=self.agent_name,
                 name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
+                data={"url": self._page.url, "screenshot": screenshot_png_name},
             )
 
         logger.log_event(
-            source=self.agent_name,
-            name="reset",
-            data={
-                "text": "Resetting browser.",
-                "url": self._page.url
-            }
+            source=self.agent_name, name="reset", data={"text": "Resetting browser.", "url": self._page.url}
         )
 
     async def _back(self) -> None:
@@ -242,7 +233,7 @@ class WebController:
             await self._page.goto(url)
             await self._page.wait_for_load_state()
             self._prior_metadata_hash = None
-            
+
         except Exception as e_outer:
             # Downloaded file
             if self.downloads_folder and "net::ERR_ABORTED" in str(e_outer):
@@ -276,35 +267,35 @@ class WebController:
     async def _click_id(self, identifier: str) -> None:
         assert self._page is not None
         assert self._context is not None
-        
+
         # Ensure identifier is a valid integer string
         try:
             identifier = str(int(identifier.strip()))
         except ValueError:
             raise ValueError(f"Invalid element identifier: {identifier}")
-        
+
         if not identifier:
             raise ValueError("Empty element identifier")
-        
+
         # Try multiple locator strategies
         locator_strategies = [
             f"[__elementId='{identifier}']",
             f"[__elementId={identifier}]",
         ]
-        
+
         for strategy in locator_strategies:
             try:
                 target = self._page.locator(strategy)
                 await target.wait_for(timeout=1000)
-                
+
                 # If found, proceed with click
                 await target.scroll_into_view_if_needed()
                 box = cast(Dict[str, Union[int, float]], await target.bounding_box())
-                
+
                 # Track current page state before click
                 current_url = self._page.url
                 current_pages = len(self._context.pages)
-                
+
                 # Click with a short timeout to catch immediate popups
                 popup_detected = False
                 try:
@@ -313,25 +304,20 @@ class WebController:
                         popup_detected = True
                         try:
                             new_page = await page_info.value
-                            await new_page.wait_for_load_state('domcontentloaded', timeout=4000)
+                            await new_page.wait_for_load_state("domcontentloaded", timeout=4000)
                             await self._on_new_page(new_page)
-                            
+
                             logger.log_event(
                                 source=self.agent_name,
                                 name="popup",
-                                data={
-                                    "url": new_page.url,
-                                    "text": "New tab or window opened"
-                                }
+                                data={"url": new_page.url, "text": "New tab or window opened"},
                             )
                             return
                         except TimeoutError:
                             logger.log_event(
                                 source=self.agent_name,
                                 name="popup_timeout",
-                                data={
-                                    "text": "Popup detected but timed out waiting for load"
-                                }
+                                data={"text": "Popup detected but timed out waiting for load"},
                             )
                             # Continue to check for delayed popups
                 except TimeoutError:
@@ -340,60 +326,53 @@ class WebController:
                         await self._page.wait_for_load_state()
                     except TimeoutError:
                         pass
-                    
+
                     # Check for any new pages that appeared
                     if len(self._context.pages) > current_pages:
                         new_page = self._context.pages[-1]
-                        await new_page.wait_for_load_state('domcontentloaded')
+                        await new_page.wait_for_load_state("domcontentloaded")
                         await self._on_new_page(new_page)
-                        
+
                         logger.log_event(
                             source=self.agent_name,
                             name="delayed_popup",
-                            data={
-                                "url": new_page.url,
-                                "text": "New tab or window opened after delay"
-                            }
+                            data={"url": new_page.url, "text": "New tab or window opened after delay"},
                         )
                         return
-                    
+
                     # Check if current page navigated
                     new_url = self._page.url
                     if new_url != current_url:
                         logger.log_event(
                             source=self.agent_name,
                             name="page_navigation",
-                            data={
-                                "old_url": current_url,
-                                "new_url": new_url,
-                                "text": "Page navigated after click"
-                            }
+                            data={"old_url": current_url, "new_url": new_url, "text": "Page navigated after click"},
                         )
-                    
+
                     # Update page state
                     await self._get_interactive_rects()
                     return
-            
+
             except TimeoutError:
                 # Try next strategy
                 continue
-        
+
         raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
-    
+
     async def _fill_id(self, identifier: str, value: str) -> None:
         assert self._page is not None
-        
+
         # Try multiple locator strategies
         locator_strategies = [
             f"[__elementId='{identifier}']",
             f"[__elementId={identifier}]",
         ]
-        
+
         for strategy in locator_strategies:
             try:
                 target = self._page.locator(strategy)
                 await target.wait_for(timeout=1000)
-                
+
                 # Fill it
                 await target.scroll_into_view_if_needed()
                 await target.focus()
@@ -403,11 +382,11 @@ class WebController:
                     await target.press_sequentially(value)
                 await target.press("Enter")
                 return
-            
+
             except TimeoutError:
                 # Try next strategy
                 continue
-        
+
         raise ValueError(f"Could not find element with ID {identifier}. Page may have changed.")
 
     async def _scroll_id(self, identifier: str, direction: str) -> None:
@@ -505,7 +484,7 @@ class WebController:
             await self._page.wait_for_load_state()
         except TimeoutError:
             pass
-    
+
     async def take_screenshot(self) -> bytes:
         """Takes a screenshot of the current page."""
         assert self._page is not None
@@ -515,7 +494,7 @@ class WebController:
         """Returns the current URL of the page."""
         assert self._page is not None
         return self._page.url
-    
+
     async def get_title(self) -> str:
         """Returns the title of the current page."""
         assert self._page is not None
@@ -526,13 +505,7 @@ class WebController:
         try:
             await self._page.wait_for_load_state()
         except TimeoutError:
-            logger.log_event(
-                source=self.agent_name,
-                name="page_load_timeout",
-                data={
-                    "url": self._page.url
-                }
-            )
+            logger.log_event(source=self.agent_name, name="page_load_timeout", data={"url": self._page.url})
 
     async def handle_download(self, downloads_folder: str) -> None:
         """Handles the download of a file initiated by the browser."""
@@ -545,4 +518,4 @@ class WebController:
                 "data:text/html;base64," + base64.b64encode(page_body.encode("utf-8")).decode("utf-8")
             )
             await self._page.wait_for_load_state()
-            self._last_download = None # Reset last download
+            self._last_download = None  # Reset last download
