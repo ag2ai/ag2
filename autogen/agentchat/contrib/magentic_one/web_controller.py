@@ -1,23 +1,24 @@
 import base64
 import io
 import os
+import pathlib
 import random
 import time
-import pathlib
-import aiofiles
 from typing import Any, Dict, Union, cast
 
+import aiofiles
+from playwright._impl._errors import Error as PlaywrightError
+from playwright._impl._errors import TimeoutError
 from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
-from playwright._impl._errors import TimeoutError, Error as PlaywrightError
 
 # Viewport dimensions
 VIEWPORT_WIDTH = 1440
 VIEWPORT_HEIGHT = 900
 
-from .types import InteractiveRegion, VisualViewport, visualviewport_from_dict, interactiveregion_from_dict
-from .markdown_browser import MarkdownConverter
-
 from autogen.logger import FileLogger
+
+from .markdown_browser import MarkdownConverter
+from .types import InteractiveRegion, VisualViewport, interactiveregion_from_dict, visualviewport_from_dict
 
 # Initialize logger with config
 logger = FileLogger(config={})
