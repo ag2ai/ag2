@@ -238,15 +238,16 @@ class OrchestratorAgent(ConversableAgent):
                 messages,
             )
 
-            assert is_valid_response
-            assert isinstance(response, str) or isinstance(response, dict)
-
-            if isinstance(response, dict):
-                assert "content" in response and isinstance(response["content"], str)
-                ledger_str = response["content"]
-            else:
-                assert isinstance(response, str)
-                ledger_str = response
+            if not is_valid_response:                                                    
+                raise ValueError("No valid response generated") 
+            if isinstance(response, dict):                                               
+                ledger_str = response.get("content")                                 
+                if not isinstance(ledger_str, str):                                      
+                    raise ValueError(f"Expected string content, got {type(ledger_str)}") 
+            elif isinstance(response, str):                                              
+                ledger_str = response                                                    
+            else:                                                                        
+                raise ValueError(f"Unexpected response type: {type(response)}")  
 
             try:
                 ledger_dict: Dict[str, Any] = clean_and_parse_json(ledger_str)
