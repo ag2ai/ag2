@@ -18,6 +18,10 @@
       "to": "#63a9db"
     }
   },
+  "topbarCtaButton": {
+    "type": "github",
+    "url": "https://github.com/ag2ai/ag2"
+  },
   "font": {
     "headings": {
       "family": "Jersey 10"
@@ -26,24 +30,6 @@
       "family": "Inter"
     }
   },
-  "topbarLinks": [
-    {
-      "name": "AG2.ai",
-      "url": "https://ag2.ai/"
-    },
-    {
-      "name": "GitHub",
-      "url": "https://github.com/ag2ai/ag2"
-    },
-    {
-      "name": "Discord",
-      "url": "https://discord.gg/pAbnFJrkgZ"
-    },
-    {
-      "name": "Twitter",
-      "url": "https://twitter.com/Chi_Wang_"
-    }
-  ],
   "tabs": [
     {
       "name": "Documentation",
@@ -142,12 +128,44 @@
         "docs/ecosystem/portkey",
         "docs/ecosystem/promptflow"
       ]
+    },
+    {
+      "group": "Contributor Guide",
+      "pages": [
+        "docs/contributor-guide/contributing",
+        "docs/contributor-guide/docker",
+        "docs/contributor-guide/documentation",
+        "docs/contributor-guide/file-bug-report",
+        "docs/contributor-guide/maintainer",
+        "docs/contributor-guide/pre-commit",
+        "docs/contributor-guide/tests",
+        "docs/Research",
+        "docs/Migration-Guide"
+      ]
+    },
+    {
+      "group": "Talks",
+      "pages": [
+        "talks/future_talks/index",
+        "talks/2024-11-28/index",
+        "talks/2024-11-25/index",
+        "talks/2024-11-18/index",
+        "talks/2024-11-12/index",
+        "talks/2024-11-11/index",
+        "talks/2024-11-04/index",
+        "talks/2024-10-15/index",
+        "talks/2024-10-14/index",
+        "talks/2024-09-30/index",
+        "talks/2024-09-23/index",
+        "talks/2024-08-26/index"
+      ]
     }
   ],
   "footerSocials": {
     "x": "https://x.com/Chi_Wang_",
     "github": "https://github.com/ag2ai/ag2",
     "linkedin": "https://www.linkedin.com/company/ag2ai",
-    "discord": "https://discord.gg/pAbnFJrkgZ"
+    "discord": "https://discord.gg/pAbnFJrkgZ",
+    "youtube": "https://www.youtube.com/@ag2ai"
   }
 }
