@@ -54,6 +54,7 @@ setuptools.setup(
         "cohere": ["pyautogen[cohere]==" + __version__],
         "ollama": ["pyautogen[ollama]==" + __version__],
         "bedrock": ["pyautogen[bedrock]==" + __version__],
+        "interop-crewai": ["pyautogen[interop-crewai]==" + __version__],
     },
     url="https://github.com/ag2ai/ag2",
     author="Chi Wang & Qingyun Wu",
