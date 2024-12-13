@@ -19,31 +19,21 @@ class FunctionObserver(RealtimeObserver):
         if response.get("type") == "response.function_call_arguments.done":
             print("!" * 50)
             print(f"Received event: {response['type']}", response)
-            await self.call_function(response["call_id"], response["name"], json.loads(response["arguments"]))
+            await self.call_function(
+                call_id=response["call_id"], name=response["name"], kwargs=json.loads(response["arguments"])
+            )
 
-    async def call_function(self, call_id, name, arguments):
-        function_result = {
-            "type": "conversation.item.create",
-            "item": {
-                "type": "function_call_output",
-                "call_id": call_id,
-                "output": self.registered_functions[name](**arguments),
-            },
-        }
-        await self.client.openai_ws.send(json.dumps(function_result))
-        await self.client.openai_ws.send(json.dumps({"type": "response.create"}))
+    async def call_function(self, call_id, name, kwargs):
+        result = "The weather is cloudy." if kwargs["location"] == "Seattle" else "The weather is sunny."
+        await self.client.function_result(call_id, result)
 
-    async def run(self, openai_ws):
-        await self.initialize_session(openai_ws)
+    async def run(self):
+        await self.initialize_session()
 
-    async def initialize_session(self, openai_ws):
+    async def initialize_session(self):
         """Add tool to OpenAI."""
         session_update = {
-            "type": "session.update",
-            "session": {
-                "tools": [schema for schema, _ in self.registered_functions.values()],
-                "tool_choice": "auto",
-            },
+            "tools": [schema for schema, _ in self.registered_functions.values()],
+            "tool_choice": "auto",
         }
-        print("Sending session update:", json.dumps(session_update))
-        await openai_ws.send(json.dumps(session_update))
+        await self.client.session_update(session_update)
