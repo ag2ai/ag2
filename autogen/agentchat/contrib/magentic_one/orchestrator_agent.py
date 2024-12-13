@@ -10,7 +10,7 @@ import traceback
 from operator import le
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
-from autogen.agentchat import Agent, ChatResult, ConversableAgent, UserProxyAgent
+from autogen.agentchat import Agent, ChatResult, ConversableAgent
 from autogen.logger import FileLogger
 
 from .orchestrator_prompts import (
@@ -29,6 +29,46 @@ logger: FileLogger = FileLogger(config={})
 
 
 class OrchestratorAgent(ConversableAgent):
+    """OrchestratorAgent is a the lead agent of magentic onethat coordinates and directs a team of specialized agents to solve complex tasks.
+
+    The OrchestratorAgent serves as a central coordinator, managing a team of specialized agents
+    with distinct capabilities. It orchestrates task execution through a sophisticated process of:
+    - Initial task planning and fact-gathering
+    - Dynamic agent selection and instruction
+    - Continuous progress tracking
+    - Adaptive replanning to recover from errors or stalls
+
+    Key Capabilities:
+    - Directs agents specialized in web browsing, file navigation, Python code execution, and more
+    - Dynamically generates and updates task plans
+    - Monitors agent interactions and task progress
+    - Implements intelligent recovery mechanisms when agents encounter challenges
+
+    Core Responsibilities:
+    1. Break down complex tasks into manageable subtasks
+    2. Assign and direct specialized agents based on their capabilities
+    3. Track and validate progress towards task completion
+    4. Detect and recover from execution stalls or loops
+    5. Provide a final synthesized answer or summary
+
+    Attributes:
+        _agents (List[ConversableAgent]): Specialized agents available for task execution.
+        _max_rounds (int): Maximum number of interaction rounds.
+        _max_stalls_before_replan (int): Threshold for detecting task progression issues.
+        _max_replans (int): Maximum number of task replanning attempts.
+        _return_final_answer (bool): Whether to generate a comprehensive task summary.
+
+    Args:
+        name (str): Name of the orchestrator agent.
+        agents (Optional[List[ConversableAgent]]): Specialized agents to coordinate.
+        max_rounds (int, optional): Maximum execution rounds. Defaults to 20.
+        max_stalls_before_replan (int, optional): Stall threshold before replanning. Defaults to 3.
+        max_replans (int, optional): Maximum replanning attempts. Defaults to 3.
+        return_final_answer (bool, optional): Generate a final summary. Defaults to False.
+
+        Additional arguments inherited from ConversableAgent.
+    """
+
     DEFAULT_SYSTEM_MESSAGES = [{"role": "system", "content": ORCHESTRATOR_SYSTEM_MESSAGE}]
 
     def __init__(
@@ -103,7 +143,16 @@ class OrchestratorAgent(ConversableAgent):
         self._plan = ""
 
     def broadcast_message(self, message: Dict[str, Any], sender: Optional[ConversableAgent] = None) -> None:
-        """Broadcast a message to all agents except the sender."""
+        """Broadcast a message to all registered agents, excluding the optional sender.
+
+        This method sends the provided message to all agents in the orchestrator's agent list,
+        with an option to exclude the sender from receiving the message.
+
+        Args:
+            message (Dict[str, Any]): The message to be broadcast to all agents.
+            sender (Optional[ConversableAgent], optional): The agent to exclude from receiving the message.
+                Defaults to None.
+        """
         for agent in self._agents:
             if agent != sender:
                 self.send(message, agent)
@@ -197,8 +246,7 @@ class OrchestratorAgent(ConversableAgent):
 
         self._plan = response
 
-    def update_ledger(self) -> Dict[str, Any]:
-        # updates the ledger at each turn
+    def _update_ledger(self) -> Dict[str, Any]:
         max_json_retries = 10
 
         team_description = self._get_team_description()
@@ -335,7 +383,7 @@ class OrchestratorAgent(ConversableAgent):
             return self._select_next_agent(synthesized_prompt)
 
         # Orchestrate the next step
-        ledger_dict = self.update_ledger()
+        ledger_dict = self._update_ledger()
         logger.log_event(
             source=self.name,
             name="thought",
@@ -448,7 +496,42 @@ class OrchestratorAgent(ConversableAgent):
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, Dict, None]:
-        """Start the orchestration process with an initial message/task."""
+        """Asynchronously generate a reply by orchestrating multi-agent task execution.
+
+        This method manages the entire lifecycle of a multi-agent task, including:
+        - Initializing the task
+        - Selecting and coordinating agents
+        - Managing task progress and replanning
+        - Handling task completion or termination
+
+        The method follows a sophisticated orchestration process:
+        1. Reset the agent states and chat histories
+        2. Agent based on the differnt sub task
+        3. Iteratively generate responses from agents
+        4. Broadcast responses and instructions
+        5. Track and manage task progress
+        6. Handle replanning and stall detection
+        7. Terminate when max rounds are reached or task is complete
+
+        Args:
+            messages (Optional[List[Dict[str, Any]]], optional):
+                Existing message history. If None, prompts for human input.
+            sender (Optional[Agent], optional):
+                The sender of the initial message. Defaults to None.
+            **kwargs:
+                Additional keyword arguments for future extensibility.
+
+        Returns:
+            Union[str, Dict, None]:
+                The final content of the last message in the conversation,
+                which could be a task result, summary, or None if task failed.
+
+        Raises:
+            Various potential exceptions during agent communication and task execution.
+
+        Notes:
+            - Tracks task state through `_current_round`, `_replan_counter`, and `_stall_counter`
+        """
         # Reset state
         self._current_round = 0
         self._oai_messages.clear()
@@ -523,3 +606,9 @@ class OrchestratorAgent(ConversableAgent):
 
         # Return chat result with all relevant info
         return self._oai_messages[self][-1]["content"]
+
+    async def a_initiate_chats(self, chat_queue: List[Dict[str, Any]]) -> Dict[int, ChatResult]:
+        raise NotImplementedError
+
+    def initiate_chats(self, chat_queue: List[Dict[str, Any]]) -> List[ChatResult]:
+        raise NotImplementedError
