@@ -24,7 +24,6 @@ class FunctionObserver(RealtimeObserver):
             )
 
     async def call_function(self, call_id, name, kwargs):
-        #result = "The weather is cloudy." if kwargs["location"] == "Seattle" else "The weather is sunny."
         _, func = self.registered_functions[name]
         await self.client.function_result(call_id, func(**kwargs))
 
@@ -35,14 +34,6 @@ class FunctionObserver(RealtimeObserver):
         """Add tool to OpenAI."""
         session_update = {
             "tools": [schema for schema, _ in self.registered_functions.values()],
-            # "tools": [
-            #     {
-            #         "name": "get_weather",
-            #         "description": "Get the current weather",
-            #         "parameters": {"type": "object", "properties": {"location": {"type": "string"}}},
-            #         "type": "function",
-            #     },
-            # ],
             "tool_choice": "auto",
         }
         await self.client.session_update(session_update)
