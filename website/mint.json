@@ -1,0 +1,171 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "AG2",
+  "logo": {
+    "dark": "/logo/ag2-white.svg",
+    "light": "/logo/ag2.svg"
+  },
+  "favicon": "/logo/ag2.svg",
+  "search": {
+    "prompt": "Search or ask..."
+  },
+  "colors": {
+    "primary": "#4b9cd6",
+    "light": "#63a9db",
+    "dark": "#338fd1",
+    "anchors": {
+      "from": "#338fd1",
+      "to": "#63a9db"
+    }
+  },
+  "topbarCtaButton": {
+    "type": "github",
+    "url": "https://github.com/ag2ai/ag2"
+  },
+  "font": {
+    "headings": {
+      "family": "Jersey 10"
+    },
+    "body": {
+      "family": "Inter"
+    }
+  },
+  "tabs": [
+    {
+      "name": "Documentation",
+      "url": "docs"
+    },
+    {
+      "name": "Examples",
+      "url": "notebook"
+    },
+    {
+      "name": "Community Talks",
+      "url": "talks"
+    },
+    {
+      "name": "Blog",
+      "url": "blog"
+    }
+  ],
+  "anchors": [],
+  "navigation": [
+    {
+      "group": "",
+      "pages": [
+        "docs/Getting-Started"
+      ]
+    },
+    {
+      "group": "Installation",
+      "pages": [
+        "docs/installation/Installation",
+        "docs/installation/Docker",
+        "docs/installation/Optional-Dependencies"
+      ]
+    },
+    {
+      "group": "Use Cases",
+      "pages": [
+        "docs/Use-Cases/agent_chat",
+        "docs/Use-Cases/enhanced_inference"
+      ]
+    },
+    {
+      "group": "User Guide",
+      "pages": [
+        {
+          "group": "OpenAI Assistant",
+          "pages": ["docs/topics/openai-assistant/gpt_assistant_agent"]
+        },
+        {
+          "group": "Using Non-OpenAI Models",
+          "pages": [
+            "docs/topics/non-openai-models/about-using-nonopenai-models",
+            "docs/topics/non-openai-models/best-tips-for-nonopenai-models"
+          ]
+        },
+        {
+          "group": "CaptainAgent",
+          "pages": [
+            "docs/topics/captainagent/agent_library",
+            "docs/topics/captainagent/configurations",
+            "docs/topics/captainagent/tool_library"
+          ]
+        },
+        {
+          "group": "Handling Long Contexts",
+          "pages": [
+            "docs/topics/handling_long_contexts/compressing_text_w_llmligua",
+            "docs/topics/handling_long_contexts/intro_to_transform_messages"
+          ]
+        },
+        "docs/topics/retrieval_augmentation",
+        "docs/FAQ"
+      ]
+    },
+    {
+      "group": "AutoGen Studio",
+      "pages": [
+        "docs/autogen-studio/getting-started",
+        "docs/autogen-studio/usage",
+        "docs/autogen-studio/faqs"
+      ]
+    },
+    {
+      "group": "Ecosystem",
+      "pages": [
+        "docs/ecosystem/agentops",
+        "docs/ecosystem/azure_cosmos_db",
+        "docs/ecosystem/composio",
+        "docs/ecosystem/databricks",
+        "docs/ecosystem/llamaindex",
+        "docs/ecosystem/mem0",
+        "docs/ecosystem/memgpt",
+        "docs/ecosystem/microsoft-fabric",
+        "docs/ecosystem/ollama",
+        "docs/ecosystem/pgvector",
+        "docs/ecosystem/portkey",
+        "docs/ecosystem/promptflow"
+      ]
+    },
+    {
+      "group": "Contributor Guide",
+      "pages": [
+        "docs/contributor-guide/contributing",
+        "docs/contributor-guide/docker",
+        "docs/contributor-guide/documentation",
+        "docs/contributor-guide/file-bug-report",
+        "docs/contributor-guide/maintainer",
+        "docs/contributor-guide/pre-commit",
+        "docs/contributor-guide/tests",
+        "docs/Research",
+        "docs/Migration-Guide"
+      ]
+    },
+    {
+      "group": "Talks",
+      "pages": [
+        "talks/future_talks/index",
+        "talks/2024-11-28/index",
+        "talks/2024-11-25/index",
+        "talks/2024-11-18/index",
+        "talks/2024-11-12/index",
+        "talks/2024-11-11/index",
+        "talks/2024-11-04/index",
+        "talks/2024-10-15/index",
+        "talks/2024-10-14/index",
+        "talks/2024-09-30/index",
+        "talks/2024-09-23/index",
+        "talks/2024-08-26/index"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "x": "https://x.com/Chi_Wang_",
+    "github": "https://github.com/ag2ai/ag2",
+    "linkedin": "https://www.linkedin.com/company/ag2ai",
+    "discord": "https://discord.gg/pAbnFJrkgZ",
+    "youtube": "https://www.youtube.com/@ag2ai"
+  }
+}
