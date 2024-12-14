@@ -6,8 +6,8 @@ import random
 import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
-from autogen.agentchat.agent import Agent
-from autogen.agentchat.assistant_agent import AssistantAgent
+from ..agent import Agent
+from ..assistant_agent import AssistantAgent
 
 EPSILON = 1e-6
 
