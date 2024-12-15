@@ -4,6 +4,8 @@
 import copy
 import inspect
 import json
+import re
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from inspect import signature
@@ -57,6 +59,29 @@ class ON_CONDITION:
         assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
 
 
+@dataclass
+class UPDATE_SYSTEM_MESSAGE:
+    update_function: Union[Callable, str]
+
+    def __post_init__(self):
+        if isinstance(self.update_function, str):
+            # find all {var} in the string
+            vars = re.findall(r"\{(\w+)\}", self.update_function)
+            if len(vars) == 0:
+                warnings.warn("Update function string contains no variables. This is probably unintended.")
+
+        elif isinstance(self.update_function, Callable):
+            sig = signature(self.update_function)
+            if len(sig.parameters) != 2:
+                raise ValueError(
+                    "Update function must accept two parameters of type ConversableAgent and List[Dict[str Any]], respectively"
+                )
+            if sig.return_annotation != str:
+                raise ValueError("Update function must return a string")
+        else:
+            raise ValueError("Update function must be either a string or a callable")
+
+
 def initiate_swarm_chat(
     initial_agent: "SwarmAgent",
     messages: Union[List[Dict[str, Any]], str],
@@ -107,12 +132,27 @@ def initiate_swarm_chat(
         name="Tool_Execution",
         system_message="Tool Execution",
     )
-    tool_execution._set_to_tool_execution(context_variables=context_variables)
+    tool_execution._set_to_tool_execution()
+
+    # Update tool execution agent with all the functions from all the agents
+    for agent in agents:
+        tool_execution._function_map.update(agent._function_map)
+
+    # Point all SwarmAgent's context variables to this function's context_variables
+    # providing a single (shared) context across all SwarmAgents in the swarm
+    for agent in agents + [tool_execution]:
+        agent._context_variables = context_variables
 
     INIT_AGENT_USED = False
 
     def swarm_transition(last_speaker: SwarmAgent, groupchat: GroupChat):
-        """Swarm transition function to determine the next agent in the conversation"""
+        """Swarm transition function to determine and prepare the next agent in the conversation"""
+        next_agent = determine_next_agent(last_speaker, groupchat)
+
+        return next_agent
+
+    def determine_next_agent(last_speaker: SwarmAgent, groupchat: GroupChat):
+        """Determine the next agent in the conversation"""
         nonlocal INIT_AGENT_USED
         if not INIT_AGENT_USED:
             INIT_AGENT_USED = True
@@ -310,6 +350,9 @@ class SwarmAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
         code_execution_config=False,
+        update_agent_state_before_reply: Optional[
+            Union[List[Union[Callable, UPDATE_SYSTEM_MESSAGE]], Callable, UPDATE_SYSTEM_MESSAGE]
+        ] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -335,23 +378,70 @@ class SwarmAgent(ConversableAgent):
 
         self.after_work = None
 
-        # Used only in the tool execution agent for context and transferring to the next agent
-        # Note: context variables are not stored for each agent
-        self._context_variables = {}
+        # Used in the tool execution agent to transfer to the next agent
         self._next_agent = None
 
         # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
         # List of Dictionaries containing the nested_chats and condition
         self._nested_chat_handoffs = []
 
-    def _set_to_tool_execution(self, context_variables: Optional[Dict[str, Any]] = None):
+        self.register_update_agent_state_before_reply(update_agent_state_before_reply)
+
+    def register_update_agent_state_before_reply(self, functions: Optional[Union[List[Callable], Callable]]):
+        """
+        Register functions that will be called when the agent is selected and before it speaks.
+        You can add your own validation or precondition functions here.
+
+        Args:
+            functions (List[Callable[[], None]]): A list of functions to be registered. Each function
+                is called when the agent is selected and before it speaks.
+        """
+        if functions is None:
+            return
+        if not isinstance(functions, list) and type(functions) not in [UPDATE_SYSTEM_MESSAGE, Callable]:
+            raise ValueError("functions must be a list of callables")
+
+        if not isinstance(functions, list):
+            functions = [functions]
+
+        for func in functions:
+            if isinstance(func, UPDATE_SYSTEM_MESSAGE):
+
+                # Wrapper function that allows this to be used in the update_agent_state hook
+                # Its primary purpose, however, is just to update the agent's system message
+                # Outer function to create a closure with the update function
+                def create_wrapper(update_func: UPDATE_SYSTEM_MESSAGE):
+                    def update_system_message_wrapper(
+                        agent: ConversableAgent, messages: List[Dict[str, Any]]
+                    ) -> List[Dict[str, Any]]:
+                        if isinstance(update_func.update_function, str):
+                            # Templates like "My context variable passport is {passport}" will
+                            # use the context_variables for substitution
+                            sys_message = OpenAIWrapper.instantiate(
+                                template=update_func.update_function,
+                                context=agent._context_variables,
+                                allow_format_str_template=True,
+                            )
+                        else:
+                            sys_message = update_func.update_function(agent, messages)
+
+                        agent.update_system_message(sys_message)
+                        return messages
+
+                    return update_system_message_wrapper
+
+                self.register_hook(hookable_method="update_agent_state", hook=create_wrapper(func))
+
+            else:
+                self.register_hook(hookable_method="update_agent_state", hook=func)
+
+    def _set_to_tool_execution(self):
         """Set to a special instance of SwarmAgent that is responsible for executing tool calls from other swarm agents.
         This agent will be used internally and should not be visible to the user.
 
-        It will execute the tool calls and update the context_variables and next_agent accordingly.
+        It will execute the tool calls and update the referenced context_variables and next_agent accordingly.
         """
         self._next_agent = None
-        self._context_variables = context_variables or {}
         self._reply_func_list.clear()
         self.register_reply([Agent, None], SwarmAgent.generate_swarm_tool_reply)
 
@@ -491,6 +581,7 @@ class SwarmAgent(ConversableAgent):
         return False, None
 
     def add_single_function(self, func: Callable, name=None, description=""):
+        """Add a single function to the agent, removing context variables for LLM use"""
         if name:
             func._name = name
         else:
