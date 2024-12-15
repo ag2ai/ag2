@@ -350,7 +350,7 @@ class SwarmAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
         code_execution_config=False,
-        update_agent_before_reply: Optional[
+        update_agent_state_before_reply: Optional[
             Union[List[Union[Callable, UPDATE_SYSTEM_MESSAGE]], Callable, UPDATE_SYSTEM_MESSAGE]
         ] = None,
         **kwargs,
@@ -385,9 +385,9 @@ class SwarmAgent(ConversableAgent):
         # List of Dictionaries containing the nested_chats and condition
         self._nested_chat_handoffs = []
 
-        self.register_update_agent_before_reply(update_agent_before_reply)
+        self.register_update_agent_state_before_reply(update_agent_state_before_reply)
 
-    def register_update_agent_before_reply(self, functions: Optional[Union[List[Callable], Callable]]):
+    def register_update_agent_state_before_reply(self, functions: Optional[Union[List[Callable], Callable]]):
         """
         Register functions that will be called when the agent is selected and before it speaks.
         You can add your own validation or precondition functions here.

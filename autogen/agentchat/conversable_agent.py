@@ -2093,7 +2093,7 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
 
         # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
-        self.process_update_agent_states(messages)
+        self.update_agent_state_before_reply(messages)
 
         # Call the hookable method that gives registered hooks a chance to process the last message.
         # Message modifications do not affect the incoming messages or self._oai_messages.
@@ -2166,7 +2166,7 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
 
         # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
-        self.process_update_agent_states(messages)
+        self.update_agent_state_before_reply(messages)
 
         # Call the hookable method that gives registered hooks a chance to process all messages.
         # Message modifications do not affect the incoming messages or self._oai_messages.
@@ -2854,7 +2854,7 @@ class ConversableAgent(LLMAgent):
         assert hook not in hook_list, f"{hook} is already registered as a hook."
         hook_list.append(hook)
 
-    def process_update_agent_states(self, messages: List[Dict]) -> None:
+    def update_agent_state_before_reply(self, messages: List[Dict]) -> None:
         """
         Calls any registered capability hooks to update the agent's state.
         Primarily used to update context variables.
