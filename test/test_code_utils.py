@@ -54,7 +54,7 @@ else:
 #         OAI_CONFIG_LIST,
 #         file_location=KEY_LOC,
 #         filter_dict={
-#             "model": ["gpt-4", "gpt4", "gpt-4-32k", "gpt-4-32k-0314"],
+#             "model": ["gpt-4o", "gpt4", "gpt-4-32k", "gpt-4-32k-0314"],
 #         },
 #     )
 #     # config_list = autogen.config_list_from_json(

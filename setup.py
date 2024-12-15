@@ -25,7 +25,7 @@ __version__ = version["__version__"]
 current_os = platform.system()
 
 install_requires = [
-    "openai>=1.3",
+    "openai>=1.57",
     "diskcache",
     "termcolor",
     "flaml",
@@ -62,10 +62,11 @@ retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 
 graph_rag_falkor_db = ["graphrag_sdk==0.3.3", "falkordb>=1.0.10"]
 
-neo4j_graph_rag = [
-    "llama_index==0.11.8",
-    "llama-index-graph-stores-neo4j=0.3.0",
-    "llma-index-core==0.11.8",
+neo4j = [
+    "docx2txt==0.8",
+    "llama-index==0.12.5",
+    "llama-index-graph-stores-neo4j==0.4.2",
+    "llama-index-core==0.12.5",
 ]
 
 if current_os in ["Windows", "Darwin"]:
@@ -75,6 +76,12 @@ elif current_os == "Linux":
 
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
+
+# NOTE: underscores in pip install, e.g. pip install ag2[graph_rag_falkor_db], will automatically
+# convert to hyphens. So, do not include underscores in the name of extras.
+
+# ** IMPORTANT: IF ADDING EXTRAS **
+# PLEASE add them in the setup_ag2.py and setup_autogen.py files
 
 extra_require = {
     "test": [
@@ -93,7 +100,7 @@ extra_require = {
     "retrievechat-pgvector": retrieve_chat_pgvector,
     "retrievechat-mongodb": [*retrieve_chat, "pymongo>=4.0.0"],
     "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
-    "graph_rag_falkor_db": graph_rag_falkor_db,
+    "graph-rag-falkor-db": graph_rag_falkor_db,
     "autobuild": autobuild,
     "captainagent": autobuild + ["pandas"],
     "teachable": ["chromadb"],
@@ -115,6 +122,7 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
+    "neo4j": neo4j,
 }
 
 setuptools.setup(
