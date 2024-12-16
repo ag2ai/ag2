@@ -198,9 +198,7 @@ Option 3: Another option"""
 
         print("OAI REPLY:", agent.thinker.generate_oai_reply)
 
-        success, response = agent.generate_beam_response(
-            messages=[{"role": "user", "content": "Test question"}], sender=None
-        )
+        success, response = agent.generate_beam_response("Test question")
 
     assert success is True
     assert "TERMINATE" in agent.thinker.last_message()["content"]

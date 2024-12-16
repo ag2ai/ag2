@@ -14,15 +14,20 @@ tags: [LLM, GPT, research]
 * We introduce Monte Carlo Tree Search (MCTS) as an alternative to Beam Search in ReasoningAgent
 * MCTS is particularly effective when ground truth evaluation is available or when LLM-based evaluation is expensive
 * We provide detailed complexity analysis and comparison between MCTS and Beam Search approaches
-* The resulting search trees can be used to generate high-quality training datasets for LLM fine-tuning
+* The resulting search trees can be used to generate high-quality training datasets for LLM fine-tuning.
 
 ## Introduction
 
-In our [previous post](/blog/2024-12-02-ReasoningAgent2), we introduced ReasoningAgent with Beam Search for systematic reasoning. Today, we explore an alternative approach using Monte Carlo Tree Search (MCTS) that offers unique advantages in certain scenarios, particularly when:
+In our [previous post](/blog/2024-12-02-ReasoningAgent2), we introduced the ReasoningAgent with Beam Search for systematic reasoning.
+Our reasoning agent is inspired by OpenAI's 2023 paper [Let's Verify Step by Step](https://arxiv.org/pdf/2305.20050) and the 2024 [O1](https://openai.com/o1/) feature.
 
-1. Ground truth evaluation is available (either from human feedback or labeled data)
-2. LLM-based evaluation is expensive or unreliable
-3. You want to generate high-quality training data for future LLM fine-tuning
+Today, we explore an alternative approach using Monte Carlo Tree Search (MCTS) that offers unique advantages in certain scenarios, particularly when:
+1. Ground truth evaluation is available (either from human feedback or labeled data).
+2. LLM-based evaluation is expensive or unreliable.
+3. You want to generate high-quality training data for future LLM fine-tuning.
+
+We also take inspiration from Language Agent Tree Search, [LATS](https://ag2ai.github.io/ag2/docs/notebooks/lats_search/). The main difference is that our reasoning agent is based on a "process reward model" and has no access to the environment, while the LATS approach requires ground truth feedback from the environment.
+In our implementation, we use our existing grader agent to provide pseudo rewards and feedback.
 
 ## MCTS vs Beam Search: Key Differences
 

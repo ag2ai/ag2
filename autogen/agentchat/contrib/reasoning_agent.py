@@ -77,49 +77,8 @@ class ThinkNode:
         self.depth = self.parent.depth + 1 if parent else 0
         self.children = []
         self.visits = 0
-        self._is_solved = "TERMINATE" in content
-        if self._is_solved:
-            self._mark_tree_as_solved()
         if self.parent:
             self.parent.children.append(self)
-
-    @property
-    def is_solved(self) -> bool:
-        """If any solutions exist, we can end the search."""
-        return self._is_solved
-
-    def _mark_tree_as_solved(self):
-        """Mark all parent nodes as solved when a solution is found."""
-        parent = self.parent
-        while parent:
-            parent._is_solved = True
-            parent = parent.parent
-
-    def backpropagate(self, reward: float):
-        """Update the score of this node and its parents using moving average."""
-        node = self
-        while node:
-            node.visits += 1
-            node.value = (node.value * (node.visits - 1) + reward) / node.visits
-            node = node.parent
-
-    def get_best_solution(self):
-        """Return the best solution from within the current sub-tree."""
-
-        def get_all_nodes(node):
-            all_nodes = [node]
-            for child in node.children:
-                all_nodes.extend(get_all_nodes(child))
-            return all_nodes
-
-        all_nodes = get_all_nodes(self)
-        best_node = max(
-            all_nodes,
-            # Filter out all non-terminal, non-solution trajectories
-            key=lambda node: int(len(node.children) == 0 and node.is_solved)
-            * (node.value if node.value is not None else 0),
-        )
-        return best_node
 
     @property
     def _trajectory_arr(self) -> List[str]:
@@ -144,6 +103,14 @@ class ThinkNode:
         for i, option in enumerate(traj[1:]):
             ans += f"\nStep {i + 1}: {option}"
         return ans
+
+    def backpropagate(self, reward: float):
+        """Update the score of this node and its parents using moving average."""
+        node = self
+        while node:
+            node.visits += 1
+            node.value = (node.value * (node.visits - 1) + reward) / node.visits
+            node = node.parent
 
     def __str__(self) -> str:
         return f"{self.content} -> Depth: {self.depth} Value: {self.value} Visits: {self.visits}"
@@ -329,11 +296,12 @@ class ReasoningAgent(AssistantAgent):
         self,
         name,
         llm_config,
+        grader_llm_config=None,
         max_depth=4,
         beam_size=3,
         answer_approach="pool",
         verbose=True,
-        reason_config: dict = None,
+        reason_config: dict = {},
         **kwargs,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
@@ -354,30 +322,71 @@ class ReasoningAgent(AssistantAgent):
         self.max_depth = max_depth
         self.beam_size = beam_size
         self.verbose = verbose
-        assert answer_approach in ["pool", "best"]
         self.answer_approach = answer_approach
-        self.thinker = AssistantAgent(name="tot_thinker", system_message=TreeofThought_message, llm_config=llm_config)
-        self.grader = AssistantAgent(name="tot_grader", system_message=GRADER_message, llm_config=llm_config)
+        self.llm_config = llm_config
+        self.grader_llm_config = grader_llm_config if grader_llm_config else llm_config
 
-        if reason_config:
-            method = reason_config.get("method", "beam_search")
+        self.thinker = AssistantAgent(
+            name="tot_thinker", system_message=TreeofThought_message, llm_config=self.llm_config
+        )
+        self.grader = AssistantAgent(
+            name="tot_grader", system_message=GRADER_message, llm_config=self.grader_llm_config
+        )
+
+        if reason_config is None:
+            reason_config = {}
+
+        self.method = reason_config.get("method", "beam_search")
+        if self.method == "beam_search":
+            self.beam_size = reason_config.get("beam_size", 3)
+            self.answer_approach = reason_config.get("answer_approach", "pool")
+            assert answer_approach in ["pool", "best"]
+        elif self.method in ["mcts", "lats"]:
+            self.mcts_simulations = reason_config.get("nsim", 10)
             self.exploration_constant = reason_config.get("exploration_constant", 1.41)
-            if method == "beam_search":
-                self.register_reply([Agent, None], ReasoningAgent.generate_beam_response)
-                if "beam_size" in reason_config:
-                    self.beam_size = reason_config["beam_size"]
-                if "answer_approach" in reason_config:
-                    self.answer_approach = reason_config["answer_approach"]
-            elif method == "mcts":
-                self.register_reply([Agent, None], ReasoningAgent.generate_mcts_response)
-                self.mcts_simulations = reason_config.get("nsim", 10)
-            elif method == "lats":
-                self.register_reply([Agent, None], ReasoningAgent.generate_lats_response)
-                self.lats_max_iterations = reason_config.get("max_iterations", 5)
-                self.lats_num_candidates = reason_config.get("num_candidates", 3)
-        else:
-            raise ValueError("Reasoning method not specified in `reason_config`.")
+
+        self.forest_size = reason_config.get("forest_size", 5)
+
         self._root = None
+        self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
+
+    def generate_forest_response(self, messages, sender, config=None):
+        """
+        Generate a response using tree-of-thought reasoning.
+
+        Args:
+            messages: Input messages to respond to
+            sender: Agent sending the messages
+            config: Optional configuration
+
+        Returns:
+            Tuple[bool, str]: Success flag and generated response
+        """
+        if sender == self:
+            return False, ""  # Defer the LLM call to next reply functions.
+        prompt, ground_truth = self._process_prompt(messages, sender)
+        if not prompt:
+            return True, "TERMINATE"
+
+        forest_answers = []
+        for _ in range(self.forest_size):
+            if self.method == "beam_search":
+                success, response = self.generate_beam_response(prompt, ground_truth)
+            elif self.method in ["mcts", "lats"]:
+                success, response = self.generate_mcts_response(prompt, ground_truth)
+
+            forest_answers.append(response)
+
+        if len(forest_answers) == 1:
+            return True, forest_answers[0]
+        else:
+            self.send(
+                message=f"Answer the question {prompt}. Here are some students' different answers:\n{"\n-".join(forest_answers)}",
+                recipient=self,
+                request_reply=True,
+                silent=not self.verbose,
+            )
+            return True, self.last_message(self)["content"].strip()
 
     def rate_node(self, node: ThinkNode, ground_truth: str = None) -> float:
         """Rate the quality of a reasoning path using the grader agent.
@@ -439,7 +448,7 @@ class ReasoningAgent(AssistantAgent):
             ground_truth = None
         return prompt, ground_truth
 
-    def generate_beam_response(self, messages, sender, config=None):
+    def generate_beam_response(self, prompt, ground_truth=""):
         """Generate a response using tree-of-thought reasoning.
 
         Implements beam search through a tree of reasoning steps, using the thinker
@@ -453,12 +462,6 @@ class ReasoningAgent(AssistantAgent):
         Returns:
             Tuple[bool, str]: Success flag and generated response
         """
-        if sender == self:
-            return False, ""  # Defer the LLM call to next reply functions.
-        prompt, ground_truth = self._process_prompt(messages, sender)
-        if not prompt:
-            return True, "TERMINATE"
-
         root = ThinkNode(content=prompt, parent=None)
         self._root = root  # save the root node for later visualization
         prev_leafs = [root]
@@ -518,13 +521,7 @@ class ReasoningAgent(AssistantAgent):
         final_answer = self.chat_messages[self][-1]["content"].strip()
         return True, final_answer
 
-    def generate_mcts_response(self, messages, sender, config=None):
-        if sender == self:
-            return False, ""  # Defer the LLM call to next reply functions.
-        prompt, ground_truth = self._process_prompt(messages, sender)
-        if not prompt:
-            return True, "TERMINATE"
-
+    def generate_mcts_response(self, prompt, ground_truth=""):
         root = ThinkNode(content=prompt, parent=None)
         self._root = root
         answer_nodes = []
@@ -549,6 +546,11 @@ class ReasoningAgent(AssistantAgent):
             while not self.is_terminal(node):
                 if len(node.children) == 0:
                     self.expand(node)
+                    if self.method == "lats":
+                        # In LATS: rate the quality of the current child node using the ground truth and
+                        # backpropagate the reward to update the node's value and visits.
+                        reward = self.rate_node(node, ground_truth)
+                        node.backpropagate(reward)
                 node = random.choice(node.children)
 
             # Add answer (leaf) node and evaluate answer
@@ -609,82 +611,3 @@ class ReasoningAgent(AssistantAgent):
 
     def is_terminal(self, node):
         return node.depth >= self.max_depth or "TERMINATE" in node.content
-
-    def generate_lats_response(self, messages, sender, config=None):
-        """Generate a response using Language Agent Tree Search (LATS)."""
-        if sender == self:
-            return False, ""
-
-        prompt, ground_truth = self._process_prompt(messages, sender)
-        if not prompt:
-            return True, "TERMINATE"
-
-        # Initialize root node
-        root = ThinkNode(content=prompt, parent=None)
-        self._root = root
-
-        # Helper function to determine if we should continue searching
-        def should_continue(node, iteration):
-            if self._root.is_solved:
-                return False
-            if iteration >= self.lats_max_iterations:
-                return False
-            if node.depth >= self.max_depth:
-                return False
-            return True
-
-        # Main LATS loop
-        iteration = 0
-        while should_continue(root, iteration):
-            # Selection - find best node to expand
-            current = root
-            while current.children and not self.is_terminal(current):
-                # Use UCT formula similar to MCTS
-                choices_weights = [
-                    (child.value / (child.visits + EPSILON))
-                    + self.exploration_constant
-                    * math.sqrt(math.log(current.visits + EPSILON) / (child.visits + EPSILON))
-                    for child in current.children
-                ]
-                current = current.children[choices_weights.index(max(choices_weights))]
-
-            # Expansion - generate candidate next steps
-            if not self.is_terminal(current):
-                self.send(
-                    message=f"{current.trajectory}\n---\nWhat are the possible next steps?",
-                    recipient=self.thinker,
-                    request_reply=True,
-                    silent=not self.verbose,
-                )
-                # TODO: the candidate generation should be done different, refer: https://ag2ai.github.io/ag2/docs/notebooks/lats_search/#candidate-generation,
-                # and im not sure how to approach, so for now we will just use the last message.
-                candidates = re.findall(
-                    r"Option \d+:(.+?)(?=Option \d+:|$)", self.thinker.last_message()["content"].strip(), re.DOTALL
-                )
-                for candidate in candidates[: self.lats_num_candidates]:
-                    child = ThinkNode(content=candidate.strip(), parent=current)
-                    self.expand(child)
-                    # Evaluate candidate and backpropagate
-                    reward = self.rate_node(child, ground_truth)
-                    child.backpropagate(reward)
-
-            iteration += 1
-
-        # Find best leaf node by traversing tree
-        def find_best_leaf(node):
-            if not node.children:
-                return node
-            best_child = max(node.children, key=lambda x: x.value if x.value is not None else 0)
-            return find_best_leaf(best_child)
-
-        best_node = find_best_leaf(root)
-
-        # Generate final answer using best trajectory
-        self.send(
-            message=f"Answer the question {prompt}. Here is my thinking process:\n{best_node.trajectory}",
-            recipient=self,
-            request_reply=True,
-            silent=not self.verbose,
-        )
-
-        return True, self.last_message(self)["content"].strip()
