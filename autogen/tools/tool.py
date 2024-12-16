@@ -17,7 +17,7 @@ __all__ = ["Tool"]
 
 class Tool:
     def __init__(self, name: str, description: str, func: Callable[..., Any]) -> None:
-        """ Create a new Tool object.
+        """Create a new Tool object.
 
         Args:
             name (str): The name of the tool.
