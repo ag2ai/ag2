@@ -48,7 +48,7 @@ def test_group_chat_with_llama_index_conversable_agent(chat_mock: MagicMock) -> 
     Each agent is set to describe an image in a unique style, but the chat should not exceed the specified max_rounds.
     """
     llm = OpenAI(
-        model="gpt-4",
+        model="gpt-4o",
         temperature=0.0,
         api_key=openaiKey,
     )

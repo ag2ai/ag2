@@ -51,7 +51,7 @@ def test_filter():
         print(exc)
         return
     config_list = autogen.config_list_from_models(
-        KEY_LOC, exclude="aoai", model_list=["text-ada-001", "gpt-3.5-turbo", "text-davinci-003"]
+        KEY_LOC, exclude="aoai", model_list=["text-ada-001", "gpt-4o-mini", "text-davinci-003"]
     )
     response = autogen.Completion.create(
         context={"yes_or_no_choice": True},
@@ -95,7 +95,7 @@ def test_chatcompletion():
     assert "messages" not in params
     params = autogen.Completion._construct_params(
         context=None,
-        config={"model": "gpt-4"},
+        config={"model": "gpt-4o"},
         prompt="hi",
     )
     assert "messages" in params
@@ -149,13 +149,8 @@ def test_nocontext():
             file_location=KEY_LOC,
             filter_dict={
                 "model": {
-                    "gpt-3.5-turbo",
-                    "gpt-3.5-turbo-16k",
-                    "gpt-3.5-turbo-16k-0613",
-                    "gpt-3.5-turbo-0301",
-                    "chatgpt-35-turbo-0301",
-                    "gpt-35-turbo-v0301",
-                    "gpt",
+                    "gpt-4o-mini",
+                    "gpt-4o",
                 },
             },
         ),
@@ -185,13 +180,8 @@ def test_humaneval(num_samples=1):
         env_or_file=OAI_CONFIG_LIST,
         filter_dict={
             "model": {
-                "gpt-3.5-turbo",
-                "gpt-3.5-turbo-16k",
-                "gpt-3.5-turbo-16k-0613",
-                "gpt-3.5-turbo-0301",
-                "chatgpt-35-turbo-0301",
-                "gpt-35-turbo-v0301",
-                "gpt",
+                "gpt-4o-mini",
+                "gpt-4o",
             },
         },
         file_location=KEY_LOC,
@@ -233,7 +223,7 @@ def test_humaneval(num_samples=1):
     # no error should be raised
     response = autogen.Completion.create(
         context=test_data[0],
-        config_list=autogen.config_list_from_models(KEY_LOC, model_list=["gpt-3.5-turbo"]),
+        config_list=autogen.config_list_from_models(KEY_LOC, model_list=["gpt-4o-mini"]),
         prompt="",
         max_tokens=1,
         max_retry_period=0,
