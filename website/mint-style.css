@@ -211,6 +211,9 @@ h4 {
   font-size: 0.7rem;
 }
 
+.examples-gallery-container .badges a{
+  display: inline-block;
+}
 .examples-gallery-container .tag:hover {
   background-color: #e0e0e0;
 }
