@@ -4,6 +4,10 @@ export const GalleryPage = ({
   target = "_blank",
 }) => {
 
+  document.addEventListener('gallery:tagChange', (event) => {
+    handleTagChange(event.detail);
+  });
+
   let selectedTags = [];
   const defaultImageIfNoImage = allowDefaultImage ?? true;
 
@@ -37,9 +41,9 @@ export const GalleryPage = ({
   };
 
   const handleTagChange = (tags) => {
-        selectedTags = tags;
-        filterItems();
-    };
+    selectedTags = tags;
+    filterItems();
+  };
 
   const filterItems = () => {
         const cards = document.querySelectorAll('.examples-gallery-container .card');
@@ -52,11 +56,6 @@ export const GalleryPage = ({
             }
         });
     };
-
-  const handleSelectChange = (event) => {
-    const selectedOptions = event.target.selectedValues || Array.from(event.target.selectedOptions).map(option => option.value);
-    handleTagChange(selectedOptions);
-  };
 
   const TagsView = ({ tags }) => (
     <div className="tags-container">
@@ -88,7 +87,6 @@ export const GalleryPage = ({
       <select
         multiple
         className="tag-filter"
-        onChange={handleSelectChange}
         data-placeholder="Filter by tags"
       >
         {allTags.map(tag => (

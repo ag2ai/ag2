@@ -36,10 +36,11 @@ function initializeGallerySelect() {
       })
       .on("change", function (evt, params) {
         const selectedValues = $(this).val() || [];
-        // Create and dispatch a custom event
-        const changeEvent = new Event("change");
-        evt.target.selectedValues = selectedValues;
-        evt.target.dispatchEvent(changeEvent);
+        // Dispatch custom event with selected values
+        const customEvent = new CustomEvent("gallery:tagChange", {
+          detail: selectedValues,
+        });
+        document.dispatchEvent(customEvent);
       });
   }, 500);
 }
