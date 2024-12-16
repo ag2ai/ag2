@@ -1,18 +1,18 @@
 ---
-hide_table_of_contents: true
+title: Application Gallery
+mode: "wide"
 ---
 
-import GalleryPage from "/snippets/components/GalleryPage.js";
-import galleryData from "/snippets/data/gallery.json";
-
-# Gallery
+import { GalleryPage } from "/snippets/components/GalleryPage.mdx";
+import { galleryItems } from "/snippets/data/GalleryItems.mdx";
+import { ClientSideComponent } from "/snippets/components/ClientSideComponent.mdx";
 
 This page contains a list of demos that use AutoGen in various applications from the community.
 
 **Contribution guide:**
 Built something interesting with AutoGen? Submit a PR to add it to the list! See the [Contribution Guide below](#contributing) for more details.
 
-<GalleryPage items={galleryData} />
+<ClientSideComponent Component={GalleryPage} componentProps={{galleryItems: galleryItems}} />
 
 ## Contributing
 

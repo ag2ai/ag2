@@ -37,7 +37,7 @@
     },
     {
       "name": "Examples",
-      "url": "notebook"
+      "url": "notebooks"
     },
     {
       "name": "Community Talks",
@@ -53,6 +53,7 @@
     {
       "group": "",
       "pages": [
+        "docs/Home",
         "docs/Getting-Started"
       ]
     },
@@ -76,7 +77,9 @@
       "pages": [
         {
           "group": "OpenAI Assistant",
-          "pages": ["docs/topics/openai-assistant/gpt_assistant_agent"]
+          "pages": [
+            "docs/topics/openai-assistant/gpt_assistant_agent"
+          ]
         },
         {
           "group": "Using Non-OpenAI Models",
@@ -158,6 +161,96 @@
         "talks/2024-09-30/index",
         "talks/2024-09-23/index",
         "talks/2024-08-26/index"
+      ]
+    },
+    {
+      "group": "Examples",
+      "pages": [
+        "notebooks/Examples",
+        "notebooks/Gallery",
+        {
+          "group": "Notebooks",
+          "pages": [
+            "/notebooks/Notebooks",
+            "/notebooks/agentchat_RetrieveChat_mongodb",
+            "/notebooks/agentchat_RetrieveChat_pgvector",
+            "/notebooks/agentchat_RetrieveChat_qdrant",
+            "/notebooks/agentchat_agentops",
+            "/notebooks/agentchat_agentoptimizer",
+            "/notebooks/agentchat_auto_feedback_from_code_execution",
+            "/notebooks/agentchat_azr_ai_search",
+            "/notebooks/agentchat_captainagent",
+            "/notebooks/agentchat_cost_token_tracking",
+            "/notebooks/agentchat_custom_model",
+            "/notebooks/agentchat_dalle_and_gpt4v",
+            "/notebooks/agentchat_databricks_dbrx",
+            "/notebooks/agentchat_function_call",
+            "/notebooks/agentchat_function_call_async",
+            "/notebooks/agentchat_function_call_code_writing",
+            "/notebooks/agentchat_function_call_currency_calculator",
+            "/notebooks/agentchat_group_chat_with_llamaindex_agents",
+            "/notebooks/agentchat_groupchat",
+            "/notebooks/agentchat_groupchat_RAG",
+            "/notebooks/agentchat_groupchat_customized",
+            "/notebooks/agentchat_groupchat_finite_state_machine",
+            "/notebooks/agentchat_groupchat_research",
+            "/notebooks/agentchat_groupchat_stateflow",
+            "/notebooks/agentchat_groupchat_vis",
+            "/notebooks/agentchat_guidance",
+            "/notebooks/agentchat_human_feedback",
+            "/notebooks/agentchat_image_generation_capability",
+            "/notebooks/agentchat_inception_function",
+            "/notebooks/agentchat_langchain",
+            "/notebooks/agentchat_lmm_gpt-4v",
+            "/notebooks/agentchat_lmm_llava",
+            "/notebooks/agentchat_logging",
+            "/notebooks/agentchat_with_memory",
+            "/notebooks/agentchat_multi_task_async_chats",
+            "/notebooks/agentchat_multi_task_chats",
+            "/notebooks/agentchat_nested_chats_chess",
+            "/notebooks/agentchat_nested_chats_chess_altmodels",
+            "/notebooks/agentchat_nested_sequential_chats",
+            "/notebooks/agentchat_nestedchat",
+            "/notebooks/agentchat_nestedchat_optiguide",
+            "/notebooks/agentchat_oai_assistant_function_call",
+            "/notebooks/agentchat_oai_assistant_groupchat",
+            "/notebooks/agentchat_oai_assistant_retrieval",
+            "/notebooks/agentchat_oai_assistant_twoagents_basic",
+            "/notebooks/agentchat_oai_code_interpreter",
+            "/notebooks/agentchat_openlit",
+            "/notebooks/agentchat_planning",
+            "/notebooks/agentchat_reasoning_agent",
+            "/notebooks/agentchat_society_of_mind",
+            "/notebooks/agentchat_sql_spider",
+            "/notebooks/agentchat_stream",
+            "/notebooks/agentchat_structured_outputs",
+            "/notebooks/agentchat_surfer",
+            "/notebooks/agentchat_swarm",
+            "/notebooks/agentchat_swarm_graphrag_telemetry_trip_planner",
+            "/notebooks/agentchat_swarm_graphrag_trip_planner",
+            "/notebooks/agentchat_swarm_w_groupchat_legacy",
+            "/notebooks/agentchat_teachability",
+            "/notebooks/agentchat_teachable_oai_assistants",
+            "/notebooks/agentchat_teaching",
+            "/notebooks/agentchat_transform_messages",
+            "/notebooks/agentchat_two_users",
+            "/notebooks/agentchat_video_transcript_translate_with_whisper",
+            "/notebooks/agentchat_web_info",
+            "/notebooks/agentchat_webscraping_with_apify",
+            "/notebooks/agentchat_websockets",
+            "/notebooks/agentchats_sequential_chats",
+            "/notebooks/agenteval_cq_math",
+            "/notebooks/async_human_input",
+            "/notebooks/autobuild_agent_library",
+            "/notebooks/autobuild_basic",
+            "/notebooks/autogen_uniformed_api_calling",
+            "/notebooks/gpt_assistant_agent_function_call",
+            "/notebooks/lats_search",
+            "/docs/notebooks/tool-use",
+            "/notebooks/JSON_mode_example",
+            "/notebooks/agentchat_RetrieveChat"
+          ]
+        }
       ]
     }
   ],

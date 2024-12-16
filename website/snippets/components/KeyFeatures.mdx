@@ -1,0 +1,40 @@
+export const KeyFeatures = () => {
+    const FeatureList = [
+        {
+            title: 'Multi-Agent Conversation Framework',
+            Svg: '/static/img/conv_2.svg',
+            docLink: '/docs/Use-Cases/agent_chat',
+            description: "AG2 provides multi-agent conversation framework as a high-level abstraction. With this framework, one can conveniently build LLM workflows."
+        },
+        {
+            title: 'Easily Build Diverse Applications',
+            Svg: '/static/img/autogen_app.svg',
+            docLink: '/docs/Use-Cases/agent_chat#diverse-applications-implemented-with-autogen',
+            description: "AG2 offers a collection of working systems spanning a wide range of applications from various domains and complexities.",
+        },
+        {
+            title: 'Enhanced LLM Inference & Optimization',
+            Svg: '/static/img/extend.svg',
+            docLink: '/docs/Use-Cases/enhanced_inference',
+            description: 'AG2 supports enhanced LLM inference APIs, which can be used to improve inference performance and reduce cost.',
+        },
+    ];
+
+    return (
+        <div class="key-features">
+            <CardGroup cols={3}>
+                {FeatureList.map((feature, index) => (
+                    <Card key={index}>
+                        <div class="key-feature">
+                            <img noZoom src={feature.Svg} alt={feature.title} />
+                            <a href={feature.docLink}>
+                                <h5>{feature.title}</h5>
+                            </a>
+                            <p>{feature.description}</p>
+                        </div>
+                    </Card>
+                ))}
+            </CardGroup>
+        </div>
+    );
+};
