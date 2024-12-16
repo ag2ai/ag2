@@ -4,9 +4,37 @@ export const GalleryPage = ({
   target = "_blank",
 }) => {
 
-  let selectedTags = [];
+  const getTagsFromURL = () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const tags = searchParams.get("tags");
+    return tags ? tags.split(",") : [];
+  };
+
+  let selectedTags = getTagsFromURL();
   const defaultImageIfNoImage = allowDefaultImage ?? true;
   const allTags = [...new Set(galleryItems.flatMap((item) => item.tags))];
+
+  const updateURL = (tags) => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (tags.length > 0) {
+      searchParams.set("tags", tags.join(","));
+    } else {
+      searchParams.delete("tags");
+    }
+    const searchParamsString = searchParams.toString();
+    const newURL = searchParamsString ? `${window.location.pathname}?${searchParamsString}` : window.location.pathname;
+    window.history.pushState({}, '', newURL);
+  };
+
+  window.addEventListener('popstate', () => {
+    selectedTags = getTagsFromURL();
+    filterItems();
+
+    const select = document.querySelector('.tag-filter');
+    if (select && window.jQuery) {
+      $(select).val(selectedTags).trigger('chosen:updated');
+    }
+  });
 
   const handleGalleryTagChange = (event) => {
     handleTagChange(event.detail);
@@ -44,6 +72,7 @@ export const GalleryPage = ({
 
   const handleTagChange = (tags) => {
     selectedTags = tags;
+    updateURL(tags);
     filterItems();
   };
 

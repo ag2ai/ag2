@@ -26,6 +26,12 @@ if (typeof jQuery === "undefined") {
   };
 }
 
+function getTagsFromURL() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const tags = searchParams.get("tags");
+  return tags ? tags.split(",") : [];
+}
+
 // Function to initialize Chosen on gallery select
 function initializeGallerySelect() {
   // Add flag to check if already initialized
@@ -36,14 +42,29 @@ function initializeGallerySelect() {
         width: "100%",
         placeholder_text_multiple: "Filter by tags",
       })
-      .on("change", function (evt, params) {
-        const selectedValues = $(this).val() || [];
-        const customEvent = new CustomEvent("gallery:tagChange", {
-          detail: selectedValues,
-        });
-        document.dispatchEvent(customEvent);
-      })
-      .data("chosen-initialized", true); // Mark as initialized
+      .data("chosen-initialized", true);
+
+    // Get tags from URL and update chosen
+    const urlTags = getTagsFromURL();
+    if (urlTags.length > 0) {
+      selectElement.val(urlTags);
+      selectElement.trigger("chosen:updated");
+
+      // Trigger the gallery:tagChange event with URL tags
+      const customEvent = new CustomEvent("gallery:tagChange", {
+        detail: urlTags,
+      });
+      document.dispatchEvent(customEvent);
+    }
+
+    // Set up change handler
+    selectElement.on("change", function (evt, params) {
+      const selectedValues = $(this).val() || [];
+      const customEvent = new CustomEvent("gallery:tagChange", {
+        detail: selectedValues,
+      });
+      document.dispatchEvent(customEvent);
+    });
   }
 }
 
