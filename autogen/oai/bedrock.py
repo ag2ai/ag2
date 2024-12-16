@@ -96,10 +96,15 @@ class BedrockClient:
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Bedrock, it will be ignored.", UserWarning)
 
-        #if haven't got any access_key or secret_key in environment variable or via arugments then
-        if self._aws_access_key is None or self._aws_access_key == "" or self._aws_secret_key is None or self._aws_secret_key == "":
-            
-            # attempts to get client from attached role of mananged service (lambda, ec2, ecs, etc.)
+        # if haven't got any access_key or secret_key in environment variable or via arguments then
+        if (
+            self._aws_access_key is None
+            or self._aws_access_key == ""
+            or self._aws_secret_key is None
+            or self._aws_secret_key == ""
+        ):
+
+            # attempts to get client from attached role of managed service (lambda, ec2, ecs, etc.)
             self.bedrock_runtime = boto3.client(service_name="bedrock-runtime", config=bedrock_config)
         else:
             session = boto3.Session(
