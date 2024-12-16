@@ -100,6 +100,7 @@ h4 {
   cursor: pointer;
   text-align: center;
   display: inline-block;
+  color: #000;
 }
 /* Home page hero section ends */
 /* Home page popular resources section starts */
@@ -154,6 +155,62 @@ h4 {
   font-size: 1.5rem !important;
 }
 /* Home page explore content section ends */
+
+/* Examples page Gallery section starts */
+.examples-gallery-container h5{
+  font-weight: bold;
+}
+.examples-gallery-container p{
+  font-size: 0.7rem;
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
+.examples-gallery-container .card {
+  padding: 0.5rem;
+}
+.examples-gallery-container .card .px-6.py-5 {
+  padding: 0;
+}
+.examples-gallery-container .tags-container {
+  margin-top:1rem;
+}
+.examples-gallery-container .tag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  background-color: #f0f0f0;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  color: #666;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin: 0.35rem 0.1rem 0 0;
+  font-size: 0.7rem;
+}
+
+.examples-gallery-container .tag:hover {
+  background-color: #e0e0e0;
+}
+
+.examples-gallery-container .chosen-container-multi .chosen-choices li.search-field {
+  padding: 0px !important;
+  margin: 0px !important;
+}
+.examples-gallery-container .chosen-container-multi .chosen-choices li.search-field::before,
+.examples-gallery-container .chosen-container-multi .chosen-drop .chosen-results .active-result::before,
+.examples-gallery-container .chosen-container-multi .chosen-drop .chosen-results .result-selected::before,
+.examples-gallery-container .chosen-container-multi .chosen-choices li.search-choice::before {
+  display: none;
+}
+.examples-gallery-container .chosen-container-multi .chosen-choices li.search-choice,
+.examples-gallery-container .chosen-container-multi .chosen-drop .chosen-results .active-result,
+.examples-gallery-container .chosen-container-multi .chosen-drop .chosen-results .result-selected {
+  padding-left: 5px !important;
+}
+.examples-gallery-container .search-choice-close {
+  border-bottom: none;
+}
+/* Examples page Gallery section ends */
 #search-bar-entry {
   border-radius: 0 !important;
   height: 36px;

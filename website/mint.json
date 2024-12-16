@@ -37,7 +37,7 @@
     },
     {
       "name": "Examples",
-      "url": "notebook"
+      "url": "examples"
     },
     {
       "name": "Community Talks",
@@ -159,6 +159,13 @@
         "talks/2024-09-30/index",
         "talks/2024-09-23/index",
         "talks/2024-08-26/index"
+      ]
+    },
+    {
+      "group": "Examples",
+      "pages": [
+        "examples/Examples",
+        "examples/Gallery"
       ]
     }
   ],

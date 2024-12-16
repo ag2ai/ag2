@@ -1,0 +1,112 @@
+export const GalleryPage = ({
+  galleryItems,
+  allowDefaultImage = true,
+  target = "_blank",
+}) => {
+
+  let selectedTags = [];
+  const defaultImageIfNoImage = allowDefaultImage ?? true;
+
+  const allTags = [...new Set(galleryItems.flatMap((item) => item.tags))];
+
+  const imageFunc = (item) => {
+    const image = (
+      <img
+        alt={item.title}
+        noZoom
+        src={
+          item.image
+            ? item.image.includes("http")
+              ? item.image
+              : `../../static/img/gallery/${item.image}`
+            : `../../static/img/gallery/default.png`
+        }
+        style={{
+          height: 150,
+          width: "fit-content",
+          margin: "auto",
+        }}
+      />
+    );
+    const imageToUse = item.image
+      ? image
+      : defaultImageIfNoImage
+      ? image
+      : null;
+    return imageToUse;
+  };
+
+  const handleTagChange = (tags) => {
+        selectedTags = tags;
+        filterItems();
+    };
+
+  const filterItems = () => {
+        const cards = document.querySelectorAll('.examples-gallery-container .card');
+        cards.forEach(card => {
+            const cardTags = Array.from(card.querySelectorAll('.tag')).map(tag => tag.textContent);
+            if (selectedTags.length === 0 || selectedTags.some(tag => cardTags.includes(tag))) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    };
+
+  const handleSelectChange = (event) => {
+    const selectedOptions = event.target.selectedValues || Array.from(event.target.selectedOptions).map(option => option.value);
+    handleTagChange(selectedOptions);
+  };
+
+  const TagsView = ({ tags }) => (
+    <div className="tags-container">
+      {tags?.map((tag, index) => (
+        <span
+          className="tag"
+          key={index}
+          onClick={(evt) => {
+            if (!selectedTags.includes(tag)) {
+              handleTagChange([...selectedTags, tag]);
+
+              const select = document.querySelector('.tag-filter');
+              if (select && window.jQuery) {
+                $(select).val([...selectedTags, tag]).trigger('chosen:updated');
+              }
+            }
+            evt.preventDefault();
+            evt.stopPropagation();
+            return false;
+          }}
+        >
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+  return (
+    <div className="examples-gallery-container">
+      <select
+        multiple
+        className="tag-filter"
+        onChange={handleSelectChange}
+        data-placeholder="Filter by tags"
+      >
+        {allTags.map(tag => (
+          <option key={tag} value={tag}>
+            {tag}
+          </option>
+        ))}
+      </select>
+      <CardGroup cols={3}>
+        {galleryItems.map((item, index) => (
+          <Card key={index}>
+            {imageFunc(item)}
+            <h5 className="card-title">{item.title}</h5>
+            <p className="card-description">{item.description || item.title}</p>
+            <TagsView tags={item.tags} />
+          </Card>
+        ))}
+      </CardGroup>
+    </div>
+  );
+};
