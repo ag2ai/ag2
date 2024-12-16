@@ -8,9 +8,12 @@ export const GalleryPage = ({
   const defaultImageIfNoImage = allowDefaultImage ?? true;
   const allTags = [...new Set(galleryItems.flatMap((item) => item.tags))];
 
-  document.addEventListener('gallery:tagChange', (event) => {
+  const handleGalleryTagChange = (event) => {
     handleTagChange(event.detail);
-  });
+  };
+
+  document.removeEventListener('gallery:tagChange', handleGalleryTagChange);
+  document.addEventListener('gallery:tagChange', handleGalleryTagChange);
 
   const imageFunc = (item) => {
     const image = (

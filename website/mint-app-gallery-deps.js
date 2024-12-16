@@ -28,35 +28,53 @@ if (typeof jQuery === "undefined") {
 
 // Function to initialize Chosen on gallery select
 function initializeGallerySelect() {
-  setTimeout(() => {
-    $(".examples-gallery-container .tag-filter")
+  // Add flag to check if already initialized
+  const selectElement = $(".examples-gallery-container .tag-filter");
+  if (selectElement.length && !selectElement.data("chosen-initialized")) {
+    selectElement
       .chosen({
         width: "100%",
         placeholder_text_multiple: "Filter by tags",
       })
       .on("change", function (evt, params) {
         const selectedValues = $(this).val() || [];
-        // Dispatch custom event with selected values
         const customEvent = new CustomEvent("gallery:tagChange", {
           detail: selectedValues,
         });
         document.dispatchEvent(customEvent);
-      });
-  }, 100);
+      })
+      .data("chosen-initialized", true); // Mark as initialized
+  }
 }
+
+// Debounce function
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Debounced version of initialize
+const debouncedInitialize = debounce(initializeGallerySelect, 100);
 
 // Watch for URL changes using MutationObserver
 const observer = new MutationObserver((mutations) => {
-  mutations.forEach((mutation) => {
-    if (window.location.pathname.includes("/Gallery")) {
-      initializeGallerySelect();
-    }
-  });
+  if (window.location.pathname.includes("/Gallery")) {
+    debouncedInitialize();
+  }
 });
 
 observer.observe(document.body, {
   childList: true,
   subtree: true,
+  attributes: false,
+  characterData: false,
 });
 
 // Initialize on page load
