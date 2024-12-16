@@ -113,6 +113,20 @@ export const GalleryPage = ({
       ))}
     </div>
   );
+
+  const badges = (item) => {
+    if (!item.source) {
+      return null;
+    }
+    const colab_href = `https://colab.research.google.com/github/ag2ai/ag2/blob/main/${item.source}`;
+    const github_href = `https://github.com/ag2ai/ag2/blob/main/${item.source}`;
+    return (<span>
+      <a style={{marginRight: '5px'}}href={colab_href} target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+      <a href={github_href} target="_parent"><img alt="Static Badge" src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"/></a>
+      </span>
+    );
+  }
+
   return (
     <div className="examples-gallery-container">
       <select
@@ -128,9 +142,10 @@ export const GalleryPage = ({
       </select>
       <CardGroup cols={3}>
         {galleryItems.map((item, index) => (
-          <Card key={index}>
+          <Card key={index} href={item.link}>
             {imageFunc(item)}
             <h5 className="card-title">{item.title}</h5>
+            {badges(item)}
             <p className="card-description">{item.description || item.title}</p>
             <TagsView tags={item.tags} />
           </Card>
