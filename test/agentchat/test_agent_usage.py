@@ -32,7 +32,7 @@ def test_gathering():
         system_message="You are a helpful assistant.",
         llm_config={
             "config_list": config_list,
-            "model": "gpt-3.5-turbo-0613",
+            "model": "gpt-4o-mini",
         },
     )
     assistant2 = AssistantAgent(
@@ -40,7 +40,7 @@ def test_gathering():
         system_message="You are a helpful assistant.",
         llm_config={
             "config_list": config_list,
-            "model": "gpt-3.5-turbo-0613",
+            "model": "gpt-4o-mini",
         },
     )
     assistant3 = AssistantAgent(
@@ -48,28 +48,28 @@ def test_gathering():
         system_message="You are a helpful assistant.",
         llm_config={
             "config_list": config_list,
-            "model": "gpt-3.5-turbo-0613",
+            "model": "gpt-4o",
         },
     )
 
     assistant1.client.total_usage_summary = {
         "total_cost": 0.1,
-        "gpt-35-turbo": {"cost": 0.1, "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
+        "gpt-4o-mini": {"cost": 0.1, "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
     }
     assistant2.client.total_usage_summary = {
         "total_cost": 0.2,
-        "gpt-35-turbo": {"cost": 0.2, "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
+        "gpt-4o-mini": {"cost": 0.2, "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
     }
     assistant3.client.total_usage_summary = {
         "total_cost": 0.3,
-        "gpt-4": {"cost": 0.3, "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
+        "gpt-4o": {"cost": 0.3, "prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
     }
 
     total_usage = gather_usage_summary([assistant1, assistant2, assistant3])
 
     assert round(total_usage["usage_including_cached_inference"]["total_cost"], 8) == 0.6
-    assert round(total_usage["usage_including_cached_inference"]["gpt-35-turbo"]["cost"], 8) == 0.3
-    assert round(total_usage["usage_including_cached_inference"]["gpt-4"]["cost"], 8) == 0.3
+    assert round(total_usage["usage_including_cached_inference"]["gpt-4o-mini"]["cost"], 8) == 0.3
+    assert round(total_usage["usage_including_cached_inference"]["gpt-4o"]["cost"], 8) == 0.3
 
     # test when agent doesn't have client
     user_proxy = UserProxyAgent(
@@ -91,7 +91,7 @@ def test_agent_usage():
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-3.5-turbo"]},
+        filter_dict={"tags": ["gpt-4o-mini"]},
     )
     assistant = AssistantAgent(
         "assistant",

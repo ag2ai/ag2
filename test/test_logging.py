@@ -35,7 +35,7 @@ SAMPLE_CHAT_REQUEST = json.loads(
             "role": "user"
         }
     ],
-    "model": "gpt-4"
+    "model": "gpt-4o"
 }
 """
 )
@@ -58,7 +58,7 @@ SAMPLE_CHAT_RESPONSE = json.loads(
         }
     ],
     "created": 1705993480,
-    "model": "gpt-4",
+    "model": "gpt-4o",
     "object": "chat.completion",
     "system_fingerprint": "fp_6d044fb900",
     "usage": {
@@ -159,7 +159,7 @@ def test_log_new_agent(db_connection):
 
     cur = db_connection.cursor()
     agent_name = "some_assistant"
-    config_list = [{"model": "gpt-4", "api_key": "some_key"}]
+    config_list = [{"model": "gpt-4o", "api_key": "some_key"}]
 
     agent = AssistantAgent(agent_name, llm_config={"config_list": config_list})
     init_args = {"foo": "bar", "baz": {"other_key": "other_val"}, "a": None}
@@ -184,7 +184,7 @@ def test_log_oai_wrapper(db_connection):
 
     cur = db_connection.cursor()
 
-    llm_config = {"config_list": [{"model": "gpt-4", "api_key": "some_key", "base_url": "some url"}]}
+    llm_config = {"config_list": [{"model": "gpt-4o", "api_key": "some_key", "base_url": "some url"}]}
     init_args = {"llm_config": llm_config, "base_config": {}}
     wrapper = OpenAIWrapper(**llm_config)
 
@@ -210,8 +210,8 @@ def test_log_oai_client(db_connection):
 
     openai_config = {
         "api_key": "some_key",
-        "api_version": "2024-02-01",
-        "azure_deployment": "gpt-4",
+        "api_version": "2024-08-06",
+        "azure_deployment": "gpt-4o",
         "azure_endpoint": "https://foobar.openai.azure.com/",
     }
     client = AzureOpenAI(**openai_config)
