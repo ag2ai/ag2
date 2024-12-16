@@ -26,7 +26,10 @@ class CrewAIInteroperability(Interoperable):
         crewai_tool: CrewAITool = tool  # type: ignore[no-any-unimported]
 
         name = _sanitize_name(crewai_tool.name)
-        description = crewai_tool.description.split("Tool Description: ")[-1]
+        description = (
+            crewai_tool.description.split("Tool Description: ")[-1]
+            + " (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+        )
 
         def func(args: crewai_tool.args_schema) -> Any:  # type: ignore[no-any-unimported]
             return crewai_tool.run(**args.model_dump())
