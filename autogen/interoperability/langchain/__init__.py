@@ -2,6 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+
+if sys.version_info < (3, 9):
+    raise ImportError("This submodule is only supported for Python versions 3.9 and above")
+
 try:
     import langchain.tools
 except ImportError:

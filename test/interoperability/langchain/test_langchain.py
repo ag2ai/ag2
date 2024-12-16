@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import sys
+import unittest
 
 import pytest
 from conftest import reason, skip_openai
@@ -11,9 +13,17 @@ from pydantic import BaseModel, Field
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interoperability import Interoperable
-from autogen.interoperability.langchain import LangchainInteroperability
+
+if sys.version_info >= (3, 9):
+    from autogen.interoperability.langchain import LangchainInteroperability
+else:
+    LangchainInteroperability = unittest.mock.MagicMock()
 
 
+# skip if python version is not >= 3.9
+@pytest.mark.skipif(
+    sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
+)
 class TestLangchainInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -71,6 +81,10 @@ class TestLangchainInteroperability:
         assert False, "No tool response found in chat messages"
 
 
+# skip if python version is not >= 3.9
+@pytest.mark.skipif(
+    sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
+)
 class TestLangchainInteroperabilityWithoutPydanticInput:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
