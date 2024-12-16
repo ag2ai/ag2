@@ -3,18 +3,29 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import sys
+import unittest
 from tempfile import TemporaryDirectory
-from typing import Protocol
 
 import pytest
 from conftest import reason, skip_openai
-from crewai_tools import FileReadTool
+
+if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
+    from crewai_tools import FileReadTool
+else:
+    FileReadTool = unittest.mock.MagicMock()
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interoperability import Interoperable
-from autogen.interoperability.crewai import CrewAIInteroperability
+
+if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
+    from autogen.interoperability.crewai import CrewAIInteroperability
+else:
+    CrewAIInteroperability = unittest.mock.MagicMock()
 
 
+# skip if python version is not in [3.10, 3.11, 3.12]
+@pytest.mark.skipif(sys.version_info < (3, 10) or sys.version_info >= (3, 13))
 class TestCrewAIInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:

@@ -2,6 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+
+if sys.version_info < (3, 10) or sys.version_info >= (3, 13):
+    raise ImportError("This submodule is only supported for Python versions 3.10, 3.11, and 3.12")
+
 try:
     import crewai.tools
 except ImportError:
