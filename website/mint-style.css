@@ -68,6 +68,92 @@ h4 {
   }
 }
 
+/* Home page hero section starts */
+.homepage-hero-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #4B9CD6; /* #4B9CD6 */
+}
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.homepage-hero-section .hero-content .hero-logo {
+  margin: 2em auto 0;
+}
+.homepage-hero-section .hero-content .hero-title {
+  margin: 0;
+  color: #fff;
+}
+.homepage-hero-section .hero-content .hero-subtitle {
+  margin: 0 0 1em 0;
+  color: #fff;
+}
+.homepage-hero-section .hero-content .hero-btn {
+  margin: 0 auto 2em;
+  background-color: #ebedf0;
+  border-radius: 5px;
+  padding: 5px 30px;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  display: inline-block;
+}
+/* Home page hero section ends */
+/* Home page popular resources section starts */
+.popular-resources .card {
+  padding: 0;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+}
+
+.popular-resources .card .px-6.py-5 {
+  padding: 0;
+  text-align: center;
+}
+.popular-resources .youtube-video a {
+  color: #4b9cd6;
+  display: inline-block;
+}
+.popular-resources .youtube-video a:hover {
+  text-decoration: underline;
+}
+/* Home page popular resources section ends */
+
+/* Home page key features section starts */
+.key-features .card {
+  padding: 0.5rem;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+}
+.key-features .card .px-6.py-5 {
+  padding: 0;
+  text-align: center;
+}
+.key-features .card .key-feature img {
+  width:132px;
+  height:132px;
+  margin:0 auto;
+}
+.key-features .card .key-feature h5 {
+  color: #4b9cd6;
+  font-weight: bold;
+  margin: 0.75rem 0;
+}
+.key-features .card .key-feature p {
+  font-size: 0.85rem;
+}
+/* Home page key features section ends */
+/* Home page explore content section starts */
+
+.explore-content h2 {
+  font-size: 1.5rem !important;
+}
+/* Home page explore content section ends */
 #search-bar-entry {
   border-radius: 0 !important;
   height: 36px;

@@ -1,0 +1,42 @@
+export const PopularResources = ({ src, linkText }) => {
+  const convertEmbedToWatchUrl = (embedUrl) => {
+    const url = new URL(embedUrl);
+    const videoId = url.pathname.split('/')[2];
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  };
+
+  const resourcesList = [
+    {
+      src: "https://www.youtube.com/embed/RLwyXRVvlNk",
+      linkText: "Foundation Capital Interview with Dr. Chi Wang"
+    },
+    {
+      src: "https://www.youtube.com/embed/TBNTH-fwGPE",
+      linkText: "Learn AG2 on DeepLearningAI"
+    }
+  ]
+
+  return (
+    <div class="popular-resources">
+      <CardGroup cols={2}>
+        {resourcesList.map((resource, index) => (
+          <Card key={index}>
+            <div class="youtube-video">
+              <iframe
+                class="w-full aspect-video rounded-md"
+                src={resource.src}
+                title="YouTube video player"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+              ></iframe>
+              <a href={convertEmbedToWatchUrl(resource.src)}>
+                {resource.linkText}
+              </a>
+            </div>
+          </Card>
+        ))}
+      </CardGroup>
+    </div>
+  );
+};

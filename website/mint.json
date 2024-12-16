@@ -53,6 +53,7 @@
     {
       "group": "",
       "pages": [
+        "docs/Home",
         "docs/Getting-Started"
       ]
     },
