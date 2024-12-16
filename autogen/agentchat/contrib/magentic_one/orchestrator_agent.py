@@ -219,7 +219,11 @@ class OrchestratorAgent(ConversableAgent):
         self._plan = response
 
     def _update_facts_and_plan(self) -> None:
-        # called when the orchestrator decides to replan
+        """Update the facts and plan based on the current task and conversation history.
+
+        This method is called when the orchestrator decides to replan. It updates the
+        internal facts and plan by querying the LLM with the current task and conversation history.
+        """
 
         planning_conversation = [m for m in self._oai_messages[self]]
 
@@ -247,6 +251,16 @@ class OrchestratorAgent(ConversableAgent):
         self._plan = response
 
     def _update_ledger(self) -> Dict[str, Any]:
+        """Update the ledger by querying the LLM for the current task status.
+
+        This method queries the LLM to determine the current status of the task,
+        including whether the request is satisfied, if the agents are in a loop,
+        if progress is being made, who the next speaker should be, and what the
+        next instruction or question should be.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the ledger information.
+        """
         max_json_retries = 10
 
         team_description = self._get_team_description()
@@ -316,6 +330,14 @@ class OrchestratorAgent(ConversableAgent):
         raise ValueError("Failed to parse ledger information after multiple retries.")
 
     def _prepare_final_answer(self) -> str:
+        """Prepare the final answer by querying the LLM for a summary of the task.
+
+        This method is called when the task is complete. It queries the LLM to
+        generate a final answer or summary of the task based on the conversation history.
+
+        Returns:
+            str: The final answer or summary of the task.
+        """
         # called when the task is complete
 
         final_message = {"role": "user", "content": ORCHESTRATOR_GET_FINAL_ANSWER.format(task=self._task)}
@@ -329,7 +351,18 @@ class OrchestratorAgent(ConversableAgent):
         return response
 
     def _select_next_agent(self, task: dict | str) -> Optional[ConversableAgent]:
-        """Select the next agent to act based on the current state."""
+        """Select the next agent to act based on the current state.
+
+        This method determines the next agent to act based on the current task,
+        conversation history, and the ledger information. It handles task initialization,
+        progress tracking, stall detection, replanning, and task completion.
+
+        Args:
+            task (dict | str): The current task or message.
+
+        Returns:
+            Optional[ConversableAgent]: The next agent to act, or None if the task is complete or stalled.
+        """
         taskstr: str = ""
         if isinstance(task, dict):
 
