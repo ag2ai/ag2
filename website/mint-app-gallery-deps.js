@@ -42,10 +42,24 @@ function initializeGallerySelect() {
         });
         document.dispatchEvent(customEvent);
       });
-  }, 500);
+  }, 100);
 }
 
-// Initialize on page load and after dynamic content loads
+// Watch for URL changes using MutationObserver
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (window.location.pathname.includes("/Gallery")) {
+      initializeGallerySelect();
+    }
+  });
+});
+
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+});
+
+// Initialize on page load
 document.addEventListener("DOMContentLoaded", function () {
   if (window.jQuery && window.jQuery.fn.chosen) {
     initializeGallerySelect();

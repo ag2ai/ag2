@@ -4,14 +4,13 @@ export const GalleryPage = ({
   target = "_blank",
 }) => {
 
+  let selectedTags = [];
+  const defaultImageIfNoImage = allowDefaultImage ?? true;
+  const allTags = [...new Set(galleryItems.flatMap((item) => item.tags))];
+
   document.addEventListener('gallery:tagChange', (event) => {
     handleTagChange(event.detail);
   });
-
-  let selectedTags = [];
-  const defaultImageIfNoImage = allowDefaultImage ?? true;
-
-  const allTags = [...new Set(galleryItems.flatMap((item) => item.tags))];
 
   const imageFunc = (item) => {
     const image = (
