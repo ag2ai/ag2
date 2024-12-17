@@ -60,6 +60,7 @@ class WebController:
         """
         Initialize the WebController.
 
+
         Args:
             headless (bool): Whether to run the browser in headless mode. Defaults to True.
             browser_channel (str | type[DEFAULT_CHANNEL]): The browser channel to use. Defaults to DEFAULT_CHANNEL.
@@ -298,18 +299,15 @@ class WebController:
 
                 # If found, proceed with click
                 await target.scroll_into_view_if_needed()
-                box = cast(Dict[str, Union[int, float]], await target.bounding_box())
 
                 # Track current page state before click
                 current_url = self._page.url
                 current_pages = len(self._context.pages)
 
                 # Click with a short timeout to catch immediate popups
-                popup_detected = False
                 try:
                     async with self._context.expect_page(timeout=6000) as page_info:
                         await target.click(delay=10)
-                        popup_detected = True
                         try:
                             new_page = await page_info.value
                             await new_page.wait_for_load_state("domcontentloaded", timeout=4000)
