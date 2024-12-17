@@ -8,15 +8,17 @@ import unittest
 
 import pytest
 from conftest import reason, skip_openai
-from langchain.tools import tool
 from pydantic import BaseModel, Field
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.interoperability import Interoperable
+from autogen.interop import Interoperable
 
 if sys.version_info >= (3, 9):
-    from autogen.interoperability.langchain import LangchainInteroperability
+    from langchain.tools import tool
+
+    from autogen.interop.langchain import LangchainInteroperability
 else:
+    tool = unittest.mock.MagicMock()
     LangchainInteroperability = unittest.mock.MagicMock()
 
 
@@ -88,7 +90,7 @@ class TestLangchainInteroperability:
 class TestLangchainInteroperabilityWithoutPydanticInput:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        @tool  # type: ignore[misc]
+        @tool
         def search(query: str, max_length: int) -> str:
             """Look up things online."""
             return f"LangChain Integration, max_length: {max_length}"

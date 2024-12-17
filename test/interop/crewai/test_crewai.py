@@ -16,10 +16,10 @@ else:
     FileReadTool = unittest.mock.MagicMock()
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.interoperability import Interoperable
+from autogen.interop import Interoperable
 
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-    from autogen.interoperability.crewai import CrewAIInteroperability
+    from autogen.interop.crewai import CrewAIInteroperability
 else:
     CrewAIInteroperability = unittest.mock.MagicMock()
 

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.interoperability import Interoperable
+from autogen.interop import Interoperable
 
 
 def test_interoperable() -> None:

@@ -61,12 +61,12 @@ files = [
     "autogen/function_utils.py",
     "autogen/io",
     "autogen/tools",
-    "autogen/interoperability",
+    "autogen/interop",
     "test/test_pydantic.py",
     "test/test_function_utils.py",
     "test/io",
     "test/tools",
-    "test/interoperability",
+    "test/interop",
 ]
 exclude = [
     "autogen/math_utils\\.py",
