@@ -1,6 +1,13 @@
-from typing import Literal, Dict, Any
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
+
 import json
 import re
+from typing import Any, Dict, Literal
 
 
 def clean_and_parse_json(content: str) -> Dict[str, Any]:
@@ -17,10 +24,10 @@ def clean_and_parse_json(content: str) -> Dict[str, Any]:
         parts = content.split("```")
         if len(parts) > 1:
             content = parts[1].strip()  # Take first code block content
-    
+
     # Find JSON-like structure if not in code block
-    if not content.strip().startswith('{'):
-        json_match = re.search(r'\{[\s\S]*\}', content)
+    if not content.strip().startswith("{"):
+        json_match = re.search(r"\{[\s\S]*\}", content)
         if not json_match:
             raise ValueError(
                 f"Could not find valid JSON structure in content. "
@@ -31,21 +38,23 @@ def clean_and_parse_json(content: str) -> Dict[str, Any]:
 
     # Preserve newlines for readability in error messages
     formatted_content = content
-    
+
     # Now clean for parsing
     try:
         # First try parsing the cleaned but formatted content
         return json.loads(formatted_content)
     except json.JSONDecodeError:
         # If that fails, try more aggressive cleaning
-        cleaned_content = re.sub(r'[\n\r\t]', ' ', content)  # Replace newlines/tabs with spaces
-        cleaned_content = re.sub(r'\s+', ' ', cleaned_content)  # Normalize whitespace
-        cleaned_content = re.sub(r'\\(?!["\\/bfnrt])', '', cleaned_content)  # Remove invalid escapes
-        cleaned_content = re.sub(r',(\s*[}\]])', r'\1', cleaned_content)  # Remove trailing commas
-        cleaned_content = re.sub(r'([{,]\s*)(\w+)(?=\s*:)', r'\1"\2"', cleaned_content)  # Quote unquoted keys
+        cleaned_content = re.sub(r"[\n\r\t]", " ", content)  # Replace newlines/tabs with spaces
+        cleaned_content = re.sub(r"\s+", " ", cleaned_content)  # Normalize whitespace
+        cleaned_content = re.sub(r'\\(?!["\\/bfnrt])', "", cleaned_content)  # Remove invalid escapes
+        cleaned_content = re.sub(r",(\s*[}\]])", r"\1", cleaned_content)  # Remove trailing commas
+        cleaned_content = re.sub(r"([{,]\s*)(\w+)(?=\s*:)", r'\1"\2"', cleaned_content)  # Quote unquoted keys
         cleaned_content = cleaned_content.replace("'", '"')  # Standardize quotes
-        
+
         try:
             return json.loads(cleaned_content)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)} Original content: {formatted_content}")
+            raise ValueError(
+                f"Failed to parse JSON after cleaning. Error: {str(e)} Original content: {formatted_content}"
+            )

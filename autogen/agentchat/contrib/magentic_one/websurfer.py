@@ -1,38 +1,46 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
+
 import base64
 import hashlib
 import io
 import json
-import logging
 import os
 import pathlib
 import re
 import time
-import traceback
-from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union, cast,Callable,Literal  # Any, Callable, Dict, List, Literal, Tuple
+from typing import (
+    Any,
+    BinaryIO,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
+
+# Any, Callable, Dict, List, Literal, Tuple
 from urllib.parse import quote_plus  # parse_qs, quote, unquote, urlparse, urlunparse
 
 import aiofiles
-
 from PIL import Image
 from playwright._impl._errors import Error as PlaywrightError
 from playwright._impl._errors import TimeoutError
-from autogen.agentchat import ConversableAgent, Agent
-
 
 # from playwright._impl._async_base.AsyncEventInfo
 from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
 
-from .websurfer_prompts import (
-    DEFAULT_DESCRIPTION,
-    SCREENSHOT_TOOL_SELECTION,
-)
+from autogen.agentchat import Agent, ConversableAgent
 
 # TODO: Fix mdconvert (I think i saw a new pull request)
 from .markdown_browser import MarkdownConverter  # type: ignore
-from .utils import SentinelMeta
-
-#from ...utils import message_content_to_str
-
 from .set_of_mark import add_set_of_mark
 from .tool_definitions import (
     TOOL_CLICK,
@@ -48,12 +56,17 @@ from .tool_definitions import (
     TOOL_VISIT_URL,
     TOOL_WEB_SEARCH,
 )
-
 from .types import (
     InteractiveRegion,
+    SentinelMeta,
     VisualViewport,
     interactiveregion_from_dict,
     visualviewport_from_dict,
+)
+from .utils import clean_and_parse_json
+from .websurfer_prompts import (
+    DEFAULT_DESCRIPTION,
+    SCREENSHOT_TOOL_SELECTION,
 )
 
 # Viewport dimensions
@@ -67,19 +80,19 @@ MLM_WIDTH = 1224
 
 SCREENSHOT_TOKENS = 1105
 
-import logging
 
 from autogen.logger import FileLogger
 
 # Initialize logger with config
 logger = FileLogger(config={})
 
+
 # Sentinels
 class DEFAULT_CHANNEL(metaclass=SentinelMeta):
     pass
 
 
-#@default_subscription
+# @default_subscription
 class MultimodalWebSurfer(ConversableAgent):
     """(In preview) A multimodal agent that acts as a web surfer that can search the web and visit web pages."""
 
@@ -114,7 +127,7 @@ class MultimodalWebSurfer(ConversableAgent):
             default_auto_reply=default_auto_reply,
             description=description,
             chat_messages=chat_messages,
-            silent=silent
+            silent=silent,
         )
         # Call init to set these
         self._playwright: Playwright | None = None
@@ -164,7 +177,7 @@ class MultimodalWebSurfer(ConversableAgent):
         self.start_page = start_page or self.DEFAULT_START_PAGE
         self.downloads_folder = downloads_folder
         self.to_save_screenshots = to_save_screenshots
-        self._chat_history: List[Dict[str,Any]] = [] 
+        self._chat_history: List[Dict[str, Any]] = []
         self._last_download = None
         self._prior_metadata_hash = None
 
@@ -176,7 +189,7 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Create the playwright self
         launch_args: Dict[str, Any] = {"headless": headless}
-        if browser_channel is not DEFAULT_CHANNEL: 
+        if browser_channel is not DEFAULT_CHANNEL:
             launch_args["channel"] = browser_channel
         self._playwright = await async_playwright().start()
 
@@ -204,16 +217,18 @@ class MultimodalWebSurfer(ConversableAgent):
 
         # Prepare the debug directory -- which stores the screenshots generated throughout the process
         await self._set_debug_dir(debug_dir)
-        
 
-    def _get_screenshot_selection_prompt(self, page_url, visible_targets, other_targets_str, focused_hint, tool_names) -> str:
+    def _get_screenshot_selection_prompt(
+        self, page_url, visible_targets, other_targets_str, focused_hint, tool_names
+    ) -> str:
         assert self._page is not None
-        return self.screenshot_tool_prompt.format(page_url=self._page.url,
-        visible_targets=visible_targets,
-        other_targets_str=other_targets_str,
-        focused_hint=focused_hint,
-        tool_names=tool_names
-        )  
+        return self.screenshot_tool_prompt.format(
+            page_url=self._page.url,
+            visible_targets=visible_targets,
+            other_targets_str=other_targets_str,
+            focused_hint=focused_hint,
+            tool_names=tool_names,
+        )
 
     async def _sleep(self, duration: Union[int, float]) -> None:
         assert self._page is not None
@@ -251,12 +266,7 @@ class MultimodalWebSurfer(ConversableAgent):
         if self.to_save_screenshots:
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
             logger.log_event(
-                source=self.name,
-                name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
+                source=self.name, name="screenshot", data={"url": self._page.url, "screenshot": screenshot_png_name}
             )
 
             logger.log_event(
@@ -264,38 +274,25 @@ class MultimodalWebSurfer(ConversableAgent):
                 name="debug_screens",
                 data={
                     "text": "Multimodal Web Surfer debug screens",
-                    "url": pathlib.Path(os.path.abspath(debug_html)).as_uri()
-                }
+                    "url": pathlib.Path(os.path.abspath(debug_html)).as_uri(),
+                },
             )
 
-
-    async def _reset(self) -> None: 
+    async def _reset(self) -> None:
         assert self._page is not None
         self.chat_messages[self] = []
-        
+
         await self._visit_page(self.start_page)
         if self.to_save_screenshots:
             current_timestamp = "_" + int(time.time()).__str__()
             screenshot_png_name = "screenshot" + current_timestamp + ".png"
             await self._page.screenshot(path=os.path.join(self.debug_dir, screenshot_png_name))
-            
+
             logger.log_event(
-                source=self.name,
-                name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
+                source=self.name, name="screenshot", data={"url": self._page.url, "screenshot": screenshot_png_name}
             )
 
-        logger.log_event(
-            source=self.name,
-            name="reset",
-            data={
-                "text": "Resetting browser.",
-                "url": self._page.url
-            }
-        )
+        logger.log_event(source=self.name, name="reset", data={"text": "Resetting browser.", "url": self._page.url})
 
     def _target_name(self, target: str, rects: Dict[str, InteractiveRegion]) -> str | None:
         try:
@@ -319,27 +316,25 @@ class MultimodalWebSurfer(ConversableAgent):
                 actions = ['"click"']
                 if rects[r]["role"] in ["textbox", "searchbox", "search"]:
                     actions = ['"input_text"']
+                if not actions:
+                    actions = ['"none"']  # Default action if none are found
                 actions_str = "[" + ",".join(actions) + "]"
 
                 targets.append(f'{{"id": {r}, "name": "{aria_name}", "role": "{aria_role}", "tools": {actions_str} }}')
 
         return targets
 
-    async def _execute_tool( # TODO: replace with ag2 ? 
-        self,
-        message: Dict[str, Any],
-        rects: Dict[str, InteractiveRegion],
-        tool_names: str,
-        use_ocr: bool = True
-        )-> Tuple[bool, Union[str, Dict, None]]:
-        # TODO: Handle both legacy function calls and new tool calls format 
-        #if isinstance(message, dict) and "tool_responses" in message:
+    async def _execute_tool(  # TODO: replace with ag2 ?
+        self, message: Dict[str, Any], rects: Dict[str, InteractiveRegion], tool_names: str, use_ocr: bool = True
+    ) -> Tuple[bool, Union[str, Dict, None]]:
+        # TODO: Handle both legacy function calls and new tool calls format
+        # if isinstance(message, dict) and "tool_responses" in message:
         #    # New tool calls format
 
         function = message["tool_calls"][0]["function"]
         args = function["arguments"]
         if isinstance(args, str):
-            args = self._clean_and_parse_json(args) 
+            args = clean_and_parse_json(args)
 
         name = function["name"]
         assert name is not None
@@ -347,13 +342,7 @@ class MultimodalWebSurfer(ConversableAgent):
         action_description = ""
         assert self._page is not None
         logger.log_event(
-            source=self.name,
-            name="tool_execution",
-            data={
-                "url": self._page.url,
-                "tool_name": name,
-                "args": args
-            }
+            source=self.name, name="tool_execution", data={"url": self._page.url, "tool_name": name, "args": args}
         )
 
         if name == "visit_url":
@@ -486,37 +475,25 @@ class MultimodalWebSurfer(ConversableAgent):
             async with aiofiles.open(os.path.join(self.debug_dir, screenshot_png_name), "wb") as file:  # type: ignore
                 await file.write(new_screenshot)  # type: ignore
             logger.log_event(
-                source=self.name,
-                name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
+                source=self.name, name="screenshot", data={"url": self._page.url, "screenshot": screenshot_png_name}
             )
 
-        ocr_text = (
-            await self._get_ocr_text(new_screenshot) if use_ocr is True else ""
-        )
+        ocr_text = await self._get_ocr_text(new_screenshot) if use_ocr is True else ""
 
         # Return the complete observation
         message_content = ""  # message.content or ""
         page_title = await self._page.title()
-        encoded_string = base64.b64encode(new_screenshot).decode('utf-8')
+        encoded_string = base64.b64encode(new_screenshot).decode("utf-8")
 
         return False, {
             "role": "user",
             "content": [
                 {
                     "type": "text",
-                    "text": f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({self._page.url}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip()
+                    "text": f"{message_content}\n\n{action_description}\n\nHere is a screenshot of [{page_title}]({self._page.url}). The viewport shows {percent_visible}% of the webpage, and is positioned {position_text}.{page_metadata}\nAutomatic OCR of the page screenshot has detected the following text:\n\n{ocr_text}".strip(),
                 },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{encoded_string}"
-                    }
-                }
-            ]
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_string}"}},
+            ],
         }
 
     async def a_generate_reply(
@@ -526,7 +503,7 @@ class MultimodalWebSurfer(ConversableAgent):
         **kwargs: Any,
     ) -> Union[str, Dict[str, Any], None]:
         """Generates the actual reply. First calls the LLM to figure out which tool to use, then executes the tool.
-        
+
         Returns:
             Union[str, Dict, None]: The response content which may be a string, dict or None
         """
@@ -535,12 +512,12 @@ class MultimodalWebSurfer(ConversableAgent):
 
         history = messages
         # Get the full conversation history
-        #history = []
-        #for msg in self._oai_messages.values():
+        # history = []
+        # for msg in self._oai_messages.values():
         #    history.extend(msg)
 
         # Ask the page for interactive elements, then prepare the state-of-mark screenshot
-        rects = await self._get_interactive_rects() 
+        rects = await self._get_interactive_rects()
         viewport = await self._get_visual_viewport()
         screenshot = await self._page.screenshot()
         som_screenshot, visible_rects, rects_above, rects_below = add_set_of_mark(screenshot, rects)
@@ -550,12 +527,7 @@ class MultimodalWebSurfer(ConversableAgent):
             screenshot_png_name = "screenshot_som" + current_timestamp + ".png"
             som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
             logger.log_event(
-                source=self.name,
-                name="screenshot",
-                data={
-                    "url": self._page.url,
-                    "screenshot": screenshot_png_name
-                }
+                source=self.name, name="screenshot", data={"url": self._page.url, "screenshot": screenshot_png_name}
             )
         # What tools are available?
         tools: List[Dict[str, Any]] = [
@@ -619,11 +591,9 @@ class MultimodalWebSurfer(ConversableAgent):
 
         tool_names = "\n".join([t["function"]["name"] for t in tools])
 
-        text_prompt = self._get_screenshot_selection_prompt(self._page.url, 
-        visible_targets, 
-        other_targets_str, 
-        focused_hint, 
-        tool_names)
+        text_prompt = self._get_screenshot_selection_prompt(
+            self._page.url, visible_targets, other_targets_str, focused_hint, tool_names
+        )
 
         # Scale the screenshot for the MLM, and close the original
         scaled_screenshot = som_screenshot.resize((MLM_WIDTH, MLM_HEIGHT))
@@ -638,24 +608,16 @@ class MultimodalWebSurfer(ConversableAgent):
         image_bytes = buffer.getvalue()
         buffer.close()
         scaled_screenshot.close()
-        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
+        encoded_string = base64.b64encode(image_bytes).decode("utf-8")
 
         message = {
             "role": "user",
             "content": [
-                {
-                    "type": "text",
-                    "text": text_prompt
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{encoded_string}"
-                    }
-                }
-            ]
+                {"type": "text", "text": text_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_string}"}},
+            ],
         }
-        
+
         # Register the tools for this interaction
         for tool in tools:
             if isinstance(tool, dict) and "function" in tool:
@@ -664,11 +626,11 @@ class MultimodalWebSurfer(ConversableAgent):
                 self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
 
         # Call the parent class's generate_reply instead of our own to avoid recursion
-        response = await super().a_generate_reply(messages=history + [message]) # system massage
+        response = await super().a_generate_reply(messages=history + [message])  # system massage
 
         self._last_download = None
 
-        if isinstance(response, str): #TODO: response format
+        if isinstance(response, str):  # TODO: response format
             # Direct text response
             return response
         elif isinstance(response, dict):
@@ -676,18 +638,18 @@ class MultimodalWebSurfer(ConversableAgent):
                 request_halt, tool_response = await self._execute_tool(response, rects, tool_names)
             elif "function_call" in response:
                 # Legacy function call handling
-                #success, func_response = await self.a_generate_function_call_reply(messages=[response])
-                #if success:
+                # success, func_response = await self.a_generate_function_call_reply(messages=[response])
+                # if success:
                 raise Exception("Legacy function call handling not implemented")
-                #return await self._execute_tool(response, rects, tool_names)
-        
+                # return await self._execute_tool(response, rects, tool_names)
+
         # Clean up registered tools
         for tool in tools:
             if isinstance(tool, dict) and "function" in tool:
                 self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
             else:
                 self.update_tool_signature({"type": "function", "function": tool}, is_remove=True)
-        
+
         if tool_response is not None:
             return tool_response
         return None
@@ -760,12 +722,7 @@ class MultimodalWebSurfer(ConversableAgent):
         )
         await self._page.wait_for_load_state()
         logger.log_event(
-            source=self.name,
-            name="new_page",
-            data={
-                "url": self._page.url,
-                "text": "New tab or window opened"
-            }
+            source=self.name, name="new_page", data={"url": self._page.url, "text": "New tab or window opened"}
         )
 
     async def _back(self) -> None:
@@ -817,7 +774,7 @@ class MultimodalWebSurfer(ConversableAgent):
         try:
             await target.wait_for(timeout=200)
         except TimeoutError:
-            try: 
+            try:
                 target = self._page.locator(f"[__elementId={identifier}]")
                 await target.wait_for(timeout=200)
             except TimeoutError:
@@ -828,7 +785,7 @@ class MultimodalWebSurfer(ConversableAgent):
         box = cast(Dict[str, Union[int, float]], await target.bounding_box())
         try:
             # Give it a chance to open a new page
-            # TOODO: Having trouble with these types 
+            # TOODO: Having trouble with these types
             async with self._page.expect_event("popup", timeout=1000) as page_info:  # type: ignore
                 await self._page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, delay=10)
                 # If we got this far without error, than a popup or new tab opened. Handle it.
@@ -839,12 +796,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 await self._on_new_page(new_page)
 
                 logger.log_event(
-                    source=self.name,
-                    name="popup",
-                    data={
-                        "url": self._page.url,
-                        "text": "New tab or window opened"
-                    }
+                    source=self.name, name="popup", data={"url": self._page.url, "text": "New tab or window opened"}
                 )
 
         except TimeoutError:
@@ -858,7 +810,7 @@ class MultimodalWebSurfer(ConversableAgent):
         try:
             await target.wait_for(timeout=200)
         except TimeoutError:
-            try: 
+            try:
                 target = self._page.locator(f"[__elementId='{identifier}']")
                 await target.wait_for(timeout=200)
             except TimeoutError:
@@ -891,11 +843,7 @@ class MultimodalWebSurfer(ConversableAgent):
     """
         )
 
-    async def _summarize_page(
-        self,
-        question: str | None = None,
-        token_limit: int = 100000
-    ) -> str:
+    async def _summarize_page(self, question: str | None = None, token_limit: int = 100000) -> str:
         assert self._page is not None
 
         page_markdown: str = await self._get_page_markdown()
@@ -910,10 +858,10 @@ class MultimodalWebSurfer(ConversableAgent):
         screenshot = Image.open(io.BytesIO(await self._page.screenshot()))
         scaled_screenshot = screenshot.resize((MLM_WIDTH, MLM_HEIGHT))
         screenshot.close()
-        #ag_image = AGImage.from_pil(scaled_screenshot)
+        # ag_image = AGImage.from_pil(scaled_screenshot)
 
         # Prepare the system prompt
-        messages: List[Dict[str,Any]] = []
+        messages: List[Dict[str, Any]] = []
         messages.append(
             {
                 "role": "system",
@@ -928,33 +876,30 @@ class MultimodalWebSurfer(ConversableAgent):
         else:
             prompt += " Please summarize the webpage into one or two paragraphs:\n\n"
 
-
         Imagebuffer = io.BytesIO()
         scaled_screenshot.save(Imagebuffer, format="PNG")
         image_bytes = Imagebuffer.getvalue()
         Imagebuffer.close()
         scaled_screenshot.close()
-        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
+        encoded_string = base64.b64encode(image_bytes).decode("utf-8")
 
         # Grow the buffer (which is added to the prompt) until we overflow the context window or run out of lines
         buffer = ""
         for line in re.split(r"([\r\n]+)", page_markdown):
-            message = {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt + buffer + line
-                    },
-                    #ag_image
-                ]
-            }
+            # message = {
+            #    "role": "user",
+            #    "content": [
+            #        {"type": "text", "text": prompt + buffer + line},
+            #        # ag_image
+            #    ],
+            # }
+            buffer += line
 
             # TODO: is something like this possible in ag2
-            #remaining = self._model_client.remaining_tokens(messages + [message])
-            #if remaining > SCREENSHOT_TOKENS:
+            # remaining = self._model_client.remaining_tokens(messages + [message])
+            # if remaining > SCREENSHOT_TOKENS:
             #    buffer += line
-            #else:
+            # else:
             #    break
 
         # Nothing to do
@@ -967,17 +912,9 @@ class MultimodalWebSurfer(ConversableAgent):
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "text",
-                        "text": prompt + buffer
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{encoded_string}"
-                        }
-                    }
-                ]
+                    {"type": "text", "text": prompt + buffer},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_string}"}},
+                ],
             }
         )
 
@@ -987,9 +924,7 @@ class MultimodalWebSurfer(ConversableAgent):
         assert isinstance(response, str)
         return response
 
-    async def _get_ocr_text(
-        self, image: bytes | io.BufferedIOBase | Image.Image
-    ) -> str:
+    async def _get_ocr_text(self, image: bytes | io.BufferedIOBase | Image.Image) -> str:
         scaled_screenshot = None
         if isinstance(image, Image.Image):
             scaled_screenshot = image.resize((MLM_WIDTH, MLM_HEIGHT))
@@ -1008,17 +943,9 @@ class MultimodalWebSurfer(ConversableAgent):
         image_bytes = buffer.getvalue()
         buffer.close()
         scaled_screenshot.close()
-        encoded_string = base64.b64encode(image_bytes).decode('utf-8')
+        encoded_string = base64.b64encode(image_bytes).decode("utf-8")
 
-        # Save the encoded string to a file
-        with open("debug_base64.txt", "w") as f:
-            f.write(encoded_string)
-
-        # Load the encoded string from the file
-        #with open("debug_base64.txt", "r") as f:
-        #    encoded_string = f.read()
-
-        messages: List[Dict[str,Any]] = [] 
+        messages: List[Dict[str, Any]] = []
 
         messages.append(
             {
@@ -1026,73 +953,15 @@ class MultimodalWebSurfer(ConversableAgent):
                 "content": [
                     {
                         "type": "text",
-                        "text": "Please transcribe all visible text on this page, including both main content and the labels of UI elements."
+                        "text": "Please transcribe all visible text on this page, including both main content and the labels of UI elements.",
                     },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{encoded_string}"
-                        }
-                    }
-                ]
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_string}"}},
+                ],
             }
         )
-        
+
         is_valid_response, response = await self.a_generate_oai_reply(messages=messages)
 
         assert is_valid_response
         assert isinstance(response, str)
         return response
-
-    def _clean_and_parse_json(self, content: str) -> Dict[str, Any]:
-        """Clean and parse JSON content from various formats."""
-        if not content or not isinstance(content, str):
-            raise ValueError("Content must be a non-empty string")
-
-        # Extract JSON from markdown code blocks if present
-        if "```json" in content:
-            parts = content.split("```json")
-            if len(parts) > 1:
-                content = parts[1].split("```")[0].strip()
-        elif "```" in content:  # Handle cases where json block might not be explicitly marked
-            parts = content.split("```")
-            if len(parts) > 1:
-                content = parts[1].strip()  # Take first code block content
-        
-        # Find JSON-like structure if not in code block
-        if not content.strip().startswith('{'):
-            json_match = re.search(r'\{[\s\S]*\}', content)
-            if not json_match:
-                raise ValueError(f"No JSON structure found in content: {content}")
-            content = json_match.group(0)
-
-        # Preserve newlines for readability in error messages
-        formatted_content = content
-        
-        # Now clean for parsing
-        try:
-            # First try parsing the cleaned but formatted content
-            return json.loads(formatted_content)
-        except json.JSONDecodeError:
-            # If that fails, try more aggressive cleaning
-            cleaned_content = re.sub(r'[\n\r\t]', ' ', content)  # Replace newlines/tabs with spaces
-            cleaned_content = re.sub(r'\s+', ' ', cleaned_content)  # Normalize whitespace
-            cleaned_content = re.sub(r'\\(?!["\\/bfnrt])', '', cleaned_content)  # Remove invalid escapes
-            cleaned_content = re.sub(r',(\s*[}\]])', r'\1', cleaned_content)  # Remove trailing commas
-            cleaned_content = re.sub(r'([{,]\s*)(\w+)(?=\s*:)', r'\1"\2"', cleaned_content)  # Quote unquoted keys
-            cleaned_content = cleaned_content.replace("'", '"')  # Standardize quotes
-            
-            try:
-                return json.loads(cleaned_content)
-            except json.JSONDecodeError as e:
-                logger.log_event(
-                    source=self.name,
-                    name="json_error",
-                    data={
-                        "original_content": formatted_content,
-                        "cleaned_content": cleaned_content,
-                        "error": str(e)
-                    }
-                )
-                raise ValueError(f"Failed to parse JSON after cleaning. Error: {str(e)}")
-
