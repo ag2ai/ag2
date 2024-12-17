@@ -383,7 +383,7 @@ class ReasoningAgent(AssistantAgent):
             return True, forest_answers[0]
         else:
             self.send(
-                message=f"Answer the question {prompt}. Here are some students' different answers:\n{"\n-".join(forest_answers)}",
+                message=f"Answer the question {prompt}. Here are some students' different answers:\n{{'\n-'.join(forest_answers)}}",
                 recipient=self,
                 request_reply=True,
                 silent=not self._verbose,
