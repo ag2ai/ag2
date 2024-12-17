@@ -1,13 +1,9 @@
-name: Deploy Mintlify Website
+name: Test Deploy Mintlify Website
 
 on:
   push:
     branches:
       - fix-deploy-job
-    paths:
-      - 'autogen/**'
-      - 'website/**'
-      - '.github/workflows/deploy-website-mintlify.yml'
 
 jobs:
   deploy-website-mintlify:
