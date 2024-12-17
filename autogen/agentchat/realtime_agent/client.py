@@ -5,11 +5,14 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-import asyncio
+# import asyncio
 import json
 from abc import ABC, abstractmethod
+from typing import Any, Optional
 
+import anyio
 import websockets
+from asyncer import TaskGroup, asyncify, create_task_group, syncify
 
 from .function_observer import FunctionObserver
 
@@ -21,6 +24,17 @@ class Client(ABC):
         self._openai_ws = None  # todo factor out to OpenAIClient
         self.register(audio_adapter)
         self.register(function_observer)
+
+        # LLM config
+        llm_config = self._agent.llm_config
+        config = llm_config["config_list"][0]
+
+        self.model = config["model"]
+        self.temperature = llm_config["temperature"]
+        self.api_key = config["api_key"]
+
+        # create a task group to manage the tasks
+        self.tg: Optional[TaskGroup] = None
 
     def register(self, observer):
         observer.register_client(self)
@@ -42,7 +56,7 @@ class Client(ABC):
         await self._openai_ws.send(json.dumps(result_item))
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
 
-    async def send_text(self, text):
+    async def send_text(self, text: str):
         text_item = {
             "type": "conversation.item.create",
             "item": {"type": "message", "role": "system", "content": [{"type": "input_text", "text": text}]},
@@ -54,6 +68,7 @@ class Client(ABC):
     async def initialize_session(self):
         """Control initial session with OpenAI."""
         session_update = {
+            # todo: move to config
             "turn_detection": {"type": "server_vad"},
             "voice": self._agent.voice,
             "instructions": self._agent.system_message,
@@ -65,8 +80,9 @@ class Client(ABC):
     # todo override in specific clients
     async def session_update(self, session_options):
         update = {"type": "session.update", "session": session_options}
-        print("Sending session update:", json.dumps(update))
+        print("Sending session update:", json.dumps(update), flush=True)
         await self._openai_ws.send(json.dumps(update))
+        print("Sending session update finished", flush=True)
 
     async def _read_from_client(self):
         try:
@@ -77,14 +93,21 @@ class Client(ABC):
             print(f"Error in _read_from_client: {e}")
 
     async def run(self):
-
         async with websockets.connect(
-            "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
+            f"wss://api.openai.com/v1/realtime?model={self.model}",
             additional_headers={
-                "Authorization": f"Bearer {self._agent.llm_config['config_list'][0]['api_key']}",
+                "Authorization": f"Bearer {self.api_key}",
                 "OpenAI-Beta": "realtime=v1",
             },
         ) as openai_ws:
             self._openai_ws = openai_ws
             await self.initialize_session()
-            await asyncio.gather(self._read_from_client(), *[observer.run() for observer in self._observers])
+            # await asyncio.gather(self._read_from_client(), *[observer.run() for observer in self._observers])
+            async with create_task_group() as tg:
+                self.tg = tg
+                self.tg.soonify(self._read_from_client)()
+                for observer in self._observers:
+                    self.tg.soonify(observer.run)()
+
+    def run_task(self, task, *args: Any, **kwargs: Any):
+        self.tg.soonify(task)(*args, **kwargs)
