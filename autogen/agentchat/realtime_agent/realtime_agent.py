@@ -30,11 +30,10 @@ logger = logging.getLogger(__name__)
 
 SWARM_SYSTEM_MESSAGE = (
     "You are a helpful voice assistant. Your task is to listen to user and to create tasks based on his/her inputs. E.g. if a user wishes to make change to his flight, you should create a task for it.\n"
-    "DO NOT ask any additional information about the task from the user. You should assume that the user has provided all the necessary information and that the agents executing the task have all the contextual information needed.\n"
+    "DO NOT ask any additional information about the task from the user. Start the task as soon as possible.\n"
     "You have to assume that every task can be successfully completed by the swarm of agents and your only role is to create tasks for them.\n"
-    "While the task is being executed, please keep the user on the line and inform him/her about the progress by calling the 'get_task_status' function. You might also get additional questions or status reports from the agents working on the task.\n"
-    "Do not assume that agents cannot complete the task, unless you create a task and the agents specifically instruct you that the task is impossible to solve by them.\n"
-    "Once the task is done, inform the user that the task is completed and ask if you can help with anything else.\n"
+    # "While the task is being executed, please keep the user on the line and inform him/her about the progress by calling the 'get_task_status' function. You might also get additional questions or status reports from the agents working on the task.\n"
+    # "Once the task is done, inform the user that the task is completed and ask if you can help with anything else.\n"
     "Do not create unethical or illegal tasks.\n"
 )
 
@@ -86,7 +85,6 @@ class RealtimeAgent(ConversableAgent):
 
         self._answer_event: anyio.Event = anyio.Event()
         self._answer: str = ""
-        self.register_handover(name="Answer question", description="Answer question from the task")(self.set_answer)
 
     def register_swarm(
         self,
@@ -129,6 +127,10 @@ class RealtimeAgent(ConversableAgent):
         async def get_task_status(task_id: str) -> str:
             return next(it)
 
+        self.register_handover(name="answer_task_question", description="Answer question from the task")(
+            self.set_answer
+        )
+
     async def run(self):
         await self._client.run()
 
@@ -150,7 +152,6 @@ class RealtimeAgent(ConversableAgent):
             Raises:
                 ValueError: if the function description is not provided and not propagated by a previous decorator.
                 RuntimeError: if the LLM config is not set up before registering a function.
-
             """
             # get JSON schema for the function
             name = name or func.__name__
@@ -167,9 +168,10 @@ class RealtimeAgent(ConversableAgent):
     def reset_answer(self) -> None:
         self._answer_event = anyio.Event()
 
-    def set_answer(self, answer: str) -> None:
+    def set_answer(self, answer: str) -> str:
         self._answer = answer
         self._answer_event.set()
+        return "Answer set successfully."
 
     async def get_answer(self) -> str:
         await self._answer_event.wait()
@@ -187,8 +189,8 @@ class RealtimeAgent(ConversableAgent):
             async with create_task_group() as tg:
                 self.reset_answer()
                 tg.soonify(self._client.send_text)(
-                    "I have a question for the user from the agent working on a task. DO NOT ANSWER YOURSELF, "
-                    "INFORM THE USER **WITH AUDIO** AND THEN CALL 'answer_question_about_task' TO PROPAGETE THE "
+                    "I have a question/information for the user from the agent working on a task. DO NOT ANSWER YOURSELF, "
+                    "INFORM THE USER **WITH AUDIO OUTPUT** AND THEN CALL 'answer_task_question' TO PROPAGETE THE "
                     f"USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n",
                 )
                 await self.get_answer()
@@ -198,25 +200,3 @@ class RealtimeAgent(ConversableAgent):
         syncify(get_input)()
 
         return True, {"role": "user", "content": self._answer}
-
-        # loop = asyncio.get_event_loop()
-        # self.answer = loop.create_future()
-        # # loop.run_until_complete(
-        # #     self._client.send_text(
-        # #         (
-        # #             f"I have a question for the user from the agent working on a task. DO NOT ANSWER YOURSELF, INFORM THE USER **WITH AUDIO** AND THEN CALL 'answer_question_about_task' TO PROPAGETE THE USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n"
-        # #         )
-        # #     )
-        # # )
-        # self.client.run_task(
-        #     self._client.send_text,
-        #     "I have a question for the user from the agent working on a task. DO NOT ANSWER YOURSELF, "
-        #     "INFORM THE USER **WITH AUDIO** AND THEN CALL 'answer_question_about_task' TO PROPAGETE THE "
-        #     f"USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n"
-        # )
-
-        # async def get_input():
-        #     input_text = await self.answer
-        #     return input_text
-
-        # return loop.run_until_complete(get_input())
