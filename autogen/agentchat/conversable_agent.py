@@ -2974,3 +2974,21 @@ def register_function(
     """
     f = caller.register_for_llm(name=name, description=description)(f)
     executor.register_for_execution(name=name)(f)
+
+def register_llm_and_execution(llm_agent: ConversableAgent, execution_agent: ConversableAgent, name: str, doc: str, function):
+
+    """
+    Register a function for LLM and Execution
+    """
+
+    llm_agent.register_for_llm(name=name, description=doc)(function)
+
+    execution_agent.register_for_execution(name=name)(function)
+
+    register_function(
+        function,
+        caller=llm_agent,
+        executor=execution_agent,
+        name=name,
+        description=doc
+    )
