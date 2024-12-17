@@ -140,7 +140,7 @@ h4 {
   height:132px;
   margin:0 auto;
 }
-.key-features .card .key-feature h5 {
+.key-features .card .key-feature a > p {
   color: #4b9cd6;
   font-weight: bold;
   margin: 0.75rem 0;
