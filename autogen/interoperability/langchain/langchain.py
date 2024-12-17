@@ -15,7 +15,7 @@ __all__ = ["LangchainInteroperability"]
 class LangchainInteroperability(Interoperable):
     def convert_tool(self, tool: Any) -> Tool:
         if not isinstance(tool, LangchainTool):
-            raise ValueError(f"Expected an instance of `crewai.tools.BaseTool`, got {type(tool)}")
+            raise ValueError(f"Expected an instance of `langchain_core.tools.BaseTool`, got {type(tool)}")
 
         # needed for type checking
         langchain_tool: LangchainTool = tool  # type: ignore[no-any-unimported]
