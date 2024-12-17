@@ -164,6 +164,46 @@
       ]
     },
     {
+      "group": "Blog",
+      "pages": [
+        {
+          "group": "Recent posts",
+          "pages": [
+        "blog/2024-12-06-FalkorDB-Structured/index",
+        "blog/2024-12-02-ReasoningAgent2/index",
+        "blog/2024-11-27-Prompt-Leakage-Probing/index",
+        "blog/2024-11-17-Swarm/index",
+        "blog/2024-11-15-CaptainAgent/index",
+        "blog/2024-10-23-NOVA/index",
+        "blog/2024-07-25-AgentOps/index",
+        "blog/2024-06-24-AltModels-Classes/index",
+        "blog/2024-06-21-AgentEval/index",
+        "blog/2024-05-24-Agent/index",
+        "blog/2024-03-11-AutoDefense/index",
+        "blog/2024-03-03-AutoGen-Update/index",
+        "blog/2024-02-29-StateFlow/index",
+        "blog/2024-02-11-FSM-GroupChat/index",
+        "blog/2024-02-02-AutoAnny/index",
+        "blog/2024-01-26-Custom-Models/index",
+        "blog/2024-01-25-AutoGenBench/index",
+        "blog/2024-01-23-Code-execution-in-docker/index",
+        "blog/2023-12-29-AgentDescriptions/index",
+        "blog/2023-12-23-AgentOptimizer/index",
+        "blog/2023-12-01-AutoGenStudio/index",
+        "blog/2023-11-26-Agent-AutoBuild/index",
+        "blog/2023-11-20-AgentEval/index",
+        "blog/2023-11-13-OAI-assistants/index",
+        "blog/2023-11-09-EcoAssistant/index",
+        "blog/2023-11-06-LMM-Agent/index",
+        "blog/2023-10-26-TeachableAgent/index",
+        "blog/2023-10-18-RetrieveChat/index",
+        "blog/2023-07-14-Local-LLMs/index",
+        "blog/2023-06-28-MathChat/index",
+        "blog/2023-05-18-GPT-adaptive-humaneval/index",
+        "blog/2023-04-21-LLM-tuning-math/index"
+        ]}
+    ]},
+    {
       "group": "Examples",
       "pages": [
         "notebooks/Examples",
