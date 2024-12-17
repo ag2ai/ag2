@@ -30,6 +30,9 @@ jobs:
           pip install pydoc-markdown pyyaml termcolor nbconvert
           pip install databind.core==4.4.2 databind.json==4.4.2
 
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
       - name: Convert Jupyter notebooks to MDX
         run: |
           python ./process_notebooks.py render
