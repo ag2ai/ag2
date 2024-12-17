@@ -68,6 +68,10 @@ neo4j_graph_rag = [
     "llma-index-core==0.11.8",
 ]
 
+realtime = ["websockets>=14.0", "asyncer>=0.0.8"]
+realtime_twilio = [*realtime, "fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
+
+
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
 elif current_os == "Linux":
@@ -121,8 +125,8 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
-    "realtime": ["websockets>=14.0", "asyncer>=0.0.8"],
-    "realtime-twilio": ["fastapi>=0.115.0", "uvicorn==0.30.6", "twilio==9.3.2"],
+    "realtime": realtime,
+    "realtime-twilio": realtime_twilio,
 }
 
 setuptools.setup(
