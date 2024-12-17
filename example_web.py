@@ -1,5 +1,9 @@
-"""This example demonstrates using a web surfer agent to search for and summarize
-information about Python programming through an embedded browser."""
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 
 import asyncio
 import logging
@@ -48,7 +52,7 @@ async def main() -> None:
     )
 
     # Create a message to start the task
-    messages = [{"role": "user", "content": "find detailed informtion for the magentic one ai agent "}]
+    messages = [{"role": "user", "content": "find detailed information for the magentic one ai agent "}]
 
     websurfer.send(messages[0], user, request_reply=False)
 

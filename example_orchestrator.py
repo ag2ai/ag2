@@ -1,14 +1,21 @@
-"""This example demonstrates using a web surfer agent to search for and summarize
-information about Python programming through an embedded browser."""
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
 
 import asyncio
 import logging
 import os
+import tempfile
 
+from autogen import ConversableAgent
 from autogen.agentchat.contrib.magentic_one.coder_agent import create_coder_agent
 from autogen.agentchat.contrib.magentic_one.filesurfer_agent import create_file_surfer
+from autogen.agentchat.contrib.magentic_one.orchestrator_agent import OrchestratorAgent
 from autogen.agentchat.contrib.magentic_one.websurfer import MultimodalWebSurfer
-from autogen.agentchat.user_proxy_agent import UserProxyAgent
+from autogen.coding import DockerCommandLineCodeExecutor
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,15 +43,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
-
-
-import json
-import tempfile
-
-from autogen import ConversableAgent
-from autogen.agentchat import AssistantAgent, UserProxyAgent
-from autogen.agentchat.contrib.magentic_one.orchestrator_agent import OrchestratorAgent
-from autogen.coding import DockerCommandLineCodeExecutor
 
 
 async def main() -> None:
@@ -91,7 +89,7 @@ async def main() -> None:
     orchestrator = OrchestratorAgent(
         name="Orchestrator",
         llm_config=llm_config,
-        agents=[websurfer],  # coder, filesurfer, executor,
+        agents=[websurfer, coder, filesurfer, executor],
         max_consecutive_auto_reply=10,
         max_stalls_before_replan=3,
         max_replans=3,
@@ -99,10 +97,10 @@ async def main() -> None:
         description="An orchestrator that manages conversation flow and handles errors.",
     )
 
-    task = """Find out some detailed informtion about the magentic one agent from microsoft"""
+    task = """Find out some detailed information about the magentic one agent from microsoft"""
     # task = """Go to amazon.com and find a good beginner 3d printer, pick any good one for under 300 dollars. """
     # task = """write the game sname in python """
-    # task = """can you generate the python call to run all return all the prime numbers bewteen 1 and 1000 and return the prime numbers ? (give the code to the Executor to run it, don't ask the user to run it. If it does not work with the executor, tell the user.)"""
+    # task = """can you generate the python call to run all return all the prime numbers between 1 and 1000 and return the prime numbers ? (give the code to the Executor to run it, don't ask the user to run it. If it does not work with the executor, tell the user.)"""
 
     messages = [{"role": "user", "content": task}]
 
