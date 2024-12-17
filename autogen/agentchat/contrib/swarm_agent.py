@@ -32,6 +32,7 @@ class AfterWorkOption(Enum):
     TERMINATE = "TERMINATE"
     REVERT_TO_USER = "REVERT_TO_USER"
     STAY = "STAY"
+    SWARM_MANAGER = "SWARM_MANAGER"
 
 
 @dataclass
@@ -209,6 +210,8 @@ def initiate_swarm_chat(
                 return user_agent
             elif tmp_after_work == AfterWorkOption.STAY:
                 return last_speaker
+            elif tmp_after_work == AfterWorkOption.SWARM_MANAGER:
+                return "auto"
         elif isinstance(tmp_after_work, Callable):
             return tmp_after_work(last_speaker, groupchat.messages, groupchat, context_variables)
         else:
