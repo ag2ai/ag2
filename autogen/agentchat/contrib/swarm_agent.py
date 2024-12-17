@@ -210,12 +210,10 @@ def initiate_swarm_chat(
 
         if isinstance(after_work_condition, str):  # Agent name in a string
             if after_work_condition in swarm_agent_names:
-                after_work_condition = groupchat.agent_by_name(name=after_work_condition)
+                return groupchat.agent_by_name(name=after_work_condition)
             else:
                 raise ValueError(f"Invalid agent name in after_work: {after_work_condition}")
-
-        # Determine next action based on after_work_condition
-        if isinstance(after_work_condition, SwarmAgent):
+        elif isinstance(after_work_condition, SwarmAgent):
             return after_work_condition
         elif after_work_condition == AfterWorkOption.TERMINATE or (
             user_agent is None and after_work_condition == AfterWorkOption.REVERT_TO_USER
@@ -410,11 +408,7 @@ class SwarmAgent(ConversableAgent):
 
         # Register the hook to update agent state (except tool executor)
         if name != __TOOL_EXECUTOR_NAME__:
-            self.register_hook("update_agent_state", self._update_agent_state_hook)
-
-    def _update_agent_state_hook(self, agent: Agent, messages: Optional[List[Dict]] = None) -> None:
-        """Hook to update the agent state and update conditional functions."""
-        self._update_conditional_functions()
+            self.register_hook("update_agent_state", self._update_conditional_functions)
 
     def register_update_agent_state_before_reply(self, functions: Optional[Union[List[Callable], Callable]]):
         """
@@ -540,27 +534,26 @@ class SwarmAgent(ConversableAgent):
             else:
                 raise ValueError("Invalid hand off condition, must be either ON_CONDITION or AFTER_WORK")
 
-    def _update_conditional_functions(self):
+    @staticmethod
+    def _update_conditional_functions(agent: Agent, messages: Optional[List[Dict]] = None) -> None:
         """Updates the agent's functions based on the ON_CONDITION's available condition."""
-        for func_name, (func, on_condition) in self._conditional_functions.items():
-            is_available = False
+        for func_name, (func, on_condition) in agent._conditional_functions.items():
+            is_available = True
 
             if on_condition.available is not None:
                 if isinstance(on_condition.available, Callable):
-                    is_available = on_condition.available(self, next(iter(self.chat_messages.values())))
+                    is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
                 elif isinstance(on_condition.available, str):
-                    is_available = self.get_context(on_condition.available) or False
-            else:
-                is_available = True
+                    is_available = agent.get_context(on_condition.available) or False
 
             if is_available:
-                if func_name not in self._function_map:
-                    self.add_single_function(func, func_name, on_condition.condition)
+                if func_name not in agent._function_map:
+                    agent.add_single_function(func, func_name, on_condition.condition)
             else:
                 # Remove function using the stored name
-                if func_name in self._function_map:
-                    self.update_tool_signature(func_name, is_remove=True)
-                    del self._function_map[func_name]
+                if func_name in agent._function_map:
+                    agent.update_tool_signature(func_name, is_remove=True)
+                    del agent._function_map[func_name]
 
     def generate_swarm_tool_reply(
         self,
