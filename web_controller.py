@@ -17,14 +17,16 @@ from playwright._impl._errors import Error as PlaywrightError
 from playwright._impl._errors import TimeoutError
 from playwright.async_api import BrowserContext, Download, Page, Playwright, async_playwright
 
-from .types import InteractiveRegion, VisualViewport, interactiveregion_from_dict, visualviewport_from_dict
 from autogen.logger import FileLogger
+
+from .types import InteractiveRegion, VisualViewport, interactiveregion_from_dict, visualviewport_from_dict
 
 logger = FileLogger(config={})
 
+
 class WebController:
     """Controls web browsing operations using Playwright."""
-    
+
     DEFAULT_START_PAGE = "https://www.bing.com/"
     VIEWPORT_HEIGHT = 900
     VIEWPORT_WIDTH = 1440
@@ -39,7 +41,7 @@ class WebController:
         self._prior_metadata_hash: Optional[str] = None
         self.downloads_folder = downloads_folder
         self.debug_dir = debug_dir
-        
+
         # Read page_script
         self._page_script: str = ""
         with open(os.path.join(os.path.abspath(os.path.dirname(__file__)), "page_script.js"), "rt") as fh:
@@ -50,7 +52,7 @@ class WebController:
         headless: bool = True,
         browser_channel: Optional[str] = None,
         browser_data_dir: Optional[str] = None,
-        start_page: Optional[str] = None
+        start_page: Optional[str] = None,
     ) -> None:
         """Initialize the web controller with browser settings."""
         self.start_page = start_page or self.DEFAULT_START_PAGE
@@ -65,16 +67,14 @@ class WebController:
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         if browser_data_dir:
             self._context = await self._playwright.chromium.launch_persistent_context(
-                browser_data_dir,
-                user_agent=f"{ua} {self._generate_random_string(4)}",
-                **launch_args
+                browser_data_dir, user_agent=f"{ua} {self._generate_random_string(4)}", **launch_args
             )
         else:
             browser = await self._playwright.chromium.launch(**launch_args)
             self._context = await browser.new_context(
                 user_agent=f"{ua} {self._generate_random_string(4)}",
-                locale=random.choice(['en-US', 'en-GB', 'en-CA']),
-                timezone_id=random.choice(['America/New_York', 'Europe/London', 'Asia/Tokyo'])
+                locale=random.choice(["en-US", "en-GB", "en-CA"]),
+                timezone_id=random.choice(["America/New_York", "Europe/London", "Asia/Tokyo"]),
             )
 
         # Set up the page
@@ -98,7 +98,7 @@ class WebController:
             await self._page.goto(url)
             await self._page.wait_for_load_state()
             self._prior_metadata_hash = None
-            
+
         except Exception as e_outer:
             if self.downloads_folder and "net::ERR_ABORTED" in str(e_outer):
                 async with self._page.expect_download() as download_info:
@@ -121,7 +121,7 @@ class WebController:
     async def get_page_state(self) -> Dict[str, Any]:
         """Get current page state including interactive elements and viewport info."""
         assert self._page is not None
-        
+
         try:
             await self._page.wait_for_load_state()
         except TimeoutError:
@@ -135,13 +135,13 @@ class WebController:
         rects = await self._get_interactive_rects()
         viewport = await self._get_visual_viewport()
         screenshot = await self._page.screenshot()
-        
+
         return {
             "url": self._page.url,
             "title": await self._page.title(),
             "rects": rects,
             "viewport": viewport,
-            "screenshot": screenshot
+            "screenshot": screenshot,
         }
 
     async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
@@ -161,7 +161,7 @@ class WebController:
     async def perform_action(self, action_type: str, params: Dict[str, Any]) -> None:
         """Perform a browser action."""
         assert self._page is not None
-        
+
         if action_type == "click":
             await self._click_id(params["target_id"])
         elif action_type == "type":
@@ -180,17 +180,17 @@ class WebController:
         """Click an element by ID."""
         assert self._page is not None
         assert self._context is not None
-        
+
         identifier = str(int(identifier.strip()))
         locator = self._page.locator(f"[__elementId='{identifier}']")
         await locator.wait_for(timeout=1000)
         await locator.scroll_into_view_if_needed()
-        
+
         try:
             async with self._context.expect_page(timeout=6000) as page_info:
                 await locator.click(delay=10)
                 new_page = await page_info.value
-                await new_page.wait_for_load_state('domcontentloaded')
+                await new_page.wait_for_load_state("domcontentloaded")
                 await self._on_new_page(new_page)
         except TimeoutError:
             await self._page.wait_for_load_state()
@@ -232,8 +232,9 @@ class WebController:
     def _generate_random_string(self, length: int) -> str:
         """Generate a random string."""
         import string
+
         characters = string.ascii_letters + string.digits
-        return ''.join(random.choice(characters) for _ in range(length))
+        return "".join(random.choice(characters) for _ in range(length))
 
     async def get_page_state(self) -> Dict[str, Any]:
         """Get current page state including title, URL and other metadata."""
@@ -242,7 +243,7 @@ class WebController:
             "url": self._page.url,
             "title": await self._page.title(),
             "focused_id": await self._get_focused_element_id(),
-            "metadata": await self._get_page_metadata()
+            "metadata": await self._get_page_metadata(),
         }
 
     async def get_page_content(self) -> str:
@@ -308,7 +309,7 @@ class WebController:
     async def get_page_summary(self, question: str | None = None) -> str:
         """Get a summary of the current page content."""
         assert self._page is not None
-        
+
         title = self._page.url
         try:
             title = await self._page.title()

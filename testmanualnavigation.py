@@ -1,9 +1,9 @@
 """Interactive manual tool execution for MultimodalWebSurfer."""
 
 import asyncio
-import os
 import json
 import logging
+import os
 
 from autogen.agentchat.contrib.magentic_one.websurfer import MultimodalWebSurfer
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
@@ -14,9 +14,10 @@ logger.setLevel(logging.INFO)
 # Add console handler
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
+
 
 async def main() -> None:
     # Set up LLM configuration
@@ -27,19 +28,10 @@ async def main() -> None:
         }
     ]
 
-    llm_config = {
-        "config_list": config_list,
-        "cache_seed": None,
-        "temperature": 0,
-        "timeout": 120
-    }
+    llm_config = {"config_list": config_list, "cache_seed": None, "temperature": 0, "timeout": 120}
 
     # Create the web surfer agent
-    websurfer = MultimodalWebSurfer(
-        name="WebSurfer",
-        human_input_mode="TERMINATE",
-        llm_config=llm_config
-    )
+    websurfer = MultimodalWebSurfer(name="WebSurfer", human_input_mode="TERMINATE", llm_config=llm_config)
 
     # Initialize the browser
     await websurfer.init(
@@ -47,7 +39,7 @@ async def main() -> None:
         downloads_folder="./downloads",
         start_page="https://www.bing.com",
         browser_channel="chromium",
-        to_save_screenshots=True
+        to_save_screenshots=True,
     )
 
     # Initial URL
@@ -70,20 +62,20 @@ async def main() -> None:
             print("9. Exit")
 
             tool_choice = input("Enter tool number: ")
-            
-            if tool_choice == '9':
+
+            if tool_choice == "9":
                 break
 
             # Prepare tool arguments based on selection
             tool_map = {
-                '1': 'visit_url',
-                '2': 'web_search',
-                '3': 'click',
-                '4': 'input_text',
-                '5': 'summarize_page',
-                '6': 'page_up',
-                '7': 'page_down',
-                '8': 'history_back'
+                "1": "visit_url",
+                "2": "web_search",
+                "3": "click",
+                "4": "input_text",
+                "5": "summarize_page",
+                "6": "page_up",
+                "7": "page_down",
+                "8": "history_back",
             }
 
             tool_name = tool_map.get(tool_choice)
@@ -93,20 +85,16 @@ async def main() -> None:
 
             # Get tool arguments dynamically
             tool_args = {}
-            if tool_name in ['visit_url', 'web_search']:
-                tool_args['url' if tool_name == 'visit_url' else 'query'] = input(f"Enter {tool_name} argument: ")
-            elif tool_name in ['click', 'input_text']:
-                tool_args['target_id'] = input("Enter target element ID: ")
-                if tool_name == 'input_text':
-                    tool_args['text_value'] = input("Enter text to input: ")
+            if tool_name in ["visit_url", "web_search"]:
+                tool_args["url" if tool_name == "visit_url" else "query"] = input(f"Enter {tool_name} argument: ")
+            elif tool_name in ["click", "input_text"]:
+                tool_args["target_id"] = input("Enter target element ID: ")
+                if tool_name == "input_text":
+                    tool_args["text_value"] = input("Enter text to input: ")
 
             # Execute the tool
             print(f"\nExecuting {tool_name} with args: {tool_args}")
-            request_halt, tool_response = await websurfer.manual_tool_execute(
-                tool_name, 
-                tool_args,
-                use_ocr=False
-            )
+            request_halt, tool_response = await websurfer.manual_tool_execute(tool_name, tool_args, use_ocr=False)
 
             # Perform set of marks after tool execution
             som_screenshot = await websurfer.test_set_of_mark()
@@ -114,11 +102,11 @@ async def main() -> None:
 
             # Print the tool response
             if isinstance(tool_response, dict):
-                for content in tool_response.get('content', []):
-                    if content['type'] == 'text':
+                for content in tool_response.get("content", []):
+                    if content["type"] == "text":
                         print("\nTool Response Text:")
-                        print(content['text'])
-                    elif content['type'] == 'image_url':
+                        print(content["text"])
+                    elif content["type"] == "image_url":
                         print("\nScreenshot saved in debug directory.")
             else:
                 print("\nTool Response:", tool_response)
@@ -126,6 +114,7 @@ async def main() -> None:
         except Exception as e:
             print(f"Error executing tool: {e}")
             continue
+
 
 if __name__ == "__main__":
     asyncio.run(main())

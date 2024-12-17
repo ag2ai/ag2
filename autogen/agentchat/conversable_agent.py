@@ -2546,7 +2546,7 @@ class ConversableAgent(LLMAgent):
         self._function_map.update(function_map)
         self._function_map = {k: v for k, v in self._function_map.items() if v is not None}
 
-    def update_function_signature(self, func_sig: Union[str, Dict], is_remove: None): # Should is_remove be bool ? 
+    def update_function_signature(self, func_sig: Union[str, Dict], is_remove: None):  # Should is_remove be bool ?
         """update a function_signature in the LLM configuration for function_call.
 
         Args:
