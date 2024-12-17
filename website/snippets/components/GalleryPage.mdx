@@ -129,21 +129,9 @@ export const GalleryPage = ({
 
   return (
     <div className="examples-gallery-container">
-      <select
-        multiple
-        className="tag-filter"
-        data-placeholder="Filter by tags"
-      >
-        {allTags.map(tag => (
-          <option key={tag} value={tag}>
-            {tag}
-          </option>
-        ))}
-      </select>
       <CardGroup cols={3}>
         {galleryItems.map((item, index) => (
           <Card key={index} href={item.link}>
-            {imageFunc(item)}
             <h5 className="card-title">{item.title}</h5>
             {badges(item)}
             <p className="card-description">{item.description || item.title}</p>
