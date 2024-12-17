@@ -25,7 +25,7 @@ __version__ = version["__version__"]
 current_os = platform.system()
 
 install_requires = [
-    "openai>=1.3",
+    "openai>=1.57",
     "diskcache",
     "termcolor",
     "flaml",
@@ -91,7 +91,7 @@ extra_require = {
         "pre-commit",
         "pytest-cov>=5",
         "pytest-asyncio",
-        "pytest>=6.1.1,<8",
+        "pytest>=8,<9",
         "pandas",
     ],
     "blendsearch": ["flaml[blendsearch]"],

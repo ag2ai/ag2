@@ -44,7 +44,7 @@ def test_math_user_proxy_agent():
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
         filter_dict={
-            "tags": ["gpt-3.5-turbo"],
+            "tags": ["gpt-4o-mini"],
         },
     )
     assistant = AssistantAgent(
