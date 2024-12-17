@@ -166,8 +166,7 @@ h4 {
   line-height: 1.5;
 }
 .examples-gallery-container .card {
-  padding: 0.5rem;
-  height: 370px;
+  padding: 1rem;
   transition: all 0.3s ease;
   border: 1px solid #e8e8e8;
   border-radius: 4px;
