@@ -8,11 +8,13 @@
 import asyncio
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Literal, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypeVar, Union
 
+import asyncer
 import websockets
 
 from autogen.agentchat.agent import Agent, LLMAgent
+from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.function_utils import get_function_schema
 
 from .client import Client
@@ -22,7 +24,7 @@ from .realtime_observer import RealtimeObserver
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-class RealtimeAgent(LLMAgent):
+class RealtimeAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
@@ -30,7 +32,7 @@ class RealtimeAgent(LLMAgent):
         system_message: Optional[Union[str, List]] = "You are a helpful AI Assistant.",
         is_termination_msg: Optional[Callable[[Dict], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
-        human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
+        human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
         function_map: Optional[Dict[str, Callable]] = None,
         code_execution_config: Union[Dict, Literal[False]] = False,
         llm_config: Optional[Union[Dict, Literal[False]]] = None,
@@ -41,13 +43,30 @@ class RealtimeAgent(LLMAgent):
         context_variables: Optional[Dict[str, Any]] = None,
         voice: str = "alloy",
     ):
-
+        super().__init__(
+            name=name,
+            is_termination_msg=is_termination_msg,
+            max_consecutive_auto_reply=max_consecutive_auto_reply,
+            human_input_mode=human_input_mode,
+            function_map=function_map,
+            code_execution_config=code_execution_config,
+            default_auto_reply=default_auto_reply,
+            llm_config=llm_config,
+            system_message=system_message,
+            description=description,
+            chat_messages=chat_messages,
+            silent=silent,
+            context_variables=context_variables,
+        )
         self._client = Client(self, audio_adapter, FunctionObserver(self))
         self.llm_config = llm_config
         self.voice = voice
         self.registered_functions = {}
 
         self._oai_system_message = [{"content": system_message, "role": "system"}]  # todo still needed?
+        self.register_reply(
+            [Agent, None], RealtimeAgent.check_termination_and_human_reply, remove_other_reply_funcs=True
+        )
 
     async def run(self):
         await self._client.run()
@@ -83,3 +102,25 @@ class RealtimeAgent(LLMAgent):
             return func
 
         return _decorator
+
+    def check_termination_and_human_reply(
+        self,
+        messages: Optional[List[Dict]] = None,
+        sender: Optional[Agent] = None,
+        config: Optional[Any] = None,
+    ) -> Tuple[bool, Union[str, None]]:
+        loop = asyncio.get_event_loop()
+        self.answer = loop.create_future()
+        loop.run_until_complete(
+            self._client.send_text(
+                (
+                    f"QUESTION FOR USER (DO NOT ANSWER, ASK THE USER, AND CALL answer_swarm_question AFTER THE USER ANSWERS): '{messages[-1]['content']}'\n\n"
+                )
+            )
+        )
+
+        async def get_input():
+            input_text = await self.answer
+            return input_text
+
+        return True, loop.run_until_complete(get_input())

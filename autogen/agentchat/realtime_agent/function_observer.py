@@ -5,7 +5,11 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
+import asyncio
 import json
+
+from asyncer import asyncify
+from pydantic import BaseModel
 
 from .realtime_observer import RealtimeObserver
 
@@ -24,8 +28,22 @@ class FunctionObserver(RealtimeObserver):
             )
 
     async def call_function(self, call_id, name, kwargs):
-        _, func = self._agent.registered_functions[name]
-        await self._client.function_result(call_id, func(**kwargs))
+        if name in self._agent.registered_functions:
+            _, func = self._agent.registered_functions[name]
+            func = func if asyncio.iscoroutinefunction(func) else asyncify(func)
+            try:
+                result = await func(**kwargs)
+            except Exception:
+                result = "Function call failed"
+
+            if isinstance(result, BaseModel):
+                result = result.model_dump_json()
+            elif not isinstance(result, str):
+                result = json.dumps(result)
+
+            print("!" * 50)
+            print(f"Function call result: {result}")
+            await self._client.function_result(call_id, result)
 
     async def run(self):
         await self.initialize_session()

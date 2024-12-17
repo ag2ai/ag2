@@ -85,7 +85,7 @@ class TwilioAudioAdapter(RealtimeObserver):
                     "content_index": 0,
                     "audio_end_ms": elapsed_time,
                 }
-                await self._client.openai_ws.send(json.dumps(truncate_event))
+                await self._client._openai_ws.send(json.dumps(truncate_event))
 
             await self.websocket.send_json({"event": "clear", "streamSid": self.stream_sid})
 

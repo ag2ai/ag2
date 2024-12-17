@@ -1,3 +1,10 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
+
 import asyncio
 import json
 from abc import ABC, abstractmethod
@@ -33,6 +40,14 @@ class Client(ABC):
             },
         }
         await self._openai_ws.send(json.dumps(result_item))
+        await self._openai_ws.send(json.dumps({"type": "response.create"}))
+
+    async def send_text(self, text):
+        text_item = {
+            "type": "conversation.item.create",
+            "item": {"type": "message", "role": "system", "content": [{"type": "input_text", "text": text}]},
+        }
+        await self._openai_ws.send(json.dumps(text_item))
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
 
     # todo override in specific clients
