@@ -69,6 +69,9 @@ neo4j = [
     "llama-index-core==0.12.5",
 ]
 
+interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
+interop_langchain = ["langchain-community>=0.3.12,<1; python_version>='3.9'"]
+
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
 elif current_os == "Linux":
@@ -122,8 +125,9 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
-    "interop-crewai": ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"],
-    "interop-langchain": ["langchain-community>=0.3.12,<1; python_version>='3.9'"],
+    "interop-crewai": interop_crewai,
+    "interop-langchain": interop_langchain,
+    "interop": interop_crewai + interop_langchain,
     "neo4j": neo4j,
 }
 
