@@ -12,6 +12,7 @@ import argparse
 import concurrent.futures
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -368,6 +369,9 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
         front_matter = yaml.safe_load(content[4:front_matter_end])
         content = content[front_matter_end + 3 :]
 
+    # Clean heading IDs using regex - matches from # to the end of ID block
+    content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
+
     # Each intermediate path needs to be resolved for this to work reliably
     repo_root = Path(__file__).parent.resolve().parent.resolve()
     repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
@@ -538,7 +542,16 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     # Create notebooks entry
     notebooks_entry = {
         "group": "Notebooks",
-        "pages": ["/notebooks/Notebooks"] + [item["link"] for item in notebooks_metadata],
+        "pages": ["/notebooks/Notebooks"]
+        + [
+            Path(item["source"])
+            .resolve()
+            .with_suffix("")
+            .as_posix()
+            .replace("/website/", "/")
+            .replace("/notebook/", "/notebooks/")
+            for item in notebooks_metadata
+        ],
     }
 
     # Replace the pages list in Examples group with our standard pages plus notebooks
