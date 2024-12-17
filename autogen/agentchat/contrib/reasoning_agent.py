@@ -40,10 +40,6 @@ Option 3: Analyze and validate the results based on the previous steps.
 Option 4: Perform Y.
 """
 
-
-GRADER_message = "Rate the response on a scale of 1 to 10 (1 being the worst and 10 being the best)."
-
-
 class ThinkNode:
 
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
@@ -74,6 +70,7 @@ class ThinkNode:
         self.value = 0
         self.parent = parent
         self.reflection = ""
+        self.rating_details = ""
         self.depth = self.parent.depth + 1 if parent else 0
         self.children = []
         self.visits = 0
@@ -89,7 +86,7 @@ class ThinkNode:
         """
         if self.parent:
             return self.parent._trajectory_arr + [self.content]
-        return ["# Question: " + self.content]
+        return ["# Question:\n" + self.content + "\n---\n"]
 
     @property
     def trajectory(self) -> str:
@@ -129,6 +126,7 @@ class ThinkNode:
             "value": self.value,
             "depth": self.depth,
             "reflection": self.reflection,
+            "rating_details": self.rating_details,
             "visits": self.visits,
             "children": [child.to_dict() for child in self.children],
         }
@@ -149,6 +147,7 @@ class ThinkNode:
         node.depth = data["depth"]
         node.visits = data["visits"]
         node.reflection = data.get("reflection", "")
+        node.rating_details = data.get("rating_details", "")
 
         # Recursively create children
         for child_data in data["children"]:
@@ -326,13 +325,6 @@ class ReasoningAgent(AssistantAgent):
         self.llm_config = llm_config
         self.grader_llm_config = grader_llm_config if grader_llm_config else llm_config
 
-        self.thinker = AssistantAgent(
-            name="tot_thinker", system_message=TreeofThought_message, llm_config=self.llm_config
-        )
-        self.grader = AssistantAgent(
-            name="tot_grader", system_message=GRADER_message, llm_config=self.grader_llm_config
-        )
-
         if reason_config is None:
             reason_config = {}
 
@@ -342,13 +334,20 @@ class ReasoningAgent(AssistantAgent):
             self.answer_approach = reason_config.get("answer_approach", "pool")
             assert answer_approach in ["pool", "best"]
         elif self.method in ["mcts", "lats"]:
-            self.mcts_simulations = reason_config.get("nsim", 10)
+            self.mcts_simulations = reason_config.get("nsim", 3)
             self.exploration_constant = reason_config.get("exploration_constant", 1.41)
 
         self.forest_size = reason_config.get("forest_size", 5)
+        self.rating_scale = reason_config.get("rating_scale", 10)
 
         self._root = None
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
+
+        self.thinker = AssistantAgent(
+            name="tot_thinker", system_message=TreeofThought_message, llm_config=self.llm_config
+        )
+        self.grader = AssistantAgent(name="tot_grader", llm_config=self.grader_llm_config)
+
 
     def generate_forest_response(self, messages, sender, config=None):
         """
@@ -388,22 +387,61 @@ class ReasoningAgent(AssistantAgent):
             )
             return True, self.last_message(self)["content"].strip()
 
-    def rate_node(self, node: ThinkNode, ground_truth: str = None) -> float:
+
+
+
+    def rate_node(self, node: ThinkNode, ground_truth: str = None, is_outcome: bool = False) -> float:
         """Rate the quality of a reasoning path using the grader agent.
 
         Args:
             node (ThinkNode): Node containing the reasoning trajectory to evaluate
+            is_outcome (bool): indicates whether the rating is for an outcome (final answer) or a process (thinking trajectory).
 
         Returns:
             float: Normalized score between 0 and 1 indicating trajectory quality
         """
+        # Update Grader's system message
+        if is_outcome:
+            ## Outcome Rating
+            message = f"""Please rate the answer on a scale of 1 to {self.rating_scale}, where 1 is the worst and {self.rating_scale} is the best.
+
+A great answer must:
+- Directly address the original question
+- Be factually accurate and complete
+- Show clear logical reasoning
+
+Additionally, a good answer should:
+- Be concise and well-structured
+- Use appropriate language and tone
+- Provide relevant examples or evidence when needed
+- Be free of contradictions or inconsistencies
+
+If the answer fails to meet any of the core requirements above, it should be considered a poor response.
+
+Please provide your rating along with a brief explanation of your assessment.
+"""
+        else:
+            ## Process Rating
+            message = f"""Please rate the thinking trajectory on a scale of 1 to {self.rating_scale}, where 1 is the worst and {self.rating_scale} is the best.
+
+A great thinking trajectory must:
+- Advance the process of solving the problem.
+
+Additionally, a good trajectory should:
+- Be appropriate in conversation.
+- Contain no inaccuracies.
+- Be free of any odd or irrelevant content.
+
+If the trajectory does not meet one of the above requirements, it is considered a bad response.
+
+Please provide your rating along with a brief explanation of your assessment.
+"""
+        ## Add ground truth to the message.
         if ground_truth:
             # override the system message
-            self.grader.update_system_message(
-                f"Rate the response on a scale of 1 to 10 (1 being the worst and 10 being the best). Use the following as the evaluation criteria: Ground Truth is:\n{ground_truth}"
-            )
-        else:
-            self.grader.update_system_message(GRADER_message)
+            message += f"--- Note that the Ground Truth is ---\n{ground_truth}\n---\n"
+        self.grader.update_system_message(message)
+
 
         self.send(
             message=f"Rate:\n{node.trajectory}",
@@ -412,9 +450,11 @@ class ReasoningAgent(AssistantAgent):
             silent=not self.verbose,
         )
         rating = self.grader.last_message()["content"].strip()
+        node.rating_details = rating
+
         try:
             # Scale rating to [0, 1]
-            reward = (float(re.findall(r"[\d.]+", rating)[0]) - 1) / 9.0
+            reward = (float(re.findall(r"[\d.]+", rating)[0]) - 1.0) / (self.rating_scale - 1.0)
         except (IndexError, ValueError):
             reward = 0.0  # Default reward if parsing fails
         return reward
@@ -564,7 +604,7 @@ class ReasoningAgent(AssistantAgent):
             # We add the answer (as a node) to the leaf to help
             # future logging and debugging.
             _ans_node = ThinkNode(content=_answer, parent=node)
-            reward = self.rate_node(_ans_node, ground_truth)
+            reward = self.rate_node(_ans_node, ground_truth, is_outcome=True)
             _ans_node.value = reward
             answer_nodes.append(_ans_node)
 

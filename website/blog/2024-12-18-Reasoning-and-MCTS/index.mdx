@@ -43,7 +43,7 @@ In our implementation, we use our existing grader agent to provide pseudo reward
 - **Beam Search**: Memory usage is bounded by beam size × depth
 - **MCTS**: Memory grows with number of simulations but focuses on promising paths
 
-## Implementation Details
+## MCTS Implementation Details
 
 The MCTS implementation in ReasoningAgent follows four key steps:
 
@@ -157,6 +157,77 @@ $b$: beam size
 - **Memory Complexity**: $O(b \times d)$
   - Maintains $b$ paths
   - Each path has depth $d$
+
+
+
+## LATS Implementation Details
+
+LATS (Language Agent Tree Search) is implemented as a variant of MCTS with a key difference in how simulation and evaluation are handled:
+
+1. **Selection**: Uses the same UCT formula as standard MCTS:
+   ```python
+   choices_weights = [
+       (child.value / (child.visits + EPSILON)) +  # exploitation
+       exploration_constant * math.sqrt(  # exploration
+           (2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON))
+       )
+   ]
+   ```
+
+2. **Expansion**: Similar to MCTS, but evaluates nodes immediately:
+   - Generates options using the thinker agent
+   - Each new node is immediately evaluated using ground truth
+   - Rewards are backpropagated right after expansion
+
+3. **Simulation**: More focused on immediate evaluation:
+   - Instead of random rollouts, LATS evaluates each node as it's created
+   - Uses ground truth comparison for more reliable evaluation
+   - Shorter simulation depth compared to standard MCTS
+
+4. **Key Differences from Standard MCTS**:
+   - Earlier evaluation in the search process
+   - Stronger reliance on ground truth feedback
+   - More immediate reward propagation
+   - Better suited for scenarios with reliable evaluation criteria
+
+## Forest of Trees to Add Bootstrapping
+
+The forest approach implements ensemble reasoning by maintaining multiple independent trees:
+
+1. **Implementation**:
+   ```python
+   forest_size = reason_config.get("forest_size", 5)
+   forest_answers = []
+   for _ in range(forest_size):
+       # Generate independent trees
+       if self.method == "beam_search":
+           success, response = self.generate_beam_response(prompt, ground_truth)
+       elif self.method in ["mcts", "lats"]:
+           success, response = self.generate_mcts_response(prompt, ground_truth)
+       forest_answers.append(response)
+   ```
+
+2. **Consensus Building**:
+   - If forest_size = 1, returns single tree result
+   - For multiple trees:
+     ```python
+     self.send(
+         message=f"Answer the question {prompt}. Here are some students' different answers:\n{"\n-".join(forest_answers)}",
+         recipient=self,
+         request_reply=True,
+     )
+     ```
+
+3. **Benefits**:
+   - Increased robustness through multiple independent searches
+   - Better exploration of the solution space
+   - Reduced sensitivity to random initialization
+   - Ability to identify consensus among different reasoning paths
+
+4. **Configuration**:
+   - Controlled via `forest_size` parameter in reason_config
+   - Default size is 5 trees
+   - Each tree can use either MCTS, LATS, or beam search
 
 ## When to Use Each Approach
 

@@ -26,7 +26,10 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Test data
 TEST_QUESTION = "What is the capital of France?"
-TEST_TRAJECTORY = """# Question: What is the capital of France?
+TEST_TRAJECTORY = """# Question:
+What is the capital of France?
+---
+
 Step 1: Let me think about this systematically
 Step 2: France is a country in Europe
 Step 3: Paris is the capital city of France"""
@@ -60,8 +63,9 @@ def test_think_node_init(think_node):
 
 def test_think_node_trajectory(think_node):
     """Test ThinkNode trajectory property"""
-    assert think_node._trajectory_arr == ["# Question: " + TEST_CONTENT]
-    assert "# Question: " + TEST_CONTENT in think_node.trajectory
+    first_line = "# Question:\n" + TEST_CONTENT + "\n---\n"
+    assert think_node._trajectory_arr == [first_line]
+    assert first_line in think_node.trajectory
 
 
 def test_think_node_str_repr(think_node):
