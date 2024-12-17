@@ -64,7 +64,7 @@ class TestCrewAIInteroperability:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        config_list = [{"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",

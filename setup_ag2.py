@@ -55,6 +55,7 @@ setuptools.setup(
         "ollama": ["pyautogen[ollama]==" + __version__],
         "bedrock": ["pyautogen[bedrock]==" + __version__],
         "interop-crewai": ["pyautogen[interop-crewai]==" + __version__],
+        "interop-langchain": ["pyautogen[interop-langchain]==" + __version__],
         "neo4j": ["pyautogen[neo4j]==" + __version__],
     },
     url="https://github.com/ag2ai/ag2",
