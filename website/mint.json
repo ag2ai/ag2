@@ -246,9 +246,14 @@
             "/notebooks/autogen_uniformed_api_calling",
             "/notebooks/gpt_assistant_agent_function_call",
             "/notebooks/lats_search",
-            "/docs/notebooks/tool-use",
+            "/docs/tutorial/tool-use",
             "/notebooks/JSON_mode_example",
-            "/notebooks/agentchat_RetrieveChat"
+            "/notebooks/agentchat_RetrieveChat",
+            "/docs/topics/non-openai-models/cloud-anthropic",
+            "/docs/topics/non-openai-models/cloud-bedrock",
+            "/docs/topics/prompting-and-reasoning/react",
+            "/docs/tutorial/human-in-the-loop",
+            "/docs/topics/task_decomposition"
           ]
         }
       ]
