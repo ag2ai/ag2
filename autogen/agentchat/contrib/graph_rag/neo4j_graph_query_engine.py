@@ -38,7 +38,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         database: str = "neo4j",
         username: str = "neo4j",
         password: str = "neo4j",
-        llm: LLM = OpenAI(model="gpt-3.5-turbo", temperature=0.0),
+        llm: LLM = OpenAI(model="gpt-4o", temperature=0.0),
         embedding: BaseEmbedding = OpenAIEmbedding(model_name="text-embedding-3-small"),
         entities: Optional[TypeAlias] = None,
         relations: Optional[TypeAlias] = None,

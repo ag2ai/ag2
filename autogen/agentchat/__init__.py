@@ -17,6 +17,7 @@ from .contrib.reasoning_agent import (
 from .contrib.swarm_agent import (
     AFTER_WORK,
     ON_CONDITION,
+    UPDATE_SYSTEM_MESSAGE,
     AfterWorkOption,
     SwarmAgent,
     SwarmResult,
@@ -44,6 +45,7 @@ __all__ = [
     "ON_CONDITION",
     "AFTER_WORK",
     "AfterWorkOption",
+    "UPDATE_SYSTEM_MESSAGE",
     "ReasoningAgent",
     "visualize_tree",
     "ThinkNode",

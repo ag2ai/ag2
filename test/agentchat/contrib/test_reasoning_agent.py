@@ -46,7 +46,7 @@ def think_node():
 @pytest.fixture
 def reasoning_agent():
     """Create a ReasoningAgent instance for testing"""
-    config_list = [{"model": "gpt-4", "api_key": "fake_key"}]
+    config_list = [{"model": "gpt-4o", "api_key": "fake_key"}]
     llm_config = {"config_list": config_list, "temperature": 0}
     return ReasoningAgent("reasoning_agent", llm_config=llm_config)
 
@@ -159,7 +159,10 @@ def test_reasoning_agent_answer():
 
 def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach):
     """Test that ReasoningAgent properly terminates when TERMINATE is received"""
-    mock_config = {"config_list": [{"model": "gpt-4", "api_key": "fake", "base_url": "0.0.0.0:8000"}], "temperature": 0}
+    mock_config = {
+        "config_list": [{"model": "gpt-4o", "api_key": "fake", "base_url": "0.0.0.0:8000"}],
+        "temperature": 0,
+    }
     with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
         agent = ReasoningAgent(
             "test_agent",
