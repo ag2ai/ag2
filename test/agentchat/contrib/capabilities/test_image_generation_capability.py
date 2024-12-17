@@ -34,11 +34,11 @@ from conftest import MOCK_OPEN_AI_API_KEY, skip_openai  # noqa: E402
 
 filter_dict = {"model": ["gpt-4o-mini"]}
 
-RESOLUTIONS = ["256x256", "512x512", "1024x1024"]
+RESOLUTIONS = ["1024x1024", "1792x1024", "1024x1792"]
 QUALITIES = ["standard", "hd"]
 PROMPTS = [
-    "Generate an image of a robot holding a 'I Love Autogen' sign",
-    "Generate an image of a dog holding a 'I Love Autogen' sign",
+    "Generate an image of a robot holding a 'I Love AG2' sign",
+    "Generate an image of a dog holding a 'I Love AG2' sign",
 ]
 
 
@@ -228,5 +228,5 @@ def test_image_generation_capability_cache(monkeypatch):
 
 if __name__ == "__main__":
     test_dalle_image_generator(
-        dalle_config={"config_list": openai_utils.config_list_from_models(model_list=["dall-e-2"], exclude="aoai")}
+        dalle_config={"config_list": openai_utils.config_list_from_models(model_list=["dall-e-3"], exclude="aoai")}
     )
