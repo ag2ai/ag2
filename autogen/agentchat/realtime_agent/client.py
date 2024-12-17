@@ -57,7 +57,7 @@ class Client(ABC):
             "turn_detection": {"type": "server_vad"},
             "voice": self._agent.voice,
             "instructions": self._agent.system_message,
-            "modalities": ["text", "audio"],
+            "modalities": ["audio"],
             "temperature": 0.8,
         }
         await self.session_update(session_update)

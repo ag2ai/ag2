@@ -114,7 +114,7 @@ class RealtimeAgent(ConversableAgent):
         loop.run_until_complete(
             self._client.send_text(
                 (
-                    f"I have a question for the user from the agent working on a task. DO NOT ANSWER YOURSELF, ASK THE USER AND THEN CALL 'answer_question_about_task' TO PROPAGETE THE USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n"
+                    f"I have a question for the user from the agent working on a task. DO NOT ANSWER YOURSELF, INFORM THE USER **WITH AUDIO** AND THEN CALL 'answer_question_about_task' TO PROPAGETE THE USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n"
                 )
             )
         )
@@ -123,4 +123,4 @@ class RealtimeAgent(ConversableAgent):
             input_text = await self.answer
             return input_text
 
-        return True, loop.run_until_complete(get_input())
+        return loop.run_until_complete(get_input())
