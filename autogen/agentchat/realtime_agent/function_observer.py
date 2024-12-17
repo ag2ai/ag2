@@ -21,7 +21,6 @@ class FunctionObserver(RealtimeObserver):
 
     async def update(self, response):
         if response.get("type") == "response.function_call_arguments.done":
-            print("!" * 50)
             print(f"Received event: {response['type']}", response)
             await self.call_function(
                 call_id=response["call_id"], name=response["name"], kwargs=json.loads(response["arguments"])
@@ -41,7 +40,6 @@ class FunctionObserver(RealtimeObserver):
             elif not isinstance(result, str):
                 result = json.dumps(result)
 
-            print("!" * 50)
             print(f"Function call result: {result}")
             await self._client.function_result(call_id, result)
 

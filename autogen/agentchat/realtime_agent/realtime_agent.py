@@ -113,6 +113,8 @@ class RealtimeAgent(ConversableAgent):
                 after_work=AfterWorkOption.REVERT_TO_USER,
             )
 
+            return "Task created successfully."
+
         def _get_task_status(task_id: str) -> Generator[None, str, None]:
             while True:
                 for s in [
@@ -183,8 +185,6 @@ class RealtimeAgent(ConversableAgent):
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> Tuple[bool, Union[str, None]]:
-        print("check_termination_and_human_reply() entering")
-
         async def get_input():
             async with create_task_group() as tg:
                 self.reset_answer()
@@ -194,8 +194,6 @@ class RealtimeAgent(ConversableAgent):
                     f"USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n",
                 )
                 await self.get_answer()
-
-        print("check_termination_and_human_reply() exiting")
 
         syncify(get_input)()
 
