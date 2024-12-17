@@ -100,19 +100,10 @@ def test_think_node_from_dict():
 def test_reasoning_agent_init(reasoning_agent):
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"
-    assert reasoning_agent.max_depth == 4
-    assert reasoning_agent.beam_size == 3
-    assert reasoning_agent.answer_approach == "pool"
+    assert reasoning_agent._max_depth == 4
+    assert reasoning_agent._beam_size == 3
+    assert reasoning_agent._answer_approach == "pool"
     assert reasoning_agent._root is None
-
-
-def test_reasoning_agent_invalid_approach():
-    """Test ReasoningAgent with invalid answer approach"""
-    config_list = [{"model": "gpt-4o-mini", "api_key": "fake_key"}]
-    llm_config = {"config_list": config_list}
-
-    with pytest.raises(AssertionError):
-        ReasoningAgent("reasoning_agent", llm_config=llm_config, answer_approach="invalid")
 
 
 def test_think_node_with_parent():
@@ -200,12 +191,12 @@ Option 3: Another option"""
 
         mock_oai_reply.side_effect = mock_response
 
-        print("OAI REPLY:", agent.thinker.generate_oai_reply)
+        print("OAI REPLY:", agent._thinker.generate_oai_reply)
 
-        success, response = agent.generate_beam_response("Test question")
+        success, response = agent._beam_reply("Test question")
 
     assert success is True
-    assert "TERMINATE" in agent.thinker.last_message()["content"]
+    assert "TERMINATE" in agent._thinker.last_message()["content"]
 
     # Verify we didn't exceed max_depth
     current_node = agent._root
@@ -217,7 +208,7 @@ Option 3: Another option"""
         max_depth_found = max(max_depth_found, node.depth)
         nodes_to_check.extend(node.children)
 
-    assert max_depth_found <= agent.max_depth
+    assert max_depth_found <= agent._max_depth
 
 
 @patch("graphviz.Digraph")

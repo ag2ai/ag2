@@ -11,7 +11,6 @@ from ..assistant_agent import AssistantAgent
 
 EPSILON = 1e-6
 
-
 TreeofThought_message = """
 Role: Expert Planning AI Assistant
 
@@ -39,6 +38,7 @@ Option 2: Reiterate and understand the user's question.
 Option 3: Analyze and validate the results based on the previous steps.
 Option 4: Perform Y.
 """
+
 
 class ThinkNode:
 
@@ -318,36 +318,39 @@ class ReasoningAgent(AssistantAgent):
                 {"method": "lats", "max_iterations": 10, "num_candidates": 5}
         """
         super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self.max_depth = max_depth
-        self.beam_size = beam_size
-        self.verbose = verbose
-        self.answer_approach = answer_approach
-        self.llm_config = llm_config
-        self.grader_llm_config = grader_llm_config if grader_llm_config else llm_config
+        self._max_depth = max_depth
+        self._beam_size = beam_size
+        self._verbose = verbose
+        self._answer_approach = answer_approach
+        self._llm_config = llm_config
+        self._grader_llm_config = grader_llm_config if grader_llm_config else llm_config
 
         if reason_config is None:
             reason_config = {}
+        self._reason_config = reason_config
 
-        self.method = reason_config.get("method", "beam_search")
-        if self.method == "beam_search":
-            self.beam_size = reason_config.get("beam_size", 3)
-            self.answer_approach = reason_config.get("answer_approach", "pool")
-            assert answer_approach in ["pool", "best"]
-        elif self.method in ["mcts", "lats"]:
-            self.mcts_simulations = reason_config.get("nsim", 3)
-            self.exploration_constant = reason_config.get("exploration_constant", 1.41)
+        self._method = reason_config.get("method", "beam_search")
+        if self._method in ["beam_search", "dfs"]:
+            if self._method == "dfs":
+                self._beam_size = 1
+            else:
+                self._beam_size = reason_config.get("beam_size", 3)
+            self._answer_approach = reason_config.get("answer_approach", "pool")
+            assert self._answer_approach in ["pool", "best"]
+        elif self._method in ["mcts", "lats"]:
+            self._nsim = reason_config.get("nsim", 3)
+            self._exploration_constant = reason_config.get("exploration_constant", 1.41)
 
-        self.forest_size = reason_config.get("forest_size", 5)
-        self.rating_scale = reason_config.get("rating_scale", 10)
+        self._forest_size = reason_config.get("forest_size", 1)  # We default use only 1 tree.
+        self._rating_scale = reason_config.get("rating_scale", 10)
 
         self._root = None
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
-        self.thinker = AssistantAgent(
-            name="tot_thinker", system_message=TreeofThought_message, llm_config=self.llm_config
+        self._thinker = AssistantAgent(
+            name="tot_thinker", system_message=TreeofThought_message, llm_config=self._llm_config
         )
-        self.grader = AssistantAgent(name="tot_grader", llm_config=self.grader_llm_config)
-
+        self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
 
     def generate_forest_response(self, messages, sender, config=None):
         """
@@ -368,11 +371,11 @@ class ReasoningAgent(AssistantAgent):
             return True, "TERMINATE"
 
         forest_answers = []
-        for _ in range(self.forest_size):
-            if self.method == "beam_search":
-                success, response = self.generate_beam_response(prompt, ground_truth)
-            elif self.method in ["mcts", "lats"]:
-                success, response = self.generate_mcts_response(prompt, ground_truth)
+        for _ in range(self._forest_size):
+            if self._method == "beam_search":
+                success, response = self._beam_reply(prompt, ground_truth)
+            elif self._method in ["mcts", "lats"]:
+                success, response = self._mtcs_reply(prompt, ground_truth)
 
             forest_answers.append(response)
 
@@ -383,12 +386,9 @@ class ReasoningAgent(AssistantAgent):
                 message=f"Answer the question {prompt}. Here are some students' different answers:\n{"\n-".join(forest_answers)}",
                 recipient=self,
                 request_reply=True,
-                silent=not self.verbose,
+                silent=not self._verbose,
             )
             return True, self.last_message(self)["content"].strip()
-
-
-
 
     def rate_node(self, node: ThinkNode, ground_truth: str = None, is_outcome: bool = False) -> float:
         """Rate the quality of a reasoning path using the grader agent.
@@ -400,10 +400,14 @@ class ReasoningAgent(AssistantAgent):
         Returns:
             float: Normalized score between 0 and 1 indicating trajectory quality
         """
+        if node.value > 0 and node.rating_details:
+            # we already calculated the rating for the node
+            return node.value
+
         # Update Grader's system message
         if is_outcome:
             ## Outcome Rating
-            message = f"""Please rate the answer on a scale of 1 to {self.rating_scale}, where 1 is the worst and {self.rating_scale} is the best.
+            message = f"""Please rate the answer on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
 
 A great answer must:
 - Directly address the original question
@@ -422,7 +426,7 @@ Please provide your rating along with a brief explanation of your assessment.
 """
         else:
             ## Process Rating
-            message = f"""Please rate the thinking trajectory on a scale of 1 to {self.rating_scale}, where 1 is the worst and {self.rating_scale} is the best.
+            message = f"""Please rate the thinking trajectory on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
 
 A great thinking trajectory must:
 - Advance the process of solving the problem.
@@ -440,21 +444,20 @@ Please provide your rating along with a brief explanation of your assessment.
         if ground_truth:
             # override the system message
             message += f"--- Note that the Ground Truth is ---\n{ground_truth}\n---\n"
-        self.grader.update_system_message(message)
-
+        self._grader.update_system_message(message)
 
         self.send(
             message=f"Rate:\n{node.trajectory}",
-            recipient=self.grader,
+            recipient=self._grader,
             request_reply=True,
-            silent=not self.verbose,
+            silent=not self._verbose,
         )
-        rating = self.grader.last_message()["content"].strip()
+        rating = self._grader.last_message()["content"].strip()
         node.rating_details = rating
 
         try:
             # Scale rating to [0, 1]
-            reward = (float(re.findall(r"[\d.]+", rating)[0]) - 1.0) / (self.rating_scale - 1.0)
+            reward = (float(re.findall(r"[\d.]+", rating)[0]) - 1.0) / (self._rating_scale - 1.0)
         except (IndexError, ValueError):
             reward = 0.0  # Default reward if parsing fails
         return reward
@@ -488,7 +491,7 @@ Please provide your rating along with a brief explanation of your assessment.
             ground_truth = None
         return prompt, ground_truth
 
-    def generate_beam_response(self, prompt, ground_truth=""):
+    def _beam_reply(self, prompt, ground_truth=""):
         """Generate a response using tree-of-thought reasoning.
 
         Implements beam search through a tree of reasoning steps, using the thinker
@@ -508,22 +511,22 @@ Please provide your rating along with a brief explanation of your assessment.
 
         final_answers = set()  # store the final answers
 
-        while prev_leafs and len(final_answers) < self.beam_size:
+        while prev_leafs and len(final_answers) < self._beam_size:
             new_leafs = []
             for node in prev_leafs:
-                if self.is_terminal(node):
+                if self._is_terminal(node):
                     # Reached max depth; collect possible answers
                     if node.value is None:
                         node.value = self.rate_node(node, ground_truth)
                     final_answers.add(node)
                     continue
 
-                new_leafs += self.expand(node)
+                new_leafs += self._expand(node)
 
             prev_leafs = new_leafs
 
-            if len(prev_leafs) + len(final_answers) > self.beam_size:
-                if len(final_answers) >= self.beam_size:
+            if len(prev_leafs) + len(final_answers) > self._beam_size:
+                if len(final_answers) >= self._beam_size:
                     prev_leafs = []  # stop searching, max beam size reached
                     break
 
@@ -532,22 +535,22 @@ Please provide your rating along with a brief explanation of your assessment.
                     node.value = self.rate_node(node, ground_truth)
                 # Beam search: keep top beam_size leaf nodes
                 prev_leafs = sorted(prev_leafs, key=lambda x: x.value if x.value else 0, reverse=True)[
-                    : self.beam_size - len(final_answers)
+                    : self._beam_size - len(final_answers)
                 ]
 
         assert final_answers, "No final answers found."
         final_answers = list(final_answers)
 
-        if self.answer_approach == "best":
+        if self._answer_approach == "best":
             # Best the final answers
             best_leaf = max(final_answers, key=lambda x: x.value)
             self.send(
                 message=f"Answer the question {prompt}. Here is my thinking processes:\n{best_leaf.trajectory}",
                 recipient=self,
                 request_reply=True,
-                silent=not self.verbose,
+                silent=not self._verbose,
             )
-        elif self.answer_approach == "pool":
+        elif self._answer_approach == "pool":
             all_thoughts = "\n\n".join(
                 [f"--- Possibility {i+1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)]
             )
@@ -555,38 +558,38 @@ Please provide your rating along with a brief explanation of your assessment.
                 message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",
                 recipient=self,
                 request_reply=True,
-                silent=not self.verbose,
+                silent=not self._verbose,
             )
 
         final_answer = self.chat_messages[self][-1]["content"].strip()
         return True, final_answer
 
-    def generate_mcts_response(self, prompt, ground_truth=""):
+    def _mtcs_reply(self, prompt, ground_truth=""):
         root = ThinkNode(content=prompt, parent=None)
         self._root = root
         answer_nodes = []
 
         # TODO: future, parallelism with Swarm agent or AsyncOpenAI client.
-        for _ in range(self.mcts_simulations):
+        for _ in range(self._nsim):
             node = root
 
             # Selection
-            while not self.is_terminal(node) and len(node.children) > 0:
+            while not self._is_terminal(node) and len(node.children) > 0:
                 choices_weights = [
                     # exploitation term +
                     (child.value / (child.visits + EPSILON)) +
                     # exploration term
-                    self.exploration_constant
+                    self._exploration_constant
                     * math.sqrt((2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON)))
                     for child in node.children
                 ]
                 node = node.children[choices_weights.index(max(choices_weights))]
 
             # Expansion and Simulation
-            while not self.is_terminal(node):
+            while not self._is_terminal(node):
                 if len(node.children) == 0:
-                    self.expand(node)
-                    if self.method == "lats":
+                    self._expand(node)
+                    if self._method == "lats":
                         # In LATS: rate the quality of the current child node using the ground truth and
                         # backpropagate the reward to update the node's value and visits.
                         reward = self.rate_node(node, ground_truth)
@@ -598,7 +601,7 @@ Please provide your rating along with a brief explanation of your assessment.
                 message=f"Answer the question {prompt}. Here is my thinking process:\n{node.trajectory}",
                 recipient=self,
                 request_reply=True,
-                silent=not self.verbose,
+                silent=not self._verbose,
             )
             _answer = self.last_message(self)["content"].strip()
             # We add the answer (as a node) to the leaf to help
@@ -615,7 +618,7 @@ Please provide your rating along with a brief explanation of your assessment.
         best_ans_node = max(answer_nodes, key=lambda node: node.value)
         return True, best_ans_node.content
 
-    def expand(self, node: ThinkNode) -> List:
+    def _expand(self, node: ThinkNode) -> List:
         """
         Expand the node by generating possible next steps based on the current trajectory.
 
@@ -630,14 +633,14 @@ Please provide your rating along with a brief explanation of your assessment.
         Returns:
             List[ThinkNode]: A list of new ThinkNode instances created from the options provided by the thinker.
         """
-        self.thinker.clear_history()
+        self._thinker.clear_history()
         self.send(
             message=f"{node.trajectory}\n---\nWhat are the possible next steps?",
-            recipient=self.thinker,
+            recipient=self._thinker,
             request_reply=True,
-            silent=not self.verbose,
+            silent=not self._verbose,
         )
-        reply = self.thinker.last_message()["content"].strip()
+        reply = self._thinker.last_message()["content"].strip()
         reflection = re.findall(r"REFLECTION:\s*(.+?)(?=\*\*Possible Options:\*\*|Option \d+:|$)", reply, re.DOTALL)
         if reflection:
             node.reflection += str(reflection[0].strip())
@@ -649,5 +652,5 @@ Please provide your rating along with a brief explanation of your assessment.
 
         return [ThinkNode(content=option.strip().rstrip(), parent=node) for option in options]
 
-    def is_terminal(self, node):
-        return node.depth >= self.max_depth or "TERMINATE" in node.content
+    def _is_terminal(self, node):
+        return node.depth >= self._max_depth or "TERMINATE" in node.content
