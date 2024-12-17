@@ -1,3 +1,9 @@
+[project]
+name = "AutoGen"
+version = "0.1.0"
+license_file = "LICENSE"
+description = "AG2"
+
 [metadata]
 license_file = "LICENSE"
 description-file = "README.md"
