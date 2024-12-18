@@ -26,10 +26,7 @@ then
 fi
 
 # Generate documentation using pydoc-markdown
-pydoc-markdown
+python ./process_api_reference.py
 
 # Process notebooks using a Python script
 python ./process_notebooks.py render
-
-# Start the website using yarn
-yarn start
