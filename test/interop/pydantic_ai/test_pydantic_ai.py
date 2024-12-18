@@ -83,8 +83,8 @@ class TestPydanticAIInteroperabilityWithotContext:
 
 
 class TestPydanticAIInteroperabilityDependencyInjection:
-    @pytest.fixture(autouse=True)
-    def setup(self) -> None:
+
+    def test_dependency_injection(self) -> None:
         def f(
             ctx: RunContext[int],  # type: ignore[valid-type]
             city: str,
@@ -93,16 +93,13 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             """Random function for testing."""
             return f"{city} {date} {ctx.deps}"  # type: ignore[attr-defined]
 
-        self.func = f
-
-    def test_dependency_injection(self) -> None:
         ctx = RunContext(
             deps=123,
             retry=0,
             messages=None,
-            tool_name=self.func.__name__,
+            tool_name=f.__name__,
         )
-        pydantic_ai_tool = PydanticAITool(self.func, takes_ctx=True)
+        pydantic_ai_tool = PydanticAITool(f, takes_ctx=True)
         g = PydanticAIInteroperability.inject_params(
             ctx=ctx,
             tool=pydantic_ai_tool,
@@ -110,6 +107,38 @@ class TestPydanticAIInteroperabilityDependencyInjection:
         assert list(signature(g).parameters.keys()) == ["city", "date"]
         kwargs: Dict[str, Any] = {"city": "Zagreb", "date": "2021-01-01"}
         assert g(**kwargs) == "Zagreb 2021-01-01 123"
+
+    def test_dependency_injection_with_retry(self) -> None:
+        def f(
+            ctx: RunContext[int],  # type: ignore[valid-type]
+            city: str,
+            date: str,
+        ) -> str:
+            """Random function for testing."""
+            raise ValueError("Retry")
+
+        ctx = RunContext(
+            deps=123,
+            retry=0,
+            messages=None,
+            tool_name=f.__name__,
+        )
+
+        pydantic_ai_tool = PydanticAITool(f, takes_ctx=True, max_retries=3)
+        g = PydanticAIInteroperability.inject_params(
+            ctx=ctx,
+            tool=pydantic_ai_tool,
+        )
+
+        for i in range(3):
+            with pytest.raises(ValueError, match="Retry"):
+                g(city="Zagreb", date="2021-01-01")
+                assert pydantic_ai_tool.current_retry == i + 1
+                assert ctx.retry == i
+
+        with pytest.raises(ValueError, match="f failed after 3 retries"):
+            g(city="Zagreb", date="2021-01-01")
+            assert pydantic_ai_tool.current_retry == 3
 
 
 class TestPydanticAIInteroperabilityWithContext:
