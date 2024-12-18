@@ -14,6 +14,8 @@ import anyio
 import websockets
 from asyncer import TaskGroup, asyncify, create_task_group, syncify
 
+from autogen.agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
+
 from .function_observer import FunctionObserver
 
 
@@ -108,6 +110,14 @@ class Client(ABC):
                 self.tg.soonify(self._read_from_client)()
                 for observer in self._observers:
                     self.tg.soonify(observer.run)()
+                if self._agent._start_swarm_chat:
+                    self.tg.soonify(asyncify(initiate_swarm_chat))(
+                        initial_agent=self._agent._initial_agent,
+                        agents=self._agent._agents,
+                        user_agent=self._agent,
+                        messages="Find out what the user wants.",
+                        after_work=AfterWorkOption.REVERT_TO_USER,
+                    )
 
     def run_task(self, task, *args: Any, **kwargs: Any):
         self.tg.soonify(task)(*args, **kwargs)

@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 # import asyncio
+import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -29,12 +30,17 @@ F = TypeVar("F", bound=Callable[..., Any])
 logger = logging.getLogger(__name__)
 
 SWARM_SYSTEM_MESSAGE = (
-    "You are a helpful voice assistant. Your task is to listen to user and to create tasks based on his/her inputs. E.g. if a user wishes to make change to his flight, you should create a task for it.\n"
-    "DO NOT ask any additional information about the task from the user. Start the task as soon as possible.\n"
-    "You have to assume that every task can be successfully completed by the swarm of agents and your only role is to create tasks for them.\n"
+    "You are a helpful voice assistant. Your task is to listen to user and to coordinate the swarm of agents based on his/her inputs."
+    "The swarm will have questions for the user, and you will be responsible for asking the user these questions and relaying the answers back to the agents."
+    "The questions will start with 'I have a question/information for the user from the agent working on a task."
+    "When you get a question, inform the user with audio output and then call 'answer_task_question' to propagate the user answer to the agent working on the task."
+    "You can communicate and will communicate using audio output only."
+    # "You are a helpful voice assistant. Your task is to listen to user and to create tasks based on his/her inputs. E.g. if a user wishes to make change to his flight, you should create a task for it.\n"
+    # "DO NOT ask any additional information about the task from the user. Start the task as soon as possible.\n"
+    # "You have to assume that every task can be successfully completed by the swarm of agents and your only role is to create tasks for them.\n"
     # "While the task is being executed, please keep the user on the line and inform him/her about the progress by calling the 'get_task_status' function. You might also get additional questions or status reports from the agents working on the task.\n"
     # "Once the task is done, inform the user that the task is completed and ask if you can help with anything else.\n"
-    "Do not create unethical or illegal tasks.\n"
+    # "Do not create unethical or illegal tasks.\n"
 )
 
 
@@ -85,6 +91,9 @@ class RealtimeAgent(ConversableAgent):
 
         self._answer_event: anyio.Event = anyio.Event()
         self._answer: str = ""
+        self._start_swarm_chat = False
+        self._initial_agent = None
+        self._agents = None
 
     def register_swarm(
         self,
@@ -102,32 +111,23 @@ class RealtimeAgent(ConversableAgent):
 
         self._oai_system_message = [{"content": system_message, "role": "system"}]
 
-        @self.register_handover(name="create_task", description="Create a task given by the user")
-        async def create_task(task_input: str) -> str:
-            self._client.run_task(
-                asyncify(initiate_swarm_chat),
-                initial_agent=initial_agent,
-                agents=agents,
-                user_agent=self,
-                messages=task_input,
-                after_work=AfterWorkOption.REVERT_TO_USER,
-            )
+        self._start_swarm_chat = True
+        self._initial_agent = initial_agent
+        self._agents = agents
 
-            return "Task created successfully."
+        # def _get_task_status(task_id: str) -> Generator[None, str, None]:
+        #     while True:
+        #         for s in [
+        #             "The task is in progress, agents are working on it. ETA is 1 minute",
+        #             "The task is successfully completed.",
+        #         ]:
+        #             yield s
 
-        def _get_task_status(task_id: str) -> Generator[None, str, None]:
-            while True:
-                for s in [
-                    "The task is in progress, agents are working on it. ETA is 1 minute",
-                    "The task is successfully completed.",
-                ]:
-                    yield s
+        # it = _get_task_status("task_id")
 
-        it = _get_task_status("task_id")
-
-        @self.register_handover(name="get_task_status", description="Get the status of the task")
-        async def get_task_status(task_id: str) -> str:
-            return next(it)
+        # @self.register_handover(name="get_task_status", description="Get the status of the task")
+        # async def get_task_status(task_id: str) -> str:
+        #     return next(it)
 
         self.register_handover(name="answer_task_question", description="Answer question from the task")(
             self.set_answer
@@ -179,6 +179,12 @@ class RealtimeAgent(ConversableAgent):
         await self._answer_event.wait()
         return self._answer
 
+    async def ask_question(self, question: str) -> str:
+        self.reset_answer()
+        while not self._answer_event.is_set():
+            await self._client.send_text(question)
+            await asyncio.sleep(5)
+
     def check_termination_and_human_reply(
         self,
         messages: Optional[List[Dict]] = None,
@@ -188,7 +194,7 @@ class RealtimeAgent(ConversableAgent):
         async def get_input():
             async with create_task_group() as tg:
                 self.reset_answer()
-                tg.soonify(self._client.send_text)(
+                tg.soonify(self.ask_question)(
                     "I have a question/information for the user from the agent working on a task. DO NOT ANSWER YOURSELF, "
                     "INFORM THE USER **WITH AUDIO OUTPUT** AND THEN CALL 'answer_task_question' TO PROPAGETE THE "
                     f"USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n",
