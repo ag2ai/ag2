@@ -7,6 +7,7 @@
 
 # import asyncio
 import json
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -17,6 +18,8 @@ from asyncer import TaskGroup, asyncify, create_task_group, syncify
 from autogen.agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 
 from .function_observer import FunctionObserver
+
+logger = logging.getLogger(__name__)
 
 
 class Client(ABC):
@@ -83,9 +86,9 @@ class Client(ABC):
     # todo override in specific clients
     async def session_update(self, session_options):
         update = {"type": "session.update", "session": session_options}
-        print("Sending session update:", json.dumps(update), flush=True)
+        logger.info("Sending session update:", json.dumps(update))
         await self._openai_ws.send(json.dumps(update))
-        print("Sending session update finished", flush=True)
+        logger.info("Sending session update finished")
 
     async def _read_from_client(self):
         try:
@@ -93,7 +96,7 @@ class Client(ABC):
                 response = json.loads(openai_message)
                 await self.notify_observers(response)
         except Exception as e:
-            print(f"Error in _read_from_client: {e}")
+            logger.warning(f"Error in _read_from_client: {e}")
 
     async def run(self):
         async with websockets.connect(
