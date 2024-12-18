@@ -60,8 +60,10 @@ reason_agent = ReasoningAgent(
     name="reason_agent",
     llm_config={"config_list": config_list},
     verbose=False,
-    beam_size=1,  # Using beam size 1 for O1-style reasoning
-    max_depth=3,
+    reason_config={
+        "beam_size": 1,  # Using beam size 1 for O1-style reasoning
+        "max_depth": 3
+    }
 )
 ```
 
@@ -91,8 +93,10 @@ reasoning_agent = ReasoningAgent(
     name="reason_agent",
     llm_config={"config_list": config_list},
     verbose=False,
-    beam_size=1,  # Using beam size 1 for O1-style reasoning
-    max_depth=3,
+    reason_config={
+        "beam_size": 1,  # Using beam size 1 for O1-style reasoning
+        "max_depth": 3
+    }
 )
 
 # Create a user proxy agent
@@ -146,8 +150,10 @@ reason_agent = ReasoningAgent(
     name="reason_agent",
     llm_config={"config_list": config_list},
     verbose=False,
-    beam_size=3,  # Explore 3 paths in parallel
-    max_depth=3,
+    reason_config={
+        "beam_size": 3,
+        "max_depth": 3
+    }
 )
 
 # Example complex problem

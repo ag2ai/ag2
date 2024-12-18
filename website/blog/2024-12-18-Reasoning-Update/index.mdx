@@ -10,12 +10,19 @@ tags: [LLM, GPT, research, tutorial]
 
 ![Tree of Thoughts](img/reasoningagent_1.png)
 
-**Update Overview:**
-* We introduce Monte Carlo Tree Search (MCTS) as an alternative to Beam Search in ReasoningAgent
-* We draw inspiration from Language Agent Tree Search (LATS) as a modified MCTS approach, where we calculate reward at every step (similar to beam search)
-* You can control the reasoning agent setup with the `reason_config` dictionary
-* We also include a parameter `forest_size` to enable "forest of thoughts"
-* You can include ground truth answer in the prompt for the reasoning agent to generate thinking trajectories for LLM post-training
+**Key Updates in this Release:**
+
+1. Configuration Changes
+   * All reasoning parameters are now configured through a single `reason_config` dictionary
+   * Breaking Change: Parameters like `max_depth`, `beam_size`, and `answer_approach` have moved from constructor arguments into `reason_config`
+
+2. New Search Strategies
+   * Added Monte Carlo Tree Search (MCTS) as an alternative to Beam Search
+   * Introduced Language Agent Tree Search (LATS) - a hybrid approach that combines MCTS with step-by-step rewards like Beam Search
+
+3. Enhanced Features
+   * New `forest_size` parameter enables maintaining multiple independent reasoning trees
+   * Support for ground truth answers in prompts to generate training data for LLM fine-tuning
 
 ## Introduction
 

@@ -167,9 +167,7 @@ def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach):
         agent = ReasoningAgent(
             "test_agent",
             llm_config=mock_config,
-            max_depth=max_depth,
-            beam_size=beam_size,
-            answer_approach=answer_approach,
+            reason_config={"beam_size": beam_size, "answer_approach": answer_approach, "max_depth": max_depth},
         )
 
         def mock_response(*args, **kwargs):
@@ -196,9 +194,9 @@ Option 3: Another option"""
 
         print("OAI REPLY:", agent._thinker.generate_oai_reply)
 
-        success, response = agent._beam_reply("Test question")
+        response = agent._beam_reply("Test question")
+        assert len(response)
 
-    assert success is True
     assert "TERMINATE" in agent._thinker.last_message()["content"]
 
     # Verify we didn't exceed max_depth
