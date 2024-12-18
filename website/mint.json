@@ -5,6 +5,9 @@
     "dark": "/logo/ag2-white.svg",
     "light": "/logo/ag2.svg"
   },
+  "metadata": {
+    "og:image": "/logo/ag2.svg"
+  },
   "favicon": "/logo/ag2.svg",
   "search": {
     "prompt": "Search or ask..."
