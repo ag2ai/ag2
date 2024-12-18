@@ -7,11 +7,14 @@
 
 import asyncio
 import json
+import logging
 
 from asyncer import asyncify
 from pydantic import BaseModel
 
 from .realtime_observer import RealtimeObserver
+
+logger = logging.getLogger(__name__)
 
 
 class FunctionObserver(RealtimeObserver):
@@ -21,7 +24,7 @@ class FunctionObserver(RealtimeObserver):
 
     async def update(self, response):
         if response.get("type") == "response.function_call_arguments.done":
-            print(f"Received event: {response['type']}", response)
+            logger.info(f"Received event: {response['type']}", response)
             await self.call_function(
                 call_id=response["call_id"], name=response["name"], kwargs=json.loads(response["arguments"])
             )
@@ -34,13 +37,13 @@ class FunctionObserver(RealtimeObserver):
                 result = await func(**kwargs)
             except Exception:
                 result = "Function call failed"
+                logger.warning(f"Function call failed: {name}")
 
             if isinstance(result, BaseModel):
                 result = result.model_dump_json()
             elif not isinstance(result, str):
                 result = json.dumps(result)
 
-            print(f"Function call result: {result}")
             await self._client.function_result(call_id, result)
 
     async def run(self):

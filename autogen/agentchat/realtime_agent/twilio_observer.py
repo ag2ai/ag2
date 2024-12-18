@@ -7,6 +7,7 @@
 
 import base64
 import json
+import logging
 
 from fastapi import WebSocketDisconnect
 
@@ -24,6 +25,8 @@ LOG_EVENT_TYPES = [
 ]
 SHOW_TIMING_MATH = False
 
+logger = logging.getLogger(__name__)
+
 
 class TwilioAudioAdapter(RealtimeObserver):
     def __init__(self, websocket):
@@ -40,7 +43,7 @@ class TwilioAudioAdapter(RealtimeObserver):
     async def update(self, response):
         """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
         if response["type"] in LOG_EVENT_TYPES:
-            print(f"Received event: {response['type']}", response)
+            logger.info(f"Received event: {response['type']}", response)
 
         if response.get("type") == "response.audio.delta" and "delta" in response:
             audio_payload = base64.b64encode(base64.b64decode(response["delta"])).decode("utf-8")
@@ -50,7 +53,7 @@ class TwilioAudioAdapter(RealtimeObserver):
             if self.response_start_timestamp_twilio is None:
                 self.response_start_timestamp_twilio = self.latest_media_timestamp
                 if SHOW_TIMING_MATH:
-                    print(f"Setting start timestamp for new response: {self.response_start_timestamp_twilio}ms")
+                    logger.info(f"Setting start timestamp for new response: {self.response_start_timestamp_twilio}ms")
 
             # Update last_assistant_item safely
             if response.get("item_id"):
@@ -60,24 +63,24 @@ class TwilioAudioAdapter(RealtimeObserver):
 
         # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
         if response.get("type") == "input_audio_buffer.speech_started":
-            print("Speech started detected.")
+            logger.info("Speech started detected.")
             if self.last_assistant_item:
-                print(f"Interrupting response with id: {self.last_assistant_item}")
+                logger.info(f"Interrupting response with id: {self.last_assistant_item}")
                 await self.handle_speech_started_event()
 
     async def handle_speech_started_event(self):
         """Handle interruption when the caller's speech starts."""
-        print("Handling speech started event.")
+        logger.info("Handling speech started event.")
         if self.mark_queue and self.response_start_timestamp_twilio is not None:
             elapsed_time = self.latest_media_timestamp - self.response_start_timestamp_twilio
             if SHOW_TIMING_MATH:
-                print(
+                logger.info(
                     f"Calculating elapsed time for truncation: {self.latest_media_timestamp} - {self.response_start_timestamp_twilio} = {elapsed_time}ms"
                 )
 
             if self.last_assistant_item:
                 if SHOW_TIMING_MATH:
-                    print(f"Truncating item with ID: {self.last_assistant_item}, Truncated at: {elapsed_time}ms")
+                    logger.info(f"Truncating item with ID: {self.last_assistant_item}, Truncated at: {elapsed_time}ms")
 
                 truncate_event = {
                     "type": "conversation.item.truncate",
@@ -111,7 +114,7 @@ class TwilioAudioAdapter(RealtimeObserver):
                 await openai_ws.send(json.dumps(audio_append))
             elif data["event"] == "start":
                 self.stream_sid = data["start"]["streamSid"]
-                print(f"Incoming stream has started {self.stream_sid}")
+                logger.info(f"Incoming stream has started {self.stream_sid}")
                 self.response_start_timestamp_twilio = None
                 self.latest_media_timestamp = 0
                 self.last_assistant_item = None

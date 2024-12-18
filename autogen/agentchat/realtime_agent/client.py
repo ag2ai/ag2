@@ -7,6 +7,7 @@
 
 # import asyncio
 import json
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -14,7 +15,11 @@ import anyio
 import websockets
 from asyncer import TaskGroup, asyncify, create_task_group, syncify
 
+from autogen.agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
+
 from .function_observer import FunctionObserver
+
+logger = logging.getLogger(__name__)
 
 
 class Client(ABC):
@@ -56,10 +61,11 @@ class Client(ABC):
         await self._openai_ws.send(json.dumps(result_item))
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
 
-    async def send_text(self, text: str):
+    async def send_text(self, *, role: str, text: str):
+        await self._openai_ws.send(json.dumps({"type": "response.cancel"}))
         text_item = {
             "type": "conversation.item.create",
-            "item": {"type": "message", "role": "system", "content": [{"type": "input_text", "text": text}]},
+            "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
         }
         await self._openai_ws.send(json.dumps(text_item))
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
@@ -72,7 +78,7 @@ class Client(ABC):
             "turn_detection": {"type": "server_vad"},
             "voice": self._agent.voice,
             "instructions": self._agent.system_message,
-            "modalities": ["audio"],
+            "modalities": ["audio", "text"],
             "temperature": 0.8,
         }
         await self.session_update(session_update)
@@ -80,9 +86,9 @@ class Client(ABC):
     # todo override in specific clients
     async def session_update(self, session_options):
         update = {"type": "session.update", "session": session_options}
-        print("Sending session update:", json.dumps(update), flush=True)
+        logger.info("Sending session update:", json.dumps(update))
         await self._openai_ws.send(json.dumps(update))
-        print("Sending session update finished", flush=True)
+        logger.info("Sending session update finished")
 
     async def _read_from_client(self):
         try:
@@ -90,7 +96,7 @@ class Client(ABC):
                 response = json.loads(openai_message)
                 await self.notify_observers(response)
         except Exception as e:
-            print(f"Error in _read_from_client: {e}")
+            logger.warning(f"Error in _read_from_client: {e}")
 
     async def run(self):
         async with websockets.connect(
@@ -108,6 +114,11 @@ class Client(ABC):
                 self.tg.soonify(self._read_from_client)()
                 for observer in self._observers:
                     self.tg.soonify(observer.run)()
-
-    def run_task(self, task, *args: Any, **kwargs: Any):
-        self.tg.soonify(task)(*args, **kwargs)
+                if self._agent._start_swarm_chat:
+                    self.tg.soonify(asyncify(initiate_swarm_chat))(
+                        initial_agent=self._agent._initial_agent,
+                        agents=self._agent._agents,
+                        user_agent=self._agent,
+                        messages="Find out what the user wants.",
+                        after_work=AfterWorkOption.REVERT_TO_USER,
+                    )
