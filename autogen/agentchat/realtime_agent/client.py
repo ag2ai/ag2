@@ -59,9 +59,10 @@ class Client(ABC):
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
 
     async def send_text(self, text: str):
+        # await self._openai_ws.send(json.dumps({"type": "response.cancel"}))
         text_item = {
             "type": "conversation.item.create",
-            "item": {"type": "message", "role": "system", "content": [{"type": "input_text", "text": text}]},
+            "item": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]},
         }
         await self._openai_ws.send(json.dumps(text_item))
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
@@ -74,7 +75,7 @@ class Client(ABC):
             "turn_detection": {"type": "server_vad"},
             "voice": self._agent.voice,
             "instructions": self._agent.system_message,
-            "modalities": ["audio"],
+            "modalities": ["audio", "text"],
             "temperature": 0.8,
         }
         await self.session_update(session_update)

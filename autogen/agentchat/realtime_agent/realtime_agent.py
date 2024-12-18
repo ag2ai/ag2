@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 
 SWARM_SYSTEM_MESSAGE = (
     "You are a helpful voice assistant. Your task is to listen to user and to coordinate the swarm of agents based on his/her inputs."
-    "The swarm will have questions for the user, and you will be responsible for asking the user these questions and relaying the answers back to the agents."
-    "The questions will start with 'I have a question/information for the user from the agent working on a task."
-    "When you get a question, inform the user with audio output and then call 'answer_task_question' to propagate the user answer to the agent working on the task."
+    # "The swarm will have questions for the user, and you will be responsible for asking the user these questions and relaying the answers back to the agents."
+    # "The questions will start with 'I have a question/information for the user from the agent working on a task."
+    # "When you get a question, inform the user with audio output and then call 'answer_task_question' to propagate the user answer to the agent working on the task."
     "You can communicate and will communicate using audio output only."
     # "You are a helpful voice assistant. Your task is to listen to user and to create tasks based on his/her inputs. E.g. if a user wishes to make change to his flight, you should create a task for it.\n"
     # "DO NOT ask any additional information about the task from the user. Start the task as soon as possible.\n"
@@ -183,7 +183,7 @@ class RealtimeAgent(ConversableAgent):
         self.reset_answer()
         while not self._answer_event.is_set():
             await self._client.send_text(question)
-            await asyncio.sleep(5)
+            await asyncio.sleep(20)
 
     def check_termination_and_human_reply(
         self,
@@ -193,14 +193,24 @@ class RealtimeAgent(ConversableAgent):
     ) -> Tuple[bool, Union[str, None]]:
         async def get_input():
             async with create_task_group() as tg:
-                self.reset_answer()
                 tg.soonify(self.ask_question)(
-                    "I have a question/information for the user from the agent working on a task. DO NOT ANSWER YOURSELF, "
-                    "INFORM THE USER **WITH AUDIO OUTPUT** AND THEN CALL 'answer_task_question' TO PROPAGETE THE "
-                    f"USER ANSWER TO THE AGENT WORKING ON THE TASK. The question is: '{messages[-1]['content']}'\n\n",
+                    "I have a question/information for the myself. DO NOT ANSWER YOURSELF, "
+                    "repeat the question to me **WITH AUDIO OUTPUT** and then call 'answer_task_question' AFTER YOU GET THE ANSWER FROM ME\n\n"
+                    f"The question is: '{messages[-1]['content']}'\n\n",
                 )
-                await self.get_answer()
 
         syncify(get_input)()
+
+        # async def get_input():
+        #     self._client.run_task(self.ask_question, (
+        #             "I have a question for the myself. DO NOT ANSWER YOURSELF, "
+        #             "repeat the question to me **WITH AUDIO OUTPUT** and then call 'answer_task_question' AFTER YOU GET THE ANSWER FROM ME\n"
+        #             "Do not conclude anything about my answer, just call the answer_task_question function after you get the answer from me.\n\n"
+        #             f"The question is: '{messages[-1]['content']}'\n\n",
+        #         )
+        #     )
+
+        # syncify(get_input)()
+        # answer = syncify(self.get_answer)()
 
         return True, {"role": "user", "content": self._answer}
