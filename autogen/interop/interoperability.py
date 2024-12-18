@@ -6,6 +6,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from ..tools import Tool
 
+__all__ = ["Interoperable"]
 
 @runtime_checkable
 class Interoperable(Protocol):
