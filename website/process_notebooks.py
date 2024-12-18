@@ -358,6 +358,31 @@ def add_front_matter_to_metadata_mdx(
         f.write(";\n")
 
 
+def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
+    """
+    Converts MDX code block image syntax to regular markdown image syntax.
+
+    Args:
+        content (str): The markdown content containing mdx-code-block image syntax
+
+    Returns:
+        str: The converted markdown content with standard image syntax
+    """
+
+    def resolve_path(match):
+        img_pattern = r"!\[(.*?)\]\((.*?)\)"
+        img_match = re.search(img_pattern, match.group(1))
+        if not img_match:
+            return match.group(0)
+
+        alt, rel_path = img_match.groups()
+        abs_path = (rendered_mdx.parent / rel_path.lstrip("./")).resolve().relative_to(website_dir)
+        return f"![{alt}](/{abs_path})"
+
+    pattern = r"````mdx-code-block\n(!\[.*?\]\(.*?\))\n````"
+    return re.sub(pattern, resolve_path, content)
+
+
 # rendered_notebook is the final mdx file
 def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: Dict, website_dir: Path) -> None:
     with open(rendered_mdx, "r", encoding="utf-8") as f:
@@ -423,6 +448,9 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
 
     # Dump front_matter to ysaml
     front_matter = yaml.dump(front_matter, default_flow_style=False)
+
+    # Convert mdx image syntax to mintly image syntax
+    content = convert_mdx_image_blocks(content, rendered_mdx, website_dir)
 
     # Rewrite the content as
     # ---
