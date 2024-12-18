@@ -50,21 +50,23 @@ class ThinkNode:
         for traversing/visualizing the reasoning path.
 
         Args:
-            content (str): The text content/description for this reasoning step
-            parent (Optional[ThinkNode]): The parent node in the tree, if any
+            content (str): The text content/description for this reasoning step.
+            parent (Optional[ThinkNode]): The parent node in the tree, if any.
 
         Attributes:
-            content (str): The text content/description for this reasoning step
-            value (Optional[float]): A numeric score/value assigned to this node
-            parent (Optional[ThinkNode]): Reference to parent node
-            depth (int): The depth of this node in the tree (root = 0)
-            children (List[ThinkNode]): List of child nodes
-            visits (int): Number of times this node has been visited during search
+            content (str): The text content/description for this reasoning step.
+            value (Optional[float]): A numeric score/value assigned to this node.
+            parent (Optional[ThinkNode]): Reference to the parent node.
+            reflection (str): A string containing reflections on the reasoning process.
+            rating_details (str): A string providing details about the rating of this node.
+            depth (int): The depth of this node in the tree (root = 0).
+            children (List[ThinkNode]): List of child nodes.
+            visits (int): Number of times this node has been visited during search.
 
         The node automatically maintains the tree structure by:
-        - Setting its depth based on parent's depth + 1
-        - Adding itself to parent's children list if parent exists
-        - Providing trajectory utilities to get the full path from root to this node
+        - Setting its depth based on the parent's depth + 1.
+        - Adding itself to the parent's children list if the parent exists.
+        - Providing trajectory utilities to get the full path from root to this node.
         """
         self.content = content
         self.value = 0
@@ -575,6 +577,10 @@ Please provide your rating along with a brief explanation of your assessment.
 
             # Selection
             while not self._is_terminal(node) and len(node.children) > 0:
+                # TODO: In the original UCT formula, child.value represents the win ratio.
+                # Here, we use the average rating rather than the win ratio.
+                # The rating might be biased from the LLM, which could affect the bounds of this vanilla UCT equation.
+                # More intensive analysis is needed in the future.
                 choices_weights = [
                     # exploitation term +
                     (child.value / (child.visits + EPSILON)) +
@@ -590,7 +596,7 @@ Please provide your rating along with a brief explanation of your assessment.
                 if len(node.children) == 0:
                     self._expand(node)
                     if self._method == "lats":
-                        # In LATS: rate the quality of the current child node using the ground truth and
+                        # In LATS: rate the quality of the current child node and
                         # backpropagate the reward to update the node's value and visits.
                         reward = self.rate_node(node, ground_truth)
                         node.backpropagate(reward)
