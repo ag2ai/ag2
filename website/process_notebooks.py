@@ -379,16 +379,15 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
 
     # Is there a title on the content? Only search up until the first code cell
-    first_code_cell = content.find("```")
-    if first_code_cell != -1:
-        title_search_content = content[:first_code_cell]
-    else:
-        title_search_content = content
+    # first_code_cell = content.find("```")
+    # if first_code_cell != -1:
+    #     title_search_content = content[:first_code_cell]
+    # else:
+    #     title_search_content = content
 
-    title_exists = title_search_content.find("\n# ") != -1
-    if not title_exists:
-        content = f"# {front_matter['title']}\n{content}"
-
+    # title_exists = title_search_content.find("\n# ") != -1
+    # if not title_exists:
+    #     content = f"# {front_matter['title']}\n{content}"
     # inject in content directly after the markdown title the word done
     # Find the end of the line with the title
     title_end = content.find("\n", content.find("#"))
