@@ -7,7 +7,7 @@ from typing import Any
 from langchain_core.tools import BaseTool as LangchainTool
 
 from ...tools import Tool
-from ..interoperability import Interoperable
+from ..interoperable import Interoperable
 
 __all__ = ["LangchainInteroperability"]
 

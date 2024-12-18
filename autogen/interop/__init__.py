@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .interoperability import Interoperable
+from .interoperability import Interoperability
+from .interoperable import Interoperable
 
-__all__ = ["Interoperable"]
+__all__ = ["Interoperable", "Interoperability"]
