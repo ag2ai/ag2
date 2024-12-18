@@ -541,21 +541,22 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
 
     # Create notebooks entry
     notebooks_entry = {
-        "group": "Notebooks",
-        "pages": ["/notebooks/Notebooks"]
+        "group": "Examples by Notebook",
+        "pages": ["notebooks/Notebooks"]
         + [
             Path(item["source"])
             .resolve()
             .with_suffix("")
             .as_posix()
             .replace("/website/", "/")
-            .replace("/notebook/", "/notebooks/")
+            .replace("/notebook/", "notebooks/")
             for item in notebooks_metadata
+            if not item["source"].startswith("/website/docs/")
         ],
     }
 
     # Replace the pages list in Examples group with our standard pages plus notebooks
-    examples_group["pages"] = ["notebooks/Examples", "notebooks/Gallery", notebooks_entry]
+    examples_group["pages"] = ["notebooks/Examples", notebooks_entry, "notebooks/Gallery"]
 
     # Write back to mint.json
     with open(mint_json_path, "w", encoding="utf-8") as f:
