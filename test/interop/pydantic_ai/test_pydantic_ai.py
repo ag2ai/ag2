@@ -39,7 +39,7 @@ class TestPydanticAIInteroperabilityWithotContext:
             return str(random.randint(1, 6))
 
         self.pydantic_ai_interop = PydanticAIInteroperability()
-        pydantic_ai_tool = PydanticAITool(roll_dice)
+        pydantic_ai_tool = PydanticAITool(roll_dice, max_retries=3)
         self.tool = self.pydantic_ai_interop.convert_tool(pydantic_ai_tool)
 
     def test_type_checks(self) -> None:
@@ -82,6 +82,36 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert False, "No tool response found in chat messages"
 
 
+class TestPydanticAIInteroperabilityDependencyInjection:
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        def f(
+            ctx: RunContext[int],  # type: ignore[valid-type]
+            city: str,
+            date: str,
+        ) -> str:
+            """Random function for testing."""
+            return f"{city} {date} {ctx.deps}"  # type: ignore[attr-defined]
+
+        self.func = f
+
+    def test_dependency_injection(self) -> None:
+        ctx = RunContext(
+            deps=123,
+            retry=0,
+            messages=None,
+            tool_name=self.func.__name__,
+        )
+        pydantic_ai_tool = PydanticAITool(self.func, takes_ctx=True)
+        g = PydanticAIInteroperability.inject_params(
+            ctx=ctx,
+            tool=pydantic_ai_tool,
+        )
+        assert list(signature(g).parameters.keys()) == ["city", "date"]
+        kwargs: Dict[str, Any] = {"city": "Zagreb", "date": "2021-01-01"}
+        assert g(**kwargs) == "Zagreb 2021-01-01 123"
+
+
 class TestPydanticAIInteroperabilityWithContext:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -101,20 +131,6 @@ class TestPydanticAIInteroperabilityWithContext:
         pydantic_ai_tool = PydanticAITool(get_player, takes_ctx=True)
         player = Player(name="Luka", age=25)
         self.tool = self.pydantic_ai_interop.convert_tool(tool=pydantic_ai_tool, deps=player)
-
-    def test_dependency_injection(self) -> None:
-        def f(
-            city: str,
-            date: str,
-            ctx: int,
-        ) -> str:
-            return f"{city} {date} {ctx}"
-
-        ctx = 123
-        g = PydanticAIInteroperability.inject_params(f=f, ctx=ctx)
-        assert list(signature(g).parameters.keys()) == ["city", "date"]
-        kwargs: Dict[str, Any] = {"city": "Zagreb", "date": "2021-01-01"}
-        assert g(**kwargs) == "Zagreb 2021-01-01 123"
 
     def test_expected_tools(self) -> None:
         config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
