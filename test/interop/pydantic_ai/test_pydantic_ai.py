@@ -116,8 +116,37 @@ class TestPydanticAIInteroperabilityWithContext:
         kwargs: Dict[str, Any] = {"city": "Zagreb", "date": "2021-01-01"}
         assert g(**kwargs) == "Zagreb 2021-01-01 123"
 
-    def test_signature(self) -> None:
-        assert str(self.tool.func.__signature__) == "(additional_info: Optional[str] = None) -> str"
+    def test_expected_tools(self) -> None:
+        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        chatbot = AssistantAgent(
+            name="chatbot",
+            llm_config={"config_list": config_list},
+        )
+        self.tool.register_for_llm(chatbot)
+
+        expected_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_player",
+                    "description": "Get the player's name.",
+                    "parameters": {
+                        "properties": {
+                            "additional_info": {
+                                "anyOf": [{"type": "string"}, {"type": "null"}],
+                                "description": "Additional information which can be used.",
+                                "title": "Additional Info",
+                            }
+                        },
+                        "required": ["additional_info"],
+                        "type": "object",
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        ]
+
+        assert chatbot.llm_config["tools"] == expected_tools  # type: ignore[index]
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
@@ -134,29 +163,6 @@ class TestPydanticAIInteroperabilityWithContext:
 
         self.tool.register_for_execution(user_proxy)
         self.tool.register_for_llm(chatbot)
-
-        expected_tools = [
-            {
-                "type": "function",
-                "function": {
-                    "description": "Get the player's name.",
-                    "name": "get_player",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "additional_info": {
-                                "anyOf": [{"type": "string"}, {"type": "null"}],
-                                "default": None,
-                                "description": "additional_info",
-                            }
-                        },
-                        "required": [],
-                    },
-                },
-            }
-        ]
-
-        assert chatbot.llm_config["tools"] == expected_tools  # type: ignore[index]
 
         user_proxy.initiate_chat(
             recipient=chatbot, message="Get player, for additional information use 'goal keeper'", max_turns=3

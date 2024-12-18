@@ -2600,7 +2600,7 @@ class ConversableAgent(LLMAgent):
 
         self.client = OpenAIWrapper(**self.llm_config)
 
-    def update_tool_signature(self, tool_sig: Union[str, Dict], is_remove: None):
+    def update_tool_signature(self, tool_sig: Union[str, Dict], is_remove: bool):
         """update a tool_signature in the LLM configuration for tool_call.
 
         Args:

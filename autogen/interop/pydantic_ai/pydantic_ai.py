@@ -10,7 +10,7 @@ from typing import Any, Callable
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool as PydanticAITool
 
-from ...tools import Tool
+from ...tools import PydanticAITool as AG2PydanticAITool
 from ..interoperability import Interoperable
 
 __all__ = ["PydanticAIInteroperability"]
@@ -31,7 +31,7 @@ class PydanticAIInteroperability(Interoperable):
 
         return wrapper
 
-    def convert_tool(self, tool: Any, deps: Any = None) -> Tool:
+    def convert_tool(self, tool: Any, deps: Any = None) -> AG2PydanticAITool:
         if not isinstance(tool, PydanticAITool):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
 
@@ -49,8 +49,9 @@ class PydanticAIInteroperability(Interoperable):
         else:
             func = pydantic_ai_tool.function
 
-        return Tool(
+        return AG2PydanticAITool(
             name=pydantic_ai_tool.name,
             description=pydantic_ai_tool.description,
             func=func,
+            parameters_json_schema=pydantic_ai_tool._parameters_json_schema,
         )
