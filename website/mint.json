@@ -164,6 +164,228 @@
       ]
     },
     {
+      "group": "API Reference",
+      "pages": [
+        {
+          "group": "agentchat",
+          "pages": [
+            {
+              "group": "agentchat.contrib",
+              "pages": [
+                {
+                  "group": "agentchat.contrib.agent_eval",
+                  "pages": [
+                    "docs/reference/agentchat/contrib/agent_eval/agent_eval",
+                    "docs/reference/agentchat/contrib/agent_eval/criterion",
+                    "docs/reference/agentchat/contrib/agent_eval/critic_agent",
+                    "docs/reference/agentchat/contrib/agent_eval/quantifier_agent",
+                    "docs/reference/agentchat/contrib/agent_eval/subcritic_agent",
+                    "docs/reference/agentchat/contrib/agent_eval/task"
+                  ]
+                },
+                {
+                  "group": "agentchat.contrib.capabilities",
+                  "pages": [
+                    "docs/reference/agentchat/contrib/capabilities/agent_capability",
+                    "docs/reference/agentchat/contrib/capabilities/generate_images",
+                    "docs/reference/agentchat/contrib/capabilities/teachability",
+                    "docs/reference/agentchat/contrib/capabilities/text_compressors",
+                    "docs/reference/agentchat/contrib/capabilities/transform_messages",
+                    "docs/reference/agentchat/contrib/capabilities/transforms",
+                    "docs/reference/agentchat/contrib/capabilities/transforms_util",
+                    "docs/reference/agentchat/contrib/capabilities/vision_capability"
+                  ]
+                },
+                {
+                  "group": "agentchat.contrib.captainagent",
+                  "pages": [
+                    {
+                      "group": "agentchat.contrib.captainagent.tools",
+                      "pages": [
+                        {
+                          "group": "agentchat.contrib.captainagent.tools.data_analysis",
+                          "pages": [
+                            "docs/reference/agentchat/contrib/captainagent/tools/data_analysis/calculate_correlation",
+                            "docs/reference/agentchat/contrib/captainagent/tools/data_analysis/calculate_skewness_and_kurtosis",
+                            "docs/reference/agentchat/contrib/captainagent/tools/data_analysis/detect_outlier_iqr",
+                            "docs/reference/agentchat/contrib/captainagent/tools/data_analysis/detect_outlier_zscore",
+                            "docs/reference/agentchat/contrib/captainagent/tools/data_analysis/explore_csv",
+                            "docs/reference/agentchat/contrib/captainagent/tools/data_analysis/shapiro_wilk_test"
+                          ]
+                        },
+                        {
+                          "group": "agentchat.contrib.captainagent.tools.information_retrieval",
+                          "pages": [
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/arxiv_download",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/arxiv_search",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/extract_pdf_image",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/extract_pdf_text",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/get_wikipedia_text",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/get_youtube_caption",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/image_qa",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/optical_character_recognition",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/perform_web_search",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/scrape_wikipedia_tables",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/transcribe_audio_file",
+                            "docs/reference/agentchat/contrib/captainagent/tools/information_retrieval/youtube_download"
+                          ]
+                        },
+                        {
+                          "group": "agentchat.contrib.captainagent.tools.math",
+                          "pages": [
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/calculate_circle_area_from_diameter",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/calculate_day_of_the_week",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/calculate_fraction_sum",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/calculate_matrix_power",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/calculate_reflected_point",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/complex_numbers_product",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/compute_currency_conversion",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/count_distinct_permutations",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/evaluate_expression",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/find_continuity_point",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/fraction_to_mixed_numbers",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/modular_inverse_sum",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/simplify_mixed_numbers",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/sum_of_digit_factorials",
+                            "docs/reference/agentchat/contrib/captainagent/tools/math/sum_of_primes_below"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "group": "agentchat.contrib.graph_rag",
+                  "pages": [
+                    "docs/reference/agentchat/contrib/graph_rag/document",
+                    "docs/reference/agentchat/contrib/graph_rag/falkor_graph_query_engine",
+                    "docs/reference/agentchat/contrib/graph_rag/falkor_graph_rag_capability",
+                    "docs/reference/agentchat/contrib/graph_rag/graph_query_engine",
+                    "docs/reference/agentchat/contrib/graph_rag/graph_rag_capability",
+                    "docs/reference/agentchat/contrib/graph_rag/neo4j_graph_query_engine",
+                    "docs/reference/agentchat/contrib/graph_rag/neo4j_graph_rag_capability"
+                  ]
+                },
+                {
+                  "group": "agentchat.contrib.vectordb",
+                  "pages": [
+                    "docs/reference/agentchat/contrib/vectordb/base",
+                    "docs/reference/agentchat/contrib/vectordb/chromadb",
+                    "docs/reference/agentchat/contrib/vectordb/mongodb",
+                    "docs/reference/agentchat/contrib/vectordb/pgvectordb",
+                    "docs/reference/agentchat/contrib/vectordb/qdrant",
+                    "docs/reference/agentchat/contrib/vectordb/utils"
+                  ]
+                },
+                "docs/reference/agentchat/contrib/agent_builder",
+                "docs/reference/agentchat/contrib/agent_optimizer",
+                "docs/reference/agentchat/contrib/captainagent",
+                "docs/reference/agentchat/contrib/gpt_assistant_agent",
+                "docs/reference/agentchat/contrib/img_utils",
+                "docs/reference/agentchat/contrib/llamaindex_conversable_agent",
+                "docs/reference/agentchat/contrib/llava_agent",
+                "docs/reference/agentchat/contrib/math_user_proxy_agent",
+                "docs/reference/agentchat/contrib/multimodal_conversable_agent",
+                "docs/reference/agentchat/contrib/qdrant_retrieve_user_proxy_agent",
+                "docs/reference/agentchat/contrib/reasoning_agent",
+                "docs/reference/agentchat/contrib/retrieve_assistant_agent",
+                "docs/reference/agentchat/contrib/retrieve_user_proxy_agent",
+                "docs/reference/agentchat/contrib/society_of_mind_agent",
+                "docs/reference/agentchat/contrib/swarm_agent",
+                "docs/reference/agentchat/contrib/text_analyzer_agent",
+                "docs/reference/agentchat/contrib/tool_retriever",
+                "docs/reference/agentchat/contrib/web_surfer"
+              ]
+            },
+            "docs/reference/agentchat/agent",
+            "docs/reference/agentchat/assistant_agent",
+            "docs/reference/agentchat/chat",
+            "docs/reference/agentchat/conversable_agent",
+            "docs/reference/agentchat/groupchat",
+            "docs/reference/agentchat/user_proxy_agent",
+            "docs/reference/agentchat/utils"
+          ]
+        },
+        {
+          "group": "cache",
+          "pages": [
+            "docs/reference/cache/abstract_cache_base",
+            "docs/reference/cache/cache",
+            "docs/reference/cache/cache_factory",
+            "docs/reference/cache/cosmos_db_cache",
+            "docs/reference/cache/disk_cache",
+            "docs/reference/cache/in_memory_cache",
+            "docs/reference/cache/redis_cache"
+          ]
+        },
+        {
+          "group": "coding",
+          "pages": [
+            {
+              "group": "coding.jupyter",
+              "pages": [
+                "docs/reference/coding/jupyter/base",
+                "docs/reference/coding/jupyter/docker_jupyter_server",
+                "docs/reference/coding/jupyter/embedded_ipython_code_executor",
+                "docs/reference/coding/jupyter/jupyter_client",
+                "docs/reference/coding/jupyter/jupyter_code_executor",
+                "docs/reference/coding/jupyter/local_jupyter_server"
+              ]
+            },
+            "docs/reference/coding/base",
+            "docs/reference/coding/docker_commandline_code_executor",
+            "docs/reference/coding/factory",
+            "docs/reference/coding/func_with_reqs",
+            "docs/reference/coding/local_commandline_code_executor",
+            "docs/reference/coding/markdown_code_extractor",
+            "docs/reference/coding/utils"
+          ]
+        },
+        {
+          "group": "io",
+          "pages": [
+            "docs/reference/io/base",
+            "docs/reference/io/console",
+            "docs/reference/io/websockets"
+          ]
+        },
+        {
+          "group": "logger",
+          "pages": [
+            "docs/reference/logger/base_logger",
+            "docs/reference/logger/file_logger"
+          ]
+        },
+        {
+          "group": "oai",
+          "pages": [
+            "docs/reference/oai/anthropic",
+            "docs/reference/oai/bedrock",
+            "docs/reference/oai/cerebras",
+            "docs/reference/oai/client",
+            "docs/reference/oai/client_utils",
+            "docs/reference/oai/cohere",
+            "docs/reference/oai/completion",
+            "docs/reference/oai/gemini",
+            "docs/reference/oai/groq",
+            "docs/reference/oai/mistral",
+            "docs/reference/oai/ollama",
+            "docs/reference/oai/openai_utils",
+            "docs/reference/oai/together"
+          ]
+        },
+        "docs/reference/browser_utils",
+        "docs/reference/code_utils",
+        "docs/reference/exception_utils",
+        "docs/reference/function_utils",
+        "docs/reference/graph_utils",
+        "docs/reference/math_utils",
+        "docs/reference/retrieve_utils",
+        "docs/reference/runtime_logging",
+        "docs/reference/token_count_utils"
+      ]
+    },
+    {
       "group": "AutoGen Studio",
       "pages": [
         "docs/autogen-studio/getting-started",

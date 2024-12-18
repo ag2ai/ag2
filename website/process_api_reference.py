@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, List, Optional
 
 
 def run_pydoc_markdown(config_file: Path) -> None:
@@ -111,12 +112,99 @@ def convert_md_to_mdx(input_dir: Path) -> None:
         # Add code fences
         processed_content = add_code_fences(processed_content)
 
+        # Update sidenav title
+        processed_content = processed_content.replace("sidebar_label: ", "sidebarTitle: ")
+
         # Write content to .mdx file
         mdx_file.write_text(processed_content, encoding="utf-8")
 
         # Remove original .md file
         md_file.unlink()
         print(f"Converted: {md_file} -> {mdx_file}")
+
+
+def get_mdx_files(directory: Path) -> List[str]:
+    """Get all MDX files in directory and subdirectories."""
+    return [f"{str(p.relative_to(directory).with_suffix(''))}".replace("\\", "/") for p in directory.rglob("*.mdx")]
+
+
+def add_prefix(path: str, parent_groups: List[str] = None) -> str:
+    """Create full path with prefix and parent groups."""
+    groups = parent_groups or []
+    return f"docs/reference/{'/'.join(groups + [path])}"
+
+
+def create_nav_structure(paths: List[str], parent_groups: List[str] = None) -> List[Any]:
+    """Convert list of file paths into nested navigation structure."""
+    groups = {}
+    pages = []
+    parent_groups = parent_groups or []
+
+    for path in paths:
+        parts = path.split("/")
+        if len(parts) == 1:
+            pages.append(add_prefix(path, parent_groups))
+        else:
+            group = parts[0]
+            subpath = "/".join(parts[1:])
+            groups.setdefault(group, []).append(subpath)
+
+    result = [
+        {
+            "group": ".".join(parent_groups + [group]) if parent_groups else group,
+            "pages": create_nav_structure(subpaths, parent_groups + [group]),
+        }
+        for group, subpaths in groups.items()
+    ] + pages
+
+    return result
+
+
+def update_nav(mint_json_path: Path, new_nav_pages: List[Any]) -> None:
+    """
+    Update the 'API Reference' section in mint.json navigation with new pages.
+
+    Args:
+        mint_json_path: Path to mint.json file
+        new_nav_pages: New navigation structure to replace in API Reference pages
+    """
+    try:
+        # Read the current mint.json
+        with open(mint_json_path, "r") as f:
+            mint_config = json.load(f)
+
+        # Find and update the API Reference section
+        for section in mint_config["navigation"]:
+            if section.get("group") == "API Reference":
+                section["pages"] = new_nav_pages
+                break
+
+        # Write back to mint.json with proper formatting
+        with open(mint_json_path, "w") as f:
+            json.dump(mint_config, f, indent=2)
+            f.write("\n")
+
+    except json.JSONDecodeError:
+        print(f"Error: {mint_json_path} is not valid JSON")
+    except Exception as e:
+        print(f"Error updating mint.json: {e}")
+
+
+def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path) -> None:
+    """Update mint.json with MDX files in the API directory."""
+    mint_json_path = script_dir / "mint.json"
+    if not mint_json_path.exists():
+        print(f"File not found: {mint_json_path}")
+        sys.exit(1)
+
+    # Get all MDX files in the API directory
+    mdx_files = get_mdx_files(api_dir)
+
+    # Create navigation structure
+    nav_structure = create_nav_structure(mdx_files)
+
+    # Update mint.json with new navigation
+    update_nav(mint_json_path, nav_structure)
 
 
 def main() -> None:
@@ -140,6 +228,9 @@ def main() -> None:
     # Convert MD to MDX
     print("Converting MD files to MDX...")
     convert_md_to_mdx(args.api_dir)
+
+    # Update mint.json
+    update_mint_json_with_api_nav(script_dir, args.api_dir)
 
     print("API reference processing complete!")
 
