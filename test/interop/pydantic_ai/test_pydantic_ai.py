@@ -144,6 +144,9 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             assert pydantic_ai_tool.current_retry == 3
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
+)
 class TestPydanticAIInteroperabilityWithContext:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
