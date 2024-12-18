@@ -58,11 +58,11 @@ class Client(ABC):
         await self._openai_ws.send(json.dumps(result_item))
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
 
-    async def send_text(self, text: str):
-        # await self._openai_ws.send(json.dumps({"type": "response.cancel"}))
+    async def send_text(self, *, role: str, text: str):
+        await self._openai_ws.send(json.dumps({"type": "response.cancel"}))
         text_item = {
             "type": "conversation.item.create",
-            "item": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]},
+            "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
         }
         await self._openai_ws.send(json.dumps(text_item))
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
@@ -119,6 +119,3 @@ class Client(ABC):
                         messages="Find out what the user wants.",
                         after_work=AfterWorkOption.REVERT_TO_USER,
                     )
-
-    def run_task(self, task, *args: Any, **kwargs: Any):
-        self.tg.soonify(task)(*args, **kwargs)

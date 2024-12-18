@@ -26,7 +26,7 @@ SHOW_TIMING_MATH = False
 
 
 class TwilioAudioAdapter(RealtimeObserver):
-    def __init__(self, websocket):
+    def __init__(self, websocket, log_events=False):
         super().__init__()
         self.websocket = websocket
 
@@ -36,10 +36,11 @@ class TwilioAudioAdapter(RealtimeObserver):
         self.last_assistant_item = None
         self.mark_queue = []
         self.response_start_timestamp_twilio = None
+        self.log_events = log_events
 
     async def update(self, response):
         """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
-        if response["type"] in LOG_EVENT_TYPES:
+        if response["type"] in LOG_EVENT_TYPES and self.log_events:
             print(f"Received event: {response['type']}", response)
 
         if response.get("type") == "response.audio.delta" and "delta" in response:
