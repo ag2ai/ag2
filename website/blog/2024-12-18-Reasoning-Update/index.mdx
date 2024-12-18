@@ -1,5 +1,5 @@
 ---
-title: ReasoningAgent Update - MCTS, LATS, and Beam Search for LLM Reasoning
+title: ReasoningAgent Update - Beam Search, MCTS, and LATS for LLM Reasoning
 authors:
   - BabyCNM
   - Hk669
@@ -18,7 +18,7 @@ tags: [LLM, GPT, research, tutorial]
 
 2. New Search Strategies
    * Added Monte Carlo Tree Search (MCTS) as an alternative to Beam Search
-   * Introduced Language Agent Tree Search (LATS) - a hybrid approach that combines MCTS with step-by-step rewards like Beam Search
+   * Introduced Language Agent Tree Search (LATS) - an enhancement to MCTS that incorporates reflection prior to the next round of simulation.
 
 3. Enhanced Features
    * New `forest_size` parameter enables maintaining multiple independent reasoning trees
@@ -96,7 +96,7 @@ mcts_agent = ReasoningAgent(
 )
 ```
 
-It is important to note that our reasoning agent operates based on "process" and lacks direct access to the environment. In contrast, the LATS approach relies on feedback from the environment. To address this, we utilize our existing grader agent to generate pseudo-rewards and provide feedback. The major difference between our LATS implementation and our MCTS implementation is that the LATS approach calculates the rewards (using the grader) and backpropagates them to its thinking trajectory at every step. You can define the agent using the LATS approach as follows.
+It is important to note that our reasoning agent operates based on "process" and lacks direct access to the environment. In contrast, the LATS approach relies on feedback from the environment. To address this, we utilize our existing grader agent to generate pseudo-rewards and provide feedback. The major difference between our LATS implementation and our MCTS implementation is that the LATS approach incorporate the reflection into prompt context before next round of simulation. You can define the agent using the LATS approach as follows.
 ```python
 # Language Agent Tree Search
 lats_agent = ReasoningAgent(
@@ -165,11 +165,9 @@ forest_agent = ReasoningAgent(
 - You have computational budget for multiple simulations
 
 ### Use LATS when:
-- You want MCTS-style exploration with step-by-step feedback
-- You can afford frequent LLM evaluations
-- You need to identify and prune poor paths early
-- The problem benefits from granular trajectory scoring
-- You want to combine benefits of beam search and MCTS
+- Provides immediate reflection feedback before the next simulation
+- Helps identify poor reasoning paths early for future improvement
+- Especially useful for complex multi-step reasoning
 
 ## Advanced Features
 
@@ -224,11 +222,9 @@ Each algorithm has different computational costs:
 - Beam Search: O(d × b × (w + 1))
   - At each depth level d, evaluates w options for each of b beams
   - Plus 1 for generating the options
-- MCTS: O(n × d)
+- MCTS and LATS: O(n × d)
   - Each simulation traverses down to depth d
   - Performs n total simulations
-- LATS: O(2 × n × d)
-  - Similar to MCTS but doubles cost due to grading at each node
 
 ### Memory Usage
 Storage requirements vary by approach:
@@ -241,7 +237,7 @@ Storage requirements vary by approach:
 
 ## Conclusion
 
-The new ReasoningAgent offers a flexible toolkit for systematic reasoning with LLMs. Choose between MCTS, Beam Search, and LATS based on your specific needs regarding:
+The new ReasoningAgent offers a flexible toolkit for systematic reasoning with LLMs. Choose between Beam Search, MCTS, and LATS based on your specific needs regarding:
 - Evaluation cost and availability
 - Time and resource constraints
 - Desired exploration vs exploitation balance
