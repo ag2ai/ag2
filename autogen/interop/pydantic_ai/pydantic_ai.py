@@ -65,7 +65,9 @@ class PydanticAIInteroperability(Interoperable):
             ctx = RunContext(
                 deps=deps,
                 retry=0,
-                messages=None,  # TODO: check what to do with this
+                # All messages send to or returned by a model.
+                # This is mostly used on pydantic_ai Agent level.
+                messages=None,  # TODO: check in the future if this is needed on Tool level
                 tool_name=pydantic_ai_tool.name,
             )
         else:
