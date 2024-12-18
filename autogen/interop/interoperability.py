@@ -9,6 +9,7 @@ from .interoperable import Interoperable
 
 __all__ = ["Interoperable"]
 
+
 class Interoperability:
     _interoperability_classes: Dict[str, Type[Interoperable]] = get_all_interoperability_classes()
 
