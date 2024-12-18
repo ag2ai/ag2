@@ -49,6 +49,5 @@ jobs:
       - name: Deploy to mintlify-pages branch
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          branch: mintlify-pages
           folder: temp_website/website
           clean: true # Automatically remove deleted files from the deploy branch

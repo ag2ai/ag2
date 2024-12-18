@@ -395,7 +395,7 @@ table {
       background-color: rgb(var(--gray-900));
     }
 
-    a[href="/docs/Getting-Started"] {
+    /* a[href="/docs/Getting-Started"] {
       font-weight: 600;
       padding-left: 1rem !important;
 
@@ -433,7 +433,7 @@ table {
         content: "";
         mask: var(--migration-icon);
       }
-    }
+    } */
 
     h5[data-text="Installation"]:before {
       content: "";
