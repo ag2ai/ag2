@@ -82,6 +82,9 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert False, "No tool response found in chat messages"
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
+)
 class TestPydanticAIInteroperabilityDependencyInjection:
 
     def test_dependency_injection(self) -> None:
