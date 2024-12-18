@@ -149,15 +149,20 @@ def create_nav_structure(paths: List[str], parent_groups: List[str] = None) -> L
             subpath = "/".join(parts[1:])
             groups.setdefault(group, []).append(subpath)
 
-    result = [
+    # Sort directories and create their structures
+    sorted_groups = [
         {
             "group": ".".join(parent_groups + [group]) if parent_groups else group,
             "pages": create_nav_structure(subpaths, parent_groups + [group]),
         }
-        for group, subpaths in groups.items()
-    ] + pages
+        for group, subpaths in sorted(groups.items())
+    ]
 
-    return result
+    # Sort pages
+    sorted_pages = sorted(pages)
+
+    # Return directories first, then files
+    return sorted_groups + sorted_pages
 
 
 def update_nav(mint_json_path: Path, new_nav_pages: List[Any]) -> None:
