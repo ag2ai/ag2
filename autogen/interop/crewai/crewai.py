@@ -8,7 +8,7 @@ from typing import Any, cast
 from crewai.tools import BaseTool as CrewAITool
 
 from ...tools import Tool
-from ..interoperability import Interoperable
+from ..interoperable import Interoperable
 
 __all__ = ["CrewAIInteroperability"]
 

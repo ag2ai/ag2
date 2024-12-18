@@ -4,8 +4,8 @@
 
 import os
 import sys
-import unittest
 from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock
 
 import pytest
 from conftest import reason, skip_openai
@@ -13,7 +13,7 @@ from conftest import reason, skip_openai
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
     from crewai_tools import FileReadTool
 else:
-    FileReadTool = unittest.mock.MagicMock()
+    FileReadTool = MagicMock()
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
@@ -21,7 +21,7 @@ from autogen.interop import Interoperable
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
     from autogen.interop.crewai import CrewAIInteroperability
 else:
-    CrewAIInteroperability = unittest.mock.MagicMock()
+    CrewAIInteroperability = MagicMock()
 
 
 # skip if python version is not in [3.10, 3.11, 3.12]
