@@ -38,6 +38,14 @@ class AfterWorkOption(Enum):
 
 @dataclass
 class AFTER_WORK:
+    """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
+
+    Args:
+        agent: The agent to hand off to or the after work option. Can be a SwarmAgent, a string name of a SwarmAgent, an AfterWorkOption, or a Callable.
+            The Callable signature is:
+                def my_after_work_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, SwarmAgent, str]:
+    """
+
     agent: Union[AfterWorkOption, "SwarmAgent", str, Callable]
 
     def __post_init__(self):
@@ -47,6 +55,17 @@ class AFTER_WORK:
 
 @dataclass
 class ON_CONDITION:
+    """Defines a condition for transitioning to another agent or nested chats
+
+    Args:
+        target: The agent to hand off to or the nested chat configuration. Can be a SwarmAgent or a Dict.
+            If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
+            Swarm Nested chat documentation: https://ag2ai.github.io/ag2/docs/topics/swarm#registering-handoffs-to-a-nested-chat
+        condition: The condition for transitioning to the target agent, evaluated by the LLM to determine whether to call the underlying function/tool which does the transition.
+        available: Optional condition to determine if this ON_CONDITION is available. Can be a Callable or a string.
+            If a string, it will look up the value of the context variable with that name, which should be a bool.
+    """
+
     target: Union["SwarmAgent", Dict[str, Any]] = None
     condition: str = ""
     available: Optional[Union[Callable, str]] = None
@@ -67,6 +86,15 @@ class ON_CONDITION:
 
 @dataclass
 class UPDATE_SYSTEM_MESSAGE:
+    """Update the agent's system message before they reply
+
+    Args:
+        update_function: The string or function to update the agent's system message. Can be a string or a Callable.
+            If a string, it will be used as a template and substitute the context variables.
+            If a Callable, it should have the signature:
+                def my_update_function(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+    """
+
     update_function: Union[Callable, str]
 
     def __post_init__(self):
@@ -210,14 +238,13 @@ def initiate_swarm_chat(
                 raise ValueError(f"Invalid agent name in after_work: {after_work_condition}")
         elif isinstance(after_work_condition, SwarmAgent):
             return after_work_condition
-        elif after_work_condition == AfterWorkOption.TERMINATE or (
-            user_agent is None and after_work_condition == AfterWorkOption.REVERT_TO_USER
-        ):
-            return None
-        elif after_work_condition == AfterWorkOption.REVERT_TO_USER:
-            return user_agent
-        elif after_work_condition == AfterWorkOption.STAY:
-            return last_speaker
+        elif isinstance(after_work_condition, AfterWorkOption):
+            if after_work_condition == AfterWorkOption.TERMINATE:
+                return None
+            elif after_work_condition == AfterWorkOption.REVERT_TO_USER:
+                return None if user_agent is None else user_agent
+            elif after_work_condition == AfterWorkOption.STAY:
+                return last_speaker
         else:
             raise ValueError("Invalid After Work condition or return value from callable")
 
@@ -354,6 +381,7 @@ class SwarmAgent(ConversableAgent):
 
     Additional args:
         functions (List[Callable]): A list of functions to register with the agent.
+        update_agent_state_before_reply (List[Callable]): A list of functions, including UPDATE_SYSTEM_MESSAGEs, called to update the agent before it replies.
     """
 
     def __init__(
