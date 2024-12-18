@@ -144,11 +144,6 @@ def initiate_swarm_chat(
     for agent in agents:
         tool_execution._function_map.update(agent._function_map)
 
-    # Point all SwarmAgent's context variables to this function's context_variables
-    # providing a single (shared) context across all SwarmAgents in the swarm
-    for agent in agents + [tool_execution]:
-        agent._context_variables = context_variables
-
     INIT_AGENT_USED = False
 
     def swarm_transition(last_speaker: SwarmAgent, groupchat: GroupChat):
@@ -231,6 +226,7 @@ def initiate_swarm_chat(
         for i, nested_chat_handoff in enumerate(agent._nested_chat_handoffs):
             nested_chats: Dict[str, Any] = nested_chat_handoff["nested_chats"]
             condition = nested_chat_handoff["condition"]
+            available = nested_chat_handoff["available"]
 
             # Create a nested chat agent specifically for this nested chat
             nested_chat_agent = SwarmAgent(name=f"nested_chat_{agent.name}_{i + 1}")
@@ -251,7 +247,7 @@ def initiate_swarm_chat(
             nested_chat_agents.append(nested_chat_agent)
 
             # Nested chat is triggered through an agent transfer to this nested chat agent
-            agent.register_hand_off(ON_CONDITION(nested_chat_agent, condition))
+            agent.register_hand_off(ON_CONDITION(nested_chat_agent, condition, available))
 
     nested_chat_agents = []
     for agent in agents:
@@ -285,6 +281,11 @@ def initiate_swarm_chat(
     )
     manager = GroupChatManager(groupchat)
     clear_history = True
+
+    # Point all SwarmAgent's context variables to this function's context_variables
+    # providing a single (shared) context across all SwarmAgents in the swarm
+    for agent in agents + [tool_execution] + [manager]:
+        agent._context_variables = context_variables
 
     if len(messages) > 1:
         last_agent, last_message = manager.resume(messages=messages)
@@ -529,7 +530,9 @@ class SwarmAgent(ConversableAgent):
                 elif isinstance(transit.target, Dict):
                     # Transition to a nested chat
                     # We will store them here and establish them in the initiate_swarm_chat
-                    self._nested_chat_handoffs.append({"nested_chats": transit.target, "condition": transit.condition})
+                    self._nested_chat_handoffs.append(
+                        {"nested_chats": transit.target, "condition": transit.condition, "available": transit.available}
+                    )
 
             else:
                 raise ValueError("Invalid hand off condition, must be either ON_CONDITION or AFTER_WORK")
@@ -676,6 +679,7 @@ class SwarmAgent(ConversableAgent):
         recipient: ConversableAgent,
         messages: List[Dict[str, Any]],
         sender: ConversableAgent,
+        config: Any,
         trim_n_messages: int = 0,
     ) -> None:
         """Process carryover messages for a nested chat (typically for the first chat of a swarm)
@@ -721,7 +725,12 @@ class SwarmAgent(ConversableAgent):
         carryover_summary_method = carryover_config["summary_method"]
         carryover_summary_args = carryover_config.get("summary_args") or {}
 
-        chat_message = chat.get("message", "")
+        chat_message = ""
+        message = chat.get("message")
+
+        # If the message is a callable, run it and get the result
+        if message:
+            chat_message = message(recipient, messages, sender, config) if callable(message) else message
 
         # deep copy and trim the latest messages
         content_messages = copy.deepcopy(messages)
@@ -780,15 +789,24 @@ class SwarmAgent(ConversableAgent):
         Returns:
             Tuple[bool, str]: A tuple where the first element indicates the completion of the chat, and the second element contains the summary of the last chat if any chats were initiated.
         """
-
         # Carryover configuration allowed on the first chat in the queue only, trim the last two messages specifically for swarm nested chat carryover as these are the messages for the transition to the nested chat agent
+        restore_chat_queue_message = False
         if len(chat_queue) > 0 and "carryover_config" in chat_queue[0]:
-            SwarmAgent.process_nested_chat_carryover(chat_queue[0], recipient, messages, sender, 2)
+            if "message" in chat_queue[0]:
+                # As we're updating the message in the nested chat queue, we need to restore it after finishing this nested chat.
+                restore_chat_queue_message = True
+                original_chat_queue_message = chat_queue[0]["message"]
+            SwarmAgent.process_nested_chat_carryover(chat_queue[0], recipient, messages, sender, config, 2)
 
         chat_to_run = ConversableAgent._get_chats_to_run(chat_queue, recipient, messages, sender, config)
         if not chat_to_run:
             return True, None
         res = sender.initiate_chats(chat_to_run)
+
+        # We need to restore the chat queue message if it has been modified so that it will be the original message for subsequent uses
+        if restore_chat_queue_message:
+            chat_queue[0]["message"] = original_chat_queue_message
+
         return True, res[-1].summary
 
 
