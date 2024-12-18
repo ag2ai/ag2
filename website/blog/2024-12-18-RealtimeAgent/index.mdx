@@ -1,0 +1,215 @@
+---
+title: Introducing RealtimeAgent Capabilities in AG2
+authors:
+  - marklysze
+  - sternakt
+  - davorrunje
+  - davorinrusevljan
+tags: [Realtime API, Voice Agents, Swarm Teams, Twilio, AI Tools]
+
+---
+
+**TL;DR:**
+- **RealtimeAgent** is coming in the next AG2 release, enabling real-time conversational AI.
+- Features include real-time voice interactions, seamless task delegation to Swarm teams, and Twilio-based telephony integration.
+- Learn how to integrate twillio and RealtimeAgent into your swarm in this blogpost
+
+### **Realtime API Support: What's New?**
+
+We're thrilled to announce the release of **RealtimeAgent**, extending AG2's capabilities to support **real-time conversational AI tasks**. This new feature makes it possible for developers to build agents capable of handling voice-based interactions with minimal latency, integrating OpenAI’s Realtime API, Twilio for telephony, and AutoGen’s Swarm task orchestration.
+
+### **Why Realtime API Support Matters**
+
+Traditionally, conversational AI tasks have focused on asynchronous interactions, such as text-based chats. However, the demand for **real-time voice agents** has surged in domains like customer support, healthcare, and virtual assistance. With this update, AG2 takes a leap forward by enabling agents to:
+
+1. **Support Real-Time Voice Interactions**
+   Engage in real-time conversations with users through seamless integration with Twilio telephony.
+
+2. **Leverage Swarm Teams for Task Delegation**
+   Delegate complex tasks to AutoGen Swarm teams during a voice interaction, ensuring efficient task management.
+
+3. **Provide Developer-Friendly Integration**
+   Tutorial and streamlined API to make setting up real-time agents more straightforward for developers.
+
+
+### **Key Features of RealtimeAgent and RealtimeOpenAIClient**
+
+#### **1. RealtimeAgent**
+- Acts as the central interface for handling real-time interactions.
+- Bridges voice input/output with AutoGen’s task-handling capabilities.
+
+#### **3. TwilioPhoneConnector**
+- Connects agents to Twilio for telephony support.
+- Simplifies the process of handling voice calls with clear API methods.
+
+
+### **Real-World Applications**
+
+Here’s how RealtimeAgent transforms use cases:
+
+- **Customer Support**: Enable agents to answer customer queries in real time while delegating complex tasks to a Swarm team.
+- **Healthcare**: Facilitate real-time interactions between patients and medical AI assistants with immediate task handoffs.
+- **Virtual Assistance**: Create voice-activated personal assistants that can handle scheduling, reminders, and more.
+
+
+### **Tutorial: Integrating RealtimeAgent with Swarm Teams**
+
+In this tutorial, we’ll demonstrate how to implement OpenAI's [Airline Customer Service Example](https://github.com/openai/swarm/tree/main/examples/airline) using AG2's new **RealtimeAgent**. By leveraging real-time capabilities, you can create a seamless voice-driven experience for customer service tasks, enhanced with Swarm's task orchestration for efficient problem-solving.
+
+This guide will walk you through the setup, implementation, and connection process, ensuring you’re ready to build real-time conversational agents with ease.
+
+
+#### **Prerequisites**
+Before we begin, ensure you have the following set up:
+
+1. **Ngrok**: Exposing your local service to the web for Twilio integration.
+2. **Twilio**: Setting up Twilio for telephony connectivity.
+
+#### Ngrok setup
+
+To enable Twilio to interact with your local server, you’ll need to expose it to the public internet. Twilio requires a public URL to send requests to your server and receive real-time instructions.
+
+For this guide, we’ll use **ngrok**, a popular tunneling service, to make your local server accessible. Alternatively, you can use other reverse proxy or tunneling options, such as a virtual private server (VPS).
+
+##### **Step 1: Install Ngrok**
+If you haven’t already, download and install **ngrok** from their [official website](https://ngrok.com/download). Follow the instructions for your operating system to set it up.
+
+##### **Step 2: Start the Tunnel**
+Run the following command to expose your local server on port `5050` (or the port your server uses):
+
+```bash
+ngrok http 5050
+```
+
+If you’ve configured your server to use a different port, replace `5050` with the correct port number in the command.
+
+##### **Step 3: Retrieve Your Public URL**
+After running the command, **ngrok** will display a public URL in your terminal. It will look something like this:
+
+```plaintext
+Forwarding                    https://abc123.ngrok.io -> http://localhost:5050
+```
+
+Copy this public URL (e.g., `https://abc123.ngrok.io`). You will use it in Twilio’s configuration to route incoming requests to your server.
+
+With your public URL set up, you’re ready to configure Twilio to send requests to your server!
+
+#### Twilio setup
+
+### **Swarm Implementation for Airline Customer Service**
+Here, we will build and configure a Swarm to manage common airline customer service tasks, such as booking changes, seat upgrades, or handling complaints.
+
+### **Connecting the Swarm to the RealtimeAgent**
+
+In this section, we will connect the Swarm to the **RealtimeAgent**, enabling real-time voice interaction and task delegation. To achieve this, we use FastAPI to create a lightweight server that acts as a bridge between Twilio and the RealtimeAgent.
+
+The key functionalities of this implementation include:
+
+1. **Setting Up a REST Endpoint**
+   We define a REST API endpoint, `/incoming-call`, to handle incoming voice calls from Twilio. This endpoint returns a Twilio Markup Language (TwiML) response, connecting the call to Twilio’s Media Stream for real-time audio data transfer.
+
+```python
+app.api_route("/incoming-call", methods=["GET", "POST"])
+async def handle_incoming_call(request: Request):
+    """Handle incoming call and return TwiML response to connect to Media Stream."""
+    response = VoiceResponse()
+    response.say("Please wait while we connect your call to the AI voice assistant.")
+    response.pause(length=1)
+    response.say("O.K. you can start talking!")
+    host = request.url.hostname
+    connect = Connect()
+    connect.stream(url=f"wss://{host}/media-stream")
+    response.append(connect)
+    return HTMLResponse(content=str(response), media_type="application/xml")
+```
+2. **WebSocket Media Stream**
+   A WebSocket endpoint, `/media-stream`, is established to manage real-time audio communication between Twilio and OpenAI's API. This allows audio data to flow seamlessly, enabling the RealtimeAgent to process and respond to user queries.
+```python
+@app.websocket("/media-stream")
+async def handle_media_stream(websocket: WebSocket):
+    """Handle WebSocket connections between Twilio and OpenAI."""
+    await websocket.accept()
+    ...
+```
+3. **Initializing the RealtimeAgent**
+   Inside the WebSocket handler, we instantiate the **RealtimeAgent** with the following components:
+   - **Name**: The identifier for the agent (e.g., `Customer_service_Bot`).
+   - **LLM Configuration**: The configuration for the underlying OpenAI model that powers the agent.
+   - **Audio Adapter**: A TwilioAudioAdapter is used to handle audio streaming between Twilio and the agent.
+```python
+   audio_adapter = TwilioAudioAdapter(websocket)
+
+   realtime_agent = RealtimeAgent(
+        name="Customer_service_Bot",
+        llm_config=realtime_llm_config,
+        audio_adapter=audio_adapter,
+   )
+```
+4. **Registering the Swarm**
+   The RealtimeAgent is linked to a Swarm of agents responsible for different customer service tasks.
+   - `initial_agent`: The first agent to process incoming queries (e.g., a triage agent).
+   - `agents`: A list of specialized agents for handling specific tasks like flight modifications, cancellations, or lost baggage.
+```python
+   realtime_agent.register_swarm(
+        initial_agent=triage_agent,
+        agents=[triage_agent, flight_modification, flight_cancel, flight_change, lost_baggage],
+   )
+```
+5. **Running the RealtimeAgent**
+   The `run()` method is invoked to start the RealtimeAgent, enabling it to handle real-time voice interactions and delegate tasks to the registered Swarm agents.
+```python
+   await realtime_agent.run()
+```
+Here is the full code for this integration:
+
+```python
+app = FastAPI(title="Realtime Swarm Agent Chat", version="0.1.0")
+
+
+@app.get("/", response_class=JSONResponse)
+async def index_page():
+    return {"message": "Twilio Media Stream Server is running!"}
+
+
+@app.api_route("/incoming-call", methods=["GET", "POST"])
+async def handle_incoming_call(request: Request):
+    """Handle incoming call and return TwiML response to connect to Media Stream."""
+    response = VoiceResponse()
+    response.say("Please wait while we connect your call to the AI voice assistant.")
+    response.pause(length=1)
+    response.say("O.K. you can start talking!")
+    host = request.url.hostname
+    connect = Connect()
+    connect.stream(url=f"wss://{host}/media-stream")
+    response.append(connect)
+    return HTMLResponse(content=str(response), media_type="application/xml")
+
+
+@app.websocket("/media-stream")
+async def handle_media_stream(websocket: WebSocket):
+    """Handle WebSocket connections between Twilio and OpenAI."""
+    await websocket.accept()
+
+    audio_adapter = TwilioAudioAdapter(websocket)
+
+    realtime_agent = RealtimeAgent(
+        name="Customer_service_Bot",
+        llm_config=realtime_llm_config,
+        audio_adapter=audio_adapter,
+    )
+
+    realtime_agent.register_swarm(
+        initial_agent=triage_agent,
+        agents=[triage_agent, flight_modification, flight_cancel, flight_change, lost_baggage],
+    )
+
+    await realtime_agent.run()
+```
+
+### **Results: Running the Service**
+Finally, we’ll test the implementation, showcasing how real-time interactions with **RealtimeAgent** and task delegation to a Swarm create an efficient and engaging customer service solution.
+
+
+For more updates, tutorials, and discussions, join our [Discord community](https://discord.com/invite/pAbnFJrkgZ).
+
+---
