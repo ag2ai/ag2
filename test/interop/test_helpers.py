@@ -35,7 +35,7 @@ class TestHelpers:
             assert CrewAIInteroperability in actual
             expected_count += 1
 
-        if sys.version_info >= (3, 10):
+        if sys.version_info >= (3, 9):
             from autogen.interop.langchain import LangchainInteroperability
 
             assert LangchainInteroperability in actual
@@ -47,7 +47,7 @@ class TestHelpers:
 
         actual = get_all_interoperability_classes()
 
-        if sys.version_info < (3, 10):
+        if sys.version_info < (3, 9):
             assert actual == {}
 
         if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
@@ -56,7 +56,7 @@ class TestHelpers:
 
             assert actual == {"crewai": CrewAIInteroperability, "langchain": LangchainInteroperability}
 
-        if sys.version_info >= (3, 13):
+        if (sys.version_info >= (3, 9) and sys.version_info < (3, 10)) and sys.version_info >= (3, 13):
             from autogen.interop.langchain import LangchainInteroperability
 
             assert actual == {"langchain": LangchainInteroperability}
