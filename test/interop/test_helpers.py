@@ -37,9 +37,11 @@ class TestHelpers:
 
         if sys.version_info >= (3, 9):
             from autogen.interop.langchain import LangchainInteroperability
+            from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
             assert LangchainInteroperability in actual
-            expected_count += 1
+            assert PydanticAIInteroperability in actual
+            expected_count += 2
 
         assert len(actual) == expected_count
 
@@ -53,8 +55,13 @@ class TestHelpers:
         if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
             from autogen.interop.crewai import CrewAIInteroperability
             from autogen.interop.langchain import LangchainInteroperability
+            from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
-            assert actual == {"crewai": CrewAIInteroperability, "langchain": LangchainInteroperability}
+            assert actual == {
+                "pydanticai": PydanticAIInteroperability,
+                "crewai": CrewAIInteroperability,
+                "langchain": LangchainInteroperability,
+            }
 
         if (sys.version_info >= (3, 9) and sys.version_info < (3, 10)) and sys.version_info >= (3, 13):
             from autogen.interop.langchain import LangchainInteroperability
