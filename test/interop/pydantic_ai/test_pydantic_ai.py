@@ -82,6 +82,9 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert False, "No tool response found in chat messages"
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
+)
 class TestPydanticAIInteroperabilityDependencyInjection:
 
     def test_dependency_injection(self) -> None:
@@ -162,7 +165,7 @@ class TestPydanticAIInteroperabilityWithContext:
         self.tool = self.pydantic_ai_interop.convert_tool(tool=pydantic_ai_tool, deps=player)
 
     def test_expected_tools(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = [{"model": "gpt-4o", "api_key": "abc"}]
         chatbot = AssistantAgent(
             name="chatbot",
             llm_config={"config_list": config_list},

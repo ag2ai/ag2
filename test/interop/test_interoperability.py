@@ -20,13 +20,13 @@ class TestInteroperability:
             assert actual == []
 
         if sys.version_info >= (3, 9) and sys.version_info < (3, 10):
-            assert actual == ["langchain"]
+            assert actual == ["langchain", "pydanticai"]
 
         if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-            assert actual == ["crewai", "langchain"]
+            assert actual == ["crewai", "langchain", "pydanticai"]
 
         if sys.version_info >= (3, 13):
-            assert actual == ["langchain"]
+            assert actual == ["langchain", "pydanticai"]
 
     def test_register_interoperability_class(self) -> None:
         org_interoperability_classes = Interoperability._interoperability_classes
