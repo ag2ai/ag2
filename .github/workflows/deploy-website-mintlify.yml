@@ -33,9 +33,14 @@ jobs:
       - name: Install quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Build website
+      - name: Generate API documentation
         run: |
-          ./build_website.sh
+          python ./process_api_reference.py
+        working-directory: website
+
+      - name: Convert Jupyter notebooks to MDX
+        run: |
+          python ./process_notebooks.py render
         working-directory: website
 
       - name: Prepare website content
