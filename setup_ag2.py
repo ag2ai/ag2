@@ -56,6 +56,7 @@ setuptools.setup(
         "bedrock": ["pyautogen[bedrock]==" + __version__],
         "interop-crewai": ["pyautogen[interop-crewai]==" + __version__],
         "interop-langchain": ["pyautogen[interop-langchain]==" + __version__],
+        "interop-pydantic-ai": ["pyautogen[interop-pydantic-ai]==" + __version__],
         "interop": ["pyautogen[interop]==" + __version__],
         "neo4j": ["pyautogen[neo4j]==" + __version__],
     },

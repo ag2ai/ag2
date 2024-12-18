@@ -71,6 +71,7 @@ neo4j = [
 
 interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
 interop_langchain = ["langchain-community>=0.3.12,<1; python_version>='3.9'"]
+interop_pydantic_ai = ["pydantic-ai>=0.0.13,<1; python_version>='3.9'"]
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
@@ -127,7 +128,8 @@ extra_require = {
     "bedrock": ["boto3>=1.34.149"],
     "interop-crewai": interop_crewai,
     "interop-langchain": interop_langchain,
-    "interop": interop_crewai + interop_langchain,
+    "interop-pydantic-ai": interop_pydantic_ai,
+    "interop": interop_crewai + interop_langchain + interop_pydantic_ai,
     "neo4j": neo4j,
 }
 
