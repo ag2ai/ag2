@@ -4,5 +4,6 @@
 
 from .interoperability import Interoperability
 from .interoperable import Interoperable
+from .registry import register_interoperable_class
 
-__all__ = ["Interoperable", "Interoperability"]
+__all__ = ["Interoperability", "Interoperable", "register_interoperable_class"]

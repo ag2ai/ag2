@@ -18,9 +18,9 @@ class LangchainInteroperability(Interoperable):
             raise ValueError(f"Expected an instance of `langchain_core.tools.BaseTool`, got {type(tool)}")
 
         # needed for type checking
-        langchain_tool: LangchainTool = tool  # type: ignore[no-any-unimported]
+        langchain_tool: LangchainTool = tool
 
-        def func(tool_input: langchain_tool.args_schema) -> Any:  # type: ignore[no-any-unimported]
+        def func(tool_input: langchain_tool.args_schema) -> Any:  # type: ignore[name-defined]
             return langchain_tool.run(tool_input.model_dump())
 
         return Tool(
