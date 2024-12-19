@@ -16,17 +16,17 @@ from autogen.interop import Interoperable
 if sys.version_info >= (3, 9):
     from langchain.tools import tool
 
-    from autogen.interop.langchain import LangchainInteroperability
+    from autogen.interop.langchain import LangChainInteroperability
 else:
     tool = unittest.mock.MagicMock()
-    LangchainInteroperability = unittest.mock.MagicMock()
+    LangChainInteroperability = unittest.mock.MagicMock()
 
 
 # skip if python version is not >= 3.9
 @pytest.mark.skipif(
     sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
 )
-class TestLangchainInteroperability:
+class TestLangChainInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         class SearchInput(BaseModel):
@@ -37,18 +37,15 @@ class TestLangchainInteroperability:
             """Look up things online."""
             return "LangChain Integration"
 
-        self.langchain_interop = LangchainInteroperability()
         self.model_type = search.args_schema
-        self.tool = self.langchain_interop.convert_tool(search)
+        self.tool = LangChainInteroperability.convert_tool(search)
 
     def test_type_checks(self) -> None:
         # mypy should fail if the type checks are not correct
-        interop: Interoperable = self.langchain_interop
+        interop: Interoperable = LangChainInteroperability()
+
         # runtime check
         assert isinstance(interop, Interoperable)
-
-    def test_init(self) -> None:
-        assert isinstance(self.langchain_interop, Interoperable)
 
     def test_convert_tool(self) -> None:
         assert self.tool.name == "search-tool"
@@ -82,12 +79,15 @@ class TestLangchainInteroperability:
 
         assert False, "No tool response found in chat messages"
 
+    def test_get_unsupported_reason(self) -> None:
+        assert LangChainInteroperability.get_unsupported_reason() is None
+
 
 # skip if python version is not >= 3.9
 @pytest.mark.skipif(
     sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
 )
-class TestLangchainInteroperabilityWithoutPydanticInput:
+class TestLangChainInteroperabilityWithoutPydanticInput:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         @tool
@@ -95,8 +95,7 @@ class TestLangchainInteroperabilityWithoutPydanticInput:
             """Look up things online."""
             return f"LangChain Integration, max_length: {max_length}"
 
-        self.langchain_interop = LangchainInteroperability()
-        self.tool = self.langchain_interop.convert_tool(search)
+        self.tool = LangChainInteroperability.convert_tool(search)
         self.model_type = search.args_schema
 
     def test_convert_tool(self) -> None:
@@ -130,3 +129,12 @@ class TestLangchainInteroperabilityWithoutPydanticInput:
                 return
 
         assert False, "No tool response found in chat messages"
+
+
+@pytest.mark.skipif(sys.version_info >= (3, 9), reason="LangChain Interoperability is supported")
+class TestLangChainInteroperabilityIfNotSupported:
+    def test_get_unsupported_reason(self) -> None:
+        assert (
+            LangChainInteroperability.get_unsupported_reason()
+            == "This submodule is only supported for Python versions 3.9 and above"
+        )

@@ -11,9 +11,8 @@ import re
 import uuid
 from pathlib import Path
 from queue import Empty
-from typing import Any, ClassVar, List
+from typing import Any, List
 
-import jupyter_kernel_gateway
 from jupyter_client import KernelManager  # type: ignore[attr-defined]
 from jupyter_client.kernelspec import KernelSpecManager
 from pydantic import BaseModel, Field, field_validator

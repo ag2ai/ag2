@@ -31,20 +31,17 @@ else:
 class TestCrewAIInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        self.crewai_interop = CrewAIInteroperability()
 
         crewai_tool = FileReadTool()
         self.model_type = crewai_tool.args_schema
-        self.tool = self.crewai_interop.convert_tool(crewai_tool)
+        self.tool = CrewAIInteroperability.convert_tool(crewai_tool)
 
     def test_type_checks(self) -> None:
         # mypy should fail if the type checks are not correct
-        interop: Interoperable = self.crewai_interop
+        interop: Interoperable = CrewAIInteroperability()
+
         # runtime check
         assert isinstance(interop, Interoperable)
-
-    def test_init(self) -> None:
-        assert isinstance(self.crewai_interop, Interoperable)
 
     def test_convert_tool(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -93,3 +90,17 @@ class TestCrewAIInteroperability:
                 return
 
         assert False, "Tool response not found in chat messages"
+
+    def test_get_unsupported_reason(self) -> None:
+        assert CrewAIInteroperability.get_unsupported_reason() is None
+
+
+@pytest.mark.skipif(
+    sys.version_info >= (3, 10) or sys.version_info < (3, 13), reason="Crew AI Interoperability is supported"
+)
+class TestCrewAIInteroperabilityIfNotSupported:
+    def test_get_unsupported_reason(self) -> None:
+        assert (
+            CrewAIInteroperability.get_unsupported_reason()
+            == "This submodule is only supported for Python versions 3.10, 3.11, and 3.12"
+        )

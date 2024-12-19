@@ -4,9 +4,8 @@
 
 from typing import Any, Callable, Dict
 
-from autogen.agentchat.conversable_agent import ConversableAgent
-
-from .tool import Tool
+from ...agentchat.conversable_agent import ConversableAgent
+from ...tools import Tool
 
 __all__ = ["PydanticAITool"]
 

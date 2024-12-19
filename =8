@@ -1,0 +1,6 @@
+Requirement already satisfied: pytest in ./.venv-3.9/lib/python3.9/site-packages (7.4.4)
+Requirement already satisfied: iniconfig in ./.venv-3.9/lib/python3.9/site-packages (from pytest) (2.0.0)
+Requirement already satisfied: packaging in ./.venv-3.9/lib/python3.9/site-packages (from pytest) (24.2)
+Requirement already satisfied: pluggy<2.0,>=0.12 in ./.venv-3.9/lib/python3.9/site-packages (from pytest) (1.5.0)
+Requirement already satisfied: exceptiongroup>=1.0.0rc8 in ./.venv-3.9/lib/python3.9/site-packages (from pytest) (1.2.2)
+Requirement already satisfied: tomli>=1.0.0 in ./.venv-3.9/lib/python3.9/site-packages (from pytest) (2.2.1)

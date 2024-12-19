@@ -38,18 +38,14 @@ class TestPydanticAIInteroperabilityWithotContext:
             """Roll a six-sided dice and return the result."""
             return str(random.randint(1, 6))
 
-        self.pydantic_ai_interop = PydanticAIInteroperability()
         pydantic_ai_tool = PydanticAITool(roll_dice, max_retries=3)
-        self.tool = self.pydantic_ai_interop.convert_tool(pydantic_ai_tool)
+        self.tool = PydanticAIInteroperability.convert_tool(pydantic_ai_tool)
 
     def test_type_checks(self) -> None:
         # mypy should fail if the type checks are not correct
-        interop: Interoperable = self.pydantic_ai_interop
+        interop: Interoperable = PydanticAIInteroperability()
         # runtime check
         assert isinstance(interop, Interoperable)
-
-    def test_init(self) -> None:
-        assert isinstance(self.pydantic_ai_interop, Interoperable)
 
     def test_convert_tool(self) -> None:
         assert self.tool.name == "roll_dice"
@@ -162,14 +158,13 @@ class TestPydanticAIInteroperabilityWithContext:
             """
             return f"Name: {ctx.deps.name}, Age: {ctx.deps.age}, Additional info: {additional_info}"  # type: ignore[attr-defined]
 
-        self.pydantic_ai_interop = PydanticAIInteroperability()
         self.pydantic_ai_tool = PydanticAITool(get_player, takes_ctx=True)
         player = Player(name="Luka", age=25)
-        self.tool = self.pydantic_ai_interop.convert_tool(tool=self.pydantic_ai_tool, deps=player)
+        self.tool = PydanticAIInteroperability.convert_tool(tool=self.pydantic_ai_tool, deps=player)
 
     def test_convert_tool_raises_error_if_take_ctx_is_true_and_deps_is_none(self) -> None:
         with pytest.raises(ValueError, match="If the tool takes a context, the `deps` argument must be provided"):
-            self.pydantic_ai_interop.convert_tool(tool=self.pydantic_ai_tool, deps=None)
+            PydanticAIInteroperability.convert_tool(tool=self.pydantic_ai_tool, deps=None)
 
     def test_expected_tools(self) -> None:
         config_list = [{"model": "gpt-4o", "api_key": "abc"}]
@@ -229,3 +224,12 @@ class TestPydanticAIInteroperabilityWithContext:
                 return
 
         assert False, "No tool response found in chat messages"
+
+
+@pytest.mark.skipif(sys.version_info >= (3, 9), reason="LangChain Interoperability is supported")
+class TestPydanticAIInteroperabilityIfNotSupported:
+    def test_get_unsupported_reason(self) -> None:
+        assert (
+            PydanticAIInteroperability.get_unsupported_reason()
+            == "This submodule is only supported for Python versions 3.9 and above"
+        )
