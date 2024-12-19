@@ -235,5 +235,12 @@
     "description": "Tracks personal finance income and expenses then helps the user to analyse it using AutoGen agents.",
     "image": "default.png",
     "tags": ["tools", "app"]
+  },
+  {
+    "title": "Multimodal Ecommerce Retail Chatbot",
+    "link": "https://github.com/haard7/multi-agent-fullstack-project",
+    "description": "Chatbot handling recommendation, purchase, order tracking and fraud detection in an ecommerce retail",
+    "image": "default.png",
+    "tags": ["ui", "groupchat"]
   }
 ]

@@ -103,14 +103,8 @@ class TestConsoleIOWithWebsockets:
                 OAI_CONFIG_LIST,
                 filter_dict={
                     "model": [
-                        "gpt-3.5-turbo",
-                        "gpt-3.5-turbo-16k",
-                        "gpt-4",
-                        "gpt-4-0314",
-                        "gpt4",
-                        "gpt-4-32k",
-                        "gpt-4-32k-0314",
-                        "gpt-4-32k-v0314",
+                        "gpt-4o-mini",
+                        "gpt-4o",
                     ],
                 },
                 file_location=KEY_LOC,

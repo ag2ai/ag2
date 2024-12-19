@@ -156,7 +156,7 @@ def test_simple_text_browser():
 
 
 @pytest.mark.skipif(
-    skip_bing,
+    skip_all or skip_bing,
     reason="do not run bing tests if key is missing",
 )
 def test_bing_search():
