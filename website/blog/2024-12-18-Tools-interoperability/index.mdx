@@ -1,0 +1,425 @@
+---
+title: Cross-Framework LLM Tool Integration with AG2
+authors:
+  - rjambrecic
+tags: [LLM, tools, langchain, crewai, pydanticai]
+---
+
+**TL;DR**
+AG2 lets you bring in tools from different frameworks like **LangChain**, **CrewAI**, and **PydanticAI**.
+
+- **LangChain**: Useful for tasks like API querying and web scraping.
+- **CrewAI**: Offers a variety of tools for web scraping, search, and more.
+- **PydanticAI**: Adds context-driven tools and structured data processing.
+
+With AG2, you can combine these tools and enhance your agents' capabilities.
+
+In this post, we’ll walk through how to integrate tools from various frameworks—like [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools),
+[CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main), and [PydanticAI Tools](https://ai.pydantic.dev/tools/)—into AG2.
+This allows you to use tools from different frameworks within AG2, giving your agents more power and flexibility. You’ll see how to set up agents, adapt the tools, and validate the integration through examples.his post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
+
+## LangChain Tools Integration
+
+LangChain is a popular framework that offers a wide range of tools to work with LLMs. LangChain has already implemented a variety of tools that can be easily integrated into AG2. You can explore the available tools in the [LangChain Community Tools](https://github.com/langchain-ai/langchain/tree/master/libs/community/langchain_community/tools) folder. These tools, such as those for querying APIs, web scraping, and text generation, can be quickly incorporated into AG2, providing powerful functionality for your agents.
+
+### Installation
+To integrate LangChain tools into the AG2 framework, install the required dependencies:
+
+```bash
+pip install ag2[interop-langchain]
+```
+
+Additionally, this notebook uses LangChain's [Wikipedia Tool](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html), which requires the `wikipedia` package. Install it with:
+
+```bash
+pip install wikipedia
+```
+
+### Imports
+
+Import necessary modules and tools.
+- `WikipediaQueryRun` and `WikipediaAPIWrapper`: Tools for querying Wikipedia.
+- `AssistantAgent` and `UserProxyAgent`: Agents that facilitate communication in the AG2 framework.
+- `Interoperability`: This module acts as a bridge, making it easier to integrate LangChain tools with AG2’s architecture.
+
+```python
+import os
+
+from langchain_community.tools import WikipediaQueryRun
+from langchain_community.utilities import WikipediaAPIWrapper
+
+from autogen import AssistantAgent, UserProxyAgent
+from autogen.interop import Interoperability
+```
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+- `config_list` defines the LLM configurations, including the model and API key.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+
+```python
+config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+user_proxy = UserProxyAgent(
+    name="User",
+    human_input_mode="NEVER",
+)
+
+chatbot = AssistantAgent(
+    name="chatbot",
+    llm_config={"config_list": config_list},
+)
+```
+
+### Tool Integration
+
+- Initialize and register the LangChain tool with AG2.
+- `WikipediaAPIWrapper`: Configured to fetch the top 1 result from Wikipedia with a maximum of 1000 characters per document.
+- `WikipediaQueryRun`: A LangChain tool that executes Wikipedia queries.
+- `LangchainInteroperability`: Converts the LangChain tool into a format compatible with the AG2 framework.
+- `ag2_tool.register_for_execution(user_proxy)`: Registers the tool for use by the user_proxy agent.
+- `ag2_tool.register_for_llm(chatbot)`: Registers the tool for integration with the chatbot agent.
+
+```python
+api_wrapper = WikipediaAPIWrapper(top_k_results=1, doc_content_chars_max=1000)
+langchain_tool = WikipediaQueryRun(api_wrapper=api_wrapper)
+
+interop = Interoperability()
+ag2_tool = interop.convert_tool(tool=langchain_tool, type="langchain")
+
+ag2_tool.register_for_execution(user_proxy)
+ag2_tool.register_for_llm(chatbot)
+```
+
+### Initiate Chat
+```python
+message = "Tell me about the history of the United States"
+user_proxy.initiate_chat(recipient=chatbot, message=message, max_turns=2)
+```
+
+Output:
+
+```console
+User (to chatbot):
+
+Tell me about the history of the United States
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+***** Suggested tool call (call_hhy2G43ymytUFmJlDsK9J0tk): wikipedia *****
+Arguments:
+{"tool_input":{"query":"history of the United States"}}
+**************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION wikipedia...
+User (to chatbot):
+
+***** Response from calling tool (call_hhy2G43ymytUFmJlDsK9J0tk) *****
+Page: History of the United States
+Summary: The history of the lands that became the United States began with the arrival of the first people in the Americas around 15,000 BC. After European colonization of North America began in the late 15th century, wars and epidemics decimated Indigenous societies. By the 1760s, the thirteen British colonies were established. The Southern Colonies built an agricultural system on slave labor, enslaving millions from Africa. After defeating France, the British Parliament imposed a series of taxes; resistance to these taxes, especially the Boston Tea Party in 1773, led to Parliament issuing the Intolerable Acts designed to end self-government.
+In 1776, the United States declared its independence. Led by General George Washington, it won the Revolutionary War in 1783. The Constitution was adopted in 1789, and a Bill of Rights was added in 1791 to guarantee inalienable rights. Washington, the first president, and his adviser Alexander Hamilton created a
+**********************************************************************
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+The history of the United States begins with the arrival of the first peoples in the Americas around 15,000 BC. This pre-Columbian era was followed by European colonization, beginning in the late 15th century, which dramatically altered the indigenous societies through wars and epidemics.
+
+By the 1760s, thirteen British colonies were established along the Atlantic seaboard. In the Southern Colonies, an agricultural economy heavily reliant on enslaved labor from Africa was developed. The British victory over France in the Seven Years' War led Parliament to impose various taxes on the colonies. Resistance to these taxes, exemplified by the Boston Tea Party in 1773, prompted the Parliament to enact the Intolerable Acts, seeking to curtail colonial self-governance.
+
+The United States declared independence in 1776. Under the leadership of General George Washington, the American Revolutionary War concluded successfully in 1783. Subsequently, the U.S. Constitution was adopted in 1789, with the Bill of Rights added in 1791 to ensure inalienable rights. During this early period, President George Washington and his advisor Alexander Hamilton played significant roles in forming the young nation's governmental and economic foundations.
+
+This overview covers the early formation and foundational moments of what became the United States, setting the stage for the country's subsequent expansion and development. TERMINATE
+
+--------------------------------------------------------------------------------
+```
+
+## CrewAI Tools Integration
+
+CrewAI provides a variety of powerful tools designed for tasks such as web scraping, search, code interpretation, and more. These tools are easy to integrate into the AG2 framework, allowing you to enhance your agents with advanced capabilities. You can explore the full list of available tools in the [CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main) repository.
+
+### Installation
+Install the required packages for integrating CrewAI tools into the AG2 framework.
+This ensures all dependencies for both frameworks are installed.
+
+```bash
+pip install ag2[interop-crewai]
+```
+
+### Imports
+
+Import necessary modules and tools.
+- `ScrapeWebsiteTool` are the CrewAI tools for web scraping
+- `AssistantAgent` and `UserProxyAgent` are core AG2 classes.
+- `Interoperability`: This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
+
+```python
+import os
+
+from crewai_tools import ScrapeWebsiteTool
+
+from autogen import AssistantAgent, UserProxyAgent
+from autogen.interop import Interoperability
+```
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+- `config_list` defines the LLM configurations, including the model and API key.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+
+```python
+config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+user_proxy = UserProxyAgent(
+    name="User",
+    human_input_mode="NEVER",
+)
+
+chatbot = AssistantAgent(
+    name="chatbot",
+    llm_config={"config_list": config_list},
+)
+```
+
+### Tool Integration
+
+Initialize and register the CrewAI tool with AG2.
+- `crewai_tool` is an instance of the `ScrapeWebsiteTool` from CrewAI.
+- `Interoperability` converts the CrewAI tool to make it usable in AG2.
+- `register_for_execution` and `register_for_llm` allow the tool to work with the UserProxyAgent and AssistantAgent.
+
+```python
+interop = Interoperability()
+crewai_tool = ScrapeWebsiteTool()
+ag2_tool = interop.convert_tool(tool=crewai_tool, type="crewai")
+
+ag2_tool.register_for_execution(user_proxy)
+ag2_tool.register_for_llm(chatbot)
+
+message = "Scrape the website https://ag2.ai/"
+
+chat_result = user_proxy.initiate_chat(recipient=chatbot, message=message, max_turns=2)
+```
+
+Output:
+
+```console
+User (to chatbot):
+
+Scrape the website https://ag2.ai/
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+***** Suggested tool call (call_ZStuwmexfN7j56uJKOi6BCid): Read_website_content *****
+Arguments:
+{"args":{"website_url":"https://ag2.ai/"}}
+*************************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION Read_website_content...
+Using Tool: Read website content
+User (to chatbot):
+
+***** Response from calling tool (call_ZStuwmexfN7j56uJKOi6BCid) *****
+
+AgentOS
+Join our growing community of over 20,000 agent builders Join our growing community of over 20,000 agent builders The Open-Source AgentOS Build production-ready multi-agent systems in minutes, not months. Github Discord The End-to-End Platform for Multi-Agent Automation The End-to-End Platform for Multi-Agent Automation Flexible Agent Construction and Orchestration Create specialized agents that work together seamlessly. AG2 makes it easy to define roles, configure behaviors, and orchestrate collaboration - all through simple, intuitive code. → Assistant agents for problem-solving → Executor agents for taking action → Critic agents for validation → Group chat managers for coordination Built-in Conversation Patterns Built-in Conversation Patterns Stop wrestling with agent coordination. AG2 handles message routing, state management, and conversation flow automatically. → Two-agent conversations → Group chats with dynamic speaker selection → Sequential chats with context carryover → Nested conversations for modularity Seamless Human-AI collaboration Seamless Human-AI collaboration Seamlessly integrate human oversight and input into your agent workflows. → Configurable human input modes → Flexible intervention points → Optional human approval workflows → Interactive conversation interfaces → Context-aware human handoff Roadmap AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls Whether you're a solo founder prototyping the next big AI product, or an enterprise team deploying at scale we're building AG2 for you. This is AgentOS - making multi-agent development accessible to everyone. Github Join Our Growing Community Join Our Growing Community → 20,000+ active agent builders → Daily technical discussions → Weekly community calls → Open RFC process → Regular contributor events (Coming soon) Discord Problem Features Roadmap Community Documentation Problem Features Roadmap Community Documentation Problem Features Roadmap Community Documentation
+
+**********************************************************************
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+The website "https://ag2.ai/" promotes a platform named AgentOS, which is designed for building multi-agent systems efficiently. Key highlights from the website are:
+
+- **Community**: They have a growing community of over 20,000 agent builders.
+
+- **End-to-End Platform**: AG2 is described as an end-to-end platform for multi-agent automation. It supports flexible agent construction and orchestration, helping to define roles, configure behaviors, and orchestrate collaboration.
+
+- **Agent Types**: It includes assistant agents for problem-solving, executor agents for taking action, critic agents for validation, and group chat managers for coordination.
+
+- **Built-in Conversation Patterns**: AG2 offers capabilities for message routing, state management, and conversation flow management, supporting various conversation types like two-agent conversations, group chats, and nested conversations.
+
+- **Human-AI Collaboration**: The platform facilitates seamless integration of human oversight and input, with options for human intervention and approval workflows.
+
+- **AG2 Studio**: This feature provides visual agent system design, real-time testing, debugging, and one-click deployment, suited for prototyping and MVPs.
+
+- **AG2 Marketplace**: Provides a place to share, monetize agents, discover pre-built solution templates, and connect with other builders.
+
+- **Scaling Tools**: Includes guides for deployment, analytics, cost optimization, team collaboration features, and enterprise-ready security controls.
+
+- **Community and Documentation**: They encourage connecting through GitHub and Discord and have regular community calls and events planned.
+
+This comprehensive platform seems to aim at both individual developers and enterprise teams looking to deploy multi-agent systems effectively and collaboratively. TERMINATE
+
+--------------------------------------------------------------------------------
+```
+
+```python
+print(chat_result.summary)
+```
+
+Output:
+
+```console
+The website "https://ag2.ai/" promotes a platform named AgentOS, which is designed for building multi-agent systems efficiently. Key highlights from the website are:
+
+- **Community**: They have a growing community of over 20,000 agent builders.
+
+- **End-to-End Platform**: AG2 is described as an end-to-end platform for multi-agent automation. It supports flexible agent construction and orchestration, helping to define roles, configure behaviors, and orchestrate collaboration.
+
+- **Agent Types**: It includes assistant agents for problem-solving, executor agents for taking action, critic agents for validation, and group chat managers for coordination.
+
+- **Built-in Conversation Patterns**: AG2 offers capabilities for message routing, state management, and conversation flow management, supporting various conversation types like two-agent conversations, group chats, and nested conversations.
+
+- **Human-AI Collaboration**: The platform facilitates seamless integration of human oversight and input, with options for human intervention and approval workflows.
+
+- **AG2 Studio**: This feature provides visual agent system design, real-time testing, debugging, and one-click deployment, suited for prototyping and MVPs.
+
+- **AG2 Marketplace**: Provides a place to share, monetize agents, discover pre-built solution templates, and connect with other builders.
+
+- **Scaling Tools**: Includes guides for deployment, analytics, cost optimization, team collaboration features, and enterprise-ready security controls.
+
+- **Community and Documentation**: They encourage connecting through GitHub and Discord and have regular community calls and events planned.
+
+This comprehensive platform seems to aim at both individual developers and enterprise teams looking to deploy multi-agent systems effectively and collaboratively.
+```
+
+## PydanticAI Tools Integration
+
+[PydanticAI](https://ai.pydantic.dev/) is a newer framework that offers powerful capabilities for working with LLMs. Although it currently does not have a repository with pre-built tools, it provides features like **dependency injection**, allowing you to inject a "Context" into a tool for better execution without relying on LLMs. This context can be used for passing parameters or managing state during the execution of a tool. While the framework is still growing, you can integrate its tools into AG2 to enhance agent capabilities, especially for tasks that involve structured data and context-driven logic.
+
+### Installation
+To integrate LangChain tools into the AG2 framework, install the required dependencies:
+
+```bash
+pip install ag2[interop-pydantic-ai]
+```
+
+
+### Imports
+
+Import necessary modules and tools.
+- `BaseModel`: Used to define data structures for tool inputs and outputs.
+- `RunContext`: Provides context during the execution of tools.
+- `PydanticAITool`: Represents a tool in the PydanticAI framework.
+- `AssistantAgent` and `UserProxyAgent`: Agents that facilitate communication in the AG2 framework.
+- `Interoperability`: This module acts as a bridge, making it easier to integrate PydanticAI tools with AG2’s architecture.
+
+```python
+import os
+from typing import Optional
+
+from pydantic import BaseModel
+from pydantic_ai import RunContext
+from pydantic_ai.tools import Tool as PydanticAITool
+
+from autogen import AssistantAgent, UserProxyAgent
+from autogen.interop import Interoperability
+```
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+- `config_list` defines the LLM configurations, including the model and API key.
+- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+
+```python
+config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+user_proxy = UserProxyAgent(
+    name="User",
+    human_input_mode="NEVER",
+)
+
+chatbot = AssistantAgent(
+    name="chatbot",
+    llm_config={"config_list": config_list},
+)
+```
+
+### Tool Integration
+
+Integrate the PydanticAI tool with AG2.
+
+- Define a `Player` model using `BaseModel` to structure the input data.
+- Use `RunContext` to securely inject dependencies (like the `Player` instance) into the tool function without exposing them to the LLM.
+- Implement `get_player` to define the tool's functionality, accessing `ctx.deps` for injected data.
+- Convert the tool to an AG2-compatible format with `Interoperability` and register it for execution and LLM communication.
+- Convert the PydanticAI tool into an AG2-compatible format using `convert_tool`.
+- Register the tool for both execution and communication with the LLM by associating it with the `user_proxy` and `chatbot`.
+
+```python
+class Player(BaseModel):
+    name: str
+    age: int
+
+
+def get_player(ctx: RunContext[Player], additional_info: Optional[str] = None) -> str:  # type: ignore[valid-type]
+    """Get the player's name.
+
+    Args:
+        additional_info: Additional information which can be used.
+    """
+    return f"Name: {ctx.deps.name}, Age: {ctx.deps.age}, Additional info: {additional_info}"  # type: ignore[attr-defined]
+
+
+interop = Interoperability()
+pydantic_ai_tool = PydanticAITool(get_player, takes_ctx=True)
+
+# player will be injected as a dependency
+player = Player(name="Luka", age=25)
+ag2_tool = interop.convert_tool(tool=pydantic_ai_tool, type="pydanticai", deps=player)
+
+ag2_tool.register_for_execution(user_proxy)
+ag2_tool.register_for_llm(chatbot)
+```
+
+Initiate a conversation between the `UserProxyAgent` and the `AssistantAgent`.
+
+- Use the `initiate_chat` method to send a message from the `user_proxy` to the `chatbot`.
+- In this example, the user requests the chatbot to retrieve player information, providing "goal keeper" as additional context.
+- The `Player` instance is securely injected into the tool using `RunContext`, ensuring the chatbot can retrieve and use this data during the interaction.
+
+```python
+user_proxy.initiate_chat(
+    recipient=chatbot, message="Get player, for additional information use 'goal keeper'", max_turns=3
+)
+```
+
+Output:
+
+```console
+User (to chatbot):
+
+Get player, for additional information use 'goal keeper'
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+***** Suggested tool call (call_lPXIohFiJfnjmgwDnNFPQCzc): get_player *****
+Arguments:
+{"additional_info":"goal keeper"}
+***************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION get_player...
+User (to chatbot):
+
+***** Response from calling tool (call_lPXIohFiJfnjmgwDnNFPQCzc) *****
+Name: Luka, Age: 25, Additional info: goal keeper
+**********************************************************************
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+The player's name is Luka, who is a 25-year-old goalkeeper. TERMINATE
+```
