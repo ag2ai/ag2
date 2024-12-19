@@ -6,7 +6,11 @@ from typing import Dict, List, Optional, TypeAlias, Union
 
 from llama_index.core import PropertyGraphIndex, SimpleDirectoryReader
 from llama_index.core.base.embeddings.base import BaseEmbedding
-from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
+from llama_index.core.indices.property_graph import (
+    DynamicLLMPathExtractor,
+    SchemaLLMPathExtractor,
+    SimpleLLMPathExtractor,
+)
 from llama_index.core.indices.property_graph.transformations.schema_llm import Triple
 from llama_index.core.llms import LLM
 from llama_index.embeddings.openai import OpenAIEmbedding
@@ -43,7 +47,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         entities: Optional[TypeAlias] = None,
         relations: Optional[TypeAlias] = None,
         validation_schema: Optional[Union[Dict[str, str], List[Triple]]] = None,
-        strict: Optional[bool] = True,
+        strict: Optional[bool] = False,
     ):
         """
         Initialize a Neo4j Property graph.
@@ -79,12 +83,8 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         """
         Build the knowledge graph with input documents.
         """
-        self.input_files = []
-        for doc in input_doc:
-            if os.path.exists(doc.path_or_url):
-                self.input_files.append(doc.path_or_url)
-            else:
-                raise ValueError(f"Document file not found: {doc.path_or_url}")
+
+        self.documents = self._load_doc(input_doc)
 
         self.graph_store = Neo4jPropertyGraphStore(
             username=self.username,
@@ -96,25 +96,35 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         # delete all entities and relationships in case a graph pre-exists
         self._clear()
 
-        self.documents = SimpleDirectoryReader(input_files=self.input_files).load_data()
-
-        # Extract paths following a strict schema of allowed entities, relationships, and which entities can be connected to which relationships.
-        # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
-        self.kg_extractors = [
-            SchemaLLMPathExtractor(
-                llm=self.llm,
-                possible_entities=self.entities,
-                possible_relations=self.relations,
-                kg_validation_schema=self.validation_schema,
-                strict=self.strict,
-            )
-        ]
+        # Create knowledge graph extractors.
+        self.kg_extractors = self._create_kg_extractors()
 
         self.index = PropertyGraphIndex.from_documents(
             self.documents,
             embed_model=self.embedding,
             kg_extractors=self.kg_extractors,
             property_graph_store=self.graph_store,
+            show_progress=True,
+        )
+
+    def connect_db(self):
+        """
+        Connect to an existing knowledge graph database.
+        """
+        self.graph_store = Neo4jPropertyGraphStore(
+            username=self.username,
+            password=self.password,
+            url=self.host + ":" + str(self.port),
+            database=self.database,
+        )
+
+        # Create knowledge graph extractors.
+        self.kg_extractors = self._create_kg_extractors()
+
+        self.index = PropertyGraphIndex.from_existing(
+            property_graph_store=self.graph_store,
+            kg_extractors=self.kg_extractors,
+            embed_model=self.embedding,
             show_progress=True,
         )
 
@@ -129,7 +139,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             bool: True if successful, False otherwise.
         """
         if self.graph_store is None:
-            raise ValueError("Knowledge graph is not initialized. Please call init_db first.")
+            raise ValueError("Knowledge graph is not initialized. Please call init_db or connect_db first.")
 
         try:
             """
@@ -162,7 +172,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             raise ValueError("Knowledge graph is not created.")
 
         # query the graph to get the answer
-        query_engine = self.index.as_query_engine(include_text=True)
+        query_engine = self.index.as_query_engine(llm=self.llm, include_text=True)
         response = str(query_engine.query(question))
 
         # retrieve source triplets that are semantically related to the question
@@ -183,3 +193,45 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         """
         with self.graph_store._driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n;")
+
+    def _load_doc(self, input_doc: List[Document]) -> List[Document]:
+        """
+        Load documents from the input files.
+        """
+        input_files = []
+        for doc in input_doc:
+            if os.path.exists(doc.path_or_url):
+                input_files.append(doc.path_or_url)
+            else:
+                raise ValueError(f"Document file not found: {doc.path_or_url}")
+
+        return SimpleDirectoryReader(input_files=input_files).load_data()
+
+    def _create_kg_extractors(self):
+        """
+        If strict is True,
+        extract paths following a strict schema of allowed relationships for each entity.
+        If strict is False,
+        auto-create relationships and schema that fit the graph
+        # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
+        """
+        kg_extractors = [
+            SchemaLLMPathExtractor(
+                llm=self.llm,
+                possible_entities=self.entities,
+                possible_relations=self.relations,
+                kg_validation_schema=self.validation_schema,
+                strict=self.strict,
+            ),
+        ]
+
+        if not self.strict:
+            kg_extractors.append(
+                DynamicLLMPathExtractor(
+                    llm=self.llm,
+                    allowed_entity_types=self.entities,
+                    allowed_relation_types=self.relations,
+                )
+            )
+
+        return kg_extractors
