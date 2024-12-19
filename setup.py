@@ -38,7 +38,7 @@ install_requires = [
     "pydantic>=1.10,<3,!=2.6.0",  # could be both V1 and V2
     "docker",
     "packaging",
-    "websockets>=14.0",
+    "websockets>=14,<15",
     "asyncer>=0.0.8",
 ]
 
@@ -120,7 +120,7 @@ extra_require = {
     "websurfer": ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"],
     "redis": ["redis"],
     "cosmosdb": ["azure-cosmos>=4.2.0"],
-    "websockets": ["websockets>=12.0,<13"],
+    "websockets": ["websockets>=14.0,<15"],
     "jupyter-executor": jupyter_executor,
     "types": types,
     "long-context": ["llmlingua<0.3"],
