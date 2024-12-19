@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
-from typing import Any, cast
-
-from crewai.tools import BaseTool as CrewAITool
+import sys
+from typing import Any, Optional
 
 from ...tools import Tool
 from ..interoperable import Interoperable
+from ..registry import register_interoperable_class
 
 __all__ = ["CrewAIInteroperability"]
 
@@ -17,7 +17,8 @@ def _sanitize_name(s: str) -> str:
     return re.sub(r"\W|^(?=\d)", "_", s)
 
 
-class CrewAIInteroperability(Interoperable):
+@register_interoperable_class("crewai")
+class CrewAIInteroperability:
     """
     A class implementing the `Interoperable` protocol for converting CrewAI tools
     to a general `Tool` format.
@@ -25,7 +26,8 @@ class CrewAIInteroperability(Interoperable):
     This class takes a `CrewAITool` and converts it into a standard `Tool` object.
     """
 
-    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
+    @classmethod
+    def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """
         Converts a given CrewAI tool into a general `Tool` format.
 
@@ -44,6 +46,8 @@ class CrewAIInteroperability(Interoperable):
             ValueError: If the provided tool is not an instance of `CrewAITool`, or if
                         any additional arguments are passed.
         """
+        from crewai.tools import BaseTool as CrewAITool
+
         if not isinstance(tool, CrewAITool):
             raise ValueError(f"Expected an instance of `crewai.tools.BaseTool`, got {type(tool)}")
         if kwargs:
@@ -66,3 +70,15 @@ class CrewAIInteroperability(Interoperable):
             description=description,
             func=func,
         )
+
+    @classmethod
+    def get_unsupported_reason(cls) -> Optional[str]:
+        if sys.version_info < (3, 10) or sys.version_info >= (3, 13):
+            return "This submodule is only supported for Python versions 3.10, 3.11, and 3.12"
+
+        try:
+            import crewai.tools
+        except ImportError:
+            return "Please install `interop-crewai` extra to use this module:\n\n\tpip install ag2[interop-crewai]"
+
+        return None

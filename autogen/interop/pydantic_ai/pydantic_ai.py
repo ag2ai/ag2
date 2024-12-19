@@ -3,21 +3,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import sys
 import warnings
 from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
 
-from pydantic_ai import RunContext
-from pydantic_ai.tools import Tool as PydanticAITool
-
 from ..interoperability import Interoperable
+from ..registry import register_interoperable_class
 from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 __all__ = ["PydanticAIInteroperability"]
 
 
-class PydanticAIInteroperability(Interoperable):
+@register_interoperable_class("pydanticai")
+class PydanticAIInteroperability:
     """
     A class implementing the `Interoperable` protocol for converting Pydantic AI tools
     into a general `Tool` format.
@@ -29,9 +29,9 @@ class PydanticAIInteroperability(Interoperable):
     """
 
     @staticmethod
-    def inject_params(  # type: ignore[no-any-unimported]
-        ctx: Optional[RunContext[Any]],
-        tool: PydanticAITool,
+    def inject_params(
+        ctx: Any,
+        tool: Any,
     ) -> Callable[..., Any]:
         """
         Wraps the tool's function to inject context parameters and handle retries.
@@ -40,8 +40,7 @@ class PydanticAIInteroperability(Interoperable):
         when invoked and that retries are managed according to the tool's settings.
 
         Args:
-            ctx (Optional[RunContext[Any]]): The run context, which may include dependencies
-                                              and retry information.
+            ctx (Optional[RunContext[Any]]): The run context, which may include dependencies and retry information.
             tool (PydanticAITool): The Pydantic AI tool whose function is to be wrapped.
 
         Returns:
@@ -50,30 +49,36 @@ class PydanticAIInteroperability(Interoperable):
         Raises:
             ValueError: If the tool fails after the maximum number of retries.
         """
-        max_retries = tool.max_retries if tool.max_retries is not None else 1
-        f = tool.function
+        from pydantic_ai import RunContext
+        from pydantic_ai.tools import Tool as PydanticAITool
+
+        ctx_typed: Optional[RunContext[Any]] = ctx  # type: ignore
+        tool_typed: PydanticAITool[Any] = tool  # type: ignore
+
+        max_retries = tool_typed.max_retries if tool_typed.max_retries is not None else 1
+        f = tool_typed.function
 
         @wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            if tool.current_retry >= max_retries:
-                raise ValueError(f"{tool.name} failed after {max_retries} retries")
+            if tool_typed.current_retry >= max_retries:
+                raise ValueError(f"{tool_typed.name} failed after {max_retries} retries")
 
             try:
-                if ctx is not None:
+                if ctx_typed is not None:
                     kwargs.pop("ctx", None)
-                    ctx.retry = tool.current_retry
-                    result = f(**kwargs, ctx=ctx)
+                    ctx_typed.retry = tool_typed.current_retry
+                    result = f(**kwargs, ctx=ctx_typed)  # type: ignore[call-arg]
                 else:
-                    result = f(**kwargs)
-                tool.current_retry = 0
+                    result = f(**kwargs)  # type: ignore[call-arg]
+                tool_typed.current_retry = 0
             except Exception as e:
-                tool.current_retry += 1
+                tool_typed.current_retry += 1
                 raise e
 
             return result
 
         sig = signature(f)
-        if ctx is not None:
+        if ctx_typed is not None:
             new_params = [param for name, param in sig.parameters.items() if name != "ctx"]
         else:
             new_params = list(sig.parameters.values())
@@ -82,7 +87,8 @@ class PydanticAIInteroperability(Interoperable):
 
         return wrapper
 
-    def convert_tool(self, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
+    @classmethod
+    def convert_tool(cls, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
         """
         Converts a given Pydantic AI tool into a general `Tool` format.
 
@@ -103,11 +109,14 @@ class PydanticAIInteroperability(Interoperable):
                         dependencies are missing for tools that require a context.
             UserWarning: If the `deps` argument is provided for a tool that does not take a context.
         """
+        from pydantic_ai import RunContext
+        from pydantic_ai.tools import Tool as PydanticAITool
+
         if not isinstance(tool, PydanticAITool):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
 
         # needed for type checking
-        pydantic_ai_tool: PydanticAITool = tool  # type: ignore[no-any-unimported]
+        pydantic_ai_tool: PydanticAITool[Any] = tool  # type: ignore[no-any-unimported]
 
         if tool.takes_ctx and deps is None:
             raise ValueError("If the tool takes a context, the `deps` argument must be provided")
@@ -123,7 +132,7 @@ class PydanticAIInteroperability(Interoperable):
                 retry=0,
                 # All messages send to or returned by a model.
                 # This is mostly used on pydantic_ai Agent level.
-                messages=None,  # TODO: check in the future if this is needed on Tool level
+                messages=[],  # TODO: check in the future if this is needed on Tool level
                 tool_name=pydantic_ai_tool.name,
             )
         else:
@@ -140,3 +149,15 @@ class PydanticAIInteroperability(Interoperable):
             func=func,
             parameters_json_schema=pydantic_ai_tool._parameters_json_schema,
         )
+
+    @classmethod
+    def get_unsupported_reason(cls) -> Optional[str]:
+        if sys.version_info < (3, 9):
+            return "This submodule is only supported for Python versions 3.9 and above"
+
+        try:
+            import pydantic_ai.tools
+        except ImportError:
+            return "Please install `interop-pydantic-ai` extra to use this module:\n\n\tpip install ag2[interop-pydantic-ai]"
+
+        return None

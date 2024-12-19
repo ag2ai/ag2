@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from ..tools import Tool
 
@@ -18,7 +18,8 @@ class Interoperable(Protocol):
     `convert_tool` to convert a given tool into a desired format or type.
     """
 
-    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
+    @classmethod
+    def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """
         Converts a given tool to a desired format or type.
 
@@ -30,5 +31,16 @@ class Interoperable(Protocol):
 
         Returns:
             Tool: The converted tool in the desired format or type.
+        """
+        ...
+
+    @classmethod
+    def get_unsupported_reason(cls) -> Optional[str]:
+        """Returns the reason for the tool being unsupported.
+
+        This method should be implemented by any class adhering to the `Interoperable` protocol.
+
+        Returns:
+            str: The reason for the interoperability class being unsupported.
         """
         ...
