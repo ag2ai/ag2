@@ -32,8 +32,8 @@ import os
 import random
 import sys
 import time
-import warnings
 from typing import Any, Dict, List
+import warnings
 
 from cohere import Client as Cohere
 from cohere.types import ToolParameterDefinitionsValue, ToolResult
@@ -42,7 +42,9 @@ from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
-from autogen.oai.client_utils import logging_formatter, validate_parameter
+from autogen import Agent, AssistantAgent, GroupChat, UserProxyAgent, ConversableAgent
+from autogen.oai.client_utils import validate_parameter, logging_formatter
+
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -407,7 +409,7 @@ def oai_messages_to_cohere_messages(
                 ) not in cohere_tool_names:
                     new_message = {
                         "role": "CHATBOT",
-                        "message": message.get("name") + ":" + message["content"] + str(message["tool_calls"]),
+                        "message": f"{message.get('name', '')}:{message['content']}{str(message['tool_calls'])}",
                     }
                     cohere_messages.append(new_message)
                     continue
@@ -426,7 +428,7 @@ def oai_messages_to_cohere_messages(
             # We also add the suggested tool call as a message
             new_message = {
                 "role": "CHATBOT",
-                "message": message.get("name","") + ":" + message["content"],
+                "message": f"{message.get('name', '')}:{message['content']}",
                 "tool_calls": message_tool_calls,
             }
 
@@ -437,7 +439,6 @@ def oai_messages_to_cohere_messages(
 
             content_output = message["content"]
             if tool_call_id not in [tool_call["id"] for tool_call in tool_calls]:
-
                 new_message = {
                     "role": "CHATBOT",
                     "message": content_output,
@@ -462,7 +463,7 @@ def oai_messages_to_cohere_messages(
             # Standard text message
             new_message = {
                 "role": "USER" if message["role"] == "user" else "CHATBOT",
-                "message": message.get("name","") + ":" + message.get("content"),
+                "message": f"{message.get('name', '')}:{message.get('content')}",
             }
 
             cohere_messages.append(new_message)
