@@ -11,8 +11,8 @@ from typing import Any, Callable, Optional
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool as PydanticAITool
 
-from ...tools import PydanticAITool as AG2PydanticAITool
 from ..interoperability import Interoperable
+from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 __all__ = ["PydanticAIInteroperability"]
 
