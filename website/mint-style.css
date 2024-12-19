@@ -68,6 +68,16 @@ h4 {
   }
 }
 
+a.colab-badge, a.github-badge {
+  display: inline-block;
+  border:none;
+}
+
+a.colab-badge > img, a.github-badge  > img {
+  margin: 0;
+  padding: 0;
+}
+
 /* Home page hero section starts */
 .homepage-hero-section {
   display: flex;

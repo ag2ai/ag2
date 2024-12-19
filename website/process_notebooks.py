@@ -415,45 +415,30 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
     #     content = f"# {front_matter['title']}\n{content}"
     # inject in content directly after the markdown title the word done
     # Find the end of the line with the title
-    title_end = content.find("\n", content.find("#"))
+    # title_end = content.find("\n", content.find("#"))
 
     # Extract page title
-    title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
+    # title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
     # If there is a { in the title we trim off the { and everything after it
-    if "{" in title:
-        title = title[: title.find("{")].strip()
+    # if "{" in title:
+    #     title = title[: title.find("{")].strip()
 
     github_link = f"https://github.com/ag2ai/ag2/blob/main/{repo_relative_notebook}"
     content = (
-        content[:title_end]
-        + f'\n<a href="{github_link}" target="_blank">'
+        f'\n<a href="{github_link}" class="github-badge" target="_blank">'
         + """<img noZoom src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open on GitHub" />"""
         + "</a>"
-        + content[title_end:]
+        + content
     )
-    # content = (
-    #     content[:title_end]
-    #     + '<a href="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github)]('
-    #     + github_link
-    #     +  ")"
-    #     + """ target="_blank" alt="Open on GitHub">
-    #         <img noZoom src="/path/image.jpg"/>
-    #     </a>"""
-    #     + "\n[![Open on GitHub](https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github)]("
-    #     + github_link
-    #     + ")"
-    #     + content[title_end:]
-    # )
 
     # If no colab link is present, insert one
     if "colab-badge.svg" not in content:
         colab_link = f"https://colab.research.google.com/github/ag2ai/ag2/blob/main/{repo_relative_notebook}"
         content = (
-            content[:title_end]
-            + "\n[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]("
-            + colab_link
-            + ")"
-            + content[title_end:]
+            f'\n<a href="{colab_link}" class="colab-badge" target="_blank">'
+            + """<img noZoom src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab" />"""
+            + "</a>"
+            + content
         )
 
     # Create the front matter metadata js file for examples by notebook section

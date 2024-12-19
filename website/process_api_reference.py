@@ -70,35 +70,6 @@ def write_file_content(file_path: str, content: str) -> None:
         f.write(content)
 
 
-def add_code_fences(content: str) -> str:
-    """Add Python code fence markers to content starting with 'import'.
-
-    Args:
-        content: Content to process
-    Returns:
-        Content with Python code blocks properly fenced
-    """
-    return content
-    lines = content.split("\n")
-    output = []
-    i = 0
-
-    while i < len(lines):
-        if lines[i].strip().startswith("import"):
-            block = []
-            # Collect lines until next markdown marker
-            while i < len(lines) and not lines[i].strip().startswith(("---", "#", "-", "`")):
-                block.append(lines[i])
-                i += 1
-            if block:
-                output.extend(["```python", *block, "```"])
-        else:
-            output.append(lines[i])
-            i += 1
-
-    return "\n".join(output)
-
-
 def convert_md_to_mdx(input_dir: Path) -> None:
     """Convert all .md files in directory to .mdx while preserving structure.
 
@@ -117,9 +88,6 @@ def convert_md_to_mdx(input_dir: Path) -> None:
 
         # Escape HTML tags
         processed_content = escape_html_tags(content)
-
-        # Add code fences
-        processed_content = add_code_fences(processed_content)
 
         # Update sidenav title
         processed_content = processed_content.replace("sidebar_label: ", "sidebarTitle: ")
