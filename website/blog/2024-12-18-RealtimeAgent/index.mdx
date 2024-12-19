@@ -219,7 +219,7 @@ async def handle_media_stream(websocket: WebSocket):
 3. **Initializing the RealtimeAgent**
    Inside the WebSocket handler, we instantiate the **RealtimeAgent** with the following components:
    - **Name**: The identifier for the agent (e.g., `Customer_service_Bot`).
-   - **LLM Configuration**: The configuration for the underlying OpenAI model that powers the agent.
+   - **LLM Configuration**: The configuration for the underlying realtime model inference client that powers the agent.
    - **Audio Adapter**: A TwilioAudioAdapter is used to handle audio streaming between Twilio and the agent.
 ```python
    audio_adapter = TwilioAudioAdapter(websocket)
