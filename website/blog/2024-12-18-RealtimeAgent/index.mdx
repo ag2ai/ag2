@@ -272,7 +272,7 @@ async def handle_incoming_call(request: Request):
 
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
-    """Handle WebSocket connections between Twilio and OpenAI."""
+    """Handle WebSocket connections between Twilio and realtime model inference client."""
     await websocket.accept()
 
     audio_adapter = TwilioAudioAdapter(websocket)
