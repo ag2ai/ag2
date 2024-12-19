@@ -6,7 +6,7 @@
     "light": "/logo/ag2.svg"
   },
   "metadata": {
-    "og:image": "/static/img/cover.png"
+    "og:image": "https://mintlify.s3.us-west-1.amazonaws.com/private-04b27de1/static/img/cover.png"
   },
   "favicon": "/logo/ag2.svg",
   "search": {
