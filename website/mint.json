@@ -5,9 +5,6 @@
     "dark": "/logo/ag2-white.svg",
     "light": "/logo/ag2.svg"
   },
-  "metadata": {
-    "og:image": "https://private-04b27de1.mintlify.app/api/og?division=Documentation&title=AutoGen%20%7C%20AG2&description=Enabling%20Next-Gen%20LLM%20Applications%20via%20Multi-Agent%20Conversation%20Framework&logoLight=https%3A%2F%2Fraw.githubusercontent.com%2Fharishmohanraj%2Fag2%2Frefs%2Fheads%2Fmain%2Fwebsite%2Flogo%2Fag2.svg&logoDark=https%3A%2F%2Fraw.githubusercontent.com%2Fharishmohanraj%2Fag2%2Frefs%2Fheads%2Fmain%2Fwebsite%2Flogo%2Fag2.svg&primaryColor=%2367E0F2&lightColor=%23F3EBA6&darkColor=%23#F5EBA7"
-  },
   "favicon": "/logo/ag2.svg",
   "search": {
     "prompt": "Search or ask..."
