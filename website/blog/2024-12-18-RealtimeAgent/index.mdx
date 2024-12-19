@@ -96,10 +96,30 @@ Copy this public URL (e.g., `https://abc123.ngrok.io`). You will use it in Twili
 
 With your public URL set up, you’re ready to configure Twilio to send requests to your server!
 
-#### Twilio setup
+#### **Twilio Setup**
+
+To connect Twilio with your RealtimeAgent, follow these steps:
+
+1. **Create a Twilio Account**
+   If you don’t already have a Twilio account, you can [sign up here](https://login.twilio.com/u/signup). Twilio offers trial accounts, which are perfect for testing purposes.
+
+2. **Access Your Voice-Enabled Number**
+   Log in to the **Twilio Console** and select your **Voice-enabled phone number**.
+
+3. **Configure the Webhook**
+   - Navigate to the **Voice & Fax** section under your number’s settings.
+   - Set the **A CALL COMES IN** webhook to your public **ngrok** URL.
+   - Append `/incoming-call` to the URL. For example:
+     - If your ngrok URL is `https://abc123.ngrok.app`, the webhook URL should be:
+       `https://abc123.ngrok.app/incoming-call`
+
+4. **Save Changes**
+   Once the webhook URL is set, save your changes.
+
+You’re now ready to test the integration between Twilio and your RealtimeAgent!
 
 ### **Swarm Implementation for Airline Customer Service**
-Here, we will build and configure a Swarm to manage common airline customer service tasks, such as booking changes, seat upgrades, or handling complaints.
+Here, we will build and configure a Swarm to manage airline customer service tasks, such as flight changes and cancellations.
 
 ### **Connecting the Swarm to the RealtimeAgent**
 
@@ -209,8 +229,61 @@ async def handle_media_stream(websocket: WebSocket):
 ```
 
 ### **Results: Running the Service**
-Finally, we’ll test the implementation, showcasing how real-time interactions with **RealtimeAgent** and task delegation to a Swarm create an efficient and engaging customer service solution.
 
+With everything set up, it’s time to put your RealtimeAgent to the test! Follow these steps to make your first call and interact with the AI system:
+
+1. **Ensure Everything is Running**
+   - Verify that your **ngrok** session is still active and providing a public URL.
+   - Confirm that your FastAPI server is up and running, as outlined in the previous chapters.
+
+2. **Place a Call**
+   - Use a cell phone or landline to call your **Twilio number**.
+
+3. **Watch the Magic Happen**
+   - Start speaking! You’ll hear the AI system’s initial message and then be able to interact with it in real-time.
+
+#### **Realtime Agent and Swarm Workflow in Action**
+
+The following images showcase the seamless interaction between the **RealtimeAgent** and the Swarm of agents as they work together to handle a live customer request. Here's how the process unfolds:
+
+1. **Service Initialization**
+   Our service starts successfully, ready to handle incoming calls and process real-time interactions.
+![Realtime Agent Swarm](img/1_service_running.png)
+
+2. **Incoming Call**
+   A call comes in, and the **RealtimeAgent** greets us with an audio prompt:
+   *“What do you need assistance with today?”*
+![Realtime Agent Swarm](img/2_incoming_call.png)
+
+3. **Request Relay to Swarm**
+   We respond via audio, requesting to cancel our flight. The **RealtimeAgent** processes this request and relays it to the Swarm team for further action.
+![Realtime Agent Swarm](img/3_request_for_flight_cancellation.png)
+
+4. **Clarification from Swarm**
+   The Swarm requires additional information, asking for the flight number we want to cancel. The **RealtimeAgent** gathers this detail from us and passes it back to the Swarm.
+![Realtime Agent Swarm](img/4_flight_number_name.png)
+
+5. **Policy Confirmation**
+   The Swarm then queries us about the refund policy preference (e.g., refund vs. flight credits). The **RealtimeAgent** conveys this question, and after receiving our preference (flight credits), it informs the Swarm.
+![Realtime Agent Swarm](img/5_refund_policy.png)
+
+6. **Successful Resolution**
+   The Swarm successfully processes the cancellation and initiates the refund. The **RealtimeAgent** communicates this resolution to us over audio:
+   *“Your refund has been successfully initiated.”*
+![Realtime Agent Swarm](img/6_flight_refunded.png)
+
+This flow highlights the power of integrating real-time audio interaction with the collaborative capabilities of a Swarm of AI agents, providing efficient and user-friendly solutions to complex tasks.
+
+### **Caveats and Future Improvements**
+
+While the RealtimeAgent and Swarm integration is a powerful tool, there are a few things to keep in mind as we continue to refine the system:
+
+- **Work in Progress**: The agent is still evolving, and we’re actively polishing its details for a smoother experience in the coming weeks.
+- **Transcription Challenges**: Occasionally, the agent may mishear inputs, particularly when dictating complex information like flight numbers or letters.
+- **Response Misdirection**: At times, the agent might respond directly instead of relaying information to the customer. We’re addressing this with prompt optimizations.
+- **Simpler Setup Coming Soon**: Setting up Twilio can be time-consuming, but we’re developing a **LocalAdapter** that will let you interact with the agent directly via your web browser audio—perfect for quick testing without the long setup.
+
+We’re excited about what’s to come and look forward to your feedback as we refine and expand these capabilities!
 
 For more updates, tutorials, and discussions, join our [Discord community](https://discord.com/invite/pAbnFJrkgZ).
 
