@@ -35,7 +35,7 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.12"
       - name: pydoc-markdown install
         run: |
           python -m pip install --upgrade pip
@@ -82,7 +82,7 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.12"
       - name: pydoc-markdown install
         run: |
           python -m pip install --upgrade pip
