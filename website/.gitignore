@@ -9,7 +9,7 @@ package-lock.json
 .docusaurus
 .cache-loader
 docs/reference
-/docs/notebooks
+/notebooks
 
 docs/tutorial/*.mdx
 docs/tutorial/**/*.png

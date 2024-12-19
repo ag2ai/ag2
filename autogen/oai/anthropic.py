@@ -11,6 +11,7 @@ Example usage:
 Install the `anthropic` package by running `pip install --upgrade anthropic`.
 - https://docs.anthropic.com/en/docs/quickstart-guide
 
+```python
 import autogen
 
 config_list = [
@@ -22,12 +23,14 @@ config_list = [
 ]
 
 assistant = autogen.AssistantAgent("assistant", llm_config={"config_list": config_list})
+```
 
 Example usage for Anthropic Bedrock:
 
 Install the `anthropic` package by running `pip install --upgrade anthropic`.
 - https://docs.anthropic.com/en/docs/quickstart-guide
 
+```python
 import autogen
 
 config_list = [
@@ -42,7 +45,7 @@ config_list = [
 ]
 
 assistant = autogen.AssistantAgent("assistant", llm_config={"config_list": config_list})
-
+```
 """
 
 from __future__ import annotations
