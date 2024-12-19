@@ -65,6 +65,12 @@ jobs:
           # Copy files except .ipynb, node_modules, .quarto, .gitignore, and temp_website
           find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -path "./temp_website/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
 
+          # Check the contents of the temp_website directory
+          ls -la temp_website
+
+          # check current working directory
+          pwd
+
   gh-release:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
