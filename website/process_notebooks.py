@@ -376,7 +376,7 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path
             return match.group(0)
 
         alt, rel_path = img_match.groups()
-        abs_path = (rendered_mdx.parent / rel_path.lstrip("./")).resolve().relative_to(website_dir)
+        abs_path = (rendered_mdx.parent / Path(rel_path)).resolve().relative_to(website_dir)
         return f"![{alt}](/{abs_path})"
 
     pattern = r"````mdx-code-block\n(!\[.*?\]\(.*?\))\n````"
