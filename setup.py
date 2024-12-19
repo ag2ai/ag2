@@ -38,6 +38,8 @@ install_requires = [
     "pydantic>=1.10,<3,!=2.6.0",  # could be both V1 and V2
     "docker",
     "packaging",
+    "websockets>=14.0",
+    "asyncer>=0.0.8",
 ]
 
 jupyter_executor = [
@@ -68,6 +70,9 @@ neo4j = [
     "llama-index-graph-stores-neo4j==0.4.2",
     "llama-index-core==0.12.5",
 ]
+
+twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
+
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
@@ -122,6 +127,7 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
+    "twilio": twilio,
     "neo4j": neo4j,
 }
 
