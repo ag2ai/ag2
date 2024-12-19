@@ -208,7 +208,7 @@ async def handle_incoming_call(request: Request):
     return HTMLResponse(content=str(response), media_type="application/xml")
 ```
 2. **WebSocket Media Stream**
-   A WebSocket endpoint, `/media-stream`, is established to manage real-time audio communication between Twilio and OpenAI's API. This allows audio data to flow seamlessly, enabling the RealtimeAgent to process and respond to user queries.
+   A WebSocket endpoint, `/media-stream`, is established to manage real-time audio communication between Twilio and a realtime model inference client such as OpenAI's realtime API. This allows audio data to flow seamlessly, enabling the RealtimeAgent to process and respond to user queries.
 ```python
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
