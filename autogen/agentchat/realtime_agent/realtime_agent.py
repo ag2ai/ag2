@@ -5,7 +5,6 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-# import asyncio
 import asyncio
 import json
 import logging
@@ -41,6 +40,7 @@ QUESTION_MESSAGE = (
     "repeat the question to me **WITH AUDIO OUTPUT** and then call 'answer_task_question' AFTER YOU GET THE ANSWER FROM ME\n\n"
     "The question is: '{}'\n\n"
 )
+QUESTION_TIMEOUT_SECONDS = 20
 
 
 class RealtimeAgent(ConversableAgent):
@@ -114,20 +114,6 @@ class RealtimeAgent(ConversableAgent):
         self._initial_agent = initial_agent
         self._agents = agents
 
-        # def _get_task_status(task_id: str) -> Generator[None, str, None]:
-        #     while True:
-        #         for s in [
-        #             "The task is in progress, agents are working on it. ETA is 1 minute",
-        #             "The task is successfully completed.",
-        #         ]:
-        #             yield s
-
-        # it = _get_task_status("task_id")
-
-        # @self.register_handover(name="get_task_status", description="Get the status of the task")
-        # async def get_task_status(task_id: str) -> str:
-        #     return next(it)
-
         self.register_handover(name="answer_task_question", description="Answer question from the task")(
             self.set_answer
         )
@@ -179,8 +165,16 @@ class RealtimeAgent(ConversableAgent):
         return self._answer
 
     async def ask_question(self, question: str, question_timeout: int) -> str:
+        """
+        Send a question for the user to the agent and wait for the answer.
+        If the answer is not received within the timeout, the question is repeated.
+
+        Args:
+            question: The question to ask the user.
+            question_timeout: The time in seconds to wait for the answer.
+        """
+
         self.reset_answer()
-        await anyio.sleep(1)
         await self._client.send_text(role=QUESTION_ROLE, text=question)
 
         async def _check_event_set(timeout: int = question_timeout) -> None:
@@ -201,7 +195,10 @@ class RealtimeAgent(ConversableAgent):
     ) -> Tuple[bool, Union[str, None]]:
         async def get_input():
             async with create_task_group() as tg:
-                tg.soonify(self.ask_question)(QUESTION_MESSAGE.format(messages[-1]["content"]), 20)
+                tg.soonify(self.ask_question)(
+                    QUESTION_MESSAGE.format(messages[-1]["content"]),
+                    question_timeout=QUESTION_TIMEOUT_SECONDS,
+                )
 
         syncify(get_input)()
 
