@@ -3,7 +3,7 @@
 
 ### Environment
 - AutoGen version: <!-- Specify the AutoGen version (e.g., v0.2.0) -->
-- Python version: <!-- Specify the Python version (e.g., 3.8) -->
+- Python version: <!-- Specify the Python version (e.g., 3.9) -->
 - Operating System: <!-- Specify the OS (e.g., Windows 10, Ubuntu 20.04) -->
 
 ### Steps to Reproduce (for bugs)
