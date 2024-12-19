@@ -13,6 +13,8 @@ from pathlib import Path
 from queue import Empty
 from typing import Any, List
 
+# this is needed for CI to work. The import of this file should fail if jupyter-kernel-gateway is not installed
+import jupyter_kernel_gateway
 from jupyter_client import KernelManager  # type: ignore[attr-defined]
 from jupyter_client.kernelspec import KernelSpecManager
 from pydantic import BaseModel, Field, field_validator
