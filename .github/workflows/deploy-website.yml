@@ -59,17 +59,11 @@ jobs:
 
       - name: Prepare website content
         run: |
-          # Print working directory
-          pwd
-
-          # List contents of current directory
-          ls -la
-
           # Create a temporary directory for filtered content
           mkdir -p temp_website
 
           # Copy files except .ipynb, node_modules, .quarto, and .gitignore
-          find website -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
+          find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
 
   gh-release:
     if: github.event_name != 'pull_request'
@@ -111,17 +105,11 @@ jobs:
 
       - name: Prepare website content
         run: |
-          # Print working directory
-          pwd
-
-          # List contents of current directory
-          ls -la
-
           # Create a temporary directory for filtered content
           mkdir -p temp_website
 
           # Copy files except .ipynb, node_modules, .quarto, and .gitignore
-          find website -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
+          find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
