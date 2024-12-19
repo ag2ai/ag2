@@ -108,9 +108,9 @@ class WebsocketAudioAdapter(RealtimeObserver):
             if data["event"] == "media":
                 self.latest_media_timestamp = int(data["media"]["timestamp"])
                 audio_append = {"type": "input_audio_buffer.append", "audio": data["media"]["payload"]}
-                #await openai_ws.send(json.dumps(audio_append))
-                audio_delta = {"event": "media", "streamSid": self.stream_sid, "media": {"payload": data["media"]["payload"]}}
-                await self.websocket.send_json(audio_delta)
+                await openai_ws.send(json.dumps(audio_append))
+                #audio_delta = {"event": "media", "streamSid": self.stream_sid, "media": {"payload": data["media"]["payload"]}}
+                #await self.websocket.send_json(audio_delta)
             elif data["event"] == "start":
                 self.stream_sid = data["start"]["streamSid"]
                 print(f"Incoming stream has started {self.stream_sid}")

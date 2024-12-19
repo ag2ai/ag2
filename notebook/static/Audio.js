@@ -107,7 +107,8 @@ export class Audio {
             this.stream = stream;
             console.log("Audio tracks", stream.getAudioTracks())
             console.log('Sample rate :', stream.getAudioTracks()[0].getSettings().sampleRate)
-            this.inAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.inAudioContext = new AudioContext({ sampleRate: 24000 });
+            //this.inAudioContext = new (window.AudioContext || window.webkitAudioContext)();
     
             // Create an AudioNode to capture the microphone stream
             const sourceNode = this.inAudioContext.createMediaStreamSource(stream);
@@ -222,8 +223,7 @@ export class Audio {
 
         // Create an audio buffer from the Float32Array
         console.log("sample rate is ", this.outAudioContext.sampleRate)
-        //const audioBuffer = this.outAudioContext.createBuffer(1, audioData.length, 24000);
-        const audioBuffer = this.outAudioContext.createBuffer(1, audioData.length, 41000);
+        const audioBuffer = this.outAudioContext.createBuffer(1, audioData.length, 24000);
         audioBuffer.getChannelData(0).set(audioData);
 
         return audioBuffer;
