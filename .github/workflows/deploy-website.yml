@@ -3,7 +3,7 @@ name: Deploy Redirect Page
 on:
   push:
     branches: [main]
-    path:
+    paths:
       - ".github/workflows/deploy-website.yml"
   workflow_dispatch:
 permissions:
