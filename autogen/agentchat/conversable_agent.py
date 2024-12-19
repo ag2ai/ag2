@@ -264,6 +264,7 @@ class ConversableAgent(LLMAgent):
             "process_last_received_message": [],
             "process_all_messages_before_reply": [],
             "process_message_before_send": [],
+            "update_agent_state": [],
         }
 
     def _validate_llm_config(self, llm_config):
@@ -2091,6 +2092,9 @@ class ConversableAgent(LLMAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
+        # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
+        self.update_agent_state_before_reply(messages)
+
         # Call the hookable method that gives registered hooks a chance to process the last message.
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_last_received_message(messages)
@@ -2160,6 +2164,9 @@ class ConversableAgent(LLMAgent):
 
         if messages is None:
             messages = self._oai_messages[sender]
+
+        # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
+        self.update_agent_state_before_reply(messages)
 
         # Call the hookable method that gives registered hooks a chance to process all messages.
         # Message modifications do not affect the incoming messages or self._oai_messages.
@@ -2846,6 +2853,18 @@ class ConversableAgent(LLMAgent):
         hook_list = self.hook_lists[hookable_method]
         assert hook not in hook_list, f"{hook} is already registered as a hook."
         hook_list.append(hook)
+
+    def update_agent_state_before_reply(self, messages: List[Dict]) -> None:
+        """
+        Calls any registered capability hooks to update the agent's state.
+        Primarily used to update context variables.
+        Will, potentially, modify the messages.
+        """
+        hook_list = self.hook_lists["update_agent_state"]
+
+        # Call each hook (in order of registration) to process the messages.
+        for hook in hook_list:
+            hook(self, messages)
 
     def process_all_messages_before_reply(self, messages: List[Dict]) -> List[Dict]:
         """

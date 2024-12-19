@@ -25,7 +25,7 @@ __version__ = version["__version__"]
 current_os = platform.system()
 
 install_requires = [
-    "openai>=1.3",
+    "openai>=1.57",
     "diskcache",
     "termcolor",
     "flaml",
@@ -62,10 +62,11 @@ retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 
 graph_rag_falkor_db = ["graphrag_sdk==0.3.3", "falkordb>=1.0.10"]
 
-neo4j_graph_rag = [
-    "llama_index==0.11.8",
-    "llama-index-graph-stores-neo4j=0.3.0",
-    "llma-index-core==0.11.8",
+neo4j = [
+    "docx2txt==0.8",
+    "llama-index==0.12.5",
+    "llama-index-graph-stores-neo4j==0.4.2",
+    "llama-index-core==0.12.5",
 ]
 
 if current_os in ["Windows", "Darwin"]:
@@ -90,7 +91,7 @@ extra_require = {
         "pre-commit",
         "pytest-cov>=5",
         "pytest-asyncio",
-        "pytest>=6.1.1,<8",
+        "pytest>=8,<9",
         "pandas",
     ],
     "blendsearch": ["flaml[blendsearch]"],
@@ -121,6 +122,7 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
+    "neo4j": neo4j,
 }
 
 setuptools.setup(
