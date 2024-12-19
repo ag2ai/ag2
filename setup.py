@@ -42,6 +42,17 @@ install_requires = [
     "asyncer>=0.0.8",
 ]
 
+test = [
+    "ipykernel",
+    "nbconvert",
+    "nbformat",
+    "pre-commit",
+    "pytest-cov>=5",
+    "pytest-asyncio",
+    "pytest>=8,<9",
+    "pandas",
+]
+
 jupyter_executor = [
     "jupyter-kernel-gateway",
     "websocket-client",
@@ -49,6 +60,8 @@ jupyter_executor = [
     "jupyter-client>=8.6.0",
     "ipykernel>=6.29.0",
 ]
+
+types = ["mypy==1.9.0"] + test + jupyter_executor
 
 retrieve_chat = [
     "protobuf==4.25.3",
@@ -89,16 +102,7 @@ autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-
 # PLEASE add them in the setup_ag2.py and setup_autogen.py files
 
 extra_require = {
-    "test": [
-        "ipykernel",
-        "nbconvert",
-        "nbformat",
-        "pre-commit",
-        "pytest-cov>=5",
-        "pytest-asyncio",
-        "pytest>=8,<9",
-        "pandas",
-    ],
+    "test": test,
     "blendsearch": ["flaml[blendsearch]"],
     "mathchat": ["sympy", "pydantic==1.10.9", "wolframalpha"],
     "retrievechat": retrieve_chat,
@@ -118,7 +122,7 @@ extra_require = {
     "cosmosdb": ["azure-cosmos>=4.2.0"],
     "websockets": ["websockets>=12.0,<13"],
     "jupyter-executor": jupyter_executor,
-    "types": ["mypy==1.9.0", "pytest>=6.1.1,<8"] + jupyter_executor,
+    "types": types,
     "long-context": ["llmlingua<0.3"],
     "anthropic": ["anthropic>=0.23.1"],
     "cerebras": ["cerebras_cloud_sdk>=1.0.0"],
@@ -162,5 +166,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.8,<3.14",
+    python_requires=">=3.9,<3.14",
 )
