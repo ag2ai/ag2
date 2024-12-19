@@ -61,8 +61,6 @@ jupyter_executor = [
     "ipykernel>=6.29.0",
 ]
 
-types = ["mypy==1.9.0"] + test + jupyter_executor
-
 retrieve_chat = [
     "protobuf==4.25.3",
     "chromadb==0.5.3",
@@ -86,6 +84,12 @@ neo4j = [
 
 twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
+interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
+interop_langchain = ["langchain-community>=0.3.12,<1"]
+interop_pydantic_ai = ["pydantic-ai==0.0.13"]
+interop = interop_crewai + interop_langchain + interop_pydantic_ai
+
+types = ["mypy==1.9.0"] + test + jupyter_executor + interop
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
@@ -132,6 +136,10 @@ extra_require = {
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
     "twilio": twilio,
+    "interop-crewai": interop_crewai,
+    "interop-langchain": interop_langchain,
+    "interop-pydantic-ai": interop_pydantic_ai,
+    "interop": interop,
     "neo4j": neo4j,
 }
 
