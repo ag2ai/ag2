@@ -37,7 +37,7 @@ SWARM_SYSTEM_MESSAGE = (
 
 QUESTION_ROLE = "user"
 QUESTION_MESSAGE = (
-    "I have a question/information for the myself. DO NOT ANSWER YOURSELF, GET THE ANSWER FROM ME. "
+    "I have a question/information for myself. DO NOT ANSWER YOURSELF, GET THE ANSWER FROM ME. "
     "repeat the question to me **WITH AUDIO OUTPUT** and then call 'answer_task_question' AFTER YOU GET THE ANSWER FROM ME\n\n"
     "The question is: '{}'\n\n"
 )
