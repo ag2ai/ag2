@@ -9,7 +9,6 @@ from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
 
-from ..interoperability import Interoperable
 from ..registry import register_interoperable_class
 from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 

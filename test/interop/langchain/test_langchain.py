@@ -14,12 +14,11 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 
 if sys.version_info >= (3, 9):
-    from langchain.tools import tool
-
-    from autogen.interop.langchain import LangChainInteroperability
+    from langchain.tools import tool as langchain_tool
 else:
-    tool = unittest.mock.MagicMock()
-    LangChainInteroperability = unittest.mock.MagicMock()
+    langchain_tool = unittest.mock.MagicMock()
+
+from autogen.interop.langchain import LangChainInteroperability
 
 
 # skip if python version is not >= 3.9
@@ -32,7 +31,7 @@ class TestLangChainInteroperability:
         class SearchInput(BaseModel):
             query: str = Field(description="should be a search query")
 
-        @tool("search-tool", args_schema=SearchInput, return_direct=True)  # type: ignore[misc]
+        @langchain_tool("search-tool", args_schema=SearchInput, return_direct=True)  # type: ignore[misc]
         def search(query: SearchInput) -> str:
             """Look up things online."""
             return "LangChain Integration"
@@ -90,7 +89,7 @@ class TestLangChainInteroperability:
 class TestLangChainInteroperabilityWithoutPydanticInput:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        @tool
+        @langchain_tool
         def search(query: str, max_length: int) -> str:
             """Look up things online."""
             return f"LangChain Integration, max_length: {max_length}"

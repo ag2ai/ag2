@@ -7,7 +7,6 @@ import sys
 from typing import Any, Optional
 
 from ...tools import Tool
-from ..interoperable import Interoperable
 from ..registry import register_interoperable_class
 
 __all__ = ["CrewAIInteroperability"]

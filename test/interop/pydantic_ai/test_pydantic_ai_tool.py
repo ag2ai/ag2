@@ -10,12 +10,12 @@ import pytest
 from autogen import AssistantAgent
 
 if sys.version_info >= (3, 9):
-    from pydantic_ai.tools import Tool
+    from pydantic_ai.tools import Tool as PydanticAITool
 
-    from autogen.interop.pydantic_ai.pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 else:
-    Tool = unittest.mock.MagicMock()
-    AG2PydanticAITool = unittest.mock.MagicMock()
+    PydanticAITool = unittest.mock.MagicMock()
+
+from autogen.interop.pydantic_ai.pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 
 # skip if python version is not >= 3.9
@@ -34,7 +34,7 @@ class TestPydanticAITool:
             """
             return f"{a} {b} {c}"
 
-        tool = Tool(foobar)
+        tool = PydanticAITool(foobar)
         ag2_tool = AG2PydanticAITool(
             name=tool.name,
             description=tool.description,

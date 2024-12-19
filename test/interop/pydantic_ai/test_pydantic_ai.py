@@ -20,11 +20,11 @@ if sys.version_info >= (3, 9):
     from pydantic_ai import RunContext
     from pydantic_ai.tools import Tool as PydanticAITool
 
-    from autogen.interop.pydantic_ai import PydanticAIInteroperability
 else:
     RunContext = unittest.mock.MagicMock()
     PydanticAITool = unittest.mock.MagicMock()
-    PydanticAIInteroperability = unittest.mock.MagicMock()
+
+from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
 
 # skip if python version is not >= 3.9
