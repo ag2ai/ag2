@@ -18,9 +18,36 @@ def _sanitize_name(s: str) -> str:
 
 
 class CrewAIInteroperability(Interoperable):
-    def convert_tool(self, tool: Any) -> Tool:
+    """
+    A class implementing the `Interoperable` protocol for converting CrewAI tools
+    to a general `Tool` format.
+
+    This class takes a `CrewAITool` and converts it into a standard `Tool` object.
+    """
+
+    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
+        """
+        Converts a given CrewAI tool into a general `Tool` format.
+
+        This method ensures that the provided tool is a valid `CrewAITool`, sanitizes
+        the tool's name, processes its description, and prepares a function to interact
+        with the tool's arguments. It then returns a standardized `Tool` object.
+
+        Args:
+            tool (Any): The tool to convert, expected to be an instance of `CrewAITool`.
+            **kwargs (Any): Additional arguments, which are not supported by this method.
+
+        Returns:
+            Tool: A standardized `Tool` object converted from the CrewAI tool.
+
+        Raises:
+            ValueError: If the provided tool is not an instance of `CrewAITool`, or if
+                        any additional arguments are passed.
+        """
         if not isinstance(tool, CrewAITool):
             raise ValueError(f"Expected an instance of `crewai.tools.BaseTool`, got {type(tool)}")
+        if kwargs:
+            raise ValueError(f"The CrewAIInteroperability does not support any additional arguments, got {kwargs}")
 
         # needed for type checking
         crewai_tool: CrewAITool = tool  # type: ignore[no-any-unimported]
