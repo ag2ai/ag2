@@ -1,4 +1,4 @@
-// AudioPlayer.js
+// Audio.js
 
 export class Audio {
     constructor(webSocketUrl) {
@@ -62,53 +62,15 @@ export class Audio {
             };
             this.outAudioContext = new (window.AudioContext || window.webkitAudioContext)();
             console.log("Audio player initialized.");
-  
-            /*
-            await wavRecorder.begin()
-            await wavRecorder.record((data) => {
-                try {
-                    const { mono, raw } = data;
-                    console.log("rec:", mono)
-                    console.log("rec:", mono.length)
-                    const pcmBuffer = new ArrayBuffer(mono.length * 2); // 2 bytes per sample
-                    const pcmView = new DataView(pcmBuffer);
-                    
-                    for (let i = 0; i < mono.length; i++) {
-                        pcmView.setInt16(i * 2, mono[i], true); // true means little-endian
-                    }
-    
-                    const byteArray = new Uint8Array(pcmView); // Create a Uint8Array view
-                    const bufferString = String.fromCharCode(...byteArray); // convert each byte of the buffer to a character
-                    const audioBase64String = btoa(bufferString); // Apply base64
-                    
-    
-                    if (this.socket.readyState === WebSocket.OPEN) {
-                        const audioMessage = {
-                            'event': "media",
-                            'media': {
-                                'timestamp': Date.now(),
-                                'payload': audioBase64String
-                            }
-                        }
-                        console.log("sendin voice ..", audioMessage);
-                        this.socket.send(JSON.stringify(audioMessage));
-                    }
-                } catch (ex) {
-                    console.log("napaka", ex)
-                }
-            });
-            */
 
             // audio in
             // Get user media (microphone access)
-
             
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate:24000}  });
             this.stream = stream;
             console.log("Audio tracks", stream.getAudioTracks())
             console.log('Sample rate :', stream.getAudioTracks()[0].getSettings().sampleRate)
             this.inAudioContext = new AudioContext({ sampleRate: 24000 });
-            //this.inAudioContext = new (window.AudioContext || window.webkitAudioContext)();
     
             // Create an AudioNode to capture the microphone stream
             const sourceNode = this.inAudioContext.createMediaStreamSource(stream);
@@ -134,7 +96,6 @@ export class Audio {
                             'payload': audioBase64String
                         }
                     }
-                    //console.log("sendin voice ..", audioMessage);
                     this.socket.send(JSON.stringify(audioMessage));
                 }
             };
@@ -142,7 +103,6 @@ export class Audio {
             // Connect the source node to the processor node and the processor node to the destination (speakers)
             sourceNode.connect(this.processorNode);
             this.processorNode.connect(this.inAudioContext.destination);
-                
             console.log("Audio capture started.");
         } catch (err) {
             console.error("Error initializing audio player:", err);
