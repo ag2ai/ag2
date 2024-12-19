@@ -29,9 +29,9 @@ class PydanticAIInteroperability(Interoperable):
     """
 
     @staticmethod
-    def inject_params(  # type: ignore[no-any-unimported]
+    def inject_params(
         ctx: Optional[RunContext[Any]],
-        tool: PydanticAITool,
+        tool: PydanticAITool[Any],
     ) -> Callable[..., Any]:
         """
         Wraps the tool's function to inject context parameters and handle retries.
@@ -40,8 +40,7 @@ class PydanticAIInteroperability(Interoperable):
         when invoked and that retries are managed according to the tool's settings.
 
         Args:
-            ctx (Optional[RunContext[Any]]): The run context, which may include dependencies
-                                              and retry information.
+            ctx (Optional[RunContext[Any]]): The run context, which may include dependencies and retry information.
             tool (PydanticAITool): The Pydantic AI tool whose function is to be wrapped.
 
         Returns:
@@ -62,9 +61,9 @@ class PydanticAIInteroperability(Interoperable):
                 if ctx is not None:
                     kwargs.pop("ctx", None)
                     ctx.retry = tool.current_retry
-                    result = f(**kwargs, ctx=ctx)
+                    result = f(**kwargs, ctx=ctx)  # type: ignore[call-arg]
                 else:
-                    result = f(**kwargs)
+                    result = f(**kwargs)  # type: ignore[call-arg]
                 tool.current_retry = 0
             except Exception as e:
                 tool.current_retry += 1
@@ -107,7 +106,7 @@ class PydanticAIInteroperability(Interoperable):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
 
         # needed for type checking
-        pydantic_ai_tool: PydanticAITool = tool  # type: ignore[no-any-unimported]
+        pydantic_ai_tool: PydanticAITool[Any] = tool
 
         if tool.takes_ctx and deps is None:
             raise ValueError("If the tool takes a context, the `deps` argument must be provided")
@@ -123,7 +122,7 @@ class PydanticAIInteroperability(Interoperable):
                 retry=0,
                 # All messages send to or returned by a model.
                 # This is mostly used on pydantic_ai Agent level.
-                messages=None,  # TODO: check in the future if this is needed on Tool level
+                messages=[],  # TODO: check in the future if this is needed on Tool level
                 tool_name=pydantic_ai_tool.name,
             )
         else:
