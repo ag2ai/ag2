@@ -27,7 +27,7 @@ export class Audio {
                 const sessionStarted = {
                     event: "start",
                     start: {
-                        streamSid:"dsfstreamSidsdf",
+                        streamSid: crypto.randomUUID(),
                     } 
                 }
                 this.socket.send(JSON.stringify(sessionStarted))
@@ -42,8 +42,6 @@ export class Audio {
                 console.log("Received web socket message")
                 const message = JSON.parse(event.data)
                 if (message.event == "media") {
-                    console.log("got media payload..")
-
                     const bufferString = atob(message.media.payload); // Decode base64 to binary string
                     const byteArray = new Uint8Array(bufferString.length);
                     for (let i = 0; i < bufferString.length; i++) {
@@ -68,8 +66,6 @@ export class Audio {
             
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate:24000}  });
             this.stream = stream;
-            console.log("Audio tracks", stream.getAudioTracks())
-            console.log('Sample rate :', stream.getAudioTracks()[0].getSettings().sampleRate)
             this.inAudioContext = new AudioContext({ sampleRate: 24000 });
     
             // Create an AudioNode to capture the microphone stream
@@ -182,7 +178,6 @@ export class Audio {
         }
 
         // Create an audio buffer from the Float32Array
-        console.log("sample rate is ", this.outAudioContext.sampleRate)
         const audioBuffer = this.outAudioContext.createBuffer(1, audioData.length, 24000);
         audioBuffer.getChannelData(0).set(audioData);
 
