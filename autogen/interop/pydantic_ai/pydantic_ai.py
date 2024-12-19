@@ -51,8 +51,8 @@ class PydanticAIInteroperability(Interoperable):
         from pydantic_ai import RunContext
         from pydantic_ai.tools import Tool as PydanticAITool
 
-        ctx_typed: Optional[RunContext[Any]] = ctx
-        tool_typed: PydanticAITool[Any] = tool
+        ctx_typed: Optional[RunContext[Any]] = ctx  # type: ignore
+        tool_typed: PydanticAITool[Any] = tool  # type: ignore
 
         max_retries = tool_typed.max_retries if tool_typed.max_retries is not None else 1
         f = tool_typed.function
@@ -114,7 +114,7 @@ class PydanticAIInteroperability(Interoperable):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
 
         # needed for type checking
-        pydantic_ai_tool: PydanticAITool[Any] = tool
+        pydantic_ai_tool: PydanticAITool[Any] = tool  # type: ignore[no-any-unimported]
 
         if tool.takes_ctx and deps is None:
             raise ValueError("If the tool takes a context, the `deps` argument must be provided")

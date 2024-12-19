@@ -50,9 +50,9 @@ class LangchainInteroperability(Interoperable):
             raise ValueError(f"The LangchainInteroperability does not support any additional arguments, got {kwargs}")
 
         # needed for type checking
-        langchain_tool: LangchainTool = tool
+        langchain_tool: LangchainTool = tool  # type: ignore
 
-        def func(tool_input: langchain_tool.args_schema) -> Any:  # type: ignore[name-defined]
+        def func(tool_input: langchain_tool.args_schema) -> Any:  # type: ignore
             return langchain_tool.run(tool_input.model_dump())
 
         return Tool(
