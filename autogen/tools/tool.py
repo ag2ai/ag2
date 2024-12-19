@@ -7,11 +7,6 @@ from unittest.mock import MagicMock
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 
-try:
-    from crewai.tools import BaseTool as CrewAITool
-except ImportError:
-    CrewAITool = MagicMock()
-
 __all__ = ["Tool"]
 
 

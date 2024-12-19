@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .crewai import CrewAIInteroperability
 from .interoperability import Interoperability
 from .interoperable import Interoperable
+from .langchain import LangChainInteroperability
+from .pydantic_ai import PydanticAIInteroperability
+from .registry import register_interoperable_class
 
-__all__ = ["Interoperable", "Interoperability"]
+__all__ = ["Interoperability", "Interoperable", "register_interoperable_class"]

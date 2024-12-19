@@ -4,8 +4,8 @@
 from typing import Any, Dict, List, Type
 
 from ..tools import Tool
-from .helpers import get_all_interoperability_classes
 from .interoperable import Interoperable
+from .registry import InteroperableRegistry
 
 __all__ = ["Interoperable"]
 
@@ -18,18 +18,10 @@ class Interoperability:
     for retrieving and registering interoperability classes.
     """
 
-    _interoperability_classes: Dict[str, Type[Interoperable]] = get_all_interoperability_classes()
+    registry = InteroperableRegistry.get_instance()
 
-    def __init__(self) -> None:
-        """
-        Initializes an instance of the Interoperability class.
-
-        This constructor does not perform any specific actions as the class is primarily used for its class
-        methods to manage interoperability classes.
-        """
-        pass
-
-    def convert_tool(self, *, tool: Any, type: str, **kwargs: Any) -> Tool:
+    @classmethod
+    def convert_tool(cls, *, tool: Any, type: str, **kwargs: Any) -> Tool:
         """
         Converts a given tool to an instance of a specified interoperability type.
 
@@ -44,8 +36,7 @@ class Interoperability:
         Raises:
             ValueError: If the interoperability class for the provided type is not found.
         """
-        interop_cls = self.get_interoperability_class(type)
-        interop = interop_cls()
+        interop = cls.get_interoperability_class(type)
         return interop.convert_tool(tool, **kwargs)
 
     @classmethod
@@ -62,35 +53,21 @@ class Interoperability:
         Raises:
             ValueError: If no interoperability class is found for the provided type.
         """
-        if type not in cls._interoperability_classes:
-            raise ValueError(f"Interoperability class {type} not found")
-        return cls._interoperability_classes[type]
+        supported_types = cls.registry.get_supported_types()
+        if type not in supported_types:
+            supported_types_formated = ", ".join(["'t'" for t in supported_types])
+            raise ValueError(
+                f"Interoperability class {type} is not supported, supported types: {supported_types_formated}"
+            )
+
+        return cls.registry.get_class(type)
 
     @classmethod
-    def supported_types(cls) -> List[str]:
+    def get_supported_types(cls) -> List[str]:
         """
         Returns a sorted list of all supported interoperability types.
 
         Returns:
             List[str]: A sorted list of strings representing the supported interoperability types.
         """
-        return sorted(cls._interoperability_classes.keys())
-
-    @classmethod
-    def register_interoperability_class(cls, name: str, interoperability_class: Type[Interoperable]) -> None:
-        """
-        Registers a new interoperability class with the given name.
-
-        Args:
-            name (str): The name to associate with the interoperability class.
-            interoperability_class (Type[Interoperable]): The class implementing the Interoperable protocol.
-
-        Raises:
-            ValueError: If the provided class does not implement the Interoperable protocol.
-        """
-        if not issubclass(interoperability_class, Interoperable):
-            raise ValueError(
-                f"Expected a class implementing `Interoperable` protocol, got {type(interoperability_class)}"
-            )
-
-        cls._interoperability_classes[name] = interoperability_class
+        return sorted(cls.registry.get_supported_types())

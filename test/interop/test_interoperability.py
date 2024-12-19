@@ -8,13 +8,12 @@ from typing import Any
 
 import pytest
 
-from autogen.interop import Interoperability, Interoperable
-from autogen.tools.tool import Tool
+from autogen.interop import Interoperability
 
 
 class TestInteroperability:
     def test_supported_types(self) -> None:
-        actual = Interoperability.supported_types()
+        actual = Interoperability.get_supported_types()
 
         if sys.version_info < (3, 9):
             assert actual == []
@@ -28,26 +27,6 @@ class TestInteroperability:
         if sys.version_info >= (3, 13):
             assert actual == ["langchain", "pydanticai"]
 
-    def test_register_interoperability_class(self) -> None:
-        org_interoperability_classes = Interoperability._interoperability_classes
-        try:
-
-            class MyInteroperability:
-                def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
-                    return Tool(name="test", description="test description", func=tool)
-
-            Interoperability.register_interoperability_class("my_interop", MyInteroperability)
-            assert Interoperability.get_interoperability_class("my_interop") == MyInteroperability
-
-            interop = Interoperability()
-            tool = interop.convert_tool(type="my_interop", tool=lambda x: x)
-            assert tool.name == "test"
-            assert tool.description == "test description"
-            assert tool.func("hello") == "hello"
-
-        finally:
-            Interoperability._interoperability_classes = org_interoperability_classes
-
     @pytest.mark.skipif(
         sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
     )
@@ -56,8 +35,7 @@ class TestInteroperability:
 
         crewai_tool = FileReadTool()
 
-        interoperability = Interoperability()
-        tool = interoperability.convert_tool(type="crewai", tool=crewai_tool)
+        tool = Interoperability.convert_tool(type="crewai", tool=crewai_tool)
 
         with TemporaryDirectory() as tmp_dir:
             file_path = f"{tmp_dir}/test.txt"
