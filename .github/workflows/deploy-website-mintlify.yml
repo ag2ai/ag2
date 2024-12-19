@@ -3,13 +3,13 @@ name: mintlify docs
 on:
   pull_request:
     branches: [main]
-    path:
+    paths:
       - "autogen/**"
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
   push:
     branches: [main]
-    path:
+    paths:
       - "autogen/**"
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
