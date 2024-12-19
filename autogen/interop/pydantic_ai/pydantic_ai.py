@@ -54,7 +54,7 @@ class PydanticAIInteroperability(Interoperable):
 
         return wrapper
 
-    def convert_tool(self, tool: Any, deps: Any = None) -> AG2PydanticAITool:
+    def convert_tool(self, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
         if not isinstance(tool, PydanticAITool):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
 

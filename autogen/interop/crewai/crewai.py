@@ -18,9 +18,11 @@ def _sanitize_name(s: str) -> str:
 
 
 class CrewAIInteroperability(Interoperable):
-    def convert_tool(self, tool: Any) -> Tool:
+    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
         if not isinstance(tool, CrewAITool):
             raise ValueError(f"Expected an instance of `crewai.tools.BaseTool`, got {type(tool)}")
+        if kwargs:
+            raise ValueError(f"The CrewAIInteroperability does not support any additional arguments, got {kwargs}")
 
         # needed for type checking
         crewai_tool: CrewAITool = tool  # type: ignore[no-any-unimported]

@@ -13,9 +13,11 @@ __all__ = ["LangchainInteroperability"]
 
 
 class LangchainInteroperability(Interoperable):
-    def convert_tool(self, tool: Any) -> Tool:
+    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
         if not isinstance(tool, LangchainTool):
             raise ValueError(f"Expected an instance of `langchain_core.tools.BaseTool`, got {type(tool)}")
+        if kwargs:
+            raise ValueError(f"The LangchainInteroperability does not support any additional arguments, got {kwargs}")
 
         # needed for type checking
         langchain_tool: LangchainTool = tool  # type: ignore[no-any-unimported]

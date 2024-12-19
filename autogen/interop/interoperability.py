@@ -16,10 +16,10 @@ class Interoperability:
     def __init__(self) -> None:
         pass
 
-    def convert_tool(self, *, tool: Any, type: str) -> Tool:
+    def convert_tool(self, *, tool: Any, type: str, **kwargs: Any) -> Tool:
         interop_cls = self.get_interoperability_class(type)
         interop = interop_cls()
-        return interop.convert_tool(tool)
+        return interop.convert_tool(tool, **kwargs)
 
     @classmethod
     def get_interoperability_class(cls, type: str) -> Type[Interoperable]:

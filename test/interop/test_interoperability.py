@@ -33,7 +33,7 @@ class TestInteroperability:
         try:
 
             class MyInteroperability:
-                def convert_tool(self, tool: Any) -> Tool:
+                def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
                     return Tool(name="test", description="test description", func=tool)
 
             Interoperability.register_interoperability_class("my_interop", MyInteroperability)
