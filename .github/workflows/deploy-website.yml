@@ -4,14 +4,14 @@ on:
   pull_request:
     branches: [main]
     path:
-      - "autogen/*"
-      - "website/*"
+      - "autogen/**"
+      - "website/**"
       - ".github/workflows/deploy-website.yml"
   push:
     branches: [main]
     path:
-      - "autogen/*"
-      - "website/*"
+      - "autogen/**"
+      - "website/**"
       - ".github/workflows/deploy-website.yml"
   workflow_dispatch:
   merge_group:
@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: true
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -36,36 +37,26 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-      - name: pydoc-markdown install
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pydoc-markdown pyyaml termcolor
+          pip install pydoc-markdown pyyaml termcolor nbconvert
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           pip install databind.core==4.4.2 databind.json==4.4.2
-      - name: pydoc-markdown run
+
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Generate API documentation
         run: |
-          pydoc-markdown
-      - name: quarto install
-        working-directory: ${{ runner.temp }}
+          python ./process_api_reference.py
+        working-directory: website
+
+      - name: Convert Jupyter notebooks to MDX
         run: |
-          wget -q https://github.com/quarto-dev/quarto-cli/releases/download/v1.5.23/quarto-1.5.23-linux-amd64.tar.gz
-          tar -xzf quarto-1.5.23-linux-amd64.tar.gz
-          echo "$(pwd)/quarto-1.5.23/bin/" >> $GITHUB_PATH
-      - name: Process notebooks
-        run: |
-          python process_notebooks.py render
-      - name: Test Build
-        run: |
-          if [ -e yarn.lock ]; then
-          yarn install --frozen-lockfile --ignore-engines
-          yarn build
-          elif [ -e package-lock.json ]; then
-          npm ci
-          npm run build
-          else
-          npm i --legacy-peer-deps
-          npm run build
-          fi
+          python ./process_notebooks.py render
+        working-directory: website
+
   gh-release:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -76,6 +67,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: true
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -83,39 +75,37 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-      - name: pydoc-markdown install
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pydoc-markdown pyyaml termcolor
+          pip install pydoc-markdown pyyaml termcolor nbconvert
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           pip install databind.core==4.4.2 databind.json==4.4.2
-      - name: pydoc-markdown run
+
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Generate API documentation
         run: |
-          pydoc-markdown
-      - name: quarto install
-        working-directory: ${{ runner.temp }}
+          python ./process_api_reference.py
+        working-directory: website
+
+      - name: Convert Jupyter notebooks to MDX
         run: |
-          wget -q https://github.com/quarto-dev/quarto-cli/releases/download/v1.5.23/quarto-1.5.23-linux-amd64.tar.gz
-          tar -xzf quarto-1.5.23-linux-amd64.tar.gz
-          echo "$(pwd)/quarto-1.5.23/bin/" >> $GITHUB_PATH
-      - name: Process notebooks
+          python ./process_notebooks.py render
+        working-directory: website
+
+      - name: Prepare website content
         run: |
-          python process_notebooks.py render
-      - name: Build website
-        run: |
-          if [ -e yarn.lock ]; then
-          yarn install --frozen-lockfile --ignore-engines
-          yarn build
-          elif [ -e package-lock.json ]; then
-          npm ci
-          npm run build
-          else
-          npm i --legacy-peer-deps
-          npm run build
-          fi
+          # Create a temporary directory for filtered content
+          mkdir -p temp_website
+
+          # Copy files except .ipynb, node_modules, .quarto, and .gitignore
+          find website -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           # Build output to publish to the `gh-pages` branch:
-          publish_dir: ./website/build
+          publish_dir: temp_website/website
