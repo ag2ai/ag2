@@ -18,7 +18,7 @@ def _sanitize_name(s: str) -> str:
 
 
 @register_interoperable_class("crewai")
-class CrewAIInteroperability(Interoperable):
+class CrewAIInteroperability:
     """
     A class implementing the `Interoperable` protocol for converting CrewAI tools
     to a general `Tool` format.

@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable, Dict
-from unittest.mock import MagicMock
+from typing import Any, Callable
 
-from autogen.agentchat.conversable_agent import ConversableAgent
+from ..agentchat.conversable_agent import ConversableAgent
 
 __all__ = ["Tool"]
 

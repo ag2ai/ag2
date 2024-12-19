@@ -13,7 +13,7 @@ __all__ = ["LangChainInteroperability"]
 
 
 @register_interoperable_class("langchain")
-class LangChainInteroperability(Interoperable):
+class LangChainInteroperability:
     """
     A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.

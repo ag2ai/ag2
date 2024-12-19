@@ -9,15 +9,15 @@ from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
 
-from ...tools import PydanticAITool as AG2PydanticAITool
 from ..interoperability import Interoperable
 from ..registry import register_interoperable_class
+from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 __all__ = ["PydanticAIInteroperability"]
 
 
 @register_interoperable_class("pydanticai")
-class PydanticAIInteroperability(Interoperable):
+class PydanticAIInteroperability:
     """
     A class implementing the `Interoperable` protocol for converting Pydantic AI tools
     into a general `Tool` format.
