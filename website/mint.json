@@ -5,6 +5,9 @@
     "dark": "/logo/ag2-white.svg",
     "light": "/logo/ag2.svg"
   },
+  "metadata": {
+    "og:image": "https://media.githubusercontent.com/media/harishmohanraj/ag2/refs/heads/main/website/static/img/cover.png"
+  },
   "favicon": "/logo/ag2.svg",
   "search": {
     "prompt": "Search or ask..."
