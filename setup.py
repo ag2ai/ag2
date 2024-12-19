@@ -81,8 +81,8 @@ neo4j = [
 ]
 
 interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
-interop_langchain = ["langchain-community>=0.3.12,<1; python_version>='3.9'"]
-interop_pydantic_ai = ["pydantic-ai>=0.0.13,<1; python_version>='3.9'"]
+interop_langchain = ["langchain-community>=0.3.12,<1"]
+interop_pydantic_ai = ["pydantic-ai==0.0.13"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai
 
 types = ["mypy==1.9.0"] + test + jupyter_executor + interop
