@@ -590,6 +590,53 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     print(f"Updated navigation in {mint_json_path}")
 
 
+def fix_internal_references(content: str, root_path: Path, current_file_path: Path) -> str:
+    """
+    Resolves internal markdown references relative to root_dir and returns fixed content.
+
+    Args:
+        content: Markdown content to fix
+        root_path: Root directory for resolving paths
+        current_file_path: Path of the current file being processed
+    """
+
+    def resolve_link(match):
+        display_text, raw_path = match.groups()
+        try:
+            path_parts = raw_path.split("#")
+            rel_path = path_parts[0]
+            anchor = f"#{path_parts[1]}" if len(path_parts) > 1 else ""
+
+            resolved = (current_file_path.parent / rel_path).resolve()
+            final_path = (resolved.relative_to(root_path.resolve())).with_suffix("")
+
+            return f"[{display_text}](/{final_path}{anchor})"
+        except Exception:
+            return match.group(0)
+
+    pattern = r"\[([^\]]+)\]\(((?:\.\./|\./)?\w+(?:/[\w-]+)*\.md(?:#[\w-]+)?)\)"
+    return re.sub(pattern, resolve_link, content)
+
+
+def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
+    """Process all MDX files in directory to fix internal references."""
+    for file_path in website_dir.glob("**/*.mdx"):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            fixed_content = fix_internal_references(content, website_dir, file_path)
+
+            if content != fixed_content:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(fixed_content)
+                print(f"Fixed internal references in {file_path}")
+
+        except Exception:
+            print(f"Error: {file_path}")
+            sys.exit(1)
+
+
 def main() -> None:
     script_dir = Path(__file__).parent.absolute()
     parser = argparse.ArgumentParser()
@@ -684,6 +731,7 @@ def main() -> None:
         if not args.dry_run:
             copy_examples_mdx_files(args.website_directory)
             update_navigation_with_notebooks(args.website_directory)
+            fix_internal_references_in_mdx_files(args.website_directory)
 
     else:
         print("Unknown subcommand")
