@@ -35,7 +35,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
         self.latest_media_timestamp = 0
         self.last_assistant_item = None
         self.mark_queue = []
-        self.response_start_timestamp_twilio = None
+        self.response_start_timestamp_socket = None
 
     async def update(self, response):
         """Receive events from the OpenAI Realtime API, send audio back to websocket."""
@@ -47,10 +47,10 @@ class WebsocketAudioAdapter(RealtimeObserver):
             audio_delta = {"event": "media", "streamSid": self.stream_sid, "media": {"payload": audio_payload}}
             await self.websocket.send_json(audio_delta)
 
-            if self.response_start_timestamp_twilio is None:
-                self.response_start_timestamp_twilio = self.latest_media_timestamp
+            if self.response_start_timestamp_socket is None:
+                self.response_start_timestamp_socket = self.latest_media_timestamp
                 if SHOW_TIMING_MATH:
-                    print(f"Setting start timestamp for new response: {self.response_start_timestamp_twilio}ms")
+                    print(f"Setting start timestamp for new response: {self.response_start_timestamp_socket}ms")
 
             # Update last_assistant_item safely
             if response.get("item_id"):
@@ -68,11 +68,11 @@ class WebsocketAudioAdapter(RealtimeObserver):
     async def handle_speech_started_event(self):
         """Handle interruption when the caller's speech starts."""
         print("Handling speech started event.")
-        if self.mark_queue and self.response_start_timestamp_twilio is not None:
-            elapsed_time = self.latest_media_timestamp - self.response_start_timestamp_twilio
+        if self.mark_queue and self.response_start_timestamp_socket is not None:
+            elapsed_time = self.latest_media_timestamp - self.response_start_timestamp_socket
             if SHOW_TIMING_MATH:
                 print(
-                    f"Calculating elapsed time for truncation: {self.latest_media_timestamp} - {self.response_start_timestamp_twilio} = {elapsed_time}ms"
+                    f"Calculating elapsed time for truncation: {self.latest_media_timestamp} - {self.response_start_timestamp_socket} = {elapsed_time}ms"
                 )
 
             if self.last_assistant_item:
@@ -91,7 +91,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
 
             self.mark_queue.clear()
             self.last_assistant_item = None
-            self.response_start_timestamp_twilio = None
+            self.response_start_timestamp_socket = None
 
     async def send_mark(self):
         if self.stream_sid:
@@ -112,7 +112,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
             elif data["event"] == "start":
                 self.stream_sid = data["start"]["streamSid"]
                 print(f"Incoming stream has started {self.stream_sid}")
-                self.response_start_timestamp_twilio = None
+                self.response_start_timestamp_socket = None
                 self.latest_media_timestamp = 0
                 self.last_assistant_item = None
             elif data["event"] == "mark":
