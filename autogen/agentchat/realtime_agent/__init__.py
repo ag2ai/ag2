@@ -3,9 +3,4 @@ from .realtime_agent import RealtimeAgent
 from .twilio_observer import TwilioAudioAdapter
 from .websocket_observer import WebsocketAudioAdapter
 
-__all__ = [
-    "RealtimeAgent",
-    "FunctionObserver",
-    "TwilioAudioAdapter",
-    "WebsocketAudioAdapter"
-]
+__all__ = ["RealtimeAgent", "FunctionObserver", "TwilioAudioAdapter", "WebsocketAudioAdapter"]

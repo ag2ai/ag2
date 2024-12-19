@@ -4,7 +4,7 @@ export class Audio {
     constructor(webSocketUrl) {
         this.webSocketUrl = webSocketUrl;
         this.socket = null;
-        // audio out        
+        // audio out
         this.outAudioContext = null;
         this.sourceNode = null;
         this.bufferQueue = [];  // Queue to store audio buffers
@@ -15,29 +15,29 @@ export class Audio {
         this.stream = null;
         this.bufferSize = 8192;  // Define the buffer size for capturing chunks
     }
-  
+
     // Initialize WebSocket and start receiving audio data
     async start() {
         try {
             // Initialize WebSocket connection
             this.socket = new WebSocket(this.webSocketUrl);
-    
+
             this.socket.onopen = () => {
                 console.log("WebSocket connected.");
                 const sessionStarted = {
                     event: "start",
                     start: {
                         streamSid: crypto.randomUUID(),
-                    } 
+                    }
                 }
                 this.socket.send(JSON.stringify(sessionStarted))
                 console.log("sent session start")
                 };
-    
+
             this.socket.onclose = () => {
                 console.log("WebSocket disconnected.");
             };
-    
+
             this.socket.onmessage = async (event) => {
                 console.log("Received web socket message")
                 const message = JSON.parse(event.data)
@@ -51,7 +51,7 @@ export class Audio {
                     // Ensure the data is an ArrayBuffer, if it's a Blob, convert it
                     //const pcmData = event.data instanceof ArrayBuffer ? event.data : await event.data.arrayBuffer();
                     //
-                    
+
                     this.queuePcmData(byteArray.buffer);  // Push the received data into the buffer queue
                     if (!this.isPlaying) {
                             this.playFromQueue();  // Start playing if not already playing
@@ -63,21 +63,21 @@ export class Audio {
 
             // audio in
             // Get user media (microphone access)
-            
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate:24000}  });
             this.stream = stream;
             this.inAudioContext = new AudioContext({ sampleRate: 24000 });
-    
+
             // Create an AudioNode to capture the microphone stream
             const sourceNode = this.inAudioContext.createMediaStreamSource(stream);
-    
+
             // Create a ScriptProcessorNode (or AudioWorkletProcessor for better performance)
             this.processorNode = this.inAudioContext.createScriptProcessor(this.bufferSize, 1, 1);
-            
+
             // Process audio data when available
             this.processorNode.onaudioprocess = (event) => {
                 const inputBuffer = event.inputBuffer;
-        
+
                 // Extract PCM 16-bit data from input buffer (mono channel)
                 const audioData = this.extractPcm16Data(inputBuffer);
                 const byteArray = new Uint8Array(audioData); // Create a Uint8Array view
@@ -95,7 +95,7 @@ export class Audio {
                     this.socket.send(JSON.stringify(audioMessage));
                 }
             };
-    
+
             // Connect the source node to the processor node and the processor node to the destination (speakers)
             sourceNode.connect(this.processorNode);
             this.processorNode.connect(this.inAudioContext.destination);
@@ -104,7 +104,7 @@ export class Audio {
             console.error("Error initializing audio player:", err);
         }
     }
-  
+
     // Stop receiving and playing audio
     stop() {
         this.stop_out()
@@ -141,7 +141,7 @@ export class Audio {
     queuePcmData(pcmData) {
         this.bufferQueue.push(pcmData);
     }
-  
+
     // Play audio from the queue
     async playFromQueue() {
         if (this.bufferQueue.length === 0) {
@@ -165,7 +165,7 @@ export class Audio {
         };
         source.start();
     }
-  
+
     // Decode PCM 16-bit data into AudioBuffer
     async decodePcm16Data(pcmData) {
         const audioData = new Float32Array(pcmData.byteLength / 2);
@@ -189,22 +189,21 @@ export class Audio {
         const sampleRate = buffer.sampleRate;
         const length = buffer.length;
         const pcmData = new Int16Array(length);
-        
+
         // Convert the float samples to PCM 16-bit (scaled between -32768 and 32767)
         for (let i = 0; i < length; i++) {
             pcmData[i] = Math.max(-32768, Math.min(32767, buffer.getChannelData(0)[i] * 32767));
         }
-        
+
         // Convert Int16Array to a binary buffer (ArrayBuffer)
         const pcmBuffer = new ArrayBuffer(pcmData.length * 2); // 2 bytes per sample
         const pcmView = new DataView(pcmBuffer);
-        
+
         for (let i = 0; i < pcmData.length; i++) {
             pcmView.setInt16(i * 2, pcmData[i], true); // true means little-endian
         }
-    
+
         return pcmBuffer;
     }
-      
+
   }
-  

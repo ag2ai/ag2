@@ -121,8 +121,5 @@ class WebsocketAudioAdapter(RealtimeObserver):
 
     async def initialize_session(self):
         """Control initial session with OpenAI."""
-        session_update = {
-            "input_audio_format": "pcm16", #  g711_ulaw
-            "output_audio_format": "pcm16" # "g711_ulaw",
-        }
+        session_update = {"input_audio_format": "pcm16", "output_audio_format": "pcm16"}  #  g711_ulaw  # "g711_ulaw",
         await self._client.session_update(session_update)
