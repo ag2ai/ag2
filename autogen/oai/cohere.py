@@ -33,7 +33,7 @@ import random
 import sys
 import time
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from cohere import Client as Cohere
 from cohere.types import ToolParameterDefinitionsValue, ToolResult
@@ -166,7 +166,6 @@ class CohereClient:
 
         # We use chat model by default
         client = Cohere(api_key=self.api_key, client_name=client_name)
-
         # Token counts will be returned
         prompt_tokens = 0
         completion_tokens = 0
@@ -174,22 +173,81 @@ class CohereClient:
 
         # Stream if in parameters
         streaming = True if "stream" in params and params["stream"] else False
-        cohere_finish = "stop"
-        tool_calls = None
-        ans = None
-        if streaming:
-            response = client.chat_stream(**cohere_params)
-            # Streaming...
-            ans = ""
-            for event in response:
-                if event.event_type == "text-generation":
-                    ans = ans + event.text
-                elif event.event_type == "tool-calls-generation":
-                    # When streaming, tool calls are compiled at the end into a single event_type
-                    ans = event.text
+        cohere_finish = ""
+        max_retries = 5
+
+        for attempt in range(max_retries):
+            ans = None
+            try:
+                if streaming:
+                    response = client.chat_stream(**cohere_params)
+                else:
+                    response = client.chat(**cohere_params)
+            except CohereRateLimitError as e:
+                raise RuntimeError(f"Cohere exception occurred: {e}")
+            else:
+                if streaming:
+                    # Streaming...
+                    ans = ""
+                    for event in response:
+                        if event.event_type == "text-generation":
+                            ans = ans + event.text
+                        elif event.event_type == "tool-calls-generation":
+                            # When streaming, tool calls are compiled at the end into a single event_type
+                            ans = event.text
+                            cohere_finish = "tool_calls"
+                            tool_calls = []
+                            for tool_call in event.tool_calls:
+                                tool_calls.append(
+                                    ChatCompletionMessageToolCall(
+                                        id=str(random.randint(0, 100000)),
+                                        function={
+                                            "name": tool_call.name,
+                                            "arguments": (
+                                                "" if tool_call.parameters is None else json.dumps(tool_call.parameters)
+                                            ),
+                                        },
+                                        type="function",
+                                    )
+                                )
+
+                    # Not using billed_units, but that may be better for cost purposes
+                    prompt_tokens = event.response.meta.tokens.input_tokens
+                    completion_tokens = event.response.meta.tokens.output_tokens
+                    total_tokens = prompt_tokens + completion_tokens
+
+                    response_id = event.response.response_id
+                else:
+                    # Non-streaming finished
+                    ans: str = response.text
+
+                    # Not using billed_units, but that may be better for cost purposes
+                    prompt_tokens = response.meta.tokens.input_tokens
+                    completion_tokens = response.meta.tokens.output_tokens
+                    total_tokens = prompt_tokens + completion_tokens
+
+                    response_id = response.response_id
+                break
+
+        if response is not None:
+
+            response_content = ans
+
+            if streaming:
+                # Streaming response
+                if cohere_finish == "":
+                    cohere_finish = "stop"
+                    tool_calls = None
+            else:
+                # Non-streaming response
+                # If we have tool calls as the response, populate completed tool calls for our return OAI response
+                if response.tool_calls is not None:
                     cohere_finish = "tool_calls"
                     tool_calls = []
-                    for tool_call in event.tool_calls:
+                    for tool_call in response.tool_calls:
+
+                        # if parameters are null, clear them out (Cohere can return a string "null" if no parameter values)
+
                         tool_calls.append(
                             ChatCompletionMessageToolCall(
                                 id=str(random.randint(0, 100000)),
@@ -202,45 +260,16 @@ class CohereClient:
                                 type="function",
                             )
                         )
-
-            # Not using billed_units, but that may be better for cost purposes
-            prompt_tokens = event.response.meta.tokens.input_tokens
-            completion_tokens = event.response.meta.tokens.output_tokens
-            total_tokens = prompt_tokens + completion_tokens
-            response_id = event.response.response_id
+                else:
+                    cohere_finish = "stop"
+                    tool_calls = None
         else:
-            response = client.chat(**cohere_params)
-            ans: str = response.text
-
-            # Not using billed_units, but that may be better for cost purposes
-            prompt_tokens = response.meta.tokens.input_tokens
-            completion_tokens = response.meta.tokens.output_tokens
-            total_tokens = prompt_tokens + completion_tokens
-
-            response_id = response.response_id
-            # If we have tool calls as the response, populate completed tool calls for our return OAI response
-            if response.tool_calls is not None:
-                cohere_finish = "tool_calls"
-                tool_calls = []
-                for tool_call in response.tool_calls:
-
-                    # if parameters are null, clear them out (Cohere can return a string "null" if no parameter values)
-
-                    tool_calls.append(
-                        ChatCompletionMessageToolCall(
-                            id=str(random.randint(0, 100000)),
-                            function={
-                                "name": tool_call.name,
-                                "arguments": ("" if tool_call.parameters is None else json.dumps(tool_call.parameters)),
-                            },
-                            type="function",
-                        )
-                    )
+            raise RuntimeError(f"Failed to get response from Cohere after retrying {attempt + 1} times.")
 
         # 3. convert output
         message = ChatCompletionMessage(
             role="assistant",
-            content=ans,
+            content=response_content,
             function_call=None,
             tool_calls=tool_calls,
         )
@@ -280,6 +309,15 @@ def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_t
     return temp_tool_results
 
 
+def is_recent_tool_call(messages: list[Dict[str, Any]], tool_call_index: int):
+    messages_length = len(messages)
+    if tool_call_index == messages_length - 1:
+        return True
+    elif messages[tool_call_index + 1].get("role", "").lower() not in ("chatbot"):
+        return True
+    return False
+
+
 def oai_messages_to_cohere_messages(
     messages: list[Dict[str, Any]], params: Dict[str, Any], cohere_params: Dict[str, Any]
 ) -> tuple[list[dict[str, Any]], str, str]:
@@ -299,7 +337,7 @@ def oai_messages_to_cohere_messages(
 
     cohere_messages = []
     preamble = ""
-
+    cohere_tool_names = set()
     # Tools
     if "tools" in params:
         cohere_tools = []
@@ -330,6 +368,7 @@ def oai_messages_to_cohere_messages(
                 "description": tool["function"]["description"],
                 "parameter_definitions": parameters,
             }
+            cohere_tool_names.add(tool["function"]["name"] or "")
 
             cohere_tools.append(cohere_tool)
 
@@ -347,8 +386,10 @@ def oai_messages_to_cohere_messages(
     # 'content' field renamed to 'message'
     # tools go into tools parameter
     # tool_results go into tool_results parameter
-    messages_length = len(messages)
     for index, message in enumerate(messages):
+
+        if not message["content"]:
+            continue
 
         if "role" in message and message["role"] == "system":
             # System message
@@ -356,22 +397,37 @@ def oai_messages_to_cohere_messages(
                 preamble = message["content"]
             else:
                 preamble = preamble + "\n" + message["content"]
-        elif "tool_calls" in message:
+
+        elif message.get("tool_calls"):
             # Suggested tool calls, build up the list before we put it into the tool_results
-            for tool_call in message["tool_calls"]:
+            message_tool_calls = []
+            for tool_call in message["tool_calls"] or []:
+                if (not tool_call.get("function", {}).get("name")) or tool_call.get("function", {}).get(
+                    "name"
+                ) not in cohere_tool_names:
+                    new_message = {
+                        "role": "CHATBOT",
+                        "message": message.get("name") + ":" + message["content"] + str(message["tool_calls"]),
+                    }
+                    cohere_messages.append(new_message)
+                    continue
+
                 tool_calls.append(tool_call)
+                message_tool_calls.append(
+                    {
+                        "name": tool_call.get("function", {}).get("name"),
+                        "parameters": json.loads(tool_call.get("function", {}).get("arguments") or "null"),
+                    }
+                )
+
+            if not message_tool_calls:
+                continue
 
             # We also add the suggested tool call as a message
             new_message = {
                 "role": "CHATBOT",
-                "message": message["content"],
-                "tool_calls": [
-                    {
-                        "name": tool_call_.get("function", {}).get("name"),
-                        "parameters": json.loads(tool_call_.get("function", {}).get("arguments") or "null"),
-                    }
-                    for tool_call_ in message["tool_calls"]
-                ],
+                "message": message.get("name","") + ":" + message["content"],
+                "tool_calls": message_tool_calls,
             }
 
             cohere_messages.append(new_message)
@@ -379,10 +435,19 @@ def oai_messages_to_cohere_messages(
             if not (tool_call_id := message.get("tool_call_id")):
                 continue
 
-            # Convert the tool call to a result
             content_output = message["content"]
+            if tool_call_id not in [tool_call["id"] for tool_call in tool_calls]:
+
+                new_message = {
+                    "role": "CHATBOT",
+                    "message": content_output,
+                }
+                cohere_messages.append(new_message)
+                continue
+
+            # Convert the tool call to a result
             tool_results_chat_turn = extract_to_cohere_tool_results(tool_call_id, content_output, tool_calls)
-            if (index == messages_length - 1) or (messages[index + 1].get("role", "").lower() in ("user", "tool")):
+            if is_recent_tool_call(messages, index):
                 # If the tool call is the last message or the next message is a user/tool message, this is a recent tool call.
                 # So, we pass it into tool_results.
                 tool_results.extend(tool_results_chat_turn)
@@ -397,7 +462,7 @@ def oai_messages_to_cohere_messages(
             # Standard text message
             new_message = {
                 "role": "USER" if message["role"] == "user" else "CHATBOT",
-                "message": message["content"],
+                "message": message.get("name","") + ":" + message.get("content"),
             }
 
             cohere_messages.append(new_message)
@@ -413,7 +478,7 @@ def oai_messages_to_cohere_messages(
         # So, we add a CHATBOT 'continue' message, if so.
         # Changed key from "content" to "message" (jaygdesai/autogen_Jay)
         if cohere_messages[-1]["role"].lower() == "user":
-            cohere_messages.append({"role": "CHATBOT", "message": "Please continue."})
+            cohere_messages.append({"role": "CHATBOT", "message": "Please go ahead and follow the instructions!"})
 
         # We return a blank message when we have tool results
         # TODO: Check what happens if tool_results aren't the latest message
@@ -426,7 +491,7 @@ def oai_messages_to_cohere_messages(
         if cohere_messages[-1]["role"] == "USER":
             return cohere_messages[0:-1], preamble, cohere_messages[-1]["message"]
         else:
-            return cohere_messages, preamble, "Please continue."
+            return cohere_messages, preamble, "Please go ahead and follow the instructions!"
 
 
 def calculate_cohere_cost(input_tokens: int, output_tokens: int, model: str) -> float:
