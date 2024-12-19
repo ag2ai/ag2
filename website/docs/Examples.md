@@ -38,6 +38,7 @@ Links to notebook examples:
 
 ### Swarms
 - Orchestrating agents in a Swarm - [View Notebook](/docs/notebooks/agentchat_swarm)
+- Orchestrating agents in a Swarm (Enhanced) - [View Notebook](/docs/notebooks/agentchat_swarm_enhanced)
 
 ### Applications
 
