@@ -52,6 +52,7 @@ TEXT_FORMATS = [
     "yaml",
     "yml",
     "pdf",
+    "mdx",
 ]
 UNSTRUCTURED_FORMATS = [
     "doc",
