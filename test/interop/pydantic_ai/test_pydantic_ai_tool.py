@@ -34,7 +34,7 @@ class TestPydanticAITool:
             """
             return f"{a} {b} {c}"
 
-        tool = PydanticAITool(foobar)
+        tool = PydanticAITool(foobar)  # type: ignore[var-annotated]
         ag2_tool = AG2PydanticAITool(
             name=tool.name,
             description=tool.description,

@@ -59,8 +59,6 @@ jupyter_executor = [
     "ipykernel>=6.29.0",
 ]
 
-types = ["mypy==1.9.0"] + test + jupyter_executor
-
 retrieve_chat = [
     "protobuf==4.25.3",
     "chromadb==0.5.3",
@@ -87,7 +85,7 @@ interop_langchain = ["langchain-community>=0.3.12,<1; python_version>='3.9'"]
 interop_pydantic_ai = ["pydantic-ai>=0.0.13,<1; python_version>='3.9'"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai
 
-types = ["mypy==1.9.0", "pytest"] + jupyter_executor + interop
+types = ["mypy==1.9.0"] + test + jupyter_executor + interop
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])

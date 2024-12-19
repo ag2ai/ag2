@@ -38,7 +38,7 @@ class TestPydanticAIInteroperabilityWithotContext:
             """Roll a six-sided dice and return the result."""
             return str(random.randint(1, 6))
 
-        pydantic_ai_tool = PydanticAITool(roll_dice, max_retries=3)
+        pydantic_ai_tool = PydanticAITool(roll_dice, max_retries=3)  # type: ignore[var-annotated]
         self.tool = PydanticAIInteroperability.convert_tool(pydantic_ai_tool)
 
     def test_type_checks(self) -> None:
@@ -95,10 +95,10 @@ class TestPydanticAIInteroperabilityDependencyInjection:
         ctx = RunContext(
             deps=123,
             retry=0,
-            messages=None,
+            messages=None,  # type: ignore[arg-type]
             tool_name=f.__name__,
         )
-        pydantic_ai_tool = PydanticAITool(f, takes_ctx=True)
+        pydantic_ai_tool = PydanticAITool(f, takes_ctx=True)  # type: ignore[var-annotated]
         g = PydanticAIInteroperability.inject_params(
             ctx=ctx,
             tool=pydantic_ai_tool,
@@ -119,11 +119,11 @@ class TestPydanticAIInteroperabilityDependencyInjection:
         ctx = RunContext(
             deps=123,
             retry=0,
-            messages=None,
+            messages=None,  # type: ignore[arg-type]
             tool_name=f.__name__,
         )
 
-        pydantic_ai_tool = PydanticAITool(f, takes_ctx=True, max_retries=3)
+        pydantic_ai_tool = PydanticAITool(f, takes_ctx=True, max_retries=3)  # type: ignore[var-annotated]
         g = PydanticAIInteroperability.inject_params(
             ctx=ctx,
             tool=pydantic_ai_tool,
@@ -158,7 +158,7 @@ class TestPydanticAIInteroperabilityWithContext:
             """
             return f"Name: {ctx.deps.name}, Age: {ctx.deps.age}, Additional info: {additional_info}"  # type: ignore[attr-defined]
 
-        self.pydantic_ai_tool = PydanticAITool(get_player, takes_ctx=True)
+        self.pydantic_ai_tool = PydanticAITool(get_player, takes_ctx=True)  # type: ignore[var-annotated]
         player = Player(name="Luka", age=25)
         self.tool = PydanticAIInteroperability.convert_tool(tool=self.pydantic_ai_tool, deps=player)
 
