@@ -25,7 +25,7 @@ __version__ = version["__version__"]
 current_os = platform.system()
 
 install_requires = [
-    "openai>=1.3",
+    "openai>=1.57",
     "diskcache",
     "termcolor",
     "flaml",
@@ -38,6 +38,8 @@ install_requires = [
     "pydantic>=1.10,<3,!=2.6.0",  # could be both V1 and V2
     "docker",
     "packaging",
+    "websockets>=14.0",
+    "asyncer>=0.0.8",
 ]
 
 jupyter_executor = [
@@ -62,14 +64,14 @@ retrieve_chat_pgvector = [*retrieve_chat, "pgvector>=0.2.5"]
 
 graph_rag_falkor_db = ["graphrag_sdk==0.3.3", "falkordb>=1.0.10"]
 
-neo4j_graph_rag = [
-    "llama_index==0.11.8",
-    "llama-index-graph-stores-neo4j=0.3.0",
-    "llma-index-core==0.11.8",
+neo4j = [
+    "docx2txt==0.8",
+    "llama-index==0.12.5",
+    "llama-index-graph-stores-neo4j==0.4.2",
+    "llama-index-core==0.12.5",
 ]
 
-realtime = ["websockets>=14.0", "asyncer>=0.0.8"]
-realtime_twilio = [*realtime, "fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
+twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
 
 if current_os in ["Windows", "Darwin"]:
@@ -94,7 +96,7 @@ extra_require = {
         "pre-commit",
         "pytest-cov>=5",
         "pytest-asyncio",
-        "pytest>=6.1.1,<8",
+        "pytest>=8,<9",
         "pandas",
     ],
     "blendsearch": ["flaml[blendsearch]"],
@@ -125,8 +127,8 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
-    "realtime": realtime,
-    "realtime-twilio": realtime_twilio,
+    "twilio": twilio,
+    "neo4j": neo4j,
 }
 
 setuptools.setup(

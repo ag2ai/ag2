@@ -1,7 +1,7 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, Dict
+from typing import Any, Dict, List, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,12 +10,14 @@ from autogen.agentchat.contrib.swarm_agent import (
     __CONTEXT_VARIABLES_PARAM_NAME__,
     AFTER_WORK,
     ON_CONDITION,
+    UPDATE_SYSTEM_MESSAGE,
     AfterWorkOption,
     SwarmAgent,
     SwarmResult,
     initiate_swarm_chat,
 )
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.agentchat.groupchat import GroupChat
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
 TEST_MESSAGES = [{"role": "user", "content": "Initial message"}]
@@ -217,7 +219,7 @@ def test_after_work_options():
     # 4. Test Callable
 
     # Transfer to agent2
-    def test_callable(last_speaker, messages, groupchat, context_variables):
+    def test_callable(last_speaker, messages, groupchat):
         return agent2
 
     agent1.after_work = AFTER_WORK(test_callable)
@@ -256,7 +258,7 @@ def test_on_condition_handoff():
         return True, {
             "role": "assistant",
             "name": "agent1",
-            "tool_calls": [{"type": "function", "function": {"name": "transfer_to_agent2"}}],
+            "tool_calls": [{"type": "function", "function": {"name": "transfer_agent1_to_agent2"}}],
         }
 
     # Mock LLM responses
@@ -461,6 +463,101 @@ def test_initialization():
         )
 
 
+def test_update_system_message():
+    """Tests the update_agent_state_before_reply functionality with multiple scenarios"""
+
+    # Test container to capture system messages
+    class MessageContainer:
+        def __init__(self):
+            self.captured_sys_message = ""
+
+    message_container = MessageContainer()
+
+    # 1. Test with a callable function
+    def custom_update_function(agent: ConversableAgent, messages: List[Dict]) -> str:
+        return f"System message with {agent.get_context('test_var')} and {len(messages)} messages"
+
+    # 2. Test with a string template
+    template_message = "Template message with {test_var}"
+
+    # Create agents with different update configurations
+    agent1 = SwarmAgent("agent1", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(custom_update_function))
+
+    agent2 = SwarmAgent("agent2", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(template_message))
+
+    # Mock the reply function to capture the system message
+    def mock_generate_oai_reply(*args, **kwargs):
+        # Capture the system message for verification
+        message_container.captured_sys_message = args[0]._oai_system_message[0]["content"]
+        return True, "Mock response"
+
+    # Register mock reply for both agents
+    agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+    agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+
+    # Test context and messages
+    test_context = {"test_var": "test_value"}
+    test_messages = [{"role": "user", "content": "Test message"}]
+
+    # Run chat with first agent (using callable function)
+    chat_result1, context_vars1, last_speaker1 = initiate_swarm_chat(
+        initial_agent=agent1, messages=test_messages, agents=[agent1], context_variables=test_context, max_rounds=2
+    )
+
+    # Verify callable function result
+    assert message_container.captured_sys_message == "System message with test_value and 1 messages"
+
+    # Reset captured message
+    message_container.captured_sys_message = ""
+
+    # Run chat with second agent (using string template)
+    chat_result2, context_vars2, last_speaker2 = initiate_swarm_chat(
+        initial_agent=agent2, messages=test_messages, agents=[agent2], context_variables=test_context, max_rounds=2
+    )
+
+    # Verify template result
+    assert message_container.captured_sys_message == "Template message with test_value"
+
+    # Test invalid update function
+    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
+        SwarmAgent("agent3", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(123))
+
+    # Test invalid callable (wrong number of parameters)
+    def invalid_update_function(context_variables):
+        return "Invalid function"
+
+    with pytest.raises(ValueError, match="Update function must accept two parameters"):
+        SwarmAgent("agent4", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(invalid_update_function))
+
+    # Test invalid callable (wrong return type)
+    def invalid_return_function(context_variables, messages) -> dict:
+        return {}
+
+    with pytest.raises(ValueError, match="Update function must return a string"):
+        SwarmAgent("agent5", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(invalid_return_function))
+
+    # Test multiple update functions
+    def another_update_function(context_variables: Dict[str, Any], messages: List[Dict]) -> str:
+        return "Another update"
+
+    agent6 = SwarmAgent(
+        "agent6",
+        update_agent_state_before_reply=[
+            UPDATE_SYSTEM_MESSAGE(custom_update_function),
+            UPDATE_SYSTEM_MESSAGE(another_update_function),
+        ],
+    )
+
+    agent6.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+
+    chat_result6, context_vars6, last_speaker6 = initiate_swarm_chat(
+        initial_agent=agent6, messages=test_messages, agents=[agent6], context_variables=test_context, max_rounds=2
+    )
+
+    # Verify last update function took effect
+    assert message_container.captured_sys_message == "Another update"
+
+
 def test_string_agent_params_for_transfer():
     """Test that string agent parameters are handled correctly without using real LLMs."""
     # Define test configuration
@@ -557,6 +654,130 @@ def test_string_agent_params_for_transfer():
             after_work=AFTER_WORK(AfterWorkOption.TERMINATE),
             max_rounds=5,
         )
+
+
+def test_after_work_callable():
+    """Test Callable in an AFTER_WORK handoff"""
+
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
+    agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
+    agent3 = SwarmAgent("agent3", llm_config=testing_llm_config)
+
+    def return_agent(
+        last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat
+    ) -> Union[AfterWorkOption, SwarmAgent, str]:
+        return agent2
+
+    def return_agent_str(
+        last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat
+    ) -> Union[AfterWorkOption, SwarmAgent, str]:
+        return "agent3"
+
+    def return_after_work_option(
+        last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat
+    ) -> Union[AfterWorkOption, SwarmAgent, str]:
+        return AfterWorkOption.TERMINATE
+
+    agent1.register_hand_off(
+        hand_to=[
+            AFTER_WORK(agent=return_agent),
+        ]
+    )
+
+    agent2.register_hand_off(
+        hand_to=[
+            AFTER_WORK(agent=return_agent_str),
+        ]
+    )
+
+    agent3.register_hand_off(
+        hand_to=[
+            AFTER_WORK(agent=return_after_work_option),
+        ]
+    )
+
+    # Fake generate_oai_reply
+    def mock_generate_oai_reply(*args, **kwargs):
+        return True, "This is a mock response from the agent."
+
+    # Mock LLM responses
+    agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+    agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+    agent3.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+
+    chat_result, context_vars, last_speaker = initiate_swarm_chat(
+        initial_agent=agent1,
+        messages=TEST_MESSAGES,
+        agents=[agent1, agent2, agent3],
+        max_rounds=5,
+    )
+
+    # Confirm transitions and it terminated with 4 messages
+    assert chat_result.chat_history[1]["name"] == "agent1"
+    assert chat_result.chat_history[2]["name"] == "agent2"
+    assert chat_result.chat_history[3]["name"] == "agent3"
+    assert len(chat_result.chat_history) == 4
+
+
+def test_on_condition_unique_function_names():
+    """Test that ON_CONDITION in handoffs generate unique function names"""
+
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
+    agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
+
+    agent1.register_hand_off(
+        hand_to=[
+            ON_CONDITION(target=agent2, condition="always take me to agent 2"),
+            ON_CONDITION(target=agent2, condition="sometimes take me there"),
+            ON_CONDITION(target=agent2, condition="always take me there"),
+        ]
+    )
+
+    # Fake generate_oai_reply
+    def mock_generate_oai_reply(*args, **kwargs):
+        return True, "This is a mock response from the agent."
+
+    # Fake generate_oai_reply
+    def mock_generate_oai_reply_tool(*args, **kwargs):
+        return True, {
+            "role": "assistant",
+            "name": "agent1",
+            "tool_calls": [{"type": "function", "function": {"name": "transfer_agent1_to_agent2"}}],
+        }
+
+    # Mock LLM responses
+    agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply_tool)
+    agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+
+    chat_result, context_vars, last_speaker = initiate_swarm_chat(
+        initial_agent=agent1,
+        messages=TEST_MESSAGES,
+        agents=[agent1, agent2],
+        max_rounds=5,
+    )
+
+    # Check that agent1 has 3 functions and they have unique names
+    assert "transfer_agent1_to_agent2" in agent1._function_map
+    assert "transfer_agent1_to_agent2_2" in agent1._function_map
+    assert "transfer_agent1_to_agent2_3" in agent1._function_map
 
 
 if __name__ == "__main__":

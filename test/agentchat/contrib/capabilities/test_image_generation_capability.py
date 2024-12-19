@@ -32,13 +32,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../.."))
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from conftest import MOCK_OPEN_AI_API_KEY, skip_openai  # noqa: E402
 
-filter_dict = {"model": ["gpt-35-turbo-16k", "gpt-3.5-turbo-16k"]}
+filter_dict = {"model": ["gpt-4o-mini"]}
 
-RESOLUTIONS = ["256x256", "512x512", "1024x1024"]
+RESOLUTIONS = ["1024x1024", "1792x1024", "1024x1792"]
 QUALITIES = ["standard", "hd"]
 PROMPTS = [
-    "Generate an image of a robot holding a 'I Love Autogen' sign",
-    "Generate an image of a dog holding a 'I Love Autogen' sign",
+    "Generate an image of a robot holding a 'I Love AG2' sign",
+    "Generate an image of a dog holding a 'I Love AG2' sign",
 ]
 
 
@@ -67,21 +67,21 @@ def api_key():
 
 @pytest.fixture
 def dalle_config() -> Dict[str, Any]:
-    config_list = openai_utils.config_list_from_models(model_list=["dall-e-2"], exclude="aoai")
+    config_list = openai_utils.config_list_from_models(model_list=["dall-e-3"], exclude="aoai")
     if not config_list:
-        config_list = [{"model": "dall-e-2", "api_key": api_key()}]
+        config_list = [{"model": "dall-e-3", "api_key": api_key()}]
     return {"config_list": config_list, "timeout": 120, "cache_seed": None}
 
 
 @pytest.fixture
-def gpt3_config() -> Dict[str, Any]:
+def gpt4_config() -> Dict[str, Any]:
     config_list = [
         {
-            "model": "gpt-35-turbo-16k",
+            "model": "gpt-4o-mini",
             "api_key": api_key(),
         },
         {
-            "model": "gpt-3.5-turbo-16k",
+            "model": "gpt-4o",
             "api_key": api_key(),
         },
     ]
@@ -228,5 +228,5 @@ def test_image_generation_capability_cache(monkeypatch):
 
 if __name__ == "__main__":
     test_dalle_image_generator(
-        dalle_config={"config_list": openai_utils.config_list_from_models(model_list=["dall-e-2"], exclude="aoai")}
+        dalle_config={"config_list": openai_utils.config_list_from_models(model_list=["dall-e-3"], exclude="aoai")}
     )
