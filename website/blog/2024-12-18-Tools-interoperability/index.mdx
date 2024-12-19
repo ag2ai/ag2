@@ -6,17 +6,17 @@ tags: [LLM, tools, langchain, crewai, pydanticai]
 ---
 
 **TL;DR**
-AG2 lets you integrate tools from different frameworks like **LangChain**, **CrewAI** and **PydanticAI**.
+AG2 lets you bring in tools from different frameworks like **LangChain**, **CrewAI**, and **PydanticAI**.
 
-- **LangChain**: Quickly bring in tools for tasks like API querying and web scraping.
-- **CrewAI**: Use a wide variety of tools for web scraping, search, and more.
-- **PydanticAI**: Leverage dependency injection for context-driven tools and structured data processing.
-This integration allows you to combine and use tools from multiple frameworks within AG2, expanding your agents' capabilities.
+- **LangChain**: Useful for tasks like API querying and web scraping.
+- **CrewAI**: Offers a variety of tools for web scraping, search, and more.
+- **PydanticAI**: Adds context-driven tools and structured data processing.
 
-In this post, we will demonstrate how to integrate LLM tools from various frameworks—including [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools), 
-[CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main) and [PydanticAI Tools](https://ai.pydantic.dev/tools/) into the AG2 framework. 
-This process enables smooth interoperability between these systems, allowing developers to leverage the unique capabilities of each toolset within AG2's flexible agent-based architecture. 
-By the end of this post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
+With AG2, you can combine these tools and enhance your agents' capabilities.
+
+In this post, we’ll walk through how to integrate tools from various frameworks—like [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools),
+[CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main), and [PydanticAI Tools](https://ai.pydantic.dev/tools/)—into AG2.
+This allows you to use tools from different frameworks within AG2, giving your agents more power and flexibility. You’ll see how to set up agents, adapt the tools, and validate the integration through examples.his post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
 
 ## LangChain Tools Integration
 
@@ -109,7 +109,7 @@ Tell me about the history of the United States
 chatbot (to User):
 
 ***** Suggested tool call (call_hhy2G43ymytUFmJlDsK9J0tk): wikipedia *****
-Arguments: 
+Arguments:
 {"tool_input":{"query":"history of the United States"}}
 **************************************************************************
 
@@ -217,7 +217,7 @@ Scrape the website https://ag2.ai/
 chatbot (to User):
 
 ***** Suggested tool call (call_ZStuwmexfN7j56uJKOi6BCid): Read_website_content *****
-Arguments: 
+Arguments:
 {"args":{"website_url":"https://ag2.ai/"}}
 *************************************************************************************
 
@@ -405,7 +405,7 @@ Get player, for additional information use 'goal keeper'
 chatbot (to User):
 
 ***** Suggested tool call (call_lPXIohFiJfnjmgwDnNFPQCzc): get_player *****
-Arguments: 
+Arguments:
 {"additional_info":"goal keeper"}
 ***************************************************************************
 
@@ -423,4 +423,3 @@ chatbot (to User):
 
 The player's name is Luka, who is a 25-year-old goalkeeper. TERMINATE
 ```
-
