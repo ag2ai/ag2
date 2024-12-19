@@ -12,9 +12,9 @@ tags: [Realtime API, Voice Agents, Swarm Teams, Twilio, AI Tools]
 ![Realtime Agent Swarm](img/realtime_agent_swarm.png)
 
 **TL;DR:**
-- **RealtimeAgent** is coming in the next AG2 release, enabling real-time conversational AI.
+- **RealtimeAgent** is coming in the AG2 0.6 release, enabling real-time conversational AI.
 - Features include real-time voice interactions, seamless task delegation to Swarm teams, and Twilio-based telephony integration.
-- Learn how to integrate twillio and RealtimeAgent into your swarm in this blogpost.
+- Learn how to integrate Twilio and RealtimeAgent into your swarm in this blogpost.
 
 ### **Realtime API Support: What's New?**
 
@@ -25,7 +25,7 @@ We're thrilled to announce the release of **RealtimeAgent**, extending AG2's cap
 Traditionally, conversational AI tasks have focused on asynchronous interactions, such as text-based chats. However, the demand for **real-time voice agents** has surged in domains like customer support, healthcare, and virtual assistance. With this update, AG2 takes a leap forward by enabling agents to:
 
 1. **Support Real-Time Voice Interactions**
-   Engage in real-time conversations with users through seamless integration with Twilio telephony.
+   Engage in real-time conversations with users.
 
 2. **Leverage Swarm Teams for Task Delegation**
    Delegate complex tasks to AG2 Swarm teams during a voice interaction, ensuring efficient task management.
@@ -38,9 +38,12 @@ Traditionally, conversational AI tasks have focused on asynchronous interactions
 
 #### **1. RealtimeAgent**
 - Acts as the central interface for handling real-time interactions.
-- Bridges voice input/output with AutoGen’s task-handling capabilities.
+- Bridges voice input/output with AG2’s task-handling capabilities.
 
-#### **3. TwilioPhoneConnector**
+#### **2. RealtimeAgent swarm integration**
+- Seamless integration of RealtimeAgent into Swarm
+
+#### **3. TwilioAdapter**
 - Connects agents to Twilio for telephony support.
 - Simplifies the process of handling voice calls with clear API methods.
 
