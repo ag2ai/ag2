@@ -44,8 +44,6 @@ class OpenAIRealtimeClient:
         # LLM config
         llm_config = self._agent.llm_config
 
-        print("!" * 100)
-        print(llm_config)
         config = llm_config["config_list"][0]
 
         self.model = config["model"]

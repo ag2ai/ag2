@@ -82,8 +82,6 @@ class RealtimeAgent(ConversableAgent):
             silent=None,
             context_variables=None,
         )
-        print("!" * 100)
-        print(llm_config)
         self.llm_config = llm_config
         self._client = OpenAIRealtimeClient(self, audio_adapter, FunctionObserver(self))
         self.voice = voice
