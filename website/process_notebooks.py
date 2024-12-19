@@ -418,10 +418,10 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
     # title_end = content.find("\n", content.find("#"))
 
     # Extract page title
-    title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
+    # title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
     # If there is a { in the title we trim off the { and everything after it
-    if "{" in title:
-        title = title[: title.find("{")].strip()
+    # if "{" in title:
+    #     title = title[: title.find("{")].strip()
 
     github_link = f"https://github.com/ag2ai/ag2/blob/main/{repo_relative_notebook}"
     content = (
