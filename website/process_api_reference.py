@@ -1,3 +1,11 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# SPDX-License-Identifier: MIT
+#!/usr/bin/env python
+
 from __future__ import annotations
 
 import argparse
@@ -70,6 +78,7 @@ def add_code_fences(content: str) -> str:
     Returns:
         Content with Python code blocks properly fenced
     """
+    return content
     lines = content.split("\n")
     output = []
     i = 0

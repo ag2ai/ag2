@@ -11,6 +11,7 @@ Example usage:
 Install the `boto3` package by running `pip install --upgrade boto3`.
 - https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html
 
+```python
 import autogen
 
 config_list = [
@@ -25,7 +26,7 @@ config_list = [
 ]
 
 assistant = autogen.AssistantAgent("assistant", llm_config={"config_list": config_list})
-
+```
 """
 
 from __future__ import annotations

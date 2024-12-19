@@ -426,11 +426,24 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
     github_link = f"https://github.com/ag2ai/ag2/blob/main/{repo_relative_notebook}"
     content = (
         content[:title_end]
-        + "\n[![Open on GitHub](https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github)]("
-        + github_link
-        + ")"
+        + f'\n<a href="{github_link}" target="_blank">'
+        + """<img noZoom src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open on GitHub" />"""
+        + "</a>"
         + content[title_end:]
     )
+    # content = (
+    #     content[:title_end]
+    #     + '<a href="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github)]('
+    #     + github_link
+    #     +  ")"
+    #     + """ target="_blank" alt="Open on GitHub">
+    #         <img noZoom src="/path/image.jpg"/>
+    #     </a>"""
+    #     + "\n[![Open on GitHub](https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github)]("
+    #     + github_link
+    #     + ")"
+    #     + content[title_end:]
+    # )
 
     # If no colab link is present, insert one
     if "colab-badge.svg" not in content:
