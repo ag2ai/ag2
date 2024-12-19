@@ -4,7 +4,7 @@
 
 import re
 import sys
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 from ...tools import Tool
 from ..interoperable import Interoperable
@@ -26,7 +26,8 @@ class CrewAIInteroperability(Interoperable):
     This class takes a `CrewAITool` and converts it into a standard `Tool` object.
     """
 
-    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
+    @classmethod
+    def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """
         Converts a given CrewAI tool into a general `Tool` format.
 

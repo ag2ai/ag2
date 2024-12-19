@@ -28,6 +28,7 @@ class PydanticAIInteroperability(Interoperable):
     into the tool's function.
     """
 
+    @staticmethod
     def inject_params(
         ctx: Any,
         tool: Any,
@@ -86,7 +87,8 @@ class PydanticAIInteroperability(Interoperable):
 
         return wrapper
 
-    def convert_tool(self, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
+    @classmethod
+    def convert_tool(cls, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
         """
         Converts a given Pydantic AI tool into a general `Tool` format.
 

@@ -13,7 +13,7 @@ from autogen.interop import Interoperability
 
 class TestInteroperability:
     def test_supported_types(self) -> None:
-        actual = Interoperability().get_supported_types()
+        actual = Interoperability.get_supported_types()
 
         if sys.version_info < (3, 9):
             assert actual == []
@@ -35,8 +35,7 @@ class TestInteroperability:
 
         crewai_tool = FileReadTool()
 
-        interoperability = Interoperability()
-        tool = interoperability.convert_tool(type="crewai", tool=crewai_tool)
+        tool = Interoperability.convert_tool(type="crewai", tool=crewai_tool)
 
         with TemporaryDirectory() as tmp_dir:
             file_path = f"{tmp_dir}/test.txt"

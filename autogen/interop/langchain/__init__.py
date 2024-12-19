@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .langchain import LangchainInteroperability
+from .langchain import LangChainInteroperability
 
-__all__ = ["LangchainInteroperability"]
+__all__ = ["LangChainInteroperability"]

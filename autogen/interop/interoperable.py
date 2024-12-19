@@ -18,7 +18,8 @@ class Interoperable(Protocol):
     `convert_tool` to convert a given tool into a desired format or type.
     """
 
-    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
+    @classmethod
+    def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """
         Converts a given tool to a desired format or type.
 

@@ -9,11 +9,11 @@ from ...tools import Tool
 from ..interoperable import Interoperable
 from ..registry import register_interoperable_class
 
-__all__ = ["LangchainInteroperability"]
+__all__ = ["LangChainInteroperability"]
 
 
 @register_interoperable_class("langchain")
-class LangchainInteroperability(Interoperable):
+class LangChainInteroperability(Interoperable):
     """
     A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.
@@ -23,7 +23,8 @@ class LangchainInteroperability(Interoperable):
     the `Tool` format.
     """
 
-    def convert_tool(self, tool: Any, **kwargs: Any) -> Tool:
+    @classmethod
+    def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """
         Converts a given Langchain tool into a general `Tool` format.
 

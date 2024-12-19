@@ -5,7 +5,7 @@
 from .crewai import CrewAIInteroperability
 from .interoperability import Interoperability
 from .interoperable import Interoperable
-from .langchain import LangchainInteroperability
+from .langchain import LangChainInteroperability
 from .pydantic_ai import PydanticAIInteroperability
 from .registry import register_interoperable_class
 
