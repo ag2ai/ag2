@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import warnings
 from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
@@ -61,7 +62,15 @@ class PydanticAIInteroperability(Interoperable):
         # needed for type checking
         pydantic_ai_tool: PydanticAITool = tool  # type: ignore[no-any-unimported]
 
-        if deps is not None:
+        if tool.takes_ctx and deps is None:
+            raise ValueError("If the tool takes a context, the `deps` argument must be provided")
+        if not tool.takes_ctx and deps is not None:
+            warnings.warn(
+                "The `deps` argument is provided but will be ignored because the tool does not take a context.",
+                UserWarning,
+            )
+
+        if tool.takes_ctx:
             ctx = RunContext(
                 deps=deps,
                 retry=0,
