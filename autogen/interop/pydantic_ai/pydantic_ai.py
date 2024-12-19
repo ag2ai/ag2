@@ -3,20 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import sys
 import warnings
 from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
 
-from pydantic_ai import RunContext
-from pydantic_ai.tools import Tool as PydanticAITool
-
 from ...tools import PydanticAITool as AG2PydanticAITool
 from ..interoperability import Interoperable
+from ..registry import register_interoperable_class
 
 __all__ = ["PydanticAIInteroperability"]
 
 
+@register_interoperable_class("pydanticai")
 class PydanticAIInteroperability(Interoperable):
     """
     A class implementing the `Interoperable` protocol for converting Pydantic AI tools
@@ -28,10 +28,9 @@ class PydanticAIInteroperability(Interoperable):
     into the tool's function.
     """
 
-    @staticmethod
     def inject_params(
-        ctx: Optional[RunContext[Any]],
-        tool: PydanticAITool[Any],
+        ctx: Any,
+        tool: Any,
     ) -> Callable[..., Any]:
         """
         Wraps the tool's function to inject context parameters and handle retries.
@@ -49,30 +48,36 @@ class PydanticAIInteroperability(Interoperable):
         Raises:
             ValueError: If the tool fails after the maximum number of retries.
         """
-        max_retries = tool.max_retries if tool.max_retries is not None else 1
-        f = tool.function
+        from pydantic_ai import RunContext
+        from pydantic_ai.tools import Tool as PydanticAITool
+
+        ctx_typed: Optional[RunContext[Any]] = ctx
+        tool_typed: PydanticAITool[Any] = tool
+
+        max_retries = tool_typed.max_retries if tool_typed.max_retries is not None else 1
+        f = tool_typed.function
 
         @wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            if tool.current_retry >= max_retries:
-                raise ValueError(f"{tool.name} failed after {max_retries} retries")
+            if tool_typed.current_retry >= max_retries:
+                raise ValueError(f"{tool_typed.name} failed after {max_retries} retries")
 
             try:
-                if ctx is not None:
+                if ctx_typed is not None:
                     kwargs.pop("ctx", None)
-                    ctx.retry = tool.current_retry
-                    result = f(**kwargs, ctx=ctx)  # type: ignore[call-arg]
+                    ctx_typed.retry = tool_typed.current_retry
+                    result = f(**kwargs, ctx=ctx_typed)  # type: ignore[call-arg]
                 else:
                     result = f(**kwargs)  # type: ignore[call-arg]
-                tool.current_retry = 0
+                tool_typed.current_retry = 0
             except Exception as e:
-                tool.current_retry += 1
+                tool_typed.current_retry += 1
                 raise e
 
             return result
 
         sig = signature(f)
-        if ctx is not None:
+        if ctx_typed is not None:
             new_params = [param for name, param in sig.parameters.items() if name != "ctx"]
         else:
             new_params = list(sig.parameters.values())
@@ -102,6 +107,9 @@ class PydanticAIInteroperability(Interoperable):
                         dependencies are missing for tools that require a context.
             UserWarning: If the `deps` argument is provided for a tool that does not take a context.
         """
+        from pydantic_ai import RunContext
+        from pydantic_ai.tools import Tool as PydanticAITool
+
         if not isinstance(tool, PydanticAITool):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
 
@@ -139,3 +147,15 @@ class PydanticAIInteroperability(Interoperable):
             func=func,
             parameters_json_schema=pydantic_ai_tool._parameters_json_schema,
         )
+
+    @classmethod
+    def get_unsupported_reason(cls) -> Optional[str]:
+        if sys.version_info < (3, 9):
+            return "This submodule is only supported for Python versions 3.9 and above"
+
+        try:
+            import pydantic_ai.tools
+        except ImportError:
+            return "Please install `interop-pydantic-ai` extra to use this module:\n\n\tpip install ag2[interop-pydantic-ai]"
+
+        return None

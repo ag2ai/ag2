@@ -2,16 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
-
-from langchain_core.tools import BaseTool as LangchainTool
+import sys
+from typing import Any, Optional
 
 from ...tools import Tool
 from ..interoperable import Interoperable
+from ..registry import register_interoperable_class
 
 __all__ = ["LangchainInteroperability"]
 
 
+@register_interoperable_class("langchain")
 class LangchainInteroperability(Interoperable):
     """
     A class implementing the `Interoperable` protocol for converting Langchain tools
@@ -41,6 +42,8 @@ class LangchainInteroperability(Interoperable):
             ValueError: If the provided tool is not an instance of `LangchainTool`, or if
                         any additional arguments are passed.
         """
+        from langchain_core.tools import BaseTool as LangchainTool
+
         if not isinstance(tool, LangchainTool):
             raise ValueError(f"Expected an instance of `langchain_core.tools.BaseTool`, got {type(tool)}")
         if kwargs:
@@ -57,3 +60,17 @@ class LangchainInteroperability(Interoperable):
             description=langchain_tool.description,
             func=func,
         )
+
+    @classmethod
+    def get_unsupported_reason(cls) -> Optional[str]:
+        if sys.version_info < (3, 9):
+            return "This submodule is only supported for Python versions 3.9 and above"
+
+        try:
+            import langchain_core.tools
+        except ImportError:
+            return (
+                "Please install `interop-langchain` extra to use this module:\n\n\tpip install ag2[interop-langchain]"
+            )
+
+        return None

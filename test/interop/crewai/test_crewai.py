@@ -93,3 +93,19 @@ class TestCrewAIInteroperability:
                 return
 
         assert False, "Tool response not found in chat messages"
+
+    def test_get_unsupported_reason(self) -> None:
+        crewai_interop = CrewAIInteroperability()
+        assert crewai_interop.get_unsupported_reason() is None
+
+
+@pytest.mark.skipif(
+    sys.version_info >= (3, 10) or sys.version_info < (3, 13), reason="Crew AI Interoperability is supported"
+)
+class TestCrewAIInteroperabilityIfNotSupported:
+    def test_get_unsupported_reason(self) -> None:
+        crewai_interop = CrewAIInteroperability()
+        assert (
+            crewai_interop.get_unsupported_reason()
+            == "This submodule is only supported for Python versions 3.10, 3.11, and 3.12"
+        )
