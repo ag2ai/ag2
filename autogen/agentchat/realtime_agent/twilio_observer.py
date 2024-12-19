@@ -29,7 +29,15 @@ logger = logging.getLogger(__name__)
 
 
 class TwilioAudioAdapter(RealtimeObserver):
+    """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa."""
+
     def __init__(self, websocket):
+        """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa.
+
+        Args:
+            websocket: WebSocket
+                the websocket connection to the Twilio service
+        """
         super().__init__()
         self.websocket = websocket
 
@@ -97,12 +105,17 @@ class TwilioAudioAdapter(RealtimeObserver):
             self.response_start_timestamp_twilio = None
 
     async def send_mark(self):
+        """Send a mark of audio interruption to the Twilio websocket."""
         if self.stream_sid:
             mark_event = {"event": "mark", "streamSid": self.stream_sid, "mark": {"name": "responsePart"}}
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
     async def run(self):
+        """Run the adapter.
+
+        Start reading messages from the Twilio websocket and send audio to OpenAI.
+        """
         openai_ws = self._client._openai_ws
         await self.initialize_session()
 

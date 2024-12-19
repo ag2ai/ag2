@@ -8,7 +8,6 @@
 # import asyncio
 import json
 import logging
-from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 import anyio
@@ -22,8 +21,20 @@ from .function_observer import FunctionObserver
 logger = logging.getLogger(__name__)
 
 
-class Client(ABC):
+class OpenAIRealtimeClient:
+    """(Experimental) Client for OpenAI Realtime API."""
+
     def __init__(self, agent, audio_adapter, function_observer: FunctionObserver):
+        """(Experimental) Client for OpenAI Realtime API.
+
+        args:
+            agent: Agent instance
+                the agent to be used for the conversation
+            audio_adapter: RealtimeObserver
+                adapter for streaming the audio from the client
+            function_observer: FunctionObserver
+                observer for handling function calls
+        """
         self._agent = agent
         self._observers = []
         self._openai_ws = None  # todo factor out to OpenAIClient
@@ -32,6 +43,9 @@ class Client(ABC):
 
         # LLM config
         llm_config = self._agent.llm_config
+
+        print("!" * 100)
+        print(llm_config)
         config = llm_config["config_list"][0]
 
         self.model = config["model"]
@@ -42,14 +56,17 @@ class Client(ABC):
         self.tg: Optional[TaskGroup] = None
 
     def register(self, observer):
+        """Register an observer to the client."""
         observer.register_client(self)
         self._observers.append(observer)
 
     async def notify_observers(self, message):
+        """Notify all observers of a message from the OpenAI Realtime API."""
         for observer in self._observers:
             await observer.update(message)
 
     async def function_result(self, call_id, result):
+        """Send the result of a function call to the OpenAI Realtime API."""
         result_item = {
             "type": "conversation.item.create",
             "item": {
@@ -62,6 +79,7 @@ class Client(ABC):
         await self._openai_ws.send(json.dumps({"type": "response.create"}))
 
     async def send_text(self, *, role: str, text: str):
+        """Send a text message to the OpenAI Realtime API."""
         await self._openai_ws.send(json.dumps({"type": "response.cancel"}))
         text_item = {
             "type": "conversation.item.create",
@@ -85,12 +103,14 @@ class Client(ABC):
 
     # todo override in specific clients
     async def session_update(self, session_options):
+        """Send a session update to the OpenAI Realtime API."""
         update = {"type": "session.update", "session": session_options}
         logger.info("Sending session update:", json.dumps(update))
         await self._openai_ws.send(json.dumps(update))
         logger.info("Sending session update finished")
 
     async def _read_from_client(self):
+        """Read messages from the OpenAI Realtime API."""
         try:
             async for openai_message in self._openai_ws:
                 response = json.loads(openai_message)
@@ -99,6 +119,7 @@ class Client(ABC):
             logger.warning(f"Error in _read_from_client: {e}")
 
     async def run(self):
+        """Run the client."""
         async with websockets.connect(
             f"wss://api.openai.com/v1/realtime?model={self.model}",
             additional_headers={

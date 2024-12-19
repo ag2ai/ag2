@@ -9,16 +9,21 @@ from abc import ABC, abstractmethod
 
 
 class RealtimeObserver(ABC):
+    """Observer for the OpenAI Realtime API."""
+
     def __init__(self):
         self._client = None
 
     def register_client(self, client):
+        """Register a client with the observer."""
         self._client = client
 
     @abstractmethod
     async def run(self, openai_ws):
+        """Run the observer."""
         pass
 
     @abstractmethod
     async def update(self, message):
+        """Update the observer with a message from the OpenAI Realtime API."""
         pass

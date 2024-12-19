@@ -20,7 +20,7 @@ from autogen.agentchat.agent import Agent, LLMAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.function_utils import get_function_schema
 
-from .client import Client
+from .client import OpenAIRealtimeClient
 from .function_observer import FunctionObserver
 from .realtime_observer import RealtimeObserver
 
@@ -44,44 +44,50 @@ QUESTION_TIMEOUT_SECONDS = 20
 
 
 class RealtimeAgent(ConversableAgent):
+    """(Experimental) Agent for interacting with the Realtime Clients."""
+
     def __init__(
         self,
         *,
         name: str,
         audio_adapter: RealtimeObserver,
         system_message: Optional[Union[str, List]] = "You are a helpful AI Assistant.",
-        is_termination_msg: Optional[Callable[[Dict], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
-        human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        function_map: Optional[Dict[str, Callable]] = None,
-        code_execution_config: Union[Dict, Literal[False]] = False,
         llm_config: Optional[Union[Dict, Literal[False]]] = None,
-        default_auto_reply: Union[str, Dict] = "",
-        description: Optional[str] = None,
-        chat_messages: Optional[Dict[Agent, List[Dict]]] = None,
-        silent: Optional[bool] = None,
-        context_variables: Optional[Dict[str, Any]] = None,
         voice: str = "alloy",
     ):
+        """(Experimental) Agent for interacting with the Realtime Clients.
+
+        Args:
+            name: str
+                the name of the agent
+            audio_adapter: RealtimeObserver
+                adapter for streaming the audio from the client
+            system_message: str or list
+                the system message for the client
+            llm_config: dict or False
+                the config for the LLM
+            voice: str
+                the voice to be used for the agent
+        """
         super().__init__(
             name=name,
-            is_termination_msg=is_termination_msg,
-            max_consecutive_auto_reply=max_consecutive_auto_reply,
-            human_input_mode=human_input_mode,
-            function_map=function_map,
-            code_execution_config=code_execution_config,
-            default_auto_reply=default_auto_reply,
-            llm_config=llm_config,
-            system_message=system_message,
-            description=description,
-            chat_messages=chat_messages,
-            silent=silent,
-            context_variables=context_variables,
+            is_termination_msg=None,
+            max_consecutive_auto_reply=None,
+            human_input_mode="ALWAYS",
+            function_map=None,
+            code_execution_config=False,
+            default_auto_reply="",
+            description=None,
+            chat_messages=None,
+            silent=None,
+            context_variables=None,
         )
-        self._client = Client(self, audio_adapter, FunctionObserver(self))
+        print("!" * 100)
+        print(llm_config)
         self.llm_config = llm_config
+        self._client = OpenAIRealtimeClient(self, audio_adapter, FunctionObserver(self))
         self.voice = voice
-        self.registered_functions = {}
+        self.realtime_functions = {}
 
         self._oai_system_message = [{"content": system_message, "role": "system"}]  # todo still needed?
         self.register_reply(
@@ -101,6 +107,16 @@ class RealtimeAgent(ConversableAgent):
         agents: List[SwarmAgent],
         system_message: Optional[str] = None,
     ) -> None:
+        """Register a swarm of agents with the Realtime Agent.
+
+        Args:
+            initial_agent: SwarmAgent
+                the initial agent in the swarm
+            agents: list of SwarmAgent
+                the agents in the swarm
+            system_message: str
+                the system message for the client
+        """
         if not system_message:
             if self.system_message != "You are a helpful AI Assistant.":
                 logger.warning(
@@ -114,14 +130,15 @@ class RealtimeAgent(ConversableAgent):
         self._initial_agent = initial_agent
         self._agents = agents
 
-        self.register_handover(name="answer_task_question", description="Answer question from the task")(
+        self.register_realtime_function(name="answer_task_question", description="Answer question from the task")(
             self.set_answer
         )
 
     async def run(self):
+        """Run the agent."""
         await self._client.run()
 
-    def register_handover(
+    def register_realtime_function(
         self,
         *,
         description: str,
@@ -146,21 +163,24 @@ class RealtimeAgent(ConversableAgent):
             schema = get_function_schema(func, name=name, description=description)["function"]
             schema["type"] = "function"
 
-            self.registered_functions[name] = (schema, func)
+            self.realtime_functions[name] = (schema, func)
 
             return func
 
         return _decorator
 
     def reset_answer(self) -> None:
+        """Reset the answer event."""
         self._answer_event = anyio.Event()
 
     def set_answer(self, answer: str) -> str:
+        """Set the answer to the question."""
         self._answer = answer
         self._answer_event.set()
         return "Answer set successfully."
 
     async def get_answer(self) -> str:
+        """Get the answer to the question."""
         await self._answer_event.wait()
         return self._answer
 
@@ -193,6 +213,19 @@ class RealtimeAgent(ConversableAgent):
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> Tuple[bool, Union[str, None]]:
+        """Check if the conversation should be terminated and if the agent should reply.
+
+        Called when its agents turn in the chat conversation.
+
+        Args:
+            messages: list of dict
+                the messages in the conversation
+            sender: Agent
+                the agent sending the message
+            config: any
+                the config for the agent
+        """
+
         async def get_input():
             async with create_task_group() as tg:
                 tg.soonify(self.ask_question)(
