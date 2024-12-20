@@ -246,6 +246,38 @@ a.colab-badge > img, a.github-badge  > img {
   border-bottom: none;
 }
 /* Examples page Gallery section ends */
+
+/* Blog page section starts */
+.blog-authors .px-6.py-5{
+  padding:0.35rem 0;
+}
+.blog-authors .card {
+  display: flex;
+  padding: 0;
+  margin: 0;
+  justify-content: flex-start;
+  background: none;
+  border: none;
+}
+.blog-authors .card img {
+  max-width: 60px;
+  height: auto;
+  border-radius: 50%;
+}
+.blog-authors p {
+  font-weight: 300;
+}
+.blog-authors p.name, .blog-authors p.authors {
+  font-weight: 700;
+}
+.blog-authors p.authors {
+  margin: 0.5rem 0;
+}
+.blog-authors .img-placeholder {
+  margin-right: 1rem;
+}
+/* Blog page section ends */
+
 #search-bar-entry {
   border-radius: 0 !important;
   height: 36px;
