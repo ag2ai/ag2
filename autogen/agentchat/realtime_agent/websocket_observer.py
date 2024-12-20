@@ -7,8 +7,10 @@
 
 import base64
 import json
+from typing import TYPE_CHECKING, Any, Optional
 
-from fastapi import WebSocketDisconnect
+if TYPE_CHECKING:
+    from fastapi.websockets import WebSocket
 
 from .realtime_observer import RealtimeObserver
 
@@ -26,7 +28,7 @@ SHOW_TIMING_MATH = False
 
 
 class WebsocketAudioAdapter(RealtimeObserver):
-    def __init__(self, websocket):
+    def __init__(self, websocket: "WebSocket"):
         super().__init__()
         self.websocket = websocket
 
@@ -34,10 +36,10 @@ class WebsocketAudioAdapter(RealtimeObserver):
         self.stream_sid = None
         self.latest_media_timestamp = 0
         self.last_assistant_item = None
-        self.mark_queue = []
-        self.response_start_timestamp_socket = None
+        self.mark_queue: list[str] = []
+        self.response_start_timestamp_socket: Optional[int] = None
 
-    async def update(self, response):
+    async def update(self, response: dict[str, Any]) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to websocket."""
         if response["type"] in LOG_EVENT_TYPES:
             print(f"Received event: {response['type']}", response)
@@ -65,7 +67,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
                 print(f"Interrupting response with id: {self.last_assistant_item}")
                 await self.handle_speech_started_event()
 
-    async def handle_speech_started_event(self):
+    async def handle_speech_started_event(self) -> None:
         """Handle interruption when the caller's speech starts."""
         print("Handling speech started event.")
         if self.mark_queue and self.response_start_timestamp_socket is not None:
@@ -93,14 +95,14 @@ class WebsocketAudioAdapter(RealtimeObserver):
             self.last_assistant_item = None
             self.response_start_timestamp_socket = None
 
-    async def send_mark(self):
+    async def send_mark(self) -> None:
         if self.stream_sid:
             mark_event = {"event": "mark", "streamSid": self.stream_sid, "mark": {"name": "responsePart"}}
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
-    async def run(self):
-        openai_ws = self._client._openai_ws
+    async def run(self) -> None:
+        openai_ws = self.client.openai_ws
         await self.initialize_session()
 
         async for message in self.websocket.iter_text():
@@ -119,7 +121,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
                 if self.mark_queue:
                     self.mark_queue.pop(0)
 
-    async def initialize_session(self):
+    async def initialize_session(self) -> None:
         """Control initial session with OpenAI."""
         session_update = {"input_audio_format": "pcm16", "output_audio_format": "pcm16"}  #  g711_ulaw  # "g711_ulaw",
-        await self._client.session_update(session_update)
+        await self.client.session_update(session_update)

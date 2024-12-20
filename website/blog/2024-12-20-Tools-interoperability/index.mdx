@@ -22,31 +22,44 @@ tags: [LLM, tools, langchain, crewai, pydanticai]
    </CardGroup>
 </div>
 
+<div style={{ display: 'none' }}>
+    This content will be hidden.
+    MOVE THE iframe BLOCK OUTSIDE OF div BLOCK ONCE THE VIDEO IS READY
+    ALSO DELETE THIS div BLOCK
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/YQdTsD4dPeg?si=m911HxxEgbzcWxQt" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</div>
+
 **TL;DR**
-AG2 lets you bring in tools from different frameworks like **LangChain**, **CrewAI**, and **PydanticAI**.
+AG2 lets you bring in **Tools** from different frameworks like **LangChain**, **CrewAI**, and **PydanticAI**.
 
-- **LangChain**: Useful for tasks like API querying and web scraping.
-- **CrewAI**: Offers a variety of tools for web scraping, search, and more.
-- **PydanticAI**: Adds context-driven tools and structured data processing.
+- [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools): Useful for tasks like API querying and web scraping.
+- [CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main): Offers a variety of tools for web scraping, search, and more.
+- [PydanticAI Tools](https://ai.pydantic.dev/tools/): Adds context-driven tools and structured data processing.
 
-With AG2, you can combine these tools and enhance your agents' capabilities.
+**With AG2, you can combine these tools and enhance your agents' capabilities.**
+
 
 In this post, we’ll walk through how to integrate tools from various frameworks—like [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools),
 [CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main), and [PydanticAI Tools](https://ai.pydantic.dev/tools/)—into AG2.
-This allows you to use tools from different frameworks within AG2, giving your agents more power and flexibility. You’ll see how to set up agents, adapt the tools, and validate the integration through examples.his post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
+
+Because, really, the magic happens when you combine them all. This allows you to use tools from different frameworks within AG2, giving your agents more power and flexibility.
+This blog builds upon the concepts covered in the [Tool Integration notebook](/notebooks/tools_interoperability).
+
+In this post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
+
 
 ## LangChain Tools Integration
 
-LangChain is a popular framework that offers a wide range of tools to work with LLMs. LangChain has already implemented a variety of tools that can be easily integrated into AG2. You can explore the available tools in the [LangChain Community Tools](https://github.com/langchain-ai/langchain/tree/master/libs/community/langchain_community/tools) folder. These tools, such as those for querying APIs, web scraping, and text generation, can be quickly incorporated into AG2, providing powerful functionality for your agents.
+LangChain is a popular framework with lots of tools for working with LLMs. It's got a range of tools that can be easily integrated into AG2. If you want to see the full list, check out the [LangChain Community Tools](https://github.com/langchain-ai/langchain/tree/master/libs/community/langchain_community/tools). You can quickly add things like API queries, web scraping, and text generation to your AG2 setup.
 
 ### Installation
-To integrate LangChain tools into the AG2 framework, install the required dependencies:
+To get LangChain tools working with AG2, you’ll need to install a couple of dependencies:
 
 ```bash
 pip install ag2[interop-langchain]
 ```
 
-Additionally, this notebook uses LangChain's [Wikipedia Tool](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html), which requires the `wikipedia` package. Install it with:
+Also, we’ll use LangChain’s [Wikipedia Tool](https://python.langchain.com/docs/integrations/tools/wikipedia/), which needs the wikipedia package. Install it like this:
 
 ```bash
 pip install wikipedia
@@ -54,10 +67,11 @@ pip install wikipedia
 
 ### Imports
 
-Import necessary modules and tools.
-- `WikipediaQueryRun` and `WikipediaAPIWrapper`: Tools for querying Wikipedia.
-- `AssistantAgent` and `UserProxyAgent`: Agents that facilitate communication in the AG2 framework.
-- `Interoperability`: This module acts as a bridge, making it easier to integrate LangChain tools with AG2’s architecture.
+Now, let’s import the necessary modules and tools.
+
+- [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) and [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html) are the tools for querying Wikipedia.
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) and [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) are the agents for interaction within AG2.
+- [`Interoperability`](/docs/reference/interop/interoperability) is what helps connect LangChain tools with AG2.
 
 ```python
 import os
@@ -71,10 +85,10 @@ from autogen.interop import Interoperability
 
 ### Agent Configuration
 
-Configure the agents for the interaction.
-- `config_list` defines the LLM configurations, including the model and API key.
-- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+Let’s set up the agents for interaction.
+- `config_list`  is where you define the LLM configuration, like the model and API key.
+- [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) represents the AI agent, configured with the LLM settings.
 
 ```python
 config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -90,13 +104,11 @@ chatbot = AssistantAgent(
 ```
 
 ### Tool Integration
-
-- Initialize and register the LangChain tool with AG2.
-- `WikipediaAPIWrapper`: Configured to fetch the top 1 result from Wikipedia with a maximum of 1000 characters per document.
-- `WikipediaQueryRun`: A LangChain tool that executes Wikipedia queries.
-- `LangchainInteroperability`: Converts the LangChain tool into a format compatible with the AG2 framework.
-- `ag2_tool.register_for_execution(user_proxy)`: Registers the tool for use by the user_proxy agent.
-- `ag2_tool.register_for_llm(chatbot)`: Registers the tool for integration with the chatbot agent.
+Here’s where we connect everything.
+- First, we set up [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html), which fetches the top Wikipedia result (with a character limit).
+- Then, we use [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) to perform Wikipedia queries.
+- [`Interoperability`](/docs/reference/interop/interoperability) helps convert the LangChain tool to AG2’s format.
+- Finally, we register the tool for use with both the `user_proxy` and `chatbot`.
 
 ```python
 api_wrapper = WikipediaAPIWrapper(top_k_results=1, doc_content_chars_max=1000)
@@ -109,13 +121,18 @@ ag2_tool.register_for_execution(user_proxy)
 ag2_tool.register_for_llm(chatbot)
 ```
 
-### Initiate Chat
+### Initiating the Chat
+
+Once everything’s set up, we can send a message to the chatbot, and it’ll use the Wikipedia tool to fetch the relevant information.
+
 ```python
 message = "Tell me about the history of the United States"
 user_proxy.initiate_chat(recipient=chatbot, message=message, max_turns=2)
 ```
 
-Output:
+### Output
+
+When the chat is initiated, here’s the output you’ll see:
 
 ```console
 User (to chatbot):
@@ -170,9 +187,9 @@ pip install ag2[interop-crewai]
 ### Imports
 
 Import necessary modules and tools.
-- `ScrapeWebsiteTool` are the CrewAI tools for web scraping
-- `AssistantAgent` and `UserProxyAgent` are core AG2 classes.
-- `Interoperability`: This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
+- [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool): A CrewAI tool for web scraping.
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) and [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent): Core AG2 classes.
+- [`Interoperability`](/docs/reference/interop/interoperability): This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
 
 ```python
 import os
@@ -187,8 +204,8 @@ from autogen.interop import Interoperability
 
 Configure the agents for the interaction.
 - `config_list` defines the LLM configurations, including the model and API key.
-- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+- [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) represents the AI agent, configured with the LLM settings.
 
 ```python
 config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -205,10 +222,10 @@ chatbot = AssistantAgent(
 
 ### Tool Integration
 
-Initialize and register the CrewAI tool with AG2.
-- `crewai_tool` is an instance of the `ScrapeWebsiteTool` from CrewAI.
-- `Interoperability` converts the CrewAI tool to make it usable in AG2.
-- `register_for_execution` and `register_for_llm` allow the tool to work with the UserProxyAgent and AssistantAgent.
+Integrate the CrewAI tool with AG2.
+- [`Interoperability`](/docs/reference/interop/interoperability) converts the CrewAI tool to a format compatible with AG2.
+- [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool) is used for web scraping tasks.
+- Register the tool for both execution and interaction with LLMs.
 
 ```python
 interop = Interoperability()
@@ -217,13 +234,17 @@ ag2_tool = interop.convert_tool(tool=crewai_tool, type="crewai")
 
 ag2_tool.register_for_execution(user_proxy)
 ag2_tool.register_for_llm(chatbot)
+```
 
+### Initiating the chat
+Initiate the conversation between the [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) and the [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) to utilize the CrewAI tool.
+```python
 message = "Scrape the website https://ag2.ai/"
-
 chat_result = user_proxy.initiate_chat(recipient=chatbot, message=message, max_turns=2)
 ```
 
-Output:
+### Output
+The `chatbot` provides results based on the web scraping operation:
 
 ```console
 User (to chatbot):
@@ -279,11 +300,11 @@ This comprehensive platform seems to aim at both individual developers and enter
 --------------------------------------------------------------------------------
 ```
 
+You can also access a detailed summary of the interaction:
+
 ```python
 print(chat_result.summary)
 ```
-
-Output:
 
 ```console
 The website "https://ag2.ai/" promotes a platform named AgentOS, which is designed for building multi-agent systems efficiently. Key highlights from the website are:
@@ -311,10 +332,10 @@ This comprehensive platform seems to aim at both individual developers and enter
 
 ## PydanticAI Tools Integration
 
-[PydanticAI](https://ai.pydantic.dev/) is a newer framework that offers powerful capabilities for working with LLMs. Although it currently does not have a repository with pre-built tools, it provides features like **dependency injection**, allowing you to inject a "Context" into a tool for better execution without relying on LLMs. This context can be used for passing parameters or managing state during the execution of a tool. While the framework is still growing, you can integrate its tools into AG2 to enhance agent capabilities, especially for tasks that involve structured data and context-driven logic.
+[PydanticAI](https://ai.pydantic.dev/) is a newer framework that brings powerful features for working with LLMs. Although it doesn't yet have a collection of pre-built tools like other frameworks, it offers useful capabilities such as **dependency injection**. This feature allows you to inject a "Context" into tools, which can help pass parameters or manage state without relying on LLMs. Though it's still evolving, you can easily integrate PydanticAI tools into AG2 to boost agent capabilities, particularly for tasks that involve structured data and context-driven logic.
 
 ### Installation
-To integrate LangChain tools into the AG2 framework, install the required dependencies:
+To get PydanticAI tools working with AG2, install the necessary dependencies:
 
 ```bash
 pip install ag2[interop-pydantic-ai]
@@ -324,11 +345,11 @@ pip install ag2[interop-pydantic-ai]
 ### Imports
 
 Import necessary modules and tools.
-- `BaseModel`: Used to define data structures for tool inputs and outputs.
-- `RunContext`: Provides context during the execution of tools.
-- `PydanticAITool`: Represents a tool in the PydanticAI framework.
-- `AssistantAgent` and `UserProxyAgent`: Agents that facilitate communication in the AG2 framework.
-- `Interoperability`: This module acts as a bridge, making it easier to integrate PydanticAI tools with AG2’s architecture.
+- [BaseModel](https://docs.pydantic.dev/latest/api/base_model/): Used to define data structures for tool inputs and outputs.
+- [RunContext](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.RunContext): Provides context during the execution of tools.
+- [PydanticAITool](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.Tool): Represents a tool in the PydanticAI framework.
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) and [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent): Agents that facilitate communication in the AG2 framework.
+- [`Interoperability`](/docs/reference/interop/interoperability): This module acts as a bridge, making it easier to integrate PydanticAI tools with AG2’s architecture.
 
 ```python
 import os
@@ -346,8 +367,8 @@ from autogen.interop import Interoperability
 
 Configure the agents for the interaction.
 - `config_list` defines the LLM configurations, including the model and API key.
-- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+- [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) represents the AI agent, configured with the LLM settings.
 
 ```python
 config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -364,14 +385,13 @@ chatbot = AssistantAgent(
 
 ### Tool Integration
 
-Integrate the PydanticAI tool with AG2.
+To integrate a PydanticAI tool into AG2:
 
-- Define a `Player` model using `BaseModel` to structure the input data.
-- Use `RunContext` to securely inject dependencies (like the `Player` instance) into the tool function without exposing them to the LLM.
-- Implement `get_player` to define the tool's functionality, accessing `ctx.deps` for injected data.
-- Convert the tool to an AG2-compatible format with `Interoperability` and register it for execution and LLM communication.
-- Convert the PydanticAI tool into an AG2-compatible format using `convert_tool`.
-- Register the tool for both execution and communication with the LLM by associating it with the `user_proxy` and `chatbot`.
+- First, define a `Player` model using [BaseModel](https://docs.pydantic.dev/latest/api/base_model/) to structure the input data.
+- Use [RunContext](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.RunContext) to inject dependencies (like the `Player` instance) securely into the tool.
+- The `get_player` function defines the tool’s functionality, retrieving injected data through `ctx.deps`.
+- Then, convert the tool into an AG2-compatible format with [`Interoperability`](/docs/reference/interop/interoperability).
+- Register the tool for execution and interaction with both the `user_proxy` and `chatbot`.
 
 ```python
 class Player(BaseModel):
@@ -399,11 +419,12 @@ ag2_tool.register_for_execution(user_proxy)
 ag2_tool.register_for_llm(chatbot)
 ```
 
-Initiate a conversation between the `UserProxyAgent` and the `AssistantAgent`.
+### Initiating the chat
+Now that everything is set up, you can initiate a chat between the [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) and the [`AssistantAgent`](/docs/reference/agentchat/assistant_agent):
 
-- Use the `initiate_chat` method to send a message from the `user_proxy` to the `chatbot`.
-- In this example, the user requests the chatbot to retrieve player information, providing "goal keeper" as additional context.
-- The `Player` instance is securely injected into the tool using `RunContext`, ensuring the chatbot can retrieve and use this data during the interaction.
+- The `user_proxy` sends a message to the `chatbot`.
+- The user requests player information, and includes "goal keeper" as additional context.
+- The `Player` data is securely injected into the tool, and the chatbot can access and use it during the chat.
 
 ```python
 user_proxy.initiate_chat(
@@ -411,7 +432,7 @@ user_proxy.initiate_chat(
 )
 ```
 
-Output:
+### Output
 
 ```console
 User (to chatbot):
@@ -440,3 +461,15 @@ chatbot (to User):
 
 The player's name is Luka, who is a 25-year-old goalkeeper. TERMINATE
 ```
+
+## Summary
+
+In this post, we've explored how to integrate tools from multiple frameworks (LangChain, CrewAI, and PydanticAI) into the AG2 framework, enabling cross-framework interoperability. By integrating these tools, you can enhance your agents with a variety of capabilities, such as API querying, web scraping, and structured data processing.
+
+- **LangChain** offers a wide range of pre-built tools for working with APIs and web scraping, making it easy to extend AG2's functionality.
+- **CrewAI** brings diverse tools for search, web scraping, and more, allowing for robust agent interactions.
+- **PydanticAI** introduces dependency injection and context-driven logic, enabling efficient data handling without relying on LLMs.
+
+With AG2's flexible architecture and the power of these frameworks, developers can create agents that are more capable and adaptable. By following the integration steps for each framework, you can enhance your agents' performance, expand their capabilities, and create more dynamic interactions.
+
+Now you should have a better understanding of how to integrate tools from different frameworks into AG2, and how to use these tools effectively within your own projects.

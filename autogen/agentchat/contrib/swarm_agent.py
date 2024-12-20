@@ -123,7 +123,7 @@ def initiate_swarm_chat(
     user_agent: Optional[UserProxyAgent] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
-    after_work: Optional[Union[AFTER_WORK, Callable]] = AFTER_WORK(AfterWorkOption.TERMINATE),
+    after_work: Optional[Union[AfterWorkOption, Callable]] = AFTER_WORK(AfterWorkOption.TERMINATE),
 ) -> tuple[ChatResult, dict[str, Any], "SwarmAgent"]:
     """Initialize and run a swarm chat
 
