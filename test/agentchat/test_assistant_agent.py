@@ -181,7 +181,7 @@ def test_tsp(human_input_mode="NEVER", max_consecutive_auto_reply=2):
 
     def tsp_message(sender, recipient, context):
         filename = context.get("prompt_filename", "")
-        with open(filename, "r") as f:
+        with open(filename) as f:
             prompt = f.read()
         question = context.get("question", "")
         return prompt.format(question=question)

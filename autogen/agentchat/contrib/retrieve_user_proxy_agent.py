@@ -100,8 +100,8 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self,
         name="RetrieveChatAgent",  # default set to RetrieveChatAgent
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        is_termination_msg: Optional[Callable[[Dict], bool]] = None,
-        retrieve_config: Optional[Dict] = None,  # config for the retrieve agent
+        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        retrieve_config: Optional[dict] = None,  # config for the retrieve agent
         **kwargs,
     ):
         r"""
@@ -371,12 +371,10 @@ class RetrieveUserProxyAgent(UserProxyAgent):
             logger.info(f"Found {len(chunks)} chunks.")
 
             if self._new_docs:
-                all_docs_ids = set(
-                    [
-                        doc["id"]
-                        for doc in self._vector_db.get_docs_by_ids(ids=None, collection_name=self._collection_name)
-                    ]
-                )
+                all_docs_ids = {
+                    doc["id"]
+                    for doc in self._vector_db.get_docs_by_ids(ids=None, collection_name=self._collection_name)
+                }
             else:
                 all_docs_ids = set()
 
@@ -525,10 +523,10 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
     def _generate_retrieve_user_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         """In this function, we will update the context and reset the conversation based on different conditions.
         We'll update the context and reset the conversation if update_context is True and either of the following:
         (1) the last message contains "UPDATE CONTEXT",

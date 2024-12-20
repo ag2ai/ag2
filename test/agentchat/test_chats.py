@@ -8,11 +8,10 @@
 
 import os
 import sys
-from typing import Literal
+from typing import Annotated, Literal
 
 import pytest
 from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
-from typing_extensions import Annotated
 
 import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, filter_config, initiate_chats
@@ -568,7 +567,7 @@ def test_udf_message_in_chats():
 
         try:
             filename = context.get("work_dir", "") + "/stock_prices.md"
-            with open(filename, "r") as file:
+            with open(filename) as file:
                 data = file.read()
         except Exception as e:
             data = f"An error occurred while reading the file: {e}"

@@ -8,12 +8,12 @@ from .interoperable import Interoperable
 
 __all__ = ["register_interoperable_class", "InteroperableRegistry"]
 
-InteroperableClass = TypeVar("InteroperableClass", bound=Type[Interoperable])
+InteroperableClass = TypeVar("InteroperableClass", bound=type[Interoperable])
 
 
 class InteroperableRegistry:
     def __init__(self) -> None:
-        self._registry: Dict[str, Type[Interoperable]] = {}
+        self._registry: dict[str, type[Interoperable]] = {}
 
     def register(self, short_name: str, cls: InteroperableClass) -> InteroperableClass:
         if short_name in self._registry:
@@ -23,15 +23,15 @@ class InteroperableRegistry:
 
         return cls
 
-    def get_short_names(self) -> List[str]:
+    def get_short_names(self) -> list[str]:
         return sorted(self._registry.keys())
 
-    def get_supported_types(self) -> List[str]:
+    def get_supported_types(self) -> list[str]:
         short_names = self.get_short_names()
         supported_types = [name for name in short_names if self._registry[name].get_unsupported_reason() is None]
         return supported_types
 
-    def get_class(self, short_name: str) -> Type[Interoperable]:
+    def get_class(self, short_name: str) -> type[Interoperable]:
         return self._registry[short_name]
 
     @classmethod

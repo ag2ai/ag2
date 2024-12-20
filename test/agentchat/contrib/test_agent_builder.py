@@ -180,7 +180,7 @@ def test_load():
     )
 
     config_save_path = f"{here}/example_test_agent_builder_config.json"
-    json.load(open(config_save_path, "r"))
+    json.load(open(config_save_path))
 
     agent_list, loaded_agent_configs = builder.load(
         config_save_path,

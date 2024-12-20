@@ -120,7 +120,7 @@ class BedrockClient:
         """Retrieve the messages from the response."""
         return [choice.message for choice in response.choices]
 
-    def parse_custom_params(self, params: Dict[str, Any]):
+    def parse_custom_params(self, params: dict[str, Any]):
         """
         Parses custom parameters for logic in this client class
         """
@@ -129,7 +129,7 @@ class BedrockClient:
         # This is required because not all models support a system prompt (e.g. Mistral Instruct).
         self._supports_system_prompts = params.get("supports_system_prompts", True)
 
-    def parse_params(self, params: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    def parse_params(self, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """
         Loads the valid parameters required to invoke Bedrock Converse
         Returns a tuple of (base_params, additional_params)
@@ -273,7 +273,7 @@ class BedrockClient:
         return calculate_cost(response.usage.prompt_tokens, response.usage.completion_tokens, response.model)
 
     @staticmethod
-    def get_usage(response) -> Dict:
+    def get_usage(response) -> dict:
         """Get the usage of tokens and their cost information."""
         return {
             "prompt_tokens": response.usage.prompt_tokens,
@@ -284,7 +284,7 @@ class BedrockClient:
         }
 
 
-def extract_system_messages(messages: List[dict]) -> List:
+def extract_system_messages(messages: list[dict]) -> list:
     """Extract the system messages from the list of messages.
 
     Args:
@@ -309,8 +309,8 @@ def extract_system_messages(messages: List[dict]) -> List:
 
 
 def oai_messages_to_bedrock_messages(
-    messages: List[Dict[str, Any]], has_tools: bool, supports_system_prompts: bool
-) -> List[Dict]:
+    messages: list[dict[str, Any]], has_tools: bool, supports_system_prompts: bool
+) -> list[dict]:
     """
     Convert messages from OAI format to Bedrock format.
     We correct for any specific role orders and types, etc.
@@ -453,9 +453,9 @@ def oai_messages_to_bedrock_messages(
 
 
 def parse_content_parts(
-    message: Dict[str, Any],
-) -> List[dict]:
-    content: str | List[Dict[str, Any]] = message.get("content")
+    message: dict[str, Any],
+) -> list[dict]:
+    content: str | list[dict[str, Any]] = message.get("content")
     if isinstance(content, str):
         return [
             {
@@ -487,7 +487,7 @@ def parse_content_parts(
     return content_parts
 
 
-def parse_image(image_url: str) -> Tuple[bytes, str]:
+def parse_image(image_url: str) -> tuple[bytes, str]:
     """Try to get the raw data from an image url.
 
     Ref: https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ImageSource.html
@@ -516,7 +516,7 @@ def parse_image(image_url: str) -> Tuple[bytes, str]:
         raise RuntimeError("Unable to access the image url")
 
 
-def format_tools(tools: List[Dict[str, Any]]) -> Dict[Literal["tools"], List[Dict[str, Any]]]:
+def format_tools(tools: list[dict[str, Any]]) -> dict[Literal["tools"], list[dict[str, Any]]]:
     converted_schema = {"tools": []}
 
     for tool in tools:

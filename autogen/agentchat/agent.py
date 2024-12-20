@@ -28,7 +28,7 @@ class Agent(Protocol):
 
     def send(
         self,
-        message: Union[Dict[str, Any], str],
+        message: Union[dict[str, Any], str],
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -44,7 +44,7 @@ class Agent(Protocol):
 
     async def a_send(
         self,
-        message: Union[Dict[str, Any], str],
+        message: Union[dict[str, Any], str],
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -60,7 +60,7 @@ class Agent(Protocol):
 
     def receive(
         self,
-        message: Union[Dict[str, Any], str],
+        message: Union[dict[str, Any], str],
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -75,7 +75,7 @@ class Agent(Protocol):
 
     async def a_receive(
         self,
-        message: Union[Dict[str, Any], str],
+        message: Union[dict[str, Any], str],
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -91,10 +91,10 @@ class Agent(Protocol):
 
     def generate_reply(
         self,
-        messages: Optional[List[Dict[str, Any]]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Union[str, Dict[str, Any], None]:
+    ) -> Union[str, dict[str, Any], None]:
         """Generate a reply based on the received messages.
 
         Args:
@@ -109,10 +109,10 @@ class Agent(Protocol):
 
     async def a_generate_reply(
         self,
-        messages: Optional[List[Dict[str, Any]]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Union[str, Dict[str, Any], None]:
+    ) -> Union[str, dict[str, Any], None]:
         """(Async) Generate a reply based on the received messages.
 
         Args:

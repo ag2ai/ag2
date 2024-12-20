@@ -18,8 +18,8 @@ class MarkdownCodeExtractor(CodeExtractor):
     """(Experimental) A class that extracts code blocks from a message using Markdown syntax."""
 
     def extract_code_blocks(
-        self, message: Union[str, List[Union[UserMessageTextContentPart, UserMessageImageContentPart]], None]
-    ) -> List[CodeBlock]:
+        self, message: Union[str, list[Union[UserMessageTextContentPart, UserMessageImageContentPart]], None]
+    ) -> list[CodeBlock]:
         """(Experimental) Extract code blocks from a message. If no code blocks are found,
         return an empty list.
 

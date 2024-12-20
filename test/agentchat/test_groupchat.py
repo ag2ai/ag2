@@ -602,9 +602,7 @@ def test_init_default_parameters():
     agents = [autogen.ConversableAgent(name=f"Agent{i}", llm_config=False) for i in range(3)]
     group_chat = GroupChat(agents=agents, messages=[], max_round=3)
     for agent in agents:
-        assert set([a.name for a in group_chat.allowed_speaker_transitions_dict[agent]]) == set(
-            [a.name for a in agents]
-        )
+        assert {a.name for a in group_chat.allowed_speaker_transitions_dict[agent]} == {a.name for a in agents}
 
 
 def test_graph_parameters():
@@ -889,7 +887,7 @@ def test_get_agent_by_name():
             llm_config=False,
         )
 
-    def team(members: List[autogen.Agent], name: str) -> autogen.Agent:
+    def team(members: list[autogen.Agent], name: str) -> autogen.Agent:
         gc = autogen.GroupChat(agents=members, messages=[])
 
         return autogen.GroupChatManager(groupchat=gc, name=name, llm_config=False)
@@ -963,7 +961,7 @@ def test_nested_teams_chat():
     team1_msg = {"content": "Hello from team 1"}
     team2_msg = {"content": "Hello from team 2"}
 
-    def agent(name: str, auto_reply: Optional[Dict[str, Any]] = None) -> autogen.ConversableAgent:
+    def agent(name: str, auto_reply: Optional[dict[str, Any]] = None) -> autogen.ConversableAgent:
         return autogen.ConversableAgent(
             name=name,
             max_consecutive_auto_reply=10,
@@ -972,7 +970,7 @@ def test_nested_teams_chat():
             default_auto_reply=auto_reply,
         )
 
-    def team(name: str, auto_reply: Optional[Dict[str, Any]] = None) -> autogen.ConversableAgent:
+    def team(name: str, auto_reply: Optional[dict[str, Any]] = None) -> autogen.ConversableAgent:
         member1 = agent(f"member1_{name}", auto_reply=auto_reply)
         member2 = agent(f"member2_{name}", auto_reply=auto_reply)
 
