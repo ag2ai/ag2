@@ -4,10 +4,9 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Annotated, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field
-from typing_extensions import Annotated
 
 from autogen._pydantic import model_dump, model_dump_json, type2schema
 
@@ -19,14 +18,14 @@ def test_type2schema() -> None:
     assert type2schema(bool) == {"type": "boolean"}
     assert type2schema(None) == {"type": "null"}
     assert type2schema(Optional[int]) == {"anyOf": [{"type": "integer"}, {"type": "null"}]}
-    assert type2schema(List[int]) == {"items": {"type": "integer"}, "type": "array"}
-    assert type2schema(Tuple[int, float, str]) == {
+    assert type2schema(list[int]) == {"items": {"type": "integer"}, "type": "array"}
+    assert type2schema(tuple[int, float, str]) == {
         "maxItems": 3,
         "minItems": 3,
         "prefixItems": [{"type": "integer"}, {"type": "number"}, {"type": "string"}],
         "type": "array",
     }
-    assert type2schema(Dict[str, int]) == {"additionalProperties": {"type": "integer"}, "type": "object"}
+    assert type2schema(dict[str, int]) == {"additionalProperties": {"type": "integer"}, "type": "object"}
     assert type2schema(Annotated[str, "some text"]) == {"type": "string"}
     assert type2schema(Union[int, float]) == {"anyOf": [{"type": "integer"}, {"type": "number"}]}
 

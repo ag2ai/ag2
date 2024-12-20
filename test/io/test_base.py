@@ -35,9 +35,9 @@ class TestIOStream:
         assert isinstance(IOStream.get_default(), IOConsole)
 
     def test_get_default_on_new_thread(self) -> None:
-        exceptions: List[Exception] = []
+        exceptions: list[Exception] = []
 
-        def on_new_thread(exceptions: List[Exception] = exceptions) -> None:
+        def on_new_thread(exceptions: list[Exception] = exceptions) -> None:
             try:
                 assert isinstance(IOStream.get_default(), IOConsole)
             except Exception as e:

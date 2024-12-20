@@ -38,9 +38,9 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def start(
-    logger: Optional[BaseLogger] = None,
+    logger: BaseLogger | None = None,
     logger_type: Literal["sqlite", "file"] = "sqlite",
-    config: Optional[Dict[str, Any]] = None,
+    config: dict[str, Any] | None = None,
 ) -> str:
     """
     Start logging for the runtime.
@@ -72,9 +72,9 @@ def log_chat_completion(
     invocation_id: uuid.UUID,
     client_id: int,
     wrapper_id: int,
-    agent: Union[str, Agent],
-    request: Dict[str, Union[float, str, List[Dict[str, str]]]],
-    response: Union[str, ChatCompletion],
+    agent: str | Agent,
+    request: dict[str, float | str | list[dict[str, str]]],
+    response: str | ChatCompletion,
     is_cached: int,
     cost: float,
     start_time: str,
@@ -88,7 +88,7 @@ def log_chat_completion(
     )
 
 
-def log_new_agent(agent: ConversableAgent, init_args: Dict[str, Any]) -> None:
+def log_new_agent(agent: ConversableAgent, init_args: dict[str, Any]) -> None:
     if autogen_logger is None:
         logger.error("[runtime logging] log_new_agent: autogen logger is None")
         return
@@ -96,7 +96,7 @@ def log_new_agent(agent: ConversableAgent, init_args: Dict[str, Any]) -> None:
     autogen_logger.log_new_agent(agent, init_args)
 
 
-def log_event(source: Union[str, Agent], name: str, **kwargs: Dict[str, Any]) -> None:
+def log_event(source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
     if autogen_logger is None:
         logger.error("[runtime logging] log_event: autogen logger is None")
         return
@@ -104,7 +104,7 @@ def log_event(source: Union[str, Agent], name: str, **kwargs: Dict[str, Any]) ->
     autogen_logger.log_event(source, name, **kwargs)
 
 
-def log_function_use(agent: Union[str, Agent], function: F, args: Dict[str, Any], returns: any):
+def log_function_use(agent: str | Agent, function: F, args: dict[str, Any], returns: any):
     if autogen_logger is None:
         logger.error("[runtime logging] log_function_use: autogen logger is None")
         return
@@ -112,7 +112,7 @@ def log_function_use(agent: Union[str, Agent], function: F, args: Dict[str, Any]
     autogen_logger.log_function_use(agent, function, args, returns)
 
 
-def log_new_wrapper(wrapper: OpenAIWrapper, init_args: Dict[str, Union[LLMConfig, List[LLMConfig]]]) -> None:
+def log_new_wrapper(wrapper: OpenAIWrapper, init_args: dict[str, LLMConfig | list[LLMConfig]]) -> None:
     if autogen_logger is None:
         logger.error("[runtime logging] log_new_wrapper: autogen logger is None")
         return
@@ -121,21 +121,21 @@ def log_new_wrapper(wrapper: OpenAIWrapper, init_args: Dict[str, Union[LLMConfig
 
 
 def log_new_client(
-    client: Union[
-        AzureOpenAI,
-        OpenAI,
-        CerebrasClient,
-        GeminiClient,
-        AnthropicClient,
-        MistralAIClient,
-        TogetherClient,
-        GroqClient,
-        CohereClient,
-        OllamaClient,
-        BedrockClient,
-    ],
+    client: (
+        AzureOpenAI
+        | OpenAI
+        | CerebrasClient
+        | GeminiClient
+        | AnthropicClient
+        | MistralAIClient
+        | TogetherClient
+        | GroqClient
+        | CohereClient
+        | OllamaClient
+        | BedrockClient
+    ),
     wrapper: OpenAIWrapper,
-    init_args: Dict[str, Any],
+    init_args: dict[str, Any],
 ) -> None:
     if autogen_logger is None:
         logger.error("[runtime logging] log_new_client: autogen logger is None")
@@ -151,7 +151,7 @@ def stop() -> None:
     is_logging = False
 
 
-def get_connection() -> Union[None, sqlite3.Connection]:
+def get_connection() -> None | sqlite3.Connection:
     if autogen_logger is None:
         logger.error("[runtime logging] get_connection: autogen logger is None")
         return None

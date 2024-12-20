@@ -12,12 +12,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 def validate_parameter(
-    params: Dict[str, Any],
+    params: dict[str, Any],
     param_name: str,
-    allowed_types: Tuple,
+    allowed_types: tuple,
     allow_None: bool,
     default_value: Any,
-    numerical_bound: Tuple,
+    numerical_bound: tuple,
     allowed_values: list,
 ) -> Any:
     """
@@ -106,7 +106,7 @@ def validate_parameter(
     return param_value
 
 
-def should_hide_tools(messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], hide_tools_param: str) -> bool:
+def should_hide_tools(messages: list[dict[str, Any]], tools: list[dict[str, Any]], hide_tools_param: str) -> bool:
     """
     Determines if tools should be hidden. This function is used to hide tools when they have been run, minimising the chance of the LLM choosing them when they shouldn't.
     Parameters:

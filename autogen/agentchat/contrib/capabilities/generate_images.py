@@ -73,7 +73,7 @@ class DalleImageGenerator:
 
     def __init__(
         self,
-        llm_config: Dict,
+        llm_config: dict,
         resolution: Literal["256x256", "512x512", "1024x1024", "1792x1024", "1024x1792"] = "1024x1024",
         quality: Literal["standard", "hd"] = "standard",
         num_images: int = 1,
@@ -149,7 +149,7 @@ class ImageGeneration(AgentCapability):
         self,
         image_generator: ImageGenerator,
         cache: Optional[AbstractCache] = None,
-        text_analyzer_llm_config: Optional[Dict] = None,
+        text_analyzer_llm_config: Optional[dict] = None,
         text_analyzer_instructions: str = PROMPT_INSTRUCTIONS,
         verbosity: int = 0,
         register_reply_position: int = 2,
@@ -212,10 +212,10 @@ class ImageGeneration(AgentCapability):
     def _image_gen_reply(
         self,
         recipient: ConversableAgent,
-        messages: Optional[List[Dict]],
+        messages: Optional[list[dict]],
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         if messages is None:
             return False, None
 
@@ -268,13 +268,13 @@ class ImageGeneration(AgentCapability):
             key = self._image_generator.cache_key(prompt)
             self._cache.set(key, img_utils.pil_to_data_uri(image))
 
-    def _extract_analysis(self, analysis: Union[str, Dict, None]) -> str:
-        if isinstance(analysis, Dict):
+    def _extract_analysis(self, analysis: Union[str, dict, None]) -> str:
+        if isinstance(analysis, dict):
             return code_utils.content_str(analysis["content"])
         else:
             return code_utils.content_str(analysis)
 
-    def _generate_content_message(self, prompt: str, image: Image) -> Dict[str, Any]:
+    def _generate_content_message(self, prompt: str, image: Image) -> dict[str, Any]:
         return {
             "content": [
                 {"type": "text", "text": f"I generated an image with the prompt: {prompt}"},

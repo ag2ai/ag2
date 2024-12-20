@@ -28,7 +28,7 @@ MESSAGES = {
 
 
 @pytest.mark.parametrize("message", MESSAGES.values())
-def test_cache_content(message: Dict[str, MessageContentType]) -> None:
+def test_cache_content(message: dict[str, MessageContentType]) -> None:
     with tempfile.TemporaryDirectory() as tmpdirname:
         cache = Cache.disk(tmpdirname)
         cache_key_1 = "test_string"
@@ -51,7 +51,7 @@ def test_cache_content(message: Dict[str, MessageContentType]) -> None:
 
 
 @pytest.mark.parametrize("messages", itertools.product(MESSAGES.values(), MESSAGES.values()))
-def test_cache_key(messages: Tuple[Dict[str, MessageContentType], Dict[str, MessageContentType]]) -> None:
+def test_cache_key(messages: tuple[dict[str, MessageContentType], dict[str, MessageContentType]]) -> None:
     message_1, message_2 = messages
     cache_1 = transforms_util.cache_key(message_1["content"], 10)
     cache_2 = transforms_util.cache_key(message_2["content"], 10)
@@ -62,17 +62,17 @@ def test_cache_key(messages: Tuple[Dict[str, MessageContentType], Dict[str, Mess
 
 
 @pytest.mark.parametrize("message", MESSAGES.values())
-def test_min_tokens_reached(message: Dict[str, MessageContentType]):
+def test_min_tokens_reached(message: dict[str, MessageContentType]):
     assert transforms_util.min_tokens_reached([message], None)
     assert transforms_util.min_tokens_reached([message], 0)
     assert not transforms_util.min_tokens_reached([message], message["text_tokens"] + 1)
 
 
 @pytest.mark.parametrize("message", MESSAGES.values())
-def test_count_text_tokens(message: Dict[str, MessageContentType]):
+def test_count_text_tokens(message: dict[str, MessageContentType]):
     assert transforms_util.count_text_tokens(message["content"]) == message["text_tokens"]
 
 
 @pytest.mark.parametrize("message", MESSAGES.values())
-def test_is_content_text_empty(message: Dict[str, MessageContentType]):
+def test_is_content_text_empty(message: dict[str, MessageContentType]):
     assert transforms_util.is_content_text_empty(message["content"]) == (message["text_tokens"] == 0)

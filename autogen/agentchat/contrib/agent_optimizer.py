@@ -217,7 +217,7 @@ class AgentOptimizer:
         )
         self._client = autogen.OpenAIWrapper(**self.llm_config)
 
-    def record_one_conversation(self, conversation_history: List[Dict], is_satisfied: bool = None):
+    def record_one_conversation(self, conversation_history: list[dict], is_satisfied: bool = None):
         """
         record one conversation history.
         Args:
@@ -234,10 +234,10 @@ class AgentOptimizer:
             ], "The input is invalid. Please input 1 or 0. 1 represents satisfied. 0 represents not satisfied."
             is_satisfied = True if reply == "1" else False
         self._trial_conversations_history.append(
-            {"Conversation {i}".format(i=len(self._trial_conversations_history)): conversation_history}
+            {f"Conversation {len(self._trial_conversations_history)}": conversation_history}
         )
         self._trial_conversations_performance.append(
-            {"Conversation {i}".format(i=len(self._trial_conversations_performance)): 1 if is_satisfied else 0}
+            {f"Conversation {len(self._trial_conversations_performance)}": 1 if is_satisfied else 0}
         )
 
     def step(self):
@@ -290,8 +290,8 @@ class AgentOptimizer:
                 incumbent_functions = self._update_function_call(incumbent_functions, actions)
 
         remove_functions = list(
-            set([key for dictionary in self._trial_functions for key in dictionary.keys()])
-            - set([key for dictionary in incumbent_functions for key in dictionary.keys()])
+            {key for dictionary in self._trial_functions for key in dictionary.keys()}
+            - {key for dictionary in incumbent_functions for key in dictionary.keys()}
         )
 
         register_for_llm = []

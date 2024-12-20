@@ -4,9 +4,10 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from time import monotonic, sleep
-from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Set, Tuple, Union
 
 import numpy as np
 from pymongo import MongoClient, UpdateOne, errors
@@ -25,7 +26,7 @@ _SAMPLE_SENTENCE = ["The weather is lovely today in paradise."]
 _DELAY = 0.5
 
 
-def with_id_rename(docs: Iterable) -> List[Dict[str, Any]]:
+def with_id_rename(docs: Iterable) -> list[dict[str, Any]]:
     """Utility changes _id field from Collection into id for Document."""
     return [{**{k: v for k, v in d.items() if k != "_id"}, "id": d["_id"]} for d in docs]
 
@@ -271,7 +272,7 @@ class MongoDBAtlasVectorDB(VectorDB):
 
     def insert_docs(
         self,
-        docs: List[Document],
+        docs: list[Document],
         collection_name: str = None,
         upsert: bool = False,
         batch_size=DEFAULT_INSERT_BATCH_SIZE,
@@ -341,8 +342,8 @@ class MongoDBAtlasVectorDB(VectorDB):
                 self._wait_for_document(collection, self.index_name, docs[-1])
 
     def _insert_batch(
-        self, collection: Collection, texts: List[str], metadatas: List[Mapping[str, Any]], ids: List[ItemID]
-    ) -> Set[ItemID]:
+        self, collection: Collection, texts: list[str], metadatas: list[Mapping[str, Any]], ids: list[ItemID]
+    ) -> set[ItemID]:
         """Compute embeddings for and insert a batch of Documents into the Collection.
 
         For performance reasons, we chose to call self.embedding_function just once,
@@ -373,7 +374,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         insert_result = collection.insert_many(to_insert)  # type: ignore
         return insert_result.inserted_ids  # TODO Remove this. Replace by log like update_docs
 
-    def update_docs(self, docs: List[Document], collection_name: str = None, **kwargs: Any) -> None:
+    def update_docs(self, docs: list[Document], collection_name: str = None, **kwargs: Any) -> None:
         """Update documents, including their embeddings, in the Collection.
 
         Optionally allow upsert as kwarg.
@@ -413,7 +414,7 @@ class MongoDBAtlasVectorDB(VectorDB):
             result.upserted_count,
         )
 
-    def delete_docs(self, ids: List[ItemID], collection_name: str = None, **kwargs):
+    def delete_docs(self, ids: list[ItemID], collection_name: str = None, **kwargs):
         """
         Delete documents from the collection of the vector database.
 
@@ -425,8 +426,8 @@ class MongoDBAtlasVectorDB(VectorDB):
         return collection.delete_many({"_id": {"$in": ids}})
 
     def get_docs_by_ids(
-        self, ids: List[ItemID] = None, collection_name: str = None, include: List[str] = None, **kwargs
-    ) -> List[Document]:
+        self, ids: list[ItemID] = None, collection_name: str = None, include: list[str] = None, **kwargs
+    ) -> list[Document]:
         """
         Retrieve documents from the collection of the vector database based on the ids.
 
@@ -457,7 +458,7 @@ class MongoDBAtlasVectorDB(VectorDB):
 
     def retrieve_docs(
         self,
-        queries: List[str],
+        queries: list[str],
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
@@ -509,14 +510,14 @@ class MongoDBAtlasVectorDB(VectorDB):
 
 
 def _vector_search(
-    embedding_vector: List[float],
+    embedding_vector: list[float],
     n_results: int,
     collection: Collection,
     index_name: str,
     distance_threshold: float = -1.0,
     oversampling_factor=10,
     include_embedding=False,
-) -> List[Tuple[Dict, float]]:
+) -> list[tuple[dict, float]]:
     """Core $vectorSearch Aggregation pipeline.
 
     Args:

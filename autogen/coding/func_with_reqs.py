@@ -20,7 +20,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-def _to_code(func: Union[FunctionWithRequirements[T, P], Callable[P, T], FunctionWithRequirementsStr]) -> str:
+def _to_code(func: FunctionWithRequirements[T, P] | Callable[P, T] | FunctionWithRequirementsStr) -> str:
     if isinstance(func, FunctionWithRequirementsStr):
         return func.func
 
@@ -40,7 +40,7 @@ class Alias:
 @dataclass
 class ImportFromModule:
     module: str
-    imports: List[Union[str, Alias]]
+    imports: list[str | Alias]
 
 
 Import = Union[str, ImportFromModule, Alias]
@@ -53,7 +53,7 @@ def _import_to_str(im: Import) -> str:
         return f"import {im.name} as {im.alias}"
     else:
 
-        def to_str(i: Union[str, Alias]) -> str:
+        def to_str(i: str | Alias) -> str:
             if isinstance(i, str):
                 return i
             else:
@@ -82,10 +82,10 @@ class FunctionWithRequirementsStr:
     func: str
     _compiled_func: Callable[..., Any]
     _func_name: str
-    python_packages: List[str] = field(default_factory=list)
-    global_imports: List[Import] = field(default_factory=list)
+    python_packages: list[str] = field(default_factory=list)
+    global_imports: list[Import] = field(default_factory=list)
 
-    def __init__(self, func: str, python_packages: List[str] = [], global_imports: List[Import] = []):
+    def __init__(self, func: str, python_packages: list[str] = [], global_imports: list[Import] = []):
         self.func = func
         self.python_packages = python_packages
         self.global_imports = global_imports
@@ -117,18 +117,18 @@ class FunctionWithRequirementsStr:
 @dataclass
 class FunctionWithRequirements(Generic[T, P]):
     func: Callable[P, T]
-    python_packages: List[str] = field(default_factory=list)
-    global_imports: List[Import] = field(default_factory=list)
+    python_packages: list[str] = field(default_factory=list)
+    global_imports: list[Import] = field(default_factory=list)
 
     @classmethod
     def from_callable(
-        cls, func: Callable[P, T], python_packages: List[str] = [], global_imports: List[Import] = []
+        cls, func: Callable[P, T], python_packages: list[str] = [], global_imports: list[Import] = []
     ) -> FunctionWithRequirements[T, P]:
         return cls(python_packages=python_packages, global_imports=global_imports, func=func)
 
     @staticmethod
     def from_str(
-        func: str, python_packages: List[str] = [], global_imports: List[Import] = []
+        func: str, python_packages: list[str] = [], global_imports: list[Import] = []
     ) -> FunctionWithRequirementsStr:
         return FunctionWithRequirementsStr(func=func, python_packages=python_packages, global_imports=global_imports)
 
@@ -138,7 +138,7 @@ class FunctionWithRequirements(Generic[T, P]):
 
 
 def with_requirements(
-    python_packages: List[str] = [], global_imports: List[Import] = []
+    python_packages: list[str] = [], global_imports: list[Import] = []
 ) -> Callable[[Callable[P, T]], FunctionWithRequirements[T, P]]:
     """Decorate a function with package and import requirements
 
@@ -162,10 +162,10 @@ def with_requirements(
 
 
 def _build_python_functions_file(
-    funcs: List[Union[FunctionWithRequirements[Any, P], Callable[..., Any], FunctionWithRequirementsStr]]
+    funcs: list[FunctionWithRequirements[Any, P] | Callable[..., Any] | FunctionWithRequirementsStr]
 ) -> str:
     # First collect all global imports
-    global_imports: Set[str] = set()
+    global_imports: set[str] = set()
     for func in funcs:
         if isinstance(func, (FunctionWithRequirements, FunctionWithRequirementsStr)):
             global_imports.update(map(_import_to_str, func.global_imports))
@@ -178,7 +178,7 @@ def _build_python_functions_file(
     return content
 
 
-def to_stub(func: Union[Callable[..., Any], FunctionWithRequirementsStr]) -> str:
+def to_stub(func: Callable[..., Any] | FunctionWithRequirementsStr) -> str:
     """Generate a stub for a function as a string
 
     Args:

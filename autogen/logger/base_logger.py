@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from autogen import Agent, ConversableAgent, OpenAIWrapper
 
 F = TypeVar("F", bound=Callable[..., Any])
-ConfigItem = Dict[str, Union[str, List[str]]]
-LLMConfig = Dict[str, Union[None, float, int, ConfigItem, List[ConfigItem]]]
+ConfigItem = dict[str, Union[str, list[str]]]
+LLMConfig = dict[str, Union[None, float, int, ConfigItem, list[ConfigItem]]]
 
 
 class BaseLogger(ABC):
@@ -39,9 +39,9 @@ class BaseLogger(ABC):
         invocation_id: uuid.UUID,
         client_id: int,
         wrapper_id: int,
-        source: Union[str, Agent],
-        request: Dict[str, Union[float, str, List[Dict[str, str]]]],
-        response: Union[str, ChatCompletion],
+        source: str | Agent,
+        request: dict[str, float | str | list[dict[str, str]]],
+        response: str | ChatCompletion,
         is_cached: int,
         cost: float,
         start_time: str,
@@ -67,7 +67,7 @@ class BaseLogger(ABC):
         ...
 
     @abstractmethod
-    def log_new_agent(self, agent: ConversableAgent, init_args: Dict[str, Any]) -> None:
+    def log_new_agent(self, agent: ConversableAgent, init_args: dict[str, Any]) -> None:
         """
         Log the birth of a new agent.
 
@@ -78,7 +78,7 @@ class BaseLogger(ABC):
         ...
 
     @abstractmethod
-    def log_event(self, source: Union[str, Agent], name: str, **kwargs: Dict[str, Any]) -> None:
+    def log_event(self, source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
         """
         Log an event for an agent.
 
@@ -90,7 +90,7 @@ class BaseLogger(ABC):
         ...
 
     @abstractmethod
-    def log_new_wrapper(self, wrapper: OpenAIWrapper, init_args: Dict[str, Union[LLMConfig, List[LLMConfig]]]) -> None:
+    def log_new_wrapper(self, wrapper: OpenAIWrapper, init_args: dict[str, LLMConfig | list[LLMConfig]]) -> None:
         """
         Log the birth of a new OpenAIWrapper.
 
@@ -101,9 +101,7 @@ class BaseLogger(ABC):
         ...
 
     @abstractmethod
-    def log_new_client(
-        self, client: Union[AzureOpenAI, OpenAI], wrapper: OpenAIWrapper, init_args: Dict[str, Any]
-    ) -> None:
+    def log_new_client(self, client: AzureOpenAI | OpenAI, wrapper: OpenAIWrapper, init_args: dict[str, Any]) -> None:
         """
         Log the birth of a new OpenAIWrapper.
 
@@ -114,7 +112,7 @@ class BaseLogger(ABC):
         ...
 
     @abstractmethod
-    def log_function_use(self, source: Union[str, Agent], function: F, args: Dict[str, Any], returns: Any) -> None:
+    def log_function_use(self, source: str | Agent, function: F, args: dict[str, Any], returns: Any) -> None:
         """
         Log the use of a registered function (could be a tool)
 
@@ -133,7 +131,7 @@ class BaseLogger(ABC):
         ...
 
     @abstractmethod
-    def get_connection(self) -> Union[None, sqlite3.Connection]:
+    def get_connection(self) -> None | sqlite3.Connection:
         """
         Return a connection to the logging database.
         """

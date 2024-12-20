@@ -103,7 +103,7 @@ def db():
 
 
 @pytest.fixture
-def example_documents() -> List[Document]:
+def example_documents() -> list[Document]:
     """Note mix of integers and strings as ids"""
     return [
         Document(id=1, content="Dogs are tough.", metadata={"a": 1}),

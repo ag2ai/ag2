@@ -67,7 +67,7 @@ class CerebrasClient:
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Crebras, it will be ignored.", UserWarning)
 
-    def message_retrieval(self, response: ChatCompletion) -> List:
+    def message_retrieval(self, response: ChatCompletion) -> list:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -81,7 +81,7 @@ class CerebrasClient:
         return response.cost
 
     @staticmethod
-    def get_usage(response: ChatCompletion) -> Dict:
+    def get_usage(response: ChatCompletion) -> dict:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -92,7 +92,7 @@ class CerebrasClient:
             "model": response.model,
         }
 
-    def parse_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Loads the parameters for Cerebras API from the passed in parameters and returns a validated set. Checks types, ranges, and sets defaults"""
         cerebras_params = {}
 
@@ -115,7 +115,7 @@ class CerebrasClient:
 
         return cerebras_params
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Cerebras messages
@@ -243,7 +243,7 @@ class CerebrasClient:
         return response_oai
 
 
-def oai_messages_to_cerebras_messages(messages: list[Dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_cerebras_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Cerebras's format.
     We correct for any specific role orders and types.
     """

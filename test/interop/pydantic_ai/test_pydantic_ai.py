@@ -12,18 +12,11 @@ from typing import Any, Dict, Optional
 import pytest
 from conftest import reason, skip_openai
 from pydantic import BaseModel
+from pydantic_ai import RunContext
+from pydantic_ai.tools import Tool as PydanticAITool
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
-
-if sys.version_info >= (3, 9):
-    from pydantic_ai import RunContext
-    from pydantic_ai.tools import Tool as PydanticAITool
-
-else:
-    RunContext = unittest.mock.MagicMock()
-    PydanticAITool = unittest.mock.MagicMock()
-
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
 
@@ -104,7 +97,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             tool=pydantic_ai_tool,
         )
         assert list(signature(g).parameters.keys()) == ["city", "date"]
-        kwargs: Dict[str, Any] = {"city": "Zagreb", "date": "2021-01-01"}
+        kwargs: dict[str, Any] = {"city": "Zagreb", "date": "2021-01-01"}
         assert g(**kwargs) == "Zagreb 2021-01-01 123"
 
     def test_dependency_injection_with_retry(self) -> None:
