@@ -25,12 +25,12 @@ jobs:
           <html>
             <head>
               <meta charset="UTF-8">
-              <meta http-equiv="refresh" content="0; url=https://ag2ai.mintlify.app">
-              <script>window.location.href = "https://ag2ai.mintlify.app";</script>
+              <meta http-equiv="refresh" content="0; url=https://docs.ag2.ai">
+              <script>window.location.href = "https://docs.ag2.ai";</script>
               <title>Page Redirection</title>
             </head>
             <body>
-              If you are not redirected automatically, follow this <a href="https://ag2ai.mintlify.app">link to the new documentation</a>.
+              If you are not redirected automatically, follow this <a href="https://docs.ag2.ai">link to the new documentation</a>.
             </body>
           </html>
           EOF
