@@ -618,6 +618,7 @@
             "notebooks/agentchat_RetrieveChat",
             "notebooks/agentchat_graph_rag_neo4j",
             "notebooks/agentchat_swarm_enhanced",
+            "notebooks/tools_interoperability",
             "notebooks/agentchat_reasoning_agent",
             "notebooks/agentchat_realtime_swarm"
           ]
