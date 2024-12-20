@@ -33,7 +33,7 @@ def test_eval_math_responses():
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         filter_dict={
-            "tags": ["gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"],
+            "tags": ["gpt-4o-mini", "gpt-4o"],
         },
         file_location=KEY_LOC,
     )
@@ -238,7 +238,7 @@ def test_update_function():
     config_list_gpt4 = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         filter_dict={
-            "tags": ["gpt-4", "gpt-4-32k", "gpt-4o", "gpt-4o-mini"],
+            "tags": ["gpt-4o", "gpt-4o-mini"],
         },
         file_location=KEY_LOC,
     )

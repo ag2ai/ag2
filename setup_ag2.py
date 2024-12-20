@@ -54,6 +54,11 @@ setuptools.setup(
         "cohere": ["pyautogen[cohere]==" + __version__],
         "ollama": ["pyautogen[ollama]==" + __version__],
         "bedrock": ["pyautogen[bedrock]==" + __version__],
+        "twilio": ["pyautogen[twilio]==" + __version__],
+        "interop-crewai": ["pyautogen[interop-crewai]==" + __version__],
+        "interop-langchain": ["pyautogen[interop-langchain]==" + __version__],
+        "interop-pydantic-ai": ["pyautogen[interop-pydantic-ai]==" + __version__],
+        "interop": ["pyautogen[interop]==" + __version__],
         "neo4j": ["pyautogen[neo4j]==" + __version__],
     },
     url="https://github.com/ag2ai/ag2",
@@ -65,5 +70,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.8,<3.14",
+    python_requires=">=3.9,<3.14",
 )

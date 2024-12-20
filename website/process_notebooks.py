@@ -12,6 +12,7 @@ import argparse
 import concurrent.futures
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -23,7 +24,7 @@ import typing
 from dataclasses import dataclass
 from multiprocessing import current_process
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from termcolor import colored
 
@@ -77,7 +78,7 @@ def check_quarto_bin(quarto_bin: str = "quarto") -> None:
 
 def notebooks_target_dir(website_directory: Path) -> Path:
     """Return the target directory for notebooks."""
-    return website_directory / "docs" / "notebooks"
+    return website_directory / "notebooks"
 
 
 def load_metadata(notebook: Path) -> typing.Dict:
@@ -230,7 +231,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
                 src_notebook, f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
             )
 
-    post_process_mdx(target_file, src_notebook, front_matter)
+    post_process_mdx(target_file, src_notebook, front_matter, website_dir)
 
     return fmt_ok(src_notebook)
 
@@ -316,8 +317,74 @@ def get_error_info(nb: NotebookNode) -> Optional[NotebookError]:
     return None
 
 
+def add_front_matter_to_metadata_mdx(
+    front_matter: Dict[str, Union[str, List[str]]], website_dir: Path, rendered_mdx: Path
+) -> None:
+    metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+
+    metadata = []
+    if metadata_mdx.exists():
+        with open(metadata_mdx, "r", encoding="utf-8") as f:
+            content = f.read()
+            if content:
+                start = content.find("export const notebooksMetadata = [")
+                end = content.rfind("]")
+                if start != -1 and end != -1:
+                    metadata = json.loads(content[start + 32 : end + 1])
+
+    # Create new entry for current notebook
+    entry = {
+        "title": front_matter.get("title", ""),
+        "link": f"/notebooks/{rendered_mdx.stem}",
+        "description": front_matter.get("description", ""),
+        "image": front_matter.get("image"),
+        "tags": front_matter.get("tags", []),
+        "source": front_matter.get("source_notebook"),
+    }
+    # Update metadata list
+    existing_entry = next((item for item in metadata if item["title"] == entry["title"]), None)
+    if existing_entry:
+        metadata[metadata.index(existing_entry)] = entry
+    else:
+        metadata.append(entry)
+
+    # Write metadata back to file
+    with open(metadata_mdx, "w", encoding="utf-8") as f:
+        f.write(
+            "{/*\nAuto-generated file - DO NOT EDIT\nPlease edit the add_front_matter_to_metadata_mdx function in process_notebooks.py\n*/}\n\n"
+        )
+        f.write("export const notebooksMetadata = ")
+        f.write(json.dumps(metadata, indent=4))
+        f.write(";\n")
+
+
+def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
+    """
+    Converts MDX code block image syntax to regular markdown image syntax.
+
+    Args:
+        content (str): The markdown content containing mdx-code-block image syntax
+
+    Returns:
+        str: The converted markdown content with standard image syntax
+    """
+
+    def resolve_path(match):
+        img_pattern = r"!\[(.*?)\]\((.*?)\)"
+        img_match = re.search(img_pattern, match.group(1))
+        if not img_match:
+            return match.group(0)
+
+        alt, rel_path = img_match.groups()
+        abs_path = (rendered_mdx.parent / Path(rel_path)).resolve().relative_to(website_dir)
+        return f"![{alt}](/{abs_path})"
+
+    pattern = r"````mdx-code-block\n(!\[.*?\]\(.*?\))\n````"
+    return re.sub(pattern, resolve_path, content)
+
+
 # rendered_notebook is the final mdx file
-def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: Dict) -> None:
+def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: Dict, website_dir: Path) -> None:
     with open(rendered_mdx, "r", encoding="utf-8") as f:
         content = f.read()
 
@@ -327,6 +394,9 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
         front_matter = yaml.safe_load(content[4:front_matter_end])
         content = content[front_matter_end + 3 :]
 
+    # Clean heading IDs using regex - matches from # to the end of ID block
+    content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
+
     # Each intermediate path needs to be resolved for this to work reliably
     repo_root = Path(__file__).parent.resolve().parent.resolve()
     repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
@@ -334,48 +404,51 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: D
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
 
     # Is there a title on the content? Only search up until the first code cell
-    first_code_cell = content.find("```")
-    if first_code_cell != -1:
-        title_search_content = content[:first_code_cell]
-    else:
-        title_search_content = content
+    # first_code_cell = content.find("```")
+    # if first_code_cell != -1:
+    #     title_search_content = content[:first_code_cell]
+    # else:
+    #     title_search_content = content
 
-    title_exists = title_search_content.find("\n# ") != -1
-    if not title_exists:
-        content = f"# {front_matter['title']}\n{content}"
-
+    # title_exists = title_search_content.find("\n# ") != -1
+    # if not title_exists:
+    #     content = f"# {front_matter['title']}\n{content}"
     # inject in content directly after the markdown title the word done
     # Find the end of the line with the title
-    title_end = content.find("\n", content.find("#"))
+    # title_end = content.find("\n", content.find("#"))
 
     # Extract page title
-    title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
+    # title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
     # If there is a { in the title we trim off the { and everything after it
-    if "{" in title:
-        title = title[: title.find("{")].strip()
+    # if "{" in title:
+    #     title = title[: title.find("{")].strip()
 
     github_link = f"https://github.com/ag2ai/ag2/blob/main/{repo_relative_notebook}"
     content = (
-        content[:title_end]
-        + "\n[![Open on GitHub](https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github)]("
-        + github_link
-        + ")"
-        + content[title_end:]
+        f'\n<a href="{github_link}" class="github-badge" target="_blank">'
+        + """<img noZoom src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open on GitHub" />"""
+        + "</a>"
+        + content
     )
 
     # If no colab link is present, insert one
     if "colab-badge.svg" not in content:
         colab_link = f"https://colab.research.google.com/github/ag2ai/ag2/blob/main/{repo_relative_notebook}"
         content = (
-            content[:title_end]
-            + "\n[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]("
-            + colab_link
-            + ")"
-            + content[title_end:]
+            f'\n<a href="{colab_link}" class="colab-badge" target="_blank">'
+            + """<img noZoom src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab" />"""
+            + "</a>"
+            + content
         )
+
+    # Create the front matter metadata js file for examples by notebook section
+    add_front_matter_to_metadata_mdx(front_matter, website_dir, rendered_mdx)
 
     # Dump front_matter to ysaml
     front_matter = yaml.dump(front_matter, default_flow_style=False)
+
+    # Convert mdx image syntax to mintly image syntax
+    content = convert_mdx_image_blocks(content, rendered_mdx, website_dir)
 
     # Rewrite the content as
     # ---
@@ -428,6 +501,140 @@ def start_thread_to_terminate_when_parent_process_dies(ppid: int):
 
     thread = threading.Thread(target=f, daemon=True)
     thread.start()
+
+
+def copy_examples_mdx_files(website_dir: str) -> None:
+    # The mdx files to copy to the notebooks directory
+    example_section_mdx_files = ["Examples", "Gallery", "Notebooks"]
+
+    # Create notebooks directory if it doesn't exist
+    website_dir = Path(website_dir)
+    notebooks_dir = website_dir / "notebooks"
+    notebooks_dir.mkdir(parents=True, exist_ok=True)
+
+    for mdx_file in example_section_mdx_files:
+        src_mdx_file_path = (website_dir / "docs" / f"{mdx_file}.mdx").resolve()
+        dest_mdx_file_path = (notebooks_dir / f"{mdx_file}.mdx").resolve()
+        # Copy mdx file to notebooks directory
+        shutil.copy(src_mdx_file_path, dest_mdx_file_path)
+
+
+def update_navigation_with_notebooks(website_dir: Path) -> None:
+    """
+    Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
+
+    Args:
+        website_dir (Path): Root directory of the website
+    """
+    mint_json_path = (website_dir / "mint.json").resolve()
+    metadata_path = (website_dir / "snippets" / "data" / "NotebooksMetadata.mdx").resolve()
+
+    if not mint_json_path.exists():
+        print(f"mint.json not found at {mint_json_path}")
+        return
+
+    if not metadata_path.exists():
+        print(f"NotebooksMetadata.mdx not found at {metadata_path}")
+        return
+
+    # Read mint.json
+    with open(mint_json_path, "r", encoding="utf-8") as f:
+        mint_config = json.load(f)
+
+    # Read NotebooksMetadata.mdx and extract metadata links
+    with open(metadata_path, "r", encoding="utf-8") as f:
+        content = f.read()
+        # Extract the array between the brackets
+        start = content.find("export const notebooksMetadata = [")
+        end = content.rfind("]")
+        if start == -1 or end == -1:
+            print("Could not find notebooksMetadata in the file")
+            return
+        metadata_str = content[start + 32 : end + 1]
+        notebooks_metadata = json.loads(metadata_str)
+
+    # Find the Examples group in navigation
+    examples_group = None
+    for group in mint_config["navigation"]:
+        if group.get("group") == "Examples":
+            examples_group = group
+            break
+
+    if examples_group is None:
+        print("Examples group not found in navigation")
+        return
+
+    # Create notebooks entry
+    notebooks_entry = {
+        "group": "Examples by Notebook",
+        "pages": ["notebooks/Notebooks"]
+        + [
+            Path(item["source"])
+            .resolve()
+            .with_suffix("")
+            .as_posix()
+            .replace("/website/", "/")
+            .replace("/notebook/", "notebooks/")
+            for item in notebooks_metadata
+            if not item["source"].startswith("/website/docs/")
+        ],
+    }
+
+    # Replace the pages list in Examples group with our standard pages plus notebooks
+    examples_group["pages"] = ["notebooks/Examples", notebooks_entry, "notebooks/Gallery"]
+
+    # Write back to mint.json
+    with open(mint_json_path, "w", encoding="utf-8") as f:
+        json.dump(mint_config, f, indent=2)
+
+    print(f"Updated navigation in {mint_json_path}")
+
+
+def fix_internal_references(content: str, root_path: Path, current_file_path: Path) -> str:
+    """
+    Resolves internal markdown references relative to root_dir and returns fixed content.
+
+    Args:
+        content: Markdown content to fix
+        root_path: Root directory for resolving paths
+        current_file_path: Path of the current file being processed
+    """
+
+    def resolve_link(match):
+        display_text, raw_path = match.groups()
+        try:
+            path_parts = raw_path.split("#")
+            rel_path = path_parts[0]
+            anchor = f"#{path_parts[1]}" if len(path_parts) > 1 else ""
+
+            resolved = (current_file_path.parent / rel_path).resolve()
+            final_path = (resolved.relative_to(root_path.resolve())).with_suffix("")
+
+            return f"[{display_text}](/{final_path}{anchor})"
+        except Exception:
+            return match.group(0)
+
+    pattern = r"\[([^\]]+)\]\(((?:\.\./|\./)?\w+(?:/[\w-]+)*\.md(?:#[\w-]+)?)\)"
+    return re.sub(pattern, resolve_link, content)
+
+
+def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
+    """Process all MDX files in directory to fix internal references."""
+    for file_path in website_dir.glob("**/*.mdx"):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            fixed_content = fix_internal_references(content, website_dir, file_path)
+
+            if content != fixed_content:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(fixed_content)
+                print(f"Fixed internal references in {file_path}")
+
+        except Exception:
+            print(f"Error: {file_path}")
+            sys.exit(1)
 
 
 def main() -> None:
@@ -519,6 +726,13 @@ def main() -> None:
                     notebook, args.website_directory, args.notebook_directory, args.quarto_bin, args.dry_run
                 )
             )
+
+        # Post-processing steps after all notebooks are handled
+        if not args.dry_run:
+            copy_examples_mdx_files(args.website_directory)
+            update_navigation_with_notebooks(args.website_directory)
+            fix_internal_references_in_mdx_files(args.website_directory)
+
     else:
         print("Unknown subcommand")
         sys.exit(1)
