@@ -16,8 +16,8 @@ import pytest
 import requests
 from agentchat.test_assistant_agent import KEY_LOC  # noqa: E402
 
-BLOG_POST_URL = "https://ag2ai.github.io/ag2/blog/2023/04/21/LLM-tuning-math"
-BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH | AG2"
+BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
+BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
 BLOG_POST_STRING = "Large language models (LLMs) are powerful tools that can generate natural language texts for various applications, such as chatbots, summarization, translation, and more. GPT-4 is currently the state of the art LLM in the world. Is model selection irrelevant? What about inference parameters?"
 
 WIKIPEDIA_URL = "https://en.wikipedia.org/wiki/Microsoft"
@@ -83,6 +83,7 @@ def test_simple_text_browser():
     # Test that we can visit a page and find what we expect there
     top_viewport = browser.visit_page(BLOG_POST_URL)
     assert browser.viewport == top_viewport
+    print(browser.page_title.strip())
     assert browser.page_title.strip() == BLOG_POST_TITLE.strip()
     assert BLOG_POST_STRING in browser.page_content.replace("\n\n", " ").replace("\\", "")
 
