@@ -9,7 +9,6 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.indices.property_graph import (
     DynamicLLMPathExtractor,
     SchemaLLMPathExtractor,
-    SimpleLLMPathExtractor,
 )
 from llama_index.core.indices.property_graph.transformations.schema_llm import Triple
 from llama_index.core.llms import LLM
@@ -23,8 +22,8 @@ from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
 
 class Neo4jGraphQueryEngine(GraphQueryEngine):
     """
-    This class serves as a wrapper for a property graph query engine backed by llamaIndex and Neo4j,
-    facilitating the creating, connecting, updating, and querying of llamaIndex property graphs.
+    This class serves as a wrapper for a property graph query engine backed by LlamaIndex and Neo4j,
+    facilitating the creating, connecting, updating, and querying of LlamaIndex property graphs.
 
     It builds a property graph Index from input documents,
     storing and retrieving data from the property graph in the Neo4j database.
@@ -37,7 +36,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
     If strict is True, the engine will extract triplets following the schema
     of allowed relationships for each entity specified in the schema.
 
-    It also leverages llamaIndex's chat engine which has a conversation history internally to provide context-aware responses.
+    It also leverages LlamaIndex's chat engine which has a conversation history internally to provide context-aware responses.
 
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
     """
@@ -165,11 +164,11 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
         """
-        Query the Property graph with a question using LlamaIndex chat engine.
+        Query the property graph with a question using LlamaIndex chat engine.
         We use the condense_plus_context chat mode
         which condenses the conversation history and the user query into a standalone question,
         and then build a context for the standadlone question
-        from the property graph  to generate a response.
+        from the property graph to generate a response.
 
         Args:
         question: a human input question.
