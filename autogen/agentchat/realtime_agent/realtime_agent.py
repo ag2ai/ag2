@@ -52,8 +52,8 @@ class RealtimeAgent(ConversableAgent):
         *,
         name: str,
         audio_adapter: RealtimeObserver,
-        system_message: Optional[Union[str, list]] = "You are a helpful AI Assistant.",
-        llm_config: Optional[Union[dict, Literal[False]]] = None,
+        system_message: Optional[Union[str, list[str]]] = "You are a helpful AI Assistant.",
+        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
         voice: str = "alloy",
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
@@ -83,10 +83,10 @@ class RealtimeAgent(ConversableAgent):
             silent=None,
             context_variables=None,
         )
-        self.llm_config = llm_config
+        self.llm_config = llm_config  # type: ignore[assignment]
         self._client = OpenAIRealtimeClient(self, audio_adapter, FunctionObserver(self))
         self.voice = voice
-        self.realtime_functions = {}
+        self.realtime_functions: dict[str, tuple[dict[str, Any], Callable[..., Any]]] = {}
 
         self._oai_system_message = [{"content": system_message, "role": "system"}]  # todo still needed?
         self.register_reply(
@@ -96,8 +96,8 @@ class RealtimeAgent(ConversableAgent):
         self._answer_event: anyio.Event = anyio.Event()
         self._answer: str = ""
         self._start_swarm_chat = False
-        self._initial_agent = None
-        self._agents = None
+        self._initial_agent: Optional[SwarmAgent] = None
+        self._agents: Optional[list[SwarmAgent]] = None
 
     def register_swarm(
         self,
@@ -133,7 +133,7 @@ class RealtimeAgent(ConversableAgent):
             self.set_answer
         )
 
-    async def run(self):
+    async def run(self) -> None:
         """Run the agent."""
         await self._client.run()
 
@@ -143,11 +143,12 @@ class RealtimeAgent(ConversableAgent):
         description: str,
         name: Optional[str] = None,
     ) -> Callable[[F], F]:
-        def _decorator(func: F, name=name) -> F:
+        def _decorator(func: F, name: Optional[str] = name) -> F:
             """Decorator for registering a function to be used by an agent.
 
             Args:
-                func: the function to be registered.
+                func (callable[..., Any]): the function to be registered.
+                name (str): the name of the function.
 
             Returns:
                 The function to be registered, with the _description attribute set to the function description.
@@ -183,7 +184,7 @@ class RealtimeAgent(ConversableAgent):
         await self._answer_event.wait()
         return self._answer
 
-    async def ask_question(self, question: str, question_timeout: int) -> str:
+    async def ask_question(self, question: str, question_timeout: int) -> None:
         """
         Send a question for the user to the agent and wait for the answer.
         If the answer is not received within the timeout, the question is repeated.
@@ -196,7 +197,7 @@ class RealtimeAgent(ConversableAgent):
         self.reset_answer()
         await self._client.send_text(role=QUESTION_ROLE, text=question)
 
-        async def _check_event_set(timeout: int = question_timeout) -> None:
+        async def _check_event_set(timeout: int = question_timeout) -> bool:
             for _ in range(timeout):
                 if self._answer_event.is_set():
                     return True
@@ -208,7 +209,7 @@ class RealtimeAgent(ConversableAgent):
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, None]]:
@@ -225,7 +226,10 @@ class RealtimeAgent(ConversableAgent):
                 the config for the agent
         """
 
-        async def get_input():
+        if not messages:
+            return False, None
+
+        async def get_input() -> None:
             async with create_task_group() as tg:
                 tg.soonify(self.ask_question)(
                     QUESTION_MESSAGE.format(messages[-1]["content"]),
@@ -234,4 +238,4 @@ class RealtimeAgent(ConversableAgent):
 
         syncify(get_input)()
 
-        return True, {"role": "user", "content": self._answer}
+        return True, {"role": "user", "content": self._answer}  # type: ignore[return-value]
