@@ -38,7 +38,7 @@ h4 {
 
 h1 {
   font-size: 3rem !important;
-
+  word-break: break-all;
   code {
     font-size: 2rem !important;
   }

@@ -300,6 +300,17 @@
                 "docs/reference/agentchat/contrib/web_surfer"
               ]
             },
+            {
+              "group": "agentchat.realtime_agent",
+              "pages": [
+                "docs/reference/agentchat/realtime_agent/client",
+                "docs/reference/agentchat/realtime_agent/function_observer",
+                "docs/reference/agentchat/realtime_agent/realtime_agent",
+                "docs/reference/agentchat/realtime_agent/realtime_observer",
+                "docs/reference/agentchat/realtime_agent/twilio_observer",
+                "docs/reference/agentchat/realtime_agent/websocket_observer"
+              ]
+            },
             "docs/reference/agentchat/agent",
             "docs/reference/agentchat/assistant_agent",
             "docs/reference/agentchat/chat",
@@ -345,6 +356,33 @@
           ]
         },
         {
+          "group": "interop",
+          "pages": [
+            {
+              "group": "interop.crewai",
+              "pages": [
+                "docs/reference/interop/crewai/crewai"
+              ]
+            },
+            {
+              "group": "interop.langchain",
+              "pages": [
+                "docs/reference/interop/langchain/langchain"
+              ]
+            },
+            {
+              "group": "interop.pydantic_ai",
+              "pages": [
+                "docs/reference/interop/pydantic_ai/pydantic_ai",
+                "docs/reference/interop/pydantic_ai/pydantic_ai_tool"
+              ]
+            },
+            "docs/reference/interop/interoperability",
+            "docs/reference/interop/interoperable",
+            "docs/reference/interop/registry"
+          ]
+        },
+        {
           "group": "io",
           "pages": [
             "docs/reference/io/base",
@@ -375,6 +413,12 @@
             "docs/reference/oai/ollama",
             "docs/reference/oai/openai_utils",
             "docs/reference/oai/together"
+          ]
+        },
+        {
+          "group": "tools",
+          "pages": [
+            "docs/reference/tools/tool"
           ]
         },
         "docs/reference/browser_utils",
@@ -450,6 +494,9 @@
         {
           "group": "Recent posts",
           "pages": [
+            "blog/2024-12-20-Tools-interoperability/index",
+            "blog/2024-12-20-Reasoning-Update/index",
+            "blog/2024-12-20-RealtimeAgent/index",
             "blog/2024-12-06-FalkorDB-Structured/index",
             "blog/2024-12-02-ReasoningAgent2/index",
             "blog/2024-11-27-Prompt-Leakage-Probing/index",
@@ -571,7 +618,9 @@
             "notebooks/JSON_mode_example",
             "notebooks/agentchat_RetrieveChat",
             "notebooks/agentchat_graph_rag_neo4j",
-            "notebooks/agentchat_swarm_enhanced"
+            "notebooks/agentchat_swarm_enhanced",
+            "notebooks/agentchat_realtime_swarm",
+            "notebooks/agentchat_reasoning_agent"
           ]
         },
         "notebooks/Gallery"
