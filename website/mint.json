@@ -617,7 +617,9 @@
             "notebooks/JSON_mode_example",
             "notebooks/agentchat_RetrieveChat",
             "notebooks/agentchat_graph_rag_neo4j",
-            "notebooks/agentchat_swarm_enhanced"
+            "notebooks/agentchat_swarm_enhanced",
+            "notebooks/agentchat_reasoning_agent",
+            "notebooks/agentchat_realtime_swarm"
           ]
         },
         "notebooks/Gallery"
