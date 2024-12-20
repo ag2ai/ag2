@@ -294,12 +294,12 @@ module.exports = {
             from: ["/docs/topics/non-openai-models/lm-studio"],
           },
           {
-            to: "/docs/notebooks/agentchat_nested_chats_chess",
-            from: ["/docs/notebooks/agentchat_chess"],
+            to: "/notebooks/agentchat_nested_chats_chess",
+            from: ["/notebooks/agentchat_chess"],
           },
           {
-            to: "/docs/notebooks/agentchat_nested_chats_chess_altmodels",
-            from: ["/docs/notebooks/agentchat_chess_altmodels"],
+            to: "/notebooks/agentchat_nested_chats_chess_altmodels",
+            from: ["/notebooks/agentchat_chess_altmodels"],
           },
           {
             to: "/docs/contributor-guide/contributing",
