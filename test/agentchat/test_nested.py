@@ -22,7 +22,7 @@ from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 
 class MockAgentReplies(AgentCapability):
-    def __init__(self, mock_messages: List[str]):
+    def __init__(self, mock_messages: list[str]):
         self.mock_messages = mock_messages
         self.mock_message_index = 0
 

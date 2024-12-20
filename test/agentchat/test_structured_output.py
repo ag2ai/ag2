@@ -73,7 +73,7 @@ class Step(BaseModel):
 
 
 class MathReasoning(BaseModel):
-    steps: List[Step]
+    steps: list[Step]
     final_answer: str
 
     def format(self) -> str:

@@ -88,7 +88,7 @@ class OllamaClient:
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Ollama, it will be ignored.", UserWarning)
 
-    def message_retrieval(self, response) -> List:
+    def message_retrieval(self, response) -> list:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -101,7 +101,7 @@ class OllamaClient:
         return response.cost
 
     @staticmethod
-    def get_usage(response) -> Dict:
+    def get_usage(response) -> dict:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -112,7 +112,7 @@ class OllamaClient:
             "model": response.model,
         }
 
-    def parse_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Loads the parameters for Ollama API from the passed in parameters and returns a validated set. Checks types, ranges, and sets defaults"""
         ollama_params = {}
 
@@ -180,7 +180,7 @@ class OllamaClient:
 
         return ollama_params
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Are tools involved in this conversation?
@@ -289,7 +289,7 @@ class OllamaClient:
                             for tool_call in response["message"]["tool_calls"]:
                                 tool_calls.append(
                                     ChatCompletionMessageToolCall(
-                                        id="ollama_func_{}".format(random_id),
+                                        id=f"ollama_func_{random_id}",
                                         function={
                                             "name": tool_call["function"]["name"],
                                             "arguments": json.dumps(tool_call["function"]["arguments"]),
@@ -314,7 +314,7 @@ class OllamaClient:
                         for json_function in response_toolcalls:
                             tool_calls.append(
                                 ChatCompletionMessageToolCall(
-                                    id="ollama_manual_func_{}".format(random_id),
+                                    id=f"ollama_manual_func_{random_id}",
                                     function={
                                         "name": json_function["name"],
                                         "arguments": (
@@ -360,7 +360,7 @@ class OllamaClient:
 
         return response_oai
 
-    def oai_messages_to_ollama_messages(self, messages: list[Dict[str, Any]], tools: list) -> list[dict[str, Any]]:
+    def oai_messages_to_ollama_messages(self, messages: list[dict[str, Any]], tools: list) -> list[dict[str, Any]]:
         """Convert messages from OAI format to Ollama's format.
         We correct for any specific role orders and types, and convert tools to messages (as Ollama can't use tool messages)
         """
@@ -526,7 +526,7 @@ def response_to_tool_call(response_string: str) -> Any:
     return None
 
 
-def _object_to_tool_call(data_object: Any) -> List[Dict]:
+def _object_to_tool_call(data_object: Any) -> list[dict]:
     """Attempts to convert an object to a valid tool call object List[Dict] and returns it, if it can, otherwise None"""
 
     # If it's a dictionary and not a list then wrap in a list

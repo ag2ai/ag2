@@ -36,7 +36,7 @@ A = ParamSpec("A")
 
 
 class LocalCommandLineCodeExecutor(CodeExecutor):
-    SUPPORTED_LANGUAGES: ClassVar[List[str]] = [
+    SUPPORTED_LANGUAGES: ClassVar[list[str]] = [
         "bash",
         "shell",
         "sh",
@@ -48,7 +48,7 @@ class LocalCommandLineCodeExecutor(CodeExecutor):
         "html",
         "css",
     ]
-    DEFAULT_EXECUTION_POLICY: ClassVar[Dict[str, bool]] = {
+    DEFAULT_EXECUTION_POLICY: ClassVar[dict[str, bool]] = {
         "bash": True,
         "shell": True,
         "sh": True,
@@ -74,9 +74,9 @@ $functions"""
         timeout: int = 60,
         virtual_env_context: Optional[SimpleNamespace] = None,
         work_dir: Union[Path, str] = Path("."),
-        functions: List[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]] = [],
+        functions: list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]] = [],
         functions_module: str = "functions",
-        execution_policies: Optional[Dict[str, bool]] = None,
+        execution_policies: Optional[dict[str, bool]] = None,
     ):
         """(Experimental) A code executor class that executes or saves LLM generated code a local command line
         environment.
@@ -168,7 +168,7 @@ $functions"""
     @property
     def functions(
         self,
-    ) -> List[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]]:
+    ) -> list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]]:
         """(Experimental) The functions that are available to the code executor."""
         return self._functions
 
@@ -244,7 +244,7 @@ $functions"""
             raise ValueError(f"Functions failed to load: {exec_result.output}")
         self._setup_functions_complete = True
 
-    def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> CommandLineCodeResult:
+    def execute_code_blocks(self, code_blocks: list[CodeBlock]) -> CommandLineCodeResult:
         """(Experimental) Execute the code blocks and return the result.
 
         Args:
@@ -256,7 +256,7 @@ $functions"""
             self._setup_functions()
         return self._execute_code_dont_check_setup(code_blocks)
 
-    def _execute_code_dont_check_setup(self, code_blocks: List[CodeBlock]) -> CommandLineCodeResult:
+    def _execute_code_dont_check_setup(self, code_blocks: list[CodeBlock]) -> CommandLineCodeResult:
         logs_all = ""
         file_names = []
         for code_block in code_blocks:

@@ -74,7 +74,7 @@ def test_log_chat_completion(logger: FileLogger):
         source=agent,
     )
 
-    with open(logger.log_file, "r") as f:
+    with open(logger.log_file) as f:
         lines = f.readlines()
         assert len(lines) == 1
         log_data = json.loads(lines[0])
@@ -98,7 +98,7 @@ def test_log_function_use(logger: FileLogger):
 
     logger.log_function_use(source=source, function=func, args=args, returns=returns)
 
-    with open(logger.log_file, "r") as f:
+    with open(logger.log_file) as f:
         lines = f.readlines()
         assert len(lines) == 1
         log_data = json.loads(lines[0])
@@ -118,7 +118,7 @@ def test_log_new_agent(logger: FileLogger):
     agent = autogen.UserProxyAgent(name="user_proxy", code_execution_config=False)
     logger.log_new_agent(agent)
 
-    with open(logger.log_file, "r") as f:
+    with open(logger.log_file) as f:
         lines = f.readlines()
         log_data = json.loads(lines[0])  # the first line is the session id
         assert log_data["agent_name"] == "user_proxy"
@@ -131,7 +131,7 @@ def test_log_event(logger: FileLogger):
     kwargs = {"key": "value"}
     logger.log_event(source, name, **kwargs)
 
-    with open(logger.log_file, "r") as f:
+    with open(logger.log_file) as f:
         lines = f.readlines()
         log_data = json.loads(lines[0])
         assert log_data["source_name"] == "TestAgent"
@@ -145,7 +145,7 @@ def test_log_new_wrapper(logger: FileLogger):
     wrapper = TestWrapper(init_args={"foo": "bar"})
     logger.log_new_wrapper(wrapper, wrapper.init_args)
 
-    with open(logger.log_file, "r") as f:
+    with open(logger.log_file) as f:
         lines = f.readlines()
         log_data = json.loads(lines[0])
         assert log_data["wrapper_id"] == id(wrapper)
@@ -160,7 +160,7 @@ def test_log_new_client(logger: FileLogger):
     init_args = {"foo": "bar"}
     logger.log_new_client(client, wrapper, init_args)
 
-    with open(logger.log_file, "r") as f:
+    with open(logger.log_file) as f:
         lines = f.readlines()
         log_data = json.loads(lines[0])
         assert log_data["client_id"] == id(client)

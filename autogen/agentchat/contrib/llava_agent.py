@@ -30,7 +30,7 @@ class LLaVAAgent(MultimodalConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[Tuple[str, List]] = DEFAULT_LLAVA_SYS_MSG,
+        system_message: Optional[tuple[str, list]] = DEFAULT_LLAVA_SYS_MSG,
         *args,
         **kwargs,
     ):

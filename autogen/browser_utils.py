@@ -44,15 +44,15 @@ class SimpleTextBrowser:
         downloads_folder: Optional[Union[str, None]] = None,
         bing_base_url: str = "https://api.bing.microsoft.com/v7.0/search",
         bing_api_key: Optional[Union[str, None]] = None,
-        request_kwargs: Optional[Union[Dict[str, Any], None]] = None,
+        request_kwargs: Optional[Union[dict[str, Any], None]] = None,
     ):
         self.start_page: str = start_page if start_page else "about:blank"
         self.viewport_size = viewport_size  # Applies only to the standard uri types
         self.downloads_folder = downloads_folder
-        self.history: List[str] = list()
+        self.history: list[str] = list()
         self.page_title: Optional[str] = None
         self.viewport_current_page = 0
-        self.viewport_pages: List[Tuple[int, int]] = list()
+        self.viewport_pages: list[tuple[int, int]] = list()
         self.set_address(self.start_page)
         self.bing_base_url = bing_base_url
         self.bing_api_key = bing_api_key
@@ -132,7 +132,7 @@ class SimpleTextBrowser:
             self.viewport_pages.append((start_idx, end_idx))
             start_idx = end_idx
 
-    def _bing_api_call(self, query: str) -> Dict[str, Dict[str, List[Dict[str, Union[str, Dict[str, str]]]]]]:
+    def _bing_api_call(self, query: str) -> dict[str, dict[str, list[dict[str, Union[str, dict[str, str]]]]]]:
         # Make sure the key was set
         if self.bing_api_key is None:
             raise ValueError("Missing Bing API key.")
@@ -162,7 +162,7 @@ class SimpleTextBrowser:
     def _bing_search(self, query: str) -> None:
         results = self._bing_api_call(query)
 
-        web_snippets: List[str] = list()
+        web_snippets: list[str] = list()
         idx = 0
         for page in results["webPages"]["value"]:
             idx += 1

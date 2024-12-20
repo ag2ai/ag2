@@ -28,7 +28,7 @@ def test_custom_model_client():
     TEST_MAX_LENGTH = 1000
 
     class CustomModel:
-        def __init__(self, config: Dict, test_hook):
+        def __init__(self, config: dict, test_hook):
             self.test_hook = test_hook
             self.device = config["device"]
             self.model = config["model"]
@@ -63,7 +63,7 @@ def test_custom_model_client():
             return TEST_COST
 
         @staticmethod
-        def get_usage(response) -> Dict:
+        def get_usage(response) -> dict:
             return {}
 
     config_list = [
@@ -96,7 +96,7 @@ def test_custom_model_client():
 
 def test_registering_with_wrong_class_name_raises_error():
     class CustomModel:
-        def __init__(self, config: Dict):
+        def __init__(self, config: dict):
             pass
 
         def create(self, params):
@@ -109,7 +109,7 @@ def test_registering_with_wrong_class_name_raises_error():
             return 0
 
         @staticmethod
-        def get_usage(response) -> Dict:
+        def get_usage(response) -> dict:
             return {}
 
     config_list = [
@@ -126,7 +126,7 @@ def test_registering_with_wrong_class_name_raises_error():
 
 def test_not_all_clients_registered_raises_error():
     class CustomModel:
-        def __init__(self, config: Dict):
+        def __init__(self, config: dict):
             pass
 
         def create(self, params):
@@ -139,7 +139,7 @@ def test_not_all_clients_registered_raises_error():
             return 0
 
         @staticmethod
-        def get_usage(response) -> Dict:
+        def get_usage(response) -> dict:
             return {}
 
     config_list = [
@@ -173,7 +173,7 @@ def test_not_all_clients_registered_raises_error():
 
 def test_registering_with_extra_config_args():
     class CustomModel:
-        def __init__(self, config: Dict, test_hook):
+        def __init__(self, config: dict, test_hook):
             self.test_hook = test_hook
             self.test_hook["called"] = True
 
@@ -192,7 +192,7 @@ def test_registering_with_extra_config_args():
             return 0
 
         @staticmethod
-        def get_usage(response) -> Dict:
+        def get_usage(response) -> dict:
             return {}
 
     config_list = [

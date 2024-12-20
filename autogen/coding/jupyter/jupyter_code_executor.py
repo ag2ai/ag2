@@ -82,7 +82,7 @@ class JupyterCodeExecutor(CodeExecutor):
         """(Experimental) Export a code extractor that can be used by an agent."""
         return MarkdownCodeExtractor()
 
-    def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> IPythonCodeResult:
+    def execute_code_blocks(self, code_blocks: list[CodeBlock]) -> IPythonCodeResult:
         """(Experimental) Execute a list of code blocks and return the result.
 
         This method executes a list of code blocks as cells in the Jupyter kernel.
@@ -156,6 +156,6 @@ class JupyterCodeExecutor(CodeExecutor):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
         self.stop()

@@ -418,7 +418,6 @@
         {
           "group": "tools",
           "pages": [
-            "docs/reference/tools/pydantic_ai_tool",
             "docs/reference/tools/tool"
           ]
         },
@@ -495,6 +494,9 @@
         {
           "group": "Recent posts",
           "pages": [
+            "blog/2024-12-20-Tools-interoperability/index",
+            "blog/2024-12-20-Reasoning-Update/index",
+            "blog/2024-12-20-RealtimeAgent/index",
             "blog/2024-12-18-Tools-interoperability/index",
             "blog/2024-12-06-FalkorDB-Structured/index",
             "blog/2024-12-02-ReasoningAgent2/index",

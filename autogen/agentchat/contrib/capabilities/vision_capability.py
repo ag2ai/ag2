@@ -49,7 +49,7 @@ class VisionCapability(AgentCapability):
 
     def __init__(
         self,
-        lmm_config: Dict,
+        lmm_config: dict,
         description_prompt: Optional[str] = DEFAULT_DESCRIPTION_PROMPT,
         custom_caption_func: Callable = None,
     ) -> None:
@@ -105,7 +105,7 @@ class VisionCapability(AgentCapability):
         # Register a hook for processing the last message.
         agent.register_hook(hookable_method="process_last_received_message", hook=self.process_last_received_message)
 
-    def process_last_received_message(self, content: Union[str, List[dict]]) -> str:
+    def process_last_received_message(self, content: Union[str, list[dict]]) -> str:
         """
         Processes the last received message content by normalizing and augmenting it
         with descriptions of any included images. The function supports input content

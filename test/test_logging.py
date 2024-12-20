@@ -264,7 +264,7 @@ def test_to_dict():
             self.extra_key = "remove this key"
             self.path = Path("/to/something")
 
-    class Bar(object):
+    class Bar:
         def init(self):
             pass
 

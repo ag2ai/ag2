@@ -31,8 +31,8 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
         self,
         name="RetrieveChatAgent",  # default set to RetrieveChatAgent
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        is_termination_msg: Optional[Callable[[Dict], bool]] = None,
-        retrieve_config: Optional[Dict] = None,  # config for the retrieve agent
+        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        retrieve_config: Optional[dict] = None,  # config for the retrieve agent
         **kwargs,
     ):
         """
@@ -169,7 +169,7 @@ def create_qdrant_from_dir(
     must_break_at_empty_line: bool = True,
     embedding_model: str = "BAAI/bge-small-en-v1.5",
     custom_text_split_function: Callable = None,
-    custom_text_types: List[str] = TEXT_FORMATS,
+    custom_text_types: list[str] = TEXT_FORMATS,
     recursive: bool = True,
     extra_docs: bool = False,
     parallel: int = 0,
@@ -177,7 +177,7 @@ def create_qdrant_from_dir(
     quantization_config: Optional[models.QuantizationConfig] = None,
     hnsw_config: Optional[models.HnswConfigDiff] = None,
     payload_indexing: bool = False,
-    qdrant_client_options: Optional[Dict] = {},
+    qdrant_client_options: Optional[dict] = {},
 ):
     """Create a Qdrant collection from all the files in a given directory, the directory can also be a single file or a
       url to a single file.
@@ -266,14 +266,14 @@ def create_qdrant_from_dir(
 
 
 def query_qdrant(
-    query_texts: List[str],
+    query_texts: list[str],
     n_results: int = 10,
     client: QdrantClient = None,
     collection_name: str = "all-my-documents",
     search_string: str = "",
     embedding_model: str = "BAAI/bge-small-en-v1.5",
-    qdrant_client_options: Optional[Dict] = {},
-) -> List[List[QueryResponse]]:
+    qdrant_client_options: Optional[dict] = {},
+) -> list[list[QueryResponse]]:
     """Perform a similarity search with filters on a Qdrant collection
 
     Args:

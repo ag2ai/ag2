@@ -9,7 +9,7 @@ To build and test documentation locally, begin by downloading and installing [No
 ## Installation
 
 ```console
-pip install pydoc-markdown pyyaml colored
+pip install pydoc-markdown pyyaml termcolor nbconvert
 ```
 
 ### Install Quarto
