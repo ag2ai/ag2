@@ -81,12 +81,12 @@ def notebooks_target_dir(website_directory: Path) -> Path:
     return website_directory / "notebooks"
 
 
-def load_metadata(notebook: Path) -> typing.Dict:
+def load_metadata(notebook: Path) -> dict:
     content = json.load(notebook.open(encoding="utf-8"))
     return content["metadata"]
 
 
-def skip_reason_or_none_if_ok(notebook: Path) -> typing.Optional[str]:
+def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     """Return a reason to skip the notebook, or None if it should not be skipped."""
 
     if notebook.suffix != ".ipynb":
@@ -99,7 +99,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> typing.Optional[str]:
     if "notebook" not in notebook.parts:
         return None
 
-    with open(notebook, "r", encoding="utf-8") as f:
+    with open(notebook, encoding="utf-8") as f:
         content = f.read()
 
     # Load the json and get the first cell
@@ -139,9 +139,9 @@ def skip_reason_or_none_if_ok(notebook: Path) -> typing.Optional[str]:
     return None
 
 
-def extract_title(notebook: Path) -> Optional[str]:
+def extract_title(notebook: Path) -> str | None:
     """Extract the title of the notebook."""
-    with open(notebook, "r", encoding="utf-8") as f:
+    with open(notebook, encoding="utf-8") as f:
         content = f.read()
 
     # Load the json and get the first cell
@@ -202,9 +202,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
                 shutil.copy(src_notebook.parent / file, dest_dir / file)
 
         # Capture output
-        result = subprocess.run(
-            [quarto_bin, "render", intermediate_notebook], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
+        result = subprocess.run([quarto_bin, "render", intermediate_notebook], capture_output=True, text=True)
         if result.returncode != 0:
             return fmt_error(
                 src_notebook, f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
@@ -223,9 +221,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
         if dry_run:
             return colored(f"Would process {src_notebook.name}", "green")
 
-        result = subprocess.run(
-            [quarto_bin, "render", src_notebook], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
+        result = subprocess.run([quarto_bin, "render", src_notebook], capture_output=True, text=True)
         if result.returncode != 0:
             return fmt_error(
                 src_notebook, f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
@@ -240,7 +236,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
 @dataclass
 class NotebookError:
     error_name: str
-    error_value: Optional[str]
+    error_value: str | None
     traceback: str
     cell_source: str
 
@@ -253,7 +249,7 @@ class NotebookSkip:
 NB_VERSION = 4
 
 
-def test_notebook(notebook_path: Path, timeout: int = 300) -> Tuple[Path, Optional[Union[NotebookError, NotebookSkip]]]:
+def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, NotebookError | NotebookSkip | None]:
     nb = nbformat.read(str(notebook_path), NB_VERSION)
 
     if "skip_test" in nb.metadata:
@@ -285,7 +281,7 @@ def test_notebook(notebook_path: Path, timeout: int = 300) -> Tuple[Path, Option
 # Find the first code cell which did not complete.
 def get_timeout_info(
     nb: NotebookNode,
-) -> Optional[NotebookError]:
+) -> NotebookError | None:
     for i, cell in enumerate(nb.cells):
         if cell.cell_type != "code":
             continue
@@ -300,7 +296,7 @@ def get_timeout_info(
     return None
 
 
-def get_error_info(nb: NotebookNode) -> Optional[NotebookError]:
+def get_error_info(nb: NotebookNode) -> NotebookError | None:
     for cell in nb["cells"]:  # get LAST error
         if cell["cell_type"] != "code":
             continue
@@ -318,13 +314,13 @@ def get_error_info(nb: NotebookNode) -> Optional[NotebookError]:
 
 
 def add_front_matter_to_metadata_mdx(
-    front_matter: Dict[str, Union[str, List[str]]], website_dir: Path, rendered_mdx: Path
+    front_matter: dict[str, str | list[str]], website_dir: Path, rendered_mdx: Path
 ) -> None:
     metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
 
     metadata = []
     if metadata_mdx.exists():
-        with open(metadata_mdx, "r", encoding="utf-8") as f:
+        with open(metadata_mdx, encoding="utf-8") as f:
             content = f.read()
             if content:
                 start = content.find("export const notebooksMetadata = [")
@@ -384,8 +380,8 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path
 
 
 # rendered_notebook is the final mdx file
-def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: Dict, website_dir: Path) -> None:
-    with open(rendered_mdx, "r", encoding="utf-8") as f:
+def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: dict, website_dir: Path) -> None:
+    with open(rendered_mdx, encoding="utf-8") as f:
         content = f.read()
 
     # If there is front matter in the mdx file, we need to remove it
@@ -465,7 +461,7 @@ def path(path_str: str) -> Path:
     return Path(path_str)
 
 
-def collect_notebooks(notebook_directory: Path, website_directory: Path) -> typing.List[Path]:
+def collect_notebooks(notebook_directory: Path, website_directory: Path) -> list[Path]:
     notebooks = list(notebook_directory.glob("*.ipynb"))
     notebooks.extend(list(website_directory.glob("docs/**/*.ipynb")))
     return notebooks
@@ -479,7 +475,7 @@ def fmt_ok(notebook: Path) -> str:
     return f"{colored('[OK]', 'green')} {colored(notebook.name, 'blue')} ✅"
 
 
-def fmt_error(notebook: Path, error: Union[NotebookError, str]) -> str:
+def fmt_error(notebook: Path, error: NotebookError | str) -> str:
     if isinstance(error, str):
         return f"{colored('[Error]', 'red')} {colored(notebook.name, 'blue')}: {error}"
     elif isinstance(error, NotebookError):
@@ -538,11 +534,11 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
         return
 
     # Read mint.json
-    with open(mint_json_path, "r", encoding="utf-8") as f:
+    with open(mint_json_path, encoding="utf-8") as f:
         mint_config = json.load(f)
 
     # Read NotebooksMetadata.mdx and extract metadata links
-    with open(metadata_path, "r", encoding="utf-8") as f:
+    with open(metadata_path, encoding="utf-8") as f:
         content = f.read()
         # Extract the array between the brackets
         start = content.find("export const notebooksMetadata = [")
@@ -622,7 +618,7 @@ def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
     """Process all MDX files in directory to fix internal references."""
     for file_path in website_dir.glob("**/*.mdx"):
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             fixed_content = fix_internal_references(content, website_dir, file_path)

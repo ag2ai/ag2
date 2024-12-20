@@ -18,7 +18,7 @@ from ..io.base import IOStream
 from .utils import consolidate_chat_info
 
 logger = logging.getLogger(__name__)
-Prerequisite = Tuple[int, int]
+Prerequisite = tuple[int, int]
 
 
 @dataclass
@@ -27,21 +27,21 @@ class ChatResult:
 
     chat_id: int = None
     """chat id"""
-    chat_history: List[Dict[str, Any]] = None
+    chat_history: list[dict[str, Any]] = None
     """The chat history."""
     summary: str = None
     """A summary obtained from the chat."""
-    cost: Dict[str, dict] = None  # keys: "usage_including_cached_inference", "usage_excluding_cached_inference"
+    cost: dict[str, dict] = None  # keys: "usage_including_cached_inference", "usage_excluding_cached_inference"
     """The cost of the chat.
        The value for each usage type is a dictionary containing cost information for that specific type.
            - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference.
            - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference".
     """
-    human_input: List[str] = None
+    human_input: list[str] = None
     """A list of human input solicited during the chat."""
 
 
-def _validate_recipients(chat_queue: List[Dict[str, Any]]) -> None:
+def _validate_recipients(chat_queue: list[dict[str, Any]]) -> None:
     """
     Validate recipients exits and warn repetitive recipients.
     """
@@ -56,7 +56,7 @@ def _validate_recipients(chat_queue: List[Dict[str, Any]]) -> None:
         )
 
 
-def __create_async_prerequisites(chat_queue: List[Dict[str, Any]]) -> List[Prerequisite]:
+def __create_async_prerequisites(chat_queue: list[dict[str, Any]]) -> list[Prerequisite]:
     """
     Create list of Prerequisite (prerequisite_chat_id, chat_id)
     """
@@ -73,7 +73,7 @@ def __create_async_prerequisites(chat_queue: List[Dict[str, Any]]) -> List[Prere
     return prerequisites
 
 
-def __find_async_chat_order(chat_ids: Set[int], prerequisites: List[Prerequisite]) -> List[int]:
+def __find_async_chat_order(chat_ids: set[int], prerequisites: list[Prerequisite]) -> list[int]:
     """Find chat order for async execution based on the prerequisite chats
 
     args:
@@ -122,7 +122,7 @@ def _post_process_carryover_item(carryover_item):
         return str(carryover_item)
 
 
-def __post_carryover_processing(chat_info: Dict[str, Any]) -> None:
+def __post_carryover_processing(chat_info: dict[str, Any]) -> None:
     iostream = IOStream.get_default()
 
     if "message" not in chat_info:
@@ -158,7 +158,7 @@ def __post_carryover_processing(chat_info: Dict[str, Any]) -> None:
     iostream.print(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
 
 
-def initiate_chats(chat_queue: List[Dict[str, Any]]) -> List[ChatResult]:
+def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
     """Initiate a list of chats.
     Args:
         chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
@@ -234,7 +234,7 @@ def _on_chat_future_done(chat_future: asyncio.Future, chat_id: int):
 
 
 async def _dependent_chat_future(
-    chat_id: int, chat_info: Dict[str, Any], prerequisite_chat_futures: Dict[int, asyncio.Future]
+    chat_id: int, chat_info: dict[str, Any], prerequisite_chat_futures: dict[int, asyncio.Future]
 ) -> asyncio.Task:
     """
     Create an async Task for each chat.
@@ -272,7 +272,7 @@ async def _dependent_chat_future(
     return chat_res_future
 
 
-async def a_initiate_chats(chat_queue: List[Dict[str, Any]]) -> Dict[int, ChatResult]:
+async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatResult]:
     """(async) Initiate a list of chats.
 
     args:

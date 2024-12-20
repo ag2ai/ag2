@@ -83,7 +83,7 @@ class CohereClient:
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Cohere, it will be ignored.", UserWarning)
 
-    def message_retrieval(self, response) -> List:
+    def message_retrieval(self, response) -> list:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -96,7 +96,7 @@ class CohereClient:
         return response.cost
 
     @staticmethod
-    def get_usage(response) -> Dict:
+    def get_usage(response) -> dict:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -107,7 +107,7 @@ class CohereClient:
             "model": response.model,
         }
 
-    def parse_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Loads the parameters for Cohere API from the passed in parameters and returns a validated set. Checks types, ranges, and sets defaults"""
         cohere_params = {}
 
@@ -151,7 +151,7 @@ class CohereClient:
 
         return cohere_params
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
         client_name = params.get("client_name") or "autogen-cohere"
         # Parse parameters to the Cohere API's parameters
@@ -263,7 +263,7 @@ class CohereClient:
         return response_oai
 
 
-def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_tool_calls) -> List[Dict[str, Any]]:
+def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_tool_calls) -> list[dict[str, Any]]:
     temp_tool_results = []
 
     for tool_call in all_tool_calls:
@@ -281,7 +281,7 @@ def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_t
 
 
 def oai_messages_to_cohere_messages(
-    messages: list[Dict[str, Any]], params: Dict[str, Any], cohere_params: Dict[str, Any]
+    messages: list[dict[str, Any]], params: dict[str, Any], cohere_params: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], str, str]:
     """Convert messages from OAI format to Cohere's format.
     We correct for any specific role orders and types.

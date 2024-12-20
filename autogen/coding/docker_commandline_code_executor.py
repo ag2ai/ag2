@@ -45,7 +45,7 @@ __all__ = ("DockerCommandLineCodeExecutor",)
 
 
 class DockerCommandLineCodeExecutor(CodeExecutor):
-    DEFAULT_EXECUTION_POLICY: ClassVar[Dict[str, bool]] = {
+    DEFAULT_EXECUTION_POLICY: ClassVar[dict[str, bool]] = {
         "bash": True,
         "shell": True,
         "sh": True,
@@ -57,18 +57,18 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         "html": False,
         "css": False,
     }
-    LANGUAGE_ALIASES: ClassVar[Dict[str, str]] = {"py": "python", "js": "javascript"}
+    LANGUAGE_ALIASES: ClassVar[dict[str, str]] = {"py": "python", "js": "javascript"}
 
     def __init__(
         self,
         image: str = "python:3-slim",
-        container_name: Optional[str] = None,
+        container_name: str | None = None,
         timeout: int = 60,
-        work_dir: Union[Path, str] = Path("."),
-        bind_dir: Optional[Union[Path, str]] = None,
+        work_dir: Path | str = Path("."),
+        bind_dir: Path | str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
-        execution_policies: Optional[Dict[str, bool]] = None,
+        execution_policies: dict[str, bool] | None = None,
     ):
         """(Experimental) A code executor class that executes code through
         a command line environment in a Docker container.
@@ -183,7 +183,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         """(Experimental) Export a code extractor that can be used by an agent."""
         return MarkdownCodeExtractor()
 
-    def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> CommandLineCodeResult:
+    def execute_code_blocks(self, code_blocks: list[CodeBlock]) -> CommandLineCodeResult:
         """(Experimental) Execute the code blocks and return the result.
 
         Args:
@@ -257,6 +257,6 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()

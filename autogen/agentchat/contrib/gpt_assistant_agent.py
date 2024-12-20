@@ -32,8 +32,8 @@ class GPTAssistantAgent(ConversableAgent):
         self,
         name="GPT Assistant",
         instructions: Optional[str] = None,
-        llm_config: Optional[Union[Dict, bool]] = None,
-        assistant_config: Optional[Dict] = None,
+        llm_config: Optional[Union[dict, bool]] = None,
+        assistant_config: Optional[dict] = None,
         overwrite_instructions: bool = False,
         overwrite_tools: bool = False,
         **kwargs,
@@ -184,10 +184,10 @@ class GPTAssistantAgent(ConversableAgent):
 
     def _invoke_assistant(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         """
         Invokes the OpenAI assistant to generate a reply based on the given messages.
 
@@ -441,7 +441,7 @@ class GPTAssistantAgent(ConversableAgent):
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     @property
-    def oai_threads(self) -> Dict[Agent, Any]:
+    def oai_threads(self) -> dict[Agent, Any]:
         """Return the threads of the agent."""
         return self._openai_threads
 
@@ -475,15 +475,15 @@ class GPTAssistantAgent(ConversableAgent):
         matching_assistants = []
 
         # Preprocess the required tools for faster comparison
-        required_tool_types = set(
+        required_tool_types = {
             "file_search" if tool.get("type") in ["retrieval", "file_search"] else tool.get("type") for tool in tools
-        )
+        }
 
-        required_function_names = set(
+        required_function_names = {
             tool.get("function", {}).get("name")
             for tool in tools
             if tool.get("type") not in ["code_interpreter", "retrieval", "file_search"]
-        )
+        }
 
         for assistant in candidate_assistants:
             # Check if instructions are similar
@@ -496,10 +496,10 @@ class GPTAssistantAgent(ConversableAgent):
                 continue
 
             # Preprocess the assistant's tools
-            assistant_tool_types = set(
+            assistant_tool_types = {
                 "file_search" if tool.type in ["retrieval", "file_search"] else tool.type for tool in assistant.tools
-            )
-            assistant_function_names = set(tool.function.name for tool in assistant.tools if hasattr(tool, "function"))
+            }
+            assistant_function_names = {tool.function.name for tool in assistant.tools if hasattr(tool, "function")}
 
             # Check if the tool types, function names match
             if required_tool_types != assistant_tool_types or required_function_names != assistant_function_names:

@@ -7,11 +7,10 @@
 import asyncio
 import inspect
 import unittest.mock
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
 
 import pytest
 from pydantic import BaseModel, Field
-from typing_extensions import Annotated
 
 from autogen._pydantic import PYDANTIC_V1, model_dump
 from autogen.function_utils import (
@@ -40,7 +39,7 @@ def g(  # type: ignore[empty-body]
     b: int = 2,
     c: Annotated[float, "Parameter c"] = 0.1,
     *,
-    d: Dict[str, Tuple[Optional[int], List[float]]],
+    d: dict[str, tuple[Optional[int], list[float]]],
 ) -> str:
     pass
 
@@ -50,7 +49,7 @@ async def a_g(  # type: ignore[empty-body]
     b: int = 2,
     c: Annotated[float, "Parameter c"] = 0.1,
     *,
-    d: Dict[str, Tuple[Optional[int], List[float]]],
+    d: dict[str, tuple[Optional[int], list[float]]],
 ) -> str:
     pass
 
@@ -89,7 +88,7 @@ def test_get_parameter_json_schema() -> None:
         b: float
         c: str
 
-    expected: Dict[str, Any] = {
+    expected: dict[str, Any] = {
         "description": "b",
         "properties": {"b": {"title": "B", "type": "number"}, "c": {"title": "C", "type": "string"}},
         "required": ["b", "c"],
@@ -367,7 +366,7 @@ def test_load_basemodels_if_needed_sync() -> None:
     def f(
         base: Annotated[Currency, "Base currency"],
         quote_currency: Annotated[CurrencySymbol, "Quote currency"] = "EUR",
-    ) -> Tuple[Currency, CurrencySymbol]:
+    ) -> tuple[Currency, CurrencySymbol]:
         return base, quote_currency
 
     assert not inspect.iscoroutinefunction(f)
@@ -385,7 +384,7 @@ async def test_load_basemodels_if_needed_async() -> None:
     async def f(
         base: Annotated[Currency, "Base currency"],
         quote_currency: Annotated[CurrencySymbol, "Quote currency"] = "EUR",
-    ) -> Tuple[Currency, CurrencySymbol]:
+    ) -> tuple[Currency, CurrencySymbol]:
         return base, quote_currency
 
     assert inspect.iscoroutinefunction(f)

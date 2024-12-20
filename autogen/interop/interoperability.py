@@ -40,7 +40,7 @@ class Interoperability:
         return interop.convert_tool(tool, **kwargs)
 
     @classmethod
-    def get_interoperability_class(cls, type: str) -> Type[Interoperable]:
+    def get_interoperability_class(cls, type: str) -> type[Interoperable]:
         """
         Retrieves the interoperability class corresponding to the specified type.
 
@@ -63,7 +63,7 @@ class Interoperability:
         return cls.registry.get_class(type)
 
     @classmethod
-    def get_supported_types(cls) -> List[str]:
+    def get_supported_types(cls) -> list[str]:
         """
         Returns a sorted list of all supported interoperability types.
 

@@ -8,16 +8,11 @@ import unittest
 
 import pytest
 from conftest import reason, skip_openai
+from langchain.tools import tool as langchain_tool
 from pydantic import BaseModel, Field
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
-
-if sys.version_info >= (3, 9):
-    from langchain.tools import tool as langchain_tool
-else:
-    langchain_tool = unittest.mock.MagicMock()
-
 from autogen.interop.langchain import LangChainInteroperability
 
 
