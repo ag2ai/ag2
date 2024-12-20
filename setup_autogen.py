@@ -54,6 +54,7 @@ setuptools.setup(
         "cohere": ["pyautogen[cohere]==" + __version__],
         "ollama": ["pyautogen[ollama]==" + __version__],
         "bedrock": ["pyautogen[bedrock]==" + __version__],
+        "twilio": ["pyautogen[twilio]==" + __version__],
         "interop-crewai": ["pyautogen[interop-crewai]==" + __version__],
         "interop-langchain": ["pyautogen[interop-langchain]==" + __version__],
         "interop-pydantic-ai": ["pyautogen[interop-pydantic-ai]==" + __version__],

@@ -38,6 +38,8 @@ install_requires = [
     "pydantic>=1.10,<3,!=2.6.0",  # could be both V1 and V2
     "docker",
     "packaging",
+    "websockets>=14,<15",
+    "asyncer>=0.0.8",
 ]
 
 test = [
@@ -80,6 +82,8 @@ neo4j = [
     "llama-index-core==0.12.5",
 ]
 
+twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
+
 interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
 interop_langchain = ["langchain-community>=0.3.12,<1"]
 interop_pydantic_ai = ["pydantic-ai==0.0.13"]
@@ -120,7 +124,7 @@ extra_require = {
     "websurfer": ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"],
     "redis": ["redis"],
     "cosmosdb": ["azure-cosmos>=4.2.0"],
-    "websockets": ["websockets>=12.0,<13"],
+    "websockets": ["websockets>=14.0,<15"],
     "jupyter-executor": jupyter_executor,
     "types": types,
     "long-context": ["llmlingua<0.3"],
@@ -131,6 +135,7 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
+    "twilio": twilio,
     "interop-crewai": interop_crewai,
     "interop-langchain": interop_langchain,
     "interop-pydantic-ai": interop_pydantic_ai,
