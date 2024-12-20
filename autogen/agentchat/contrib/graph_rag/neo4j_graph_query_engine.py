@@ -52,7 +52,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         embedding: BaseEmbedding = OpenAIEmbedding(model_name="text-embedding-3-small"),
         entities: Optional[TypeAlias] = None,
         relations: Optional[TypeAlias] = None,
-        schema: Optional[Union[Dict[str, str], List[Triple]]] = None,
+        schema: Optional[Union[dict[str, str], list[Triple]]] = None,
         strict: Optional[bool] = False,
     ):
         """
@@ -85,7 +85,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         self.schema = schema
         self.strict = strict
 
-    def init_db(self, input_doc: List[Document] | None = None):
+    def init_db(self, input_doc: list[Document] | None = None):
         """
         Build the knowledge graph with input documents.
         """
@@ -133,7 +133,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             show_progress=True,
         )
 
-    def add_records(self, new_records: List) -> bool:
+    def add_records(self, new_records: list) -> bool:
         """
         Add new records to the knowledge graph. Must be local files.
 
@@ -195,7 +195,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         with self.graph_store._driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n;")
 
-    def _load_doc(self, input_doc: List[Document]) -> List[Document]:
+    def _load_doc(self, input_doc: list[Document]) -> list[Document]:
         """
         Load documents from the input files.
         """

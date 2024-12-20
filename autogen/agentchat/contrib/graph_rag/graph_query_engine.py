@@ -29,7 +29,7 @@ class GraphQueryEngine(Protocol):
     This interface defines the basic methods for graph-based RAG.
     """
 
-    def init_db(self, input_doc: List[Document] | None = None):
+    def init_db(self, input_doc: list[Document] | None = None):
         """
         This method initializes graph database with the input documents or records.
         Usually, it takes the following steps,
@@ -43,7 +43,7 @@ class GraphQueryEngine(Protocol):
         """
         pass
 
-    def add_records(self, new_records: List) -> bool:
+    def add_records(self, new_records: list) -> bool:
         """
         Add new records to the underlying database and add to the graph if required.
         """

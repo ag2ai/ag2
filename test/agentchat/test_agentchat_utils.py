@@ -48,13 +48,13 @@ TAG_PARSING_TESTS = [
 ]
 
 
-def _delete_unused_keys(d: Dict) -> None:
+def _delete_unused_keys(d: dict) -> None:
     if "match" in d:
         del d["match"]
 
 
 @pytest.mark.parametrize("test_case", TAG_PARSING_TESTS)
-def test_tag_parsing(test_case: Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, str]]]]]]) -> None:
+def test_tag_parsing(test_case: dict[str, Union[str, list[dict[str, Union[str, dict[str, str]]]]]]) -> None:
     """Test the tag_parsing function."""
     message = test_case["message"]
     expected = test_case["expected"]

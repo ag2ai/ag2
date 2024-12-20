@@ -92,7 +92,7 @@ class TestConsoleIOWithWebsockets:
 
         success_dict = {"success": False}
 
-        def on_connect(iostream: IOWebsockets, success_dict: Dict[str, bool] = success_dict) -> None:
+        def on_connect(iostream: IOWebsockets, success_dict: dict[str, bool] = success_dict) -> None:
             print(f" - on_connect(): Connected to client using IOWebsockets {iostream}", flush=True)
 
             print(" - on_connect(): Receiving message from client.", flush=True)

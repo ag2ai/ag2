@@ -76,7 +76,7 @@ class MistralAIClient:
 
         self._client = Mistral(api_key=self.api_key)
 
-    def message_retrieval(self, response: ChatCompletion) -> Union[List[str], List[ChatCompletionMessage]]:
+    def message_retrieval(self, response: ChatCompletion) -> Union[list[str], list[ChatCompletionMessage]]:
         """Retrieve the messages from the response."""
 
         return [choice.message for choice in response.choices]
@@ -84,7 +84,7 @@ class MistralAIClient:
     def cost(self, response) -> float:
         return response.cost
 
-    def parse_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Loads the parameters for Mistral.AI API from the passed in parameters and returns a validated set. Checks types, ranges, and sets defaults"""
         mistral_params = {}
 
@@ -173,7 +173,7 @@ class MistralAIClient:
 
         return mistral_params
 
-    def create(self, params: Dict[str, Any]) -> ChatCompletion:
+    def create(self, params: dict[str, Any]) -> ChatCompletion:
         # 1. Parse parameters to Mistral.AI API's parameters
         mistral_params = self.parse_params(params)
 
@@ -224,7 +224,7 @@ class MistralAIClient:
         return response_oai
 
     @staticmethod
-    def get_usage(response: ChatCompletion) -> Dict:
+    def get_usage(response: ChatCompletion) -> dict:
         return {
             "prompt_tokens": response.usage.prompt_tokens if response.usage is not None else 0,
             "completion_tokens": response.usage.completion_tokens if response.usage is not None else 0,
@@ -236,7 +236,7 @@ class MistralAIClient:
         }
 
 
-def tool_def_to_mistral(tool_definitions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Converts AutoGen tool definition to a mistral tool format"""
 
     mistral_tools = []

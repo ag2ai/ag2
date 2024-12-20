@@ -84,7 +84,7 @@ OAI_PRICE1K = {
 }
 
 
-def get_key(config: Dict[str, Any]) -> str:
+def get_key(config: dict[str, Any]) -> str:
     """Get a unique identifier of a configuration.
 
     Args:
@@ -122,11 +122,11 @@ def is_valid_api_key(api_key: str) -> bool:
 
 
 def get_config_list(
-    api_keys: List[str],
-    base_urls: Optional[List[str]] = None,
+    api_keys: list[str],
+    base_urls: Optional[list[str]] = None,
     api_type: Optional[str] = None,
     api_version: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Get a list of configs for OpenAI API client.
 
     Args:
@@ -179,7 +179,7 @@ def config_list_openai_aoai(
     openai_api_base_file: Optional[str] = "base_openai.txt",
     aoai_api_base_file: Optional[str] = "base_aoai.txt",
     exclude: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Get a list of configs for OpenAI API client (including Azure or local model deployments that support OpenAI's chat completion API).
 
     This function constructs configurations by reading API keys and base URLs from environment variables or text files.
@@ -307,8 +307,8 @@ def config_list_from_models(
     aoai_api_key_file: Optional[str] = "key_aoai.txt",
     aoai_api_base_file: Optional[str] = "base_aoai.txt",
     exclude: Optional[str] = None,
-    model_list: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    model_list: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """
     Get a list of configs for API calls with models specified in the model list.
 
@@ -374,7 +374,7 @@ def config_list_gpt4_gpt35(
     aoai_api_key_file: Optional[str] = "key_aoai.txt",
     aoai_api_base_file: Optional[str] = "base_aoai.txt",
     exclude: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Get a list of configs for 'gpt-4' followed by 'gpt-3.5-turbo' API calls.
 
     Args:
@@ -398,10 +398,10 @@ def config_list_gpt4_gpt35(
 
 
 def filter_config(
-    config_list: List[Dict[str, Any]],
-    filter_dict: Optional[Dict[str, Union[List[Union[str, None]], Set[Union[str, None]]]]],
+    config_list: list[dict[str, Any]],
+    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]],
     exclude: bool = False,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """This function filters `config_list` by checking each configuration dictionary against the criteria specified in
     `filter_dict`. A configuration dictionary is retained if for every key in `filter_dict`, see example below.
 
@@ -479,8 +479,8 @@ def _satisfies_criteria(value: Any, criteria_values: Any) -> bool:
 def config_list_from_json(
     env_or_file: str,
     file_location: Optional[str] = "",
-    filter_dict: Optional[Dict[str, Union[List[Union[str, None]], Set[Union[str, None]]]]] = None,
-) -> List[Dict[str, Any]]:
+    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]] = None,
+) -> list[dict[str, Any]]:
     """
     Retrieves a list of API configurations from a JSON stored in an environment variable or a file.
 
@@ -523,7 +523,7 @@ def config_list_from_json(
         # The environment variable exists. We should use information from it.
         if os.path.exists(env_str):
             # It is a file location, and we need to load the json from the file.
-            with open(env_str, "r") as file:
+            with open(env_str) as file:
                 json_str = file.read()
         else:
             # Else, it should be a JSON string by itself.
@@ -547,7 +547,7 @@ def get_config(
     base_url: Optional[str] = None,
     api_type: Optional[str] = None,
     api_version: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Constructs a configuration dictionary for a single model with the provided API configurations.
 
@@ -587,9 +587,9 @@ def get_config(
 
 def config_list_from_dotenv(
     dotenv_file_path: Optional[str] = None,
-    model_api_key_map: Optional[Dict[str, Any]] = None,
-    filter_dict: Optional[Dict[str, Union[List[Union[str, None]], Set[Union[str, None]]]]] = None,
-) -> List[Dict[str, Union[str, Set[str]]]]:
+    model_api_key_map: Optional[dict[str, Any]] = None,
+    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]] = None,
+) -> list[dict[str, Union[str, set[str]]]]:
     """
     Load API configurations from a specified .env file or environment variables and construct a list of configurations.
 
@@ -688,7 +688,7 @@ def config_list_from_dotenv(
     return config_list
 
 
-def retrieve_assistants_by_name(client: OpenAI, name: str) -> List[Assistant]:
+def retrieve_assistants_by_name(client: OpenAI, name: str) -> list[Assistant]:
     """
     Return the assistants with the given name from OAI assistant API
     """
@@ -709,7 +709,7 @@ def detect_gpt_assistant_api_version() -> str:
         return "v2"
 
 
-def create_gpt_vector_store(client: OpenAI, name: str, fild_ids: List[str]) -> Any:
+def create_gpt_vector_store(client: OpenAI, name: str, fild_ids: list[str]) -> Any:
     """Create a openai vector store for gpt assistant"""
 
     try:
@@ -732,7 +732,7 @@ def create_gpt_vector_store(client: OpenAI, name: str, fild_ids: List[str]) -> A
 
 
 def create_gpt_assistant(
-    client: OpenAI, name: str, instructions: str, model: str, assistant_config: Dict[str, Any]
+    client: OpenAI, name: str, instructions: str, model: str, assistant_config: dict[str, Any]
 ) -> Assistant:
     """Create a openai gpt assistant"""
 
@@ -782,7 +782,7 @@ def create_gpt_assistant(
     return client.beta.assistants.create(name=name, instructions=instructions, model=model, **assistant_create_kwargs)
 
 
-def update_gpt_assistant(client: OpenAI, assistant_id: str, assistant_config: Dict[str, Any]) -> Assistant:
+def update_gpt_assistant(client: OpenAI, assistant_id: str, assistant_config: dict[str, Any]) -> Assistant:
     """Update openai gpt assistant"""
 
     gpt_assistant_api_version = detect_gpt_assistant_api_version()

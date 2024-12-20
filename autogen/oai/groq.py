@@ -70,7 +70,7 @@ class GroqClient:
             warnings.warn("response_format is not supported for Groq API, it will be ignored.", UserWarning)
         self.base_url = kwargs.get("base_url", None)
 
-    def message_retrieval(self, response) -> List:
+    def message_retrieval(self, response) -> list:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -83,7 +83,7 @@ class GroqClient:
         return response.cost
 
     @staticmethod
-    def get_usage(response) -> Dict:
+    def get_usage(response) -> dict:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -94,7 +94,7 @@ class GroqClient:
             "model": response.model,
         }
 
-    def parse_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Loads the parameters for Groq API from the passed in parameters and returns a validated set. Checks types, ranges, and sets defaults"""
         groq_params = {}
 
@@ -130,7 +130,7 @@ class GroqClient:
 
         return groq_params
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Groq messages
@@ -255,7 +255,7 @@ class GroqClient:
         return response_oai
 
 
-def oai_messages_to_groq_messages(messages: list[Dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_groq_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Groq's format.
     We correct for any specific role orders and types.
     """

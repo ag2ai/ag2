@@ -81,7 +81,7 @@ class ThinkNode:
             self.parent.children.append(self)
 
     @property
-    def _trajectory_arr(self) -> List[str]:
+    def _trajectory_arr(self) -> list[str]:
         """Get the full path from root to this node as a list of strings.
 
         Returns:
@@ -118,7 +118,7 @@ class ThinkNode:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert ThinkNode to dictionary representation.
 
         Returns:
@@ -135,7 +135,7 @@ class ThinkNode:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict, parent: Optional["ThinkNode"] = None) -> "ThinkNode":
+    def from_dict(cls, data: dict, parent: Optional["ThinkNode"] = None) -> "ThinkNode":
         """Create ThinkNode from dictionary representation.
 
         Args:
@@ -624,7 +624,7 @@ Please provide your rating along with a brief explanation of your assessment.
                     (child.value / (child.visits + EPSILON)) +
                     # exploration term
                     self._exploration_constant
-                    * math.sqrt((2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON)))
+                    * math.sqrt(2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON))
                     for child in node.children
                 ]
                 node = node.children[choices_weights.index(max(choices_weights))]
@@ -657,7 +657,7 @@ Please provide your rating along with a brief explanation of your assessment.
         best_ans_node = max(answer_nodes, key=lambda node: node.value)
         return best_ans_node.content
 
-    def _expand(self, node: ThinkNode) -> List:
+    def _expand(self, node: ThinkNode) -> list:
         """
         Expand the node by generating possible next steps based on the current trajectory.
 

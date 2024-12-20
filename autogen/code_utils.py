@@ -48,7 +48,7 @@ PYTHON_VARIANTS = ["python", "Python", "py"]
 logger = logging.getLogger(__name__)
 
 
-def content_str(content: Union[str, List[Union[UserMessageTextContentPart, UserMessageImageContentPart]], None]) -> str:
+def content_str(content: Union[str, list[Union[UserMessageTextContentPart, UserMessageImageContentPart]], None]) -> str:
     """Converts the `content` field of an OpenAI message into a string format.
 
     This function processes content that may be a string, a list of mixed text and image URLs, or None,
@@ -108,8 +108,8 @@ def infer_lang(code: str) -> str:
 # TODO: In the future move, to better support https://spec.commonmark.org/0.30/#fenced-code-blocks
 #       perhaps by using a full Markdown parser.
 def extract_code(
-    text: Union[str, List], pattern: str = CODE_BLOCK_PATTERN, detect_single_line_code: bool = False
-) -> List[Tuple[str, str]]:
+    text: Union[str, list], pattern: str = CODE_BLOCK_PATTERN, detect_single_line_code: bool = False
+) -> list[tuple[str, str]]:
     """Extract code from a text.
 
     Args:
@@ -146,7 +146,7 @@ def extract_code(
     return extracted
 
 
-def generate_code(pattern: str = CODE_BLOCK_PATTERN, **config) -> Tuple[str, float]:
+def generate_code(pattern: str = CODE_BLOCK_PATTERN, **config) -> tuple[str, float]:
     """(openai<1) Generate code.
 
     Args:
@@ -175,7 +175,7 @@ def improve_function(file_name, func_name, objective, **config):
     """(openai<1) Improve the function to achieve the objective."""
     params = {**_IMPROVE_FUNCTION_CONFIG, **config}
     # read the entire file into a str
-    with open(file_name, "r") as f:
+    with open(file_name) as f:
         file_string = f.read()
     response = oai.Completion.create(
         {"func_name": func_name, "objective": objective, "file_string": file_string}, **params
@@ -208,7 +208,7 @@ def improve_code(files, objective, suggest_only=True, **config):
     code = ""
     for file_name in files:
         # read the entire file into a string
-        with open(file_name, "r") as f:
+        with open(file_name) as f:
             file_string = f.read()
         code += f"""{file_name}:
 {file_string}
@@ -358,9 +358,9 @@ def execute_code(
     timeout: Optional[int] = None,
     filename: Optional[str] = None,
     work_dir: Optional[str] = None,
-    use_docker: Union[List[str], str, bool] = SENTINEL,
+    use_docker: Union[list[str], str, bool] = SENTINEL,
     lang: Optional[str] = "python",
-) -> Tuple[int, str, Optional[str]]:
+) -> tuple[int, str, Optional[str]]:
     """Execute code in a docker container.
     This function is not tested on MacOS.
 
@@ -552,7 +552,7 @@ assertions:""",
 }
 
 
-def generate_assertions(definition: str, **config) -> Tuple[str, float]:
+def generate_assertions(definition: str, **config) -> tuple[str, float]:
     """(openai<1) Generate assertions for a function.
 
     Args:
@@ -582,14 +582,14 @@ def _remove_check(response):
 
 
 def eval_function_completions(
-    responses: List[str],
+    responses: list[str],
     definition: str,
     test: Optional[str] = None,
     entry_point: Optional[str] = None,
-    assertions: Optional[Union[str, Callable[[str], Tuple[str, float]]]] = None,
+    assertions: Optional[Union[str, Callable[[str], tuple[str, float]]]] = None,
     timeout: Optional[float] = 3,
     use_docker: Optional[bool] = True,
-) -> Dict:
+) -> dict:
     """(openai<1) Select a response from a list of responses for the function completion task (using generated assertions), and/or evaluate if the task is successful using a gold test.
 
     Args:
@@ -692,9 +692,9 @@ class PassAssertionFilter:
 
 def implement(
     definition: str,
-    configs: Optional[List[Dict]] = None,
-    assertions: Optional[Union[str, Callable[[str], Tuple[str, float]]]] = generate_assertions,
-) -> Tuple[str, float]:
+    configs: Optional[list[dict]] = None,
+    assertions: Optional[Union[str, Callable[[str], tuple[str, float]]]] = generate_assertions,
+) -> tuple[str, float]:
     """(openai<1) Implement a function from a definition.
 
     Args:
