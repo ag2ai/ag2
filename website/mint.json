@@ -418,6 +418,7 @@
         {
           "group": "tools",
           "pages": [
+            "docs/reference/tools/pydantic_ai_tool",
             "docs/reference/tools/tool"
           ]
         },
@@ -621,8 +622,8 @@
             "notebooks/agentchat_graph_rag_neo4j",
             "notebooks/agentchat_swarm_enhanced",
             "notebooks/tools_interoperability",
-            "notebooks/agentchat_reasoning_agent",
-            "notebooks/agentchat_realtime_swarm"
+            "notebooks/agentchat_realtime_swarm",
+            "notebooks/agentchat_reasoning_agent"
           ]
         },
         "notebooks/Gallery"
