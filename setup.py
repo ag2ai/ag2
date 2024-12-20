@@ -82,6 +82,7 @@ neo4j = [
     "llama-index-core==0.12.5",
 ]
 
+# used for
 twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
 interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
