@@ -7,6 +7,11 @@
 from .agent import Agent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, initiate_chats
+from .contrib.reasoning_agent import (
+    ReasoningAgent,
+    ThinkNode,
+    visualize_tree,
+)
 
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
@@ -41,4 +46,7 @@ __all__ = [
     "AFTER_WORK",
     "AfterWorkOption",
     "UPDATE_SYSTEM_MESSAGE",
+    "ReasoningAgent",
+    "visualize_tree",
+    "ThinkNode",
 ]
