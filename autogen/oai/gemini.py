@@ -272,7 +272,7 @@ class GeminiClient:
                 if fn_call not in prev_function_calls:
                     autogen_tool_calls.append(
                         ChatCompletionMessageToolCall(
-                            id=random_id,
+                            id=str(random_id),
                             function={
                                 "name": fn_call.name,
                                 "arguments": (
