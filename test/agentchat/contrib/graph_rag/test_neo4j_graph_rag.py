@@ -49,7 +49,7 @@ def neo4j_query_engine():
     ]
 
     # define which entities can have which relations
-    validation_schema = {
+    schema = {
         "EMPLOYEE": ["FOLLOWS", "APPLIES_TO", "ASSIGNED_TO", "ENTITLED_TO", "REPORTS_TO"],
         "EMPLOYER": ["PROVIDES", "DEFINED_AS", "MANAGES", "REQUIRES"],
         "POLICY": ["APPLIES_TO", "DEFINED_AS", "REQUIRES"],
@@ -69,12 +69,29 @@ def neo4j_query_engine():
         database="neo4j",  # Change if you want to store the graphh in your custom database
         entities=entities,  # possible entities
         relations=relations,  # possible relations
-        validation_schema=validation_schema,  # schema to validate the extracted triplets
+        schema=schema,
         strict=True,  # enofrce the extracted triplets to be in the schema
     )
 
     # Ingest data and initialize the database
     query_engine.init_db(input_doc=input_documents)
+    return query_engine
+
+
+# Test fixture to test auto-generation without given schema
+@pytest.fixture(scope="module")
+def neo4j_query_engine_auto():
+    """
+    Test the engine with auto-generated property graph
+    """
+    query_engine = Neo4jGraphQueryEngine(
+        username="neo4j",
+        password="password",
+        host="bolt://172.17.0.3",
+        port=7687,
+        database="neo4j",
+    )
+    query_engine.connect_db()  # Connect to the existing graph
     return query_engine
 
 
@@ -117,3 +134,18 @@ def test_neo4j_add_records(neo4j_query_engine):
     print(query_result.answer)
 
     assert query_result.answer.find("Keanu Reeves") >= 0
+
+
+@pytest.mark.skipif(
+    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    reason=reason,
+)
+def test_neo4j_auto(neo4j_query_engine_auto):
+    """
+    Test querying with auto-generated property graph
+    """
+    question = "Which company is the employer?"
+    query_result: GraphStoreQueryResult = neo4j_query_engine_auto.query(question=question)
+
+    print(query_result.answer)
+    assert query_result.answer.find("BUZZ") >= 0
