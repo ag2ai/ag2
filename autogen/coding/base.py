@@ -36,7 +36,7 @@ class CodeExtractor(Protocol):
     """(Experimental) A code extractor class that extracts code blocks from a message."""
 
     def extract_code_blocks(
-        self, message: str | list[UserMessageTextContentPart | UserMessageImageContentPart] | None
+        self, message: str | list[Union[UserMessageTextContentPart, UserMessageImageContentPart]] | None
     ) -> list[CodeBlock]:
         """(Experimental) Extract code blocks from a message.
 
@@ -108,7 +108,7 @@ CodeExecutionConfig = TypedDict(
 class CommandLineCodeResult(CodeResult):
     """(Experimental) A code result class for command line code executor."""
 
-    code_file: str | None = Field(
+    code_file: Optional[str] = Field(
         default=None,
         description="The file that the executed code block was saved to.",
     )
