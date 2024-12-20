@@ -59,12 +59,12 @@ WORKDIR "${HOME}"
     def __init__(
         self,
         *,
-        custom_image_name: Optional[str] = None,
-        container_name: Optional[str] = None,
+        custom_image_name: str | None = None,
+        container_name: str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
-        docker_env: Dict[str, str] = {},
-        token: Union[str, GenerateToken] = GenerateToken(),
+        docker_env: dict[str, str] = {},
+        token: str | GenerateToken = GenerateToken(),
     ):
         """Start a Jupyter kernel gateway server in a Docker container.
 
@@ -159,6 +159,6 @@ WORKDIR "${HOME}"
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()

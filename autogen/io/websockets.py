@@ -7,10 +7,11 @@
 import logging
 import ssl
 import threading
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial
 from time import sleep
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, Optional, Protocol, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Protocol, Union
 
 from .base import IOStream
 
@@ -134,7 +135,7 @@ class IOWebsockets(IOStream):
         Yields:
             str: The URI of the websocket server.
         """
-        server_dict: Dict[str, WebSocketServer] = {}
+        server_dict: dict[str, WebSocketServer] = {}
 
         def _run_server() -> None:
             if _import_error is not None:

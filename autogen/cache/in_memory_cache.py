@@ -20,7 +20,7 @@ class InMemoryCache(AbstractCache):
 
     def __init__(self, seed: Union[str, int] = ""):
         self._seed = str(seed)
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
 
     def _prefixed_key(self, key: str) -> str:
         separator = "_" if self._seed else ""
@@ -48,7 +48,7 @@ class InMemoryCache(AbstractCache):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
         """
         Exit the runtime context related to the object.

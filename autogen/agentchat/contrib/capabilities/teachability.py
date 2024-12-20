@@ -42,7 +42,7 @@ class Teachability(AgentCapability):
         path_to_db_dir: Optional[str] = "./tmp/teachable_agent_db",
         recall_threshold: Optional[float] = 1.5,
         max_num_retrievals: Optional[int] = 10,
-        llm_config: Optional[Union[Dict, bool]] = None,
+        llm_config: Optional[Union[dict, bool]] = None,
     ):
         """
         Args:
@@ -92,7 +92,7 @@ class Teachability(AgentCapability):
         """Adds a few arbitrary memos to the DB."""
         self.memo_store.prepopulate()
 
-    def process_last_received_message(self, text: Union[Dict, str]):
+    def process_last_received_message(self, text: Union[dict, str]):
         """
         Appends any relevant memos to the message text, and stores any apparent teachings in new memos.
         Uses TextAnalyzerAgent to make decisions about memo storage and retrieval.
@@ -109,7 +109,7 @@ class Teachability(AgentCapability):
         # Return the (possibly) expanded message text.
         return expanded_text
 
-    def _consider_memo_storage(self, comment: Union[Dict, str]):
+    def _consider_memo_storage(self, comment: Union[dict, str]):
         """Decides whether to store something from one user comment in the DB."""
         memo_added = False
 
@@ -167,7 +167,7 @@ class Teachability(AgentCapability):
             # Yes. Save them to disk.
             self.memo_store._save_memos()
 
-    def _consider_memo_retrieval(self, comment: Union[Dict, str]):
+    def _consider_memo_retrieval(self, comment: Union[dict, str]):
         """Decides whether to retrieve memos from the DB, and add them to the chat context."""
 
         # First, use the comment directly as the lookup key.
@@ -231,7 +231,7 @@ class Teachability(AgentCapability):
             memo_texts = memo_texts + "\n" + info
         return memo_texts
 
-    def _analyze(self, text_to_analyze: Union[Dict, str], analysis_instructions: Union[Dict, str]):
+    def _analyze(self, text_to_analyze: Union[dict, str], analysis_instructions: Union[dict, str]):
         """Asks TextAnalyzerAgent to analyze the given text according to specific instructions."""
         self.analyzer.reset()  # Clear the analyzer's list of messages.
         self.teachable_agent.send(
@@ -280,7 +280,7 @@ class MemoStore:
         self.last_memo_id = 0
         if (not reset) and os.path.exists(self.path_to_dict):
             print(colored("\nLOADING MEMORY FROM DISK", "light_green"))
-            print(colored("    Location = {}".format(self.path_to_dict), "light_green"))
+            print(colored(f"    Location = {self.path_to_dict}", "light_green"))
             with open(self.path_to_dict, "rb") as f:
                 self.uid_text_dict = pickle.load(f)
                 self.last_memo_id = len(self.uid_text_dict)
@@ -298,7 +298,7 @@ class MemoStore:
             input_text, output_text = text
             print(
                 colored(
-                    "  ID: {}\n    INPUT TEXT: {}\n    OUTPUT TEXT: {}".format(uid, input_text, output_text),
+                    f"  ID: {uid}\n    INPUT TEXT: {input_text}\n    OUTPUT TEXT: {output_text}",
                     "light_green",
                 )
             )

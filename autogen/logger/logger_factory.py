@@ -16,7 +16,7 @@ __all__ = ("LoggerFactory",)
 class LoggerFactory:
     @staticmethod
     def get_logger(
-        logger_type: Literal["sqlite", "file"] = "sqlite", config: Optional[Dict[str, Any]] = None
+        logger_type: Literal["sqlite", "file"] = "sqlite", config: Optional[dict[str, Any]] = None
     ) -> BaseLogger:
         if config is None:
             config = {}

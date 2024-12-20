@@ -15,7 +15,7 @@ from autogen.agentchat.contrib.agent_eval.task import Task
 
 
 def generate_criteria(
-    llm_config: Optional[Union[Dict, Literal[False]]] = None,
+    llm_config: Optional[Union[dict, Literal[False]]] = None,
     task: Task = None,
     additional_instructions: str = "",
     max_round=2,
@@ -67,8 +67,8 @@ def generate_criteria(
 
 
 def quantify_criteria(
-    llm_config: Optional[Union[Dict, Literal[False]]] = None,
-    criteria: List[Criterion] = None,
+    llm_config: Optional[Union[dict, Literal[False]]] = None,
+    criteria: list[Criterion] = None,
     task: Task = None,
     test_case: str = "",
     ground_truth: str = "",

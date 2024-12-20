@@ -9,7 +9,8 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Generator, List, Literal, Optional, Tuple, TypeVar, Union
+from collections.abc import Generator
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypeVar, Union
 
 import anyio
 import websockets
@@ -51,8 +52,8 @@ class RealtimeAgent(ConversableAgent):
         *,
         name: str,
         audio_adapter: RealtimeObserver,
-        system_message: Optional[Union[str, List]] = "You are a helpful AI Assistant.",
-        llm_config: Optional[Union[Dict, Literal[False]]] = None,
+        system_message: Optional[Union[str, list]] = "You are a helpful AI Assistant.",
+        llm_config: Optional[Union[dict, Literal[False]]] = None,
         voice: str = "alloy",
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
@@ -102,7 +103,7 @@ class RealtimeAgent(ConversableAgent):
         self,
         *,
         initial_agent: SwarmAgent,
-        agents: List[SwarmAgent],
+        agents: list[SwarmAgent],
         system_message: Optional[str] = None,
     ) -> None:
         """Register a swarm of agents with the Realtime Agent.
@@ -207,10 +208,10 @@ class RealtimeAgent(ConversableAgent):
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> Tuple[bool, Union[str, None]]:
+    ) -> tuple[bool, Union[str, None]]:
         """Check if the conversation should be terminated and if the agent should reply.
 
         Called when its agents turn in the chat conversation.

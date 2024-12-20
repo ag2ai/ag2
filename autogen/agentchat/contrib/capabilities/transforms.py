@@ -26,7 +26,7 @@ class MessageTransform(Protocol):
     that takes a list of messages and returns the transformed list.
     """
 
-    def apply_transform(self, messages: List[Dict]) -> List[Dict]:
+    def apply_transform(self, messages: list[dict]) -> list[dict]:
         """Applies a transformation to a list of messages.
 
         Args:
@@ -37,7 +37,7 @@ class MessageTransform(Protocol):
         """
         ...
 
-    def get_logs(self, pre_transform_messages: List[Dict], post_transform_messages: List[Dict]) -> Tuple[str, bool]:
+    def get_logs(self, pre_transform_messages: list[dict], post_transform_messages: list[dict]) -> tuple[str, bool]:
         """Creates the string including the logs of the transformation
 
         Alongside the string, it returns a boolean indicating whether the transformation had an effect or not.
@@ -70,7 +70,7 @@ class MessageHistoryLimiter:
         self._max_messages = max_messages
         self._keep_first_message = keep_first_message
 
-    def apply_transform(self, messages: List[Dict]) -> List[Dict]:
+    def apply_transform(self, messages: list[dict]) -> list[dict]:
         """Truncates the conversation history to the specified maximum number of messages.
 
         This method returns a new list containing the most recent messages up to the specified
@@ -110,7 +110,7 @@ class MessageHistoryLimiter:
 
         return truncated_messages
 
-    def get_logs(self, pre_transform_messages: List[Dict], post_transform_messages: List[Dict]) -> Tuple[str, bool]:
+    def get_logs(self, pre_transform_messages: list[dict], post_transform_messages: list[dict]) -> tuple[str, bool]:
         pre_transform_messages_len = len(pre_transform_messages)
         post_transform_messages_len = len(post_transform_messages)
 
@@ -161,7 +161,7 @@ class MessageTokenLimiter:
         max_tokens: Optional[int] = None,
         min_tokens: Optional[int] = None,
         model: str = "gpt-3.5-turbo-0613",
-        filter_dict: Optional[Dict] = None,
+        filter_dict: Optional[dict] = None,
         exclude_filter: bool = True,
     ):
         """
@@ -185,7 +185,7 @@ class MessageTokenLimiter:
         self._filter_dict = filter_dict
         self._exclude_filter = exclude_filter
 
-    def apply_transform(self, messages: List[Dict]) -> List[Dict]:
+    def apply_transform(self, messages: list[dict]) -> list[dict]:
         """Applies token truncation to the conversation history.
 
         Args:
@@ -237,7 +237,7 @@ class MessageTokenLimiter:
 
         return processed_messages
 
-    def get_logs(self, pre_transform_messages: List[Dict], post_transform_messages: List[Dict]) -> Tuple[str, bool]:
+    def get_logs(self, pre_transform_messages: list[dict], post_transform_messages: list[dict]) -> tuple[str, bool]:
         pre_transform_messages_tokens = sum(
             transforms_util.count_text_tokens(msg["content"]) for msg in pre_transform_messages if "content" in msg
         )
@@ -253,7 +253,7 @@ class MessageTokenLimiter:
             return logs_str, True
         return "No tokens were truncated.", False
 
-    def _truncate_str_to_tokens(self, contents: Union[str, List], n_tokens: int) -> Union[str, List]:
+    def _truncate_str_to_tokens(self, contents: Union[str, list], n_tokens: int) -> Union[str, list]:
         if isinstance(contents, str):
             return self._truncate_tokens(contents, n_tokens)
         elif isinstance(contents, list):
@@ -261,7 +261,7 @@ class MessageTokenLimiter:
         else:
             raise ValueError(f"Contents must be a string or a list of dictionaries. Received type: {type(contents)}")
 
-    def _truncate_multimodal_text(self, contents: List[Dict[str, Any]], n_tokens: int) -> List[Dict[str, Any]]:
+    def _truncate_multimodal_text(self, contents: list[dict[str, Any]], n_tokens: int) -> list[dict[str, Any]]:
         """Truncates text content within a list of multimodal elements, preserving the overall structure."""
         tmp_contents = []
         for content in contents:
@@ -324,9 +324,9 @@ class TextMessageCompressor:
         self,
         text_compressor: Optional[TextCompressor] = None,
         min_tokens: Optional[int] = None,
-        compression_params: Dict = dict(),
+        compression_params: dict = dict(),
         cache: Optional[AbstractCache] = None,
-        filter_dict: Optional[Dict] = None,
+        filter_dict: Optional[dict] = None,
         exclude_filter: bool = True,
     ):
         """
@@ -364,7 +364,7 @@ class TextMessageCompressor:
         # Optimizing savings calculations to optimize log generation
         self._recent_tokens_savings = 0
 
-    def apply_transform(self, messages: List[Dict]) -> List[Dict]:
+    def apply_transform(self, messages: list[dict]) -> list[dict]:
         """Applies compression to messages in a conversation history based on the specified configuration.
 
         The function processes each message according to the `compression_args` and `min_tokens` settings, applying
@@ -414,13 +414,13 @@ class TextMessageCompressor:
         self._recent_tokens_savings = total_savings
         return processed_messages
 
-    def get_logs(self, pre_transform_messages: List[Dict], post_transform_messages: List[Dict]) -> Tuple[str, bool]:
+    def get_logs(self, pre_transform_messages: list[dict], post_transform_messages: list[dict]) -> tuple[str, bool]:
         if self._recent_tokens_savings > 0:
             return f"{self._recent_tokens_savings} tokens saved with text compression.", True
         else:
             return "No tokens saved with text compression.", False
 
-    def _compress(self, content: MessageContentType) -> Tuple[MessageContentType, int]:
+    def _compress(self, content: MessageContentType) -> tuple[MessageContentType, int]:
         """Compresses the given text or multimodal content using the specified compression method."""
         if isinstance(content, str):
             return self._compress_text(content)
@@ -429,7 +429,7 @@ class TextMessageCompressor:
         else:
             return content, 0
 
-    def _compress_multimodal(self, content: MessageContentType) -> Tuple[MessageContentType, int]:
+    def _compress_multimodal(self, content: MessageContentType) -> tuple[MessageContentType, int]:
         tokens_saved = 0
         for item in content:
             if isinstance(item, dict) and "text" in item:
@@ -442,7 +442,7 @@ class TextMessageCompressor:
 
         return content, tokens_saved
 
-    def _compress_text(self, text: str) -> Tuple[str, int]:
+    def _compress_text(self, text: str) -> tuple[str, int]:
         """Compresses the given text using the specified compression method."""
         compressed_text = self._text_compressor.compress_text(text, **self._compression_args)
 
@@ -483,7 +483,7 @@ class TextMessageContentName:
         position: str = "start",
         format_string: str = "{name}:\n",
         deduplicate: bool = True,
-        filter_dict: Optional[Dict] = None,
+        filter_dict: Optional[dict] = None,
         exclude_filter: bool = True,
     ):
         """
@@ -510,7 +510,7 @@ class TextMessageContentName:
         # Track the number of messages changed for logging
         self._messages_changed = 0
 
-    def apply_transform(self, messages: List[Dict]) -> List[Dict]:
+    def apply_transform(self, messages: list[dict]) -> list[dict]:
         """Applies the name change to the message based on the position and format string.
 
         Args:
@@ -558,7 +558,7 @@ class TextMessageContentName:
         self._messages_changed = messages_changed
         return processed_messages
 
-    def get_logs(self, pre_transform_messages: List[Dict], post_transform_messages: List[Dict]) -> Tuple[str, bool]:
+    def get_logs(self, pre_transform_messages: list[dict], post_transform_messages: list[dict]) -> tuple[str, bool]:
         if self._messages_changed > 0:
             return f"{self._messages_changed} message(s) changed to incorporate name.", True
         else:

@@ -22,7 +22,7 @@ import autogen
 logger = logging.getLogger(__name__)
 
 
-def _config_check(config: Dict):
+def _config_check(config: dict):
     # check config loading
     assert config.get("coding", None) is not None, 'Missing "coding" in your config.'
     assert config.get("default_llm_config", None) is not None, 'Missing "default_llm_config" in your config.'
@@ -220,11 +220,11 @@ Match roles in the role set to each expert in expert set.
         self.config_file_location = config_file_location
 
         self.building_task: str = None
-        self.agent_configs: List[Dict] = []
-        self.open_ports: List[str] = []
-        self.agent_procs: Dict[str, Tuple[sp.Popen, str]] = {}
-        self.agent_procs_assign: Dict[str, Tuple[autogen.ConversableAgent, str]] = {}
-        self.cached_configs: Dict = {}
+        self.agent_configs: list[dict] = []
+        self.open_ports: list[str] = []
+        self.agent_procs: dict[str, tuple[sp.Popen, str]] = {}
+        self.agent_procs_assign: dict[str, tuple[autogen.ConversableAgent, str]] = {}
+        self.cached_configs: dict = {}
 
         self.max_agents = max_agents
 
@@ -236,8 +236,8 @@ Match roles in the role set to each expert in expert set.
 
     def _create_agent(
         self,
-        agent_config: Dict,
-        member_name: List[str],
+        agent_config: dict,
+        member_name: list[str],
         llm_config: dict,
         use_oai_assistant: Optional[bool] = False,
     ) -> autogen.AssistantAgent:
@@ -366,14 +366,14 @@ Match roles in the role set to each expert in expert set.
     def build(
         self,
         building_task: str,
-        default_llm_config: Dict,
+        default_llm_config: dict,
         coding: Optional[bool] = None,
-        code_execution_config: Optional[Dict] = None,
+        code_execution_config: Optional[dict] = None,
         use_oai_assistant: Optional[bool] = False,
         user_proxy: Optional[autogen.ConversableAgent] = None,
         max_agents: Optional[int] = None,
         **kwargs,
-    ) -> Tuple[List[autogen.ConversableAgent], Dict]:
+    ) -> tuple[list[autogen.ConversableAgent], dict]:
         """
         Auto build agents based on the building task.
 
@@ -496,15 +496,15 @@ Match roles in the role set to each expert in expert set.
         self,
         building_task: str,
         library_path_or_json: str,
-        default_llm_config: Dict,
+        default_llm_config: dict,
         top_k: int = 3,
         coding: Optional[bool] = None,
-        code_execution_config: Optional[Dict] = None,
+        code_execution_config: Optional[dict] = None,
         use_oai_assistant: Optional[bool] = False,
         embedding_model: Optional[str] = "all-mpnet-base-v2",
         user_proxy: Optional[autogen.ConversableAgent] = None,
         **kwargs,
-    ) -> Tuple[List[autogen.ConversableAgent], Dict]:
+    ) -> tuple[list[autogen.ConversableAgent], dict]:
         """
         Build agents from a library.
         The library is a list of agent configs, which contains the name and system_message for each agent.
@@ -551,7 +551,7 @@ Match roles in the role set to each expert in expert set.
         try:
             agent_library = json.loads(library_path_or_json)
         except json.decoder.JSONDecodeError:
-            with open(library_path_or_json, "r") as f:
+            with open(library_path_or_json) as f:
                 agent_library = json.load(f)
         except Exception as e:
             raise e
@@ -663,7 +663,7 @@ Match roles in the role set to each expert in expert set.
 
     def _build_agents(
         self, use_oai_assistant: Optional[bool] = False, user_proxy: Optional[autogen.ConversableAgent] = None, **kwargs
-    ) -> Tuple[List[autogen.ConversableAgent], Dict]:
+    ) -> tuple[list[autogen.ConversableAgent], dict]:
         """
         Build agents with generated configs.
 
@@ -731,7 +731,7 @@ Match roles in the role set to each expert in expert set.
         config_json: Optional[str] = None,
         use_oai_assistant: Optional[bool] = False,
         **kwargs,
-    ) -> Tuple[List[autogen.ConversableAgent], Dict]:
+    ) -> tuple[list[autogen.ConversableAgent], dict]:
         """
         Load building configs and call the build function to complete building without calling online LLMs' api.
 
