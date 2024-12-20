@@ -300,6 +300,17 @@
                 "docs/reference/agentchat/contrib/web_surfer"
               ]
             },
+            {
+              "group": "agentchat.realtime_agent",
+              "pages": [
+                "docs/reference/agentchat/realtime_agent/client",
+                "docs/reference/agentchat/realtime_agent/function_observer",
+                "docs/reference/agentchat/realtime_agent/realtime_agent",
+                "docs/reference/agentchat/realtime_agent/realtime_observer",
+                "docs/reference/agentchat/realtime_agent/twilio_observer",
+                "docs/reference/agentchat/realtime_agent/websocket_observer"
+              ]
+            },
             "docs/reference/agentchat/agent",
             "docs/reference/agentchat/assistant_agent",
             "docs/reference/agentchat/chat",
@@ -450,6 +461,7 @@
         {
           "group": "Recent posts",
           "pages": [
+            "blog/2024-12-18-RealtimeAgent/index",
             "blog/2024-12-06-FalkorDB-Structured/index",
             "blog/2024-12-02-ReasoningAgent2/index",
             "blog/2024-11-27-Prompt-Leakage-Probing/index",
@@ -571,7 +583,8 @@
             "notebooks/JSON_mode_example",
             "notebooks/agentchat_RetrieveChat",
             "notebooks/agentchat_graph_rag_neo4j",
-            "notebooks/agentchat_swarm_enhanced"
+            "notebooks/agentchat_swarm_enhanced",
+            "notebooks/agentchat_realtime_swarm"
           ]
         },
         "notebooks/Gallery"
