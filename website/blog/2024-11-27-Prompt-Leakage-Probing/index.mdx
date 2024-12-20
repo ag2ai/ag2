@@ -80,7 +80,7 @@ The **Prompt Leakage Probing Framework** leverages key agentic design patterns f
 1. **Group Chat Pattern**
    - The chat between agents in this project is modeled on the [Group Chat Pattern](https://ag2ai.github.io/ag2/docs/tutorial/conversation-patterns#group-chat), where multiple agents collaboratively interact to perform tasks.
    - This structure allows for seamless coordination between agents like the prompt generator, classifier, and user proxy agent.
-   - The chat has a [custom speaker selection](https://ag2ai.github.io/ag2/docs/notebooks/agentchat_groupchat_customized) method implemented so that it guarantees the prompt->response->classification chat flow.
+   - The chat has a [custom speaker selection](https://docs.ag2.ai/notebooks/agentchat_groupchat_customized) method implemented so that it guarantees the prompt->response->classification chat flow.
 
 2. **ConversableAgents**
    - The system includes two [ConversableAgents](https://ag2ai.github.io/ag2/docs/reference/agentchat/conversable_agent#conversableagent):
@@ -194,4 +194,4 @@ The **Prompt Leakage Probing Framework** provides a tool to help test LLM agents
 
 For more details about **Prompt Leakage Probing**, please explore our [codebase](https://github.com/airtai/prompt-leakage-probing).
 
-Additionally, check out [AutoDefense](https://ag2ai.github.io/ag2/blog/2024/03/11/AutoDefense/Defending%20LLMs%20Against%20Jailbreak%20Attacks%20with%20AutoDefense), which aligns with future directions for this work. One proposed idea is to use the testing system to compare the performance of unprotected LLMs versus LLMs fortified with AutoDefense protection. The testing system can serve as an evaluator for different defense strategies, with the expectation that AutoDefense provides enhanced safety.
+Additionally, check out [AutoDefense](https://docs.ag2.ai/blog/2024-03-11-AutoDefense), which aligns with future directions for this work. One proposed idea is to use the testing system to compare the performance of unprotected LLMs versus LLMs fortified with AutoDefense protection. The testing system can serve as an evaluator for different defense strategies, with the expectation that AutoDefense provides enhanced safety.
