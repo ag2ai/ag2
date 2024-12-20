@@ -82,6 +82,7 @@ neo4j = [
     "llama-index-core==0.12.5",
 ]
 
+# used for agentchat_realtime_swarm notebook and realtime agent twilio demo
 twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
 interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
@@ -89,7 +90,7 @@ interop_langchain = ["langchain-community>=0.3.12,<1"]
 interop_pydantic_ai = ["pydantic-ai==0.0.13"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai
 
-types = ["mypy==1.9.0"] + test + jupyter_executor + interop
+types = ["mypy==1.9.0"] + test + jupyter_executor + interop + ["fastapi>=0.115.0,<1"]
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
