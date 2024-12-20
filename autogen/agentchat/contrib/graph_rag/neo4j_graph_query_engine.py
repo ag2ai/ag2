@@ -23,14 +23,21 @@ from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
 
 class Neo4jGraphQueryEngine(GraphQueryEngine):
     """
-    This class serves as a wrapper for a Neo4j database-backed PropertyGraphIndex query engine,
-    facilitating the creation, updating, and querying of graphs.
+    This class serves as a wrapper for a property graph query engine backed by llamaIndex and Neo4j,
+    facilitating the creating, connecting, updating, and querying of llamaIndex property graphs.
 
-    It builds a PropertyGraph Index from input documents,
-    storing and retrieving data from a property graph in the Neo4j database.
+    It builds a property graph Index from input documents,
+    storing and retrieving data from the property graph in the Neo4j database.
 
-    Using SchemaLLMPathExtractor, it defines schemas with entities, relationships, and other properties based on the input,
-    which are added into the preprty graph.
+    It extracts triplets, i.e., [entity] -> [relationship] -> [entity] sets,
+    from the input documents using llamIndex extractors.
+
+    Users can provide custom entities, relationships, and schema to guide the extraction process.
+
+    If strict is True, the engine will extract triplets following the schema
+    of allowed relationships for each entity specified in the schema.
+
+    It also leverages llamaIndex's chat engine which has a conversation history internally to provide context-aware responses.
 
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
     """
@@ -46,7 +53,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         embedding: BaseEmbedding = OpenAIEmbedding(model_name="text-embedding-3-small"),
         entities: Optional[TypeAlias] = None,
         relations: Optional[TypeAlias] = None,
-        validation_schema: Optional[Union[Dict[str, str], List[Triple]]] = None,
+        schema: Optional[Union[Dict[str, str], List[Triple]]] = None,
         strict: Optional[bool] = False,
     ):
         """
@@ -60,12 +67,12 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             database (str): Neo4j database name.
             username (str): Neo4j username.
             password (str): Neo4j password.
-            llm (LLM): Language model to use for extracting tripletss.
+            llm (LLM): Language model to use for extracting triplets.
             embedding (BaseEmbedding): Embedding model to use constructing index and query
-            entities (Optional[TypeAlias]): Custom possible entities to include in the graph.
-            relations (Optional[TypeAlias]): Custom poissble relations to include in the graph.
-            validation_schema (Optional[Union[Dict[str, str], List[Triple]]): Custom schema to validate the extracted triplets
-            strict (Optional[bool]): If false, allows for values outside of the schema, useful for using the schema as a suggestion.
+            entities (Optional[TypeAlias]): Custom suggested entities to include in the graph.
+            relations (Optional[TypeAlias]): Custom suggested relations to include in the graph.
+            schema (Optional[Union[Dict[str, str], List[Triple]]): Custom schema to specify allowed relationships for each entity.
+            strict (Optional[bool]): If false, allows for values outside of the input schema.
         """
         self.host = host
         self.port = port
@@ -76,7 +83,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         self.embedding = embedding
         self.entities = entities
         self.relations = relations
-        self.validation_schema = validation_schema
+        self.schema = schema
         self.strict = strict
 
     def init_db(self, input_doc: List[Document] | None = None):
@@ -118,7 +125,6 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             database=self.database,
         )
 
-        # Create knowledge graph extractors.
         self.kg_extractors = self._create_kg_extractors()
 
         self.index = PropertyGraphIndex.from_existing(
@@ -159,7 +165,11 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
         """
-        Query the knowledge graph with a question.
+        Query the Property graph with a question using LlamaIndex chat engine.
+        We use the condense_plus_context chat mode
+        which condenses the conversation history and the user query into a standalone question,
+        and then build a context for the standadlone question
+        from the property graph  to generate a response.
 
         Args:
         question: a human input question.
@@ -168,23 +178,15 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         Returns:
         A GrapStoreQueryResult object containing the answer and related triplets.
         """
-        if self.graph_store is None:
-            raise ValueError("Knowledge graph is not created.")
+        if not hasattr(self, "index"):
+            raise ValueError("Property graph index is not created.")
 
-        # query the graph to get the answer
-        query_engine = self.index.as_query_engine(llm=self.llm, include_text=True)
-        response = str(query_engine.query(question))
+        # Initialize chat engine if not already initialized
+        if not hasattr(self, "chat_engine"):
+            self.chat_engine = self.index.as_chat_engine(chat_mode="condense_plus_context", llm=self.llm)
 
-        # retrieve source triplets that are semantically related to the question
-        retriever = self.index.as_retriever(include_text=False)
-        nodes = retriever.retrieve(question)
-        triplets = []
-        for node in nodes:
-            entities = [sub.split("(")[0].strip() for sub in node.text.split("->")]
-            triplet = " -> ".join(entities)
-            triplets.append(triplet)
-
-        return GraphStoreQueryResult(answer=response, results=triplets)
+        response = self.chat_engine.chat(question)
+        return GraphStoreQueryResult(answer=str(response))
 
     def _clear(self) -> None:
         """
@@ -211,20 +213,25 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         """
         If strict is True,
         extract paths following a strict schema of allowed relationships for each entity.
+
         If strict is False,
         auto-create relationships and schema that fit the graph
+
         # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
         """
+
+        #
         kg_extractors = [
             SchemaLLMPathExtractor(
                 llm=self.llm,
                 possible_entities=self.entities,
                 possible_relations=self.relations,
-                kg_validation_schema=self.validation_schema,
+                kg_validation_schema=self.schema,
                 strict=self.strict,
             ),
         ]
 
+        # DynamicLLMPathExtractor will auto-create relationships and schema that fit the graph
         if not self.strict:
             kg_extractors.append(
                 DynamicLLMPathExtractor(
