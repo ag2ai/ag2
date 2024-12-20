@@ -202,7 +202,7 @@ def test_teachability_accuracy():
             return
 
     # All trials failed.
-    assert False, "test_teachability_accuracy() failed on all {} trials.".format(num_trials)
+    assert False, f"test_teachability_accuracy() failed on all {num_trials} trials."
 
 
 if __name__ == "__main__":

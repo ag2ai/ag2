@@ -6,15 +6,9 @@ import sys
 import unittest
 
 import pytest
+from pydantic_ai.tools import Tool as PydanticAITool
 
 from autogen import AssistantAgent
-
-if sys.version_info >= (3, 9):
-    from pydantic_ai.tools import Tool as PydanticAITool
-
-else:
-    PydanticAITool = unittest.mock.MagicMock()
-
 from autogen.interop.pydantic_ai.pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 

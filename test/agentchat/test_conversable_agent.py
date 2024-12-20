@@ -13,13 +13,12 @@ import os
 import sys
 import time
 import unittest
-from typing import Any, Callable, Dict, Literal
+from typing import Annotated, Any, Callable, Dict, Literal
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel, Field
 from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
-from typing_extensions import Annotated
 
 import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
@@ -660,7 +659,7 @@ async def test__wrap_function_async():
     assert inspect.iscoroutinefunction(currency_calculator)
 
 
-def get_origin(d: Dict[str, Callable[..., Any]]) -> Dict[str, Callable[..., Any]]:
+def get_origin(d: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:
     return {k: v._origin for k, v in d.items()}
 
 

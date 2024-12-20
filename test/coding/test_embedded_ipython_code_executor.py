@@ -61,7 +61,7 @@ def test_is_code_executor(cls) -> None:
 
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_create_dict() -> None:
-    config: Dict[str, Union[str, CodeExecutor]] = {"executor": "ipython-embedded"}
+    config: dict[str, Union[str, CodeExecutor]] = {"executor": "ipython-embedded"}
     executor = CodeExecutorFactory.create(config)
     assert isinstance(executor, EmbeddedIPythonCodeExecutor)
 
@@ -190,7 +190,7 @@ def test_save_image(cls) -> None:
 
 @pytest.mark.skipif(skip, reason=skip_reason)
 @pytest.mark.parametrize("cls", classes_to_test)
-def test_timeout_preserves_kernel_state(cls: Type[CodeExecutor]) -> None:
+def test_timeout_preserves_kernel_state(cls: type[CodeExecutor]) -> None:
     executor = cls(timeout=1)
     code_blocks = [CodeBlock(code="x = 123", language="python")]
     code_result = executor.execute_code_blocks(code_blocks)
