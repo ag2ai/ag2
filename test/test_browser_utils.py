@@ -83,7 +83,6 @@ def test_simple_text_browser():
     # Test that we can visit a page and find what we expect there
     top_viewport = browser.visit_page(BLOG_POST_URL)
     assert browser.viewport == top_viewport
-    print(browser.page_title.strip())
     assert browser.page_title.strip() == BLOG_POST_TITLE.strip()
     assert BLOG_POST_STRING in browser.page_content.replace("\n\n", " ").replace("\\", "")
 
