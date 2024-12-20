@@ -14,9 +14,18 @@ AG2 lets you bring in tools from different frameworks like **LangChain**, **Crew
 
 With AG2, you can combine these tools and enhance your agents' capabilities.
 
+
+![One to rule them all img](img/one_to_rule_them_all.png)
+
 In this post, we’ll walk through how to integrate tools from various frameworks—like [LangChain Tools](https://python.langchain.com/v0.1/docs/modules/tools),
 [CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main), and [PydanticAI Tools](https://ai.pydantic.dev/tools/)—into AG2.
-This allows you to use tools from different frameworks within AG2, giving your agents more power and flexibility. You’ll see how to set up agents, adapt the tools, and validate the integration through examples.his post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
+
+And let’s be honest:
+
+Because, really, the magic happens when you combine them all. This allows you to use tools from different frameworks within AG2, giving your agents more power and flexibility.
+
+In this post, you will understand how to configure agents, adapt these tools for use in AG2, and validate the integration through practical examples.
+
 
 ## LangChain Tools Integration
 
@@ -75,8 +84,8 @@ chatbot = AssistantAgent(
 ### Tool Integration
 
 - Initialize and register the LangChain tool with AG2.
-- `WikipediaAPIWrapper`: Configured to fetch the top 1 result from Wikipedia with a maximum of 1000 characters per document.
-- `WikipediaQueryRun`: A LangChain tool that executes Wikipedia queries.
+- [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html): Configured to fetch the top 1 result from Wikipedia with a maximum of 1000 characters per document.
+- [WikipediaQueryRun](https://python.langchain.com/api_reference/community/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html): A LangChain tool that executes Wikipedia queries.
 - `LangchainInteroperability`: Converts the LangChain tool into a format compatible with the AG2 framework.
 - `ag2_tool.register_for_execution(user_proxy)`: Registers the tool for use by the user_proxy agent.
 - `ag2_tool.register_for_llm(chatbot)`: Registers the tool for integration with the chatbot agent.

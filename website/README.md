@@ -25,7 +25,7 @@ Install it [here](https://github.com/quarto-dev/quarto-cli/releases).
 Navigate to the `website` folder and run:
 
 ```console
-pydoc-markdown
+python ./process_api_reference.py
 python ./process_notebooks.py render
 npm install
 ```
