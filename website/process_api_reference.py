@@ -55,7 +55,7 @@ def read_file_content(file_path: str) -> str:
     Returns:
         str: Content of the file
     """
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         return f.read()
 
 
@@ -100,18 +100,18 @@ def convert_md_to_mdx(input_dir: Path) -> None:
         print(f"Converted: {md_file} -> {mdx_file}")
 
 
-def get_mdx_files(directory: Path) -> List[str]:
+def get_mdx_files(directory: Path) -> list[str]:
     """Get all MDX files in directory and subdirectories."""
     return [f"{str(p.relative_to(directory).with_suffix(''))}".replace("\\", "/") for p in directory.rglob("*.mdx")]
 
 
-def add_prefix(path: str, parent_groups: List[str] = None) -> str:
+def add_prefix(path: str, parent_groups: list[str] = None) -> str:
     """Create full path with prefix and parent groups."""
     groups = parent_groups or []
     return f"docs/reference/{'/'.join(groups + [path])}"
 
 
-def create_nav_structure(paths: List[str], parent_groups: List[str] = None) -> List[Any]:
+def create_nav_structure(paths: list[str], parent_groups: list[str] = None) -> list[Any]:
     """Convert list of file paths into nested navigation structure."""
     groups = {}
     pages = []
@@ -142,7 +142,7 @@ def create_nav_structure(paths: List[str], parent_groups: List[str] = None) -> L
     return sorted_groups + sorted_pages
 
 
-def update_nav(mint_json_path: Path, new_nav_pages: List[Any]) -> None:
+def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
     """
     Update the 'API Reference' section in mint.json navigation with new pages.
 
@@ -152,7 +152,7 @@ def update_nav(mint_json_path: Path, new_nav_pages: List[Any]) -> None:
     """
     try:
         # Read the current mint.json
-        with open(mint_json_path, "r") as f:
+        with open(mint_json_path) as f:
             mint_config = json.load(f)
 
         # Find and update the API Reference section

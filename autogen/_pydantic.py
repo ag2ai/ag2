@@ -75,7 +75,8 @@ else:  # pragma: no cover
             return {"type": "null"}
         elif get_origin(t) is Union:
             return {"anyOf": [type2schema(tt) for tt in get_args(t)]}
-        elif get_origin(t) in [tuple, tuple]:
+        # we need to support both syntaxes for Tuple
+        elif get_origin(t) in [Tuple, tuple]:
             prefixItems = [type2schema(tt) for tt in get_args(t)]
             return {
                 "maxItems": len(prefixItems),
