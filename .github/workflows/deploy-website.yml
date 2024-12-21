@@ -46,7 +46,7 @@ jobs:
                 const newDomain = 'https://docs.ag2.ai';
                 let path = window.location.pathname;
                 const hash = window.location.hash;
-                
+
                 // Remove /ag2/ prefix and trailing slash
                 path = path.replace(/^\/ag2\//, '/').replace(/\/$/, "");
 
@@ -59,7 +59,7 @@ jobs:
 
                 // Handle -index and create final URL with hash
                 const redirectUrl = (newDomain + path).replace(/-index$/, "/index") + hash;
-                
+
                 window.location.href = redirectUrl;
               </script>
               <title>Page Redirection</title>
