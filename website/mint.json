@@ -418,7 +418,6 @@
         {
           "group": "tools",
           "pages": [
-            "docs/reference/tools/pydantic_ai_tool",
             "docs/reference/tools/tool"
           ]
         },
