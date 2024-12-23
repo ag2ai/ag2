@@ -60,7 +60,7 @@ class ON_CONDITION:
     Args:
         target: The agent to hand off to or the nested chat configuration. Can be a SwarmAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
-            Swarm Nested chat documentation: https://ag2ai.github.io/ag2/docs/topics/swarm#registering-handoffs-to-a-nested-chat
+            Swarm Nested chat documentation: https://docs.ag2.ai/docs/topics/swarm#registering-handoffs-to-a-nested-chat
         condition: The condition for transitioning to the target agent, evaluated by the LLM to determine whether to call the underlying function/tool which does the transition.
         available: Optional condition to determine if this ON_CONDITION is available. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool.

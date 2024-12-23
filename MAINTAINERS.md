@@ -32,7 +32,7 @@
 | Rajan Chari *    | [rajan-chari](https://github.com/rajan-chari)                | Microsoft Research                | CAP                        |
 
 ## I would like to join this list. How can I help the project?
-> We're always looking for new contributors to join our team and help improve the project. For more information, please refer to our [CONTRIBUTING](https://ag2ai.github.io/ag2/docs/contributor-guide/contributing) guide.
+> We're always looking for new contributors to join our team and help improve the project. For more information, please refer to our [CONTRIBUTING](https://docs.ag2.ai/docs/contributor-guide/contributing) guide.
 
 
 ## Are you missing from this list?

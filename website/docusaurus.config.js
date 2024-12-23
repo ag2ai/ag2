@@ -15,7 +15,7 @@ customPostCssPlugin = () => {
 module.exports = {
   title: "AG2",
   tagline: "The Open Source Agent OS",
-  url: "https://ag2ai.github.io",
+  url: "https://docs.ag2.ai",
   baseUrl: "/ag2/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
@@ -35,7 +35,7 @@ module.exports = {
   themeConfig: {
     themeConfig: {
       colorMode: {
-        defaultMode: 'dark',
+        defaultMode: "dark",
       },
     },
     docs: {
@@ -136,7 +136,7 @@ module.exports = {
           items: [
             {
               label: "Dotnet",
-              href: "https://ag2ai.github.io/autogen-for-net/",
+              href: "https://docs.ag2.ai/autogen-for-net/",
             },
           ],
         },
@@ -241,11 +241,11 @@ module.exports = {
 
   plugins: [
     [
-      '@docusaurus/plugin-content-blog',
+      "@docusaurus/plugin-content-blog",
       {
-        id: 'talks',
-        routeBasePath: 'talks',
-        path: './talks',
+        id: "talks",
+        routeBasePath: "talks",
+        path: "./talks",
         showReadingTime: true,
         blogSidebarCount: "ALL",
       },
