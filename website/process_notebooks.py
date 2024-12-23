@@ -582,6 +582,7 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     # Write back to mint.json
     with open(mint_json_path, "w", encoding="utf-8") as f:
         json.dump(mint_config, f, indent=2)
+        f.write("\n")
 
     print(f"Updated navigation in {mint_json_path}")
 

@@ -30,11 +30,10 @@ RUN sudo pip install --upgrade pip && \
 # Install pre-commit hooks
 RUN pre-commit install
 
-# Setup Docusaurus and Yarn for the documentation website
-RUN sudo npm install --global yarn
-RUN sudo pip install pydoc-markdown
+# Setup Mintlify for the documentation website
+RUN sudo pip install pydoc-markdown pyyaml termcolor nbformat
 RUN cd website
-RUN yarn install --frozen-lockfile --ignore-engines
+RUN npm install
 
 RUN arch=$(arch | sed s/aarch64/arm64/ | sed s/x86_64/amd64/) && \
     wget -q https://github.com/quarto-dev/quarto-cli/releases/download/v1.5.23/quarto-1.5.23-linux-${arch}.tar.gz && \
