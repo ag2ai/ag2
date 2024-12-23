@@ -70,3 +70,16 @@ class Tool:
             agent (ConversableAgent): The agent to which the tool will be registered.
         """
         agent.register_for_execution()(self)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """
+        Execute the tool by calling its underlying function with the provided arguments.
+
+        Args:
+            *args: Positional arguments to pass to the tool
+            **kwargs: Keyword arguments to pass to the tool
+
+        Returns:
+            The result of executing the tool's function.
+        """
+        return self._func(*args, **kwargs)
