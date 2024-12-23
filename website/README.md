@@ -17,7 +17,7 @@ nvm install --lts
 Then, install the required packages by running the following commands:
 
 ```bash
-pip install pydoc-markdown pyyaml termcolor nbformat
+pip install pydoc-markdown pyyaml termcolor nbclient
 ```
 
 2. You also need to install quarto. Please click on the `Pre-release` tab from [this website](https://quarto.org/docs/download/) to download the latest version of `quarto` and install it. Ensure that the `quarto` version is `1.5.23` or higher.

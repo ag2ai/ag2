@@ -31,7 +31,7 @@ RUN sudo pip install --upgrade pip && \
 RUN pre-commit install
 
 # Setup Mintlify for the documentation website
-RUN sudo pip install pydoc-markdown pyyaml termcolor nbformat
+RUN sudo pip install pydoc-markdown pyyaml termcolor nbclient
 RUN cd website
 RUN npm install
 
