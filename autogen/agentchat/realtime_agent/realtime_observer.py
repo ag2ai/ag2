@@ -6,7 +6,9 @@
 # SPDX-License-Identifier: MIT
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
+
+from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
 if TYPE_CHECKING:
     from .client import OpenAIRealtimeClient
@@ -36,6 +38,6 @@ class RealtimeObserver(ABC):
         ...
 
     @abstractmethod
-    async def update(self, message: dict[str, Any]) -> None:
+    async def update(self, message: RealtimeServerEvent) -> None:
         """Update the observer with a message from the OpenAI Realtime API."""
         ...

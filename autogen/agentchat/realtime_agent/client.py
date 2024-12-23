@@ -8,13 +8,14 @@
 # import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from asyncer import TaskGroup, asyncify, create_task_group
-from websockets import connect
-from websockets.asyncio.client import ClientConnection
+from openai import AsyncOpenAI
+from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
+from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
-from ..contrib.swarm_agent import AfterWorkOption, SwarmAgent, initiate_swarm_chat
+from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 
 if TYPE_CHECKING:
     from .function_observer import FunctionObserver
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
     from .realtime_observer import RealtimeObserver
 
 logger = logging.getLogger(__name__)
+
+# define role literal type for typing
+Role = Literal["user", "assistant", "system"]
 
 
 class OpenAIRealtimeClient:
@@ -40,7 +44,8 @@ class OpenAIRealtimeClient:
         """
         self._agent = agent
         self._observers: list["RealtimeObserver"] = []
-        self._openai_ws: Optional[ClientConnection] = None  # todo factor out to OpenAIClient
+        self._connection: Optional[AsyncRealtimeConnection] = None
+        self.client = AsyncOpenAI()
         self.register(audio_adapter)
         self.register(function_observer)
 
@@ -57,26 +62,26 @@ class OpenAIRealtimeClient:
         self.tg: Optional[TaskGroup] = None
 
     @property
-    def openai_ws(self) -> ClientConnection:
+    def connection(self) -> AsyncRealtimeConnection:
         """Get the OpenAI WebSocket connection."""
-        if self._openai_ws is None:
+        if self._connection is None:
             raise RuntimeError("OpenAI WebSocket is not initialized")
-        return self._openai_ws
+        return self._connection
 
     def register(self, observer: "RealtimeObserver") -> None:
         """Register an observer to the client."""
         observer.register_client(self)
         self._observers.append(observer)
 
-    async def notify_observers(self, message: dict[str, Any]) -> None:
-        """Notify all observers of a message from the OpenAI Realtime API.
+    async def notify_observers(self, event: RealtimeServerEvent) -> None:
+        """Notify all observers of a event from the OpenAI Realtime API.
 
         Args:
-            message (dict[str, Any]): The message from the OpenAI Realtime API.
+            event (RealtimeServerEvent): The message from the OpenAI Realtime API.
 
         """
         for observer in self._observers:
-            await observer.update(message)
+            await observer.update(event)
 
     async def function_result(self, call_id: str, result: str) -> None:
         """Send the result of a function call to the OpenAI Realtime API.
@@ -85,21 +90,17 @@ class OpenAIRealtimeClient:
             call_id (str): The ID of the function call.
             result (str): The result of the function call.
         """
-        result_item = {
-            "type": "conversation.item.create",
-            "item": {
+        await self.connection.conversation.item.create(
+            item={
                 "type": "function_call_output",
                 "call_id": call_id,
                 "output": result,
             },
-        }
-        if self._openai_ws is None:
-            raise RuntimeError("OpenAI WebSocket is not initialized")
+        )
 
-        await self._openai_ws.send(json.dumps(result_item))
-        await self._openai_ws.send(json.dumps({"type": "response.create"}))
+        await self.connection.response.create()
 
-    async def send_text(self, *, role: str, text: str) -> None:
+    async def send_text(self, *, role: Role, text: str) -> None:
         """Send a text message to the OpenAI Realtime API.
 
         Args:
@@ -107,16 +108,14 @@ class OpenAIRealtimeClient:
             text (str): The text of the message.
         """
 
-        if self._openai_ws is None:
+        if self.connection is None:
             raise RuntimeError("OpenAI WebSocket is not initialized")
 
-        await self._openai_ws.send(json.dumps({"type": "response.cancel"}))
-        text_item = {
-            "type": "conversation.item.create",
-            "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
-        }
-        await self._openai_ws.send(json.dumps(text_item))
-        await self._openai_ws.send(json.dumps({"type": "response.create"}))
+        await self.connection.response.cancel()
+        await self.connection.conversation.item.create(
+            item={"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]}
+        )
+        await self.connection.response.create()
 
     # todo override in specific clients
     async def initialize_session(self) -> None:
@@ -129,7 +128,7 @@ class OpenAIRealtimeClient:
             "modalities": ["audio", "text"],
             "temperature": 0.8,
         }
-        await self.session_update(session_update)
+        await self.session_update(session_options=session_update)
 
     # todo override in specific clients
     async def session_update(self, session_options: dict[str, Any]) -> None:
@@ -138,36 +137,29 @@ class OpenAIRealtimeClient:
         Args:
             session_options (dict[str, Any]): The session options to update.
         """
-        if self._openai_ws is None:
-            raise RuntimeError("OpenAI WebSocket is not initialized")
-
-        update = {"type": "session.update", "session": session_options}
-        logger.info("Sending session update:", json.dumps(update))
-        await self._openai_ws.send(json.dumps(update))
+        logger.info(f"Sending session update: {session_options}")
+        await self.connection.session.update(session=session_options)  # type: ignore[arg-type]
         logger.info("Sending session update finished")
 
     async def _read_from_client(self) -> None:
         """Read messages from the OpenAI Realtime API."""
-        if self._openai_ws is None:
-            raise RuntimeError("OpenAI WebSocket is not initialized")
-
         try:
-            async for openai_message in self._openai_ws:
-                response = json.loads(openai_message)
-                await self.notify_observers(response)
+            async for event in self.connection:
+                await self.notify_observers(event)
         except Exception as e:
             logger.warning(f"Error in _read_from_client: {e}")
 
     async def run(self) -> None:
         """Run the client."""
-        async with connect(
-            f"wss://api.openai.com/v1/realtime?model={self.model}",
-            additional_headers={
+        async with self.client.beta.realtime.connect(
+            model="gpt-4o-realtime-preview",
+            extra_headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "OpenAI-Beta": "realtime=v1",
             },
-        ) as openai_ws:
-            self._openai_ws = openai_ws
+        ) as connection:
+            self._connection = connection
+
             await self.initialize_session()
             async with create_task_group() as tg:
                 self.tg = tg
@@ -179,10 +171,7 @@ class OpenAIRealtimeClient:
                 agents = self._agent._agents
                 user_agent = self._agent
 
-                if not (initial_agent and agents):
-                    raise RuntimeError("Swarm not registered.")
-
-                if self._agent._start_swarm_chat:
+                if (initial_agent and agents) and self._agent._start_swarm_chat:
                     self.tg.soonify(asyncify(initiate_swarm_chat))(
                         initial_agent=initial_agent,
                         agents=agents,

@@ -10,6 +10,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
+from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
+
 from .realtime_observer import RealtimeObserver
 
 if TYPE_CHECKING:
@@ -46,17 +48,17 @@ class TwilioAudioAdapter(RealtimeObserver):
         # Connection specific state
         self.stream_sid = None
         self.latest_media_timestamp = 0
-        self.last_assistant_item = None
+        self.last_assistant_item: Optional[str] = None
         self.mark_queue: list[str] = []
         self.response_start_timestamp_twilio: Optional[int] = None
 
-    async def update(self, response: dict[str, Any]) -> None:
+    async def update(self, event: RealtimeServerEvent) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
-        if response["type"] in LOG_EVENT_TYPES:
-            logger.info(f"Received event: {response['type']}", response)
+        if event.type in LOG_EVENT_TYPES:
+            logger.info(f"Received event: {event.type}", event)
 
-        if response.get("type") == "response.audio.delta" and "delta" in response:
-            audio_payload = base64.b64encode(base64.b64decode(response["delta"])).decode("utf-8")
+        if event.type == "response.audio.delta":
+            audio_payload = base64.b64encode(base64.b64decode(event.delta)).decode("utf-8")
             audio_delta = {"event": "media", "streamSid": self.stream_sid, "media": {"payload": audio_payload}}
             await self.websocket.send_json(audio_delta)
 
@@ -66,13 +68,13 @@ class TwilioAudioAdapter(RealtimeObserver):
                     logger.info(f"Setting start timestamp for new response: {self.response_start_timestamp_twilio}ms")
 
             # Update last_assistant_item safely
-            if response.get("item_id"):
-                self.last_assistant_item = response["item_id"]
+            if event.item_id:
+                self.last_assistant_item = event.item_id
 
             await self.send_mark()
 
         # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
-        if response.get("type") == "input_audio_buffer.speech_started":
+        if event.type == "input_audio_buffer.speech_started":
             logger.info("Speech started detected.")
             if self.last_assistant_item:
                 logger.info(f"Interrupting response with id: {self.last_assistant_item}")
@@ -92,13 +94,14 @@ class TwilioAudioAdapter(RealtimeObserver):
                 if SHOW_TIMING_MATH:
                     logger.info(f"Truncating item with ID: {self.last_assistant_item}, Truncated at: {elapsed_time}ms")
 
-                truncate_event = {
-                    "type": "conversation.item.truncate",
-                    "item_id": self.last_assistant_item,
-                    "content_index": 0,
-                    "audio_end_ms": elapsed_time,
-                }
-                await self._client._openai_ws.send(json.dumps(truncate_event))
+                logger.error("Truncate event is not implemented yet.")
+                # truncate_event = {
+                #     "type": "conversation.item.truncate",
+                #     "item_id": self.last_assistant_item,
+                #     "content_index": 0,
+                #     "audio_end_ms": elapsed_time,
+                # }
+                # await self.client.connection.input_audio_buffer.truncate(item=truncate_event)
 
             await self.websocket.send_json({"event": "clear", "streamSid": self.stream_sid})
 
@@ -118,15 +121,13 @@ class TwilioAudioAdapter(RealtimeObserver):
 
         Start reading messages from the Twilio websocket and send audio to OpenAI.
         """
-        openai_ws = self.client.openai_ws
         await self.initialize_session()
 
         async for message in self.websocket.iter_text():
             data = json.loads(message)
             if data["event"] == "media":
                 self.latest_media_timestamp = int(data["media"]["timestamp"])
-                audio_append = {"type": "input_audio_buffer.append", "audio": data["media"]["payload"]}
-                await openai_ws.send(json.dumps(audio_append))
+                await self.client.connection.input_audio_buffer.append(audio=data["media"]["payload"])
             elif data["event"] == "start":
                 self.stream_sid = data["start"]["streamSid"]
                 logger.info(f"Incoming stream has started {self.stream_sid}")
