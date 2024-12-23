@@ -12,6 +12,6 @@
 
 ## Checks
 
-- [ ] I've included any doc changes needed for https://ag2ai.github.io/ag2/. See https://ag2ai.github.io/ag2/docs/Contribute#documentation to build and test documentation locally.
+- [ ] I've included any doc changes needed for https://docs.ag2.ai/. See https://ag2ai.github.io/ag2/docs/Contribute#documentation to build and test documentation locally.
 - [ ] I've added tests (if relevant) corresponding to the changes introduced in this PR.
 - [ ] I've made sure all auto checks have passed.
