@@ -43,7 +43,7 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 :tada: May 11, 2024: [AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation](https://openreview.net/pdf?id=uAjxFFing2) received the best paper award at the [ICLR 2024 LLM Agents Workshop](https://llmagents.github.io/).
 
-<!-- :tada: Apr 26, 2024: [AutoGen.NET](https://ag2ai.github.io/ag2-for-net/) is available for .NET developers! -->
+<!-- :tada: Apr 26, 2024: [AutoGen.NET](https://docs.ag2.ai/ag2-for-net/) is available for .NET developers! -->
 
 :tada: Apr 17, 2024: Andrew Ng cited AutoGen in [The Batch newsletter](https://www.deeplearning.ai/the-batch/issue-245/) and [What's next for AI agentic workflows](https://youtu.be/sal78ACtGTc?si=JduUzN_1kDnMq0vF) at Sequoia Capital's AI Ascent (Mar 26).
 
@@ -117,7 +117,7 @@ The easiest way to start playing is
   </a>
 </p>
 
-## [Installation](https://ag2ai.github.io/ag2/docs/Installation)
+## [Installation](https://docs.ag2.ai/docs/installation/Installation)
 
 ### Option 1. Install and Run AG2 in Docker
 
@@ -142,7 +142,7 @@ Find more options in [Installation](https://docs.ag2.ai/docs/Installation#option
 
 <!-- Each of the [`notebook examples`](https://github.com/ag2ai/ag2/tree/main/notebook) may require a specific option to be installed. -->
 
-Even if you are installing and running AG2 locally outside of docker, the recommendation and default behavior of agents is to perform [code execution](https://ag2ai.github.io/ag2/docs/FAQ/#code-execution) in docker. Find more instructions and how to change the default behaviour [here](https://ag2ai.github.io/ag2/docs/Installation#code-execution-with-docker-(default)).
+Even if you are installing and running AG2 locally outside of docker, the recommendation and default behavior of agents is to perform [code execution](https://docs.ag2.ai/docs/FAQ#if-you-want-to-run-code-execution-in-docker) in docker. Find more instructions and how to change the default behaviour [here](https://docs.ag2.ai/docs/FAQ#if-you-want-to-run-code-execution-locally).
 
 For LLM inference configurations, check the [FAQs](https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints).
 
@@ -220,7 +220,7 @@ config, analysis = autogen.Completion.tune(
 response = autogen.Completion.create(context=test_instance, **config)
 ```
 
-Please find more [code examples](https://ag2ai.github.io/ag2/docs/Examples#tune-gpt-models) for this feature. -->
+Please find more [code examples](https://docs.ag2.ai/docs/Examples#tune-gpt-models) for this feature. -->
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
@@ -238,7 +238,7 @@ In addition, you can find:
 
 - [Discord](https://discord.gg/pAbnFJrkgZ)
 
-- [Contributing guide](https://ag2ai.github.io/ag2/docs/Contribute)
+- [Contributing guide](https://docs.ag2.ai/docs/contributor-guide/contributing)
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
