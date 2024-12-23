@@ -17,9 +17,6 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Type, Ty
 
 from openai import BadRequestError
 
-from autogen.agentchat.chat import _post_process_carryover_item
-from autogen.exception_utils import InvalidCarryOverType, SenderRequired
-
 from .._pydantic import BaseModel, model_dump
 from ..cache.cache import AbstractCache
 from ..code_utils import (
@@ -34,13 +31,15 @@ from ..code_utils import (
 )
 from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
+from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
+from ..tools import Tool
 from .agent import Agent, LLMAgent
-from .chat import ChatResult, a_initiate_chats, initiate_chats
+from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
 
 __all__ = ("ConversableAgent",)
@@ -2695,7 +2694,7 @@ class ConversableAgent(LLMAgent):
         name: Optional[str] = None,
         description: Optional[str] = None,
         api_style: Literal["function", "tool"] = "tool",
-    ) -> Callable[[F], F]:
+    ) -> Callable[[Union[F, Tool]], Tool]:
         """Decorator factory for registering a function to be used by an agent.
 
         It's return value is used to decorate a function to be registered to the agent. The function uses type hints to
@@ -2735,7 +2734,7 @@ class ConversableAgent(LLMAgent):
 
         """
 
-        def _decorator(func: F) -> F:
+        def _decorator(func_or_tool: Union[F, Tool]) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:
@@ -2749,42 +2748,62 @@ class ConversableAgent(LLMAgent):
                 RuntimeError: if the LLM config is not set up before registering a function.
 
             """
-            # name can be overwritten by the parameter, by default it is the same as function name
-            if name:
-                func._name = name
-            elif not hasattr(func, "_name"):
-                func._name = func.__name__
+            nonlocal name, description
 
-            # description is propagated from the previous decorator, but it is mandatory for the first one
-            if description:
-                func._description = description
-            else:
-                if not hasattr(func, "_description"):
-                    raise ValueError("Function description is required, none found.")
+            tool = self._create_tool_if_needed(func_or_tool, name, description)
 
-            # get JSON schema for the function
-            f = get_function_schema(func, name=func._name, description=func._description)
+            self._register_for_llm(tool.func, tool.name, tool.description, api_style)
 
-            # register the function to the agent if there is LLM config, raise an exception otherwise
-            if self.llm_config is None:
-                raise RuntimeError("LLM config must be setup before registering a function for LLM.")
-
-            if api_style == "function":
-                f = f["function"]
-                self.update_function_signature(f, is_remove=False)
-            elif api_style == "tool":
-                self.update_tool_signature(f, is_remove=False)
-            else:
-                raise ValueError(f"Unsupported API style: {api_style}")
-
-            return func
+            return tool
 
         return _decorator
+
+    def _create_tool_if_needed(
+        self, func_or_tool: Union[Tool, Callable[..., Any]], name: Optional[str], description: Optional[str]
+    ) -> Tool:
+
+        if isinstance(func_or_tool, Tool):
+            tool: Tool = func_or_tool
+            tool._name = name or tool.name
+            tool._description = description or tool.description
+
+            return tool
+
+        if isinstance(func_or_tool, Callable):
+            func: Callable[..., Any] = func_or_tool
+
+            name = name or func.__name__
+
+            tool = Tool(name=name, description=description, func=func)
+
+            return tool
+
+        raise ValueError(
+            "Parameter 'func_or_tool' must be a function or a Tool instance, it is '{type(func_or_tool)}' instead."
+        )
+
+    def _register_for_llm(
+        self, func: Callable[..., Any], name: str, description: str, api_style: Literal["tool", "function"]
+    ) -> None:
+        # get JSON schema for the function
+        f = get_function_schema(func, name=name, description=description)
+
+        # register the function to the agent if there is LLM config, raise an exception otherwise
+        if self.llm_config is None:
+            raise RuntimeError("LLM config must be setup before registering a function for LLM.")
+
+        if api_style == "function":
+            f = f["function"]
+            self.update_function_signature(f, is_remove=False)
+        elif api_style == "tool":
+            self.update_tool_signature(f, is_remove=False)
+        else:
+            raise ValueError(f"Unsupported API style: {api_style}")
 
     def register_for_execution(
         self,
         name: Optional[str] = None,
-    ) -> Callable[[F], F]:
+    ) -> Callable[[Union[Tool, F]], Tool]:
         """Decorator factory for registering a function to be executed by an agent.
 
         It's return value is used to decorate a function to be registered to the agent.
@@ -2806,7 +2825,7 @@ class ConversableAgent(LLMAgent):
 
         """
 
-        def _decorator(func: F) -> F:
+        def _decorator(func_or_tool: Union[Tool, F]) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:
@@ -2819,15 +2838,13 @@ class ConversableAgent(LLMAgent):
                 ValueError: if the function description is not provided and not propagated by a previous decorator.
 
             """
-            # name can be overwritten by the parameter, by default it is the same as function name
-            if name:
-                func._name = name
-            elif not hasattr(func, "_name"):
-                func._name = func.__name__
+            nonlocal name
 
-            self.register_function({func._name: self._wrap_function(func)})
+            tool = self._create_tool_if_needed(func_or_tool=func_or_tool, name=name, description=None)
 
-            return func
+            self.register_function({tool.name: self._wrap_function(tool.func)})
+
+            return tool
 
         return _decorator
 

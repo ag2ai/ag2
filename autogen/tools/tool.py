@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from ..agentchat.conversable_agent import ConversableAgent
+if TYPE_CHECKING:
+    from ..agentchat.conversable_agent import ConversableAgent
 
 __all__ = ["Tool"]
 
@@ -22,7 +23,7 @@ class Tool:
         func (Callable[..., Any]): The function to be executed when the tool is called.
     """
 
-    def __init__(self, name: str, description: str, func: Callable[..., Any]) -> None:
+    def __init__(self, *, name: str, description: str, func: Callable[..., Any]) -> None:
         """Create a new Tool object.
 
         Args:
@@ -46,7 +47,7 @@ class Tool:
     def func(self) -> Callable[..., Any]:
         return self._func
 
-    def register_for_llm(self, agent: ConversableAgent) -> None:
+    def register_for_llm(self, agent: "ConversableAgent") -> None:
         """
         Registers the tool for use with a ConversableAgent's language model (LLM).
 
@@ -56,9 +57,9 @@ class Tool:
         Args:
             agent (ConversableAgent): The agent to which the tool will be registered.
         """
-        agent.register_for_llm(name=self._name, description=self._description)(self._func)
+        agent.register_for_llm()(self)
 
-    def register_for_execution(self, agent: ConversableAgent) -> None:
+    def register_for_execution(self, agent: "ConversableAgent") -> None:
         """
         Registers the tool for direct execution by a ConversableAgent.
 
@@ -68,4 +69,4 @@ class Tool:
         Args:
             agent (ConversableAgent): The agent to which the tool will be registered.
         """
-        agent.register_for_execution(name=self._name)(self._func)
+        agent.register_for_execution()(self)
