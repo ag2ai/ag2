@@ -80,38 +80,143 @@ a.colab-badge > img, a.github-badge  > img {
 
 /* Home page hero section starts */
 .homepage-hero-section {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #4B9CD6; /* #4B9CD6 */
+  background-image: url('/static/img/homepage-hero-background.png');
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3.078;
 }
+
 .hero-content {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  gap: 5px;
+  max-width: 1200px;
+  width: 100%;
+  height: 100%;
 }
-.homepage-hero-section .hero-content .hero-logo {
-  margin: 2em auto 0;
+
+.hero-logo-section {
+  flex: 0 0 auto;
 }
-.homepage-hero-section .hero-content .hero-title {
+
+.hero-logo {
+  width: 200px;
+  height: auto;
+}
+
+.hero-text-section {
+  flex: 1;
+}
+
+.hero-title {
+  font-size: 2rem !important;
+  line-height: 1.5rem;
   margin: 0;
-  color: #fff;
+  color: #000
 }
-.homepage-hero-section .hero-content .hero-subtitle {
-  margin: 0 0 1em 0;
-  color: #fff;
+
+.hero-subtitle {
+  font-size: 1rem;
+  line-height: 1.75rem;
+  color: #3E4342
 }
-.homepage-hero-section .hero-content .hero-btn {
-  margin: 0 auto 2em;
-  background-color: #ebedf0;
-  border-radius: 5px;
-  padding: 5px 30px;
-  border: none;
-  cursor: pointer;
-  text-align: center;
+
+.hero-btn {
   display: inline-block;
-  color: #000;
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(0, 0, 0);
+  color: rgb(255, 255, 255);
+  padding: 7px 10px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1.125rem;
+  line-height: 100%;
+  box-sizing: border-box;
+  border: 2px solid rgb(255, 255, 255);
+  box-shadow: rgba(0, 0, 0, 0.16) 4px 4px 0px 0px;
+  --font-family-headings-custom: "Jersey 10" !important;
+  font-family: var(
+    --font-family-headings-custom,
+    var(--font-inter, sans-serif)
+  );
+  transition: 200ms all ease;
 }
+
+.hero-btn::before{
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -67px;
+  width: 100%;
+  height: 20px;
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: rotate(125deg);
+  transform-origin: 50% 50%;
+  transition: left 0.5s ease-in-out;
+}
+
+.hero-btn::after{
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -34px;
+  width: 100%;
+  height: 14px;
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: rotate(125deg);
+  transform-origin: 50% 50%;
+  transition: left 0.5s ease-out;
+}
+
+.hero-btn:hover::before,
+.hero-btn:hover::after {
+  left: 100%;
+}
+
+.hero-btn:hover {
+  box-shadow: rgba(0, 0, 0, 0.16) 3px 3px 0px 0px;
+}
+
+@media screen and (max-width: 540px) {
+  .homepage-hero-section {
+    background-image: url('/static/img/homepage-hero-background-large.png');
+    aspect-ratio: 1.43;
+  }
+  .hero-content {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-align: center;
+    padding: 8px;
+  }
+  .hero-subtitle{
+    margin-bottom: 0;
+  }
+
+  .hero-logo {
+    width: 80px;
+    margin: 0;
+  }
+  .hero-text-section{
+    flex: 0 0 auto;
+  }
+
+  .hero-title {
+    display: none;
+  }
+  .hero-btn {
+    font-size: 1rem;
+    padding: 5px 8px;
+    margin-top: 4px;
+  }
+}
+
 /* Home page hero section ends */
 /* Home page popular resources section starts */
 .popular-resources .card {
@@ -126,9 +231,24 @@ a.colab-badge > img, a.github-badge  > img {
   text-align: center;
 }
 .popular-resources .youtube-video a {
-  color: #4b9cd6;
-  display: inline-block;
+  color: #000;
+  display: block;
+  --font-family-headings-custom: "Jersey 10" !important;
+  font-family: var(
+    --font-family-headings-custom,
+    var(--font-inter, sans-serif)
+  );
+  font-size: 1.125rem;
+  text-align: left;
+  margin-top: 6px;
 }
+
+.popular-resources .youtube-video iframe {
+  border: 2px #000 solid;
+  border-radius: 0;
+  padding: 0;
+}
+
 .popular-resources .youtube-video a:hover {
   text-decoration: underline;
 }
@@ -145,24 +265,49 @@ a.colab-badge > img, a.github-badge  > img {
   padding: 0;
   text-align: center;
 }
+
 .key-features .card .key-feature img {
   width:132px;
   height:132px;
-  margin:0 auto;
+  margin:0 auto 18px;
 }
-.key-features .card .key-feature a > p {
-  color: #4b9cd6;
-  font-weight: bold;
-  margin: 0.75rem 0;
-}
+
 .key-features .card .key-feature p {
-  font-size: 0.85rem;
+  font-size: 1rem;
+  line-height: 1.75rem;
+}
+
+.key-features .card .key-feature a > p {
+  margin: 0.75rem 0;
+  --font-family-headings-custom: "Jersey 10" !important;
+  font-family: var(
+    --font-family-headings-custom,
+    var(--font-inter, sans-serif)
+  );
+  font-size: 1.125rem;
+  min-height: 2.25rem;
+  line-height: 1.125;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: #000;
 }
 /* Home page key features section ends */
 /* Home page explore content section starts */
 
+.explore-content .card{
+  border: 2px #000 solid;
+  border-radius: 0;
+  padding: 0;
+}
+
+.explore-content .card:hover{
+  border-color: #000 !important;
+}
+
 .explore-content h2 {
-  font-size: 1.5rem !important;
+  font-size: 1.125rem !important;
 }
 /* Home page explore content section ends */
 
