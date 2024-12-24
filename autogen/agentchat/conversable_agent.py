@@ -842,68 +842,83 @@ class ConversableAgent(LLMAgent):
             )
 
     def _print_received_message(self, message: Union[dict, str], sender: Agent, skip_head: bool = False):
-        if not skip_head:
-            message_model = create_message_model(message=message, sender=sender, receiver=self)
+
         iostream = IOStream.get_default()
-        # print the message received
-        if not skip_head:
-            iostream.print(colored(sender.name, "yellow"), "(to", f"{self.name}):\n", flush=True)
+
         message = self._message_to_dict(message)
+        message_model = create_message_model(message=message, sender=sender, receiver=self)
 
-        if message.get("tool_responses"):  # Handle tool multi-call responses
-            for tool_response in message["tool_responses"]:
-                self._print_received_message(tool_response, sender, skip_head=True)
-            if message.get("role") == "tool":
-                return  # If role is tool, then content is just a concatenation of all tool_responses
+        message_model.print(iostream.print)
 
-        if message.get("role") in ["function", "tool"]:
-            if message["role"] == "function":
-                id_key = "name"
-            else:
-                id_key = "tool_call_id"
-            id = message.get(id_key, "No id found")
-            func_print = f"***** Response from calling {message['role']} ({id}) *****"
-            iostream.print(colored(func_print, "green"), flush=True)
-            iostream.print(message["content"], flush=True)
-            iostream.print(colored("*" * len(func_print), "green"), flush=True)
-        else:
-            content = message.get("content")
-            if content is not None:
-                if "context" in message:
-                    content = OpenAIWrapper.instantiate(
-                        content,
-                        message["context"],
-                        self.llm_config and self.llm_config.get("allow_format_str_template", False),
-                    )
-                iostream.print(content_str(content), flush=True)
-            if "function_call" in message and message["function_call"]:
-                function_call = dict(message["function_call"])
-                func_print = (
-                    f"***** Suggested function call: {function_call.get('name', '(No function name found)')} *****"
-                )
-                iostream.print(colored(func_print, "green"), flush=True)
-                iostream.print(
-                    "Arguments: \n",
-                    function_call.get("arguments", "(No arguments found)"),
-                    flush=True,
-                    sep="",
-                )
-                iostream.print(colored("*" * len(func_print), "green"), flush=True)
-            if "tool_calls" in message and message["tool_calls"]:
-                for tool_call in message["tool_calls"]:
-                    id = tool_call.get("id", "No tool call id found")
-                    function_call = dict(tool_call.get("function", {}))
-                    func_print = f"***** Suggested tool call ({id}): {function_call.get('name', '(No function name found)')} *****"
-                    iostream.print(colored(func_print, "green"), flush=True)
-                    iostream.print(
-                        "Arguments: \n",
-                        function_call.get("arguments", "(No arguments found)"),
-                        flush=True,
-                        sep="",
-                    )
-                    iostream.print(colored("*" * len(func_print), "green"), flush=True)
+    # def _print_received_message(self, message: Union[dict, str], sender: Agent, skip_head: bool = False):
+    #     if not skip_head:
+    #         message_model = create_message_model(message=message, sender=sender, receiver=self)
+    #     iostream = IOStream.get_default()
 
-        iostream.print("\n", "-" * 80, flush=True, sep="")
+    #     # ToDo: For debugging. Remove later!!!
+    #     iostream.print(colored("At the start of _print_received_message", "red"), flush=True)
+    #     # print the message received
+    #     if not skip_head:
+    #         iostream.print(colored(sender.name, "yellow"), "(to", f"{self.name}):\n", flush=True)
+    #     message = self._message_to_dict(message)
+
+    #     if message.get("tool_responses"):  # Handle tool multi-call responses
+    #         for tool_response in message["tool_responses"]:
+    #             self._print_received_message(tool_response, sender, skip_head=True)
+    #         if message.get("role") == "tool":
+    #             return  # If role is tool, then content is just a concatenation of all tool_responses
+
+    #     if message.get("role") in ["function", "tool"]:
+    #         if message["role"] == "function":
+    #             id_key = "name"
+    #         else:
+    #             id_key = "tool_call_id"
+    #         id = message.get(id_key, "No id found")
+    #         func_print = f"***** Response from calling {message['role']} ({id}) *****"
+    #         iostream.print(colored(func_print, "green"), flush=True)
+    #         iostream.print(message["content"], flush=True)
+    #         iostream.print(colored("*" * len(func_print), "green"), flush=True)
+    #     else:
+    #         content = message.get("content")
+    #         if content is not None:
+    #             if "context" in message:
+    #                 content = OpenAIWrapper.instantiate(
+    #                     content,
+    #                     message["context"],
+    #                     self.llm_config and self.llm_config.get("allow_format_str_template", False),
+    #                 )
+    #             iostream.print(content_str(content), flush=True)
+    #         if "function_call" in message and message["function_call"]:
+    #             function_call = dict(message["function_call"])
+    #             func_print = (
+    #                 f"***** Suggested function call: {function_call.get('name', '(No function name found)')} *****"
+    #             )
+    #             iostream.print(colored(func_print, "green"), flush=True)
+    #             iostream.print(
+    #                 "Arguments: \n",
+    #                 function_call.get("arguments", "(No arguments found)"),
+    #                 flush=True,
+    #                 sep="",
+    #             )
+    #             iostream.print(colored("*" * len(func_print), "green"), flush=True)
+    #         if "tool_calls" in message and message["tool_calls"]:
+    #             for tool_call in message["tool_calls"]:
+    #                 id = tool_call.get("id", "No tool call id found")
+    #                 function_call = dict(tool_call.get("function", {}))
+    #                 func_print = f"***** Suggested tool call ({id}): {function_call.get('name', '(No function name found)')} *****"
+    #                 iostream.print(colored(func_print, "green"), flush=True)
+    #                 iostream.print(
+    #                     "Arguments: \n",
+    #                     function_call.get("arguments", "(No arguments found)"),
+    #                     flush=True,
+    #                     sep="",
+    #                 )
+    #                 iostream.print(colored("*" * len(func_print), "green"), flush=True)
+
+    #     iostream.print("\n", "-" * 80, flush=True, sep="")
+
+    #     # ToDo: For debugging. Remove later!!!
+    #     iostream.print(colored("At the end of _print_received_message", "red"), flush=True)
 
     def _process_received_message(self, message: Union[dict, str], sender: Agent, silent: bool):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
