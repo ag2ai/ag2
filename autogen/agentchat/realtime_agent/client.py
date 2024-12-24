@@ -117,6 +117,26 @@ class OpenAIRealtimeClient:
         )
         await self.connection.response.create()
 
+    async def send_audio(self, audio: str) -> None:
+        """Send audio to the OpenAI Realtime API.
+
+        Args:
+            audio (str): The audio to send.
+        """
+        await self.connection.input_audio_buffer.append(audio=audio)
+
+    async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
+        """Truncate audio in the OpenAI Realtime API.
+
+        Args:
+            audio_end_ms (int): The end of the audio to truncate.
+            content_index (int): The index of the content to truncate.
+            item_id (str): The ID of the item to truncate.
+        """
+        await self.connection.conversation.item.truncate(
+            audio_end_ms=audio_end_ms, content_index=content_index, item_id=item_id
+        )
+
     # todo override in specific clients
     async def initialize_session(self) -> None:
         """Control initial session with OpenAI."""
@@ -152,7 +172,7 @@ class OpenAIRealtimeClient:
     async def run(self) -> None:
         """Run the client."""
         async with self.client.beta.realtime.connect(
-            model="gpt-4o-realtime-preview",
+            model=self.model,
             extra_headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "OpenAI-Beta": "realtime=v1",

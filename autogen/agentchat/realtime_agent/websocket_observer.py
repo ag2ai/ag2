@@ -86,14 +86,11 @@ class WebsocketAudioAdapter(RealtimeObserver):
                 if SHOW_TIMING_MATH:
                     logger.info(f"Truncating item with ID: {self.last_assistant_item}, Truncated at: {elapsed_time}ms")
 
-                logger.error("Truncate event is not implemented yet.")
-                # truncate_event = {
-                #     "type": "conversation.item.truncate",
-                #     "item_id": self.last_assistant_item,
-                #     "content_index": 0,
-                #     "audio_end_ms": elapsed_time,
-                # }
-                # await self.client.connection.input_audio_buffer.truncate(item=truncate_event)
+                await self.client.truncate_audio(
+                    audio_end_ms=elapsed_time,
+                    content_index=0,
+                    item_id=self.last_assistant_item,
+                )
 
             await self.websocket.send_json({"event": "clear", "streamSid": self.stream_sid})
 
@@ -114,7 +111,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
             data = json.loads(message)
             if data["event"] == "media":
                 self.latest_media_timestamp = int(data["media"]["timestamp"])
-                await self.client.connection.input_audio_buffer.append(audio=data["media"]["payload"])
+                await self.client.send_audio(audio=data["media"]["payload"])
             elif data["event"] == "start":
                 self.stream_sid = data["start"]["streamSid"]
                 logger.info(f"Incoming stream has started {self.stream_sid}")
