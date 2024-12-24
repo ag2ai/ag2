@@ -93,6 +93,7 @@ class FunctionCall(BaseModel):
 class FunctionCallMessage(BaseMessage):
     content: Optional[str] = None
     function_call: FunctionCall
+    # ToDo: Does function call has context?
     context: Optional[dict[str, Any]] = None
     llm_config: Union[dict, Literal[False]]
 
@@ -146,6 +147,7 @@ class ToolCallMessage(BaseMessage):
     audio: Optional[str] = None
     function_call: Optional[FunctionCall] = None
     tool_calls: list[ToolCall]
+    # ToDo: Does tool calls has context?
     context: Optional[dict[str, Any]] = None
     llm_config: Union[dict, Literal[False]]
 

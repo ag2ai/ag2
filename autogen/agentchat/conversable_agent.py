@@ -842,12 +842,9 @@ class ConversableAgent(LLMAgent):
             )
 
     def _print_received_message(self, message: Union[dict, str], sender: Agent, skip_head: bool = False):
-
-        iostream = IOStream.get_default()
-
         message = self._message_to_dict(message)
         message_model = create_message_model(message=message, sender=sender, receiver=self)
-
+        iostream = IOStream.get_default()
         message_model.print(iostream.print)
 
     # def _print_received_message(self, message: Union[dict, str], sender: Agent, skip_head: bool = False):
