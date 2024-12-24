@@ -41,7 +41,7 @@ Install `autogen`:
 pip install autogen
 ```
 
-For more information, please refer to the [installation guide](/docs/installation/Installation/).
+For more information, please refer to the [installation guide](/docs/installation/Installation).
 :::
 ````
 ``````
@@ -57,7 +57,7 @@ Some extra dependencies are needed for this notebook, which can be installed via
 pip install autogen[retrievechat] flaml[automl]
 ```
 
-For more information, please refer to the [installation guide](/docs/installation/Installation/).
+For more information, please refer to the [installation guide](/docs/installation/Installation).
 :::
 ````
 ``````
