@@ -11,6 +11,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from asyncer import asyncify
+from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 from pydantic import BaseModel
 
 from .realtime_observer import RealtimeObserver
@@ -33,16 +34,18 @@ class FunctionObserver(RealtimeObserver):
         super().__init__()
         self._agent = agent
 
-    async def update(self, response: dict[str, Any]) -> None:
+    async def update(self, event: RealtimeServerEvent) -> None:
         """Handle function call events from the OpenAI Realtime API.
 
         Args:
-            response (dict[str, Any]): The response from the OpenAI Realtime API.
+            event (dict[str, Any]): The event from the OpenAI Realtime API.
         """
-        if response.get("type") == "response.function_call_arguments.done":
-            logger.info(f"Received event: {response['type']}", response)
+        if event.type == "response.function_call_arguments.done":
+            logger.info(f"Received event: {event.type}", event)
             await self.call_function(
-                call_id=response["call_id"], name=response["name"], kwargs=json.loads(response["arguments"])
+                call_id=event.call_id,
+                name=event.name,  # type: ignore [attr-defined]
+                kwargs=json.loads(event.arguments),
             )
 
     async def call_function(self, call_id: str, name: str, kwargs: dict[str, Any]) -> None:

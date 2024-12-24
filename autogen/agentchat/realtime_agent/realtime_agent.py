@@ -5,23 +5,18 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-import asyncio
-import json
 import logging
-from abc import ABC, abstractmethod
-from collections.abc import Generator
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Literal, Optional, TypeVar, Union
 
 import anyio
-import websockets
-from asyncer import TaskGroup, asyncify, create_task_group, syncify
+from asyncer import create_task_group, syncify
 
-from autogen import ON_CONDITION, AfterWorkOption, SwarmAgent, initiate_swarm_chat
-from autogen.agentchat.agent import Agent, LLMAgent
+from autogen import SwarmAgent
+from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.function_utils import get_function_schema
 
-from .client import OpenAIRealtimeClient
+from .client import OpenAIRealtimeClient, Role
 from .function_observer import FunctionObserver
 from .realtime_observer import RealtimeObserver
 
@@ -35,7 +30,7 @@ SWARM_SYSTEM_MESSAGE = (
     "You can communicate and will communicate using audio output only."
 )
 
-QUESTION_ROLE = "user"
+QUESTION_ROLE: Role = "user"
 QUESTION_MESSAGE = (
     "I have a question/information for myself. DO NOT ANSWER YOURSELF, GET THE ANSWER FROM ME. "
     "repeat the question to me **WITH AUDIO OUTPUT** and then call 'answer_task_question' AFTER YOU GET THE ANSWER FROM ME\n\n"

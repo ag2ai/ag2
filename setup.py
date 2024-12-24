@@ -25,7 +25,7 @@ __version__ = version["__version__"]
 current_os = platform.system()
 
 install_requires = [
-    "openai>=1.57",
+    "openai>=1.58",
     "diskcache",
     "termcolor",
     "flaml",
