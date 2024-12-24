@@ -47,7 +47,7 @@ class TransformMessages:
         ```
     """
 
-    def __init__(self, *, transforms: List[MessageTransform] = [], verbose: bool = True):
+    def __init__(self, *, transforms: list[MessageTransform] = [], verbose: bool = True):
         """
         Args:
             transforms: A list of message transformations to apply.
@@ -66,7 +66,7 @@ class TransformMessages:
         """
         agent.register_hook(hookable_method="process_all_messages_before_reply", hook=self._transform_messages)
 
-    def _transform_messages(self, messages: List[Dict]) -> List[Dict]:
+    def _transform_messages(self, messages: list[dict]) -> list[dict]:
         post_transform_messages = copy.deepcopy(messages)
         system_message = None
 

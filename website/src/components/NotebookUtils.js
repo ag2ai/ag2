@@ -8,7 +8,7 @@ function findAllNotebooks() {
 
         notebooks.push({
             title: notebook.frontMatter.title,
-            link: "/ag2/docs/notebooks/" + key,
+            link: "/ag2/notebooks/" + key,
             description: notebook.frontMatter.description,
             image: notebook.frontMatter.image,
             tags: notebook.frontMatter.tags,

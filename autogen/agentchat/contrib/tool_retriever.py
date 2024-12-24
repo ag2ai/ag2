@@ -81,7 +81,7 @@ def get_full_tool_description(py_file):
     """
     Retrieves the function signature for a given Python file.
     """
-    with open(py_file, "r") as f:
+    with open(py_file) as f:
         code = f.read()
         exec(code)
         function_name = os.path.splitext(os.path.basename(py_file))[0]

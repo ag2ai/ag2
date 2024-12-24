@@ -11,8 +11,10 @@ import re
 import uuid
 from pathlib import Path
 from queue import Empty
-from typing import Any, ClassVar, List
+from typing import Any, List
 
+# this is needed for CI to work. The import of this file should fail if jupyter-kernel-gateway is not installed
+import jupyter_kernel_gateway
 from jupyter_client import KernelManager  # type: ignore[attr-defined]
 from jupyter_client.kernelspec import KernelSpecManager
 from pydantic import BaseModel, Field, field_validator
@@ -76,7 +78,7 @@ class EmbeddedIPythonCodeExecutor(BaseModel):
         """(Experimental) Export a code extractor that can be used by an agent."""
         return MarkdownCodeExtractor()
 
-    def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> IPythonCodeResult:
+    def execute_code_blocks(self, code_blocks: list[CodeBlock]) -> IPythonCodeResult:
         """(Experimental) Execute a list of code blocks and return the result.
 
         This method executes a list of code blocks as cells in an IPython kernel

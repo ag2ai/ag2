@@ -1,53 +1,52 @@
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-# Installation
+---
+title: "Overview"
+sidebarTitle: "Overview"
+---
 
 ## Create a virtual environment (optional)
 
 When installing AG2 locally, we recommend using a virtual environment for the installation. This will ensure that the dependencies for AG2 are isolated from the rest of your system.
 
 <Tabs>
-  <TabItem value="venv" label="venv" default>
+  <Tab title="venv" default>
 
-    Create and activate:
+    <p>Create and activate:</p>
 
     ```bash
     python3 -m venv autogen
     source autogen/bin/activate
     ```
 
-    To deactivate later, run:
+    <p>To deactivate later, run:</p>
 
     ```bash
     deactivate
     ```
 
-  </TabItem>
-  <TabItem value="conda" label="Conda">
+  </Tab>
+  <Tab title="Conda">
 
-    [Install Conda](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html) if you have not already.
+    <p>[Install Conda](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html) if you have not already.</p>
 
 
-    Create and activate:
+    <p>Create and activate:</p>
 
     ```bash
     conda create -n autogen python=3.10
     conda activate autogen
     ```
 
-    To deactivate later, run:
+    <p>To deactivate later, run:</p>
 
     ```bash
     conda deactivate
     ```
 
-  </TabItem>
-  <TabItem value="poetry" label="Poetry">
+  </Tab>
+  <Tab title="Poetry">
+    <p><a href="https://python-poetry.org/docs/#installation" target="_blank" rel="noopener noreferrer">Install Poetry</a> if you have not already.</p>
 
-    [Install Poetry](https://python-poetry.org/docs/#installation) if you have not already.
-
-    Create and activate:
+    <p>Create and active:</p>
     ```bash
     poetry init
     poetry shell
@@ -55,28 +54,26 @@ When installing AG2 locally, we recommend using a virtual environment for the in
     poetry add autogen
     ```
 
-    To deactivate later, run:
+    <p>To deactivate later, run:</p>
 
     ```bash
     exit
     ```
 
-  </TabItem>
+  </Tab>
 </Tabs>
 
 ## Install AG2
 
-AG2 requires **Python version >= 3.8, < 3.14**. It can be installed from pip:
+AG2 requires **Python version >= 3.9, < 3.14**. It can be installed from pip:
 
 ```bash
 pip install autogen
 ```
 
-:::info
-
-`openai>=1` is required.
-
-:::
+<div class="info">
+  <Info> `openai>=1` is required. </Info>
+</div>
 
 ## Install Docker for Code Execution
 

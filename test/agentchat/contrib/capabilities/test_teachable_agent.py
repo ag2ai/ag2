@@ -38,7 +38,7 @@ filter_dict = {"tags": ["gpt-4o-mini"]}
 def create_teachable_agent(reset_db=False, verbosity=0):
     """Instantiates a teachable agent using the settings from the top of this file."""
     # Load LLM inference endpoints from an env variable or a file
-    # See https://ag2ai.github.io/ag2/docs/FAQ#set-your-api-endpoints
+    # See https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints
     # and OAI_CONFIG_LIST_sample
     config_list = config_list_from_json(env_or_file=OAI_CONFIG_LIST, filter_dict=filter_dict, file_location=KEY_LOC)
 
@@ -202,7 +202,7 @@ def test_teachability_accuracy():
             return
 
     # All trials failed.
-    assert False, "test_teachability_accuracy() failed on all {} trials.".format(num_trials)
+    assert False, f"test_teachability_accuracy() failed on all {num_trials} trials."
 
 
 if __name__ == "__main__":

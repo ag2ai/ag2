@@ -52,6 +52,7 @@ TEXT_FORMATS = [
     "yaml",
     "yml",
     "pdf",
+    "mdx",
 ]
 UNSTRUCTURED_FORMATS = [
     "doc",
@@ -163,7 +164,7 @@ def split_files_to_chunks(
     chunk_mode: str = "multi_lines",
     must_break_at_empty_line: bool = True,
     custom_text_split_function: Callable = None,
-) -> Tuple[List[str], List[dict]]:
+) -> tuple[list[str], list[dict]]:
     """Split a list of files into chunks of max_tokens."""
 
     chunks = []
@@ -184,7 +185,7 @@ def split_files_to_chunks(
         elif file_extension == ".pdf":
             text = extract_text_from_pdf(file)
         else:  # For non-PDF text-based files
-            with open(file, "r", encoding="utf-8", errors="ignore") as f:
+            with open(file, encoding="utf-8", errors="ignore") as f:
                 text = f.read()
 
         if not text.strip():  # Debugging line to check if text is empty after reading
@@ -201,7 +202,7 @@ def split_files_to_chunks(
     return chunks, sources
 
 
-def get_files_from_dir(dir_path: Union[str, List[str]], types: list = TEXT_FORMATS, recursive: bool = True):
+def get_files_from_dir(dir_path: Union[str, list[str]], types: list = TEXT_FORMATS, recursive: bool = True):
     """Return a list of all the files in a given directory, a url, a file path or a list of them."""
     if len(types) == 0:
         raise ValueError("types cannot be empty.")
@@ -291,7 +292,7 @@ def _generate_file_name_from_url(url: str, max_length=255) -> str:
     return file_name
 
 
-def get_file_from_url(url: str, save_path: str = None) -> Tuple[str, str]:
+def get_file_from_url(url: str, save_path: str = None) -> tuple[str, str]:
     """Download a file from a URL."""
     if save_path is None:
         save_path = "tmp/chromadb"
@@ -338,7 +339,7 @@ def is_url(string: str):
 
 
 def create_vector_db_from_dir(
-    dir_path: Union[str, List[str]],
+    dir_path: Union[str, list[str]],
     max_tokens: int = 4000,
     client: API = None,
     db_path: str = "tmp/chromadb.db",
@@ -349,7 +350,7 @@ def create_vector_db_from_dir(
     embedding_model: str = "all-MiniLM-L6-v2",
     embedding_function: Callable = None,
     custom_text_split_function: Callable = None,
-    custom_text_types: List[str] = TEXT_FORMATS,
+    custom_text_types: list[str] = TEXT_FORMATS,
     recursive: bool = True,
     extra_docs: bool = False,
 ) -> API:
@@ -431,7 +432,7 @@ def create_vector_db_from_dir(
 
 
 def query_vector_db(
-    query_texts: List[str],
+    query_texts: list[str],
     n_results: int = 10,
     client: API = None,
     db_path: str = "tmp/chromadb.db",

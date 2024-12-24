@@ -38,6 +38,19 @@ install_requires = [
     "pydantic>=1.10,<3,!=2.6.0",  # could be both V1 and V2
     "docker",
     "packaging",
+    "websockets>=14,<15",
+    "asyncer>=0.0.8",
+]
+
+test = [
+    "ipykernel",
+    "nbconvert",
+    "nbformat",
+    "pre-commit",
+    "pytest-cov>=5",
+    "pytest-asyncio",
+    "pytest>=8,<9",
+    "pandas",
 ]
 
 jupyter_executor = [
@@ -69,6 +82,16 @@ neo4j = [
     "llama-index-core==0.12.5",
 ]
 
+# used for agentchat_realtime_swarm notebook and realtime agent twilio demo
+twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
+
+interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
+interop_langchain = ["langchain-community>=0.3.12,<1"]
+interop_pydantic_ai = ["pydantic-ai==0.0.13"]
+interop = interop_crewai + interop_langchain + interop_pydantic_ai
+
+types = ["mypy==1.9.0"] + test + jupyter_executor + interop + ["fastapi>=0.115.0,<1"]
+
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
 elif current_os == "Linux":
@@ -84,16 +107,7 @@ autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-
 # PLEASE add them in the setup_ag2.py and setup_autogen.py files
 
 extra_require = {
-    "test": [
-        "ipykernel",
-        "nbconvert",
-        "nbformat",
-        "pre-commit",
-        "pytest-cov>=5",
-        "pytest-asyncio",
-        "pytest>=8,<9",
-        "pandas",
-    ],
+    "test": test,
     "blendsearch": ["flaml[blendsearch]"],
     "mathchat": ["sympy", "pydantic==1.10.9", "wolframalpha"],
     "retrievechat": retrieve_chat,
@@ -111,9 +125,9 @@ extra_require = {
     "websurfer": ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"],
     "redis": ["redis"],
     "cosmosdb": ["azure-cosmos>=4.2.0"],
-    "websockets": ["websockets>=12.0,<13"],
+    "websockets": ["websockets>=14.0,<15"],
     "jupyter-executor": jupyter_executor,
-    "types": ["mypy==1.9.0", "pytest>=6.1.1,<8"] + jupyter_executor,
+    "types": types,
     "long-context": ["llmlingua<0.3"],
     "anthropic": ["anthropic>=0.23.1"],
     "cerebras": ["cerebras_cloud_sdk>=1.0.0"],
@@ -122,6 +136,11 @@ extra_require = {
     "cohere": ["cohere>=5.5.8"],
     "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
     "bedrock": ["boto3>=1.34.149"],
+    "twilio": twilio,
+    "interop-crewai": interop_crewai,
+    "interop-langchain": interop_langchain,
+    "interop-pydantic-ai": interop_pydantic_ai,
+    "interop": interop,
     "neo4j": neo4j,
 }
 
@@ -156,5 +175,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.8,<3.14",
+    python_requires=">=3.9,<3.14",
 )
