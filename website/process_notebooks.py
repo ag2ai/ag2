@@ -354,6 +354,42 @@ def add_front_matter_to_metadata_mdx(
         f.write(";\n")
 
 
+def convert_callout_blocks(content: str) -> str:
+    """
+    Converts MDX callout block syntax to custom HTML/component syntax.
+
+    Args:
+        content (str): The markdown content containing mdx-code-block callout syntax
+
+    Returns:
+        str: The converted content with HTML/component callout syntax
+    """
+    callout_types = {
+        "tip": "Tip",
+        "note": "Note",
+        "warning": "Warning",
+        "info": "Info",
+        "info Requirements": "Info",
+        "check": "Check",
+        "danger": "Warning",
+    }
+
+    def replace_callout(match: re.Match) -> str:
+        """Helper function to format individual callout blocks."""
+        callout_type = match.group(1)
+        inner_content = match.group(2).strip()
+
+        return f"""<div class="{callout_type}">
+        <{callout_types[callout_type]}>
+        {inner_content}
+        </{callout_types[callout_type]}>
+        </div>"""
+
+    # Pattern matches: ````mdx-code-block\n:::[type]\n[content]\n:::\n````
+    pattern = r"````mdx-code-block\n:::(\w+(?:\s+\w+)?)\n(.*?)\n:::\n````"
+    return re.sub(pattern, replace_callout, content, flags=re.DOTALL)
+
+
 def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
     """
     Converts MDX code block image syntax to regular markdown image syntax.
@@ -442,6 +478,9 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: d
 
     # Dump front_matter to ysaml
     front_matter = yaml.dump(front_matter, default_flow_style=False)
+
+    # Convert callout blocks
+    content = convert_callout_blocks(content)
 
     # Convert mdx image syntax to mintly image syntax
     content = convert_mdx_image_blocks(content, rendered_mdx, website_dir)
