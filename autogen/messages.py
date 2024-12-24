@@ -35,3 +35,15 @@ class FunctionMessage(BaseMessage):
         iostream.print(colored(header, "green"), flush=True)
         iostream.print(self.content, flush=True) 
         iostream.print(colored("*" * len(header), "green"), flush=True)
+
+
+def create_message_model(message: Union[dict[str, Any], str]) -> BaseMessage:
+    if isinstance(message, dict):
+        if "role" in message:
+            return FunctionMessage(**message)
+        else:
+            return BaseMessage(**message)
+    elif isinstance(message, str):
+        return BaseMessage(content=message)
+    else:
+        raise ValueError(f"Invalid message type: {type(message)}")

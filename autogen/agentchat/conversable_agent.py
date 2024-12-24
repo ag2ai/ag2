@@ -42,6 +42,7 @@ from ..runtime_logging import log_event, log_function_use, log_new_agent, loggin
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
+from ..messages import MessageRole
 
 __all__ = ("ConversableAgent",)
 
