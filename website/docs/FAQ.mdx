@@ -202,7 +202,7 @@ You can save that image name. For a new conversation, you can set "use_docker" t
 
 When using VMs such as Azure Machine Learning compute instances,
 you may encounter a "database locked error". This is because the
-[LLM cache](./Use-Cases/agent_chat.md#cache)
+[LLM cache](/docs/topics/llm-caching)
 is trying to write to a location that the application does not have access to.
 
 You can set the `cache_path_root` to a location where the application has access.
@@ -224,7 +224,7 @@ with Cache.redis(redis_url=...) as cache:
     agent_a.initate_chat(agent_b, ..., cache=cache)
 ```
 
-You can also disable the cache. See [here](./Use-Cases/agent_chat.md#llm-caching) for details.
+You can also disable the cache. See [here](/docs/topics/llm-caching#disabling-cache) for details.
 
 ## Agents are throwing due to docker not running, how can I resolve this?
 
