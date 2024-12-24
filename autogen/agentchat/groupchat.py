@@ -1666,3 +1666,12 @@ class GroupChatManager(ConversableAgent):
         reply_content = " ".join(words[:clear_word_index] + words[clear_word_index + skip_words_number :])
 
         return reply_content
+
+    def _get_related_agents_for_usage(self) -> List[Agent]:
+        """Gets all agents in the groupchat in order to calculate the usage summary.
+
+        This overrides the ConversableAgent method to include groupchat agents.
+
+        TODO: Persist and include the speaker selection agent from the auto speaker selection mode."""
+
+        return [self] + self._groupchat.agents

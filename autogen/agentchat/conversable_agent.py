@@ -1024,6 +1024,20 @@ class ConversableAgent(LLMAgent):
 
             raise RuntimeError(msg)
 
+    def _get_related_agents_for_usage(self) -> List[Agent]:
+        """Gets all agents related to this agent so they can be used in the usage summary.
+
+        In ConversableAgent, this is only itself, but this can be overridden in other Agent classes to add additional agents, such as for
+        the agents in a group chat when self is the GroupChatManager."""
+
+        return [self]
+
+    @staticmethod
+    def _get_agents_for_usage_summary(sender: "ConversableAgent", recipient: "ConversableAgent") -> List[Agent]:
+        """Gets all agents for a chat session in order to calculate the usage summary."""
+
+        return list(set(sender._get_related_agents_for_usage() + recipient._get_related_agents_for_usage()))
+
     def initiate_chat(
         self,
         recipient: "ConversableAgent",
@@ -1162,7 +1176,7 @@ class ConversableAgent(LLMAgent):
         chat_result = ChatResult(
             chat_history=self.chat_messages[recipient],
             summary=summary,
-            cost=gather_usage_summary([self, recipient]),
+            cost=gather_usage_summary(ConversableAgent._get_agents_for_usage_summary(self, recipient)),
             human_input=self._human_input,
         )
         return chat_result
@@ -1228,7 +1242,7 @@ class ConversableAgent(LLMAgent):
         chat_result = ChatResult(
             chat_history=self.chat_messages[recipient],
             summary=summary,
-            cost=gather_usage_summary([self, recipient]),
+            cost=gather_usage_summary(ConversableAgent._get_agents_for_usage_summary(self, recipient)),
             human_input=self._human_input,
         )
         return chat_result
