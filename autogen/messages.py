@@ -15,7 +15,7 @@ MessageRole = Literal["assistant", "function", "tool"]
 
 
 class BaseMessage(BaseModel):
-    content: str
+    content: Union[str, int, float, bool]
     sender_name: str
     receiver_name: str
 
@@ -27,7 +27,7 @@ class BaseMessage(BaseModel):
 class FunctionResponseMessage(BaseMessage):
     name: Optional[str] = None
     role: MessageRole = "function"
-    content: str
+    content: Union[str, int, float, bool]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -45,7 +45,7 @@ class FunctionResponseMessage(BaseMessage):
 class ToolResponse(BaseModel):
     tool_call_id: Optional[str] = None
     role: MessageRole = "tool"
-    content: str
+    content: Union[str, int, float, bool]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -59,7 +59,7 @@ class ToolResponse(BaseModel):
 class ToolResponseMessage(BaseMessage):
     role: MessageRole = "tool"
     tool_responses: list[ToolResponse]
-    content: str
+    content: Union[str, int, float, bool]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -92,7 +92,7 @@ class FunctionCall(BaseModel):
 
 
 class FunctionCallMessage(BaseMessage):
-    content: Optional[str] = None  # type: ignore [assignment]
+    content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     function_call: FunctionCall
     # ToDo: Does function call has context?
     context: Optional[dict[str, Any]] = None
@@ -107,7 +107,7 @@ class FunctionCallMessage(BaseMessage):
                 self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
             )
             content = OpenAIWrapper.instantiate(
-                self.content,
+                self.content,  # type: ignore [arg-type]
                 self.context,
                 allow_format_str_template,
             )
@@ -143,9 +143,9 @@ class ToolCall(BaseModel):
 
 
 class ToolCallMessage(BaseMessage):
-    content: Optional[str] = None  # type: ignore [assignment]
+    content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     refusal: Optional[str] = None
-    role: MessageRole
+    role: Optional[MessageRole] = None
     audio: Optional[str] = None
     function_call: Optional[FunctionCall] = None
     tool_calls: list[ToolCall]
@@ -162,7 +162,7 @@ class ToolCallMessage(BaseMessage):
                 self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
             )
             content = OpenAIWrapper.instantiate(
-                self.content,
+                self.content,  # type: ignore [arg-type]
                 self.context,
                 allow_format_str_template,
             )
@@ -175,7 +175,7 @@ class ToolCallMessage(BaseMessage):
 
 
 class ContentMessage(BaseMessage):
-    content: Optional[Union[str, Callable[..., Any]]] = None  # type: ignore [assignment]
+    content: Optional[Union[str, int, float, bool, Callable[..., Any]]] = None  # type: ignore [assignment]
     context: Optional[dict[str, Any]] = None
     llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None
 
@@ -188,7 +188,7 @@ class ContentMessage(BaseMessage):
                 self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
             )
             content = OpenAIWrapper.instantiate(
-                self.content,
+                self.content,  # type: ignore [arg-type]
                 self.context,
                 allow_format_str_template,
             )
@@ -198,13 +198,18 @@ class ContentMessage(BaseMessage):
 
 
 def create_message_model(message: dict[str, Any], sender: Agent, receiver: Agent) -> BaseMessage:
-    # print(f"{message=}")
-    # print(f"{sender=}")
+    print(f"{message=}")
+    print(f"{sender=}")
 
     role = message.get("role")
     if role == "function":
+        # if "context" in message:
+        #     raise ValueError("Function response message should not have context???")
         return FunctionResponseMessage(**message, sender_name=sender.name, receiver_name=receiver.name)
     if role == "tool":
+        # if "context" in message:
+        #     raise ValueError("Tool response message should not have context???")
+
         return ToolResponseMessage(**message, sender_name=sender.name, receiver_name=receiver.name)
 
     # Role is neither function nor tool

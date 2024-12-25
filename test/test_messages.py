@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,6 +13,7 @@ from autogen.messages import (
     FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
+    MessageRole,
     ToolCall,
     ToolCallMessage,
     ToolResponse,
@@ -82,16 +84,21 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) ->
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_function_response(sender: ConversableAgent, receiver: ConversableAgent) -> None:
-    message = {"name": "get_random_number", "role": "function", "content": "76"}
-
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"name": "get_random_number", "role": "function", "content": "76"},
+        {"name": "get_random_number", "role": "function", "content": 2},
+    ],
+)
+def test_function_response(sender: ConversableAgent, receiver: ConversableAgent, message: dict[str, Any]) -> None:
     actual = create_message_model(message, sender=sender, receiver=receiver)
 
     assert isinstance(actual, FunctionResponseMessage)
 
     assert actual.name == "get_random_number"
     assert actual.role == "function"
-    assert actual.content == "76"
+    assert actual.content == message["content"]
     assert actual.sender_name == "sender"
     assert actual.receiver_name == "receiver"
 
@@ -101,7 +108,7 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent)
     expected_call_args_list = [
         (("\x1b[33msender\x1b[0m (to receiver):\n",), {"flush": True}),
         (("\x1b[32m***** Response from calling function (get_random_number) *****\x1b[0m",), {"flush": True}),
-        (("76",), {"flush": True}),
+        ((message["content"],), {"flush": True}),
         (("\x1b[32m**************************************************************\x1b[0m",), {"flush": True}),
         (
             ("\n", "--------------------------------------------------------------------------------"),
@@ -145,11 +152,15 @@ def test_function_call(sender: ConversableAgent, receiver: ConversableAgent) -> 
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent) -> None:
+@pytest.mark.parametrize(
+    "role",
+    ["assistant", None],
+)
+def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: Optional[MessageRole]) -> None:
     message = {
         "content": None,
         "refusal": None,
-        "role": "assistant",
+        "role": role,
         "audio": None,
         "function_call": None,
         "tool_calls": [
@@ -172,7 +183,7 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent) -> Non
 
     assert actual.content is None
     assert actual.refusal is None
-    assert actual.role == "assistant"
+    assert actual.role == role
     assert actual.audio is None
     assert actual.function_call is None
     assert actual.sender_name == "sender"
