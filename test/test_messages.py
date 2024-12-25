@@ -3,7 +3,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.formatting_utils import colored
 from autogen.messages import (
     ContentMessage,
     FunctionCall,

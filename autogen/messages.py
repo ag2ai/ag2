@@ -1,13 +1,10 @@
-from enum import Enum
-from pprint import pprint
 from typing import Any, Callable, Literal, Optional, TypeVar, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from termcolor import colored
 
 from .agentchat.agent import Agent
 from .code_utils import content_str
-from .io.base import IOStream
 from .oai.client import OpenAIWrapper
 
 MessageRole = TypeVar("MessageRole", bound=Literal["assistant", "function", "tool"])
