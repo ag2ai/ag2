@@ -15,43 +15,6 @@ from autogen.messages import (
     create_message_model,
 )
 
-# def test_context():
-#     agent = ConversableAgent("a0", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
-#     agent1 = ConversableAgent("a1", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
-#     m1 = {
-#             "content": "hello {name}",
-#             "context": {
-#                 "name": "there",
-#             },
-#         }
-
-#     actual = create_message_model(m1, agent)
-
-#     expected = BaseMessage(content="hello there")
-
-#     # expect hello {name} to be printed
-#     agent1.send(
-#         {
-#             "content": lambda context: f"hello {context['name']}",
-#             "context": {
-#                 "name": "there",
-#             },
-#         },
-#         agent,
-#     )
-#     # expect hello there to be printed
-#     agent.llm_config = {"allow_format_str_template": True}
-#     agent1.send(
-#         {
-#             "content": "hello {name}",
-#             "context": {
-#                 "name": "there",
-#             },
-#         },
-#         agent,
-#     )
-#     # expect hello there to be printed
-
 
 @pytest.fixture
 def sender() -> ConversableAgent:
@@ -63,7 +26,7 @@ def receiver() -> ConversableAgent:
     return ConversableAgent("receiver", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 
 
-def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent):
+def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {
         "role": "tool",
         "tool_responses": [
@@ -115,7 +78,7 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent):
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_function_response(sender: ConversableAgent, receiver: ConversableAgent):
+def test_function_response(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {"name": "get_random_number", "role": "function", "content": "76"}
 
     actual = create_message_model(message, sender=sender, receiver=receiver)
@@ -145,7 +108,7 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent)
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_function_call(sender: ConversableAgent, receiver: ConversableAgent):
+def test_function_call(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {"content": "Let's play a game.", "function_call": {"name": "get_random_number", "arguments": "{}"}}
 
     actual = create_message_model(message, sender=sender, receiver=receiver)
@@ -178,7 +141,7 @@ def test_function_call(sender: ConversableAgent, receiver: ConversableAgent):
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent):
+def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {
         "content": None,
         "refusal": None,
@@ -215,14 +178,14 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent):
 
     assert isinstance(actual.tool_calls[0], ToolCall)
     assert actual.tool_calls[0].id == "call_rJfVpHU3MXuPRR2OAdssVqUV"
-    assert actual.tool_calls[0].function.name == "timer"
-    assert actual.tool_calls[0].function.arguments == '{"num_seconds": "1"}'
+    assert actual.tool_calls[0].function.name == "timer"  # type: ignore [union-attr]
+    assert actual.tool_calls[0].function.arguments == '{"num_seconds": "1"}'  # type: ignore [union-attr]
     assert actual.tool_calls[0].type == "function"
 
     assert isinstance(actual.tool_calls[1], ToolCall)
     assert actual.tool_calls[1].id == "call_zFZVYovdsklFYgqxttcOHwlr"
-    assert actual.tool_calls[1].function.name == "stopwatch"
-    assert actual.tool_calls[1].function.arguments == '{"num_seconds": "2"}'
+    assert actual.tool_calls[1].function.name == "stopwatch"  # type: ignore [union-attr]
+    assert actual.tool_calls[1].function.arguments == '{"num_seconds": "2"}'  # type: ignore [union-attr]
     assert actual.tool_calls[1].type == "function"
 
     mock = MagicMock()
@@ -251,7 +214,7 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent):
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_context_message(sender: ConversableAgent, receiver: ConversableAgent):
+def test_context_message(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {"content": "hello {name}", "context": {"name": "there"}}
 
     actual = create_message_model(message, sender=sender, receiver=receiver)
@@ -277,7 +240,7 @@ def test_context_message(sender: ConversableAgent, receiver: ConversableAgent):
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableAgent):
+def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {
         "content": lambda context: f"hello {context['name']}",
         "context": {
