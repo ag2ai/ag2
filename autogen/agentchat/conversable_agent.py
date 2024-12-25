@@ -35,7 +35,7 @@ from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
-from ..messages import create_message_model
+from ..messages import create_received_message_model
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import Tool
@@ -843,7 +843,7 @@ class ConversableAgent(LLMAgent):
 
     def _print_received_message(self, message: Union[dict, str], sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
-        message_model = create_message_model(message=message, sender=sender, receiver=self)
+        message_model = create_received_message_model(message=message, sender=sender, receiver=self)
         iostream = IOStream.get_default()
         message_model.print(iostream.print)
 

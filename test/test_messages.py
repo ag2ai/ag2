@@ -18,7 +18,7 @@ from autogen.messages import (
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
-    create_message_model,
+    create_received_message_model,
 )
 
 
@@ -41,7 +41,7 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) ->
         ],
         "content": "Timer is done!\\n\\nStopwatch is done!",
     }
-    actual = create_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, receiver=receiver)
 
     assert isinstance(actual, ToolResponseMessage)
     assert actual.role == "tool"
@@ -92,7 +92,7 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) ->
     ],
 )
 def test_function_response(sender: ConversableAgent, receiver: ConversableAgent, message: dict[str, Any]) -> None:
-    actual = create_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, receiver=receiver)
 
     assert isinstance(actual, FunctionResponseMessage)
 
@@ -122,7 +122,7 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent,
 def test_function_call(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {"content": "Let's play a game.", "function_call": {"name": "get_random_number", "arguments": "{}"}}
 
-    actual = create_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, receiver=receiver)
 
     assert isinstance(actual, FunctionCallMessage)
 
@@ -177,7 +177,7 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: 
         ],
     }
 
-    actual = create_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, receiver=receiver)
 
     assert isinstance(actual, ToolCallMessage)
 
@@ -232,7 +232,7 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: 
 def test_context_message(sender: ConversableAgent, receiver: ConversableAgent) -> None:
     message = {"content": "hello {name}", "context": {"name": "there"}}
 
-    actual = create_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, receiver=receiver)
 
     assert isinstance(actual, ContentMessage)
 
@@ -263,7 +263,7 @@ def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableA
         },
     }
 
-    actual = create_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, receiver=receiver)
 
     assert isinstance(actual, ContentMessage)
 

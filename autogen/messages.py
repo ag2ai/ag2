@@ -175,7 +175,7 @@ class ContentMessage(BaseMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-def create_message_model(message: dict[str, Any], sender: Agent, receiver: Agent) -> BaseMessage:
+def create_received_message_model(message: dict[str, Any], sender: Agent, receiver: Agent) -> BaseMessage:
     # print(f"{message=}")
     # print(f"{sender=}")
 
