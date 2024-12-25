@@ -94,24 +94,13 @@ class FunctionCall(BaseModel):
 class FunctionCallMessage(BaseMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     function_call: FunctionCall
-    # ToDo: Does function call has context?
-    context: Optional[dict[str, Any]] = None
-    llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
         super().print(f)
 
         if self.content is not None:
-            allow_format_str_template = (
-                self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
-            )
-            content = OpenAIWrapper.instantiate(
-                self.content,  # type: ignore [arg-type]
-                self.context,
-                allow_format_str_template,
-            )
-            f(content_str(content), flush=True)
+            f(self.content, flush=True)
 
         self.function_call.print(f)
 
@@ -149,24 +138,13 @@ class ToolCallMessage(BaseMessage):
     audio: Optional[str] = None
     function_call: Optional[FunctionCall] = None
     tool_calls: list[ToolCall]
-    # ToDo: Does tool calls has context?
-    context: Optional[dict[str, Any]] = None
-    llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
         super().print(f)
 
         if self.content is not None:
-            allow_format_str_template = (
-                self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
-            )
-            content = OpenAIWrapper.instantiate(
-                self.content,  # type: ignore [arg-type]
-                self.context,
-                allow_format_str_template,
-            )
-            f(content_str(content), flush=True)
+            f(self.content, flush=True)
 
         for tool_call in self.tool_calls:
             tool_call.print(f)
@@ -198,18 +176,13 @@ class ContentMessage(BaseMessage):
 
 
 def create_message_model(message: dict[str, Any], sender: Agent, receiver: Agent) -> BaseMessage:
-    print(f"{message=}")
-    print(f"{sender=}")
+    # print(f"{message=}")
+    # print(f"{sender=}")
 
     role = message.get("role")
     if role == "function":
-        # if "context" in message:
-        #     raise ValueError("Function response message should not have context???")
         return FunctionResponseMessage(**message, sender_name=sender.name, receiver_name=receiver.name)
     if role == "tool":
-        # if "context" in message:
-        #     raise ValueError("Tool response message should not have context???")
-
         return ToolResponseMessage(**message, sender_name=sender.name, receiver_name=receiver.name)
 
     # Role is neither function nor tool
@@ -219,7 +192,6 @@ def create_message_model(message: dict[str, Any], sender: Agent, receiver: Agent
             **message,
             sender_name=sender.name,
             receiver_name=receiver.name,
-            llm_config=receiver.llm_config,  # type: ignore [attr-defined]
         )
 
     if "tool_calls" in message and message["tool_calls"]:
@@ -227,7 +199,6 @@ def create_message_model(message: dict[str, Any], sender: Agent, receiver: Agent
             **message,
             sender_name=sender.name,
             receiver_name=receiver.name,
-            llm_config=receiver.llm_config,  # type: ignore [attr-defined]
         )
 
     # Now message is a simple content message
