@@ -92,19 +92,6 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent):
     assert actual.tool_responses[1].role == "tool"
     assert actual.tool_responses[1].content == "Stopwatch is done!"
 
-    expected_print = f"""{colored("user_proxy", "yellow")} (to chatbot):
-
-{colored("***** Response from calling tool (call_rJfVpHU3MXuPRR2OAdssVqUV) *****", "green")}
-Timer is done!
-{colored("**********************************************************************", "green")}
-
---------------------------------------------------------------------------------
-{colored("***** Response from calling tool (call_zFZVYovdsklFYgqxttcOHwlr) *****", "green")}
-Stopwatch is done!
-{colored("**********************************************************************", "green")}
-
---------------------------------------------------------------------------------"""
-
     mock = MagicMock()
     actual.print(f=mock)
 
@@ -141,14 +128,6 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent)
     assert actual.content == "76"
     assert actual.sender_name == "sender"
     assert actual.receiver_name == "receiver"
-
-    expected_print = f"""{colored("Player", "yellow")} (to user):
-
-{colored("***** Response from calling function (get_random_number) *****", "green")}
-76
-{colored("**************************************************************", "green")}
-
---------------------------------------------------------------------------------"""
 
     mock = MagicMock()
     actual.print(f=mock)
