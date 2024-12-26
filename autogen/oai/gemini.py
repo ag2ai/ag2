@@ -46,8 +46,9 @@ import random
 import re
 import time
 import warnings
+from collections.abc import Mapping
 from io import BytesIO
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import google.generativeai as genai
 import PIL
@@ -151,7 +152,7 @@ class GeminiClient:
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
 
-    def message_retrieval(self, response) -> List:
+    def message_retrieval(self, response) -> list:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -164,7 +165,7 @@ class GeminiClient:
         return response.cost
 
     @staticmethod
-    def get_usage(response) -> Dict:
+    def get_usage(response) -> dict:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -175,7 +176,7 @@ class GeminiClient:
             "model": response.model,
         }
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: dict) -> ChatCompletion:
 
         if self.use_vertexai:
             self._initialize_vertexai(**params)
@@ -193,7 +194,7 @@ class GeminiClient:
             raise ValueError(
                 "Please provide a model name for the Gemini Client. "
                 "You can configure it in the OAI Config List file. "
-                "See this [LLM configuration tutorial](https://ag2ai.github.io/ag2/docs/topics/llm_configuration/) for more details."
+                "See this [LLM configuration tutorial](https://docs.ag2.ai/docs/topics/llm_configuration/) for more details."
             )
 
         params.get("api_type", "google")  # not used
@@ -230,7 +231,7 @@ class GeminiClient:
         autogen_tool_calls = []
 
         # Maps the function call ids to function names so we can inject it into FunctionResponse messages
-        self.tool_call_function_map: Dict[str, str] = {}
+        self.tool_call_function_map: dict[str, str] = {}
 
         # A. create and call the chat model.
         gemini_messages = self._oai_messages_to_gemini_messages(messages)
@@ -271,7 +272,7 @@ class GeminiClient:
                 if fn_call not in prev_function_calls:
                     autogen_tool_calls.append(
                         ChatCompletionMessageToolCall(
-                            id=random_id,
+                            id=str(random_id),
                             function={
                                 "name": fn_call.name,
                                 "arguments": (
@@ -325,7 +326,7 @@ class GeminiClient:
 
         return response_oai
 
-    def _oai_content_to_gemini_content(self, message: Dict[str, Any]) -> Tuple[List, str]:
+    def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list, str]:
         """Convert AutoGen content to Gemini parts, catering for text and tool calls"""
         rst = []
 
@@ -420,7 +421,7 @@ class GeminiClient:
         else:
             raise Exception("Unable to convert content to Gemini format.")
 
-    def _concat_parts(self, parts: List[Part]) -> List:
+    def _concat_parts(self, parts: list[Part]) -> list:
         """Concatenate parts with the same type.
         If two adjacent parts both have the "text" attribute, then it will be joined into one part.
         """
@@ -449,7 +450,7 @@ class GeminiClient:
 
         return concatenated_parts
 
-    def _oai_messages_to_gemini_messages(self, messages: list[Dict[str, Any]]) -> list[dict[str, Any]]:
+    def _oai_messages_to_gemini_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Convert messages from OAI format to Gemini format.
         Make sure the "user" role and "model" role are interleaved.
         Also, make sure the last item is from the "user" role.
@@ -522,7 +523,7 @@ class GeminiClient:
 
         return rst
 
-    def _tools_to_gemini_tools(self, tools: List[Dict[str, Any]]) -> List[Tool]:
+    def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
 
         functions = []
@@ -543,7 +544,7 @@ class GeminiClient:
             return [Tool(function_declarations=functions)]
 
     @staticmethod
-    def _create_gemini_function_declaration(tool: Dict) -> FunctionDeclaration:
+    def _create_gemini_function_declaration(tool: dict) -> FunctionDeclaration:
         function_declaration = FunctionDeclaration()
         function_declaration.name = tool["function"]["name"]
         function_declaration.description = tool["function"]["description"]
@@ -657,7 +658,7 @@ class GeminiClient:
             return safety_settings
 
     @staticmethod
-    def _to_json_or_str(data: str) -> Union[Dict, str]:
+    def _to_json_or_str(data: str) -> dict | str:
         try:
             json_data = json.loads(data)
             return json_data

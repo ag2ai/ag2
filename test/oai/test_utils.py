@@ -96,7 +96,7 @@ FILTER_CONFIG_TEST = [
 ]
 
 
-def _compare_lists_of_dicts(list1: List[Dict], list2: List[Dict]) -> bool:
+def _compare_lists_of_dicts(list1: list[dict], list2: list[dict]) -> bool:
     dump1 = sorted(json.dumps(d, sort_keys=True) for d in list1)
     dump2 = sorted(json.dumps(d, sort_keys=True) for d in list2)
     return dump1 == dump2

@@ -68,13 +68,13 @@ def test_chat_completion_stream() -> None:
 def test__update_dict_from_chunk() -> None:
     # dictionaries and lists are not supported
     mock = MagicMock()
-    empty_collections: List[Union[List[Any], Dict[str, Any]]] = [{}, []]
+    empty_collections: list[Union[list[Any], dict[str, Any]]] = [{}, []]
     for c in empty_collections:
         mock.c = c
         with pytest.raises(NotImplementedError):
             OpenAIWrapper._update_dict_from_chunk(mock, {}, "c")
 
-    org_d: Dict[str, Any] = {}
+    org_d: dict[str, Any] = {}
     for i, v in enumerate([0, 1, False, True, 0.0, 1.0]):
         field = "abcedfghijklmnopqrstuvwxyz"[i]
         setattr(mock, field, v)
@@ -186,7 +186,7 @@ def test__update_tool_calls_from_chunk() -> None:
         ),
     ]
 
-    full_tool_calls: List[Optional[Dict[str, Any]]] = [None, None]
+    full_tool_calls: list[Optional[dict[str, Any]]] = [None, None]
     completion_tokens = 0
     for tool_calls_chunk in tool_calls_chunks:
         index = tool_calls_chunk.index

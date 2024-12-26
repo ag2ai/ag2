@@ -88,7 +88,7 @@ class Collection:
         self.name = name
         return self.name
 
-    def add(self, ids: List[ItemID], documents: List, embeddings: List = None, metadatas: List = None) -> None:
+    def add(self, ids: list[ItemID], documents: list, embeddings: list = None, metadatas: list = None) -> None:
         """
         Add documents to the collection.
 
@@ -131,7 +131,7 @@ class Collection:
         cursor.executemany(sql_string, sql_values)
         cursor.close()
 
-    def upsert(self, ids: List[ItemID], documents: List, embeddings: List = None, metadatas: List = None) -> None:
+    def upsert(self, ids: list[ItemID], documents: list, embeddings: list = None, metadatas: list = None) -> None:
         """
         Upsert documents into the collection.
 
@@ -240,7 +240,7 @@ class Collection:
         where: Optional[str] = None,
         limit: Optional[Union[int, str]] = None,
         offset: Optional[Union[int, str]] = None,
-    ) -> List[Document]:
+    ) -> list[Document]:
         """
         Retrieve documents from the collection.
 
@@ -312,7 +312,7 @@ class Collection:
         cursor.close()
         return retrieved_documents
 
-    def update(self, ids: List, embeddings: List, metadatas: List, documents: List) -> None:
+    def update(self, ids: list, embeddings: list, metadatas: list, documents: list) -> None:
         """
         Update documents in the collection.
 
@@ -341,7 +341,7 @@ class Collection:
         cursor.close()
 
     @staticmethod
-    def euclidean_distance(arr1: List[float], arr2: List[float]) -> float:
+    def euclidean_distance(arr1: list[float], arr2: list[float]) -> float:
         """
         Calculate the Euclidean distance between two vectors.
 
@@ -356,7 +356,7 @@ class Collection:
         return dist
 
     @staticmethod
-    def cosine_distance(arr1: List[float], arr2: List[float]) -> float:
+    def cosine_distance(arr1: list[float], arr2: list[float]) -> float:
         """
         Calculate the cosine distance between two vectors.
 
@@ -371,7 +371,7 @@ class Collection:
         return dist
 
     @staticmethod
-    def inner_product_distance(arr1: List[float], arr2: List[float]) -> float:
+    def inner_product_distance(arr1: list[float], arr2: list[float]) -> float:
         """
         Calculate the Euclidean distance between two vectors.
 
@@ -387,7 +387,7 @@ class Collection:
 
     def query(
         self,
-        query_texts: List[str],
+        query_texts: list[str],
         collection_name: Optional[str] = None,
         n_results: Optional[int] = 10,
         distance_type: Optional[str] = "euclidean",
@@ -458,7 +458,7 @@ class Collection:
         return results
 
     @staticmethod
-    def convert_string_to_array(array_string: str) -> List[float]:
+    def convert_string_to_array(array_string: str) -> list[float]:
         """
         Convert a string representation of an array to a list of floats.
 
@@ -494,7 +494,7 @@ class Collection:
         )
         cursor.close()
 
-    def delete(self, ids: List[ItemID], collection_name: Optional[str] = None) -> None:
+    def delete(self, ids: list[ItemID], collection_name: Optional[str] = None) -> None:
         """
         Delete documents from the collection.
 
@@ -836,7 +836,7 @@ class PGVectorDB(VectorDB):
             else:
                 collection.add(**collection_kwargs)
 
-    def insert_docs(self, docs: List[Document], collection_name: str = None, upsert: bool = False) -> None:
+    def insert_docs(self, docs: list[Document], collection_name: str = None, upsert: bool = False) -> None:
         """
         Insert documents into the collection of the vector database.
 
@@ -874,7 +874,7 @@ class PGVectorDB(VectorDB):
 
         self._batch_insert(collection, embeddings, ids, metadatas, documents, upsert)
 
-    def update_docs(self, docs: List[Document], collection_name: str = None) -> None:
+    def update_docs(self, docs: list[Document], collection_name: str = None) -> None:
         """
         Update documents in the collection of the vector database.
 
@@ -887,7 +887,7 @@ class PGVectorDB(VectorDB):
         """
         self.insert_docs(docs, collection_name, upsert=True)
 
-    def delete_docs(self, ids: List[ItemID], collection_name: str = None) -> None:
+    def delete_docs(self, ids: list[ItemID], collection_name: str = None) -> None:
         """
         Delete documents from the collection of the vector database.
 
@@ -904,7 +904,7 @@ class PGVectorDB(VectorDB):
 
     def retrieve_docs(
         self,
-        queries: List[str],
+        queries: list[str],
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
@@ -936,8 +936,8 @@ class PGVectorDB(VectorDB):
         return results
 
     def get_docs_by_ids(
-        self, ids: List[ItemID] = None, collection_name: str = None, include=None, **kwargs
-    ) -> List[Document]:
+        self, ids: list[ItemID] = None, collection_name: str = None, include=None, **kwargs
+    ) -> list[Document]:
         """
         Retrieve documents from the collection of the vector database based on the ids.
 

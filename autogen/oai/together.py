@@ -32,8 +32,9 @@ import random
 import re
 import time
 import warnings
+from collections.abc import Mapping
 from io import BytesIO
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
@@ -67,7 +68,7 @@ class TogetherClient:
             self.api_key
         ), "Please include the api_key in your config list entry for Together.AI or set the TOGETHER_API_KEY env variable."
 
-    def message_retrieval(self, response) -> List:
+    def message_retrieval(self, response) -> list:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -80,7 +81,7 @@ class TogetherClient:
         return response.cost
 
     @staticmethod
-    def get_usage(response) -> Dict:
+    def get_usage(response) -> dict:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -91,7 +92,7 @@ class TogetherClient:
             "model": response.model,
         }
 
-    def parse_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Loads the parameters for Together.AI API from the passed in parameters and returns a validated set. Checks types, ranges, and sets defaults"""
         together_params = {}
 
@@ -133,7 +134,7 @@ class TogetherClient:
 
         return together_params
 
-    def create(self, params: Dict) -> ChatCompletion:
+    def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
         # Convert AutoGen messages to Together.AI messages
@@ -218,7 +219,7 @@ class TogetherClient:
         return response_oai
 
 
-def oai_messages_to_together_messages(messages: list[Dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_together_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Together.AI format.
     We correct for any specific role orders and types.
     """

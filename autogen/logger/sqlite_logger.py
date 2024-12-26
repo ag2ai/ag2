@@ -55,7 +55,7 @@ def safe_serialize(obj: Any) -> str:
 class SqliteLogger(BaseLogger):
     schema_version = 1
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.config = config
 
         try:
@@ -169,7 +169,7 @@ class SqliteLogger(BaseLogger):
         finally:
             return self.session_id
 
-    def _get_current_db_version(self) -> Union[None, int]:
+    def _get_current_db_version(self) -> None | int:
         self.cur.execute("SELECT version_number FROM version ORDER BY id DESC LIMIT 1")
         result = self.cur.fetchone()
         return result[0] if result is not None else None
@@ -188,7 +188,7 @@ class SqliteLogger(BaseLogger):
         migrations_to_apply = [m for m in migrations if int(m.split("_")[0]) > current_version]
 
         for script in migrations_to_apply:
-            with open(script, "r") as f:
+            with open(script) as f:
                 migration_sql = f.read()
                 self._run_query_script(script=migration_sql)
 
@@ -197,7 +197,7 @@ class SqliteLogger(BaseLogger):
                 args = (latest_version,)
                 self._run_query(query=query, args=args)
 
-    def _run_query(self, query: str, args: Tuple[Any, ...] = ()) -> None:
+    def _run_query(self, query: str, args: tuple[Any, ...] = ()) -> None:
         """
         Executes a given SQL query.
 
@@ -231,9 +231,9 @@ class SqliteLogger(BaseLogger):
         invocation_id: uuid.UUID,
         client_id: int,
         wrapper_id: int,
-        source: Union[str, Agent],
-        request: Dict[str, Union[float, str, List[Dict[str, str]]]],
-        response: Union[str, ChatCompletion],
+        source: str | Agent,
+        request: dict[str, float | str | list[dict[str, str]]],
+        response: str | ChatCompletion,
         is_cached: int,
         cost: float,
         start_time: str,
@@ -275,7 +275,7 @@ class SqliteLogger(BaseLogger):
 
         self._run_query(query=query, args=args)
 
-    def log_new_agent(self, agent: ConversableAgent, init_args: Dict[str, Any]) -> None:
+    def log_new_agent(self, agent: ConversableAgent, init_args: dict[str, Any]) -> None:
         from autogen import Agent
 
         if self.con is None:
@@ -317,7 +317,7 @@ class SqliteLogger(BaseLogger):
         )
         self._run_query(query=query, args=args)
 
-    def log_event(self, source: Union[str, Agent], name: str, **kwargs: Dict[str, Any]) -> None:
+    def log_event(self, source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
         from autogen import Agent
 
         if self.con is None:
@@ -352,7 +352,7 @@ class SqliteLogger(BaseLogger):
             )
             self._run_query(query=query, args=args_str_based)
 
-    def log_new_wrapper(self, wrapper: OpenAIWrapper, init_args: Dict[str, Union[LLMConfig, List[LLMConfig]]]) -> None:
+    def log_new_wrapper(self, wrapper: OpenAIWrapper, init_args: dict[str, LLMConfig | list[LLMConfig]]) -> None:
         if self.con is None:
             return
 
@@ -382,7 +382,7 @@ class SqliteLogger(BaseLogger):
         )
         self._run_query(query=query, args=args)
 
-    def log_function_use(self, source: Union[str, Agent], function: F, args: Dict[str, Any], returns: Any) -> None:
+    def log_function_use(self, source: str | Agent, function: F, args: dict[str, Any], returns: Any) -> None:
 
         if self.con is None:
             return
@@ -390,7 +390,7 @@ class SqliteLogger(BaseLogger):
         query = """
         INSERT INTO function_calls (source_id, source_name, function_name, args, returns, timestamp) VALUES (?, ?, ?, ?, ?, ?)
         """
-        query_args: Tuple[Any, ...] = (
+        query_args: tuple[Any, ...] = (
             id(source),
             source.name if hasattr(source, "name") else source,
             function.__name__,
@@ -402,21 +402,21 @@ class SqliteLogger(BaseLogger):
 
     def log_new_client(
         self,
-        client: Union[
-            AzureOpenAI,
-            OpenAI,
-            CerebrasClient,
-            GeminiClient,
-            AnthropicClient,
-            MistralAIClient,
-            TogetherClient,
-            GroqClient,
-            CohereClient,
-            OllamaClient,
-            BedrockClient,
-        ],
+        client: (
+            AzureOpenAI
+            | OpenAI
+            | CerebrasClient
+            | GeminiClient
+            | AnthropicClient
+            | MistralAIClient
+            | TogetherClient
+            | GroqClient
+            | CohereClient
+            | OllamaClient
+            | BedrockClient
+        ),
         wrapper: OpenAIWrapper,
-        init_args: Dict[str, Any],
+        init_args: dict[str, Any],
     ) -> None:
         if self.con is None:
             return
@@ -453,7 +453,7 @@ class SqliteLogger(BaseLogger):
         if self.con:
             self.con.close()
 
-    def get_connection(self) -> Union[None, sqlite3.Connection]:
+    def get_connection(self) -> None | sqlite3.Connection:
         if self.con:
             return self.con
         return None

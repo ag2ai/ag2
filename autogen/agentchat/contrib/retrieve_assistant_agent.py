@@ -33,10 +33,10 @@ class RetrieveAssistantAgent(AssistantAgent):
 
     def _generate_retrieve_assistant_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         if config is None:
             config = self
         if messages is None:

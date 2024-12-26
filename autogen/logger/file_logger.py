@@ -51,7 +51,7 @@ def safe_serialize(obj: Any) -> str:
 
 
 class FileLogger(BaseLogger):
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.config = config
         self.session_id = str(uuid.uuid4())
 
@@ -85,9 +85,9 @@ class FileLogger(BaseLogger):
         invocation_id: uuid.UUID,
         client_id: int,
         wrapper_id: int,
-        source: Union[str, Agent],
-        request: Dict[str, Union[float, str, List[Dict[str, str]]]],
-        response: Union[str, ChatCompletion],
+        source: str | Agent,
+        request: dict[str, float | str | list[dict[str, str]]],
+        response: str | ChatCompletion,
         is_cached: int,
         cost: float,
         start_time: str,
@@ -122,7 +122,7 @@ class FileLogger(BaseLogger):
         except Exception as e:
             self.logger.error(f"[file_logger] Failed to log chat completion: {e}")
 
-    def log_new_agent(self, agent: ConversableAgent, init_args: Dict[str, Any] = {}) -> None:
+    def log_new_agent(self, agent: ConversableAgent, init_args: dict[str, Any] = {}) -> None:
         """
         Log a new agent instance.
         """
@@ -147,7 +147,7 @@ class FileLogger(BaseLogger):
         except Exception as e:
             self.logger.error(f"[file_logger] Failed to log new agent: {e}")
 
-    def log_event(self, source: Union[str, Agent], name: str, **kwargs: Dict[str, Any]) -> None:
+    def log_event(self, source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
         """
         Log an event from an agent or a string source.
         """
@@ -191,9 +191,7 @@ class FileLogger(BaseLogger):
             except Exception as e:
                 self.logger.error(f"[file_logger] Failed to log event {e}")
 
-    def log_new_wrapper(
-        self, wrapper: OpenAIWrapper, init_args: Dict[str, Union[LLMConfig, List[LLMConfig]]] = {}
-    ) -> None:
+    def log_new_wrapper(self, wrapper: OpenAIWrapper, init_args: dict[str, LLMConfig | list[LLMConfig]] = {}) -> None:
         """
         Log a new wrapper instance.
         """
@@ -229,7 +227,7 @@ class FileLogger(BaseLogger):
             | BedrockClient
         ),
         wrapper: OpenAIWrapper,
-        init_args: Dict[str, Any],
+        init_args: dict[str, Any],
     ) -> None:
         """
         Log a new client instance.
@@ -252,7 +250,7 @@ class FileLogger(BaseLogger):
         except Exception as e:
             self.logger.error(f"[file_logger] Failed to log event {e}")
 
-    def log_function_use(self, source: Union[str, Agent], function: F, args: Dict[str, Any], returns: Any) -> None:
+    def log_function_use(self, source: str | Agent, function: F, args: dict[str, Any], returns: Any) -> None:
         """
         Log a registered function(can be a tool) use from an agent or a string source.
         """

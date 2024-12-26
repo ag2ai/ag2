@@ -18,7 +18,7 @@ class CacheFactory:
         seed: Union[str, int],
         redis_url: Optional[str] = None,
         cache_path_root: str = ".cache",
-        cosmosdb_config: Optional[Dict[str, Any]] = None,
+        cosmosdb_config: Optional[dict[str, Any]] = None,
     ) -> AbstractCache:
         """
         Factory function for creating cache instances.

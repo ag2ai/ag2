@@ -1,40 +1,62 @@
 # Website
 
-This website is built using [Docusaurus 3](https://docusaurus.io/), a modern static website generator.
+This website is built using [Mintlify](https://mintlify.com/docs/quickstart), a modern website generator.
 
-## Prerequisites
+## How to get a notebook rendered on the website
 
-To build and test documentation locally, begin by downloading and installing [Node.js](https://nodejs.org/en/download/), and then installing [Yarn](https://classic.yarnpkg.com/en/).
-On Windows, you can install via the npm package manager (npm) which comes bundled with Node.js:
+See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-to-get-a-notebook-displayed-on-the-website) for instructions on how to get a notebook in the `notebook` directory rendered on the website.
 
-```console
-npm install --global yarn
+## Build documentation locally
+
+1. To build and test documentation locally, first install [Node.js](https://nodejs.org/en/download/). For example,
+
+```bash
+nvm install --lts
 ```
 
-## Installation
+Then, install the required packages by running the following commands:
+
+```bash
+pip install pydoc-markdown pyyaml termcolor nbclient
+```
+
+2. You also need to install quarto. Please click on the `Pre-release` tab from [this website](https://quarto.org/docs/download/) to download the latest version of `quarto` and install it. Ensure that the `quarto` version is `1.5.23` or higher.
+
+3. Finally, run the following commands to build and serve the documentation:
 
 ```console
-pip install pydoc-markdown pyyaml colored
 cd website
-yarn install
+python ./process_api_reference.py
+python ./process_notebooks.py render
+npm install
+npm run mintlify:dev
 ```
 
-### Install Quarto
+The last command starts a local development server and opens up a browser window.
+Most changes are reflected live without having to restart the server.
 
-`quarto` is used to render notebooks.
+## Build with Docker
 
-Install it [here](https://github.com/quarto-dev/quarto-cli/releases).
+To build and test documentation within a docker container, run the following commands from your project root directory:
 
-> Note: Ensure that your `quarto` version is `1.5.23` or higher.
+```bash
+docker build -f .devcontainer/dev/Dockerfile -t ag2ai_dev_img https://github.com/ag2ai/ag2.git#main
+```
 
-## Local Development
+Then start the container like so, this will log you in and ensure that Docker port 3000 is mapped to port 8081 on your local machine:
 
-Navigate to the `website` folder and run:
+```bash
+docker run -it -p 8081:3000 -v $(pwd):/home/autogen/ag2 ag2ai_dev_img bash
+```
+
+Once at the CLI in Docker run the following commands:
 
 ```console
-pydoc-markdown
+cd website
+python ./process_api_reference.py
 python ./process_notebooks.py render
-yarn start
+npm install
+npm run mintlify:dev
 ```
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+Once done you should be able to access the documentation at `http://127.0.0.1:8081`

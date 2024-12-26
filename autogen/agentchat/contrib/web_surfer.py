@@ -10,9 +10,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
-
-from typing_extensions import Annotated
+from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from ... import Agent, AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
@@ -36,17 +34,17 @@ class WebSurferAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[Union[str, List[str]]] = DEFAULT_PROMPT,
+        system_message: Optional[Union[str, list[str]]] = DEFAULT_PROMPT,
         description: Optional[str] = DEFAULT_DESCRIPTION,
-        is_termination_msg: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[Dict[str, Callable]] = None,
-        code_execution_config: Union[Dict, Literal[False]] = False,
-        llm_config: Optional[Union[Dict, Literal[False]]] = None,
-        summarizer_llm_config: Optional[Union[Dict, Literal[False]]] = None,
-        default_auto_reply: Optional[Union[str, Dict, None]] = "",
-        browser_config: Optional[Union[Dict, None]] = None,
+        function_map: Optional[dict[str, Callable]] = None,
+        code_execution_config: Union[dict, Literal[False]] = False,
+        llm_config: Optional[Union[dict, Literal[False]]] = None,
+        summarizer_llm_config: Optional[Union[dict, Literal[False]]] = None,
+        default_auto_reply: Optional[Union[str, dict, None]] = "",
+        browser_config: Optional[Union[dict, None]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -94,7 +92,7 @@ class WebSurferAgent(ConversableAgent):
         self.register_reply([Agent, None], ConversableAgent.generate_function_call_reply)
         self.register_reply([Agent, None], ConversableAgent.check_termination_and_human_reply)
 
-    def _create_summarizer_client(self, summarizer_llm_config: Dict[str, Any], llm_config: Dict[str, Any]) -> None:
+    def _create_summarizer_client(self, summarizer_llm_config: dict[str, Any], llm_config: dict[str, Any]) -> None:
         # If the summarizer_llm_config is None, we copy it from the llm_config
         if summarizer_llm_config is None:
             if llm_config is None:  # Nothing to copy
@@ -127,7 +125,7 @@ class WebSurferAgent(ConversableAgent):
         """Register the functions for the inner assistant and user proxy."""
 
         # Helper functions
-        def _browser_state() -> Tuple[str, str]:
+        def _browser_state() -> tuple[str, str]:
             header = f"Address: {self.browser.address}\n"
             if self.browser.page_title is not None:
                 header += f"Title: {self.browser.page_title}\n"
@@ -266,10 +264,10 @@ class WebSurferAgent(ConversableAgent):
 
     def generate_surfer_reply(
         self,
-        messages: Optional[List[Dict[str, str]]] = None,
+        messages: Optional[list[dict[str, str]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> Tuple[bool, Optional[Union[str, Dict[str, str]]]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, str]]]]:
         """Generate a reply using autogen.oai."""
         if messages is None:
             messages = self._oai_messages[sender]

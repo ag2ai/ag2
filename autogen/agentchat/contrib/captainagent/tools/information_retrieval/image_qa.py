@@ -39,7 +39,7 @@ def image_qa(image, question, ckpt="Salesforce/blip-vqa-base"):
     def text_processing(file_path):
         # Check the file extension
         if file_path.endswith(".txt"):
-            with open(file_path, "r") as file:
+            with open(file_path) as file:
                 content = file.read()
         else:
             # if the file is not .txt, then it is a string, directly return the string

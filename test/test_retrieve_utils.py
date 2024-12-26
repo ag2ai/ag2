@@ -226,7 +226,7 @@ class TestRetrieveUtils:
             dir_path="./website/docs",
             client=client,
             collection_name="autogen-docs",
-            custom_text_types=["txt", "md", "rtf", "rst"],
+            custom_text_types=["txt", "md", "rtf", "rst", "mdx"],
             get_or_create=True,
         )
         results = query_vector_db(

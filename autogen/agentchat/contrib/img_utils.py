@@ -107,7 +107,7 @@ def get_image_data(image_file: Union[str, Image.Image], use_b64=True) -> bytes:
         return content
 
 
-def llava_formatter(prompt: str, order_image_tokens: bool = False) -> Tuple[str, List[str]]:
+def llava_formatter(prompt: str, order_image_tokens: bool = False) -> tuple[str, list[str]]:
     """
     Formats the input prompt by replacing image tags and returns the new prompt along with image locations.
 
@@ -189,7 +189,7 @@ def convert_base64_to_data_uri(base64_image):
     return data_uri
 
 
-def gpt4v_formatter(prompt: str, img_format: str = "uri") -> List[Union[str, dict]]:
+def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dict]]:
     """
     Formats the input prompt by replacing image tags and returns a list of text and images.
 
@@ -274,7 +274,7 @@ def _to_pil(data: str) -> Image.Image:
     return Image.open(BytesIO(base64.b64decode(data)))
 
 
-def message_formatter_pil_to_b64(messages: List[Dict]) -> List[Dict]:
+def message_formatter_pil_to_b64(messages: list[dict]) -> list[dict]:
     """
     Converts the PIL image URLs in the messages to base64 encoded data URIs.
 

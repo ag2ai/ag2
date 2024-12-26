@@ -169,7 +169,7 @@ class ChromaVectorDB(VectorDB):
             else:
                 collection.add(**collection_kwargs)
 
-    def insert_docs(self, docs: List[Document], collection_name: str = None, upsert: bool = False) -> None:
+    def insert_docs(self, docs: list[Document], collection_name: str = None, upsert: bool = False) -> None:
         """
         Insert documents into the collection of the vector database.
 
@@ -204,7 +204,7 @@ class ChromaVectorDB(VectorDB):
             metadatas = [doc.get("metadata") for doc in docs]
         self._batch_insert(collection, embeddings, ids, metadatas, documents, upsert)
 
-    def update_docs(self, docs: List[Document], collection_name: str = None) -> None:
+    def update_docs(self, docs: list[Document], collection_name: str = None) -> None:
         """
         Update documents in the collection of the vector database.
 
@@ -217,7 +217,7 @@ class ChromaVectorDB(VectorDB):
         """
         self.insert_docs(docs, collection_name, upsert=True)
 
-    def delete_docs(self, ids: List[ItemID], collection_name: str = None, **kwargs) -> None:
+    def delete_docs(self, ids: list[ItemID], collection_name: str = None, **kwargs) -> None:
         """
         Delete documents from the collection of the vector database.
 
@@ -234,7 +234,7 @@ class ChromaVectorDB(VectorDB):
 
     def retrieve_docs(
         self,
-        queries: List[str],
+        queries: list[str],
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
@@ -269,7 +269,7 @@ class ChromaVectorDB(VectorDB):
         return results
 
     @staticmethod
-    def _chroma_get_results_to_list_documents(data_dict) -> List[Document]:
+    def _chroma_get_results_to_list_documents(data_dict) -> list[Document]:
         """Converts a dictionary with list values to a list of Document.
 
         Args:
@@ -305,8 +305,8 @@ class ChromaVectorDB(VectorDB):
         return results
 
     def get_docs_by_ids(
-        self, ids: List[ItemID] = None, collection_name: str = None, include=None, **kwargs
-    ) -> List[Document]:
+        self, ids: list[ItemID] = None, collection_name: str = None, include=None, **kwargs
+    ) -> list[Document]:
         """
         Retrieve documents from the collection of the vector database based on the ids.
 

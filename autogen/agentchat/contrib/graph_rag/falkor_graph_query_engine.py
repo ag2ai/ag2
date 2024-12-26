@@ -88,7 +88,7 @@ class FalkorGraphQueryEngine:
         else:
             raise ValueError(f"Knowledge graph '{self.name}' does not exist")
 
-    def init_db(self, input_doc: List[Document]):
+    def init_db(self, input_doc: list[Document]):
         """
         Build the knowledge graph with input documents.
         """
@@ -124,7 +124,7 @@ class FalkorGraphQueryEngine:
         else:
             raise ValueError("No input documents could be loaded.")
 
-    def add_records(self, new_records: List) -> bool:
+    def add_records(self, new_records: list) -> bool:
         raise NotImplementedError("This method is not supported by FalkorDB SDK yet.")
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
@@ -168,12 +168,12 @@ class FalkorGraphQueryEngine:
         Save graph ontology to a separate table with {graph_name}_ontology
         """
         if self.ontology_table_name in self.falkordb.list_graphs():
-            raise ValueError("Knowledge graph {} is already created.".format(self.name))
+            raise ValueError(f"Knowledge graph {self.name} is already created.")
         graph = self.__get_ontology_storage_graph()
         ontology.save_to_graph(graph)
 
     def _load_ontology_from_db(self) -> Ontology:
         if self.ontology_table_name not in self.falkordb.list_graphs():
-            raise ValueError("Knowledge graph {} has not been created.".format(self.name))
+            raise ValueError(f"Knowledge graph {self.name} has not been created.")
         graph = self.__get_ontology_storage_graph()
         return Ontology.from_graph(graph)
