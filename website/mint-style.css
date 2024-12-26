@@ -248,6 +248,9 @@ a.colab-badge > img, a.github-badge  > img {
 /* Examples page Gallery section ends */
 
 /* Blog page section starts */
+.blog-authors {
+  margin: 1rem 0;
+}
 .blog-authors .px-6.py-5{
   padding:0.35rem 0;
 }
