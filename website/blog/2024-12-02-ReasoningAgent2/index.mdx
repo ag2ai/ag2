@@ -77,7 +77,7 @@ tags: [LLM, GPT, research]
 * ReasoningAgent explores multiple reasoning paths in parallel and uses a grader agent to evaluate and select the most promising paths.
 * The exploration trajectory and thought tree can be saved locally for further analysis. These logs can even be saved as SFT dataset and preference dataset for DPO and PPO training.
 
-![Tree of Thoughts](img/reasoningagent_1.png)
+![Tree of Thoughts](img/reasoningagent_1.webp)
 
 ## Introduction
 
@@ -106,7 +106,7 @@ The process works as follows:
 3. Beam search selects the top-k paths based on these scores
 4. The process repeats until a solution is found or maximum depth is reached
 
-![Beam Search](img/reasoningagent_2.png)
+![Beam Search](img/reasoningagent_2.webp)
 
 ## O1-Style Reasoning with Beam Size 1
 
@@ -321,7 +321,7 @@ The implementation is flexible and can be customized for different types of prob
 ## For Further Reading
 
 * [Documentation about ReasoningAgent](/docs/reference/agentchat/contrib/reasoning_agent)
-* [Example notebook](https://docs.ag2.ai/notebooks/agentchat_reasoning_agent/)
+* [Example notebook](https://docs.ag2.ai/notebooks/agentchat_reasoning_agent)
 * [The Original research paper about Tree of Thoughts](https://arxiv.org/abs/2305.10601) from Google DeepMind and Princeton University.
 
 *Do you have interesting use cases for ReasoningAgent? Would you like to see more features or improvements? Please join our [Discord](https://discord.com/invite/pAbnFJrkgZ) server for discussion.*

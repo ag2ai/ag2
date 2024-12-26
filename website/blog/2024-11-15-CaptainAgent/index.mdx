@@ -75,16 +75,16 @@ tags: [LLM, GPT, AutoBuild]
 - We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://docs.ag2.ai/docs/tutorial/conversation-patterns#nested-chats) conversation pattern in AG2.
 - CaptainAgent supports all types of `ConversableAgents` implemented in AG2.
 
-![Illustration of how CaptainAgent build a team](img/overall.png)
+![Illustration of how CaptainAgent build a team](img/overall.webp)
 
 # Introduction
 
 Given an ad-hoc task, dynamically assembling a group of agents capable of effectively solving the problem is a complex challenge. In many cases, we manually design and select the agents involved. In this blog, we introduce **CaptainAgent**, an intelligent agent that can autonomously assemble a team of agents tailored to meet diverse and complex task requirements.
 CaptainAgent iterates over the following two steps until the problem is successfully solved.
 - (**Step 1**) CaptainAgent will break down the task, recommend several roles needed for each subtask, and then create a team of agents accordingly. Each agent in the team is either generated from scratch or retrieved and selected from an agent library if provided. Each of them will also be equipped with predefined tools retrieved from a tool library if provided.
-![Building workflow](img/build.png)
+![Building workflow](img/build.webp)
 - (**Step 2**) For each subtask, the corresponding team of agents will jointly solve it. Once it's done, a summarization and reflection step will be triggered to generate a report based on the multi-agent conversation history. Based on the report, CaptainAgent will decide whether to adjust the subtasks and corresponding team (go to Step 1) or to terminate and output the results.
-![Building workflow](img/chat.png)
+![Building workflow](img/chat.webp)
 
 The design of CaptainAgent allows it to leverage agents and tools from a pre-specified agent library and tool library. In the following section, we demonstrate how to use CaptainAgent with or without the provided library.
 
@@ -156,7 +156,7 @@ result = user_proxy.initiate_chat(captain_agent, message=query)
 # Further Reading
 For a detailed description of how to configure the CaptainAgent, please refer to
 - [document](https://docs.ag2.ai/docs/topics/captainagent/agent_library).
-- [Notebook example](https://docs.ag2.ai/notebooks/agentchat_captainagent/)
+- [Notebook example](https://docs.ag2.ai/notebooks/agentchat_captainagent)
 
 Please also refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
 
