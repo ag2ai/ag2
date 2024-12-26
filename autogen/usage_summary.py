@@ -1,6 +1,11 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel
+
 
 class ModelUsageSummary(BaseModel):
     model: str
@@ -9,9 +14,11 @@ class ModelUsageSummary(BaseModel):
     prompt_tokens: int
     total_tokens: int
 
+
 class ActualUsageSummary(BaseModel):
     usages: Optional[list[ModelUsageSummary]] = None
     total_cost: Optional[float] = None
+
 
 class TotalUsageSummary(BaseModel):
     usages: Optional[list[ModelUsageSummary]] = None
@@ -20,12 +27,18 @@ class TotalUsageSummary(BaseModel):
 
 Mode = Literal["both", "total", "actual"]
 
+
 class UsageSummary(BaseModel):
     actual: ActualUsageSummary
     total: TotalUsageSummary
     mode: Mode
 
-    def _print_usage(self, usage_summary: Union[ActualUsageSummary, TotalUsageSummary], usage_type: str = "total", f: Optional[Callable[..., Any]] = None) -> None:
+    def _print_usage(
+        self,
+        usage_summary: Union[ActualUsageSummary, TotalUsageSummary],
+        usage_type: str = "total",
+        f: Optional[Callable[..., Any]] = None,
+    ) -> None:
         f = f or print
         word_from_type = "including" if usage_type == "total" else "excluding"
         if usage_summary.usages is None or len(usage_summary.usages) == 0:
@@ -33,7 +46,7 @@ class UsageSummary(BaseModel):
             return
 
         f(f"Usage summary {word_from_type} cached usage: ", flush=True)
-        f(f"Total cost: {round(usage_summary.total_cost, 5)}", flush=True)
+        f(f"Total cost: {round(usage_summary.total_cost, 5)}", flush=True)  # type: ignore [arg-type]
 
         for usage in usage_summary.usages:
             f(
@@ -67,20 +80,18 @@ class UsageSummary(BaseModel):
             raise ValueError(f'Invalid mode: {self.mode}, choose from "actual", "total", ["actual", "total"]')
         f("-" * 100, flush=True)
 
-    
 
 def _change_usage_summary_format(
-        actual_usage_summary: Optional[dict[str, Any]] = None, 
-        total_usage_summary: Optional[dict[str, Any]] = None
-    ) -> dict[str, dict[str, Any]]:
-    summary = {}
-    
+    actual_usage_summary: Optional[dict[str, Any]] = None, total_usage_summary: Optional[dict[str, Any]] = None
+) -> dict[str, dict[str, Any]]:
+    summary: dict[str, Any] = {}
+
     for usage_type, usage_summary in {"actual": actual_usage_summary, "total": total_usage_summary}.items():
         if usage_summary is None:
             summary[usage_type] = {"usages": None, "total_cost": None}
             continue
-        
-        usage_summary_altered_format = {"usages": []}
+
+        usage_summary_altered_format: dict[str, list[dict[str, Any]]] = {"usages": []}
         for k, v in usage_summary.items():
             if isinstance(k, str) and isinstance(v, dict):
                 current_usage = {key: value for key, value in v.items()}
@@ -91,13 +102,13 @@ def _change_usage_summary_format(
         summary[usage_type] = usage_summary_altered_format
 
     return summary
-    
+
 
 def create_usage_summary_model(
-        actual_usage_summary: Optional[dict[str, Any]] = None, 
-        total_usage_summary: Optional[dict[str, Any]] = None,
-        mode: Mode = "both"
-    ) -> UsageSummary:
+    actual_usage_summary: Optional[dict[str, Any]] = None,
+    total_usage_summary: Optional[dict[str, Any]] = None,
+    mode: Mode = "both",
+) -> UsageSummary:
     # print(f"{actual_usage_summary=}")
     # print(f"{total_usage_summary=}")
 
