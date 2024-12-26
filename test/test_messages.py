@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any, Optional
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -63,21 +63,21 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) ->
     mock = MagicMock()
     actual.print(f=mock)
 
+    # print(mock.call_args_list)
+
     expected_call_args_list = [
-        (("\x1b[33msender\x1b[0m (to receiver):\n",), {"flush": True}),
-        (("\x1b[32m***** Response from calling tool (call_rJfVpHU3MXuPRR2OAdssVqUV) *****\x1b[0m",), {"flush": True}),
-        (("Timer is done!",), {"flush": True}),
-        (("\x1b[32m**********************************************************************\x1b[0m",), {"flush": True}),
-        (
-            ("\n", "--------------------------------------------------------------------------------"),
-            {"flush": True, "sep": ""},
+        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[32m***** Response from calling tool (call_rJfVpHU3MXuPRR2OAdssVqUV) *****\x1b[0m", flush=True),
+        call("Timer is done!", flush=True),
+        call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
+        call(
+            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
         ),
-        (("\x1b[32m***** Response from calling tool (call_zFZVYovdsklFYgqxttcOHwlr) *****\x1b[0m",), {"flush": True}),
-        (("Stopwatch is done!",), {"flush": True}),
-        (("\x1b[32m**********************************************************************\x1b[0m",), {"flush": True}),
-        (
-            ("\n", "--------------------------------------------------------------------------------"),
-            {"flush": True, "sep": ""},
+        call("\x1b[32m***** Response from calling tool (call_zFZVYovdsklFYgqxttcOHwlr) *****\x1b[0m", flush=True),
+        call("Stopwatch is done!", flush=True),
+        call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
+        call(
+            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
         ),
     ]
 
@@ -105,14 +105,15 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent,
     mock = MagicMock()
     actual.print(f=mock)
 
+    # print(mock.call_args_list)
+
     expected_call_args_list = [
-        (("\x1b[33msender\x1b[0m (to receiver):\n",), {"flush": True}),
-        (("\x1b[32m***** Response from calling function (get_random_number) *****\x1b[0m",), {"flush": True}),
-        ((message["content"],), {"flush": True}),
-        (("\x1b[32m**************************************************************\x1b[0m",), {"flush": True}),
-        (
-            ("\n", "--------------------------------------------------------------------------------"),
-            {"flush": True, "sep": ""},
+        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[32m***** Response from calling function (get_random_number) *****\x1b[0m", flush=True),
+        call(message["content"], flush=True),
+        call("\x1b[32m**************************************************************\x1b[0m", flush=True),
+        call(
+            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
         ),
     ]
 
@@ -137,15 +138,16 @@ def test_function_call(sender: ConversableAgent, receiver: ConversableAgent) -> 
     mock = MagicMock()
     actual.print(f=mock)
 
+    # print(mock.call_args_list)
+
     expected_call_args_list = [
-        (("\x1b[33msender\x1b[0m (to receiver):\n",), {"flush": True}),
-        (("Let's play a game.",), {"flush": True}),
-        (("\x1b[32m***** Suggested function call: get_random_number *****\x1b[0m",), {"flush": True}),
-        (("Arguments: \n", "{}"), {"flush": True, "sep": ""}),
-        (("\x1b[32m******************************************************\x1b[0m",), {"flush": True}),
-        (
-            ("\n", "--------------------------------------------------------------------------------"),
-            {"flush": True, "sep": ""},
+        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("Let's play a game.", flush=True),
+        call("\x1b[32m***** Suggested function call: get_random_number *****\x1b[0m", flush=True),
+        call("Arguments: \n", "{}", flush=True, sep=""),
+        call("\x1b[32m******************************************************\x1b[0m", flush=True),
+        call(
+            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
         ),
     ]
 
@@ -206,23 +208,18 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: 
     mock = MagicMock()
     actual.print(f=mock)
 
+    # print(mock.call_args_list)
+
     expected_call_args_list = [
-        (("\x1b[33msender\x1b[0m (to receiver):\n",), {"flush": True}),
-        (("\x1b[32m***** Suggested tool call (call_rJfVpHU3MXuPRR2OAdssVqUV): timer *****\x1b[0m",), {"flush": True}),
-        (("Arguments: \n", '{"num_seconds": "1"}'), {"flush": True, "sep": ""}),
-        (("\x1b[32m**********************************************************************\x1b[0m",), {"flush": True}),
-        (
-            ("\x1b[32m***** Suggested tool call (call_zFZVYovdsklFYgqxttcOHwlr): stopwatch *****\x1b[0m",),
-            {"flush": True},
-        ),
-        (("Arguments: \n", '{"num_seconds": "2"}'), {"flush": True, "sep": ""}),
-        (
-            ("\x1b[32m**************************************************************************\x1b[0m",),
-            {"flush": True},
-        ),
-        (
-            ("\n", "--------------------------------------------------------------------------------"),
-            {"flush": True, "sep": ""},
+        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[32m***** Suggested tool call (call_rJfVpHU3MXuPRR2OAdssVqUV): timer *****\x1b[0m", flush=True),
+        call("Arguments: \n", '{"num_seconds": "1"}', flush=True, sep=""),
+        call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
+        call("\x1b[32m***** Suggested tool call (call_zFZVYovdsklFYgqxttcOHwlr): stopwatch *****\x1b[0m", flush=True),
+        call("Arguments: \n", '{"num_seconds": "2"}', flush=True, sep=""),
+        call("\x1b[32m**************************************************************************\x1b[0m", flush=True),
+        call(
+            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
         ),
     ]
 
@@ -243,12 +240,13 @@ def test_context_message(sender: ConversableAgent, receiver: ConversableAgent) -
     mock = MagicMock()
     actual.print(f=mock)
 
+    # print(mock.call_args_list)
+
     expected_call_args_list = [
-        (("\x1b[33msender\x1b[0m (to receiver):\n",), {"flush": True}),
-        (("hello {name}",), {"flush": True}),
-        (
-            ("\n", "--------------------------------------------------------------------------------"),
-            {"flush": True, "sep": ""},
+        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("hello {name}", flush=True),
+        call(
+            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
         ),
     ]
 
@@ -274,12 +272,13 @@ def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableA
     mock = MagicMock()
     actual.print(f=mock)
 
+    # print(mock.call_args_list)
+
     expected_call_args_list = [
-        (("\x1b[33msender\x1b[0m (to receiver):\n",), {"flush": True}),
-        (("hello there",), {"flush": True}),
-        (
-            ("\n", "--------------------------------------------------------------------------------"),
-            {"flush": True, "sep": ""},
+        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("hello there", flush=True),
+        call(
+            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
         ),
     ]
 
