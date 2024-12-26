@@ -1132,62 +1132,6 @@ class OpenAIWrapper:
         usage_summary = create_usage_summary_model(self.actual_usage_summary, self.total_usage_summary, mode=mode)
         usage_summary.print(iostream.print)
 
-    # def print_usage_summary(self, mode: Union[str, list[str]] = ["actual", "total"]) -> None:
-    #     """Print the usage summary."""
-    #     iostream = IOStream.get_default()
-    #     iostream.print("Start of the usage summary", flush=True)
-
-    #     def print_usage(usage_summary: Optional[dict[str, Any]], usage_type: str = "total") -> None:
-    #         word_from_type = "including" if usage_type == "total" else "excluding"
-    #         if usage_summary is None:
-    #             iostream.print("No actual cost incurred (all completions are using cache).", flush=True)
-    #             return
-
-    #         iostream.print(f"Usage summary {word_from_type} cached usage: ", flush=True)
-    #         iostream.print(f"Total cost: {round(usage_summary['total_cost'], 5)}", flush=True)
-    #         for model, counts in usage_summary.items():
-    #             if model == "total_cost":
-    #                 continue  #
-    #             iostream.print(
-    #                 f"* Model '{model}': cost: {round(counts['cost'], 5)}, prompt_tokens: {counts['prompt_tokens']}, completion_tokens: {counts['completion_tokens']}, total_tokens: {counts['total_tokens']}",
-    #                 flush=True,
-    #             )
-
-    #     if self.total_usage_summary is None:
-    #         iostream.print('No usage summary. Please call "create" first.', flush=True)
-    #         return
-
-    #     if isinstance(mode, list):
-    #         if len(mode) == 0 or len(mode) > 2:
-    #             raise ValueError(f'Invalid mode: {mode}, choose from "actual", "total", ["actual", "total"]')
-    #         if "actual" in mode and "total" in mode:
-    #             mode = "both"
-    #         elif "actual" in mode:
-    #             mode = "actual"
-    #         elif "total" in mode:
-    #             mode = "total"
-
-    #     iostream.print("-" * 100, flush=True)
-    #     if mode == "both":
-    #         print_usage(self.actual_usage_summary, "actual")
-    #         iostream.print()
-    #         if self.total_usage_summary != self.actual_usage_summary:
-    #             print_usage(self.total_usage_summary, "total")
-    #         else:
-    #             iostream.print(
-    #                 "All completions are non-cached: the total cost with cached completions is the same as actual cost.",
-    #                 flush=True,
-    #             )
-    #     elif mode == "total":
-    #         print_usage(self.total_usage_summary, "total")
-    #     elif mode == "actual":
-    #         print_usage(self.actual_usage_summary, "actual")
-    #     else:
-    #         raise ValueError(f'Invalid mode: {mode}, choose from "actual", "total", ["actual", "total"]')
-    #     iostream.print("-" * 100, flush=True)
-    #     iostream.print("End of the usage summary", flush=True)
-    #     # model = create_usage_summary_model(self.actual_usage_summary, self.total_usage_summary)
-
     def clear_usage_summary(self) -> None:
         """Clear the usage summary."""
         self.total_usage_summary = None
