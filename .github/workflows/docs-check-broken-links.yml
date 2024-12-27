@@ -16,8 +16,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Sleep for 5 minutes
-        run: sleep 300
+      - uses: actions/setup-go@v5
+        # with:
+        #   go-version: '^1.13.1' # The Go version to download (if necessary) and use.
+        run: go install github.com/raviqqe/muffet/v2@latest
+
+      # - name: Sleep for 5 minutes
+      #   run: sleep 300
 
       - name: Check links using container
         run: ./scripts/broken-links-check.sh
