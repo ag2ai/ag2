@@ -1,10 +1,7 @@
 name: Check docs for broken links
 
 on:
-  workflow_run:
-    types:
-      - completed
-    workflows: ["mintlify docs"]
+  workflow_call:
 
 jobs:
   check-broken-link:

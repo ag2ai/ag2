@@ -117,3 +117,8 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: mintlify-pages
           publish_dir: ./website/temp_website
+
+trigger-link-check:
+    needs: mintlify-release
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/docs-check-broken-links.yml
