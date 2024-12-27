@@ -63,7 +63,7 @@ Reply "TERMINATE" in the end when everything is done.
                 default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
                 The limit only plays a role when human_input_mode is not "ALWAYS".
             **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](conversable_agent#__init__).
+                [ConversableAgent](conversable_agent#init).
         """
         super().__init__(
             name,

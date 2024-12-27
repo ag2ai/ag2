@@ -87,7 +87,7 @@ class UserProxyAgent(ConversableAgent):
             description (str): a short description of the agent. This description is used by other agents
                 (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
             **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](conversable_agent#__init__).
+                [ConversableAgent](conversable_agent#init).
         """
         super().__init__(
             name=name,

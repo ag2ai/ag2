@@ -14,7 +14,7 @@ from .neo4j_graph_query_engine import Neo4jGraphQueryEngine
 class Neo4jGraphCapability(GraphRagCapability):
     """
     The Neo4j graph capability integrates Neo4j Property graph into a graph rag agent.
-    Ref: https://neo4j.com/labs/genai-ecosystem/llamaindex/#_property_graph_constructing_modules/
+    Ref: https://neo4j.com/labs/genai-ecosystem/llamaindex/#_property_graph_constructing_modules
 
 
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
