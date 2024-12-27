@@ -430,9 +430,9 @@ def convert_callout_blocks(content: str) -> str:
         # Return the formatted HTML block.
         return f"""
 <div class="{ctype}">
-    <{mapped_type}>
-        {inner.strip()}
-    </{mapped_type}>
+<{mapped_type}>
+{inner.strip()}
+</{mapped_type}>
 </div>
 """
 
