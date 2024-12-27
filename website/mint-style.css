@@ -803,3 +803,11 @@ table {
 .codeblock-dark {
   border-radius: 0 !important;
 }
+
+p a {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
