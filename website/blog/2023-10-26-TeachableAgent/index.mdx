@@ -4,6 +4,23 @@ authors: rickyloynd-microsoft
 tags: [LLM, teach]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/rickyloynd-microsoft">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/rickyloynd-microsoft.png" />
+          </div>
+          <div>
+            <p class="name">Ricky Loynd</p>
+            <p>Senior Research Engineer at Microsoft</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 ![Teachable Agent Architecture](img/teachable-arch.png)
 
 **TL;DR:**
@@ -54,7 +71,7 @@ from autogen import ConversableAgent  # As an example
 
 ```python
 # Load LLM inference endpoints from an env variable or a file
-# See https://ag2ai.github.io/ag2/docs/FAQ#set-your-api-endpoints
+# See https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints
 # and OAI_CONFIG_LIST_sample
 filter_dict = {"model": ["gpt-4"]}  # GPT-3.5 is less reliable than GPT-4 at learning from user feedback.
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict=filter_dict)

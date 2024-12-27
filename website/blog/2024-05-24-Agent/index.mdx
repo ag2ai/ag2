@@ -4,6 +4,23 @@ authors: sonichi
 tags: [thoughts, interview notes]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://www.linkedin.com/in/chi-wang-autogen/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/sonichi.png" />
+          </div>
+          <div>
+            <p class="name">Chi Wang</p>
+            <p>Founder of AutoGen (now AG2) & FLAML</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 ![agents](img/agents.png)
 
 **TL;DR**
@@ -83,7 +100,7 @@ framework that allows easy experimentation of these different ways of combining 
 - [Tool use](/docs/tutorial/tool-use) and [code execution](/docs/tutorial/code-executors), as well as their [combination](/docs/topics/code-execution/user-defined-functions).
 - [Planning and task decomposition](/docs/topics/task_decomposition).
 - [Retrieve augmentation](/docs/topics/retrieval_augmentation).
-- Integrating multiple [models](/blog/2023/11/09/EcoAssistant), [APIs](/docs/topics/openai-assistant/gpt_assistant_agent), [modalities](/blog/2023/11/06/LMM-Agent) and [memories](/blog/2023/10/26/TeachableAgent).
+- Integrating multiple [models](/blog/2023-11-09-EcoAssistant/index), [APIs](/docs/topics/openai-assistant/gpt_assistant_agent), [modalities](/blog/2023-11-06-LMM-Agent/index) and [memories](/blog/2023-10-26-TeachableAgent/index).
 
 My own experience is that if people practice using multi-agents to solve a problem, they often reach a solution faster.
 I have high hopes that they can figure out a robust way of building a complex, multi-faceted single agent using this way.
@@ -129,7 +146,7 @@ Very complex multi-agent systems with leading frontier models are expensive, but
 Will using multiple agents always increase the cost, latency, and chance of failures, compared to using a single agent? It depends on how the multi-agent system is designed, and surprisingly, the answer can, actually, be the opposite.
 
 - Even if the performance of a single agent is good enough, you may also want to make this single agent teach some other relatively cheaper agent so that they can become
-better with low cost. [EcoAssistant](/blog/2023/11/09/EcoAssistant) is a good example of combining GPT-4 and GPT-3.5 agents to reduce the cost while improving the performance even compared to using a single GPT-4 agent.
+better with low cost. [EcoAssistant](/blog/2023-11-09-EcoAssistant/index) is a good example of combining GPT-4 and GPT-3.5 agents to reduce the cost while improving the performance even compared to using a single GPT-4 agent.
 - A recent use case reports that sometimes using multi-agents with a cheap model can outperform a single agent with an expensive model:
 
 > Our research group at Tufts University continues to make important improvements in addressing the challenges students face when transitioning from undergraduate to graduate-level courses, particularly in the Doctor of Physical Therapy program at the School of Medicine. With the ongoing support from the Data Intensive Studies Center (DISC) and our collaboration with Chi Wang's team at Microsoft, we are now leveraging StateFlow with Autogen to create even more effective assessments tailored to course content. This State-driven workflow approach complements our existing work using multiple agents in sequential chat, teachable agents, and round-robin style debate formats…
@@ -139,11 +156,11 @@ better with low cost. [EcoAssistant](/blog/2023/11/09/EcoAssistant) is a good ex
 > > Benjamin D Stern, MS, DPT, Assistant Professor, Doctor of Physical Therapy Program,
 > > Tufts University School of Medicine
 
-- [AutoDefense](/blog/2024/03/11/AutoDefense/Defending%20LLMs%20Against%20Jailbreak%20Attacks%20with%20AutoDefense) demonstrates that using multi-agents reduces the risk of suffering from jailbreak attacks.
+- [AutoDefense](/blog/2024-03-11-AutoDefense/index) demonstrates that using multi-agents reduces the risk of suffering from jailbreak attacks.
 
 There are certainly tradeoffs to make. The large design space of multi-agents offers these tradeoffs and opens up new opportunities for optimization.
 
-> Over a year since the debut of Ask AT&T, the generative AI platform to which we’ve onboarded over 80,000 users, AT&T has been enhancing its capabilities by incorporating 'AI Agents'. These agents, powered by the Autogen framework pioneered by Microsoft (https://docs.ag2.ai/blog/2023-12-01-AutoGenStudio/), are designed to tackle complicated workflows and tasks that traditional language models find challenging. To drive collaboration, AT&T is contributing back to the open-source project by introducing features that facilitate enhanced security and role-based access for various projects and data.
+> Over a year since the debut of Ask AT&T, the generative AI platform to which we’ve onboarded over 80,000 users, AT&T has been enhancing its capabilities by incorporating 'AI Agents'. These agents, powered by the Autogen framework pioneered by Microsoft (https://docs.ag2.ai/blog/2023-12-01-AutoGenStudio/index), are designed to tackle complicated workflows and tasks that traditional language models find challenging. To drive collaboration, AT&T is contributing back to the open-source project by introducing features that facilitate enhanced security and role-based access for various projects and data.
 >
 > > Andy Markus, Chief Data Officer at AT&T
 

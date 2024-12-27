@@ -4,6 +4,23 @@ authors: gagb
 tags: [openai-assistant]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://www.linkedin.com/in/gagan-bansal/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/gagb.png" />
+          </div>
+          <div>
+            <p class="name">Gagan Bansal</p>
+            <p>Senior Researcher at Microsoft Research</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 ![OpenAI Assistant](img/teaser.jpg)
 <p align="center"><em>AutoGen enables collaboration among multiple ChatGPTs for complex tasks.</em></p>
 
@@ -18,10 +35,10 @@ Checkout example notebooks for reference:
 
 
 ## Introduction
-Earlier last week, OpenAI introduced [GPTs](https://openai.com/blog/introducing-gpts), giving users ability to create custom ChatGPTs tailored for them.
+Earlier last week, OpenAI introduced [GPTs](https://openai.com/index/introducing-gpts), giving users ability to create custom ChatGPTs tailored for them.
 *But what if these individual GPTs could collaborate to do even more?*
 Fortunately, because of AutoGen, this is now a reality!
-AutoGen has been pioneering agents and supporting [multi-agent workflows](https://openreview.net/pdf?id=BAakY1hNKS) since earlier this year, and now (starting with version 0.2.0b5) we are introducing compatibility with the [Assistant API](https://openai.com/blog/introducing-gpts), which is currently in beta preview.
+AutoGen has been pioneering agents and supporting [multi-agent workflows](https://openreview.net/pdf?id=BAakY1hNKS) since earlier this year, and now (starting with version 0.2.0b5) we are introducing compatibility with the [Assistant API](https://openai.com/index/introducing-gpts), which is currently in beta preview.
 
 To accomplish this, we've added a new (experimental) agent called the `GPTAssistantAgent` that
 lets you seamlessly add these new OpenAI assistants into AutoGen-based multi-agent workflows.
@@ -111,7 +128,7 @@ Checkout more examples [here](https://github.com/ag2ai/ag2/tree/main/notebook).
 
 `GPTAssistantAgent` was made possible through collaboration with
 [@IANTHEREAL](https://github.com/IANTHEREAL),
-[Jiale Liu](https://leoljl.github.io),
+[Jiale Liu](https://github.com/LeoLjl),
 [Yiran Wu](https://github.com/yiranwu0),
 [Qingyun Wu](https://qingyun-wu.github.io/),
 [Chi Wang](https://github.com/sonichi), and many other AutoGen maintainers.

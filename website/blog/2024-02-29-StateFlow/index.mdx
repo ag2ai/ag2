@@ -4,6 +4,23 @@ authors: yiranwu
 tags: [LLM, research]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/yiranwu0">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/yiranwu0.png" />
+          </div>
+          <div>
+            <p class="name">Yiran Wu</p>
+            <p>PhD student at Pennsylvania State University</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 **TL;DR:** Introduce Stateflow, a task-solving paradigm that conceptualizes complex task-solving processes backed by LLMs as state machines.
 Introduce how to use GroupChat to realize such an idea with a customized speaker selection function.
 
@@ -30,7 +47,7 @@ For each step, we create a corresponding state. Also, we define an error state t
 In the figure, execution outcomes are indicated by red arrows for failures and green for successes.
 Transition to different states is based on specific rules. For example, at a successful "Submit" command, the model transits to the *End* state.
 When reaching a state, a sequence of output functions defined is executed (e.g., M_i -> E means to first call the model and then execute the SQL command).
-![Intercode Example](./img/intercode.png)
+![Intercode Example](./img/intercode.webp)
 
 
 ## Experiments
@@ -62,7 +79,7 @@ For both tasks, **StateFlow** achieves the best performance with the lowest cost
 
 
 ## Implement StateFlow With GroupChat
-We illustrate how to build **StateFlow** with GroupChat. Previous blog [FSM Group Chat](/blog/2024/02/11/FSM-GroupChat/)
+We illustrate how to build **StateFlow** with GroupChat. Previous blog [FSM Group Chat](/blog/2024-02-11-FSM-GroupChat/index)
 introduces a new feature of GroupChat that allows us to input a transition graph to constrain agent transitions.
 It requires us to use natural language to describe the transition conditions of the FSM in the agent's `description` parameter, and then use an LLM to take in the description and make decisions for the next agent.
 In this blog, we take advantage of a customized speaker selection function passed to the `speaker_selection_method` of the `GroupChat` object.
@@ -73,7 +90,7 @@ We present an example of how to build a state-oriented workflow using GroupChat.
 We define a custom speaker selection function to be passed into the `speaker_selection_method` parameter of the GroupChat.
 Here, the task is to retrieve research papers related to a given topic and create a markdown table for these papers.
 
-![StateFlow Example](./img/sf_example_1.png)
+![StateFlow Example](./img/sf_example_1.webp)
 
 
 We define the following agents:
@@ -150,5 +167,5 @@ When returning `None`, the group chat will terminate. Note that some of the tran
 * [StateFlow paper](https://arxiv.org/abs/2403.11322)
 * [StateFlow notebook](/notebooks/agentchat_groupchat_stateflow)
 * [GroupChat with Customized Speaker Selection notebook](/notebooks/agentchat_groupchat_customized)
-* [FSM Group Chat](/blog/2024/02/11/FSM-GroupChat/)
+* [FSM Group Chat](/blog/2024-02-11-FSM-GroupChat/index)
 * [Documentation about `autogen`](/docs/Getting-Started)

@@ -163,7 +163,7 @@ Note that the previous experts will forget everything after you obtain the respo
             agent_lib (str): the path or a JSON file of the agent library for retrieving the nested chat instantiated by CaptainAgent.
             tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.
             nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
-                A full list of keys and their functionalities can be found in [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
+                A full list of keys and their functionalities can be found in [docs](https://docs.ag2.ai/docs/topics/captainagent/configurations).
             agent_config_save_path (str): the path to save the generated or retrieved agent configuration.
             **kwargs (dict): Please refer to other kwargs in
                 [ConversableAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py#L74).

@@ -6,7 +6,35 @@ authors:
 tags: [AutoGen]
 ---
 
-![FSM Group Chat](img/teaser.jpg)
+<div class="blog-authors">
+  <p class="authors">Authors:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/joshkyh/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/joshkyh.png" />
+          </div>
+          <div>
+            <p class="name">Joshua Kim</p>
+            <p>AI Freelancer at SpectData</p>
+          </div>
+        </div>
+    </Card>
+    <Card href="https://github.com/freedeaths/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/freedeaths.png" />
+          </div>
+          <div>
+            <p class="name">Yishen Sun</p>
+            <p>Data Scientist at PingCAP LAB</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
+![FSM Group Chat](img/teaser.webp)
 <p align="center"><em>Finite State Machine (FSM) Group Chat allows the user to constrain agent transitions.</em></p>
 
 
@@ -31,7 +59,7 @@ We have added two parameters `allowed_or_disallowed_speaker_transitions` and `sp
 
 A quick demonstration of how to initiate a FSM-based `GroupChat` in the `AutoGen` framework. In this demonstration, if we consider each agent as a state, and each agent speaks according to certain conditions. For example, User always initiates the task first, followed by Planner creating a plan. Then Engineer and Executor work alternately, with Critic intervening when necessary, and after Critic, only Planner should revise additional plans. Each state can only exist at a time, and there are transition conditions between states. Therefore, GroupChat can be well abstracted as a Finite-State Machine (FSM).
 
-![visualization](img/FSM_logic.png)
+![visualization](img/FSM_logic.webp)
 
 
 ### Usage
@@ -146,7 +174,7 @@ pip install autogen[graph]
     1. **The graph here and the transition conditions mentioned above together form a complete FSM. Both are essential and cannot be missing.**
     2. You can visualize it as you wish, which is shown as follows
 
-    ![visualization](img/FSM_of_multi-agents.png)
+    ![visualization](img/FSM_of_multi-agents.webp)
 
 6. Define a `GroupChat` and a `GroupChatManager`
 
@@ -285,4 +313,4 @@ pip install autogen[graph]
     ```
 
 ## Notebook examples
-More examples can be found in the [notebook](https://docs.ag2.ai/notebooks/agentchat_groupchat_finite_state_machine/). The notebook includes more examples of possible transition paths such as (1) hub and spoke, (2) sequential team operations, and (3) think aloud and debate. It also uses the function `visualize_speaker_transitions_dict` from `autogen.graph_utils` to visualize the various graphs.
+More examples can be found in the [notebook](https://docs.ag2.ai/notebooks/agentchat_groupchat_finite_state_machine). The notebook includes more examples of possible transition paths such as (1) hub and spoke, (2) sequential team operations, and (3) think aloud and debate. It also uses the function `visualize_speaker_transitions_dict` from `autogen.graph_utils` to visualize the various graphs.
