@@ -5,13 +5,11 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-# import asyncio
-import json
 import logging
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from asyncer import TaskGroup, asyncify, create_task_group
-from openai import AsyncOpenAI
+from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
@@ -21,6 +19,8 @@ if TYPE_CHECKING:
     from .function_observer import FunctionObserver
     from .realtime_agent import RealtimeAgent
     from .realtime_observer import RealtimeObserver
+
+__all__ = ["OpenAIRealtimeClient", "Role"]
 
 logger = logging.getLogger(__name__)
 
@@ -45,21 +45,30 @@ class OpenAIRealtimeClient:
         self._agent = agent
         self._observers: list["RealtimeObserver"] = []
         self._connection: Optional[AsyncRealtimeConnection] = None
-        self.client = AsyncOpenAI()
         self.register(audio_adapter)
         self.register(function_observer)
 
         # LLM config
         llm_config = self._agent.llm_config
-
-        config: dict[str, Any] = llm_config["config_list"][0]  # type: ignore[index]
+        config = agent.config
 
         self.model: str = config["model"]
-        self.temperature: float = llm_config["temperature"]  # type: ignore[index]
-        self.api_key: str = config["api_key"]
+        self.temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
 
         # create a task group to manage the tasks
-        self.tg: Optional[TaskGroup] = None
+        self._tg: Optional[TaskGroup] = None
+
+        self.client = AsyncOpenAI(
+            api_key=config.get("api_key", None),
+            organization=config.get("organization", None),
+            project=config.get("project", None),
+            base_url=config.get("base_url", None),
+            websocket_base_url=config.get("websocket_base_url", None),
+            timeout=config.get("timeout", NOT_GIVEN),
+            max_retries=config.get("max_retries", DEFAULT_MAX_RETRIES),
+            default_headers=config.get("default_headers", None),
+            default_query=config.get("default_query", None),
+        )
 
     @property
     def connection(self) -> AsyncRealtimeConnection:
@@ -107,7 +116,6 @@ class OpenAIRealtimeClient:
             role (str): The role of the message.
             text (str): The text of the message.
         """
-
         if self.connection is None:
             raise RuntimeError("OpenAI WebSocket is not initialized")
 
@@ -146,7 +154,7 @@ class OpenAIRealtimeClient:
             "voice": self._agent.voice,
             "instructions": self._agent.system_message,
             "modalities": ["audio", "text"],
-            "temperature": 0.8,
+            "temperature": self.temperature,
         }
         await self.session_update(session_options=session_update)
 
@@ -173,26 +181,23 @@ class OpenAIRealtimeClient:
         """Run the client."""
         async with self.client.beta.realtime.connect(
             model=self.model,
-            extra_headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "OpenAI-Beta": "realtime=v1",
-            },
         ) as connection:
             self._connection = connection
 
             await self.initialize_session()
+            # await self.send_text(role="user", text="Hi!")
             async with create_task_group() as tg:
-                self.tg = tg
-                self.tg.soonify(self._read_from_client)()
+                self._tg = tg
+                self._tg.soonify(self._read_from_client)()
                 for observer in self._observers:
-                    self.tg.soonify(observer.run)()
+                    self._tg.soonify(observer.run)()
 
                 initial_agent = self._agent._initial_agent
                 agents = self._agent._agents
                 user_agent = self._agent
 
                 if (initial_agent and agents) and self._agent._start_swarm_chat:
-                    self.tg.soonify(asyncify(initiate_swarm_chat))(
+                    self._tg.soonify(asyncify(initiate_swarm_chat))(
                         initial_agent=initial_agent,
                         agents=agents,
                         user_agent=user_agent,  # type: ignore[arg-type]

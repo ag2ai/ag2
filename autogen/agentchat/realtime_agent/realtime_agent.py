@@ -72,13 +72,13 @@ class RealtimeAgent(ConversableAgent):
             human_input_mode="ALWAYS",
             function_map=None,
             code_execution_config=False,
+            llm_config=llm_config,
             default_auto_reply="",
             description=None,
             chat_messages=None,
             silent=None,
             context_variables=None,
         )
-        self.llm_config = llm_config  # type: ignore[assignment]
         self._client = OpenAIRealtimeClient(self, audio_adapter, FunctionObserver(self))
         self.voice = voice
         self.realtime_functions: dict[str, tuple[dict[str, Any], Callable[..., Any]]] = {}
@@ -93,6 +93,20 @@ class RealtimeAgent(ConversableAgent):
         self._start_swarm_chat = False
         self._initial_agent: Optional[SwarmAgent] = None
         self._agents: Optional[list[SwarmAgent]] = None
+
+    @property
+    def config(self) -> dict[str, Any]:
+        """Get the config for the agent."""
+
+        llm_config = self.llm_config
+        if not llm_config:
+            raise RuntimeError("LLM config (None) is not set up for the agent.")
+
+        config_list: list[dict[str, Any]] = llm_config.get("config_list")  # type: ignore[assignment]
+        if not config_list:
+            raise RuntimeError("LLM config (empty list) is not set up for the agent.")
+
+        return config_list[0]
 
     def register_swarm(
         self,
