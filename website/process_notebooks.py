@@ -379,12 +379,12 @@ def convert_callout_blocks(content: str) -> str:
         callout_type = match.group(1)
         inner_content = match.group(2).strip()
         return f"""
-        <div class="{callout_type}">
-            <{callout_types[callout_type]}>
-                {inner_content}
-            </{callout_types[callout_type]}>
-        </div>
-        """
+<div class="{callout_type}">
+    <{callout_types[callout_type]}>
+      {inner_content}
+   </{callout_types[callout_type]}>
+</div>
+"""
 
     pattern = re.compile(
         # Matches optional opening fences:
