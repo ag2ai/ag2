@@ -73,7 +73,7 @@ class FunctionObserver(RealtimeObserver):
 
             await self.client.function_result(call_id, result)
 
-    async def run(self) -> None:
+    async def _run(self) -> None:
         """Run the observer.
 
         Initialize the session with the OpenAI Realtime API.

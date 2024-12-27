@@ -24,7 +24,7 @@ class RealtimeObserver(ABC):
     def __init__(self) -> None:
         self._client: Optional["OpenAIRealtimeClient"] = None
         self._shutdown_state: RunningState = "not started"
-        self._shutdown_event = anyio.Event()
+        self._run_tg: Optional[anyio.abc.TaskGroup] = None
 
     @property
     def running_state(self) -> RunningState:
@@ -45,21 +45,20 @@ class RealtimeObserver(ABC):
 
     def request_shutdown(self) -> None:
         """Shutdown the observer."""
-        self._shutdown_event.set()
+        if self._shutdown_state != "running":
+            raise RuntimeError("Observer is not running.")
+        if self._run_tg is None:
+            raise RuntimeError("Task group is not initialized.")
 
-    async def _shutdown_watcher(self) -> None:
-        await self._shutdown_event.wait()
         self._shutdown_state = "shutdown requested"
+        self._run_tg.cancel_scope.cancel()
 
     async def run(self) -> None:
         try:
-            self._shutdown_state = "running"
-            self._shutdown_event = anyio.Event()
-
             async with anyio.create_task_group() as tg:
-                tg.start_soon(self._shutdown_watcher)
-                await self._run()
-
+                self._run_tg = tg
+                self._shutdown_state = "running"
+                tg.start_soon(self._run)
         finally:
             self._shutdown_state = "shutdown completed"
 

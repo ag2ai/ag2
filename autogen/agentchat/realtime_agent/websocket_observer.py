@@ -104,31 +104,24 @@ class WebsocketAudioAdapter(RealtimeObserver):
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
-    async def run(self) -> None:
+    async def _run(self) -> None:
 
-        try:
-            self._shutdown_state = "not started"
+        await self.initialize_session()
 
-            await self.initialize_session()
-
-            async for message in self.websocket.iter_text():
-                if self._shutdown_state == "requested":
-                    self._shutdown_state = "in progress"
-                data = json.loads(message)
-                if data["event"] == "media":
-                    self.latest_media_timestamp = int(data["media"]["timestamp"])
-                    await self.client.send_audio(audio=data["media"]["payload"])
-                elif data["event"] == "start":
-                    self.stream_sid = data["start"]["streamSid"]
-                    logger.info(f"Incoming stream has started {self.stream_sid}")
-                    self.response_start_timestamp_socket = None
-                    self.latest_media_timestamp = 0
-                    self.last_assistant_item = None
-                elif data["event"] == "mark":
-                    if self.mark_queue:
-                        self.mark_queue.pop(0)
-        finally:
-            self._shutdown_state = "completed"
+        async for message in self.websocket.iter_text():
+            data = json.loads(message)
+            if data["event"] == "media":
+                self.latest_media_timestamp = int(data["media"]["timestamp"])
+                await self.client.send_audio(audio=data["media"]["payload"])
+            elif data["event"] == "start":
+                self.stream_sid = data["start"]["streamSid"]
+                logger.info(f"Incoming stream has started {self.stream_sid}")
+                self.response_start_timestamp_socket = None
+                self.latest_media_timestamp = 0
+                self.last_assistant_item = None
+            elif data["event"] == "mark":
+                if self.mark_queue:
+                    self.mark_queue.pop(0)
 
     async def initialize_session(self) -> None:
         """Control initial session with OpenAI."""
