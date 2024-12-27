@@ -123,4 +123,4 @@ jobs:
   trigger-link-check:
     needs: mintlify-release
     if: needs.mintlify-release.outputs.deployment_status == 'success' && github.event_name != 'pull_request'
-    uses: ./.github/workflows/check-broken-links.yml
+    uses: ./.github/workflows/docs-check-broken-links.yml
