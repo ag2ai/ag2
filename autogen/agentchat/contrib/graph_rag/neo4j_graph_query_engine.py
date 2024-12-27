@@ -107,6 +107,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
         self.index = PropertyGraphIndex.from_documents(
             self.documents,
+            llm=self.llm,
             embed_model=self.embedding,
             kg_extractors=self.kg_extractors,
             property_graph_store=self.graph_store,
@@ -129,6 +130,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         self.index = PropertyGraphIndex.from_existing(
             property_graph_store=self.graph_store,
             kg_extractors=self.kg_extractors,
+            llm=self.llm,
             embed_model=self.embedding,
             show_progress=True,
         )
