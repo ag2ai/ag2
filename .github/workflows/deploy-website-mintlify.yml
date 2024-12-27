@@ -68,6 +68,8 @@ jobs:
   mintlify-release:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    outputs:
+      deployment_status: ${{ job.status }}
     defaults:
       run:
         working-directory: website
@@ -118,7 +120,7 @@ jobs:
           publish_branch: mintlify-pages
           publish_dir: ./website/temp_website
 
-trigger-link-check:
+  trigger-link-check:
     needs: mintlify-release
-    if: github.event_name != 'pull_request'
-    uses: ./.github/workflows/docs-check-broken-links.yml
+    if: needs.mintlify-release.outputs.deployment_status == 'success' && github.event_name != 'pull_request'
+    uses: ./.github/workflows/check-broken-links.yml
