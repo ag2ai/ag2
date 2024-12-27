@@ -122,12 +122,13 @@ yifanzeng:
   name: Yifan Zeng
   title: PhD student at Oregon State University
   url: https://xhmy.github.io/
-  image_url: https://xhmy.github.io/assets/img/photo.JPG
+  image_url: https://xhmy.github.io/assets/img/photo.jpg
 
 jluey:
   name: James Woffinden-Luey
   title: Senior Research Engineer at Microsoft Research
   url: https://github.com/jluey1
+  image_url: https://github.com/jluey1.png
 
 Hk669:
   name: Hrushikesh Dokala
