@@ -378,16 +378,33 @@ def convert_callout_blocks(content: str) -> str:
         """Helper function to format individual callout blocks."""
         callout_type = match.group(1)
         inner_content = match.group(2).strip()
+        return f"""
+        <div class="{callout_type}">
+            <{callout_types[callout_type]}>
+                {inner_content}
+            </{callout_types[callout_type]}>
+        </div>
+        """
 
-        return f"""<div class="{callout_type}">
-        <{callout_types[callout_type]}>
-        {inner_content}
-        </{callout_types[callout_type]}>
-        </div>"""
+    pattern = re.compile(
+        # Matches optional opening fences:
+        # - 3 or 4 backticks (` ``` ` or ` ```` `),
+        # - optionally followed by "mdx-code-block",
+        # - optionally followed by "{=mdx}",
+        # - optional whitespace and line ending.
+        r"(?:`{3,4}(?:\s*mdx-code-block)?(?:\s*\{=mdx\})?" r"|mdx-code-block(?:\s*\{=mdx\})?)?\s*\r?\n?"
+        # Matches the opening line of the callout (e.g., ":::info").
+        r":::(\w+(?:\s+\w+)?)\r?\n"
+        # Matches the content inside the callout, capturing until the closing line.
+        r"(.*?)"  # Uses non-greedy matching to capture content.
+        # Matches the closing line (e.g., ":::").
+        r"\r?\n:::\r?\n"
+        # Matches optional closing fences (same as the opening fences).
+        r"(?:`{3,4}(?:\s*mdx-code-block)?(?:\s*\{=mdx\})?" r"|mdx-code-block(?:\s*\{=mdx\})?)?\s*\r?\n?",
+        flags=re.DOTALL,  # DOTALL allows `.` to match newline characters.
+    )
 
-    # Pattern matches: ````mdx-code-block\n:::[type]\n[content]\n:::\n````
-    pattern = r"````mdx-code-block\n:::(\w+(?:\s+\w+)?)\n(.*?)\n:::\n````"
-    return re.sub(pattern, replace_callout, content, flags=re.DOTALL)
+    return pattern.sub(replace_callout, content)
 
 
 def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
