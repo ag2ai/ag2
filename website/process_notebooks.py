@@ -393,7 +393,7 @@ def convert_callout_blocks(content: str) -> str:
         # - optionally followed by "mdx-code-block",
         # - optionally followed by "{=mdx}",
         # - optional whitespace and line ending.
-        r"(?:`{3,4}(?:\s*mdx-code-block)?(?:\s*\{=mdx\})?" r"|mdx-code-block(?:\s*\{=mdx\})?)?\s*\r?\n?"
+        r"(?:```{3,4}(?:\s*mdx-code-block)?(?:\s*\{=mdx\})?)?\s*\r?\n?"
         # Matches the opening line of the callout (e.g., ":::info").
         r":::(\w+(?:\s+\w+)?)\r?\n"
         # Matches the content inside the callout, capturing until the closing line.
