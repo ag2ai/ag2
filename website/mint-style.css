@@ -68,6 +68,13 @@ h4 {
   }
 }
 
+body.reference-page h1,
+body.reference-page h2,
+body.reference-page h3,
+body.reference-page h4 {
+  text-transform: none !important;
+}
+
 a.colab-badge, a.github-badge {
   display: inline-block;
   border:none;
