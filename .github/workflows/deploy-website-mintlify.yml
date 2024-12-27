@@ -7,12 +7,14 @@ on:
       - "autogen/**"
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
+      - ".github/workflows/docs-check-broken-links.yml"
   push:
     branches: [main]
     paths:
       - "autogen/**"
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
+      - ".github/workflows/docs-check-broken-links.yml"
   workflow_dispatch:
   merge_group:
     types: [checks_requested]
