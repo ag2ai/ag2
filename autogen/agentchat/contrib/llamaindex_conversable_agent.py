@@ -56,7 +56,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
             description (str): a short description of the agent. This description is used by other agents
                 (e.g. the GroupChatManager) to decide when to call upon this agent.
             **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](../conversable_agent#__init__).
+                [ConversableAgent](../conversable_agent#init).
         """
 
         if llama_index_agent is None:
@@ -80,10 +80,10 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     def _generate_oai_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
@@ -95,10 +95,10 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     async def _a_generate_oai_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
@@ -111,8 +111,8 @@ class LLamaIndexConversableAgent(ConversableAgent):
         return (True, extracted_response)
 
     def _extract_message_and_history(
-        self, messages: Optional[List[Dict]] = None, sender: Optional[Agent] = None
-    ) -> Tuple[str, List[ChatMessage]]:
+        self, messages: Optional[list[dict]] = None, sender: Optional[Agent] = None
+    ) -> tuple[str, list[ChatMessage]]:
         """Extract the message and history from the messages."""
         if not messages:
             messages = self._oai_messages[sender]
@@ -123,7 +123,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         message = messages[-1].get("content", "")
 
         history = messages[:-1]
-        history_messages: List[ChatMessage] = []
+        history_messages: list[ChatMessage] = []
         for history_message in history:
             content = history_message.get("content", "")
             role = history_message.get("role", "user")

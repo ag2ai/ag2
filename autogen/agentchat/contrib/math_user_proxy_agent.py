@@ -140,10 +140,10 @@ class MathUserProxyAgent(UserProxyAgent):
         self,
         name: Optional[str] = "MathChatAgent",  # default set to MathChatAgent
         is_termination_msg: Optional[
-            Callable[[Dict], bool]
+            Callable[[dict], bool]
         ] = _is_termination_msg_mathchat,  # terminate if \boxed{} in message
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",  # Fully automated
-        default_auto_reply: Optional[Union[str, Dict, None]] = DEFAULT_REPLY,
+        default_auto_reply: Optional[Union[str, dict, None]] = DEFAULT_REPLY,
         max_invalid_q_per_step=3,  # a parameter needed in MathChat
         **kwargs,
     ):
@@ -163,7 +163,7 @@ class MathUserProxyAgent(UserProxyAgent):
                     when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
             default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
             max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
-            **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#__init__).
+            **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
         """
         super().__init__(
             name=name,
@@ -292,7 +292,7 @@ class MathUserProxyAgent(UserProxyAgent):
 
     def _generate_math_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ):
@@ -364,7 +364,7 @@ class MathUserProxyAgent(UserProxyAgent):
 # THE SOFTWARE.
 
 
-def get_from_dict_or_env(data: Dict[str, Any], key: str, env_key: str, default: Optional[str] = None) -> str:
+def get_from_dict_or_env(data: dict[str, Any], key: str, env_key: str, default: Optional[str] = None) -> str:
     """Get a value from a dictionary or an environment variable."""
     if key in data and data[key]:
         return data[key]
@@ -402,7 +402,7 @@ class WolframAlphaAPIWrapper(BaseModel):
             extra = Extra.forbid
 
     @root_validator(skip_on_failure=True)
-    def validate_environment(cls, values: Dict) -> Dict:
+    def validate_environment(cls, values: dict) -> dict:
         """Validate that api key and python package exists in environment."""
         wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
         values["wolfram_alpha_appid"] = wolfram_alpha_appid
@@ -417,7 +417,7 @@ class WolframAlphaAPIWrapper(BaseModel):
 
         return values
 
-    def run(self, query: str) -> Tuple[str, bool]:
+    def run(self, query: str) -> tuple[str, bool]:
         """Run query through WolframAlpha and parse result."""
         from urllib.error import HTTPError
 

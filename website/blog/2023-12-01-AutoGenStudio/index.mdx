@@ -7,6 +7,45 @@ authors:
 tags: [AutoGen, UI, web, UX]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Authors:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/victordibia">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/victordibia.png" />
+          </div>
+          <div>
+            <p class="name">Victor Dibia</p>
+            <p>Principal RSDE at Microsoft Research</p>
+          </div>
+        </div>
+    </Card>
+    <Card href="https://www.linkedin.com/in/gagan-bansal/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/gagb.png" />
+          </div>
+          <div>
+            <p class="name">Gagan Bansal</p>
+            <p>Senior Researcher at Microsoft Research</p>
+          </div>
+        </div>
+    </Card>
+    <Card href="https://github.com/samershi">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/samershi.png" />
+          </div>
+          <div>
+            <p class="name">Saleema Amershi</p>
+            <p>Senior Principal Research Manager at Microsoft Research</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 ![AutoGen Studio Playground View: Solving a task with multiple agents that generate a pdf document with images.](img/autogenstudio_home.png)
 
 <p align="center">
@@ -18,7 +57,7 @@ tags: [AutoGen, UI, web, UX]
 
 ## TL;DR
 
-To help you rapidly prototype multi-agent solutions for your tasks, we are introducing AutoGen Studio, an interface powered by [AutoGen](https://github.com/microsoft/autogen/tree/main/autogen). It allows you to:
+To help you rapidly prototype multi-agent solutions for your tasks, we are introducing AutoGen Studio, an interface powered by [AutoGen](https://github.com/ag2ai/ag2/tree/main/autogen). It allows you to:
 
 - Declaratively define and modify agents and multi-agent workflows through a point and click, drag and drop interface (e.g., you can select the parameters of two agents that will communicate to solve your task).
 - Use our UI to create chat sessions with the specified agents and view results (e.g., view chat history, generated files, and time taken).
@@ -26,7 +65,7 @@ To help you rapidly prototype multi-agent solutions for your tasks, we are intro
 - Publish your sessions to a local gallery.
 
 
-See the official AutoGen Studio documentation [here](https://ag2ai.github.io/ag2/docs/autogen-studio/getting-started) for more details.
+See the official AutoGen Studio documentation [here](https://docs.ag2.ai/docs/autogen-studio/getting-started) for more details.
 
 AutoGen Studio is open source [code here](https://github.com/ag2ai/build-with-ag2/blob/main/samples/apps/autogen-studio), and can be installed via pip. Give it a try!
 
@@ -48,7 +87,7 @@ The following guide will help you get AutoGen Studio up and running on your syst
 
 ### Configuring an LLM Provider
 
-To get started, you need access to a language model. You can get this set up by following the steps in the AutoGen documentation [here](https://ag2ai.github.io/ag2/docs/FAQ#set-your-api-endpoints). Configure your environment with either `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY`.
+To get started, you need access to a language model. You can get this set up by following the steps in the AutoGen documentation [here](https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints). Configure your environment with either `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY`.
 
 For example, in your terminal, you would set the API key like this:
 

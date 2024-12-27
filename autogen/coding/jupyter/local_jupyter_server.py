@@ -32,8 +32,8 @@ class LocalJupyterServer(JupyterConnectable):
     def __init__(
         self,
         ip: str = "127.0.0.1",
-        port: Optional[int] = None,
-        token: Union[str, GenerateToken] = GenerateToken(),
+        port: int | None = None,
+        token: str | GenerateToken = GenerateToken(),
         log_file: str = "jupyter_gateway.log",
         log_level: str = "INFO",
         log_max_bytes: int = 1048576,
@@ -59,8 +59,7 @@ class LocalJupyterServer(JupyterConnectable):
             subprocess.run(
                 [sys.executable, "-m", "jupyter", "kernelgateway", "--version"],
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
             )
         except subprocess.CalledProcessError:
@@ -163,6 +162,6 @@ class LocalJupyterServer(JupyterConnectable):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()

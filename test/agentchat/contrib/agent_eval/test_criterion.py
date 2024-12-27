@@ -11,7 +11,7 @@ from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 
 def test_parse_json_str():
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"
-    criteria = open(criteria_file, "r").read()
+    criteria = open(criteria_file).read()
     criteria = Criterion.parse_json_str(criteria)
     assert criteria
     assert len(criteria) == 6

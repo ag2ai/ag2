@@ -135,12 +135,12 @@ Note that the previous experts will forget everything after you obtain the respo
         self,
         name: str,
         system_message: Optional[str] = None,
-        llm_config: Optional[Union[Dict, Literal[False]]] = None,
-        is_termination_msg: Optional[Callable[[Dict], bool]] = None,
+        llm_config: Optional[Union[dict, Literal[False]]] = None,
+        is_termination_msg: Optional[Callable[[dict], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Optional[str] = "NEVER",
-        code_execution_config: Optional[Union[Dict, Literal[False]]] = False,
-        nested_config: Optional[Dict] = None,
+        code_execution_config: Optional[Union[dict, Literal[False]]] = False,
+        nested_config: Optional[dict] = None,
         agent_lib: Optional[str] = None,
         tool_lib: Optional[str] = None,
         agent_config_save_path: Optional[str] = None,
@@ -163,7 +163,7 @@ Note that the previous experts will forget everything after you obtain the respo
             agent_lib (str): the path or a JSON file of the agent library for retrieving the nested chat instantiated by CaptainAgent.
             tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.
             nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
-                A full list of keys and their functionalities can be found in [docs](https://ag2ai.github.io/ag2/docs/topics/captainagent/configurations).
+                A full list of keys and their functionalities can be found in [docs](https://docs.ag2.ai/docs/topics/captainagent/configurations).
             agent_config_save_path (str): the path to save the generated or retrieved agent configuration.
             **kwargs (dict): Please refer to other kwargs in
                 [ConversableAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py#L74).
@@ -220,7 +220,7 @@ Note that the previous experts will forget everything after you obtain the respo
         )
 
     @staticmethod
-    def _update_config(default_dict: Dict, update_dict: Optional[Dict]) -> Dict:
+    def _update_config(default_dict: dict, update_dict: Optional[dict]) -> dict:
         """
         Recursively updates the default_dict with values from update_dict.
         """
@@ -290,15 +290,15 @@ Collect information from the general task, follow the suggestions from manager t
     def __init__(
         self,
         name: str,
-        nested_config: Dict,
+        nested_config: dict,
         agent_config_save_path: str = None,
-        is_termination_msg: Optional[Callable[[Dict], bool]] = None,
+        is_termination_msg: Optional[Callable[[dict], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Optional[str] = "NEVER",
-        code_execution_config: Optional[Union[Dict, Literal[False]]] = None,
-        default_auto_reply: Optional[Union[str, Dict, None]] = DEFAULT_AUTO_REPLY,
-        llm_config: Optional[Union[Dict, Literal[False]]] = False,
-        system_message: Optional[Union[str, List]] = "",
+        code_execution_config: Optional[Union[dict, Literal[False]]] = None,
+        default_auto_reply: Optional[Union[str, dict, None]] = DEFAULT_AUTO_REPLY,
+        llm_config: Optional[Union[dict, Literal[False]]] = False,
+        system_message: Optional[Union[str, list]] = "",
         description: Optional[str] = None,
     ):
         """

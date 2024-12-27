@@ -11,7 +11,7 @@ Running this stack requires the installation of:
 1. AutoGen ([installation instructions](/docs/installation))
 2. vLLM
 
-Note: We recommend using a virtual environment for your stack, see [this article](https://ag2ai.github.io/ag2/docs/installation/#create-a-virtual-environment-optional)
+Note: We recommend using a virtual environment for your stack, see [this article](https://docs.ag2.ai/docs/installation/Installation#create-a-virtual-environment-optional)
 for guidance.
 
 ## Installing vLLM
@@ -56,15 +56,14 @@ Create a file name `autogenmistraltemplate.jinja` with the following content:
     {% endif %}
 {% endfor %}
 ````
-
-````mdx-code-block
-:::warning
+<div class="warning">
+<Warning>
 Chat Templates are specific to the model/model family. The example shown here is for Mistral-based models like Mistral 7B and Mixtral 8x7B.
 
 vLLM has a number of [example templates](https://github.com/vllm-project/vllm/tree/main/examples) for models that can be a
 starting point for your chat template. Just remember, the template may need to be adjusted to support 'system' role messages.
-:::
-````
+</Warning>
+</div>
 
 ## Running vLLM proxy server
 

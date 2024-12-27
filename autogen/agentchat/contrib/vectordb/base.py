@@ -4,14 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from collections.abc import Mapping, Sequence
 from typing import (
     Any,
     Callable,
     List,
-    Mapping,
     Optional,
     Protocol,
-    Sequence,
     Tuple,
     TypedDict,
     Union,
@@ -42,7 +41,7 @@ class Document(TypedDict):
 A query is a list containing one string while queries is a list containing multiple strings.
 The response is a list of query results, each query result is a list of tuples containing the document and the distance.
 """
-QueryResults = List[List[Tuple[Document, float]]]
+QueryResults = list[list[tuple[Document, float]]]
 
 
 @runtime_checkable
@@ -67,7 +66,7 @@ class VectorDB(Protocol):
 
     active_collection: Any = None
     type: str = ""
-    embedding_function: Optional[Callable[[List[str]], List[List[float]]]] = (
+    embedding_function: Optional[Callable[[list[str]], list[list[float]]]] = (
         None  # embeddings = embedding_function(sentences)
     )
 
@@ -114,7 +113,7 @@ class VectorDB(Protocol):
         """
         ...
 
-    def insert_docs(self, docs: List[Document], collection_name: str = None, upsert: bool = False, **kwargs) -> None:
+    def insert_docs(self, docs: list[Document], collection_name: str = None, upsert: bool = False, **kwargs) -> None:
         """
         Insert documents into the collection of the vector database.
 
@@ -129,7 +128,7 @@ class VectorDB(Protocol):
         """
         ...
 
-    def update_docs(self, docs: List[Document], collection_name: str = None, **kwargs) -> None:
+    def update_docs(self, docs: list[Document], collection_name: str = None, **kwargs) -> None:
         """
         Update documents in the collection of the vector database.
 
@@ -143,7 +142,7 @@ class VectorDB(Protocol):
         """
         ...
 
-    def delete_docs(self, ids: List[ItemID], collection_name: str = None, **kwargs) -> None:
+    def delete_docs(self, ids: list[ItemID], collection_name: str = None, **kwargs) -> None:
         """
         Delete documents from the collection of the vector database.
 
@@ -159,7 +158,7 @@ class VectorDB(Protocol):
 
     def retrieve_docs(
         self,
-        queries: List[str],
+        queries: list[str],
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
@@ -183,8 +182,8 @@ class VectorDB(Protocol):
         ...
 
     def get_docs_by_ids(
-        self, ids: List[ItemID] = None, collection_name: str = None, include=None, **kwargs
-    ) -> List[Document]:
+        self, ids: list[ItemID] = None, collection_name: str = None, include=None, **kwargs
+    ) -> list[Document]:
         """
         Retrieve documents from the collection of the vector database based on the ids.
 

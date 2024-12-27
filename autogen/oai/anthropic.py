@@ -56,7 +56,7 @@ import json
 import os
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
 from anthropic import Anthropic, AnthropicBedrock
 from anthropic import __version__ as anthropic_version
@@ -65,7 +65,6 @@ from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
-from typing_extensions import Annotated
 
 from autogen.oai.client_utils import validate_parameter
 
@@ -134,7 +133,7 @@ class AnthropicClient:
 
         self._last_tooluse_status = {}
 
-    def load_config(self, params: Dict[str, Any]):
+    def load_config(self, params: dict[str, Any]):
         """Load the configuration for the Anthropic API client."""
         anthropic_params = {}
 
@@ -183,7 +182,7 @@ class AnthropicClient:
     def aws_region(self):
         return self._aws_region
 
-    def create(self, params: Dict[str, Any]) -> ChatCompletion:
+    def create(self, params: dict[str, Any]) -> ChatCompletion:
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions
@@ -270,7 +269,7 @@ class AnthropicClient:
 
         return response_oai
 
-    def message_retrieval(self, response) -> List:
+    def message_retrieval(self, response) -> list:
         """
         Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -286,7 +285,7 @@ class AnthropicClient:
         return res
 
     @staticmethod
-    def get_usage(response: ChatCompletion) -> Dict:
+    def get_usage(response: ChatCompletion) -> dict:
         """Get the usage of tokens and their cost information."""
         return {
             "prompt_tokens": response.usage.prompt_tokens if response.usage is not None else 0,
@@ -297,7 +296,7 @@ class AnthropicClient:
         }
 
     @staticmethod
-    def convert_tools_to_functions(tools: List) -> List:
+    def convert_tools_to_functions(tools: list) -> list:
         functions = []
         for tool in tools:
             if tool.get("type") == "function" and "function" in tool:
@@ -306,7 +305,7 @@ class AnthropicClient:
         return functions
 
 
-def oai_messages_to_anthropic_messages(params: Dict[str, Any]) -> list[dict[str, Any]]:
+def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Anthropic format.
     We correct for any specific role orders and types, etc.
     """

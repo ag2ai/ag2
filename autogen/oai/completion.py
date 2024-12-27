@@ -172,7 +172,7 @@ class Completion(openai_Completion):
             cache.clear()
 
     @classmethod
-    def _book_keeping(cls, config: Dict, response):
+    def _book_keeping(cls, config: dict, response):
         """Book keeping for the created completions."""
         if response != -1 and "cost" not in response:
             response["cost"] = cls.cost(response)
@@ -212,7 +212,7 @@ class Completion(openai_Completion):
         cls._count_create += 1
 
     @classmethod
-    def _get_response(cls, config: Dict, raise_on_ratelimit_or_timeout=False, use_cache=True):
+    def _get_response(cls, config: dict, raise_on_ratelimit_or_timeout=False, use_cache=True):
         """Get the response from the openai api call.
 
         Try cache first. If not found, call the openai api. If the api call fails, retry after retry_wait_time.
@@ -335,7 +335,7 @@ class Completion(openai_Completion):
         return config.copy() if always_copy else config
 
     @classmethod
-    def _get_params_for_create(cls, config: Dict) -> Dict:
+    def _get_params_for_create(cls, config: dict) -> dict:
         """Get the params for the openai api call from a config in the search space."""
         params = cls._pop_subspace(config)
         if cls._prompts:
@@ -526,7 +526,7 @@ class Completion(openai_Completion):
     @classmethod
     def tune(
         cls,
-        data: List[Dict],
+        data: list[dict],
         metric: str,
         mode: str,
         eval_func: Callable,
@@ -726,10 +726,10 @@ class Completion(openai_Completion):
     @classmethod
     def create(
         cls,
-        context: Optional[Dict] = None,
+        context: Optional[dict] = None,
         use_cache: Optional[bool] = True,
-        config_list: Optional[List[Dict]] = None,
-        filter_func: Optional[Callable[[Dict, Dict], bool]] = None,
+        config_list: Optional[list[dict]] = None,
+        filter_func: Optional[Callable[[dict, dict], bool]] = None,
         raise_on_ratelimit_or_timeout: Optional[bool] = True,
         allow_format_str_template: Optional[bool] = False,
         **config,
@@ -742,7 +742,7 @@ class Completion(openai_Completion):
                 E.g., `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`.
                 The actual prompt will be:
                 "Complete the following sentence: Today I feel".
-                More examples can be found at [templating](https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference#templating).
+                More examples can be found at [templating](https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#templating).
             use_cache (bool, Optional): Whether to use cached responses.
             config_list (List, Optional): List of configurations for the completion to try.
                 The first one that does not raise an error will be used.
@@ -804,7 +804,7 @@ class Completion(openai_Completion):
         logger.warning(
             "Completion.create is deprecated in autogen, pyautogen v0.2 and openai>=1. "
             "The new openai requires initiating a client for inference. "
-            "Please refer to https://ag2ai.github.io/ag2/docs/Use-Cases/enhanced_inference#api-unification"
+            "Please refer to https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#api-unification"
         )
         if ERROR:
             raise ERROR
@@ -861,7 +861,7 @@ class Completion(openai_Completion):
     def instantiate(
         cls,
         template: Union[str, None],
-        context: Optional[Dict] = None,
+        context: Optional[dict] = None,
         allow_format_str_template: Optional[bool] = False,
     ):
         if not context or template is None:
@@ -1069,7 +1069,7 @@ class Completion(openai_Completion):
         return price1K * (n_input_tokens + n_output_tokens) / 1000
 
     @classmethod
-    def extract_text(cls, response: dict) -> List[str]:
+    def extract_text(cls, response: dict) -> list[str]:
         """Extract the text from a completion or chat response.
 
         Args:
@@ -1084,7 +1084,7 @@ class Completion(openai_Completion):
         return [choice["message"].get("content", "") for choice in choices]
 
     @classmethod
-    def extract_text_or_function_call(cls, response: dict) -> List[str]:
+    def extract_text_or_function_call(cls, response: dict) -> list[str]:
         """Extract the text or function calls from a completion or chat response.
 
         Args:
@@ -1103,12 +1103,12 @@ class Completion(openai_Completion):
 
     @classmethod
     @property
-    def logged_history(cls) -> Dict:
+    def logged_history(cls) -> dict:
         """Return the book keeping dictionary."""
         return cls._history_dict
 
     @classmethod
-    def print_usage_summary(cls) -> Dict:
+    def print_usage_summary(cls) -> dict:
         """Return the usage summary."""
         if cls._history_dict is None:
             print("No usage summary available.", flush=True)
@@ -1147,7 +1147,7 @@ class Completion(openai_Completion):
 
     @classmethod
     def start_logging(
-        cls, history_dict: Optional[Dict] = None, compact: Optional[bool] = True, reset_counter: Optional[bool] = True
+        cls, history_dict: Optional[dict] = None, compact: Optional[bool] = True, reset_counter: Optional[bool] = True
     ):
         """Start book keeping.
 

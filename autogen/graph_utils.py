@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from autogen.agentchat import Agent
 
 
-def has_self_loops(allowed_speaker_transitions: Dict) -> bool:
+def has_self_loops(allowed_speaker_transitions: dict) -> bool:
     """
     Returns True if there are self loops in the allowed_speaker_transitions_Dict.
     """
@@ -18,8 +18,8 @@ def has_self_loops(allowed_speaker_transitions: Dict) -> bool:
 
 
 def check_graph_validity(
-    allowed_speaker_transitions_dict: Dict,
-    agents: List[Agent],
+    allowed_speaker_transitions_dict: dict,
+    agents: list[Agent],
 ):
     """
     allowed_speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
@@ -100,7 +100,7 @@ def check_graph_validity(
             )
 
 
-def invert_disallowed_to_allowed(disallowed_speaker_transitions_dict: dict, agents: List[Agent]) -> dict:
+def invert_disallowed_to_allowed(disallowed_speaker_transitions_dict: dict, agents: list[Agent]) -> dict:
     """
     Start with a fully connected allowed_speaker_transitions_dict of all agents. Remove edges from the fully connected allowed_speaker_transitions_dict according to the disallowed_speaker_transitions_dict to form the allowed_speaker_transitions_dict.
     """
@@ -117,7 +117,7 @@ def invert_disallowed_to_allowed(disallowed_speaker_transitions_dict: dict, agen
 
 
 def visualize_speaker_transitions_dict(
-    speaker_transitions_dict: dict, agents: List[Agent], export_path: Optional[str] = None
+    speaker_transitions_dict: dict, agents: list[Agent], export_path: Optional[str] = None
 ):
     """
     Visualize the speaker_transitions_dict using networkx.

@@ -26,7 +26,7 @@ These configurations can be used with Codespaces and locally.
 - **Usage**: Recommended for developers who are contributing to the AutoGen project.
 - **Building the Image**: Run `docker build -f dev/Dockerfile -t ag2_dev_img .`.
 - **Using with Codespaces**: `Code > Codespaces > Click on ...> New with options > Choose "dev" as devcontainer configuration`. This image may require a Codespace with at least 64GB of disk space.
-- **Before using**: We highly encourage all potential contributors to read the [AutoGen Contributing](https://ag2ai.github.io/ag2/docs/Contribute) page prior to submitting any pull requests.
+- **Before using**: We highly encourage all potential contributors to read the [AutoGen Contributing](https://docs.ag2.ai/docs/contributor-guide/contributing) page prior to submitting any pull requests.
 
 
 ## Customizing Dockerfiles

@@ -25,7 +25,7 @@ class PydanticAITool(Tool):
     """
 
     def __init__(
-        self, name: str, description: str, func: Callable[..., Any], parameters_json_schema: Dict[str, Any]
+        self, name: str, description: str, func: Callable[..., Any], parameters_json_schema: dict[str, Any]
     ) -> None:
         """
         Initializes a PydanticAITool object with the provided name, description,
@@ -38,7 +38,7 @@ class PydanticAITool(Tool):
             parameters_json_schema (Dict[str, Any]): A schema describing the parameters
                                                      that the function accepts.
         """
-        super().__init__(name, description, func)
+        super().__init__(name=name, description=description, func=func)
         self._func_schema = {
             "type": "function",
             "function": {

@@ -23,7 +23,7 @@ class TextAnalyzerAgent(ConversableAgent):
         name="analyzer",
         system_message: Optional[str] = system_message,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        llm_config: Optional[Union[Dict, bool]] = None,
+        llm_config: Optional[Union[dict, bool]] = None,
         **kwargs,
     ):
         """
@@ -35,7 +35,7 @@ class TextAnalyzerAgent(ConversableAgent):
                 Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
                 for available options.
                 To disable llm-based auto reply, set to False.
-            **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#__init__).
+            **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).
         """
         super().__init__(
             name=name,
@@ -48,10 +48,10 @@ class TextAnalyzerAgent(ConversableAgent):
 
     def _analyze_in_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         """Analyzes the given text as instructed, and returns the analysis as a message.
         Assumes exactly two messages containing the text to analyze and the analysis instructions.
         See Teachability.analyze for an example of how to use this method."""

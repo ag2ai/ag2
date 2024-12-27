@@ -8,9 +8,9 @@
 
 import os
 import sys
+from typing import Annotated
 
 import pytest
-from typing_extensions import Annotated
 
 import autogen
 from autogen.agentchat.contrib.society_of_mind_agent import SocietyOfMindAgent

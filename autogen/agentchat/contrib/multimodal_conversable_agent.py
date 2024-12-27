@@ -29,7 +29,7 @@ class MultimodalConversableAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[Union[str, List]] = DEFAULT_LMM_SYS_MSG,
+        system_message: Optional[Union[str, list]] = DEFAULT_LMM_SYS_MSG,
         is_termination_msg: str = None,
         *args,
         **kwargs,
@@ -40,7 +40,7 @@ class MultimodalConversableAgent(ConversableAgent):
             system_message (str): system message for the OpenAIWrapper inference.
                 Please override this attribute if you want to reprogram the agent.
             **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](../conversable_agent#__init__).
+                [ConversableAgent](../conversable_agent#init).
         """
         super().__init__(
             name,
@@ -64,7 +64,7 @@ class MultimodalConversableAgent(ConversableAgent):
             MultimodalConversableAgent.a_generate_oai_reply,
         )
 
-    def update_system_message(self, system_message: Union[Dict, List, str]):
+    def update_system_message(self, system_message: Union[dict, list, str]):
         """Update the system message.
 
         Args:
@@ -74,7 +74,7 @@ class MultimodalConversableAgent(ConversableAgent):
         self._oai_system_message[0]["role"] = "system"
 
     @staticmethod
-    def _message_to_dict(message: Union[Dict, List, str]) -> Dict:
+    def _message_to_dict(message: Union[dict, list, str]) -> dict:
         """Convert a message to a dictionary. This implementation
         handles the GPT-4V formatting for easier prompts.
 
@@ -103,10 +103,10 @@ class MultimodalConversableAgent(ConversableAgent):
 
     def generate_oai_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
+    ) -> tuple[bool, Union[str, dict, None]]:
         """Generate a reply using autogen.oai."""
         client = self.client if config is None else config
         if client is None:

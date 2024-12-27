@@ -31,7 +31,7 @@ There are also complex interactions among subsets of the hyperparameters. For ex
 the temperature and top_p are not recommended to be altered from their default values together because they both control the randomness of the generated text, and changing both at the same time can result in conflicting effects; n and best_of are rarely tuned together because if the application can process multiple outputs, filtering on the server side causes unnecessary information loss; both n and max_tokens will affect the total number of tokens generated, which in turn will affect the cost of the request.
 These interactions and trade-offs make it difficult to manually determine the optimal hyperparameter settings for a given text generation task.
 
-*Do the choices matter? Check this [blogpost](/blog/2023/04/21/LLM-tuning-math) to find example tuning results about gpt-3.5-turbo and gpt-4.*
+*Do the choices matter? Check this [blogpost](/blog/2023-04-21-LLM-tuning-math) to find example tuning results about gpt-3.5-turbo and gpt-4.*
 
 
 With AutoGen, the tuning can be performed with the following information:
@@ -130,9 +130,9 @@ print(client.extract_text_or_completion_object(response))
 
 ```
 
-For local LLMs, one can spin up an endpoint using a package like [FastChat](https://github.com/lm-sys/FastChat), and then use the same API to send a request. See [here](/blog/2023/07/14/Local-LLMs) for examples on how to make inference with local LLMs.
+For local LLMs, one can spin up an endpoint using a package like [FastChat](https://github.com/lm-sys/FastChat), and then use the same API to send a request. See [here](/blog/2023-07-14-Local-LLMs) for examples on how to make inference with local LLMs.
 
-For custom model clients, one can register the client with `autogen.OpenAIWrapper.register_model_client` and then use the same API to send a request. See [here](/blog/2024/01/26/Custom-Models) for examples on how to make inference with custom model clients.
+For custom model clients, one can register the client with `autogen.OpenAIWrapper.register_model_client` and then use the same API to send a request. See [here](/blog/2024-01-26-Custom-Models) for examples on how to make inference with custom model clients.
 
 ## Usage Summary
 
@@ -142,7 +142,7 @@ The `OpenAIWrapper` from `autogen` tracks token counts and costs of your API cal
 - `mode='actual'`: only print non-cached usage.
 - `mode='total'`: only print all usage (including cache).
 
-Reset your session's usage data with `clear_usage_summary()` when needed. [View Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/oai_client_cost.ipynb)
+Reset your session's usage data with `clear_usage_summary()` when needed. [View Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_cost_token_tracking.ipynb)
 
 Example usage:
 ```python
@@ -165,7 +165,7 @@ Total cost: 0.00027
 * Model 'gpt-3.5-turbo': cost: 0.00027, prompt_tokens: 50, completion_tokens: 100, total_tokens: 150
 ```
 
-Note: if using a custom model client (see [here](/blog/2024/01/26/Custom-Models) for details) and if usage summary is not implemented, then the usage summary will not be available.
+Note: if using a custom model client (see [here](/blog/2024-01-26-Custom-Models) for details) and if usage summary is not implemented, then the usage summary will not be available.
 
 ## Caching
 
@@ -241,7 +241,7 @@ response = client.create(
 
 The example above will try to use text-ada-001, gpt-3.5-turbo-instruct, and text-davinci-003 iteratively, until a valid json string is returned or the last config is used. One can also repeat the same model in the list for multiple times (with different seeds) to try one model multiple times for increasing the robustness of the final response.
 
-*Advanced use case: Check this [blogpost](/blog/2023/05/18/GPT-adaptive-humaneval) to find how to improve GPT-4's coding performance from 68% to 90% while reducing the inference cost.*
+*Advanced use case: Check this [blogpost](/blog/2023-05-18-GPT-adaptive-humaneval/index) to find how to improve GPT-4's coding performance from 68% to 90% while reducing the inference cost.*
 
 ## Templating
 
@@ -383,7 +383,7 @@ AutoGen logging supports OpenAI's llm message schema. Each LLM run is saved in `
 }
 ```
 
-Learn more about [request and response format](https://platform.openai.com/docs/api-reference/chat/create)
+Learn more about [request and response format](https://platform.openai.com/docs/api-reference/introduction/chat/create)
 
 ### For openai < 1
 

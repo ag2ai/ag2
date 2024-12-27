@@ -9,12 +9,75 @@ authors:
 tags: [LLM, GPT, research]
 ---
 
-![Tree of Thoughts](img/reasoningagent_1.png)
+<div class="blog-authors">
+   <p class="authors">Authors:</p>
+   <CardGroup cols={2}>
+      <Card href="https://github.com/Hk669">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/Hk669.png" />
+         </div>
+         <div>
+            <p class="name">Hrushikesh Dokala</p>
+            <p>CS Undergraduate Based in India</p>
+         </div>
+      </div>
+      </Card>
+      <Card href="https://github.com/BabyCNM">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/BabyCNM.png" />
+         </div>
+         <div>
+            <p class="name">BabyCNM</p>
+            <p>AG2 Contributor</p>
+         </div>
+      </div>
+      </Card>
+      <Card href="https://github.com/skzhang1">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/skzhang1.png" />
+         </div>
+         <div>
+            <p class="name">Shaokun Zhang</p>
+            <p>PhD student at the Pennsylvania State University</p>
+         </div>
+      </div>
+      </Card>
+      <Card href="https://www.linkedin.com/in/chi-wang-autogen">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/sonichi.png" />
+         </div>
+         <div>
+            <p class="name">Chi Wang</p>
+            <p>Founder of AutoGen (now AG2) & FLAML</p>
+         </div>
+      </div>
+      </Card>
+      <Card href="https://qingyun-wu.github.io/">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/qingyun-wu.png" />
+         </div>
+         <div>
+            <p class="name">Qingyun Wu</p>
+            <p>Co-Founder of AutoGen/AG2 & FLAML, Assistant Professor at Penn State University</p>
+         </div>
+      </div>
+      </Card>
+   </CardGroup>
+</div>
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/sS8Q5yMuEhs?si=MfWmzflK94S94FEx" title="ReasoningAgent" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 **TL;DR:**
 * We introduce **ReasoningAgent**, an AG2 agent that implements tree-of-thought reasoning with beam search to solve complex problems.
 * ReasoningAgent explores multiple reasoning paths in parallel and uses a grader agent to evaluate and select the most promising paths.
 * The exploration trajectory and thought tree can be saved locally for further analysis. These logs can even be saved as SFT dataset and preference dataset for DPO and PPO training.
+
+![Tree of Thoughts](img/reasoningagent_1.webp)
 
 ## Introduction
 
@@ -43,7 +106,7 @@ The process works as follows:
 3. Beam search selects the top-k paths based on these scores
 4. The process repeats until a solution is found or maximum depth is reached
 
-![Beam Search](img/reasoningagent_2.png)
+![Beam Search](img/reasoningagent_2.webp)
 
 ## O1-Style Reasoning with Beam Size 1
 
@@ -258,7 +321,7 @@ The implementation is flexible and can be customized for different types of prob
 ## For Further Reading
 
 * [Documentation about ReasoningAgent](/docs/reference/agentchat/contrib/reasoning_agent)
-* [Example notebook](https://ag2ai.github.io/ag2/docs/notebooks/agentchat_reasoning_agent/)
+* [Example notebook](https://docs.ag2.ai/notebooks/agentchat_reasoning_agent)
 * [The Original research paper about Tree of Thoughts](https://arxiv.org/abs/2305.10601) from Google DeepMind and Princeton University.
 
 *Do you have interesting use cases for ReasoningAgent? Would you like to see more features or improvements? Please join our [Discord](https://discord.com/invite/pAbnFJrkgZ) server for discussion.*

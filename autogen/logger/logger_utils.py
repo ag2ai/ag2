@@ -17,9 +17,9 @@ def get_current_ts() -> str:
 
 
 def to_dict(
-    obj: Union[int, float, str, bool, Dict[Any, Any], List[Any], Tuple[Any, ...], Any],
-    exclude: Tuple[str, ...] = (),
-    no_recursive: Tuple[Any, ...] = (),
+    obj: Union[int, float, str, bool, dict[Any, Any], list[Any], tuple[Any, ...], Any],
+    exclude: tuple[str, ...] = (),
+    no_recursive: tuple[Any, ...] = (),
 ) -> Any:
     if isinstance(obj, (int, float, str, bool)):
         return obj

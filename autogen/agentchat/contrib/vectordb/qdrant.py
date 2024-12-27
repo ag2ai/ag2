@@ -7,7 +7,8 @@
 import abc
 import logging
 import os
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Callable, List, Optional, Tuple, Union
 
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
@@ -24,7 +25,7 @@ Embeddings = Union[Sequence[float], Sequence[int]]
 
 class EmbeddingFunction(abc.ABC):
     @abc.abstractmethod
-    def __call__(self, inputs: List[str]) -> List[Embeddings]:
+    def __call__(self, inputs: list[str]) -> list[Embeddings]:
         raise NotImplementedError
 
 
@@ -67,7 +68,7 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
         self._parallel = parallel
         self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir, threads=threads, **kwargs)
 
-    def __call__(self, inputs: List[str]) -> List[Embeddings]:
+    def __call__(self, inputs: list[str]) -> list[Embeddings]:
         embeddings = self._model.embed(inputs, batch_size=self._batch_size, parallel=self._parallel)
 
         return [embedding.tolist() for embedding in embeddings]
@@ -161,7 +162,7 @@ class QdrantVectorDB(VectorDB):
         """
         return self.client.delete_collection(collection_name)
 
-    def insert_docs(self, docs: List[Document], collection_name: str = None, upsert: bool = False) -> None:
+    def insert_docs(self, docs: list[Document], collection_name: str = None, upsert: bool = False) -> None:
         """
         Insert documents into the collection of the vector database.
 
@@ -186,7 +187,7 @@ class QdrantVectorDB(VectorDB):
 
         self.client.upsert(collection_name, points=self._documents_to_points(docs))
 
-    def update_docs(self, docs: List[Document], collection_name: str = None) -> None:
+    def update_docs(self, docs: list[Document], collection_name: str = None) -> None:
         if not docs:
             return
         if any(doc.get("id") is None for doc in docs):
@@ -198,7 +199,7 @@ class QdrantVectorDB(VectorDB):
 
         raise ValueError("Some IDs do not exist. Skipping update")
 
-    def delete_docs(self, ids: List[ItemID], collection_name: str = None, **kwargs) -> None:
+    def delete_docs(self, ids: list[ItemID], collection_name: str = None, **kwargs) -> None:
         """
         Delete documents from the collection of the vector database.
 
@@ -214,7 +215,7 @@ class QdrantVectorDB(VectorDB):
 
     def retrieve_docs(
         self,
-        queries: List[str],
+        queries: list[str],
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = 0,
@@ -251,8 +252,8 @@ class QdrantVectorDB(VectorDB):
         return [self._scored_points_to_documents(results) for results in batch_results]
 
     def get_docs_by_ids(
-        self, ids: List[ItemID] = None, collection_name: str = None, include=True, **kwargs
-    ) -> List[Document]:
+        self, ids: list[ItemID] = None, collection_name: str = None, include=True, **kwargs
+    ) -> list[Document]:
         """
         Retrieve documents from the collection of the vector database based on the ids.
 
@@ -280,13 +281,13 @@ class QdrantVectorDB(VectorDB):
             "embedding": point.vector,
         }
 
-    def _points_to_documents(self, points) -> List[Document]:
+    def _points_to_documents(self, points) -> list[Document]:
         return [self._point_to_document(point) for point in points]
 
-    def _scored_point_to_document(self, scored_point: models.ScoredPoint) -> Tuple[Document, float]:
+    def _scored_point_to_document(self, scored_point: models.ScoredPoint) -> tuple[Document, float]:
         return self._point_to_document(scored_point), scored_point.score
 
-    def _documents_to_points(self, documents: List[Document]):
+    def _documents_to_points(self, documents: list[Document]):
         contents = [document["content"] for document in documents]
         embeddings = self.embedding_function(contents)
         points = [
@@ -302,10 +303,10 @@ class QdrantVectorDB(VectorDB):
         ]
         return points
 
-    def _scored_points_to_documents(self, scored_points: List[models.ScoredPoint]) -> List[Tuple[Document, float]]:
+    def _scored_points_to_documents(self, scored_points: list[models.ScoredPoint]) -> list[tuple[Document, float]]:
         return [self._scored_point_to_document(scored_point) for scored_point in scored_points]
 
-    def _validate_update_ids(self, collection_name: str, ids: List[str]) -> bool:
+    def _validate_update_ids(self, collection_name: str, ids: list[str]) -> bool:
         """
         Validates all the IDs exist in the collection
         """
@@ -319,7 +320,7 @@ class QdrantVectorDB(VectorDB):
 
         return True
 
-    def _validate_upsert_ids(self, collection_name: str, ids: List[str]) -> bool:
+    def _validate_upsert_ids(self, collection_name: str, ids: list[str]) -> bool:
         """
         Validate none of the IDs exist in the collection
         """

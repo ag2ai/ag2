@@ -7,12 +7,14 @@ on:
       - "autogen/**"
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
+      - ".github/workflows/docs-check-broken-links.yml"
   push:
     branches: [main]
     paths:
       - "autogen/**"
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
+      - ".github/workflows/docs-check-broken-links.yml"
   workflow_dispatch:
   merge_group:
     types: [checks_requested]
@@ -40,7 +42,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pydoc-markdown pyyaml termcolor nbconvert
+          pip install pydoc-markdown pyyaml termcolor nbclient
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           pip install databind.core==4.4.2 databind.json==4.4.2
 
@@ -86,7 +88,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pydoc-markdown pyyaml termcolor nbconvert
+          pip install pydoc-markdown pyyaml termcolor nbclient
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           pip install databind.core==4.4.2 databind.json==4.4.2
 

@@ -306,12 +306,12 @@ def test_context_variables_updating_multi_tools():
     test_context_variables = {"my_key": 0}
 
     # Increment the context variable
-    def test_func_1(context_variables: Dict[str, Any], param1: str) -> str:
+    def test_func_1(context_variables: dict[str, Any], param1: str) -> str:
         context_variables["my_key"] += 1
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
     # Increment the context variable
-    def test_func_2(context_variables: Dict[str, Any], param2: str) -> str:
+    def test_func_2(context_variables: dict[str, Any], param2: str) -> str:
         context_variables["my_key"] += 100
         return SwarmResult(values=f"Test 2 {param2}", context_variables=context_variables, agent=agent1)
 
@@ -367,7 +367,7 @@ def test_function_transfer():
     test_context_variables = {"my_key": 0}
 
     # Increment the context variable
-    def test_func_1(context_variables: Dict[str, Any], param1: str) -> str:
+    def test_func_1(context_variables: dict[str, Any], param1: str) -> str:
         context_variables["my_key"] += 1
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
@@ -474,7 +474,7 @@ def test_update_system_message():
     message_container = MessageContainer()
 
     # 1. Test with a callable function
-    def custom_update_function(agent: ConversableAgent, messages: List[Dict]) -> str:
+    def custom_update_function(agent: ConversableAgent, messages: list[dict]) -> str:
         return f"System message with {agent.get_context('test_var')} and {len(messages)} messages"
 
     # 2. Test with a string template
@@ -537,7 +537,7 @@ def test_update_system_message():
         SwarmAgent("agent5", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(invalid_return_function))
 
     # Test multiple update functions
-    def another_update_function(context_variables: Dict[str, Any], messages: List[Dict]) -> str:
+    def another_update_function(context_variables: dict[str, Any], messages: list[dict]) -> str:
         return "Another update"
 
     agent6 = SwarmAgent(
@@ -673,17 +673,17 @@ def test_after_work_callable():
     agent3 = SwarmAgent("agent3", llm_config=testing_llm_config)
 
     def return_agent(
-        last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat
+        last_speaker: SwarmAgent, messages: list[dict[str, Any]], groupchat: GroupChat
     ) -> Union[AfterWorkOption, SwarmAgent, str]:
         return agent2
 
     def return_agent_str(
-        last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat
+        last_speaker: SwarmAgent, messages: list[dict[str, Any]], groupchat: GroupChat
     ) -> Union[AfterWorkOption, SwarmAgent, str]:
         return "agent3"
 
     def return_after_work_option(
-        last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat
+        last_speaker: SwarmAgent, messages: list[dict[str, Any]], groupchat: GroupChat
     ) -> Union[AfterWorkOption, SwarmAgent, str]:
         return AfterWorkOption.TERMINATE
 

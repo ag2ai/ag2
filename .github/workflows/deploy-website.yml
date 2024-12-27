@@ -16,21 +16,56 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Create a fresh redirect HTML file
+      # Step 2: Create redirect HTML files
       - name: Create redirect HTML
         run: |
           mkdir -p dist
+          # Homepage redirect
           cat > dist/index.html << 'EOF'
           <!DOCTYPE html>
           <html>
             <head>
               <meta charset="UTF-8">
-              <meta http-equiv="refresh" content="0; url=https://ag2ai.mintlify.app">
-              <script>window.location.href = "https://ag2ai.mintlify.app";</script>
+              <meta http-equiv="refresh" content="0; url=https://docs.ag2.ai">
+              <script>window.location.href = "https://docs.ag2.ai";</script>
               <title>Page Redirection</title>
             </head>
             <body>
-              If you are not redirected automatically, follow this <a href="https://ag2ai.mintlify.app">link to the new documentation</a>.
+              If you are not redirected automatically, follow this <a href="https://docs.ag2.ai">link to the new documentation</a>.
+            </body>
+          </html>
+          EOF
+
+          # Deep link handling
+          cat > dist/404.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <script>
+                const newDomain = 'https://docs.ag2.ai';
+                let path = window.location.pathname;
+                const hash = window.location.hash;
+
+                // Remove /ag2/ prefix and trailing slash
+                path = path.replace(/^\/ag2\//, '/').replace(/\/$/, "");
+
+                // Transform blog and talks URLs
+                if (path.includes('/blog/') || path.includes('/talks/')) {
+                  const afterPrefix = path.split(/\/(blog|talks)\//)[2];
+                  const transformed = afterPrefix.replace(/\//g, '-');
+                  path = path.replace(afterPrefix, transformed);
+                }
+
+                // Handle -index and create final URL with hash
+                const redirectUrl = (newDomain + path).replace(/-index$/, "/index") + hash;
+
+                window.location.href = redirectUrl;
+              </script>
+              <title>Page Redirection</title>
+            </head>
+            <body>
+              If you are not redirected automatically, follow this <a href="https://docs.ag2.ai">link to the new documentation</a>.
             </body>
           </html>
           EOF

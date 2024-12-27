@@ -30,7 +30,7 @@ class LLaVAAgent(MultimodalConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[Tuple[str, List]] = DEFAULT_LLAVA_SYS_MSG,
+        system_message: Optional[tuple[str, list]] = DEFAULT_LLAVA_SYS_MSG,
         *args,
         **kwargs,
     ):
@@ -40,7 +40,7 @@ class LLaVAAgent(MultimodalConversableAgent):
             system_message (str): system message for the ChatCompletion inference.
                 Please override this attribute if you want to reprogram the agent.
             **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](../conversable_agent#__init__).
+                [ConversableAgent](../conversable_agent#init).
         """
         super().__init__(
             name,

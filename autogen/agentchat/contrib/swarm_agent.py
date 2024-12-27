@@ -60,13 +60,13 @@ class ON_CONDITION:
     Args:
         target: The agent to hand off to or the nested chat configuration. Can be a SwarmAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
-            Swarm Nested chat documentation: https://ag2ai.github.io/ag2/docs/topics/swarm#registering-handoffs-to-a-nested-chat
+            Swarm Nested chat documentation: https://docs.ag2.ai/docs/topics/swarm#registering-handoffs-to-a-nested-chat
         condition: The condition for transitioning to the target agent, evaluated by the LLM to determine whether to call the underlying function/tool which does the transition.
         available: Optional condition to determine if this ON_CONDITION is available. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool.
     """
 
-    target: Union["SwarmAgent", Dict[str, Any]] = None
+    target: Union["SwarmAgent", dict[str, Any]] = None
     condition: str = ""
     available: Optional[Union[Callable, str]] = None
 
@@ -74,7 +74,7 @@ class ON_CONDITION:
         # Ensure valid types
         if self.target is not None:
             assert isinstance(self.target, SwarmAgent) or isinstance(
-                self.target, Dict
+                self.target, dict
             ), "'target' must be a SwarmAgent or a Dict"
 
         # Ensure they have a condition
@@ -118,13 +118,13 @@ class UPDATE_SYSTEM_MESSAGE:
 
 def initiate_swarm_chat(
     initial_agent: "SwarmAgent",
-    messages: Union[List[Dict[str, Any]], str],
-    agents: List["SwarmAgent"],
+    messages: Union[list[dict[str, Any]], str],
+    agents: list["SwarmAgent"],
     user_agent: Optional[UserProxyAgent] = None,
     max_rounds: int = 20,
-    context_variables: Optional[Dict[str, Any]] = None,
-    after_work: Optional[Union[AFTER_WORK, Callable]] = AFTER_WORK(AfterWorkOption.TERMINATE),
-) -> Tuple[ChatResult, Dict[str, Any], "SwarmAgent"]:
+    context_variables: Optional[dict[str, Any]] = None,
+    after_work: Optional[Union[AfterWorkOption, Callable]] = AFTER_WORK(AfterWorkOption.TERMINATE),
+) -> tuple[ChatResult, dict[str, Any], "SwarmAgent"]:
     """Initialize and run a swarm chat
 
     Args:
@@ -248,10 +248,10 @@ def initiate_swarm_chat(
         else:
             raise ValueError("Invalid After Work condition or return value from callable")
 
-    def create_nested_chats(agent: SwarmAgent, nested_chat_agents: List[SwarmAgent]):
+    def create_nested_chats(agent: SwarmAgent, nested_chat_agents: list[SwarmAgent]):
         """Create nested chat agents and register nested chats"""
         for i, nested_chat_handoff in enumerate(agent._nested_chat_handoffs):
-            nested_chats: Dict[str, Any] = nested_chat_handoff["nested_chats"]
+            nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
             condition = nested_chat_handoff["condition"]
             available = nested_chat_handoff["available"]
 
@@ -365,7 +365,7 @@ class SwarmResult(BaseModel):
 
     values: str = ""
     agent: Optional[Union["SwarmAgent", str]] = None
-    context_variables: Dict[str, Any] = {}
+    context_variables: dict[str, Any] = {}
 
     class Config:  # Add this inner class
         arbitrary_types_allowed = True
@@ -388,15 +388,15 @@ class SwarmAgent(ConversableAgent):
         self,
         name: str,
         system_message: Optional[str] = "You are a helpful AI Assistant.",
-        llm_config: Optional[Union[Dict, Literal[False]]] = None,
-        functions: Union[List[Callable], Callable] = None,
-        is_termination_msg: Optional[Callable[[Dict], bool]] = None,
+        llm_config: Optional[Union[dict, Literal[False]]] = None,
+        functions: Union[list[Callable], Callable] = None,
+        is_termination_msg: Optional[Callable[[dict], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
         code_execution_config=False,
         update_agent_state_before_reply: Optional[
-            Union[List[Union[Callable, UPDATE_SYSTEM_MESSAGE]], Callable, UPDATE_SYSTEM_MESSAGE]
+            Union[list[Union[Callable, UPDATE_SYSTEM_MESSAGE]], Callable, UPDATE_SYSTEM_MESSAGE]
         ] = None,
         **kwargs,
     ) -> None:
@@ -439,7 +439,7 @@ class SwarmAgent(ConversableAgent):
         if name != __TOOL_EXECUTOR_NAME__:
             self.register_hook("update_agent_state", self._update_conditional_functions)
 
-    def register_update_agent_state_before_reply(self, functions: Optional[Union[List[Callable], Callable]]):
+    def register_update_agent_state_before_reply(self, functions: Optional[Union[list[Callable], Callable]]):
         """
         Register functions that will be called when the agent is selected and before it speaks.
         You can add your own validation or precondition functions here.
@@ -464,8 +464,8 @@ class SwarmAgent(ConversableAgent):
                 # Outer function to create a closure with the update function
                 def create_wrapper(update_func: UPDATE_SYSTEM_MESSAGE):
                     def update_system_message_wrapper(
-                        agent: ConversableAgent, messages: List[Dict[str, Any]]
-                    ) -> List[Dict[str, Any]]:
+                        agent: ConversableAgent, messages: list[dict[str, Any]]
+                    ) -> list[dict[str, Any]]:
                         if isinstance(update_func.update_function, str):
                             # Templates like "My context variable passport is {passport}" will
                             # use the context_variables for substitution
@@ -502,7 +502,7 @@ class SwarmAgent(ConversableAgent):
 
     def register_hand_off(
         self,
-        hand_to: Union[List[Union[ON_CONDITION, AFTER_WORK]], ON_CONDITION, AFTER_WORK],
+        hand_to: Union[list[Union[ON_CONDITION, AFTER_WORK]], ON_CONDITION, AFTER_WORK],
     ):
         """Register a function to hand off to another agent.
 
@@ -555,7 +555,7 @@ class SwarmAgent(ConversableAgent):
                     # Store function to add/remove later based on it being 'available'
                     self._conditional_functions[func_name] = (transfer_func, transit)
 
-                elif isinstance(transit.target, Dict):
+                elif isinstance(transit.target, dict):
                     # Transition to a nested chat
                     # We will store them here and establish them in the initiate_swarm_chat
                     self._nested_chat_handoffs.append(
@@ -566,7 +566,7 @@ class SwarmAgent(ConversableAgent):
                 raise ValueError("Invalid hand off condition, must be either ON_CONDITION or AFTER_WORK")
 
     @staticmethod
-    def _update_conditional_functions(agent: Agent, messages: Optional[List[Dict]] = None) -> None:
+    def _update_conditional_functions(agent: Agent, messages: Optional[list[dict]] = None) -> None:
         """Updates the agent's functions based on the ON_CONDITION's available condition."""
         for func_name, (func, on_condition) in agent._conditional_functions.items():
             is_available = True
@@ -588,10 +588,10 @@ class SwarmAgent(ConversableAgent):
 
     def generate_swarm_tool_reply(
         self,
-        messages: Optional[List[Dict]] = None,
+        messages: Optional[list[dict]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> Tuple[bool, dict]:
+    ) -> tuple[bool, dict]:
         """Pre-processes and generates tool call replies.
 
         This function:
@@ -697,15 +697,15 @@ class SwarmAgent(ConversableAgent):
         self.update_tool_signature(f_no_context, is_remove=False)
         self.register_function({func._name: func})
 
-    def add_functions(self, func_list: List[Callable]):
+    def add_functions(self, func_list: list[Callable]):
         for func in func_list:
             self.add_single_function(func)
 
     @staticmethod
     def process_nested_chat_carryover(
-        chat: Dict[str, Any],
+        chat: dict[str, Any],
         recipient: ConversableAgent,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         sender: ConversableAgent,
         config: Any,
         trim_n_messages: int = 0,
@@ -730,7 +730,7 @@ class SwarmAgent(ConversableAgent):
             trim_n_messages: The number of latest messages to trim from the messages list
         """
 
-        def concat_carryover(chat_message: str, carryover_message: Union[str, List[Dict[str, Any]]]) -> str:
+        def concat_carryover(chat_message: str, carryover_message: Union[str, list[dict[str, Any]]]) -> str:
             """Concatenate the carryover message to the chat message."""
             prefix = f"{chat_message}\n" if chat_message else ""
 
@@ -799,8 +799,8 @@ class SwarmAgent(ConversableAgent):
 
     @staticmethod
     def _summary_from_nested_chats(
-        chat_queue: List[Dict[str, Any]], recipient: Agent, messages: Union[str, Callable], sender: Agent, config: Any
-    ) -> Tuple[bool, Union[str, None]]:
+        chat_queue: list[dict[str, Any]], recipient: Agent, messages: Union[str, Callable], sender: Agent, config: Any
+    ) -> tuple[bool, Union[str, None]]:
         """Overridden _summary_from_nested_chats method from ConversableAgent.
         This function initiates one or a sequence of chats between the "recipient" and the agents in the chat_queue.
 
