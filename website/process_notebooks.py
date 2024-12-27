@@ -24,7 +24,6 @@ import typing
 from dataclasses import dataclass
 from multiprocessing import current_process
 from pathlib import Path
-from textwrap import dedent, indent
 from typing import Dict, List, Optional, Tuple, Union
 
 from termcolor import colored
@@ -357,14 +356,12 @@ def add_front_matter_to_metadata_mdx(
 
 def convert_callout_blocks(content: str) -> str:
     """
-    Converts MDX callout block syntax to custom HTML/component syntax.
-
-    Args:
-        content (str): The markdown content containing mdx-code-block callout syntax
-
-    Returns:
-        str: The converted content with HTML/component callout syntax
+    Converts callout blocks in the following formats:
+    1) Plain callout blocks using ::: syntax.
+    2) Blocks using 3-4 backticks + (mdx-code-block or {=mdx}) + ::: syntax.
+    Transforms them into custom HTML/component syntax.
     """
+
     callout_types = {
         "tip": "Tip",
         "note": "Note",
@@ -375,33 +372,73 @@ def convert_callout_blocks(content: str) -> str:
         "danger": "Warning",
     }
 
-    def replace_callout(match: re.Match) -> str:
-        """Helper function to format individual callout blocks."""
-        callout_type = match.group(1)
-        inner_content = match.group(2).strip()
+    # Regex explanation (using alternation):
+    #
+    # -- Alternative #1: Backticks + mdx-code-block/{=mdx} --
+    #
+    #   ^(?P<backticks>`{3,4})(?:mdx-code-block|\{=mdx\})[ \t]*\n
+    #     - Matches opening backticks and optional mdx markers.
+    #   :::(?P<callout_type_backtick>...)  
+    #     - Captures the callout type.
+    #   (.*?)                              
+    #     - Captures the content inside the callout.
+    #   ^:::[ \t]*\n
+    #     - Matches the closing ::: line.
+    #   (?P=backticks)
+    #     - Ensures the same number of backticks close the block.
+    #
+    # -- Alternative #2: Plain ::: callout --
+    #
+    #   ^:::(?P<callout_type_no_backtick>...)
+    #     - Captures the callout type after :::.
+    #   (.*?)
+    #     - Captures the content inside the callout.
+    #   ^:::
+    #     - Matches the closing ::: line.
+    #
+    #  (?s)(?m): DOTALL + MULTILINE flags.
+    #    - DOTALL (`.` matches everything, including newlines).
+    #    - MULTILINE (`^` and `$` work at the start/end of each line).
+
+    pattern = re.compile(
+        r"(?s)(?m)"
+        r"(?:"
+        # Alternative #1: Backticks + mdx-code-block/{=mdx}
+        r"^(?P<backticks>`{3,4})(?:mdx-code-block|\{=mdx\})[ \t]*\n"
+        r":::(?P<callout_type_backtick>\w+(?:\s+\w+)?)[ \t]*\n"
+        r"(?P<inner_backtick>.*?)"
+        r"^:::[ \t]*\n"
+        r"(?P=backticks)"   # Closing backticks must match the opening count.
+        r")"
+        r"|"
+        # Alternative #2: Plain ::: callout
+        r"(?:"
+        r"^:::(?P<callout_type_no_backtick>\w+(?:\s+\w+)?)[ \t]*\n"
+        r"(?P<inner_no_backtick>.*?)"
+        r"^:::[ \t]*(?:\n|$)"
+        r")"
+    )
+
+    def replace_callout(m: re.Match) -> str:
+        # Determine the matched alternative and extract the corresponding groups.
+        ctype = m.group('callout_type_backtick') or m.group('callout_type_no_backtick')
+        inner = m.group('inner_backtick') or m.group('inner_no_backtick') or ""
+
+        # Map the callout type to its standard representation or fallback to the original type.
+        mapped_type = callout_types.get(ctype, ctype)
+        
+        # Return the formatted HTML block.
         return f"""
-<div class="{callout_type}">
-<{callout_types[callout_type]}>
-{inner_content}
-</{callout_types[callout_type]}>
+<div class="{ctype}">
+    <{mapped_type}>
+        {inner.strip()}
+    </{mapped_type}>
 </div>
 """
 
-    pattern = re.compile(
-        r'(?P<opening>`{3,4}'
-        r'(?:\s*(?:mdx-code-block|\{=mdx\}))+\s*'
-        r')?\r?\n'
-
-        r':::(\w+(?:\s+\w+)?)\r?\n'
-        r'(.*?)\r?\n'
-        r':::\r?\n'
-
-        r'(?(opening)`{3,4}\s*\r?\n|)',
-
-        flags=re.DOTALL
-    )
-
+    # Apply the regex pattern and replace matched callouts with the custom HTML structure.
     return pattern.sub(replace_callout, content)
+
 
 
 def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
@@ -687,106 +724,6 @@ def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
             sys.exit(1)
 
 
-def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict[str, str]]) -> str:
-    """Constructs HTML for displaying author cards in a blog.
-
-    Args:
-        authors_list: List of author identifiers
-        authors_dict: Dictionary containing author information keyed by author identifier
-
-    Returns:
-        str: Formatted HTML string containing author cards
-    """
-
-    if not authors_list:
-        return ""
-
-    card_template = """
-        <Card href="{url}">
-            <div class="col card">
-              <div class="img-placeholder">
-                <img noZoom src="{image_url}" />
-              </div>
-              <div>
-                <p class="name">{name}</p>
-                <p>{title}</p>
-              </div>
-            </div>
-        </Card>"""
-
-    authors_html = [card_template.format(**authors_dict[author]) for author in authors_list]
-
-    author_label = "Author:" if len(authors_list) == 1 else "Authors:"
-    authors_html_str = indent("".join(authors_html), "        ")
-    retval = dedent(
-        f"""
-            <div class="blog-authors">
-              <p class="authors">{author_label}</p>
-              <CardGroup cols={{2}}>{authors_html_str}
-              </CardGroup>
-            </div>
-        """
-    )
-    return retval
-
-
-def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
-    """Separate front matter and content from a markdown file.
-
-    Args:
-        file_path (Path): Path to the mdx file
-    """
-    content = file_path.read_text(encoding="utf-8")
-
-    if content.startswith("---"):
-        front_matter_end = content.find("---", 3)
-        front_matter = content[0 : front_matter_end + 3]
-        content = content[front_matter_end + 3 :].strip()
-        return front_matter, content
-
-    return "", content
-
-
-def add_authors_info_to_blog_posts(website_dir: Path) -> None:
-    """Add authors info to blog posts.
-
-    Args:
-        website_dir (Path): Root directory of the website
-    """
-    blog_dir = website_dir / "blog"
-    authors_yml = blog_dir / "authors.yml"
-
-    try:
-        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError) as e:
-        print(f"Error reading authors file: {e}")
-        sys.exit(1)
-
-    for file_path in blog_dir.glob("**/*.mdx"):
-        try:
-            front_matter_string, content = separate_front_matter_and_content(file_path)
-
-            # Skip if authors section already exists
-            if '<div class="blog-authors">' in content:
-                continue
-
-            # Convert single author to list and handle authors
-            front_matter = yaml.safe_load(front_matter_string[4:-3])
-            authors = front_matter.get("authors", [])
-            authors_list = [authors] if isinstance(authors, str) else authors
-
-            # Generate and write content
-            authors_html = construct_authors_html(authors_list, all_authors_info)
-            new_content = f"{front_matter_string}\n{authors_html}\n{content}"
-
-            file_path.write_text(f"{new_content}\n", encoding="utf-8")
-            print(f"Added authors info to {file_path}")
-
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-            continue
-
-
 def main() -> None:
     script_dir = Path(__file__).parent.absolute()
     parser = argparse.ArgumentParser()
@@ -882,7 +819,6 @@ def main() -> None:
             copy_examples_mdx_files(args.website_directory)
             update_navigation_with_notebooks(args.website_directory)
             fix_internal_references_in_mdx_files(args.website_directory)
-            add_authors_info_to_blog_posts(args.website_directory)
 
     else:
         print("Unknown subcommand")
