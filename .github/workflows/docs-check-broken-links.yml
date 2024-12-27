@@ -2,14 +2,18 @@ name: Check docs for broken links
 
 on:
   workflow_call:
+    inputs:
+      event_name:
+        required: true
+        type: string
 
 jobs:
   check-broken-link:
-    name: Check docs for broken links
+    if: inputs.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Sleep for 5 minutes
         run: sleep 300
+
       - name: Check links using container
         run: ./scripts/broken-links-check.sh
