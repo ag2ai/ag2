@@ -388,7 +388,7 @@ def convert_callout_blocks(content: str) -> str:
 """
 
     pattern = re.compile(
-        r'(?P<opening>```{3,4}'
+        r'(?P<opening>`{3,4}'
         r'(?:\s*(?:mdx-code-block|\{=mdx\}))+\s*'
         r')?\r?\n'
 
@@ -396,7 +396,7 @@ def convert_callout_blocks(content: str) -> str:
         r'(.*?)\r?\n'
         r':::\r?\n'
 
-        r'(?(opening)```{3,4}\s*\r?\n|)',
+        r'(?(opening)`{3,4}\s*\r?\n|)',
 
         flags=re.DOTALL
     )
