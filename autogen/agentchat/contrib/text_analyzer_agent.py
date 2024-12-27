@@ -35,7 +35,7 @@ class TextAnalyzerAgent(ConversableAgent):
                 Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
                 for available options.
                 To disable llm-based auto reply, set to False.
-            **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#__init__).
+            **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).
         """
         super().__init__(
             name=name,
