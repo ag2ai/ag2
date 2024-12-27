@@ -388,21 +388,17 @@ def convert_callout_blocks(content: str) -> str:
 """
 
     pattern = re.compile(
-        # Matches optional opening fences:
-        # - 3 or 4 backticks (` ``` ` or ` ```` `),
-        # - optionally followed by "mdx-code-block",
-        # - optionally followed by "{=mdx}",
-        # - optional whitespace and line ending.
-        r"(?:```{3,4}(?:\s*(?:mdx-code-block|\{=mdx\}))+\s*)?\r?\n?"
-        # Matches the opening line of the callout (e.g., ":::info").
-        r":::(\w+(?:\s+\w+)?)\r?\n"
-        # Matches the content inside the callout, capturing until the closing line.
-        r"(.*?)"  # Uses non-greedy matching to capture content.
-        # Matches the closing line (e.g., ":::").
-        r"\r?\n:::\r?\n"
-        # Matches optional closing fences (same as the opening fences).
-        r"(?:`{3,4}(?:\s*mdx-code-block)?(?:\s*\{=mdx\})?" r"|mdx-code-block(?:\s*\{=mdx\})?)?\s*\r?\n?",
-        flags=re.DOTALL,  # DOTALL allows `.` to match newline characters.
+        r'(?P<opening>```{3,4}'
+        r'(?:\s*(?:mdx-code-block|\{=mdx\}))+\s*'
+        r')?\r?\n'
+
+        r':::(\w+(?:\s+\w+)?)\r?\n'
+        r'(.*?)\r?\n'
+        r':::\r?\n'
+
+        r'(?(opening)```{3,4}\s*\r?\n|)',
+
+        flags=re.DOTALL
     )
 
     return pattern.sub(replace_callout, content)
