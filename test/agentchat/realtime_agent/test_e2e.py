@@ -15,7 +15,7 @@ from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen.agentchat.realtime_agent import FunctionObserver, RealtimeAgent, WebsocketAudioAdapter
-from autogen.agentchat.realtime_agent.client import OpenAIRealtimeClient
+from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)

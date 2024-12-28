@@ -16,8 +16,8 @@ from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.function_utils import get_function_schema
 
-from .client import OpenAIRealtimeClient, Role
 from .function_observer import FunctionObserver
+from .oai_realtime_client import OpenAIRealtimeClient, Role
 from .realtime_observer import RealtimeObserver
 
 F = TypeVar("F", bound=Callable[..., Any])

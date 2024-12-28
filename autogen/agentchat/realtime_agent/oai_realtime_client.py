@@ -6,59 +6,49 @@
 # SPDX-License-Identifier: MIT
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
 
-from asyncer import TaskGroup, asyncify, create_task_group
+from asyncer import TaskGroup, create_task_group
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
-from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
+from .realtime_client import Role
 
 if TYPE_CHECKING:
-    from .function_observer import FunctionObserver
-    from .realtime_agent import RealtimeAgent
-    from .realtime_observer import RealtimeObserver
+    from .realtime_client import RealtimeClientProtocol 
 
 __all__ = ["OpenAIRealtimeClient", "Role"]
 
 logger = logging.getLogger(__name__)
-
-# define role literal type for typing
-Role = Literal["user", "assistant", "system"]
 
 
 class OpenAIRealtimeClient:
     """(Experimental) Client for OpenAI Realtime API."""
 
     def __init__(
-        self, agent: "RealtimeAgent", audio_adapter: "RealtimeObserver", function_observer: "FunctionObserver"
+        self,
+        *,
+        llm_config: dict[str, Any],
+        voice: str,
+        system_message: str,
     ) -> None:
         """(Experimental) Client for OpenAI Realtime API.
 
         Args:
-            agent (RealtimeAgent): The agent that the client is associated with.
-            audio_adapter (RealtimeObserver): The audio adapter for the client.
-            function_observer (FunctionObserver): The function observer for the client.
-
+            llm_config (dict[str, Any]): The config for the client.
         """
-        self._agent = agent
-        self._observers: list["RealtimeObserver"] = []
+        self._llm_config = llm_config
+        self._voice = voice
+        self._system_message = system_message
+
         self._connection: Optional[AsyncRealtimeConnection] = None
-        self.register(audio_adapter)
-        self.register(function_observer)
 
-        # LLM config
-        llm_config = self._agent.llm_config
-        config = agent.config
+        config = llm_config["config_list"][0]
+        self._model: str = config["model"]
+        self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
 
-        self.model: str = config["model"]
-        self.temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
-
-        # create a task group to manage the tasks
-        self._tg: Optional[TaskGroup] = None
-
-        self.client = AsyncOpenAI(
+        self._client = AsyncOpenAI(
             api_key=config.get("api_key", None),
             organization=config.get("organization", None),
             project=config.get("project", None),
@@ -70,6 +60,8 @@ class OpenAIRealtimeClient:
             default_query=config.get("default_query", None),
         )
 
+        self._tg: Optional[TaskGroup] = None
+
     @property
     def connection(self) -> AsyncRealtimeConnection:
         """Get the OpenAI WebSocket connection."""
@@ -77,22 +69,7 @@ class OpenAIRealtimeClient:
             raise RuntimeError("OpenAI WebSocket is not initialized")
         return self._connection
 
-    def register(self, observer: "RealtimeObserver") -> None:
-        """Register an observer to the client."""
-        observer.register_client(self)
-        self._observers.append(observer)
-
-    async def notify_observers(self, event: RealtimeServerEvent) -> None:
-        """Notify all observers of a event from the OpenAI Realtime API.
-
-        Args:
-            event (RealtimeServerEvent): The message from the OpenAI Realtime API.
-
-        """
-        for observer in self._observers:
-            await observer.update(event)
-
-    async def function_result(self, call_id: str, result: str) -> None:
+    async def send_function_result(self, call_id: str, result: str) -> None:
         """Send the result of a function call to the OpenAI Realtime API.
 
         Args:
@@ -116,9 +93,6 @@ class OpenAIRealtimeClient:
             role (str): The role of the message.
             text (str): The text of the message.
         """
-        if self.connection is None:
-            raise RuntimeError("OpenAI WebSocket is not initialized")
-
         await self.connection.response.cancel()
         await self.connection.conversation.item.create(
             item={"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]}
@@ -145,20 +119,17 @@ class OpenAIRealtimeClient:
             audio_end_ms=audio_end_ms, content_index=content_index, item_id=item_id
         )
 
-    # todo override in specific clients
-    async def initialize_session(self) -> None:
+    async def _initialize_session(self) -> None:
         """Control initial session with OpenAI."""
         session_update = {
-            # todo: move to config
             "turn_detection": {"type": "server_vad"},
-            "voice": self._agent.voice,
-            "instructions": self._agent.system_message,
+            "voice": self._voice,
+            "instructions": self._system_message,
             "modalities": ["audio", "text"],
-            "temperature": self.temperature,
+            "temperature": self._temperature,
         }
         await self.session_update(session_options=session_update)
 
-    # todo override in specific clients
     async def session_update(self, session_options: dict[str, Any]) -> None:
         """Send a session update to the OpenAI Realtime API.
 
@@ -169,38 +140,35 @@ class OpenAIRealtimeClient:
         await self.connection.session.update(session=session_options)  # type: ignore[arg-type]
         logger.info("Sending session update finished")
 
-    async def _read_from_client(self) -> None:
+    async def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
         """Read messages from the OpenAI Realtime API."""
         try:
-            async for event in self.connection:
-                await self.notify_observers(event)
-        except Exception as e:
-            logger.warning(f"Error in _read_from_client: {e}")
+            async with self._client.beta.realtime.connect(
+                model=self._model,
+            ) as self._connection:
 
-    async def run(self) -> None:
-        """Run the client."""
-        async with self.client.beta.realtime.connect(
-            model=self.model,
-        ) as connection:
-            self._connection = connection
+                await self._initialize_session()
 
-            await self.initialize_session()
-            # await self.send_text(role="user", text="Hi!")
-            async with create_task_group() as tg:
-                self._tg = tg
-                self._tg.soonify(self._read_from_client)()
-                for observer in self._observers:
-                    self._tg.soonify(observer.run)()
+                async with create_task_group() as self._tg:
+                    async for event in self._connection:
+                        yield event.model_dump()
 
-                initial_agent = self._agent._initial_agent
-                agents = self._agent._agents
-                user_agent = self._agent
+        finally:
+            self._tg = None
+            self._connection = None
 
-                if (initial_agent and agents) and self._agent._start_swarm_chat:
-                    self._tg.soonify(asyncify(initiate_swarm_chat))(
-                        initial_agent=initial_agent,
-                        agents=agents,
-                        user_agent=user_agent,  # type: ignore[arg-type]
-                        messages="Find out what the user wants.",
-                        after_work=AfterWorkOption.REVERT_TO_USER,
-                    )
+    def request_shutdown(self) -> None:
+        """Request a shutdown of a Realtime API."""
+        if self._tg is None:
+            raise RuntimeError("Client is not running, call read_events first.")
+        self._tg.cancel_scope.cancel()
+
+
+# needed for mypy to check if OpenAIRealtimeClient implements RealtimeClientProtocol
+if TYPE_CHECKING:
+    _client: RealtimeClientProtocol = OpenAIRealtimeClient(
+        llm_config={},
+        voice="alloy",
+        system_message="You are a helpful AI voice assistant."
+    )
+

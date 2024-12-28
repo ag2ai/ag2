@@ -5,15 +5,14 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal, Optional
 
-import anyio
+from asyncer import TaskGroup, create_task_group
 from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
 if TYPE_CHECKING:
-    from .client import OpenAIRealtimeClient
+    from .oai_realtime_client import OpenAIRealtimeClient
 
 RunningState = Literal["not started", "running", "shutdown requested", "shutdown completed"]
 
@@ -24,7 +23,7 @@ class RealtimeObserver(ABC):
     def __init__(self) -> None:
         self._client: Optional["OpenAIRealtimeClient"] = None
         self._shutdown_state: RunningState = "not started"
-        self._run_tg: Optional[anyio.abc.TaskGroup] = None
+        self._tg: Optional[TaskGroup] = None
 
     @property
     def running_state(self) -> RunningState:
@@ -47,16 +46,16 @@ class RealtimeObserver(ABC):
         """Shutdown the observer."""
         if self._shutdown_state != "running":
             raise RuntimeError("Observer is not running.")
-        if self._run_tg is None:
+        if self._tg is None:
             raise RuntimeError("Task group is not initialized.")
 
         self._shutdown_state = "shutdown requested"
-        self._run_tg.cancel_scope.cancel()
+        self._tg.cancel_scope.cancel()
 
     async def run(self) -> None:
         try:
-            async with anyio.create_task_group() as tg:
-                self._run_tg = tg
+            async with create_task_group() as tg:
+                self._tg = tg
                 self._shutdown_state = "running"
                 tg.start_soon(self._run)
         finally:

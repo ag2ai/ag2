@@ -5,7 +5,6 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from asyncio import CancelledError
 from unittest.mock import MagicMock
 
 import anyio
