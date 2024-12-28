@@ -4,14 +4,14 @@
 import hashlib
 import json
 import os
-from typing import Callable, Dict, List, Literal, Optional, Union
+from typing import Callable, Literal, Optional, Union
 
 import autogen
 from autogen import UserProxyAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
 
 from .agent_builder import AgentBuilder
-from .tool_retriever import ToolBuilder, get_full_tool_description
+from .tool_retriever import ToolBuilder, format_ag2_tool, get_full_tool_description
 
 
 class CaptainAgent(ConversableAgent):
@@ -387,8 +387,9 @@ Collect information from the general task, follow the suggestions from manager t
                 # tool library is enabled, reload tools and bind them to the agents
                 tool_root_dir = self.tool_root_dir
                 tool_builder = ToolBuilder(
-                    corpus_path=os.path.join(tool_root_dir, "tool_description.tsv"),
+                    corpus_root=tool_root_dir,
                     retriever=self._nested_config["autobuild_tool_config"].get("retriever", "all-mpnet-base-v2"),
+                    type=self.tool_type,
                 )
                 for idx, agent in enumerate(agent_list):
                     if idx == len(self.tool_history[group_name]):
@@ -404,39 +405,57 @@ Collect information from the general task, follow the suggestions from manager t
                 self.build_history[group_name] = agent_configs.copy()
 
                 if self._nested_config.get("autobuild_tool_config", None) and agent_configs["coding"] is True:
-                    print("==> Retrieving tools...", flush=True)
                     skills = building_task.split("\n")
                     if len(skills) == 0:
                         skills = [building_task]
 
+                    tool_type = "default"
                     if self._nested_config["autobuild_tool_config"].get("tool_root", "default") == "default":
+                        print("==> Retrieving tools...", flush=True)
                         cur_path = os.path.dirname(os.path.abspath(__file__))
                         tool_root_dir = os.path.join(cur_path, "captainagent", "tools")
+                    elif isinstance(self._nested_config["autobuild_tool_config"].get("tool_root", "default"), list):
+                        # We get a list, in this case, we assume it contains several tools for the agents
+                        tool_root_dir = self._nested_config["autobuild_tool_config"]["tool_root"]
+                        tool_type = "user_defined"
                     else:
                         tool_root_dir = self._nested_config["autobuild_tool_config"]["tool_root"]
                     self.tool_root_dir = tool_root_dir
+                    self.tool_type = tool_type
 
                     # Retrieve and build tools based on the smilarities between the skills and the tool description
                     tool_builder = ToolBuilder(
-                        corpus_path=os.path.join(tool_root_dir, "tool_description.tsv"),
+                        corpus_root=tool_root_dir,
                         retriever=self._nested_config["autobuild_tool_config"].get("retriever", "all-mpnet-base-v2"),
+                        type=tool_type,
                     )
-                    for idx, skill in enumerate(skills):
-                        tools = tool_builder.retrieve(skill)
+                    if tool_type == "default":
+                        for idx, skill in enumerate(skills):
+                            tools = tool_builder.retrieve(skill)
+                            docstrings = []
+                            for tool in tools:
+                                category, tool_name = tool.split(" ")[0], tool.split(" ")[1]
+                                tool_path = os.path.join(tool_root_dir, category, f"{tool_name}.py")
+                                docstring = get_full_tool_description(tool_path)
+                                docstrings.append(docstring)
+                            tool_builder.bind(agent_list[idx], "\n\n".join(docstrings))
+                        # the last agent is the user proxy agent, we need special treatment
+                        agent_list[-1] = tool_builder.bind_user_proxy(agent_list[-1], tool_root_dir)
+                    else:
+                        # a list containing all the tools that the agents share
                         docstrings = []
-                        for tool in tools:
-                            category, tool_name = tool.split(" ")[0], tool.split(" ")[1]
-                            tool_path = os.path.join(tool_root_dir, category, f"{tool_name}.py")
-                            docstring = get_full_tool_description(tool_path)
-                            docstrings.append(docstring)
-                        tool_builder.bind(agent_list[idx], "\n\n".join(docstrings))
-                        # log tools
-                        tool_history = self.tool_history.get(group_name, [])
-                        tool_history.append(docstrings)
-                        self.tool_history[group_name] = tool_history
+                        for tool in tool_root_dir:
+                            docstrings.append(format_ag2_tool(tool))
+                        for idx, agent in enumerate(agent_list):
+                            if idx == len(agent_list) - 1:
+                                break
+                            tool_builder.bind(agent, "\n\n".join(docstrings))
+                        agent_list[-1] = tool_builder.bind_user_proxy(agent_list[-1], tool_root_dir)
 
-                    agent_list[-1] = tool_builder.bind_user_proxy(agent_list[-1], tool_root_dir)
-
+                    # log tools
+                    tool_history = self.tool_history.get(group_name, [])
+                    tool_history.append(docstrings)
+                    self.tool_history[group_name] = tool_history
             else:
                 # Build agents from scratch
                 agent_list, agent_configs = builder.build(
