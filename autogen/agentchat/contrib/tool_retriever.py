@@ -4,16 +4,26 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import contextlib
+import functools
 import importlib.util
 import inspect
+import io
 import os
+import traceback
+from hashlib import md5
+from pathlib import Path
 from textwrap import dedent, indent
+from typing import List, Optional, Union
 
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.coding import LocalCommandLineCodeExecutor
+from autogen.coding.base import CodeBlock, CodeResult
+from autogen.function_utils import get_function_schema, load_basemodels_if_needed
+from autogen.tools import Tool
 
 
 class ToolBuilder:
@@ -23,13 +33,20 @@ For example, if there is a function called `foo` you could import it by writing 
 {functions}
 """
 
-    def __init__(self, corpus_path, retriever="all-mpnet-base-v2"):
-
-        self.df = pd.read_csv(corpus_path, sep="\t")
-        document_list = self.df["document_content"].tolist()
+    def __init__(self, corpus_root, retriever="all-mpnet-base-v2", type="default"):
+        if type == "default":
+            corpus_path = os.path.join(corpus_root, "tool_description.tsv")
+            self.df = pd.read_csv(corpus_path, sep="\t")
+            document_list = self.df["document_content"].tolist()
+        else:
+            # user defined tools, retrieve is actually not needed, just for consistency
+            document_list = []
+            for tool in corpus_root:
+                document_list.append(tool.description)
 
         self.model = SentenceTransformer(retriever)
         self.embeddings = self.model.encode(document_list)
+        self.type = type
 
     def retrieve(self, query, top_k=3):
         # Encode the query using the Sentence Transformer model
@@ -49,32 +66,148 @@ For example, if there is a function called `foo` you could import it by writing 
         agent.update_system_message(sys_message)
         return
 
-    def bind_user_proxy(self, agent: UserProxyAgent, tool_root: str):
+    def bind_user_proxy(self, agent: UserProxyAgent, tool_root: Union[str, list]):
         """
         Updates user proxy agent with a executor so that code executor can successfully execute function-related code.
         Returns an updated user proxy.
         """
-        # Find all the functions in the tool root
-        functions = find_callables(tool_root)
+        if isinstance(tool_root, str):
+            # Find all the functions in the tool root
+            functions = find_callables(tool_root)
 
-        code_execution_config = agent._code_execution_config
-        executor = LocalCommandLineCodeExecutor(
-            timeout=code_execution_config.get("timeout", 180),
-            work_dir=code_execution_config.get("work_dir", "coding"),
-            functions=functions,
-        )
-        code_execution_config = {
-            "executor": executor,
-            "last_n_messages": code_execution_config.get("last_n_messages", 1),
-        }
-        updated_user_proxy = UserProxyAgent(
-            name=agent.name,
-            is_termination_msg=agent._is_termination_msg,
-            code_execution_config=code_execution_config,
-            human_input_mode="NEVER",
-            default_auto_reply=agent._default_auto_reply,
-        )
-        return updated_user_proxy
+            code_execution_config = agent._code_execution_config
+            executor = LocalCommandLineCodeExecutor(
+                timeout=code_execution_config.get("timeout", 180),
+                work_dir=code_execution_config.get("work_dir", "coding"),
+                functions=functions,
+            )
+            code_execution_config = {
+                "executor": executor,
+                "last_n_messages": code_execution_config.get("last_n_messages", 1),
+            }
+            updated_user_proxy = UserProxyAgent(
+                name=agent.name,
+                is_termination_msg=agent._is_termination_msg,
+                code_execution_config=code_execution_config,
+                human_input_mode="NEVER",
+                default_auto_reply=agent._default_auto_reply,
+            )
+            return updated_user_proxy
+        else:
+            # second case: user defined tools
+
+            executor = LocalExecutorWithTools(tools=tool_root)
+
+
+class LocalExecutorWithTools:
+    """An executor that executes code blocks with injected tools."""
+
+    def __init__(self, tools: Optional[List[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
+        self.tools = tools if tools is not None else []
+        self.work_dir = work_dir
+        if not os.path.exists(work_dir):
+            os.makedirs(work_dir, exist_ok=True)
+
+    def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> CodeResult:
+        """Execute code blocks and return the result.
+
+        Args:
+            code_blocks (List[CodeBlock]): The code blocks to execute.
+
+        Returns:
+            CodeResult: The result of the code execution.
+        """
+        logs_all = ""
+        exit_code = 0  # Success code
+        code_file = None  # Path to the first saved codeblock content
+
+        for idx, code_block in enumerate(code_blocks):
+            code = code_block.code
+            code_hash = md5(code.encode()).hexdigest()
+            filename = f"tmp_code_{code_hash}.py"
+            filepath = os.path.join(self.work_dir, filename)
+            # Save code content to file
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(code)
+
+            if idx == 0:
+                code_file = filepath
+
+            # Create a new execution environment
+            execution_env = {}
+            # Inject the tools
+            for tool in self.tools:
+                execution_env[tool.name] = _wrap_function(tool.func)
+
+            # Prepare to capture stdout and stderr
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            # Execute the code block
+            try:
+                # Redirect stdout and stderr
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    # Exec the code in the execution environment
+                    exec(code, execution_env)
+            except Exception:
+                # Capture exception traceback
+                tb = traceback.format_exc()
+                stderr.write(tb)
+                exit_code = 1  # Non-zero exit code indicates failure
+
+            # Collect outputs
+            stdout_content = stdout.getvalue()
+            stderr_content = stderr.getvalue()
+            logs_all += stdout_content + stderr_content
+
+        return CodeResult(exit_code=exit_code, output=logs_all, code_file=code_file)
+
+    def restart(self):
+        """Restart the code executor. Since this executor is stateless, no action is needed."""
+        pass
+
+
+def remove_extra(text):
+    # some tool description has (IMPORTANT: ) at the end, remove it as it is not needed
+    idx = text.find("(IMPORTANT:")
+    return text[:idx] if idx != -1 else text
+
+
+def format_ag2_tool(tool: Tool):
+    # get the args first
+    schema = get_function_schema(tool.func, description=tool.description)
+    description = remove_extra(tool.description)
+
+    arg_name = list(inspect.signature(tool.func).parameters.keys())[0]
+    arg_info = schema["function"]["parameters"]["properties"][arg_name]["properties"]
+
+    content = f'def {tool.name}({" ,".join(list(arg_info.keys()))}):\n    """\n'
+    content += indent(description, "    ") + "\n"
+    for arg, info in arg_info.items():
+        content += f"    {arg} ({info['type']}): {info['description']}\n"
+    content += '    """\n'
+    return content
+    # schema['function']['parameters']['properties']['args']['properties']
+
+
+def _wrap_function(func):
+    """Wrap the function to dump the return value to json.
+
+    Handles both sync and async functions.
+
+    Args:
+        func: the function to be wrapped.
+
+    Returns:
+        The wrapped function.
+    """
+
+    @load_basemodels_if_needed
+    @functools.wraps(func)
+    def _wrapped_func(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return _wrapped_func
 
 
 def get_full_tool_description(py_file):
