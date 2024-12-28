@@ -27,9 +27,13 @@ from autogen.tools import Tool
 
 
 class ToolBuilder:
-    TOOL_USING_PROMPT = """# Functions
-    You have access to the following functions. They can be accessed from the module called 'functions' by their function names.
+    TOOL_PROMPT_DEFAULT = """\n## Functions
+You have access to the following functions. They can be accessed from the module called 'functions' by their function names.
 For example, if there is a function called `foo` you could import it by writing `from functions import foo`
+{functions}
+"""
+    TOOL_PROMPT_USER_DEFINED = """\n## Functions
+You have access to the following functions. You can write python code to call these functions directly without importing them.
 {functions}
 """
 
@@ -38,7 +42,9 @@ For example, if there is a function called `foo` you could import it by writing 
             corpus_path = os.path.join(corpus_root, "tool_description.tsv")
             self.df = pd.read_csv(corpus_path, sep="\t")
             document_list = self.df["document_content"].tolist()
+            self.TOOL_PROMPT = self.TOOL_PROMPT_DEFAULT
         else:
+            self.TOOL_PROMPT = self.TOOL_PROMPT_USER_DEFINED
             # user defined tools, retrieve is actually not needed, just for consistency
             document_list = []
             for tool in corpus_root:
@@ -62,7 +68,7 @@ For example, if there is a function called `foo` you could import it by writing 
     def bind(self, agent: AssistantAgent, functions: str):
         """Binds the function to the agent so that agent is aware of it."""
         sys_message = agent.system_message
-        sys_message += self.TOOL_USING_PROMPT.format(functions=functions)
+        sys_message += self.TOOL_PROMPT.format(functions=functions)
         agent.update_system_message(sys_message)
         return
 
@@ -231,7 +237,13 @@ def format_ag2_tool(tool: Tool):
     content = f'def {tool.name}({arg_name}):\n    """\n'
     content += indent(tool.description, "    ") + "\n"
     content += (
-        indent(f"You should format all the arguments into a dictionary and pass it to {arg_name}.", "    ") + "\n"
+        indent(
+            f"You must format all the arguments into a dictionary and pass them as **kwargs to {arg_name}. You should use print function to get the results.",
+            "    ",
+        )
+        + "\n"
+        + indent(f"For example:\n\tresult = {tool.name}({arg_name}={{'arg1': 'value1' }})", "    ")
+        + "\n"
     )
     content += indent(f"Arguments passed in {arg_name}:\n", "    ")
     for arg, info in arg_info.items():
