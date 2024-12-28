@@ -95,8 +95,23 @@ For example, if there is a function called `foo` you could import it by writing 
             return updated_user_proxy
         else:
             # second case: user defined tools
-
-            executor = LocalExecutorWithTools(tools=tool_root)
+            code_execution_config = agent._code_execution_config
+            executor = LocalExecutorWithTools(
+                tools=tool_root,
+                work_dir=code_execution_config.get("work_dir", "coding"),
+            )
+            code_execution_config = {
+                "executor": executor,
+                "last_n_messages": code_execution_config.get("last_n_messages", 1),
+            }
+            updated_user_proxy = UserProxyAgent(
+                name=agent.name,
+                is_termination_msg=agent._is_termination_msg,
+                code_execution_config=code_execution_config,
+                human_input_mode="NEVER",
+                default_auto_reply=agent._default_auto_reply,
+            )
+            return updated_user_proxy
 
 
 class LocalExecutorWithTools:
@@ -221,7 +236,6 @@ def format_ag2_tool(tool: Tool):
         content += f"    {arg} ({info['type']}): {info['description']}\n"
     content += '    """\n'
     return content
-    # schema['function']['parameters']['properties']['args']['properties']
 
 
 def _wrap_function(func):
