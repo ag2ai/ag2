@@ -100,7 +100,41 @@ For example, if there is a function called `foo` you could import it by writing 
 
 
 class LocalExecutorWithTools:
-    """An executor that executes code blocks with injected tools."""
+    """
+    An executor that executes code blocks with injected tools. In this executor, the func within the tools can be called directly without declaring in the code block.
+
+    For example, for a tool converted from langchain, the relevant functions can be called directly.
+    ```python
+    from langchain_community.tools import WikipediaQueryRun
+    from langchain_community.utilities import WikipediaAPIWrapper
+    from autogen.interop import Interoperability
+
+    api_wrapper = WikipediaAPIWrapper(top_k_results=1, doc_content_chars_max=3000)
+    langchain_tool = WikipediaQueryRun(api_wrapper=api_wrapper)
+    interop = Interoperability()
+    ag2_tool = interop.convert_tool(tool=langchain_tool, type="langchain")
+
+    # `ag2_tool.name` is wikipedia
+    local_executor = LocalExecutorWithTools(tools=[ag2_tool], work_dir='./')
+
+    code = '''
+    result = wikipedia(tool_input={"query":"Christmas"})
+    print(result)
+    '''
+    print(
+        local_executor.execute_code_blocks(
+            code_blocks=[
+                CodeBlock(language="python", code=code),
+            ]
+        )
+    )
+    ```
+    In this case, the `wikipedia` function can be called directly in the code block. This hides the complexity of the tool.
+
+    Args:
+        tools: The tools to inject into the code execution environment. Default is an empty list.
+        work_dir: The working directory for the code execution. Default is the current directory.
+    """
 
     def __init__(self, tools: Optional[List[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
         self.tools = tools if tools is not None else []
@@ -231,6 +265,26 @@ def get_full_tool_description(py_file):
             return content
         else:
             raise ValueError(f"Function {function_name} not found in {py_file}")
+
+
+def _wrap_function(func):
+    """Wrap the function to dump the return value to json.
+
+    Handles both sync and async functions.
+
+    Args:
+        func: the function to be wrapped.
+
+    Returns:
+        The wrapped function.
+    """
+
+    @load_basemodels_if_needed
+    @functools.wraps(func)
+    def _wrapped_func(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return _wrapped_func
 
 
 def find_callables(directory):
