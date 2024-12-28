@@ -46,6 +46,27 @@ config_list = [
 
 assistant = autogen.AssistantAgent("assistant", llm_config={"config_list": config_list})
 ```
+
+Example usage for Anthropic VertexAI:
+
+Install the `anthropic` package by running `pip install anthropic[vertex]`.
+- https://docs.anthropic.com/en/docs/quickstart-guide
+
+```python
+
+import autogen
+config_list = [
+    {
+        "model": "claude-3-5-sonnet-20240620-v1:0",
+        "gcp_project_id": "dummy_project_id",
+        "gcp_region": "us-west-2",
+        "gcp_auth_token": "dummy_auth_token",
+        "api_type": "anthropic",
+    }
+]
+
+assistant = autogen.AssistantAgent("assistant", llm_config={"config_list": config_list})
+```python
 """
 
 from __future__ import annotations
@@ -58,7 +79,7 @@ import time
 import warnings
 from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
-from anthropic import Anthropic, AnthropicBedrock
+from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
 from anthropic import __version__ as anthropic_version
 from anthropic.types import Completion, Message, TextBlock, ToolUseBlock
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
@@ -100,6 +121,9 @@ class AnthropicClient:
         self._aws_secret_key = kwargs.get("aws_secret_key", None)
         self._aws_session_token = kwargs.get("aws_session_token", None)
         self._aws_region = kwargs.get("aws_region", None)
+        self._gcp_project_id = kwargs.get("gcp_project_id", None)
+        self._gcp_region = kwargs.get("gcp_region", None)
+        self._gcp_auth_token = kwargs.get("gcp_auth_token", None)
 
         if not self._api_key:
             self._api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -113,16 +137,30 @@ class AnthropicClient:
         if not self._aws_region:
             self._aws_region = os.getenv("AWS_REGION")
 
-        if self._api_key is None and (
-            self._aws_access_key is None or self._aws_secret_key is None or self._aws_region is None
-        ):
-            raise ValueError("API key or AWS credentials are required to use the Anthropic API.")
+        if not self._gcp_region:
+            self._gcp_region = os.getenv("GCP_REGION")
+
+        if self._api_key is None:
+            if self._aws_region:
+                if self._aws_access_key is None or self._aws_secret_key is None:
+                    raise ValueError("API key or AWS credentials are required to use the Anthropic API.")
+            elif self._gcp_region:
+                if self._gcp_project_id is None or self._gcp_region is None:
+                    raise ValueError("API key or GCP credentials are required to use the Anthropic API.")
+            else:
+                raise ValueError("API key or AWS credentials or GCP credentials are required to use the Anthropic API.")
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Anthropic, it will be ignored.", UserWarning)
 
         if self._api_key is not None:
             self._client = Anthropic(api_key=self._api_key)
+        elif self._gcp_region is not None:
+            kw = {}
+            for i, p in enumerate(inspect.signature(AnthropicVertex).parameters):
+                if hasattr(self, f"_gcp_{p}"):
+                    kw[p] = getattr(self, f"_gcp_{p}")
+            self._client = AnthropicVertex(**kw)
         else:
             self._client = AnthropicBedrock(
                 aws_access_key=self._aws_access_key,
@@ -181,6 +219,18 @@ class AnthropicClient:
     @property
     def aws_region(self):
         return self._aws_region
+
+    @property
+    def gcp_project_id(self):
+        return self._gcp_project_id
+
+    @property
+    def gcp_region(self):
+        return self._gcp_region
+
+    @property
+    def gcp_auth_token(self):
+        return self._gcp_auth_token
 
     def create(self, params: dict[str, Any]) -> ChatCompletion:
         if "tools" in params:

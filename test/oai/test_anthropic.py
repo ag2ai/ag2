@@ -60,7 +60,7 @@ def test_initialization_missing_api_key():
     os.environ.pop("AWS_SECRET_KEY", None)
     os.environ.pop("AWS_SESSION_TOKEN", None)
     os.environ.pop("AWS_REGION", None)
-    with pytest.raises(ValueError, match="API key or AWS credentials are required to use the Anthropic API."):
+    with pytest.raises(ValueError, match="credentials are required to use the Anthropic API."):
         AnthropicClient()
 
     AnthropicClient(api_key="dummy_api_key")
@@ -75,6 +75,13 @@ def anthropic_client_with_aws_credentials():
         aws_region="us-west-2",
     )
 
+@pytest.fixture()
+def anthropic_client_with_vertexai_credentials():
+    return AnthropicClient(
+        gcp_project_id="dummy_project_id",
+        gcp_region="us-west-2",
+        gcp_auth_token="dummy_auth_token",
+    )
 
 @pytest.mark.skipif(skip, reason=reason)
 def test_intialization(anthropic_client):
@@ -95,6 +102,19 @@ def test_intialization_with_aws_credentials(anthropic_client_with_aws_credential
     assert (
         anthropic_client_with_aws_credentials.aws_region == "us-west-2"
     ), "`aws_region` should be correctly set in the config"
+
+
+@pytest.mark.skipif(skip, reason=reason)
+def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai_credentials):
+    assert (
+        anthropic_client_with_vertexai_credentials.gcp_project_id == "dummy_project_id"
+    ), "`gcp_project_id` should be correctly set in the config"
+    assert (
+        anthropic_client_with_vertexai_credentials.gcp_region == "us-west-2"
+    ), "`gcp_region` should be correctly set in the config"
+    assert (
+        anthropic_client_with_vertexai_credentials.gcp_auth_token == "dummy_auth_token"
+    ), "`gcp_auth_token` should be correctly set in the config"
 
 
 # Test cost calculation
