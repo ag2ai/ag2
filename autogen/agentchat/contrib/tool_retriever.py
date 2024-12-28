@@ -20,7 +20,7 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer, util
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.coding import LocalCommandLineCodeExecutor
+from autogen.coding import CodeExecutor, CodeExtractor, LocalCommandLineCodeExecutor, MarkdownCodeExtractor
 from autogen.coding.base import CodeBlock, CodeResult
 from autogen.function_utils import get_function_schema, load_basemodels_if_needed
 from autogen.tools import Tool
@@ -114,7 +114,7 @@ For example, if there is a function called `foo` you could import it by writing 
             return updated_user_proxy
 
 
-class LocalExecutorWithTools:
+class LocalExecutorWithTools(CodeExecutor):
     """
     An executor that executes code blocks with injected tools. In this executor, the func within the tools can be called directly without declaring in the code block.
 
@@ -150,6 +150,11 @@ class LocalExecutorWithTools:
         tools: The tools to inject into the code execution environment. Default is an empty list.
         work_dir: The working directory for the code execution. Default is the current directory.
     """
+
+    @property
+    def code_extractor(self) -> CodeExtractor:
+        """(Experimental) Export a code extractor that can be used by an agent."""
+        return MarkdownCodeExtractor()
 
     def __init__(self, tools: Optional[List[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
         self.tools = tools if tools is not None else []
