@@ -216,24 +216,21 @@ class LocalExecutorWithTools:
         pass
 
 
-def remove_extra(text):
-    # some tool description has (IMPORTANT: ) at the end, remove it as it is not needed
-    idx = text.find("(IMPORTANT:")
-    return text[:idx] if idx != -1 else text
-
-
 def format_ag2_tool(tool: Tool):
     # get the args first
     schema = get_function_schema(tool.func, description=tool.description)
-    description = remove_extra(tool.description)
 
     arg_name = list(inspect.signature(tool.func).parameters.keys())[0]
     arg_info = schema["function"]["parameters"]["properties"][arg_name]["properties"]
 
-    content = f'def {tool.name}({" ,".join(list(arg_info.keys()))}):\n    """\n'
-    content += indent(description, "    ") + "\n"
+    content = f'def {tool.name}({arg_name}):\n    """\n'
+    content += indent(tool.description, "    ") + "\n"
+    content += (
+        indent(f"You should format all the arguments into a dictionary and pass it to {arg_name}.", "    ") + "\n"
+    )
+    content += indent(f"Arguments passed in {arg_name}:\n", "    ")
     for arg, info in arg_info.items():
-        content += f"    {arg} ({info['type']}): {info['description']}\n"
+        content += indent(f"{arg} ({info['type']}): {info['description']}\n", "    " * 2)
     content += '    """\n'
     return content
 
