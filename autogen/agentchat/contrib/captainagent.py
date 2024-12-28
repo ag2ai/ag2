@@ -6,6 +6,8 @@ import json
 import os
 from typing import Callable, Literal, Optional, Union
 
+from termcolor import colored
+
 import autogen
 from autogen import UserProxyAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
