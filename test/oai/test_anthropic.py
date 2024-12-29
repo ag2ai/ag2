@@ -75,6 +75,7 @@ def anthropic_client_with_aws_credentials():
         aws_region="us-west-2",
     )
 
+
 @pytest.fixture()
 def anthropic_client_with_vertexai_credentials():
     return AnthropicClient(
@@ -82,6 +83,7 @@ def anthropic_client_with_vertexai_credentials():
         gcp_region="us-west-2",
         gcp_auth_token="dummy_auth_token",
     )
+
 
 @pytest.mark.skipif(skip, reason=reason)
 def test_intialization(anthropic_client):
