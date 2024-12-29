@@ -20,26 +20,39 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer, util
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.coding import LocalCommandLineCodeExecutor
+from autogen.coding import CodeExecutor, CodeExtractor, LocalCommandLineCodeExecutor, MarkdownCodeExtractor
 from autogen.coding.base import CodeBlock, CodeResult
-from autogen.function_utils import load_basemodels_if_needed
+from autogen.function_utils import get_function_schema, load_basemodels_if_needed
 from autogen.tools import Tool
 
 
 class ToolBuilder:
-    TOOL_USING_PROMPT = """# Functions
-    You have access to the following functions. They can be accessed from the module called 'functions' by their function names.
+    TOOL_PROMPT_DEFAULT = """\n## Functions
+You have access to the following functions. They can be accessed from the module called 'functions' by their function names.
 For example, if there is a function called `foo` you could import it by writing `from functions import foo`
 {functions}
 """
+    TOOL_PROMPT_USER_DEFINED = """\n## Functions
+You have access to the following functions. You can write python code to call these functions directly without importing them.
+{functions}
+"""
 
-    def __init__(self, corpus_path, retriever="all-mpnet-base-v2"):
-
-        self.df = pd.read_csv(corpus_path, sep="\t")
-        document_list = self.df["document_content"].tolist()
+    def __init__(self, corpus_root, retriever="all-mpnet-base-v2", type="default"):
+        if type == "default":
+            corpus_path = os.path.join(corpus_root, "tool_description.tsv")
+            self.df = pd.read_csv(corpus_path, sep="\t")
+            document_list = self.df["document_content"].tolist()
+            self.TOOL_PROMPT = self.TOOL_PROMPT_DEFAULT
+        else:
+            self.TOOL_PROMPT = self.TOOL_PROMPT_USER_DEFINED
+            # user defined tools, retrieve is actually not needed, just for consistency
+            document_list = []
+            for tool in corpus_root:
+                document_list.append(tool.description)
 
         self.model = SentenceTransformer(retriever)
         self.embeddings = self.model.encode(document_list)
+        self.type = type
 
     def retrieve(self, query, top_k=3):
         # Encode the query using the Sentence Transformer model
@@ -55,39 +68,59 @@ For example, if there is a function called `foo` you could import it by writing 
     def bind(self, agent: AssistantAgent, functions: str):
         """Binds the function to the agent so that agent is aware of it."""
         sys_message = agent.system_message
-        sys_message += self.TOOL_USING_PROMPT.format(functions=functions)
+        sys_message += self.TOOL_PROMPT.format(functions=functions)
         agent.update_system_message(sys_message)
         return
 
-    def bind_user_proxy(self, agent: UserProxyAgent, tool_root: str):
+    def bind_user_proxy(self, agent: UserProxyAgent, tool_root: Union[str, list]):
         """
         Updates user proxy agent with a executor so that code executor can successfully execute function-related code.
         Returns an updated user proxy.
         """
-        # Find all the functions in the tool root
-        functions = find_callables(tool_root)
+        if isinstance(tool_root, str):
+            # Find all the functions in the tool root
+            functions = find_callables(tool_root)
 
-        code_execution_config = agent._code_execution_config
-        executor = LocalCommandLineCodeExecutor(
-            timeout=code_execution_config.get("timeout", 180),
-            work_dir=code_execution_config.get("work_dir", "coding"),
-            functions=functions,
-        )
-        code_execution_config = {
-            "executor": executor,
-            "last_n_messages": code_execution_config.get("last_n_messages", 1),
-        }
-        updated_user_proxy = UserProxyAgent(
-            name=agent.name,
-            is_termination_msg=agent._is_termination_msg,
-            code_execution_config=code_execution_config,
-            human_input_mode="NEVER",
-            default_auto_reply=agent._default_auto_reply,
-        )
-        return updated_user_proxy
+            code_execution_config = agent._code_execution_config
+            executor = LocalCommandLineCodeExecutor(
+                timeout=code_execution_config.get("timeout", 180),
+                work_dir=code_execution_config.get("work_dir", "coding"),
+                functions=functions,
+            )
+            code_execution_config = {
+                "executor": executor,
+                "last_n_messages": code_execution_config.get("last_n_messages", 1),
+            }
+            updated_user_proxy = UserProxyAgent(
+                name=agent.name,
+                is_termination_msg=agent._is_termination_msg,
+                code_execution_config=code_execution_config,
+                human_input_mode="NEVER",
+                default_auto_reply=agent._default_auto_reply,
+            )
+            return updated_user_proxy
+        else:
+            # second case: user defined tools
+            code_execution_config = agent._code_execution_config
+            executor = LocalExecutorWithTools(
+                tools=tool_root,
+                work_dir=code_execution_config.get("work_dir", "coding"),
+            )
+            code_execution_config = {
+                "executor": executor,
+                "last_n_messages": code_execution_config.get("last_n_messages", 1),
+            }
+            updated_user_proxy = UserProxyAgent(
+                name=agent.name,
+                is_termination_msg=agent._is_termination_msg,
+                code_execution_config=code_execution_config,
+                human_input_mode="NEVER",
+                default_auto_reply=agent._default_auto_reply,
+            )
+            return updated_user_proxy
 
 
-class LocalExecutorWithTools:
+class LocalExecutorWithTools(CodeExecutor):
     """
     An executor that executes code blocks with injected tools. In this executor, the func within the tools can be called directly without declaring in the code block.
 
@@ -123,6 +156,11 @@ class LocalExecutorWithTools:
         tools: The tools to inject into the code execution environment. Default is an empty list.
         work_dir: The working directory for the code execution. Default is the current directory.
     """
+
+    @property
+    def code_extractor(self) -> CodeExtractor:
+        """(Experimental) Export a code extractor that can be used by an agent."""
+        return MarkdownCodeExtractor()
 
     def __init__(self, tools: Optional[List[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
         self.tools = tools if tools is not None else []
@@ -187,6 +225,51 @@ class LocalExecutorWithTools:
     def restart(self):
         """Restart the code executor. Since this executor is stateless, no action is needed."""
         pass
+
+
+def format_ag2_tool(tool: Tool):
+    # get the args first
+    schema = get_function_schema(tool.func, description=tool.description)
+
+    arg_name = list(inspect.signature(tool.func).parameters.keys())[0]
+    arg_info = schema["function"]["parameters"]["properties"][arg_name]["properties"]
+
+    content = f'def {tool.name}({arg_name}):\n    """\n'
+    content += indent(tool.description, "    ") + "\n"
+    content += (
+        indent(
+            f"You must format all the arguments into a dictionary and pass them as **kwargs to {arg_name}. You should use print function to get the results.",
+            "    ",
+        )
+        + "\n"
+        + indent(f"For example:\n\tresult = {tool.name}({arg_name}={{'arg1': 'value1' }})", "    ")
+        + "\n"
+    )
+    content += indent(f"Arguments passed in {arg_name}:\n", "    ")
+    for arg, info in arg_info.items():
+        content += indent(f"{arg} ({info['type']}): {info['description']}\n", "    " * 2)
+    content += '    """\n'
+    return content
+
+
+def _wrap_function(func):
+    """Wrap the function to dump the return value to json.
+
+    Handles both sync and async functions.
+
+    Args:
+        func: the function to be wrapped.
+
+    Returns:
+        The wrapped function.
+    """
+
+    @load_basemodels_if_needed
+    @functools.wraps(func)
+    def _wrapped_func(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return _wrapped_func
 
 
 def get_full_tool_description(py_file):
