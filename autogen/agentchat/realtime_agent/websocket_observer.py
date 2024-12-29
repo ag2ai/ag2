@@ -15,6 +15,8 @@ from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 if TYPE_CHECKING:
     from fastapi.websockets import WebSocket
 
+    from .realtime_agent import RealtimeAgent
+
 from .realtime_observer import RealtimeObserver
 
 LOG_EVENT_TYPES = [
@@ -44,13 +46,13 @@ class WebsocketAudioAdapter(RealtimeObserver):
         self.mark_queue: list[str] = []
         self.response_start_timestamp_socket: Optional[int] = None
 
-    async def update(self, response: RealtimeServerEvent) -> None:
+    async def on_event(self, event: dict[str, Any]) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to websocket."""
-        if response.type in LOG_EVENT_TYPES:
-            logger.info(f"Received event: {response.type}", response)
+        if event["type"] in LOG_EVENT_TYPES:
+            logger.info(f"Received event: {event['type']}", event)
 
-        if response.type == "response.audio.delta":
-            audio_payload = base64.b64encode(base64.b64decode(response.delta)).decode("utf-8")
+        if event["type"] == "response.audio.delta":
+            audio_payload = base64.b64encode(base64.b64decode(event["delta"])).decode("utf-8")
             audio_delta = {"event": "media", "streamSid": self.stream_sid, "media": {"payload": audio_payload}}
             await self.websocket.send_json(audio_delta)
 
@@ -60,13 +62,13 @@ class WebsocketAudioAdapter(RealtimeObserver):
                     logger.info(f"Setting start timestamp for new response: {self.response_start_timestamp_socket}ms")
 
             # Update last_assistant_item safely
-            if response.item_id:
-                self.last_assistant_item = response.item_id
+            if event["item_id"]:
+                self.last_assistant_item = event["item_id"]
 
             await self.send_mark()
 
         # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
-        if response.type == "input_audio_buffer.speech_started":
+        if event["type"] == "input_audio_buffer.speech_started":
             logger.info("Speech started detected.")
             if self.last_assistant_item:
                 logger.info(f"Interrupting response with id: {self.last_assistant_item}")
@@ -86,7 +88,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
                 if SHOW_TIMING_MATH:
                     logger.info(f"Truncating item with ID: {self.last_assistant_item}, Truncated at: {elapsed_time}ms")
 
-                await self.client.truncate_audio(
+                await self.realtime_client.truncate_audio(
                     audio_end_ms=elapsed_time,
                     content_index=0,
                     item_id=self.last_assistant_item,
@@ -104,15 +106,16 @@ class WebsocketAudioAdapter(RealtimeObserver):
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
-    async def _run(self) -> None:
-
+    async def run(self, agent: "RealtimeAgent") -> None:
+        self._agent = agent
         await self.initialize_session()
+        self._ready_event.set()
 
         async for message in self.websocket.iter_text():
             data = json.loads(message)
             if data["event"] == "media":
                 self.latest_media_timestamp = int(data["media"]["timestamp"])
-                await self.client.send_audio(audio=data["media"]["payload"])
+                await self.realtime_client.send_audio(audio=data["media"]["payload"])
             elif data["event"] == "start":
                 self.stream_sid = data["start"]["streamSid"]
                 logger.info(f"Incoming stream has started {self.stream_sid}")
@@ -126,4 +129,4 @@ class WebsocketAudioAdapter(RealtimeObserver):
     async def initialize_session(self) -> None:
         """Control initial session with OpenAI."""
         session_update = {"input_audio_format": "pcm16", "output_audio_format": "pcm16"}  #  g711_ulaw  # "g711_ulaw",
-        await self.client.session_update(session_update)
+        await self.realtime_client.session_update(session_update)

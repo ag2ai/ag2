@@ -12,6 +12,7 @@ __all__ = ["RealtimeClientProtocol", "Role"]
 # define role literal type for typing
 Role = Literal["user", "assistant", "system"]
 
+
 @runtime_checkable
 class RealtimeClientProtocol(Protocol):
     async def send_function_result(self, call_id: str, result: str) -> None:

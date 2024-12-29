@@ -17,6 +17,8 @@ from .realtime_observer import RealtimeObserver
 if TYPE_CHECKING:
     from fastapi.websockets import WebSocket
 
+    from .realtime_agent import RealtimeAgent
+
 LOG_EVENT_TYPES = [
     "error",
     "response.content.done",
@@ -94,7 +96,7 @@ class TwilioAudioAdapter(RealtimeObserver):
                 if SHOW_TIMING_MATH:
                     logger.info(f"Truncating item with ID: {self.last_assistant_item}, Truncated at: {elapsed_time}ms")
 
-                await self.client.truncate_audio(
+                await self.realtime_client.truncate_audio(
                     audio_end_ms=elapsed_time,
                     content_index=0,
                     item_id=self.last_assistant_item,
@@ -113,18 +115,19 @@ class TwilioAudioAdapter(RealtimeObserver):
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
-    async def run(self) -> None:
+    async def run(self, agent: "RealtimeAgent") -> None:
         """Run the adapter.
 
         Start reading messages from the Twilio websocket and send audio to OpenAI.
         """
+        self._agent = agent
         await self.initialize_session()
 
         async for message in self.websocket.iter_text():
             data = json.loads(message)
             if data["event"] == "media":
                 self.latest_media_timestamp = int(data["media"]["timestamp"])
-                await self.client.send_audio(audio=data["media"]["payload"])
+                await self.realtime_client.send_audio(audio=data["media"]["payload"])
             elif data["event"] == "start":
                 self.stream_sid = data["start"]["streamSid"]
                 logger.info(f"Incoming stream has started {self.stream_sid}")
@@ -141,4 +144,4 @@ class TwilioAudioAdapter(RealtimeObserver):
             "input_audio_format": "g711_ulaw",
             "output_audio_format": "g711_ulaw",
         }
-        await self.client.session_update(session_update)
+        await self.realtime_client.session_update(session_update)

@@ -5,13 +5,15 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
+from asyncio import sleep
+from typing import Any
 from unittest.mock import MagicMock
 
-import anyio
 import pytest
+from asyncer import create_task_group
 from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
-from autogen.agentchat.realtime_agent.realtime_observer import RealtimeObserver
+from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver
 
 
 class MyObserver(RealtimeObserver):
@@ -19,19 +21,19 @@ class MyObserver(RealtimeObserver):
         super().__init__()
         self.mock = mock
 
-    async def _run(self) -> None:
+    async def run(self, agent: "RealtimeAgent") -> None:
         self.mock("started")
         try:
             self.mock("running")
             print("-> running", end="", flush=True)
             while True:
-                await anyio.sleep(0.05)
+                await sleep(0.05)
                 print(".", end="", flush=True)
         finally:
             print("stopped", flush=True)
             self.mock("stopped")
 
-    async def update(self, message: RealtimeServerEvent) -> None:
+    async def on_event(self, event: dict[str, Any]) -> None:
         pass
 
 
@@ -42,11 +44,13 @@ class TestRealtimeObserver:
         mock = MagicMock()
         observer = MyObserver(mock)
 
+        agent = MagicMock()
+
         try:
-            async with anyio.create_task_group() as tg:
-                tg.start_soon(observer.run)
-                await anyio.sleep(1.0)
-                observer.request_shutdown()
+            async with create_task_group() as tg:
+                tg.soonify(observer.run)(agent)
+                await sleep(1.0)
+                tg.cancel_scope.cancel()
 
         except Exception as e:
             print(e)

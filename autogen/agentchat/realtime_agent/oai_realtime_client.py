@@ -11,12 +11,11 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
 from asyncer import TaskGroup, create_task_group
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
-from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
 from .realtime_client import Role
 
 if TYPE_CHECKING:
-    from .realtime_client import RealtimeClientProtocol 
+    from .realtime_client import RealtimeClientProtocol
 
 __all__ = ["OpenAIRealtimeClient", "Role"]
 
@@ -167,8 +166,5 @@ class OpenAIRealtimeClient:
 # needed for mypy to check if OpenAIRealtimeClient implements RealtimeClientProtocol
 if TYPE_CHECKING:
     _client: RealtimeClientProtocol = OpenAIRealtimeClient(
-        llm_config={},
-        voice="alloy",
-        system_message="You are a helpful AI voice assistant."
+        llm_config={}, voice="alloy", system_message="You are a helpful AI voice assistant."
     )
-

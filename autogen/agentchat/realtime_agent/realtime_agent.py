@@ -47,23 +47,18 @@ class RealtimeAgent(ConversableAgent):
         *,
         name: str,
         audio_adapter: RealtimeObserver,
-        system_message: Optional[Union[str, list[str]]] = "You are a helpful AI Assistant.",
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        system_message: str = "You are a helpful AI Assistant.",
+        llm_config: dict[str, Any],
         voice: str = "alloy",
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
 
         Args:
-            name: str
-                the name of the agent
-            audio_adapter: RealtimeObserver
-                adapter for streaming the audio from the client
-            system_message: str or list
-                the system message for the client
-            llm_config: dict or False
-                the config for the LLM
-            voice: str
-                the voice to be used for the agent
+            name (str): The name of the agent.
+            audio_adapter (RealtimeObserver): The audio adapter for the agent.
+            system_message (str): The system message for the agent.
+            llm_config (dict[str, Any], bool): The config for the agent.
+            voice (str): The voice for the agent.
         """
         super().__init__(
             name=name,
@@ -72,18 +67,25 @@ class RealtimeAgent(ConversableAgent):
             human_input_mode="ALWAYS",
             function_map=None,
             code_execution_config=False,
-            llm_config=llm_config,
+            # no LLM config is passed down to the ConversableAgent
+            llm_config=False,
             default_auto_reply="",
             description=None,
             chat_messages=None,
             silent=None,
             context_variables=None,
         )
-        self._client = OpenAIRealtimeClient(self, audio_adapter, FunctionObserver(self))
-        self.voice = voice
-        self.realtime_functions: dict[str, tuple[dict[str, Any], Callable[..., Any]]] = {}
+        self._function_observer = FunctionObserver()
+        self._audio_adapter = audio_adapter
+        self._realtime_client = OpenAIRealtimeClient(llm_config=llm_config, voice=voice, system_message=system_message)
+        self._voice = voice
 
-        self._oai_system_message = [{"content": system_message, "role": "system"}]  # todo still needed?
+        self._observers: list[RealtimeObserver] = [self._function_observer, self._audio_adapter]
+
+        self._registred_realtime_functions: dict[str, tuple[dict[str, Any], Callable[..., Any]]] = {}
+
+        # is this all Swarm related?
+        self._oai_system_message = [{"content": system_message, "role": "system"}]  # todo still needed? see below
         self.register_reply(
             [Agent, None], RealtimeAgent.check_termination_and_human_reply, remove_other_reply_funcs=True
         )
@@ -95,18 +97,9 @@ class RealtimeAgent(ConversableAgent):
         self._agents: Optional[list[SwarmAgent]] = None
 
     @property
-    def config(self) -> dict[str, Any]:
-        """Get the config for the agent."""
-
-        llm_config = self.llm_config
-        if not llm_config:
-            raise RuntimeError("LLM config (None) is not set up for the agent.")
-
-        config_list: list[dict[str, Any]] = llm_config.get("config_list")  # type: ignore[assignment]
-        if not config_list:
-            raise RuntimeError("LLM config (empty list) is not set up for the agent.")
-
-        return config_list[0]
+    def realtime_client(self) -> OpenAIRealtimeClient:
+        """Get the OpenAI Realtime Client."""
+        return self._realtime_client
 
     def register_swarm(
         self,
@@ -118,12 +111,9 @@ class RealtimeAgent(ConversableAgent):
         """Register a swarm of agents with the Realtime Agent.
 
         Args:
-            initial_agent: SwarmAgent
-                the initial agent in the swarm
-            agents: list of SwarmAgent
-                the agents in the swarm
-            system_message: str
-                the system message for the client
+            initial_agent (SwarmAgent): The initial agent.
+            agents (list[SwarmAgent]): The agents in the swarm.
+            system_message (str): The system message for the agent.
         """
         if not system_message:
             if self.system_message != "You are a helpful AI Assistant.":
@@ -144,7 +134,20 @@ class RealtimeAgent(ConversableAgent):
 
     async def run(self) -> None:
         """Run the agent."""
-        await self._client.run()
+        # await self._client.run()
+        async with create_task_group() as self._tg:
+            # start the observers
+            for observer in self._observers:
+                self._tg.soonify(observer.run)(self)
+
+            # wait for the observers to be ready
+            for observer in self._observers:
+                await observer.wait_for_ready()
+
+            # iterate over the events
+            async for event in self.realtime_client.read_events():
+                for observer in self._observers:
+                    await observer.on_event(event)
 
     def register_realtime_function(
         self,
@@ -172,7 +175,7 @@ class RealtimeAgent(ConversableAgent):
             schema = get_function_schema(func, name=name, description=description)["function"]
             schema["type"] = "function"
 
-            self.realtime_functions[name] = (schema, func)
+            self._registred_realtime_functions[name] = (schema, func)
 
             return func
 
@@ -204,7 +207,7 @@ class RealtimeAgent(ConversableAgent):
         """
 
         self.reset_answer()
-        await self._client.send_text(role=QUESTION_ROLE, text=question)
+        await self._realtime_client.send_text(role=QUESTION_ROLE, text=question)
 
         async def _check_event_set(timeout: int = question_timeout) -> bool:
             for _ in range(timeout):
@@ -214,7 +217,7 @@ class RealtimeAgent(ConversableAgent):
             return False
 
         while not await _check_event_set():
-            await self._client.send_text(role=QUESTION_ROLE, text=question)
+            await self._realtime_client.send_text(role=QUESTION_ROLE, text=question)
 
     def check_termination_and_human_reply(
         self,

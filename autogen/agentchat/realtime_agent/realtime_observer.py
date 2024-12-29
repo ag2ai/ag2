@@ -6,67 +6,59 @@
 # SPDX-License-Identifier: MIT
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from asyncer import TaskGroup, create_task_group
-from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
+from anyio import Event
+
+from .realtime_client import RealtimeClientProtocol
 
 if TYPE_CHECKING:
-    from .oai_realtime_client import OpenAIRealtimeClient
+    from .realtime_agent import RealtimeAgent
 
-RunningState = Literal["not started", "running", "shutdown requested", "shutdown completed"]
+__all__ = ["RealtimeObserver"]
 
 
 class RealtimeObserver(ABC):
     """Observer for the OpenAI Realtime API."""
 
     def __init__(self) -> None:
-        self._client: Optional["OpenAIRealtimeClient"] = None
-        self._shutdown_state: RunningState = "not started"
-        self._tg: Optional[TaskGroup] = None
+        self._ready_event = Event()
+        self._agent: Optional["RealtimeAgent"] = None
 
     @property
-    def running_state(self) -> RunningState:
-        """Get the shutdown state of the observer."""
-        return self._shutdown_state
+    def agent(self) -> "RealtimeAgent":
+        if self._agent is None:
+            raise RuntimeError("Agent has not been set.")
+        return self._agent
 
     @property
-    def client(self) -> "OpenAIRealtimeClient":
-        """Get the client associated with the observer."""
-        if self._client is None:
-            raise ValueError("Observer client is not registered.")
+    def realtime_client(self) -> RealtimeClientProtocol:
+        if self._agent is None:
+            raise RuntimeError("Agent has not been set.")
+        if self._agent.realtime_client is None:
+            raise RuntimeError("Realtime client has not been set.")
 
-        return self._client
+        return self._agent.realtime_client
 
-    def register_client(self, client: "OpenAIRealtimeClient") -> None:
-        """Register a client with the observer."""
-        self._client = client
+    async def run(self, agent: "RealtimeAgent") -> None:
+        """Run the observer with the agent.
 
-    def request_shutdown(self) -> None:
-        """Shutdown the observer."""
-        if self._shutdown_state != "running":
-            raise RuntimeError("Observer is not running.")
-        if self._tg is None:
-            raise RuntimeError("Task group is not initialized.")
+        When implementing, be sure to call `self._ready_event.set()` when the observer is ready to process events.
 
-        self._shutdown_state = "shutdown requested"
-        self._tg.cancel_scope.cancel()
-
-    async def run(self) -> None:
-        try:
-            async with create_task_group() as tg:
-                self._tg = tg
-                self._shutdown_state = "running"
-                tg.start_soon(self._run)
-        finally:
-            self._shutdown_state = "shutdown completed"
-
-    @abstractmethod
-    async def _run(self) -> None:
-        """Run the observer."""
+        Args:
+            agent (RealtimeAgent): The realtime agent attached to the observer.
+        """
         ...
 
+    async def wait_for_ready(self) -> None:
+        """Get the event that is set when the observer is ready."""
+        await self._ready_event.wait()
+
     @abstractmethod
-    async def update(self, message: RealtimeServerEvent) -> None:
-        """Update the observer with a message from the OpenAI Realtime API."""
+    async def on_event(self, event: dict[str, Any]) -> None:
+        """Handle an event from the OpenAI Realtime API.
+
+        Args:
+            event (RealtimeServerEvent): The event from the OpenAI Realtime API.
+        """
         ...

@@ -7,15 +7,16 @@
 
 from typing import Any
 from unittest.mock import MagicMock
+
+import pytest
 from anyio import move_on_after
 from asyncer import create_task_group
-import pytest
 from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
 from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
-from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
 from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
+from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
 
 
 class TestOAIRealtimeClient:
@@ -33,11 +34,15 @@ class TestOAIRealtimeClient:
             "config_list": config_list,
             "temperature": 0.8,
         }
-    
+
     @pytest.fixture
     def client(self, llm_config: dict[str, Any]) -> RealtimeClientProtocol:
-        return OpenAIRealtimeClient(llm_config=llm_config, voice="alloy", system_message="You are a helpful AI assistant with voice capabilities.")
-    
+        return OpenAIRealtimeClient(
+            llm_config=llm_config,
+            voice="alloy",
+            system_message="You are a helpful AI assistant with voice capabilities.",
+        )
+
     def test_init(self) -> None:
         llm_config = {
             "config_list": [
@@ -48,7 +53,11 @@ class TestOAIRealtimeClient:
             ],
             "temperature": 0.8,
         }
-        client = OpenAIRealtimeClient(llm_config=llm_config, voice="alloy", system_message="You are a helpful AI assistant with voice capabilities.")
+        client = OpenAIRealtimeClient(
+            llm_config=llm_config,
+            voice="alloy",
+            system_message="You are a helpful AI assistant with voice capabilities.",
+        )
         assert isinstance(client, RealtimeClientProtocol)
 
     @pytest.mark.skipif(skip_openai, reason=reason)
@@ -67,7 +76,7 @@ class TestOAIRealtimeClient:
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
-        # check that we recieved the expected two events
+        # check that we received the expected two events
         calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
         assert calls_kwargs[0]["type"] == "session.created"
         assert calls_kwargs[1]["type"] == "session.updated"
@@ -91,7 +100,7 @@ class TestOAIRealtimeClient:
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
-        # check that we recieved the expected two events
+        # check that we received the expected two events
         calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
         assert calls_kwargs[0]["type"] == "session.created"
         assert calls_kwargs[1]["type"] == "session.updated"
@@ -107,16 +116,15 @@ class TestOAIRealtimeClient:
     @pytest.mark.asyncio()
     async def test_send_audio(self, client: OpenAIRealtimeClient) -> None:
         raise NotImplementedError
-    
+
     @pytest.mark.skip(reason="Not implemented")
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.asyncio()
     async def test_truncate_audio(self, client: OpenAIRealtimeClient) -> None:
         raise NotImplementedError
-    
+
     @pytest.mark.skip(reason="Not implemented")
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.asyncio()
     async def test_initialize_session(self, client: OpenAIRealtimeClient) -> None:
         raise NotImplementedError
-
