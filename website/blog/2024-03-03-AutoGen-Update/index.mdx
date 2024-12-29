@@ -4,6 +4,23 @@ authors: sonichi
 tags: [news, summary, roadmap]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://www.linkedin.com/in/chi-wang-autogen/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/sonichi.png" />
+          </div>
+          <div>
+            <p class="name">Chi Wang</p>
+            <p>Founder of AutoGen (now AG2) & FLAML</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 ![autogen is loved](img/love.png)
 
 **TL;DR**
@@ -138,8 +155,8 @@ The community has been working hard to address them in several dimensions:
 
 We are working on agent-based evaluation tools and benchmarking tools. For example:
 
-- [AgentEval](/blog/2023/11/20/AgentEval). Our [research](https://arxiv.org/abs/2402.09015) finds that LLM agents built with AutoGen can be used to automatically identify evaluation criteria and assess the performance from task descriptions and execution logs. It is demonstrated as a [notebook example](https://github.com/ag2ai/ag2/blob/main/notebook/agenteval_cq_math.ipynb). Feedback and help are welcome for building it into the library.
-- [AutoGenBench](/blog/2024/01/25/AutoGenBench). AutoGenBench is a commandline tool for downloading, configuring, running an agentic benchmark, and reporting results. It is designed to allow repetition, isolation and instrumentation, leveraging the new [runtime logging](/notebooks/agentchat_logging) feature.
+- [AgentEval](/blog/2023-11-20-AgentEval/index). Our [research](https://arxiv.org/abs/2402.09015) finds that LLM agents built with AutoGen can be used to automatically identify evaluation criteria and assess the performance from task descriptions and execution logs. It is demonstrated as a [notebook example](https://github.com/ag2ai/ag2/blob/main/notebook/agenteval_cq_math.ipynb). Feedback and help are welcome for building it into the library.
+- [AutoGenBench](/blog/2024-01-25-AutoGenBench/index). AutoGenBench is a commandline tool for downloading, configuring, running an agentic benchmark, and reporting results. It is designed to allow repetition, isolation and instrumentation, leveraging the new [runtime logging](/notebooks/agentchat_logging) feature.
 
 These tools have been used for improving the AutoGen library as well as applications. For example, the new state-of-the-art performance achieved by a multi-agent solution to the [GAIA](https://huggingface.co/spaces/gaia-benchmark/leaderboard) benchmark has benefited from these evaluation tools.
 
@@ -147,17 +164,17 @@ These tools have been used for improving the AutoGen library as well as applicat
 
 We are making rapid progress in further improving the interface to make it even easier to build agent applications. For example:
 
-- [AutoBuild](/blog/2023/11/26/Agent-AutoBuild). AutoBuild is an ongoing area of research to automatically create or select a group of agents for a given task and objective. If successful, it will greatly reduce the effort from users or developers when using the multi-agent technology. It also paves the way for agentic decomposition to handle complex tasks. It is available as an experimental feature and demonstrated in two modes: free-form [creation](https://github.com/ag2ai/ag2/blob/main/notebook/autobuild_basic.ipynb) and [selection](https://github.com/ag2ai/ag2/blob/main/notebook/autobuild_agent_library.ipynb) from a library.
-- [AutoGen Studio](/blog/2023/12/01/AutoGenStudio). AutoGen Studio is a no-code UI for fast experimentation with the multi-agent conversations. It lowers the barrier of entrance to the AutoGen technology. Models, agents, and workflows can all be configured without writing code. And chatting with multiple agents in a playground is immediately available after the configuration. Although only a subset of `autogen` features are available in this sample app, it demonstrates a promising experience. It has generated tremendous excitement in the community.
-- Conversation Programming+. The [AutoGen paper](https://arxiv.org/abs/2308.08155) introduced a key concept of _Conversation Programming_, which can be used to program diverse conversation patterns such as 1-1 chat, group chat, hierarchical chat, nested chat etc. While we offered dynamic group chat as an example of high-level orchestration, it made other patterns relatively less discoverable. Therefore, we have added more convenient conversation programming features which enables easier definition of other types of complex workflow, such as [finite state machine based group chat](/blog/2024/02/11/FSM-GroupChat), [sequential chats](/notebooks/agentchats_sequential_chats), and [nested chats](/notebooks/agentchat_nestedchat). Many users have found them useful in implementing specific patterns, which have been always possible but more obvious with the added features. I will write another blog post for a deep dive.
+- [AutoBuild](/blog/2023-11-26-Agent-AutoBuild/index). AutoBuild is an ongoing area of research to automatically create or select a group of agents for a given task and objective. If successful, it will greatly reduce the effort from users or developers when using the multi-agent technology. It also paves the way for agentic decomposition to handle complex tasks. It is available as an experimental feature and demonstrated in two modes: free-form [creation](https://github.com/ag2ai/ag2/blob/main/notebook/autobuild_basic.ipynb) and [selection](https://github.com/ag2ai/ag2/blob/main/notebook/autobuild_agent_library.ipynb) from a library.
+- [AutoGen Studio](/blog/2023-12-01-AutoGenStudio/index). AutoGen Studio is a no-code UI for fast experimentation with the multi-agent conversations. It lowers the barrier of entrance to the AutoGen technology. Models, agents, and workflows can all be configured without writing code. And chatting with multiple agents in a playground is immediately available after the configuration. Although only a subset of `autogen` features are available in this sample app, it demonstrates a promising experience. It has generated tremendous excitement in the community.
+- Conversation Programming+. The [AutoGen paper](https://arxiv.org/abs/2308.08155) introduced a key concept of _Conversation Programming_, which can be used to program diverse conversation patterns such as 1-1 chat, group chat, hierarchical chat, nested chat etc. While we offered dynamic group chat as an example of high-level orchestration, it made other patterns relatively less discoverable. Therefore, we have added more convenient conversation programming features which enables easier definition of other types of complex workflow, such as [finite state machine based group chat](/blog/2024-02-11-FSM-GroupChat/index), [sequential chats](/notebooks/agentchats_sequential_chats), and [nested chats](/notebooks/agentchat_nestedchat). Many users have found them useful in implementing specific patterns, which have been always possible but more obvious with the added features. I will write another blog post for a deep dive.
 
 ### Learning/Optimization/Teaching
 
 The features in this category allow agents to remember teachings from users or other agents long term, or improve over iterations. For example:
 
-- [AgentOptimizer](/blog/2023/12/23/AgentOptimizer). This [research](https://arxiv.org/abs/2402.11359) finds an approach of training LLM agents without modifying the model. As a case study, this technique optimizes a set of Python functions for agents to use in solving a set of training tasks. It is planned to be available as an experimental feature.
-- [EcoAssistant](/blog/2023/11/09/EcoAssistant). This [research](https://arxiv.org/abs/2310.03046) finds a multi-agent teaching approach when using agents with different capacities powered by different LLMs. For example, a GPT-4 agent can teach a GPT-3.5 agent by demonstration. With this approach, one only needs 1/3 or 1/2 of GPT-4's cost, while getting 10-20\% higher success rate than GPT-4 on coding-based QA. No finetuning is needed. All you need is a GPT-4 endpoint and a GPT-3.5-turbo endpoint. Help is appreciated to offer this technique as a feature in the AutoGen library.
-- [Teachability](/blog/2023/10/26/TeachableAgent). Every LLM agent in AutoGen can be made teachable, i.e., remember facts, preferences, skills etc. from interacting with other agents. For example, a user behind a user proxy agent can teach an assistant agent instructions in solving a difficult math problem. After teaching once, the problem solving rate for the assistant agent can have a dramatic improvement (e.g., 37% -> 95% for gpt-4-0613).
+- [AgentOptimizer](/blog/2023-12-23-AgentOptimizer/index). This [research](https://arxiv.org/abs/2402.11359) finds an approach of training LLM agents without modifying the model. As a case study, this technique optimizes a set of Python functions for agents to use in solving a set of training tasks. It is planned to be available as an experimental feature.
+- [EcoAssistant](/blog/2023-11-09-EcoAssistant/index). This [research](https://arxiv.org/abs/2310.03046) finds a multi-agent teaching approach when using agents with different capacities powered by different LLMs. For example, a GPT-4 agent can teach a GPT-3.5 agent by demonstration. With this approach, one only needs 1/3 or 1/2 of GPT-4's cost, while getting 10-20\% higher success rate than GPT-4 on coding-based QA. No finetuning is needed. All you need is a GPT-4 endpoint and a GPT-3.5-turbo endpoint. Help is appreciated to offer this technique as a feature in the AutoGen library.
+- [Teachability](/blog/2023-10-26-TeachableAgent/index). Every LLM agent in AutoGen can be made teachable, i.e., remember facts, preferences, skills etc. from interacting with other agents. For example, a user behind a user proxy agent can teach an assistant agent instructions in solving a difficult math problem. After teaching once, the problem solving rate for the assistant agent can have a dramatic improvement (e.g., 37% -> 95% for gpt-4-0613).
   ![teach](img/teach.png)
   This feature works for GPTAssistantAgent (using OpenAI's assistant API) and group chat as well. One interesting use case of teachability + FSM group chat: [teaching resilience](https://www.linkedin.com/pulse/combatting-ai-naivete-teaching-resilience-emotional-leah-bonser-jdhrc).
 
@@ -165,17 +182,17 @@ The features in this category allow agents to remember teachings from users or o
 
 The extensible design of AutoGen makes it easy to integrate with new technologies. For example:
 
-- [Custom models and clients](/blog/2024/01/26/Custom-Models) can be used as backends of an agent, such as Huggingface models and inference APIs.
-- [OpenAI assistant](/blog/2023/11/13/OAI-assistants) can be used as the backend of an agent (GPTAssistantAgent). It will be nice to reimplement it as a custom client to increase the compatibility with ConversableAgent.
-- [Multimodality](/blog/2023/11/06/LMM-Agent). LMM models like GPT-4V can be used to provide vision to an agent, and accomplish interesting multimodal tasks by conversing with other agents, including advanced image analysis, figure generation, and automatic iterative improvement in image generation.
+- [Custom models and clients](/blog/2024-01-26-Custom-Models/index) can be used as backends of an agent, such as Huggingface models and inference APIs.
+- [OpenAI assistant](/blog/2023-11-13-OAI-assistants/index) can be used as the backend of an agent (GPTAssistantAgent). It will be nice to reimplement it as a custom client to increase the compatibility with ConversableAgent.
+- [Multimodality](/blog/2023-11-06-LMM-Agent/index). LMM models like GPT-4V can be used to provide vision to an agent, and accomplish interesting multimodal tasks by conversing with other agents, including advanced image analysis, figure generation, and automatic iterative improvement in image generation.
 
 ![multimodal](img/dalle_gpt4v.png)
 
 The above only covers a subset of new features and roadmap. There are many other interesting new features, integration examples or sample apps:
 
-- new features like stateful code execution, [tool decorators](/docs/Use-Cases/agent_chat#tool-calling), [long context handling](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_capability_long_context_handling.ipynb), [web agents](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_surfer.ipynb).
+- new features like [stateful code execution](/docs/tutorial/code-executors), [tool decorators](/docs/tutorial/tool-use), [long context handling](/notebooks/agentchat_transform_messages), [web agents](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_surfer.ipynb).
 - integration examples like using [guidance](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_guidance.ipynb) to generate structured response.
-- sample apps like [AutoAnny](/blog/2024/02/02/AutoAnny).
+- sample apps like [AutoAnny](/blog/2024-02-02-AutoAnny/index).
 
 ## Call for Help
 

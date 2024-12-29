@@ -1,4 +1,4 @@
-<!-- Thank you for your contribution! Please review https://ag2ai.github.io/ag2/docs/Contribute before opening a pull request. -->
+<!-- Thank you for your contribution! Please review https://docs.ag2.ai/docs/contributor-guide/contributing before opening a pull request. -->
 
 <!-- Please add a reviewer to the assignee section when you create a PR. If you don't have the access to it, we will shortly find a reviewer and assign them to your PR. -->
 
@@ -12,6 +12,6 @@
 
 ## Checks
 
-- [ ] I've included any doc changes needed for https://ag2ai.github.io/ag2/. See https://ag2ai.github.io/ag2/docs/Contribute#documentation to build and test documentation locally.
+- [ ] I've included any doc changes needed for https://docs.ag2.ai/. See https://docs.ag2.ai/docs/contributor-guide/documentation to build and test documentation locally.
 - [ ] I've added tests (if relevant) corresponding to the changes introduced in this PR.
 - [ ] I've made sure all auto checks have passed.

@@ -57,3 +57,6 @@ class TestTool:
         self.tool.register_for_execution(user_proxy)
         assert user_proxy.can_execute_function("test_tool")
         assert user_proxy.function_map["test_tool"]("Hello") == "Hello!"
+
+    def test__call__(self) -> None:
+        assert self.tool("Hello") == "Hello!"

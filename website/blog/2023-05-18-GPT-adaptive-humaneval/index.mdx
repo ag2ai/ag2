@@ -4,6 +4,23 @@ authors: sonichi
 tags: [LLM, GPT, research]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://www.linkedin.com/in/chi-wang-autogen/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/sonichi.png" />
+          </div>
+          <div>
+            <p class="name">Chi Wang</p>
+            <p>Founder of AutoGen (now AG2) & FLAML</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 ![An adaptive way of using GPT-3.5 and GPT-4 outperforms GPT-4 in both coding success rate and inference cost](img/humaneval.png)
 
 **TL;DR:**
@@ -161,7 +178,7 @@ While the specific way of generating assertions is application-specific, the mai
   - Model and other inference parameter choice affect the utility-cost tradeoff; or
   - Different configurations have complementary effect.
 
-A [previous blog post](/blog/2023/04/21/LLM-tuning-math) provides evidence that these ideas are relevant in solving math problems too.
+A [previous blog post](/blog/2023-04-21-LLM-tuning-math/index) provides evidence that these ideas are relevant in solving math problems too.
 `autogen` uses a technique [EcoOptiGen](https://arxiv.org/abs/2303.04673) to support inference parameter tuning and model selection.
 
 There are many directions of extensions in research and development:
@@ -175,4 +192,4 @@ _Do you find this approach applicable to your use case? Do you have any other ch
 ## For Further Reading
 
 - [Documentation](/docs/Getting-Started) about `autogen` and [Research paper](https://arxiv.org/abs/2303.04673).
-- [Blog post](/blog/2023/04/21/LLM-tuning-math) about a related study for math.
+- [Blog post](/blog/2023-04-21-LLM-tuning-math/index) about a related study for math.

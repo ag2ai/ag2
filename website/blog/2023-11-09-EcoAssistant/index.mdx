@@ -4,7 +4,24 @@ authors: jieyuz2
 tags: [LLM, RAG, cost-effectiveness]
 ---
 
-![system](img/system.png)
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://jieyuz2.github.io/">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/jieyuz2.png" />
+          </div>
+          <div>
+            <p class="name">Jieyu Zhang</p>
+            <p>PhD student at University of Washington</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
+![system](img/system.webp)
 
 **TL;DR:**
 * Introducing the **EcoAssistant**, which is designed to solve user queries more accurately and affordably.
@@ -39,7 +56,7 @@ where the first agent is a **LLM assistant agent** (`AssistantAgent` in AutoGen)
 the second agent is a **code executor agent** (`UserProxyAgent` in AutoGen) that would extract the generated code and execute it, forwarding the output back to the LLM assistant agent.
 A visualization of the two-agent system is shown below.
 
-![chat](img/chat.png)
+![chat](img/chat.webp)
 
 To instruct the assistant agent to leverage external APIs, we only need to add the API name/key dictionary at the beginning of the initial message.
 The template is shown below, where the red part is the information of APIs and black part is user query.

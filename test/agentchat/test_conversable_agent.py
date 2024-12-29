@@ -24,6 +24,7 @@ import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
+from autogen.tools.tool import Tool
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
@@ -812,13 +813,11 @@ def test_register_for_llm_without_description():
         mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
         agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match=" Input should be a valid string"):
 
             @agent.register_for_llm()
             def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
                 pass
-
-        assert e.value.args[0] == "Function description is required, none found."
 
 
 def test_register_for_llm_without_LLM():
@@ -863,11 +862,11 @@ def test_register_for_execution():
         def exec_python(cell: Annotated[str, "Valid Python cell to execute."]):
             pass
 
-        expected_function_map_1 = {"exec_python": exec_python}
+        expected_function_map_1 = {"exec_python": exec_python.func}
         assert get_origin(agent.function_map) == expected_function_map_1
         assert get_origin(user_proxy_1.function_map) == expected_function_map_1
 
-        expected_function_map_2 = {"python": exec_python}
+        expected_function_map_2 = {"python": exec_python.func}
         assert get_origin(user_proxy_2.function_map) == expected_function_map_2
 
         @agent.register_for_execution()
@@ -877,8 +876,8 @@ def test_register_for_execution():
             pass
 
         expected_function_map = {
-            "exec_python": exec_python,
-            "sh": exec_sh,
+            "exec_python": exec_python.func,
+            "sh": exec_sh.func,
         }
         assert get_origin(agent.function_map) == expected_function_map
         assert get_origin(user_proxy_1.function_map) == expected_function_map
