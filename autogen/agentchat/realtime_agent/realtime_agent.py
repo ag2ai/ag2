@@ -134,20 +134,24 @@ class RealtimeAgent(ConversableAgent):
 
     async def run(self) -> None:
         """Run the agent."""
-        # await self._client.run()
+        # everything is run in the same task group to enable easy cancellation using self._tg.cancel_scope.cancel()
         async with create_task_group() as self._tg:
-            # start the observers
-            for observer in self._observers:
-                self._tg.soonify(observer.run)(self)
 
-            # wait for the observers to be ready
-            for observer in self._observers:
-                await observer.wait_for_ready()
+            # connect with the client first (establishes a connection and initializes a session)
+            async with self._realtime_client.connect():
 
-            # iterate over the events
-            async for event in self.realtime_client.read_events():
+                # start the observers
                 for observer in self._observers:
-                    await observer.on_event(event)
+                    self._tg.soonify(observer.run)(self)
+
+                # wait for the observers to be ready
+                for observer in self._observers:
+                    await observer.wait_for_ready()
+
+                # iterate over the events
+                async for event in self.realtime_client.read_events():
+                    for observer in self._observers:
+                        await observer.on_event(event)
 
     def register_realtime_function(
         self,

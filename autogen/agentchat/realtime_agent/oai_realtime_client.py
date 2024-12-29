@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 import logging
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
 
 from asyncer import TaskGroup, create_task_group
@@ -58,8 +59,6 @@ class OpenAIRealtimeClient:
             default_headers=config.get("default_headers", None),
             default_query=config.get("default_query", None),
         )
-
-        self._tg: Optional[TaskGroup] = None
 
     @property
     def connection(self) -> AsyncRealtimeConnection:
@@ -139,28 +138,29 @@ class OpenAIRealtimeClient:
         await self.connection.session.update(session=session_options)  # type: ignore[arg-type]
         logger.info("Sending session update finished")
 
-    async def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
-        """Read messages from the OpenAI Realtime API."""
+    @asynccontextmanager
+    async def connect(self) -> AsyncGenerator[None, None]:
+        """Connect to the OpenAI Realtime API."""
         try:
             async with self._client.beta.realtime.connect(
                 model=self._model,
             ) as self._connection:
-
                 await self._initialize_session()
-
-                async with create_task_group() as self._tg:
-                    async for event in self._connection:
-                        yield event.model_dump()
-
+                yield
         finally:
-            self._tg = None
             self._connection = None
 
-    def request_shutdown(self) -> None:
-        """Request a shutdown of a Realtime API."""
-        if self._tg is None:
-            raise RuntimeError("Client is not running, call read_events first.")
-        self._tg.cancel_scope.cancel()
+    async def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
+        """Read messages from the OpenAI Realtime API."""
+        if self._connection is None:
+            raise RuntimeError("Client is not connected, call connect() first.")
+
+        try:
+            async for event in self._connection:
+                yield event.model_dump()
+
+        finally:
+            self._connection = None
 
 
 # needed for mypy to check if OpenAIRealtimeClient implements RealtimeClientProtocol

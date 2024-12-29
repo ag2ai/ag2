@@ -8,6 +8,8 @@
 from typing import Annotated, Any, Generator
 
 import pytest
+from anyio import sleep
+from asyncer import create_task_group
 from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
@@ -35,7 +37,8 @@ class TestE2E:
             "temperature": 0.8,
         }
 
-    def test_init(self, llm_config: dict[str, Any]) -> None:
+    @pytest.mark.asyncio()
+    async def test_init(self, llm_config: dict[str, Any]) -> None:
 
         app = FastAPI()
 
@@ -59,13 +62,23 @@ class TestE2E:
                 return "The weather is cloudy." if location == "Seattle" else "The weather is sunny."
 
             print("test_init() Running agent...", flush=True)
-            await agent.run()
+            async with create_task_group() as tg:
+                tg.soonify(agent.run)()
+                await sleep(3)
+                tg.cancel_scope.cancel()
+
+            # todo: the rest of the scenario
+            ...
+
+            await websocket.send_json({"msg": "Hello, World!"})
+
             print("test_init() Running agent finished", flush=True)
+            await websocket.close()
 
         client = TestClient(app)
         with client.websocket_connect("/media-stream") as websocket:
             data = websocket.receive_json()
-            assert data == {"msg": "Hello WebSocket"}
+            assert data == {"msg": "Hello, World!"}
             print("test_init() client.websocket_connect() finished", flush=True)
 
         print("test_init() finished")

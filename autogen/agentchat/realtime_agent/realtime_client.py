@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from typing import Any, AsyncGenerator, Literal, Protocol, runtime_checkable
+from typing import Any, AsyncContextManager, AsyncGenerator, Literal, Protocol, runtime_checkable
 
 __all__ = ["RealtimeClientProtocol", "Role"]
 
@@ -59,10 +59,8 @@ class RealtimeClientProtocol(Protocol):
         """
         ...
 
+    def connect(self) -> AsyncContextManager[None]: ...
+
     def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
         """Read messages from a Realtime API."""
-        ...
-
-    def request_shutdown(self) -> None:
-        """Request a shutdown of a Realtime API."""
         ...
