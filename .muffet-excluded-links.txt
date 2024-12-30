@@ -1,6 +1,7 @@
 http://localhost
 linkedin.com
 x.com
+twitter.com
 example.com
 rapidapi.com
 https://platform.openai.com

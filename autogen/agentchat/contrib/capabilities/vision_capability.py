@@ -141,22 +141,24 @@ class VisionCapability(AgentCapability):
             (Content is a string without an image, remains unchanged.)
 
         - Input as String, with image location:
-            content = "What's weather in this cool photo: <img http://example.com/photo.jpg>"
-            Output: "What's weather in this cool photo: <img http://example.com/photo.jpg> in case you can not see, the caption of this image is:
+            content = "What's weather in this cool photo: `<img http://example.com/photo.jpg>`"
+            Output: "What's weather in this cool photo: `<img http://example.com/photo.jpg>` in case you can not see, the caption of this image is:
             A beautiful sunset over the mountains\n"
             (Caption added after the image)
 
         - Input as List with Text Only:
-            content = [{"type": "text", "text": "Here's an interesting fact."}]
+            content = `[{"type": "text", "text": "Here's an interesting fact."}]`
             Output: "Here's an interesting fact."
             (No images in the content, it remains unchanged.)
 
         - Input as List with Image URL:
+            ```python
             content = [
                 {"type": "text", "text": "What's weather in this cool photo:"},
                 {"type": "image_url", "image_url": {"url": "http://example.com/photo.jpg"}}
             ]
-            Output: "What's weather in this cool photo: <img http://example.com/photo.jpg> in case you can not see, the caption of this image is:
+            ```
+            Output: "What's weather in this cool photo: `<img http://example.com/photo.jpg>` in case you can not see, the caption of this image is:
             A beautiful sunset over the mountains\n"
             (Caption added after the image)
         """

@@ -16,7 +16,7 @@ _MATH_CONFIG = {
 
 
 def solve_problem(problem: str, **config) -> str:
-    """(openai<1) Solve the math problem.
+    """`(openai<1)` Solve the math problem.
 
     Args:
         problem (str): The problem statement.
@@ -33,12 +33,13 @@ def solve_problem(problem: str, **config) -> str:
 
 def remove_boxed(string: str) -> Optional[str]:
     """Source: https://github.com/hendrycks/math
-    Extract the text within a \\boxed{...} environment.
+    Extract the text within a \\boxed`{...}` environment.
     Example:
-
+    ```python
     > remove_boxed("\\boxed{\\frac{2}{3}}")
 
     \\frac{2}{3}
+    ```
     """
     left = "\\boxed{"
     try:
@@ -52,7 +53,7 @@ def remove_boxed(string: str) -> Optional[str]:
 
 def last_boxed_only_string(string: str) -> Optional[str]:
     """Source: https://github.com/hendrycks/math
-    Extract the last \\boxed{...} or \\fbox{...} element from a string.
+    Extract the last \\boxed`{...}` or \\fbox`{...}` element from a string.
     """
     idx = string.rfind("\\boxed")
     if idx < 0:
@@ -85,12 +86,14 @@ def _fix_fracs(string: str) -> str:
     """Source: https://github.com/hendrycks/math
     Reformat fractions.
     Examples:
+    ```
     >>> _fix_fracs("\\frac1b")
     \frac{1}{b}
     >>> _fix_fracs("\\frac12")
     \frac{1}{2}
     >>> _fix_fracs("\\frac1{72}")
     \frac{1}{72}
+    ```
     """
     substrs = string.split("\\frac")
     new_str = substrs[0]
@@ -126,10 +129,12 @@ def _fix_fracs(string: str) -> str:
 
 def _fix_a_slash_b(string: str) -> str:
     """Source: https://github.com/hendrycks/math
-    Reformat fractions formatted as a/b to \\frac{a}{b}.
+    Reformat fractions formatted as a/b to \\`frac{a}{b}`.
     Example:
+    ```
     >>> _fix_a_slash_b("2/3")
     \frac{2}{3}
+    ```
     """
     if len(string.split("/")) != 2:
         return string
@@ -164,8 +169,10 @@ def _fix_sqrt(string: str) -> str:
     """Source: https://github.com/hendrycks/math
     Reformat square roots.
     Example:
+    ```
     >>> _fix_sqrt("\\sqrt3")
     \\sqrt{3}
+    ```
     """
     if "\\sqrt" not in string:
         return string

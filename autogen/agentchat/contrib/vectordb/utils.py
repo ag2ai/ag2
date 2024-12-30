@@ -78,6 +78,7 @@ def chroma_results_to_query_results(data_dict: dict[str, list[list[Any]]], speci
         special_key.
 
     Example:
+        ```python
         data_dict = {
             "key1s": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
             "key2s": [["a", "b", "c"], ["c", "d", "e"], ["e", "f", "g"]],
@@ -103,6 +104,7 @@ def chroma_results_to_query_results(data_dict: dict[str, list[list[Any]]], speci
                 ({"key1": 9, "key2": "g", "key4": "6"}, 0.9),
             ],
         ]
+        ```
     """
 
     keys = [

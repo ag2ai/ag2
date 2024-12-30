@@ -34,18 +34,6 @@ def run_pydoc_markdown(config_file: Path) -> None:
         sys.exit(1)
 
 
-def escape_html_tags(content: str) -> str:
-    """Escape all angle brackets < > in the content.
-
-    Args:
-        content (str): Input text content
-
-    Returns:
-        str: Content with all angle brackets escaped
-    """
-    return content.replace("<", r"\<").replace("{", r"\{")
-
-
 def read_file_content(file_path: str) -> str:
     """Read content from a file.
 
@@ -86,11 +74,8 @@ def convert_md_to_mdx(input_dir: Path) -> None:
         # Read content from .md file
         content = md_file.read_text(encoding="utf-8")
 
-        # Escape HTML tags
-        processed_content = escape_html_tags(content)
-
         # Update sidenav title
-        processed_content = processed_content.replace("sidebar_label: ", "sidebarTitle: ")
+        processed_content = content.replace("sidebar_label: ", "sidebarTitle: ")
 
         # Write content to .mdx file
         mdx_file.write_text(processed_content, encoding="utf-8")
