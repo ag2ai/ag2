@@ -265,8 +265,6 @@ class PostCarryoverProcessing(BaseModel):
 
 
 def create_post_carryover_processing(chat_info: dict[str, Any]) -> PostCarryoverProcessing:
-    print(f"{chat_info=}")
-
     if "message" not in chat_info:
         chat_info["message"] = None
     return PostCarryoverProcessing(
