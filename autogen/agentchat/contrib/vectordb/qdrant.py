@@ -56,7 +56,7 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
                                       Defaults to None.
             **kwargs: Additional options to pass to fastembed.TextEmbedding
         Raises:
-            ValueError: If the model_name is not in the format <org>/<model> e.g. BAAI/bge-small-en-v1.5.
+            ValueError: If the model_name is not in the format `<org>/<model>` e.g. BAAI/bge-small-en-v1.5.
         """
         try:
             from fastembed import TextEmbedding
@@ -229,7 +229,7 @@ class QdrantVectorDB(VectorDB):
             collection_name: str | The name of the collection. Default is None.
             n_results: int | The number of relevant documents to return. Default is 10.
             distance_threshold: float | The threshold for the distance score, only distance smaller than it will be
-                returned. Don't filter with it if < 0. Default is 0.
+                returned. Don't filter with it if `< 0`. Default is 0.
             kwargs: Dict | Additional keyword arguments.
 
         Returns:

@@ -39,28 +39,28 @@ class GroupChat:
         When set to True and when a message is a function call suggestion,
         the next speaker will be chosen from an agent which contains the corresponding function name
         in its `function_map`.
-    - select_speaker_message_template: customize the select speaker message (used in "auto" speaker selection), which appears first in the message context and generally includes the agent descriptions and list of agents. If the string contains "{roles}" it will replaced with the agent's and their role descriptions. If the string contains "{agentlist}" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
+    - select_speaker_message_template: customize the select speaker message (used in "auto" speaker selection), which appears first in the message context and generally includes the agent descriptions and list of agents. If the string contains "`{roles}`" it will replaced with the agent's and their role descriptions. If the string contains "`{agentlist}`" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
         "You are in a role play game. The following roles are available:
-                {roles}.
+                `{roles}`.
                 Read the following conversation.
-                Then select the next role from {agentlist} to play. Only return the role."
-    - select_speaker_prompt_template: customize the select speaker prompt (used in "auto" speaker selection), which appears last in the message context and generally includes the list of agents and guidance for the LLM to select the next agent. If the string contains "{agentlist}" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
-        "Read the above conversation. Then select the next role from {agentlist} to play. Only return the role."
+                Then select the next role from `{agentlist}` to play. Only return the role."
+    - select_speaker_prompt_template: customize the select speaker prompt (used in "auto" speaker selection), which appears last in the message context and generally includes the list of agents and guidance for the LLM to select the next agent. If the string contains "`{agentlist}`" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
+        "Read the above conversation. Then select the next role from `{agentlist}` to play. Only return the role."
         To ignore this prompt being used, set this to None. If set to None, ensure your instructions for selecting a speaker are in the select_speaker_message_template string.
-    - select_speaker_auto_multiple_template: customize the follow-up prompt used when selecting a speaker fails with a response that contains multiple agent names. This prompt guides the LLM to return just one agent name. Applies only to "auto" speaker selection method. If the string contains "{agentlist}" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
+    - select_speaker_auto_multiple_template: customize the follow-up prompt used when selecting a speaker fails with a response that contains multiple agent names. This prompt guides the LLM to return just one agent name. Applies only to "auto" speaker selection method. If the string contains "`{agentlist}`" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
         "You provided more than one name in your text, please return just the name of the next speaker. To determine the speaker use these prioritised rules:
                 1. If the context refers to themselves as a speaker e.g. "As the..." , choose that speaker's name
                 2. If it refers to the "next" speaker name, choose that name
                 3. Otherwise, choose the first provided speaker's name in the context
                 The names are case-sensitive and should not be abbreviated or changed.
                 Respond with ONLY the name of the speaker and DO NOT provide a reason."
-    - select_speaker_auto_none_template: customize the follow-up prompt used when selecting a speaker fails with a response that contains no agent names. This prompt guides the LLM to return an agent name and provides a list of agent names. Applies only to "auto" speaker selection method. If the string contains "{agentlist}" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
+    - select_speaker_auto_none_template: customize the follow-up prompt used when selecting a speaker fails with a response that contains no agent names. This prompt guides the LLM to return an agent name and provides a list of agent names. Applies only to "auto" speaker selection method. If the string contains "`{agentlist}`" it will be replaced with a comma-separated list of agent names in square brackets. The default value is:
         "You didn't choose a speaker. As a reminder, to determine the speaker use these prioritised rules:
                 1. If the context refers to themselves as a speaker e.g. "As the..." , choose that speaker's name
                 2. If it refers to the "next" speaker name, choose that name
                 3. Otherwise, choose the first provided speaker's name in the context
                 The names are case-sensitive and should not be abbreviated or changed.
-                The only names that are accepted are {agentlist}.
+                The only names that are accepted are `{agentlist}`.
                 Respond with ONLY the name of the speaker and DO NOT provide a reason."
     - speaker_selection_method: the method for selecting the next speaker. Default is "auto".
         Could be any of the following (case insensitive), will raise ValueError if not recognized:
@@ -1592,11 +1592,11 @@ class GroupChatManager(ConversableAgent):
         """Clears history of messages for all agents or selected one. Can preserve selected number of last messages.
         That function is called when user manually provide "clear history" phrase in his reply.
         When "clear history" is provided, the history of messages for all agents is cleared.
-        When "clear history <agent_name>" is provided, the history of messages for selected agent is cleared.
-        When "clear history <nr_of_messages_to_preserve>" is provided, the history of messages for all agents is cleared
-        except last <nr_of_messages_to_preserve> messages.
-        When "clear history <agent_name> <nr_of_messages_to_preserve>" is provided, the history of messages for selected
-        agent is cleared except last <nr_of_messages_to_preserve> messages.
+        When "clear history `<agent_name>`" is provided, the history of messages for selected agent is cleared.
+        When "clear history `<nr_of_messages_to_preserve>`" is provided, the history of messages for all agents is cleared
+        except last `<nr_of_messages_to_preserve>` messages.
+        When "clear history `<agent_name>` `<nr_of_messages_to_preserve>`" is provided, the history of messages for selected
+        agent is cleared except last `<nr_of_messages_to_preserve>` messages.
         Phrase "clear history" and optional arguments are cut out from the reply before it passed to the chat.
 
         Args:

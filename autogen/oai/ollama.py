@@ -7,6 +7,7 @@
 """Create an OpenAI-compatible client using Ollama's API.
 
 Example:
+    ```python
     llm_config={
         "config_list": [{
             "api_type": "ollama",
@@ -15,6 +16,7 @@ Example:
     ]}
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
+    ```
 
 Install Ollama's python library using: pip install --upgrade ollama
 Install fix-busted-json library: pip install --upgrade fix-busted-json
@@ -467,7 +469,7 @@ class OllamaClient:
 
 
 def response_to_tool_call(response_string: str) -> Any:
-    """Attempts to convert the response to an object, aimed to align with function format [{},{}]"""
+    """Attempts to convert the response to an object, aimed to align with function format `[{},{}]`"""
 
     # We try and detect the list[dict] format:
     # Pattern 1 is [{},{}]

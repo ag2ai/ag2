@@ -7,6 +7,7 @@
 """Create an OpenAI-compatible client using Cohere's API.
 
 Example:
+    ```python
     llm_config={
         "config_list": [{
             "api_type": "cohere",
@@ -17,6 +18,7 @@ Example:
     ]}
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
+    ```
 
 Install Cohere's python library using: pip install --upgrade cohere
 
