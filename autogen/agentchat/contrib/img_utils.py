@@ -112,7 +112,7 @@ def llava_formatter(prompt: str, order_image_tokens: bool = False) -> tuple[str,
     Formats the input prompt by replacing image tags and returns the new prompt along with image locations.
 
     Parameters:
-        - prompt (str): The input string that may contain image tags like <img ...>.
+        - prompt (str): The input string that may contain image tags like `<img ...>`.
         - order_image_tokens (bool, optional): Whether to order the image tokens with numbers.
             It will be useful for GPT-4V. Defaults to False.
 
@@ -194,7 +194,7 @@ def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dic
     Formats the input prompt by replacing image tags and returns a list of text and images.
 
     Args:
-        - prompt (str): The input string that may contain image tags like <img ...>.
+        - prompt (str): The input string that may contain image tags like `<img ...>`.
         - img_format (str): what image format should be used. One of "uri", "url", "pil".
 
     Returns:
@@ -293,24 +293,28 @@ def message_formatter_pil_to_b64(messages: list[dict]) -> list[dict]:
                     'image_url' key converted to base64 encoded data URIs.
 
     Example Input:
+        ```python
         [
             {'content': [{'type': 'text', 'text': 'You are a helpful AI assistant.'}], 'role': 'system'},
             {'content': [
-                {'type': 'text', 'text': "What's the breed of this dog here? \n"},
+                {'type': 'text', 'text': "What's the breed of this dog here?"},
                 {'type': 'image_url', 'image_url': {'url': a PIL.Image.Image}},
                 {'type': 'text', 'text': '.'}],
             'role': 'user'}
         ]
+        ```
 
     Example Output:
+        ```python
         [
             {'content': [{'type': 'text', 'text': 'You are a helpful AI assistant.'}], 'role': 'system'},
             {'content': [
-                {'type': 'text', 'text': "What's the breed of this dog here? \n"},
+                {'type': 'text', 'text': "What's the breed of this dog here?"},
                 {'type': 'image_url', 'image_url': {'url': a B64 Image}},
                 {'type': 'text', 'text': '.'}],
             'role': 'user'}
         ]
+        ```
     """
     new_messages = []
     for message in messages:

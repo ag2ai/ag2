@@ -7,6 +7,7 @@
 """Create an OpenAI-compatible client using Groq's API.
 
 Example:
+    ```python
     llm_config={
         "config_list": [{
             "api_type": "groq",
@@ -16,6 +17,7 @@ Example:
     ]}
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
+    ```
 
 Install Groq's python library using: pip install --upgrade groq
 
