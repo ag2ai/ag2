@@ -6,6 +6,7 @@ from typing import Any, Optional
 from unittest.mock import MagicMock, call
 
 import pytest
+import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.messages import (
@@ -20,6 +21,14 @@ from autogen.messages import (
     ToolResponseMessage,
     create_received_message_model,
 )
+
+
+@pytest.fixture(autouse=True)
+def enable_color_in_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    def mock_can_do_colour(*args: Any, **kwargs: Any) -> bool:
+        return True
+
+    monkeypatch.setattr(termcolor.termcolor, "_can_do_colour", mock_can_do_colour)
 
 
 @pytest.fixture
