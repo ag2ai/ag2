@@ -3,8 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from copy import deepcopy
-from types import NoneType
-from typing import Any, Callable, Literal, Optional, TypeVar, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel
 from termcolor import colored
