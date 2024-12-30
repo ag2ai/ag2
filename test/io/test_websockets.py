@@ -172,7 +172,7 @@ class TestConsoleIOWithWebsockets:
                             print()
                             print(" - Received TERMINATE message.", flush=True)
                     except ConnectionClosed as e:
-                        print("Connection closed:", e)
+                        print("Connection closed:", e, flush=True)
                         break
 
         assert success_dict["success"]
