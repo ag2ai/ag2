@@ -58,6 +58,7 @@ class RealtimeObserver(ABC):
 
         await self.run_loop()
 
+    @abstractmethod
     async def run_loop(self) -> None:
         """Run the loop if needed.
 
@@ -67,6 +68,7 @@ class RealtimeObserver(ABC):
         """
         ...
 
+    @abstractmethod
     async def initialize_session(self) -> None:
         """Initialize the session for the observer."""
         ...

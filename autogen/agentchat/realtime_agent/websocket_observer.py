@@ -140,3 +140,9 @@ class WebsocketAudioAdapter(RealtimeObserver):
                         self.mark_queue.pop(0)
             except Exception as e:
                 logger.warning(f"Failed to process message: {e}", stack_info=True)
+
+
+if TYPE_CHECKING:
+
+    def websocket_audio_adapter(websocket: WebSocket) -> RealtimeObserver:
+        return WebsocketAudioAdapter(websocket)

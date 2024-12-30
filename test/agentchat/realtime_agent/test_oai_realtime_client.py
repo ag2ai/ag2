@@ -63,7 +63,7 @@ class TestOAIRealtimeClient:
 
         with pytest.raises(RuntimeError, match=r"Client is not connected, call connect\(\) first."):
             with move_on_after(1) as scope:
-                async for event in client.read_events():
+                async for _ in client.read_events():
                     pass
 
         assert not scope.cancelled_caught

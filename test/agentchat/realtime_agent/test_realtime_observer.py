@@ -18,7 +18,10 @@ class MyObserver(RealtimeObserver):
         super().__init__()
         self.mock = mock
 
-    async def run(self, agent: "RealtimeAgent") -> None:
+    async def initialize_session(self) -> None:
+        pass
+
+    async def run_loop(self) -> None:
         self.mock("started")
         try:
             self.mock("running")

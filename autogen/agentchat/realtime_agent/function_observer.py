@@ -71,3 +71,11 @@ class FunctionObserver(RealtimeObserver):
             "tool_choice": "auto",
         }
         await self.realtime_client.session_update(session_update)
+
+    async def run_loop(self) -> None:
+        """Run the observer loop."""
+        pass
+
+
+if TYPE_CHECKING:
+    function_observer: RealtimeObserver = FunctionObserver()
