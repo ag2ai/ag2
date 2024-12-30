@@ -8,6 +8,7 @@
 
 
 Example:
+    ```python
     llm_config={
         "config_list": [{
             "api_type": "google",
@@ -27,6 +28,7 @@ Example:
     ]}
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
+    ```
 
 Resources:
 - https://ai.google.dev/docs
