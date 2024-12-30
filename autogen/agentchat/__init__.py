@@ -21,6 +21,7 @@ from .contrib.swarm_agent import (
     AfterWorkOption,
     SwarmAgent,
     SwarmResult,
+    a_initiate_swarm_chat,
     initiate_swarm_chat,
 )
 from .conversable_agent import ConversableAgent, register_function
@@ -40,6 +41,7 @@ __all__ = [
     "gather_usage_summary",
     "ChatResult",
     "initiate_swarm_chat",
+    "a_initiate_swarm_chat",
     "SwarmAgent",
     "SwarmResult",
     "ON_CONDITION",
