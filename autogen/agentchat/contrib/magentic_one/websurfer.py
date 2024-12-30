@@ -656,7 +656,7 @@ class MultimodalWebSurfer(ConversableAgent):
                 return tool_response
             return None
         except Exception:
-            return False, f"Web surfing error:\n\n{traceback.format_exc()}"
+            return f"Web surfing error:\n\n{traceback.format_exc()}"
 
     async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
         assert self._page is not None
