@@ -11,5 +11,5 @@ def test_import() -> None:
         FunctionObserver,
         RealtimeAgent,
         TwilioAudioAdapter,
-        WebsocketAudioAdapter,
+        WebSocketAudioAdapter,
     )
