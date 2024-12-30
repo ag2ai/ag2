@@ -51,6 +51,7 @@ test = [
     "pytest-asyncio",
     "pytest>=8,<9",
     "pandas",
+    "fastapi>=0.115.0,<1",
 ]
 
 jupyter_executor = [
@@ -90,7 +91,7 @@ interop_langchain = ["langchain-community>=0.3.12,<1"]
 interop_pydantic_ai = ["pydantic-ai==0.0.13"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai
 
-types = ["mypy==1.9.0"] + test + jupyter_executor + interop + ["fastapi>=0.115.0,<1"]
+types = ["mypy==1.9.0"] + test + jupyter_executor + interop
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
