@@ -1048,7 +1048,7 @@ class ConversableAgent(LLMAgent):
             silent (bool or None): (Experimental) whether to print the messages for this conversation. Default is False.
             cache (AbstractCache or None): the cache client to be used for this conversation. Default is None.
             max_turns (int or None): the maximum number of turns for the chat between the two agents. One turn means one conversation round trip. Note that this is different from
-                [max_consecutive_auto_reply](#max-consecutive-auto-reply) which is the maximum number of consecutive auto replies; and it is also different from [max_rounds in GroupChat](./groupchat#groupchat-objects) which is the maximum number of rounds in a group chat session.
+                [max_consecutive_auto_reply](#max-consecutive-auto-reply) which is the maximum number of consecutive auto replies; and it is also different from [max_rounds in GroupChat](./groupchat) which is the maximum number of rounds in a group chat session.
                 If max_turns is set to None, the chat will continue until a termination condition is met. Default is None.
             summary_method (str or callable): a method to get a summary from the chat. Default is DEFAULT_SUMMARY_METHOD, i.e., "last_msg".
 
@@ -1376,7 +1376,7 @@ class ConversableAgent(LLMAgent):
 
         Args:
             chat_queue (List[Dict]): a list of dictionaries containing the information of the chats.
-                Each dictionary should contain the input arguments for [`initiate_chat`](conversable_agent#initiate_chat)
+                Each dictionary should contain the input arguments for [`initiate_chat`](conversable_agent#initiate-chat)
 
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """

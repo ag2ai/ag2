@@ -8,6 +8,6 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "mintlify": "^4.0.294"
+    "mintlify": "4.0.294"
   }
 }

@@ -52,8 +52,8 @@ export const GalleryPage = ({
           item.image
             ? item.image.includes("http")
               ? item.image
-              : `../../static/img/gallery/${item.image}`
-            : `../../static/img/gallery/default.png`
+              : `https://mintlify.s3.us-west-1.amazonaws.com/ag2ai/static/img/gallery/${item.image}`
+            : `https://mintlify.s3.us-west-1.amazonaws.com/ag2ai/static/img/gallery/default.png`
         }
         style={{
           height: 150,
@@ -132,6 +132,7 @@ export const GalleryPage = ({
       <CardGroup cols={3}>
         {galleryItems.map((item, index) => (
           <Card key={index} href={item.link}>
+            {imageFunc(item)}
             <h5 className="card-title">{item.title}</h5>
             {badges(item)}
             <p className="card-description">{item.description || item.title}</p>
