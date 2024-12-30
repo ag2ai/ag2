@@ -158,18 +158,21 @@ class TestConsoleIOWithWebsockets:
                 # websocket.send("2+2=?")
                 websocket.send("Please write a poem about spring in a city of your choice.")
 
-                while not success_dict["success"]:
-                    message = websocket.recv()
-                    message = message.decode("utf-8") if isinstance(message, bytes) else message
-                    # drop the newline character
-                    if message.endswith("\n"):
-                        message = message[:-1]
+                while True:
+                    try:
+                        message = websocket.recv()
+                        message = message.decode("utf-8") if isinstance(message, bytes) else message
+                        # drop the newline character
+                        if message.endswith("\n"):
+                            message = message[:-1]
 
-                    print(message, end="", flush=True)
+                        print(message, end="", flush=True)
 
-                    if "TERMINATE" in message:
-                        print()
-                        print(" - Received TERMINATE message. Exiting.", flush=True)
+                        if "TERMINATE" in message:
+                            print()
+                            print(" - Received TERMINATE message.", flush=True)
+                    except ConnectionClosed as e:
+                        print("Connection closed:", e)
                         break
 
         assert success_dict["success"]
