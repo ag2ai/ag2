@@ -158,7 +158,7 @@ class TestConsoleIOWithWebsockets:
                 # websocket.send("2+2=?")
                 websocket.send("Please write a poem about spring in a city of your choice.")
 
-                while True:
+                while not success_dict["success"]:
                     message = websocket.recv()
                     message = message.decode("utf-8") if isinstance(message, bytes) else message
                     # drop the newline character
