@@ -41,7 +41,7 @@ class AFTER_WORK:
     """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
 
     Args:
-        agent: The agent to hand off to or the after work option. Can be a SwarmAgent, a string name of a SwarmAgent, an AfterWorkOption, or a Callable.
+        agent (Union[AfterWorkOption, SwarmAgent, str, Callable]): The agent to hand off to or the after work option. Can be a SwarmAgent, a string name of a SwarmAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
                 def my_after_work_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, SwarmAgent, str]:
     """
@@ -58,11 +58,11 @@ class ON_CONDITION:
     """Defines a condition for transitioning to another agent or nested chats
 
     Args:
-        target: The agent to hand off to or the nested chat configuration. Can be a SwarmAgent or a Dict.
+        target (Union[SwarmAgent, dict[str, Any]]): The agent to hand off to or the nested chat configuration. Can be a SwarmAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/topics/swarm#registering-handoffs-to-a-nested-chat
-        condition: The condition for transitioning to the target agent, evaluated by the LLM to determine whether to call the underlying function/tool which does the transition.
-        available: Optional condition to determine if this ON_CONDITION is available. Can be a Callable or a string.
+        condition (str): The condition for transitioning to the target agent, evaluated by the LLM to determine whether to call the underlying function/tool which does the transition.
+        available (Union[Callable, str]): Optional condition to determine if this ON_CONDITION is available. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool.
     """
 
@@ -89,7 +89,7 @@ class UPDATE_SYSTEM_MESSAGE:
     """Update the agent's system message before they reply
 
     Args:
-        update_function: The string or function to update the agent's system message. Can be a string or a Callable.
+        update_function (Union[Callable, str]): The string or function to update the agent's system message. Can be a string or a Callable.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
                 def my_update_function(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
@@ -114,6 +114,285 @@ class UPDATE_SYSTEM_MESSAGE:
                 raise ValueError("Update function must return a string")
         else:
             raise ValueError("Update function must be either a string or a callable")
+
+
+def _prepare_swarm_agents(
+    initial_agent: "SwarmAgent",
+    agents: list["SwarmAgent"],
+) -> tuple["SwarmAgent", list["SwarmAgent"]]:
+    """Validates agents, create the tool executor, configure nested chats.
+
+    Args:
+        initial_agent (SwarmAgent): The first agent in the conversation.
+        agents (list[SwarmAgent]): List of all agents in the conversation.
+
+    Returns:
+        SwarmAgent: The tool executor agent.
+        list[SwarmAgent]: List of nested chat agents.
+    """
+    assert isinstance(initial_agent, SwarmAgent), "initial_agent must be a SwarmAgent"
+    assert all(isinstance(agent, SwarmAgent) for agent in agents), "Agents must be a list of SwarmAgents"
+
+    # Ensure all agents in hand-off after-works are in the passed in agents list
+    for agent in agents:
+        if agent.after_work is not None:
+            if isinstance(agent.after_work.agent, SwarmAgent):
+                assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
+
+    tool_execution = SwarmAgent(
+        name=__TOOL_EXECUTOR_NAME__,
+        system_message="Tool Execution",
+    )
+    tool_execution._set_to_tool_execution()
+
+    nested_chat_agents = []
+    for agent in agents:
+        _create_nested_chats(agent, nested_chat_agents)
+
+    # Update tool execution agent with all the functions from all the agents
+    for agent in agents + nested_chat_agents:
+        tool_execution._function_map.update(agent._function_map)
+        # Add conditional functions to the tool_execution agent
+        for func_name, (func, _) in agent._conditional_functions.items():
+            tool_execution._function_map[func_name] = func
+
+    return tool_execution, nested_chat_agents
+
+
+def _create_nested_chats(agent: "SwarmAgent", nested_chat_agents: list["SwarmAgent"]):
+    """Create nested chat agents and register nested chats.
+
+    Args:
+        agent (SwarmAgent): The agent to create nested chat agents for, including registering the hand offs.
+        nested_chat_agents (list[SwarmAgent]): List for all nested chat agents, appends to this.
+    """
+    for i, nested_chat_handoff in enumerate(agent._nested_chat_handoffs):
+        nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
+        condition = nested_chat_handoff["condition"]
+        available = nested_chat_handoff["available"]
+
+        # Create a nested chat agent specifically for this nested chat
+        nested_chat_agent = SwarmAgent(name=f"nested_chat_{agent.name}_{i + 1}")
+
+        nested_chat_agent.register_nested_chats(
+            nested_chats["chat_queue"],
+            reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
+            or "summary_from_nested_chats",
+            config=nested_chats.get("config", None),
+            trigger=lambda sender: True,
+            position=0,
+            use_async=nested_chats.get("use_async", False),
+        )
+
+        # After the nested chat is complete, transfer back to the parent agent
+        nested_chat_agent.register_hand_off(AFTER_WORK(agent=agent))
+
+        nested_chat_agents.append(nested_chat_agent)
+
+        # Nested chat is triggered through an agent transfer to this nested chat agent
+        agent.register_hand_off(ON_CONDITION(nested_chat_agent, condition, available))
+
+
+def _process_initial_messages(
+    messages: Union[list[dict[str, Any]], str],
+    user_agent: Optional[UserProxyAgent],
+    agents: list["SwarmAgent"],
+    nested_chat_agents: list["SwarmAgent"],
+) -> tuple[list[dict], Optional[Agent], list[str], list[Agent]]:
+    """Process initial messages, validating agent names against messages, and determining the last agent to speak.
+
+    Args:
+        messages: Initial messages to process.
+        user_agent: Optional user proxy agent passed in to a_/initiate_swarm_chat.
+        agents: Agents in swarm.
+        nested_chat_agents: List of nested chat agents.
+
+    Returns:
+        list[dict]: Processed message(s).
+        Agent: Last agent to speak.
+        list[str]: List of agent names.
+        list[Agent]: List of temporary user proxy agents to add to GroupChat.
+    """
+    if isinstance(messages, str):
+        messages = [{"role": "user", "content": messages}]
+
+    swarm_agent_names = [agent.name for agent in agents + nested_chat_agents]
+
+    # If there's only one message and there's no identified swarm agent
+    # Start with a user proxy agent, creating one if they haven't passed one in
+    temp_user_proxy = None
+    temp_user_list = []
+    if len(messages) == 1 and "name" not in messages[0] and not user_agent:
+        temp_user_proxy = UserProxyAgent(name="_User")
+        last_agent = temp_user_proxy
+        temp_user_list.append(temp_user_proxy)
+    else:
+        last_message = messages[0]
+        if "name" in last_message:
+            if last_message["name"] in swarm_agent_names:
+                last_agent = next(agent for agent in agents + nested_chat_agents if agent.name == last_message["name"])
+            elif user_agent and last_message["name"] == user_agent.name:
+                last_agent = user_agent
+            else:
+                raise ValueError(f"Invalid swarm agent name in last message: {last_message['name']}")
+        else:
+            last_agent = user_agent if user_agent else temp_user_proxy
+
+    return messages, last_agent, swarm_agent_names, temp_user_list
+
+
+def _setup_context_variables(
+    tool_execution: "SwarmAgent",
+    agents: list["SwarmAgent"],
+    manager: GroupChatManager,
+    context_variables: dict[str, Any],
+) -> None:
+    """Assign a common context_variables reference to all agents in the swarm, including the tool executor and group chat manager.
+
+    Args:
+        tool_execution: The tool execution agent.
+        agents: List of all agents in the conversation.
+        manager: GroupChatManager instance.
+    """
+    for agent in agents + [tool_execution] + [manager]:
+        agent._context_variables = context_variables
+
+
+def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
+    """Remove temporary user proxy agent name from messages before returning.
+
+    Args:
+        chat_result: ChatResult instance.
+    """
+    for message in chat_result.chat_history:
+        if "name" in message and message["name"] == "_User":
+            del message["name"]
+
+
+def _determine_next_agent(
+    last_speaker: "SwarmAgent",
+    groupchat: GroupChat,
+    initial_agent: ConversableAgent,
+    use_initial_agent: bool,
+    tool_execution: "SwarmAgent",
+    swarm_agent_names: list[str],
+    user_agent: Optional[UserProxyAgent],
+    swarm_after_work: Optional[Union[AfterWorkOption, Callable]],
+) -> Optional[Agent]:
+    """Determine the next agent in the conversation.
+
+    Args:
+        last_speaker (SwarmAgent): The last agent to speak.
+        groupchat (GroupChat): GroupChat instance.
+        initial_agent (ConversableAgent): The initial agent in the conversation.
+        use_initial_agent (bool): Whether to use the initial agent straight away.
+        tool_execution (SwarmAgent): The tool execution agent.
+        swarm_agent_names (list[str]): List of agent names.
+        user_agent (UserProxyAgent): Optional user proxy agent.
+        swarm_after_work (Union[AfterWorkOption, Callable]): Method to handle conversation continuation when an agent doesn't select the next agent.
+    """
+    if use_initial_agent:
+        return initial_agent
+
+    if "tool_calls" in groupchat.messages[-1]:
+        return tool_execution
+
+    if tool_execution._next_agent is not None:
+        next_agent = tool_execution._next_agent
+        tool_execution._next_agent = None
+
+        # Check for string, access agent from group chat.
+
+        if isinstance(next_agent, str):
+            if next_agent in swarm_agent_names:
+                next_agent = groupchat.agent_by_name(name=next_agent)
+            else:
+                raise ValueError(f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm.")
+
+        return next_agent
+
+    # get the last swarm agent
+    last_swarm_speaker = None
+    for message in reversed(groupchat.messages):
+        if "name" in message and message["name"] in swarm_agent_names:
+            agent = groupchat.agent_by_name(name=message["name"])
+            if isinstance(agent, SwarmAgent):
+                last_swarm_speaker = agent
+                break
+    if last_swarm_speaker is None:
+        raise ValueError("No swarm agent found in the message history")
+
+    # If the user last spoke, return to the agent prior
+    if (user_agent and last_speaker == user_agent) or groupchat.messages[-1]["role"] == "tool":
+        return last_swarm_speaker
+
+    # Resolve after_work condition (agent-level overrides global)
+    after_work_condition = (
+        last_swarm_speaker.after_work if last_swarm_speaker.after_work is not None else swarm_after_work
+    )
+    if isinstance(after_work_condition, AFTER_WORK):
+        after_work_condition = after_work_condition.agent
+
+    # Evaluate callable after_work
+    if isinstance(after_work_condition, Callable):
+        after_work_condition = after_work_condition(last_speaker, groupchat.messages, groupchat)
+
+    if isinstance(after_work_condition, str):  # Agent name in a string
+        if after_work_condition in swarm_agent_names:
+            return groupchat.agent_by_name(name=after_work_condition)
+        else:
+            raise ValueError(f"Invalid agent name in after_work: {after_work_condition}")
+    elif isinstance(after_work_condition, SwarmAgent):
+        return after_work_condition
+    elif isinstance(after_work_condition, AfterWorkOption):
+        if after_work_condition == AfterWorkOption.TERMINATE:
+            return None
+        elif after_work_condition == AfterWorkOption.REVERT_TO_USER:
+            return None if user_agent is None else user_agent
+        elif after_work_condition == AfterWorkOption.STAY:
+            return last_speaker
+    else:
+        raise ValueError("Invalid After Work condition or return value from callable")
+
+
+def create_swarm_transition(
+    initial_agent: "SwarmAgent",
+    tool_execution: "SwarmAgent",
+    swarm_agent_names: list[str],
+    user_agent: Optional[UserProxyAgent],
+    swarm_after_work: Optional[Union[AfterWorkOption, Callable]],
+) -> Callable[["SwarmAgent", GroupChat], Optional[Agent]]:
+    """Creates a transition function for swarm chat with enclosed state for the use_initial_agent.
+
+    Args:
+        initial_agent (SwarmAgent): The first agent to speak
+        tool_execution (SwarmAgent): The tool execution agent
+        swarm_agent_names (list[str]): List of all agent names
+        user_agent (UserProxyAgent): Optional user proxy agent
+        swarm_after_work (Union[AfterWorkOption, Callable]): Swarm-level after work
+
+    Returns:
+        Callable transition function (for sync and async swarm chats)
+    """
+    # Create enclosed state, this will be set once per creation so will only be True on the first execution
+    # of swarm_transition
+    state = {"use_initial_agent": True}
+
+    def swarm_transition(last_speaker: SwarmAgent, groupchat: GroupChat) -> Optional[Agent]:
+        result = _determine_next_agent(
+            last_speaker=last_speaker,
+            groupchat=groupchat,
+            initial_agent=initial_agent,
+            use_initial_agent=state["use_initial_agent"],
+            tool_execution=tool_execution,
+            swarm_agent_names=swarm_agent_names,
+            user_agent=user_agent,
+            swarm_after_work=swarm_after_work,
+        )
+        state["use_initial_agent"] = False
+        return result
+
+    return swarm_transition
 
 
 def initiate_swarm_chat(
@@ -150,192 +429,39 @@ def initiate_swarm_chat(
         Dict[str, Any]: Updated Context variables.
         SwarmAgent:     Last speaker.
     """
-    assert isinstance(initial_agent, SwarmAgent), "initial_agent must be a SwarmAgent"
-    assert all(isinstance(agent, SwarmAgent) for agent in agents), "Agents must be a list of SwarmAgents"
-    # Ensure all agents in hand-off after-works are in the passed in agents list
-    for agent in agents:
-        if agent.after_work is not None:
-            if isinstance(agent.after_work.agent, SwarmAgent):
-                assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents)
 
-    context_variables = context_variables or {}
-    if isinstance(messages, str):
-        messages = [{"role": "user", "content": messages}]
-
-    tool_execution = SwarmAgent(
-        name=__TOOL_EXECUTOR_NAME__,
-        system_message="Tool Execution",
+    processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
+        messages, user_agent, agents, nested_chat_agents
     )
-    tool_execution._set_to_tool_execution()
 
-    # Update tool execution agent with all the functions from all the agents
-    for agent in agents:
-        tool_execution._function_map.update(agent._function_map)
-
-    INIT_AGENT_USED = False
-
-    def swarm_transition(last_speaker: SwarmAgent, groupchat: GroupChat):
-        """Swarm transition function to determine and prepare the next agent in the conversation"""
-        next_agent = determine_next_agent(last_speaker, groupchat)
-
-        return next_agent
-
-    def determine_next_agent(last_speaker: SwarmAgent, groupchat: GroupChat):
-        """Determine the next agent in the conversation"""
-        nonlocal INIT_AGENT_USED
-        if not INIT_AGENT_USED:
-            INIT_AGENT_USED = True
-            return initial_agent
-
-        if "tool_calls" in groupchat.messages[-1]:
-            return tool_execution
-        if tool_execution._next_agent is not None:
-            next_agent = tool_execution._next_agent
-            tool_execution._next_agent = None
-
-            # Check for string, access agent from group chat.
-
-            if isinstance(next_agent, str):
-                if next_agent in swarm_agent_names:
-                    next_agent = groupchat.agent_by_name(name=next_agent)
-                else:
-                    raise ValueError(
-                        f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm."
-                    )
-
-            return next_agent
-
-        # get the last swarm agent
-        last_swarm_speaker = None
-        for message in reversed(groupchat.messages):
-            if "name" in message and message["name"] in swarm_agent_names:
-                agent = groupchat.agent_by_name(name=message["name"])
-                if isinstance(agent, SwarmAgent):
-                    last_swarm_speaker = agent
-                    break
-        if last_swarm_speaker is None:
-            raise ValueError("No swarm agent found in the message history")
-
-        # If the user last spoke, return to the agent prior
-        if (user_agent and last_speaker == user_agent) or groupchat.messages[-1]["role"] == "tool":
-            return last_swarm_speaker
-
-        # Resolve after_work condition (agent-level overrides global)
-        after_work_condition = (
-            last_swarm_speaker.after_work if last_swarm_speaker.after_work is not None else after_work
-        )
-        if isinstance(after_work_condition, AFTER_WORK):
-            after_work_condition = after_work_condition.agent
-
-        # Evaluate callable after_work
-        if isinstance(after_work_condition, Callable):
-            after_work_condition = after_work_condition(last_speaker, groupchat.messages, groupchat)
-
-        if isinstance(after_work_condition, str):  # Agent name in a string
-            if after_work_condition in swarm_agent_names:
-                return groupchat.agent_by_name(name=after_work_condition)
-            else:
-                raise ValueError(f"Invalid agent name in after_work: {after_work_condition}")
-        elif isinstance(after_work_condition, SwarmAgent):
-            return after_work_condition
-        elif isinstance(after_work_condition, AfterWorkOption):
-            if after_work_condition == AfterWorkOption.TERMINATE:
-                return None
-            elif after_work_condition == AfterWorkOption.REVERT_TO_USER:
-                return None if user_agent is None else user_agent
-            elif after_work_condition == AfterWorkOption.STAY:
-                return last_speaker
-        else:
-            raise ValueError("Invalid After Work condition or return value from callable")
-
-    def create_nested_chats(agent: SwarmAgent, nested_chat_agents: list[SwarmAgent]):
-        """Create nested chat agents and register nested chats"""
-        for i, nested_chat_handoff in enumerate(agent._nested_chat_handoffs):
-            nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
-            condition = nested_chat_handoff["condition"]
-            available = nested_chat_handoff["available"]
-
-            # Create a nested chat agent specifically for this nested chat
-            nested_chat_agent = SwarmAgent(name=f"nested_chat_{agent.name}_{i + 1}")
-
-            nested_chat_agent.register_nested_chats(
-                nested_chats["chat_queue"],
-                reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
-                or "summary_from_nested_chats",
-                config=nested_chats.get("config", None),
-                trigger=lambda sender: True,
-                position=0,
-                use_async=nested_chats.get("use_async", False),
-            )
-
-            # After the nested chat is complete, transfer back to the parent agent
-            nested_chat_agent.register_hand_off(AFTER_WORK(agent=agent))
-
-            nested_chat_agents.append(nested_chat_agent)
-
-            # Nested chat is triggered through an agent transfer to this nested chat agent
-            agent.register_hand_off(ON_CONDITION(nested_chat_agent, condition, available))
-
-    nested_chat_agents = []
-    for agent in agents:
-        create_nested_chats(agent, nested_chat_agents)
-
-    # Update tool execution agent with all the functions from all the agents
-    for agent in agents + nested_chat_agents:
-        tool_execution._function_map.update(agent._function_map)
-
-        # Add conditional functions to the tool_execution agent
-        for func_name, (func, on_condition) in agent._conditional_functions.items():
-            tool_execution._function_map[func_name] = func
-
-    swarm_agent_names = [agent.name for agent in agents + nested_chat_agents]
-
-    # If there's only one message and there's no identified swarm agent
-    # Start with a user proxy agent, creating one if they haven't passed one in
-    if len(messages) == 1 and "name" not in messages[0] and not user_agent:
-        temp_user_proxy = [UserProxyAgent(name="_User")]
-    else:
-        temp_user_proxy = []
+    # Create transition function (has enclosed state for initial agent)
+    swarm_transition = create_swarm_transition(
+        initial_agent=initial_agent,
+        tool_execution=tool_execution,
+        swarm_agent_names=swarm_agent_names,
+        user_agent=user_agent,
+        swarm_after_work=after_work,
+    )
 
     groupchat = GroupChat(
-        agents=[tool_execution]
-        + agents
-        + nested_chat_agents
-        + ([user_agent] if user_agent is not None else temp_user_proxy),
-        messages=[],  # Set to empty. We will resume the conversation with the messages
+        agents=[tool_execution] + agents + nested_chat_agents + ([user_agent] if user_agent else temp_user_list),
+        messages=[],
         max_round=max_rounds,
         speaker_selection_method=swarm_transition,
     )
+
     manager = GroupChatManager(groupchat)
-    clear_history = True
 
     # Point all SwarmAgent's context variables to this function's context_variables
-    # providing a single (shared) context across all SwarmAgents in the swarm
-    for agent in agents + [tool_execution] + [manager]:
-        agent._context_variables = context_variables
+    _setup_context_variables(tool_execution, agents, manager, context_variables or {})
 
-    if len(messages) > 1:
-        last_agent, last_message = manager.resume(messages=messages)
+    if len(processed_messages) > 1:
+        last_agent, last_message = manager.resume(messages=processed_messages)
         clear_history = False
     else:
-        last_message = messages[0]
-
-        if "name" in last_message:
-            if last_message["name"] in swarm_agent_names:
-                # If there's a name in the message and it's a swarm agent, use that
-                last_agent = groupchat.agent_by_name(name=last_message["name"])
-            elif user_agent and last_message["name"] == user_agent.name:
-                # If the user agent is passed in and is the first message
-                last_agent = user_agent
-            else:
-                raise ValueError(f"Invalid swarm agent name in last message: {last_message['name']}")
-        else:
-            # No name, so we're using the user proxy to start the conversation
-            if user_agent:
-                last_agent = user_agent
-            else:
-                # If no user agent passed in, use our temporary user proxy
-                last_agent = temp_user_proxy[0]
+        last_message = processed_messages[0]
+        clear_history = True
 
     chat_result = last_agent.initiate_chat(
         manager,
@@ -343,12 +469,86 @@ def initiate_swarm_chat(
         clear_history=clear_history,
     )
 
-    # Clear the temporary user proxy's name from messages
-    if len(temp_user_proxy) == 1:
-        for message in chat_result.chat_history:
-            if "name" in message and message["name"] == "_User":
-                # delete the name key from the message
-                del message["name"]
+    _cleanup_temp_user_messages(chat_result)
+
+    return chat_result, context_variables, manager.last_speaker
+
+
+async def a_initiate_swarm_chat(
+    initial_agent: "SwarmAgent",
+    messages: Union[list[dict[str, Any]], str],
+    agents: list["SwarmAgent"],
+    user_agent: Optional[UserProxyAgent] = None,
+    max_rounds: int = 20,
+    context_variables: Optional[dict[str, Any]] = None,
+    after_work: Optional[Union[AfterWorkOption, Callable]] = AFTER_WORK(AfterWorkOption.TERMINATE),
+) -> tuple[ChatResult, dict[str, Any], "SwarmAgent"]:
+    """Initialize and run a swarm chat asynchronously
+
+    Args:
+        initial_agent: The first receiving agent of the conversation.
+        messages: Initial message(s).
+        agents: List of swarm agents.
+        user_agent: Optional user proxy agent for falling back to.
+        max_rounds: Maximum number of conversation rounds.
+        context_variables: Starting context variables.
+        after_work: Method to handle conversation continuation when an agent doesn't select the next agent. If no agent is selected and no tool calls are output, we will use this method to determine the next agent.
+            Must be a AFTER_WORK instance (which is a dataclass accepting a SwarmAgent, AfterWorkOption, A str (of the AfterWorkOption)) or a callable.
+            AfterWorkOption:
+                - TERMINATE (Default): Terminate the conversation.
+                - REVERT_TO_USER : Revert to the user agent if a user agent is provided. If not provided, terminate the conversation.
+                - STAY : Stay with the last speaker.
+
+            Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a SwarmAgent (by reference or string name).
+                ```python
+                def custom_afterwork_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, SwarmAgent, str]:
+                ```
+    Returns:
+        ChatResult:     Conversations chat history.
+        Dict[str, Any]: Updated Context variables.
+        SwarmAgent:     Last speaker.
+    """
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents)
+
+    processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
+        messages, user_agent, agents, nested_chat_agents
+    )
+
+    # Create transition function (has enclosed state for initial agent)
+    swarm_transition = create_swarm_transition(
+        initial_agent=initial_agent,
+        tool_execution=tool_execution,
+        swarm_agent_names=swarm_agent_names,
+        user_agent=user_agent,
+        swarm_after_work=after_work,
+    )
+
+    groupchat = GroupChat(
+        agents=[tool_execution] + agents + nested_chat_agents + ([user_agent] if user_agent else temp_user_list),
+        messages=[],
+        max_round=max_rounds,
+        speaker_selection_method=swarm_transition,
+    )
+
+    manager = GroupChatManager(groupchat)
+
+    # Point all SwarmAgent's context variables to this function's context_variables
+    _setup_context_variables(tool_execution, agents, manager, context_variables or {})
+
+    if len(processed_messages) > 1:
+        last_agent, last_message = await manager.a_resume(messages=processed_messages)
+        clear_history = False
+    else:
+        last_message = processed_messages[0]
+        clear_history = True
+
+    chat_result = await last_agent.a_initiate_chat(
+        manager,
+        message=last_message,
+        clear_history=clear_history,
+    )
+
+    _cleanup_temp_user_messages(chat_result)
 
     return chat_result, context_variables, manager.last_speaker
 
