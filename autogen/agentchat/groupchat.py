@@ -18,7 +18,7 @@ from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNex
 from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
-from ..messages import create_clear_agents_history
+from ..messages import create_clear_agents_history, create_speaker_attempt
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
@@ -841,15 +841,21 @@ class GroupChat:
 
         Used by auto_select_speaker and a_auto_select_speaker.
         """
-
-        # Output the query and requery results
-        if self.select_speaker_auto_verbose:
-            iostream = IOStream.get_default()
-
         # Validate the speaker name selected
         select_name = messages[-1]["content"].strip()
 
         mentions = self._mentioned_agents(select_name, agents)
+
+        # Output the query and requery results
+        if self.select_speaker_auto_verbose:
+            iostream = IOStream.get_default()
+            speaker_attempt = create_speaker_attempt(
+                mentions=mentions,
+                attempt=attempt,
+                attempts_left=attempts_left,
+                select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+            )
+            speaker_attempt.print(iostream.print)
 
         if len(mentions) == 1:
             # Success on retry, we have just one name mentioned
@@ -858,26 +864,8 @@ class GroupChat:
             # Add the selected agent to the response so we can return it
             messages.append({"role": "user", "content": f"[AGENT SELECTED]{selected_agent_name}"})
 
-            if self.select_speaker_auto_verbose:
-                iostream.print(
-                    colored(
-                        f">>>>>>>> Select speaker attempt {attempt} of {attempt + attempts_left} successfully selected: {selected_agent_name}",
-                        "green",
-                    ),
-                    flush=True,
-                )
-
         elif len(mentions) > 1:
             # More than one name on requery so add additional reminder prompt for next retry
-
-            if self.select_speaker_auto_verbose:
-                iostream.print(
-                    colored(
-                        f">>>>>>>> Select speaker attempt {attempt} of {attempt + attempts_left} failed as it included multiple agent names.",
-                        "red",
-                    ),
-                    flush=True,
-                )
 
             if attempts_left:
                 # Message to return to the chat for the next attempt
@@ -899,15 +887,6 @@ class GroupChat:
 
         else:
             # No names at all on requery so add additional reminder prompt for next retry
-
-            if self.select_speaker_auto_verbose:
-                iostream.print(
-                    colored(
-                        f">>>>>>>> Select speaker attempt #{attempt} failed as it did not include any agent names.",
-                        "red",
-                    ),
-                    flush=True,
-                )
 
             if attempts_left:
                 # Message to return to the chat for the next attempt

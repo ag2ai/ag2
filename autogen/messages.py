@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from copy import deepcopy
 from typing import Any, Callable, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel
@@ -297,3 +298,51 @@ def create_clear_agents_history(
     agent: Optional[Agent] = None, nr_messages_to_preserve: Optional[int] = None
 ) -> ClearAgentsHistory:
     return ClearAgentsHistory(agent_name=agent.name if agent else None, nr_messages_to_preserve=nr_messages_to_preserve)
+
+
+class SpeakerAttempt(BaseModel):
+    mentions: dict[str, int]
+    attempt: int
+    attempts_left: int
+    verbose: Optional[bool] = False
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if not self.verbose:
+            return
+
+        if len(self.mentions) == 1:
+            # Success on retry, we have just one name mentioned
+            selected_agent_name = next(iter(self.mentions))
+            f(
+                colored(
+                    f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} successfully selected: {selected_agent_name}",
+                    "green",
+                ),
+                flush=True,
+            )
+        elif len(self.mentions) > 1:
+            f(
+                colored(
+                    f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} failed as it included multiple agent names.",
+                    "red",
+                ),
+                flush=True,
+            )
+        else:
+            f(
+                colored(
+                    f">>>>>>>> Select speaker attempt #{self.attempt} failed as it did not include any agent names.",
+                    "red",
+                ),
+                flush=True,
+            )
+
+
+def create_speaker_attempt(
+    mentions: dict[str, int], attempt: int, attempts_left: int, select_speaker_auto_verbose: Optional[bool] = False
+) -> SpeakerAttempt:
+    return SpeakerAttempt(
+        mentions=deepcopy(mentions), attempt=attempt, attempts_left=attempts_left, verbose=select_speaker_auto_verbose
+    )
