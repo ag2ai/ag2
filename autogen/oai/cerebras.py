@@ -7,6 +7,7 @@
 """Create an OpenAI-compatible client using Cerebras's API.
 
 Example:
+    ```python
     llm_config={
         "config_list": [{
             "api_type": "cerebras",
@@ -16,6 +17,7 @@ Example:
     }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
+    ```
 
 Install Cerebras's python library using: pip install --upgrade cerebras_cloud_sdk
 

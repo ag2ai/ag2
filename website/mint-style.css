@@ -68,6 +68,13 @@ h4 {
   }
 }
 
+body.reference-page h1,
+body.reference-page h2,
+body.reference-page h3,
+body.reference-page h4 {
+  text-transform: none !important;
+}
+
 a.colab-badge, a.github-badge {
   display: inline-block;
   border:none;
@@ -393,6 +400,9 @@ a.colab-badge > img, a.github-badge  > img {
 /* Examples page Gallery section ends */
 
 /* Blog page section starts */
+.blog-authors {
+  margin: 1rem 0;
+}
 .blog-authors .px-6.py-5{
   padding:0.35rem 0;
 }
@@ -792,4 +802,12 @@ table {
 
 .codeblock-dark {
   border-radius: 0 !important;
+}
+
+p a {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

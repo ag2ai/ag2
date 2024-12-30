@@ -6,6 +6,34 @@ authors:
 tags: [mistral ai,anthropic,together.ai,gemini]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Authors:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/marklysze">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/marklysze.png" />
+          </div>
+          <div>
+            <p class="name">Mark Sze</p>
+            <p>Software Engineer at AG2.ai</p>
+          </div>
+        </div>
+    </Card>
+    <Card href="https://github.com/Hk669">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/Hk669.png" />
+          </div>
+          <div>
+            <p class="name">Hrushikesh Dokala</p>
+            <p>CS Undergraduate Based in India</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 ![agents](img/agentstogether.jpeg)
 
 ## TL;DR
@@ -60,7 +88,7 @@ Here are some tips when working with these client classes:
 - **Agent names** - these cloud providers do not use the `name` field on a message, so be sure to use your agent's name in their `system_message` and `description` fields, as well as instructing the LLM to 'act as' them. This is particularly important for "auto" speaker selection in group chats as we need to guide the LLM to choose the next agent based on a name, so tweak `select_speaker_message_template`, `select_speaker_prompt_template`, and `select_speaker_auto_multiple_template` with more guidance.
 - **Context length** - as your conversation gets longer, models need to support larger context lengths, be mindful of what the model supports and consider using [Transform Messages](https://docs.ag2.ai/docs/topics/handling_long_contexts/intro_to_transform_messages) to manage context size.
 - **Provider parameters** - providers have parameters you can set such as temperature, maximum tokens, top-k, top-p, and safety. See each client class in AutoGen's [API Reference](https://docs.ag2.ai/docs/reference/oai/gemini) or [documentation](https://docs.ag2.ai/docs/topics/non-openai-models/cloud-gemini) for details.
-- **Prompts** - prompt engineering is critical in guiding smaller LLMs to do what you need. [ConversableAgent](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent), [GroupChat](https://docs.ag2.ai/docs/reference/agentchat/groupchat), [UserProxyAgent](https://docs.ag2.ai/docs/reference/agentchat/user_proxy_agent), and [AssistantAgent](https://docs.ag2.ai/docs/reference/agentchat/assistant_agent) all have customizable prompt attributes that you can tailor. Here are some prompting tips from [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)([+Library](https://docs.anthropic.com/en/prompt-library/library)), [Mistral AI](https://docs.mistral.ai/guides/prompting_capabilities/), [Together.AI](https://docs.together.ai/docs/examples), and [Meta](https://llama.meta.com/docs/how-to-guides/prompting/).
+- **Prompts** - prompt engineering is critical in guiding smaller LLMs to do what you need. [ConversableAgent](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent), [GroupChat](https://docs.ag2.ai/docs/reference/agentchat/groupchat), [UserProxyAgent](https://docs.ag2.ai/docs/reference/agentchat/user_proxy_agent), and [AssistantAgent](https://docs.ag2.ai/docs/reference/agentchat/assistant_agent) all have customizable prompt attributes that you can tailor. Here are some prompting tips from [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)([+Library](https://docs.anthropic.com/en/prompt-library/library)), [Mistral AI](https://docs.mistral.ai/guides/prompting_capabilities/), [Together.AI](https://docs.together.ai/docs/examples), and [Meta](https://www.llama.com/docs/how-to-guides/prompting/).
 - **Help!** - reach out on the AutoGen [Discord](https://discord.gg/pAbnFJrkgZ) or [log an issue](https://github.com/ag2ai/ag2/issues) if you need help with or can help improve these client classes.
 
 Now it's time to try them out.

@@ -6,7 +6,7 @@ The following example shows how to enable JSON mode in @AutoGen.OpenAI.OpenAICha
 JSON mode is a new feature in OpenAI which allows you to instruct model to always respond with a valid JSON object. This is useful when you want to constrain the model output to JSON format only.
 
 > [!NOTE]
-> Currently, JOSN mode is only supported by `gpt-4-turbo-preview` and `gpt-3.5-turbo-0125`. For more information (and limitations) about JSON mode, please visit [OpenAI API documentation](https://platform.openai.com/docs/guides/text-generation/json-mode).
+> Currently, JOSN mode is only supported by `gpt-4-turbo-preview` and `gpt-3.5-turbo-0125`. For more information (and limitations) about JSON mode, please visit [OpenAI API documentation](https://platform.openai.com/docs/guides/structured-outputs#json-mode).
 
 ## How to enable JSON mode in OpenAIChatAgent.
 

@@ -356,14 +356,12 @@ def add_front_matter_to_metadata_mdx(
 
 def convert_callout_blocks(content: str) -> str:
     """
-    Converts MDX callout block syntax to custom HTML/component syntax.
-
-    Args:
-        content (str): The markdown content containing mdx-code-block callout syntax
-
-    Returns:
-        str: The converted content with HTML/component callout syntax
+    Converts callout blocks in the following formats:
+    1) Plain callout blocks using ::: syntax.
+    2) Blocks using 3-4 backticks + (mdx-code-block or {=mdx}) + ::: syntax.
+    Transforms them into custom HTML/component syntax.
     """
+
     callout_types = {
         "tip": "Tip",
         "note": "Note",
@@ -374,20 +372,72 @@ def convert_callout_blocks(content: str) -> str:
         "danger": "Warning",
     }
 
-    def replace_callout(match: re.Match) -> str:
-        """Helper function to format individual callout blocks."""
-        callout_type = match.group(1)
-        inner_content = match.group(2).strip()
+    # Regex explanation (using alternation):
+    #
+    # -- Alternative #1: Backticks + mdx-code-block/{=mdx} --
+    #
+    #   ^(?P<backticks>`{3,4})(?:mdx-code-block|\{=mdx\})[ \t]*\n
+    #     - Matches opening backticks and optional mdx markers.
+    #   :::(?P<callout_type_backtick>...)
+    #     - Captures the callout type.
+    #   (.*?)
+    #     - Captures the content inside the callout.
+    #   ^:::[ \t]*\n
+    #     - Matches the closing ::: line.
+    #   (?P=backticks)
+    #     - Ensures the same number of backticks close the block.
+    #
+    # -- Alternative #2: Plain ::: callout --
+    #
+    #   ^:::(?P<callout_type_no_backtick>...)
+    #     - Captures the callout type after :::.
+    #   (.*?)
+    #     - Captures the content inside the callout.
+    #   ^:::
+    #     - Matches the closing ::: line.
+    #
+    #  (?s)(?m): DOTALL + MULTILINE flags.
+    #    - DOTALL (`.` matches everything, including newlines).
+    #    - MULTILINE (`^` and `$` work at the start/end of each line).
 
-        return f"""<div class="{callout_type}">
-        <{callout_types[callout_type]}>
-        {inner_content}
-        </{callout_types[callout_type]}>
-        </div>"""
+    pattern = re.compile(
+        r"(?s)(?m)"
+        r"(?:"
+        # Alternative #1: Backticks + mdx-code-block/{=mdx}
+        r"^(?P<backticks>`{3,4})(?:mdx-code-block|\{=mdx\})[ \t]*\n"
+        r":::(?P<callout_type_backtick>\w+(?:\s+\w+)?)[ \t]*\n"
+        r"(?P<inner_backtick>.*?)"
+        r"^:::[ \t]*\n"
+        r"(?P=backticks)"  # Closing backticks must match the opening count.
+        r")"
+        r"|"
+        # Alternative #2: Plain ::: callout
+        r"(?:"
+        r"^:::(?P<callout_type_no_backtick>\w+(?:\s+\w+)?)[ \t]*\n"
+        r"(?P<inner_no_backtick>.*?)"
+        r"^:::[ \t]*(?:\n|$)"
+        r")"
+    )
 
-    # Pattern matches: ````mdx-code-block\n:::[type]\n[content]\n:::\n````
-    pattern = r"````mdx-code-block\n:::(\w+(?:\s+\w+)?)\n(.*?)\n:::\n````"
-    return re.sub(pattern, replace_callout, content, flags=re.DOTALL)
+    def replace_callout(m: re.Match) -> str:
+        # Determine the matched alternative and extract the corresponding groups.
+        ctype = m.group("callout_type_backtick") or m.group("callout_type_no_backtick")
+        inner = m.group("inner_backtick") or m.group("inner_no_backtick") or ""
+
+        # Map the callout type to its standard representation or fallback to the original type.
+        mapped_type = callout_types.get(ctype, ctype)
+
+        # Return the formatted HTML block.
+        return f"""
+<div class="{ctype}">
+<{mapped_type}>
+{inner.strip()}
+</{mapped_type}>
+</div>
+"""
+
+    # Apply the regex pattern and replace matched callouts with the custom HTML structure.
+    return pattern.sub(replace_callout, content)
 
 
 def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:

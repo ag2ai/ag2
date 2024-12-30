@@ -111,9 +111,9 @@ def parse_tags_from_content(tag: str, content: Union[str, list[dict[str, Any]]])
     can be a single string or a set of attribute-value pairs.
 
     Examples:
-        <img http://example.com/image.png> -> [{"tag": "img", "attr": {"src": "http://example.com/image.png"}, "match": re.Match}]
-        <audio text="Hello I'm a robot" prompt="whisper"> ->
-                [{"tag": "audio", "attr": {"text": "Hello I'm a robot", "prompt": "whisper"}, "match": re.Match}]
+        `<img http://example.com/image.png> -> [{"tag": "img", "attr": {"src": "http://example.com/image.png"}, "match": re.Match}]`
+        ```<audio text="Hello I'm a robot" prompt="whisper"> ->
+                [{"tag": "audio", "attr": {"text": "Hello I'm a robot", "prompt": "whisper"}, "match": re.Match}]```
 
     Args:
         tag (str): The HTML style tag to be parsed.

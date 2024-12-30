@@ -220,7 +220,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 - `distance_threshold` (Optional, float) - the threshold for the distance score, only
                     distance smaller than it will be returned. Will be ignored if < 0. Default is -1.
 
-            `**kwargs` (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#__init__).
+            `**kwargs` (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
 
         Example:
 

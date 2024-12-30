@@ -4,6 +4,23 @@ authors: thinkall
 tags: [LLM, RAG]
 ---
 
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/thinkall">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/thinkall.png" />
+          </div>
+          <div>
+            <p class="name">Li Jiang</p>
+            <p>Senior Software Engineer at Microsoft</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
 *Last update: August 14, 2024; AutoGen version: v0.2.35*
 
 ![RAG Architecture](img/retrievechat-arch.png)
@@ -174,7 +191,7 @@ huggingface_ef = embedding_functions.HuggingFaceEmbeddingFunction(
 )
 ```
 
-More examples can be found [here](https://docs.trychroma.com/embeddings).
+More examples can be found [here](https://docs.trychroma.com/docs/embeddings/embedding-functions).
 
 ### Customizing Text Split Function
 Before we can store the documents into a vector database, we need to split the texts into chunks. Although

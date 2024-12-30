@@ -20,6 +20,7 @@ class GraphRagCapability(AgentCapability):
     3. generate answers from retrieved information and send messages back.
 
     For example,
+    ```python
     graph_query_engine = GraphQueryEngine(...)
     graph_query_engine.init_db([Document(doc1), Document(doc2), ...])
 
@@ -50,7 +51,7 @@ class GraphRagCapability(AgentCapability):
             #   - Hugo Weaving',
             #   'role': 'user_proxy'},
         # ...)
-
+    ```
     """
 
     def __init__(self, query_engine: GraphQueryEngine):
