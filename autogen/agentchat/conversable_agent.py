@@ -35,7 +35,7 @@ from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
-from ..messages import create_received_message_model
+from ..messages import create_received_message_model, create_termination_and_human_reply
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import Tool
@@ -1837,8 +1837,10 @@ class ConversableAgent(LLMAgent):
                     reply = reply or "exit"
 
         # print the no_human_input_msg
-        if no_human_input_msg:
-            iostream.print(colored(f"\n>>>>>>>> {no_human_input_msg}", "red"), flush=True)
+        termination_and_human_reply = create_termination_and_human_reply(
+            no_human_input_msg, self.human_input_mode, sender=sender, recipient=self
+        )
+        termination_and_human_reply.print_no_human_input_msg(iostream.print)
 
         # stop the conversation
         if reply == "exit":
@@ -1877,8 +1879,7 @@ class ConversableAgent(LLMAgent):
 
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
-        if self.human_input_mode != "NEVER":
-            iostream.print(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+        termination_and_human_reply.print_human_input_mode(iostream.print)
 
         return False, None
 
@@ -1950,8 +1951,10 @@ class ConversableAgent(LLMAgent):
                     reply = reply or "exit"
 
         # print the no_human_input_msg
-        if no_human_input_msg:
-            iostream.print(colored(f"\n>>>>>>>> {no_human_input_msg}", "red"), flush=True)
+        termination_and_human_reply = create_termination_and_human_reply(
+            no_human_input_msg, self.human_input_mode, sender=sender, recipient=self
+        )
+        termination_and_human_reply.print_no_human_input_msg(iostream.print)
 
         # stop the conversation
         if reply == "exit":
@@ -1990,8 +1993,7 @@ class ConversableAgent(LLMAgent):
 
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
-        if self.human_input_mode != "NEVER":
-            iostream.print(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+        termination_and_human_reply.print_human_input_mode(iostream.print)
 
         return False, None
 

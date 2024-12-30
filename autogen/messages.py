@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from copy import deepcopy
+from types import NoneType
 from typing import Any, Callable, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel
@@ -383,3 +384,33 @@ class GroupChatRunChat(BaseModel):
 
 def create_group_chat_run_chat(speaker: Agent, silent: Optional[bool] = False) -> GroupChatRunChat:
     return GroupChatRunChat(speaker_name=speaker.name, verbose=not silent)
+
+
+class TerminationAndHumanReply(BaseModel):
+    no_human_input_msg: str
+    human_input_mode: str
+    sender_name: str
+    recipient_name: str
+
+    def print_no_human_input_msg(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.no_human_input_msg:
+            f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
+
+    def print_human_input_mode(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.human_input_mode != "NEVER":
+            f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+
+
+def create_termination_and_human_reply(
+    no_human_input_msg: str, human_input_mode: str, *, sender: Optional[Agent] = None, recipient: Agent
+) -> TerminationAndHumanReply:
+    return TerminationAndHumanReply(
+        no_human_input_msg=no_human_input_msg,
+        human_input_mode=human_input_mode,
+        sender_name=sender.name if sender else "No sender",
+        recipient_name=recipient.name,
+    )

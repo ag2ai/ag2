@@ -20,6 +20,7 @@ from autogen.messages import (
     MessageRole,
     PostCarryoverProcessing,
     SpeakerAttempt,
+    TerminationAndHumanReply,
     ToolCall,
     ToolCallMessage,
     ToolResponse,
@@ -30,6 +31,7 @@ from autogen.messages import (
     create_post_carryover_processing,
     create_received_message_model,
     create_speaker_attempt,
+    create_termination_and_human_reply,
 )
 
 
@@ -510,4 +512,31 @@ def test_group_chat_run_chat() -> None:
 
     expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant uno\n\x1b[0m", flush=True)]
 
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_termination_and_human_reply(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+    no_human_input_msg = "NO HUMAN INPUT RECEIVED."
+    human_input_mode = "ALWAYS"
+
+    actual = create_termination_and_human_reply(
+        no_human_input_msg, human_input_mode, sender=sender, recipient=recipient
+    )
+
+    assert isinstance(actual, TerminationAndHumanReply)
+    assert actual.no_human_input_msg == no_human_input_msg
+    assert actual.human_input_mode == human_input_mode
+    assert actual.sender_name == "sender"
+    assert actual.recipient_name == "recipient"
+
+    mock = MagicMock()
+    actual.print_no_human_input_msg(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [call("\x1b[31m\n>>>>>>>> NO HUMAN INPUT RECEIVED.\x1b[0m", flush=True)]
+    assert mock.call_args_list == expected_call_args_list
+
+    mock = MagicMock()
+    actual.print_human_input_mode(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [call("\x1b[31m\n>>>>>>>> USING AUTO REPLY...\x1b[0m", flush=True)]
     assert mock.call_args_list == expected_call_args_list
