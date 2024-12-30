@@ -17,11 +17,11 @@ MessageRole = Literal["assistant", "function", "tool"]
 class BaseMessage(BaseModel):
     content: Union[str, int, float, bool]
     sender_name: str
-    receiver_name: str
+    recipient_name: str
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
-        f(f"{colored(self.sender_name, 'yellow')} (to {self.receiver_name}):\n", flush=True)
+        f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
 
 class FunctionResponseMessage(BaseMessage):
@@ -175,15 +175,15 @@ class ContentMessage(BaseMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-def create_received_message_model(message: dict[str, Any], sender: Agent, receiver: Agent) -> BaseMessage:
+def create_received_message_model(message: dict[str, Any], sender: Agent, recipient: Agent) -> BaseMessage:
     # print(f"{message=}")
     # print(f"{sender=}")
 
     role = message.get("role")
     if role == "function":
-        return FunctionResponseMessage(**message, sender_name=sender.name, receiver_name=receiver.name)
+        return FunctionResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name)
     if role == "tool":
-        return ToolResponseMessage(**message, sender_name=sender.name, receiver_name=receiver.name)
+        return ToolResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name)
 
     # Role is neither function nor tool
 
@@ -191,14 +191,14 @@ def create_received_message_model(message: dict[str, Any], sender: Agent, receiv
         return FunctionCallMessage(
             **message,
             sender_name=sender.name,
-            receiver_name=receiver.name,
+            recipient_name=recipient.name,
         )
 
     if "tool_calls" in message and message["tool_calls"]:
         return ToolCallMessage(
             **message,
             sender_name=sender.name,
-            receiver_name=receiver.name,
+            recipient_name=recipient.name,
         )
 
     # Now message is a simple content message
@@ -206,8 +206,8 @@ def create_received_message_model(message: dict[str, Any], sender: Agent, receiv
     return ContentMessage(
         **message,
         sender_name=sender.name,
-        receiver_name=receiver.name,
-        llm_config=receiver.llm_config,  # type: ignore [attr-defined]
+        recipient_name=recipient.name,
+        llm_config=recipient.llm_config,  # type: ignore [attr-defined]
     )
 
 
@@ -217,7 +217,7 @@ class PostCarryoverProcessing(BaseModel):
     verbose: bool = False
 
     sender_name: str
-    receiver_name: str
+    recipient_name: str
     summary_method: Union[str, Callable[..., Any]]
     summary_args: Optional[dict[str, Any]] = None
     max_turns: Optional[int] = None
@@ -270,5 +270,5 @@ def create_post_carryover_processing(chat_info: dict[str, Any]) -> PostCarryover
     return PostCarryoverProcessing(
         **chat_info,
         sender_name=chat_info["sender"].name,
-        receiver_name=chat_info["recipient"].name,
+        recipient_name=chat_info["recipient"].name,
     )

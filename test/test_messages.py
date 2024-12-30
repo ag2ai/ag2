@@ -39,11 +39,11 @@ def sender() -> ConversableAgent:
 
 
 @pytest.fixture
-def receiver() -> ConversableAgent:
-    return ConversableAgent("receiver", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
+def recipient() -> ConversableAgent:
+    return ConversableAgent("recipient", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 
 
-def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) -> None:
+def test_tool_responses(sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {
         "role": "tool",
         "tool_responses": [
@@ -52,12 +52,12 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) ->
         ],
         "content": "Timer is done!\\n\\nStopwatch is done!",
     }
-    actual = create_received_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ToolResponseMessage)
     assert actual.role == "tool"
     assert actual.sender_name == "sender"
-    assert actual.receiver_name == "receiver"
+    assert actual.recipient_name == "recipient"
     assert actual.content == "Timer is done!\\n\\nStopwatch is done!"
     assert len(actual.tool_responses) == 2
 
@@ -77,7 +77,7 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) ->
     # print(mock.call_args_list)
 
     expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
         call("\x1b[32m***** Response from calling tool (call_rJfVpHU3MXuPRR2OAdssVqUV) *****\x1b[0m", flush=True),
         call("Timer is done!", flush=True),
         call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
@@ -102,8 +102,8 @@ def test_tool_responses(sender: ConversableAgent, receiver: ConversableAgent) ->
         {"name": "get_random_number", "role": "function", "content": 2},
     ],
 )
-def test_function_response(sender: ConversableAgent, receiver: ConversableAgent, message: dict[str, Any]) -> None:
-    actual = create_received_message_model(message, sender=sender, receiver=receiver)
+def test_function_response(sender: ConversableAgent, recipient: ConversableAgent, message: dict[str, Any]) -> None:
+    actual = create_received_message_model(message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, FunctionResponseMessage)
 
@@ -111,7 +111,7 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent,
     assert actual.role == "function"
     assert actual.content == message["content"]
     assert actual.sender_name == "sender"
-    assert actual.receiver_name == "receiver"
+    assert actual.recipient_name == "recipient"
 
     mock = MagicMock()
     actual.print(f=mock)
@@ -119,7 +119,7 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent,
     # print(mock.call_args_list)
 
     expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
         call("\x1b[32m***** Response from calling function (get_random_number) *****\x1b[0m", flush=True),
         call(message["content"], flush=True),
         call("\x1b[32m**************************************************************\x1b[0m", flush=True),
@@ -131,16 +131,16 @@ def test_function_response(sender: ConversableAgent, receiver: ConversableAgent,
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_function_call(sender: ConversableAgent, receiver: ConversableAgent) -> None:
+def test_function_call(sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {"content": "Let's play a game.", "function_call": {"name": "get_random_number", "arguments": "{}"}}
 
-    actual = create_received_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, FunctionCallMessage)
 
     assert actual.content == "Let's play a game."
     assert actual.sender_name == "sender"
-    assert actual.receiver_name == "receiver"
+    assert actual.recipient_name == "recipient"
 
     assert isinstance(actual.function_call, FunctionCall)
     assert actual.function_call.name == "get_random_number"
@@ -152,7 +152,7 @@ def test_function_call(sender: ConversableAgent, receiver: ConversableAgent) -> 
     # print(mock.call_args_list)
 
     expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
         call("Let's play a game.", flush=True),
         call("\x1b[32m***** Suggested function call: get_random_number *****\x1b[0m", flush=True),
         call("Arguments: \n", "{}", flush=True, sep=""),
@@ -169,7 +169,7 @@ def test_function_call(sender: ConversableAgent, receiver: ConversableAgent) -> 
     "role",
     ["assistant", None],
 )
-def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: Optional[MessageRole]) -> None:
+def test_tool_calls(sender: ConversableAgent, recipient: ConversableAgent, role: Optional[MessageRole]) -> None:
     message = {
         "content": None,
         "refusal": None,
@@ -190,7 +190,7 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: 
         ],
     }
 
-    actual = create_received_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ToolCallMessage)
 
@@ -200,7 +200,7 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: 
     assert actual.audio is None
     assert actual.function_call is None
     assert actual.sender_name == "sender"
-    assert actual.receiver_name == "receiver"
+    assert actual.recipient_name == "recipient"
 
     assert len(actual.tool_calls) == 2
 
@@ -222,7 +222,7 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: 
     # print(mock.call_args_list)
 
     expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
         call("\x1b[32m***** Suggested tool call (call_rJfVpHU3MXuPRR2OAdssVqUV): timer *****\x1b[0m", flush=True),
         call("Arguments: \n", '{"num_seconds": "1"}', flush=True, sep=""),
         call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
@@ -237,10 +237,10 @@ def test_tool_calls(sender: ConversableAgent, receiver: ConversableAgent, role: 
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_context_message(sender: ConversableAgent, receiver: ConversableAgent) -> None:
+def test_context_message(sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {"content": "hello {name}", "context": {"name": "there"}}
 
-    actual = create_received_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ContentMessage)
 
@@ -254,7 +254,7 @@ def test_context_message(sender: ConversableAgent, receiver: ConversableAgent) -
     # print(mock.call_args_list)
 
     expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
         call("hello {name}", flush=True),
         call(
             "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
@@ -264,7 +264,7 @@ def test_context_message(sender: ConversableAgent, receiver: ConversableAgent) -
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableAgent) -> None:
+def test_context_lambda_message(sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {
         "content": lambda context: f"hello {context['name']}",
         "context": {
@@ -272,7 +272,7 @@ def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableA
         },
     }
 
-    actual = create_received_message_model(message, sender=sender, receiver=receiver)
+    actual = create_received_message_model(message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ContentMessage)
 
@@ -286,7 +286,7 @@ def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableA
     # print(mock.call_args_list)
 
     expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to receiver):\n", flush=True),
+        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
         call("hello there", flush=True),
         call(
             "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
@@ -296,13 +296,13 @@ def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableA
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_create_post_carryover_processing(sender: ConversableAgent, receiver: ConversableAgent) -> None:
+def test_create_post_carryover_processing(sender: ConversableAgent, recipient: ConversableAgent) -> None:
     chat_info = {
         "carryover": ["This is a test message 1", "This is a test message 2"],
         "message": "Start chat",
         "verbose": True,
         "sender": sender,
-        "recipient": receiver,
+        "recipient": recipient,
         "summary_method": "last_msg",
         "max_turns": 5,
     }
@@ -313,7 +313,7 @@ def test_create_post_carryover_processing(sender: ConversableAgent, receiver: Co
     assert actual.message == "Start chat"
     assert actual.verbose is True
     assert actual.sender_name == "sender"
-    assert actual.receiver_name == "receiver"
+    assert actual.recipient_name == "recipient"
     assert actual.summary_method == "last_msg"
     assert actual.max_turns == 5
 
@@ -363,14 +363,14 @@ def test__process_carryover(
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]],
     expected: str,
     sender: ConversableAgent,
-    receiver: ConversableAgent,
+    recipient: ConversableAgent,
 ) -> None:
     chat_info = {
         "carryover": carryover,
         "message": "Start chat",
         "verbose": True,
         "sender": sender,
-        "recipient": receiver,
+        "recipient": recipient,
         "summary_method": "last_msg",
         "max_turns": 5,
     }
