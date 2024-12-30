@@ -1,19 +1,18 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
-# SPDX-License-Identifier: MIT
 
 import base64
 import json
-import logging
+from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Optional
 
 from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
 if TYPE_CHECKING:
     from fastapi.websockets import WebSocket
+
+    from .realtime_agent import RealtimeAgent
 
 from .realtime_observer import RealtimeObserver
 
@@ -29,12 +28,16 @@ LOG_EVENT_TYPES = [
 ]
 SHOW_TIMING_MATH = False
 
-logger = logging.getLogger(__name__)
-
 
 class WebsocketAudioAdapter(RealtimeObserver):
-    def __init__(self, websocket: "WebSocket"):
-        super().__init__()
+    def __init__(self, websocket: "WebSocket", *, logger: Optional[Logger] = None) -> None:
+        """Observer for handling function calls from the OpenAI Realtime API.
+
+        Args:
+            websocket (WebSocket): The websocket connection.
+            logger (Logger): The logger for the observer.
+        """
+        super().__init__(logger=logger)
         self.websocket = websocket
 
         # Connection specific state
@@ -44,13 +47,14 @@ class WebsocketAudioAdapter(RealtimeObserver):
         self.mark_queue: list[str] = []
         self.response_start_timestamp_socket: Optional[int] = None
 
-    async def update(self, response: RealtimeServerEvent) -> None:
+    async def on_event(self, event: dict[str, Any]) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to websocket."""
-        if response.type in LOG_EVENT_TYPES:
-            logger.info(f"Received event: {response.type}", response)
+        logger = self.logger
+        if event["type"] in LOG_EVENT_TYPES:
+            logger.info(f"Received event: {event['type']}", event)
 
-        if response.type == "response.audio.delta":
-            audio_payload = base64.b64encode(base64.b64decode(response.delta)).decode("utf-8")
+        if event["type"] == "response.audio.delta":
+            audio_payload = base64.b64encode(base64.b64decode(event["delta"])).decode("utf-8")
             audio_delta = {"event": "media", "streamSid": self.stream_sid, "media": {"payload": audio_payload}}
             await self.websocket.send_json(audio_delta)
 
@@ -60,13 +64,13 @@ class WebsocketAudioAdapter(RealtimeObserver):
                     logger.info(f"Setting start timestamp for new response: {self.response_start_timestamp_socket}ms")
 
             # Update last_assistant_item safely
-            if response.item_id:
-                self.last_assistant_item = response.item_id
+            if event["item_id"]:
+                self.last_assistant_item = event["item_id"]
 
             await self.send_mark()
 
         # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
-        if response.type == "input_audio_buffer.speech_started":
+        if event["type"] == "input_audio_buffer.speech_started":
             logger.info("Speech started detected.")
             if self.last_assistant_item:
                 logger.info(f"Interrupting response with id: {self.last_assistant_item}")
@@ -74,6 +78,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
 
     async def handle_speech_started_event(self) -> None:
         """Handle interruption when the caller's speech starts."""
+        logger = self.logger
         logger.info("Handling speech started event.")
         if self.mark_queue and self.response_start_timestamp_socket is not None:
             elapsed_time = self.latest_media_timestamp - self.response_start_timestamp_socket
@@ -86,7 +91,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
                 if SHOW_TIMING_MATH:
                     logger.info(f"Truncating item with ID: {self.last_assistant_item}, Truncated at: {elapsed_time}ms")
 
-                await self.client.truncate_audio(
+                await self.realtime_client.truncate_audio(
                     audio_end_ms=elapsed_time,
                     content_index=0,
                     item_id=self.last_assistant_item,
@@ -104,25 +109,34 @@ class WebsocketAudioAdapter(RealtimeObserver):
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
-    async def run(self) -> None:
-        await self.initialize_session()
-
-        async for message in self.websocket.iter_text():
-            data = json.loads(message)
-            if data["event"] == "media":
-                self.latest_media_timestamp = int(data["media"]["timestamp"])
-                await self.client.send_audio(audio=data["media"]["payload"])
-            elif data["event"] == "start":
-                self.stream_sid = data["start"]["streamSid"]
-                logger.info(f"Incoming stream has started {self.stream_sid}")
-                self.response_start_timestamp_socket = None
-                self.latest_media_timestamp = 0
-                self.last_assistant_item = None
-            elif data["event"] == "mark":
-                if self.mark_queue:
-                    self.mark_queue.pop(0)
-
     async def initialize_session(self) -> None:
         """Control initial session with OpenAI."""
-        session_update = {"input_audio_format": "pcm16", "output_audio_format": "pcm16"}  #  g711_ulaw  # "g711_ulaw",
-        await self.client.session_update(session_update)
+        session_update = {"input_audio_format": "pcm16", "output_audio_format": "pcm16"}
+        await self.realtime_client.session_update(session_update)
+
+    async def run_loop(self) -> None:
+        """Reads data from websocket and sends it to the RealtimeClient."""
+        logger = self.logger
+        async for message in self.websocket.iter_text():
+            try:
+                data = json.loads(message)
+                if data["event"] == "media":
+                    self.latest_media_timestamp = int(data["media"]["timestamp"])
+                    await self.realtime_client.send_audio(audio=data["media"]["payload"])
+                elif data["event"] == "start":
+                    self.stream_sid = data["start"]["streamSid"]
+                    logger.info(f"Incoming stream has started {self.stream_sid}")
+                    self.response_start_timestamp_socket = None
+                    self.latest_media_timestamp = 0
+                    self.last_assistant_item = None
+                elif data["event"] == "mark":
+                    if self.mark_queue:
+                        self.mark_queue.pop(0)
+            except Exception as e:
+                logger.warning(f"Failed to process message: {e}", stack_info=True)
+
+
+if TYPE_CHECKING:
+
+    def websocket_audio_adapter(websocket: WebSocket) -> RealtimeObserver:
+        return WebsocketAudioAdapter(websocket)
