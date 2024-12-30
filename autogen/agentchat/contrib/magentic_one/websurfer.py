@@ -13,6 +13,7 @@ import os
 import pathlib
 import re
 import time
+import traceback
 from typing import (
     Any,
     BinaryIO,
@@ -507,152 +508,155 @@ class MultimodalWebSurfer(ConversableAgent):
         Returns:
             Union[str, Dict, None]: The response content which may be a string, dict or None
         """
-        assert self._page is not None
-        assert messages is not None
+        try:
+            assert self._page is not None
+            assert messages is not None
 
-        history = messages
-        # Get the full conversation history
-        # history = []
-        # for msg in self._oai_messages.values():
-        #    history.extend(msg)
+            history = messages
+            # Get the full conversation history
+            # history = []
+            # for msg in self._oai_messages.values():
+            #    history.extend(msg)
 
-        # Ask the page for interactive elements, then prepare the state-of-mark screenshot
-        rects = await self._get_interactive_rects()
-        viewport = await self._get_visual_viewport()
-        screenshot = await self._page.screenshot()
-        som_screenshot, visible_rects, rects_above, rects_below = add_set_of_mark(screenshot, rects)
+            # Ask the page for interactive elements, then prepare the state-of-mark screenshot
+            rects = await self._get_interactive_rects()
+            viewport = await self._get_visual_viewport()
+            screenshot = await self._page.screenshot()
+            som_screenshot, visible_rects, rects_above, rects_below = add_set_of_mark(screenshot, rects)
 
-        if self.to_save_screenshots:
-            current_timestamp = "_" + int(time.time()).__str__()
-            screenshot_png_name = "screenshot_som" + current_timestamp + ".png"
-            som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
-            logger.log_event(
-                source=self.name, name="screenshot", data={"url": self._page.url, "screenshot": screenshot_png_name}
-            )
-        # What tools are available?
-        tools: List[Dict[str, Any]] = [
-            TOOL_VISIT_URL,
-            TOOL_HISTORY_BACK,
-            TOOL_CLICK,
-            TOOL_TYPE,
-            TOOL_SUMMARIZE_PAGE,
-            TOOL_READ_PAGE_AND_ANSWER,
-            TOOL_SLEEP,
-        ]
+            if self.to_save_screenshots:
+                current_timestamp = "_" + int(time.time()).__str__()
+                screenshot_png_name = "screenshot_som" + current_timestamp + ".png"
+                som_screenshot.save(os.path.join(self.debug_dir, screenshot_png_name))  # type: ignore
+                logger.log_event(
+                    source=self.name, name="screenshot", data={"url": self._page.url, "screenshot": screenshot_png_name}
+                )
+            # What tools are available?
+            tools: List[Dict[str, Any]] = [
+                TOOL_VISIT_URL,
+                TOOL_HISTORY_BACK,
+                TOOL_CLICK,
+                TOOL_TYPE,
+                TOOL_SUMMARIZE_PAGE,
+                TOOL_READ_PAGE_AND_ANSWER,
+                TOOL_SLEEP,
+            ]
 
-        # Can we reach Bing to search?
-        # if self._navigation_allow_list("https://www.bing.com/"):
-        tools.append(TOOL_WEB_SEARCH)
+            # Can we reach Bing to search?
+            # if self._navigation_allow_list("https://www.bing.com/"):
+            tools.append(TOOL_WEB_SEARCH)
 
-        # We can scroll up
-        if viewport["pageTop"] > 5:
-            tools.append(TOOL_PAGE_UP)
+            # We can scroll up
+            if viewport["pageTop"] > 5:
+                tools.append(TOOL_PAGE_UP)
 
-        # Can scroll down
-        if (viewport["pageTop"] + viewport["height"] + 5) < viewport["scrollHeight"]:
-            tools.append(TOOL_PAGE_DOWN)
+            # Can scroll down
+            if (viewport["pageTop"] + viewport["height"] + 5) < viewport["scrollHeight"]:
+                tools.append(TOOL_PAGE_DOWN)
 
-        # Focus hint
-        focused = await self._get_focused_rect_id()
-        focused_hint = ""
-        if focused:
-            name = self._target_name(focused, rects)
-            if name:
-                name = f"(and name '{name}') "
+            # Focus hint
+            focused = await self._get_focused_rect_id()
+            focused_hint = ""
+            if focused:
+                name = self._target_name(focused, rects)
+                if name:
+                    name = f"(and name '{name}') "
 
-            role = "control"
-            try:
-                role = rects[focused]["role"]
-            except KeyError:
-                pass
+                role = "control"
+                try:
+                    role = rects[focused]["role"]
+                except KeyError:
+                    pass
 
-            focused_hint = f"\nThe {role} with ID {focused} {name}currently has the input focus.\n\n"
+                focused_hint = f"\nThe {role} with ID {focused} {name}currently has the input focus.\n\n"
 
-        # Everything visible
-        visible_targets = "\n".join(self._format_target_list(visible_rects, rects)) + "\n\n"
+            # Everything visible
+            visible_targets = "\n".join(self._format_target_list(visible_rects, rects)) + "\n\n"
 
-        # Everything else
-        other_targets: List[str] = []
-        other_targets.extend(self._format_target_list(rects_above, rects))
-        other_targets.extend(self._format_target_list(rects_below, rects))
+            # Everything else
+            other_targets: List[str] = []
+            other_targets.extend(self._format_target_list(rects_above, rects))
+            other_targets.extend(self._format_target_list(rects_below, rects))
 
-        if len(other_targets) > 0:
-            other_targets_str = (
-                "Additional valid interaction targets (not shown) include:\n" + "\n".join(other_targets) + "\n\n"
-            )
-        else:
-            other_targets_str = ""
-
-        # If there are scrollable elements, then add the corresponding tools
-        # has_scrollable_elements = False
-        # if has_scrollable_elements:
-        #    tools.append(TOOL_SCROLL_ELEMENT_UP)
-        #    tools.append(TOOL_SCROLL_ELEMENT_DOWN)
-
-        tool_names = "\n".join([t["function"]["name"] for t in tools])
-
-        text_prompt = self._get_screenshot_selection_prompt(
-            self._page.url, visible_targets, other_targets_str, focused_hint, tool_names
-        )
-
-        # Scale the screenshot for the MLM, and close the original
-        scaled_screenshot = som_screenshot.resize((MLM_WIDTH, MLM_HEIGHT))
-        som_screenshot.close()
-        if self.to_save_screenshots:
-            scaled_screenshot.save(os.path.join(self.debug_dir, "screenshot_scaled.png"))  # type: ignore
-
-        # Add the multimodal message for the current state
-        # Convert PIL image to base64
-        buffer = io.BytesIO()
-        scaled_screenshot.save(buffer, format="PNG")
-        image_bytes = buffer.getvalue()
-        buffer.close()
-        scaled_screenshot.close()
-        encoded_string = base64.b64encode(image_bytes).decode("utf-8")
-
-        message = {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": text_prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_string}"}},
-            ],
-        }
-
-        # Register the tools for this interaction
-        for tool in tools:
-            if isinstance(tool, dict) and "function" in tool:
-                self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=False)
+            if len(other_targets) > 0:
+                other_targets_str = (
+                    "Additional valid interaction targets (not shown) include:\n" + "\n".join(other_targets) + "\n\n"
+                )
             else:
-                self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
+                other_targets_str = ""
 
-        # Call the parent class's generate_reply instead of our own to avoid recursion
-        response = await super().a_generate_reply(messages=history + [message])  # system massage
+            # If there are scrollable elements, then add the corresponding tools
+            # has_scrollable_elements = False
+            # if has_scrollable_elements:
+            #    tools.append(TOOL_SCROLL_ELEMENT_UP)
+            #    tools.append(TOOL_SCROLL_ELEMENT_DOWN)
 
-        self._last_download = None
+            tool_names = "\n".join([t["function"]["name"] for t in tools])
 
-        if isinstance(response, str):  # TODO: response format
-            # Direct text response
-            return response
-        elif isinstance(response, dict):
-            if "tool_calls" in response:
-                request_halt, tool_response = await self._execute_tool(response, rects, tool_names)
-            elif "function_call" in response:
-                # Legacy function call handling
-                # success, func_response = await self.a_generate_function_call_reply(messages=[response])
-                # if success:
-                raise Exception("Legacy function call handling not implemented")
-                # return await self._execute_tool(response, rects, tool_names)
+            text_prompt = self._get_screenshot_selection_prompt(
+                self._page.url, visible_targets, other_targets_str, focused_hint, tool_names
+            )
 
-        # Clean up registered tools
-        for tool in tools:
-            if isinstance(tool, dict) and "function" in tool:
-                self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
-            else:
-                self.update_tool_signature({"type": "function", "function": tool}, is_remove=True)
+            # Scale the screenshot for the MLM, and close the original
+            scaled_screenshot = som_screenshot.resize((MLM_WIDTH, MLM_HEIGHT))
+            som_screenshot.close()
+            if self.to_save_screenshots:
+                scaled_screenshot.save(os.path.join(self.debug_dir, "screenshot_scaled.png"))  # type: ignore
 
-        if tool_response is not None:
-            return tool_response
-        return None
+            # Add the multimodal message for the current state
+            # Convert PIL image to base64
+            buffer = io.BytesIO()
+            scaled_screenshot.save(buffer, format="PNG")
+            image_bytes = buffer.getvalue()
+            buffer.close()
+            scaled_screenshot.close()
+            encoded_string = base64.b64encode(image_bytes).decode("utf-8")
+
+            message = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_string}"}},
+                ],
+            }
+
+            # Register the tools for this interaction
+            for tool in tools:
+                if isinstance(tool, dict) and "function" in tool:
+                    self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=False)
+                else:
+                    self.update_tool_signature({"type": "function", "function": tool}, is_remove=False)
+
+            # Call the parent class's generate_reply instead of our own to avoid recursion
+            response = await super().a_generate_reply(messages=history + [message])  # system massage
+
+            self._last_download = None
+
+            if isinstance(response, str):  # TODO: response format
+                # Direct text response
+                return response
+            elif isinstance(response, dict):
+                if "tool_calls" in response:
+                    request_halt, tool_response = await self._execute_tool(response, rects, tool_names)
+                elif "function_call" in response:
+                    # Legacy function call handling
+                    # success, func_response = await self.a_generate_function_call_reply(messages=[response])
+                    # if success:
+                    raise Exception("Legacy function call handling not implemented")
+                    # return await self._execute_tool(response, rects, tool_names)
+
+            # Clean up registered tools
+            for tool in tools:
+                if isinstance(tool, dict) and "function" in tool:
+                    self.update_tool_signature({"type": "function", "function": tool["function"]}, is_remove=True)
+                else:
+                    self.update_tool_signature({"type": "function", "function": tool}, is_remove=True)
+
+            if tool_response is not None:
+                return tool_response
+            return None
+        except Exception:
+            return False, f"Web surfing error:\n\n{traceback.format_exc()}"
 
     async def _get_interactive_rects(self) -> Dict[str, InteractiveRegion]:
         assert self._page is not None
