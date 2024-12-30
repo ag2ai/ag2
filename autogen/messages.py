@@ -209,3 +209,68 @@ def create_received_message_model(message: dict[str, Any], sender: Agent, receiv
         receiver_name=receiver.name,
         llm_config=receiver.llm_config,  # type: ignore [attr-defined]
     )
+
+
+class PostCarryoverProcessing(BaseModel):
+    carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
+    message: Optional[Union[str, dict[str, Any], Callable[..., Any]]] = None
+    verbose: bool = False
+
+    sender_name: str
+    receiver_name: str
+    summary_method: Union[str, Callable[..., Any]]
+    summary_args: Optional[dict[str, Any]] = None
+    max_turns: Optional[int] = None
+
+    def _process_carryover(self) -> str:
+        if not isinstance(self.carryover, list):
+            return self.carryover
+
+        print_carryover = []
+        for carryover_item in self.carryover:
+            if isinstance(carryover_item, str):
+                print_carryover.append(carryover_item)
+            elif isinstance(carryover_item, dict) and "content" in carryover_item:
+                print_carryover.append(str(carryover_item["content"]))
+            else:
+                print_carryover.append(str(carryover_item))
+
+        return ("\n").join(print_carryover)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        print_carryover = self._process_carryover()
+
+        if isinstance(self.message, str):
+            print_message = self.message
+        elif callable(self.message):
+            print_message = "Callable: " + self.message.__name__
+        elif isinstance(self.message, dict):
+            print_message = "Dict: " + str(self.message)
+        elif self.message is None:
+            print_message = "None"
+        f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
+        f(
+            colored(
+                "Starting a new chat....",
+                "blue",
+            ),
+            flush=True,
+        )
+        if self.verbose:
+            f(colored("Message:\n" + print_message, "blue"), flush=True)
+            f(colored("Carryover:\n" + print_carryover, "blue"), flush=True)
+        f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
+
+
+def create_post_carryover_processing(chat_info: dict[str, Any]) -> PostCarryoverProcessing:
+    print(f"{chat_info=}")
+
+    if "message" not in chat_info:
+        chat_info["message"] = None
+    return PostCarryoverProcessing(
+        **chat_info,
+        sender_name=chat_info["sender"].name,
+        receiver_name=chat_info["recipient"].name,
+    )

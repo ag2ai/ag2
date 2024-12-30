@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from unittest.mock import MagicMock, call
 
 import pytest
@@ -15,10 +15,12 @@ from autogen.messages import (
     FunctionCallMessage,
     FunctionResponseMessage,
     MessageRole,
+    PostCarryoverProcessing,
     ToolCall,
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
+    create_post_carryover_processing,
     create_received_message_model,
 )
 
@@ -292,3 +294,89 @@ def test_context_lambda_message(sender: ConversableAgent, receiver: ConversableA
     ]
 
     assert mock.call_args_list == expected_call_args_list
+
+
+def test_create_post_carryover_processing(sender: ConversableAgent, receiver: ConversableAgent) -> None:
+    chat_info = {
+        "carryover": ["This is a test message 1", "This is a test message 2"],
+        "message": "Start chat",
+        "verbose": True,
+        "sender": sender,
+        "recipient": receiver,
+        "summary_method": "last_msg",
+        "max_turns": 5,
+    }
+
+    actual = create_post_carryover_processing(chat_info)
+
+    assert actual.carryover == ["This is a test message 1", "This is a test message 2"]
+    assert actual.message == "Start chat"
+    assert actual.verbose is True
+    assert actual.sender_name == "sender"
+    assert actual.receiver_name == "receiver"
+    assert actual.summary_method == "last_msg"
+    assert actual.max_turns == 5
+
+    mock = MagicMock()
+    actual.print(f=mock)
+
+    # print(mock.call_args_list)
+
+    expected_call_args_list = [
+        call(
+            "\x1b[34m\n********************************************************************************\x1b[0m",
+            flush=True,
+            sep="",
+        ),
+        call("\x1b[34mStarting a new chat....\x1b[0m", flush=True),
+        call("\x1b[34mMessage:\nStart chat\x1b[0m", flush=True),
+        call("\x1b[34mCarryover:\nThis is a test message 1\nThis is a test message 2\x1b[0m", flush=True),
+        call(
+            "\x1b[34m\n********************************************************************************\x1b[0m",
+            flush=True,
+            sep="",
+        ),
+    ]
+
+    assert mock.call_args_list == expected_call_args_list
+
+
+@pytest.mark.parametrize(
+    "carryover, expected",
+    [
+        ("This is a test message 1", "This is a test message 1"),
+        (
+            ["This is a test message 1", "This is a test message 2"],
+            "This is a test message 1\nThis is a test message 2",
+        ),
+        (
+            [
+                {"content": "This is a test message 1"},
+                {"content": "This is a test message 2"},
+            ],
+            "This is a test message 1\nThis is a test message 2",
+        ),
+        ([1, 2, 3], "1\n2\n3"),
+    ],
+)
+def test__process_carryover(
+    carryover: Union[str, list[Union[str, dict[str, Any], Any]]],
+    expected: str,
+    sender: ConversableAgent,
+    receiver: ConversableAgent,
+) -> None:
+    chat_info = {
+        "carryover": carryover,
+        "message": "Start chat",
+        "verbose": True,
+        "sender": sender,
+        "recipient": receiver,
+        "summary_method": "last_msg",
+        "max_turns": 5,
+    }
+
+    post_carryover_processing = create_post_carryover_processing(chat_info)
+    assert post_carryover_processing.carryover == carryover
+
+    actual = post_carryover_processing._process_carryover()
+    assert actual == expected
