@@ -10,6 +10,7 @@ import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.messages import (
+    ClearAgentsHistory,
     ContentMessage,
     FunctionCall,
     FunctionCallMessage,
@@ -20,6 +21,7 @@ from autogen.messages import (
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
+    create_clear_agents_history,
     create_post_carryover_processing,
     create_received_message_model,
 )
@@ -380,3 +382,41 @@ def test__process_carryover(
 
     actual = post_carryover_processing._process_carryover()
     assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "agent, nr_messages_to_preserve, expected",
+    [
+        (None, None, "Clearing history for all agents."),
+        (None, 5, "Clearing history for all agents except last 5 messages."),
+        (
+            ConversableAgent("clear_agent", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+            None,
+            "Clearing history for clear_agent.",
+        ),
+        (
+            ConversableAgent("clear_agent", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+            5,
+            "Clearing history for clear_agent except last 5 messages.",
+        ),
+    ],
+)
+def test_clear_agents_history(
+    agent: Optional[ConversableAgent], nr_messages_to_preserve: Optional[int], expected: str
+) -> None:
+    actual = create_clear_agents_history(agent=agent, nr_messages_to_preserve=nr_messages_to_preserve)
+
+    assert isinstance(actual, ClearAgentsHistory)
+    if agent:
+        assert actual.agent_name == "clear_agent"
+    else:
+        assert actual.agent_name is None
+    assert actual.nr_messages_to_preserve == nr_messages_to_preserve
+
+    mock = MagicMock()
+    actual.print(f=mock)
+
+    # print(mock.call_args_list)
+
+    expected_call_args_list = [call(expected)]
+    assert mock.call_args_list == expected_call_args_list

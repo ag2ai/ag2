@@ -18,6 +18,7 @@ from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNex
 from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
+from ..messages import create_clear_agents_history
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
@@ -1638,23 +1639,19 @@ class GroupChatManager(ConversableAgent):
                 "The last tool call message will be saved to prevent errors caused by tool response without tool call."
             )
         # clear history
+        clear_agents_history = create_clear_agents_history(
+            agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve
+        )
+        clear_agents_history.print(iostream.print)
         if agent_to_memory_clear:
-            if nr_messages_to_preserve:
-                iostream.print(
-                    f"Clearing history for {agent_to_memory_clear.name} except last {nr_messages_to_preserve} messages."
-                )
-            else:
-                iostream.print(f"Clearing history for {agent_to_memory_clear.name}.")
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
         else:
             if nr_messages_to_preserve:
-                iostream.print(f"Clearing history for all agents except last {nr_messages_to_preserve} messages.")
                 # clearing history for groupchat here
                 temp = groupchat.messages[-nr_messages_to_preserve:]
                 groupchat.messages.clear()
                 groupchat.messages.extend(temp)
             else:
-                iostream.print("Clearing history for all agents.")
                 # clearing history for groupchat here
                 groupchat.messages.clear()
             # clearing history for agents

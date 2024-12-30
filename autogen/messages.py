@@ -272,3 +272,28 @@ def create_post_carryover_processing(chat_info: dict[str, Any]) -> PostCarryover
         sender_name=chat_info["sender"].name,
         recipient_name=chat_info["recipient"].name,
     )
+
+
+class ClearAgentsHistory(BaseModel):
+    agent_name: Optional[str] = None
+    nr_messages_to_preserve: Optional[int] = None
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.agent_name:
+            if self.nr_messages_to_preserve:
+                f(f"Clearing history for {self.agent_name} except last {self.nr_messages_to_preserve} messages.")
+            else:
+                f(f"Clearing history for {self.agent_name}.")
+        else:
+            if self.nr_messages_to_preserve:
+                f(f"Clearing history for all agents except last {self.nr_messages_to_preserve} messages.")
+            else:
+                f("Clearing history for all agents.")
+
+
+def create_clear_agents_history(
+    agent: Optional[Agent] = None, nr_messages_to_preserve: Optional[int] = None
+) -> ClearAgentsHistory:
+    return ClearAgentsHistory(agent_name=agent.name if agent else None, nr_messages_to_preserve=nr_messages_to_preserve)
