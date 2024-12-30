@@ -621,7 +621,8 @@
             "notebooks/agentchat_swarm_enhanced",
             "notebooks/tools_interoperability",
             "notebooks/agentchat_realtime_swarm",
-            "notebooks/agentchat_reasoning_agent"
+            "notebooks/agentchat_reasoning_agent",
+            "notebooks/agentchat_captainagent_crosstool"
           ]
         },
         "notebooks/Gallery"

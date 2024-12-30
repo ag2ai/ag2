@@ -30,10 +30,13 @@ RUN sudo pip install --upgrade pip && \
 # Install pre-commit hooks
 RUN pre-commit install
 
-# Setup Mintlify for the documentation website
+# Install Python packages for documentation
 RUN sudo pip install pydoc-markdown pyyaml termcolor nbclient
-RUN cd website
+
+# Install npm packages for documentation
+WORKDIR /home/autogen/ag2/website
 RUN npm install
+WORKDIR /home/autogen/ag2
 
 RUN arch=$(arch | sed s/aarch64/arm64/ | sed s/x86_64/amd64/) && \
     wget -q https://github.com/quarto-dev/quarto-cli/releases/download/v1.5.23/quarto-1.5.23-linux-${arch}.tar.gz && \

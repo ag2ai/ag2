@@ -30,7 +30,7 @@ Example:
 
 Resources:
 - https://ai.google.dev/docs
-- https://cloud.google.com/vertex-ai/docs/generative-ai/migrate-from-azure
+- https://cloud.google.com/vertex-ai/generative-ai/docs/migrate/migrate-from-azure-to-gemini
 - https://blog.google/technology/ai/google-gemini-pro-imagen-duet-ai-update/
 - https://ai.google.dev/api/python/google/generativeai/ChatSession
 """
