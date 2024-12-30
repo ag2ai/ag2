@@ -346,3 +346,25 @@ def create_speaker_attempt(
     return SpeakerAttempt(
         mentions=deepcopy(mentions), attempt=attempt, attempts_left=attempts_left, verbose=select_speaker_auto_verbose
     )
+
+
+class GroupChatResume(BaseModel):
+    last_speaker_name: str
+    messages: list[dict[str, Any]]
+    verbose: Optional[bool] = False
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.verbose:
+            f(
+                f"Prepared group chat with {len(self.messages)} messages, the last speaker is",
+                colored(self.last_speaker_name, "yellow"),
+                flush=True,
+            )
+
+
+def create_group_chat_resume(
+    last_speaker_name: str, messages: list[dict[str, Any]], silent: Optional[bool] = False
+) -> GroupChatResume:
+    return GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)

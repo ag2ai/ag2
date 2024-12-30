@@ -15,6 +15,7 @@ from autogen.messages import (
     FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
+    GroupChatResume,
     MessageRole,
     PostCarryoverProcessing,
     SpeakerAttempt,
@@ -23,6 +24,7 @@ from autogen.messages import (
     ToolResponse,
     ToolResponseMessage,
     create_clear_agents_history,
+    create_group_chat_resume,
     create_post_carryover_processing,
     create_received_message_model,
     create_speaker_attempt,
@@ -456,5 +458,32 @@ def test_speaker_attempt(mentions: dict[str, int], expected: str) -> None:
     # print(mock.call_args_list)
 
     expected_call_args_list = [call(expected, flush=True)]
+
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_group_chat_resume() -> None:
+    last_speaker_name = "Coder"
+    messages = [
+        {"content": "You are an expert at coding.", "role": "system", "name": "chat_manager"},
+        {"content": "Let's get coding, should I use Python?", "name": "Coder", "role": "assistant"},
+    ]
+    silent = False
+
+    actual = create_group_chat_resume(last_speaker_name, messages, silent)
+
+    assert isinstance(actual, GroupChatResume)
+    assert actual.last_speaker_name == last_speaker_name
+    assert actual.messages == messages
+    assert actual.verbose is True
+
+    mock = MagicMock()
+    actual.print(f=mock)
+
+    # print(mock.call_args_list)
+
+    expected_call_args_list = [
+        call("Prepared group chat with 2 messages, the last speaker is", "\x1b[33mCoder\x1b[0m", flush=True)
+    ]
 
     assert mock.call_args_list == expected_call_args_list

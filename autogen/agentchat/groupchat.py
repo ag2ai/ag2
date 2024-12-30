@@ -18,7 +18,7 @@ from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNex
 from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
-from ..messages import create_clear_agents_history, create_speaker_attempt
+from ..messages import create_clear_agents_history, create_group_chat_resume, create_speaker_attempt
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
@@ -1350,11 +1350,8 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.print(
-                f"Prepared group chat with {len(messages)} messages, the last speaker is",
-                colored(last_speaker_name, "yellow"),
-                flush=True,
-            )
+            group_chat_resume = create_group_chat_resume(last_speaker_name, messages, silent)
+            group_chat_resume.print(iostream.print)
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1458,11 +1455,8 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.print(
-                f"Prepared group chat with {len(messages)} messages, the last speaker is",
-                colored(last_speaker_name, "yellow"),
-                flush=True,
-            )
+            group_chat_resume = create_group_chat_resume(last_speaker_name, messages, silent)
+            group_chat_resume.print(iostream.print)
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
