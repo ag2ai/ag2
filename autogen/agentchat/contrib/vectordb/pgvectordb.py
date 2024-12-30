@@ -606,7 +606,7 @@ class PGVectorDB(VectorDB):
                 Models can be chosen from:
                 https://huggingface.co/models?library=sentence-transformers
             metadata: dict | The metadata of the vector database. Default is None. If None, it will use this
-                setting: {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 16}. Creates Index on table
+                setting: `{"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 16}`. Creates Index on table
                 using hnsw (embedding vector_l2_ops) WITH (m = hnsw:M) ef_construction = "hnsw:construction_ef".
                 For more info: https://github.com/pgvector/pgvector?tab=readme-ov-file#hnsw
         Returns:
@@ -917,7 +917,7 @@ class PGVectorDB(VectorDB):
             collection_name: str | The name of the collection. Default is None.
             n_results: int | The number of relevant documents to return. Default is 10.
             distance_threshold: float | The threshold for the distance score, only distance smaller than it will be
-                returned. Don't filter with it if < 0. Default is -1.
+                returned. Don't filter with it if `< 0`. Default is -1.
             kwargs: Dict | Additional keyword arguments.
 
         Returns:

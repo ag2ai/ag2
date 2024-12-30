@@ -7,6 +7,7 @@
 """Create an OpenAI-compatible client using Mistral.AI's API.
 
 Example:
+    ```python
     llm_config={
         "config_list": [{
             "api_type": "mistral",
@@ -16,6 +17,7 @@ Example:
     ]}
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
+    ```
 
 Install Mistral.AI python library using: pip install --upgrade mistralai
 
