@@ -4,30 +4,23 @@
 
 import asyncio
 import json
-import logging
-from typing import TYPE_CHECKING, Any
+from logging import Logger, getLogger
+from typing import TYPE_CHECKING, Any, Optional
 
 from asyncer import asyncify
 from pydantic import BaseModel
 
 from .realtime_observer import RealtimeObserver
 
-if TYPE_CHECKING:
-    from .realtime_agent import RealtimeAgent
-
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class FunctionObserver(RealtimeObserver):
     """Observer for handling function calls from the OpenAI Realtime API."""
 
-    def __init__(self) -> None:
-        """Observer for handling function calls from the OpenAI Realtime API.
-
-        Args:
-            agent (RealtimeAgent): The realtime agent attached to the observer.
-        """
-        super().__init__()
+    def __init__(self, *, logger: Optional[Logger] = None) -> None:
+        """Observer for handling function calls from the OpenAI Realtime API."""
+        super().__init__(logger=logger)
 
     async def on_event(self, event: dict[str, Any]) -> None:
         """Handle function call events from the OpenAI Realtime API.
@@ -70,15 +63,6 @@ class FunctionObserver(RealtimeObserver):
                     result = str(result)
 
             await self.realtime_client.send_function_result(call_id, result)
-
-    async def run(self, agent: "RealtimeAgent") -> None:
-        """Run the observer.
-
-        Initialize the session with the OpenAI Realtime API.
-        """
-        self._agent = agent
-        await self.initialize_session()
-        self._ready_event.set()
 
     async def initialize_session(self) -> None:
         """Add registered tools to OpenAI with a session update."""

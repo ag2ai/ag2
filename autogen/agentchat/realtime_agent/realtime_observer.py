@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
+from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Optional
 
 from anyio import Event
@@ -18,9 +19,15 @@ __all__ = ["RealtimeObserver"]
 class RealtimeObserver(ABC):
     """Observer for the OpenAI Realtime API."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, logger: Optional[Logger] = None) -> None:
+        """Observer for the OpenAI Realtime API.
+
+        Args:
+            logger (Logger): The logger for the observer.
+        """
         self._ready_event = Event()
         self._agent: Optional["RealtimeAgent"] = None
+        self._logger = logger
 
     @property
     def agent(self) -> "RealtimeAgent":
@@ -45,6 +52,23 @@ class RealtimeObserver(ABC):
         Args:
             agent (RealtimeAgent): The realtime agent attached to the observer.
         """
+        self._agent = agent
+        await self.initialize_session()
+        self._ready_event.set()
+
+        await self.run_loop()
+
+    async def run_loop(self) -> None:
+        """Run the loop if needed.
+
+        This method is called after the observer is ready to process events.
+        Events will be processed by the on_event method, this is just a hook for additional processing.
+        Use initialize_session to set up the session.
+        """
+        ...
+
+    async def initialize_session(self) -> None:
+        """Initialize the session for the observer."""
         ...
 
     async def wait_for_ready(self) -> None:

@@ -4,7 +4,7 @@
 
 import base64
 import json
-import logging
+from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Optional
 
 from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
@@ -28,12 +28,18 @@ LOG_EVENT_TYPES = [
 ]
 SHOW_TIMING_MATH = False
 
-logger = logging.getLogger(__name__)
+global_logger = getLogger(__name__)
 
 
 class WebsocketAudioAdapter(RealtimeObserver):
-    def __init__(self, websocket: "WebSocket"):
-        super().__init__()
+    def __init__(self, websocket: "WebSocket", *, logger: Optional[Logger] = None) -> None:
+        """Observer for handling function calls from the OpenAI Realtime API.
+
+        Args:
+            websocket (WebSocket): The websocket connection.
+            logger (Logger): The logger for the observer.
+        """
+        super().__init__(logger=logger)
         self.websocket = websocket
 
         # Connection specific state
@@ -43,8 +49,13 @@ class WebsocketAudioAdapter(RealtimeObserver):
         self.mark_queue: list[str] = []
         self.response_start_timestamp_socket: Optional[int] = None
 
+    @property
+    def logger(self) -> Logger:
+        return self._logger or global_logger
+
     async def on_event(self, event: dict[str, Any]) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to websocket."""
+        logger = self.logger
         if event["type"] in LOG_EVENT_TYPES:
             logger.info(f"Received event: {event['type']}", event)
 
@@ -73,6 +84,7 @@ class WebsocketAudioAdapter(RealtimeObserver):
 
     async def handle_speech_started_event(self) -> None:
         """Handle interruption when the caller's speech starts."""
+        logger = self.logger
         logger.info("Handling speech started event.")
         if self.mark_queue and self.response_start_timestamp_socket is not None:
             elapsed_time = self.latest_media_timestamp - self.response_start_timestamp_socket
@@ -103,27 +115,28 @@ class WebsocketAudioAdapter(RealtimeObserver):
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
-    async def run(self, agent: "RealtimeAgent") -> None:
-        self._agent = agent
-        await self.initialize_session()
-        self._ready_event.set()
-
-        async for message in self.websocket.iter_text():
-            data = json.loads(message)
-            if data["event"] == "media":
-                self.latest_media_timestamp = int(data["media"]["timestamp"])
-                await self.realtime_client.send_audio(audio=data["media"]["payload"])
-            elif data["event"] == "start":
-                self.stream_sid = data["start"]["streamSid"]
-                logger.info(f"Incoming stream has started {self.stream_sid}")
-                self.response_start_timestamp_socket = None
-                self.latest_media_timestamp = 0
-                self.last_assistant_item = None
-            elif data["event"] == "mark":
-                if self.mark_queue:
-                    self.mark_queue.pop(0)
-
     async def initialize_session(self) -> None:
         """Control initial session with OpenAI."""
-        session_update = {"input_audio_format": "pcm16", "output_audio_format": "pcm16"}  #  g711_ulaw  # "g711_ulaw",
+        session_update = {"input_audio_format": "pcm16", "output_audio_format": "pcm16"}
         await self.realtime_client.session_update(session_update)
+
+    async def run_loop(self) -> None:
+        """Reads data from websocket and sends it to the RealtimeClient."""
+        logger = self.logger
+        async for message in self.websocket.iter_text():
+            try:
+                data = json.loads(message)
+                if data["event"] == "media":
+                    self.latest_media_timestamp = int(data["media"]["timestamp"])
+                    await self.realtime_client.send_audio(audio=data["media"]["payload"])
+                elif data["event"] == "start":
+                    self.stream_sid = data["start"]["streamSid"]
+                    logger.info(f"Incoming stream has started {self.stream_sid}")
+                    self.response_start_timestamp_socket = None
+                    self.latest_media_timestamp = 0
+                    self.last_assistant_item = None
+                elif data["event"] == "mark":
+                    if self.mark_queue:
+                        self.mark_queue.pop(0)
+            except Exception as e:
+                logger.warning(f"Failed to process message: {e}", stack_info=True)

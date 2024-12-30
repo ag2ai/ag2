@@ -59,16 +59,29 @@ class TestOAIRealtimeClient:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.asyncio()
+    async def test_not_connected(self, client: OpenAIRealtimeClient) -> None:
+
+        with pytest.raises(RuntimeError, match=r"Client is not connected, call connect\(\) first."):
+            with move_on_after(1) as scope:
+                async for event in client.read_events():
+                    pass
+
+        assert not scope.cancelled_caught
+
+    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.asyncio()
     async def test_start_read_events(self, client: OpenAIRealtimeClient) -> None:
 
         mock = MagicMock()
 
-        # read events for 3 seconds and then interrupt
-        with move_on_after(3) as scope:
-            print("Reading events...")
-            async for event in client.read_events():
-                print(f"-> Received event: {event}")
-                mock(**event)
+        async with client.connect():
+            # read events for 3 seconds and then interrupt
+            with move_on_after(3) as scope:
+                print("Reading events...")
+
+                async for event in client.read_events():
+                    print(f"-> Received event: {event}")
+                    mock(**event)
 
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
@@ -84,15 +97,16 @@ class TestOAIRealtimeClient:
 
         mock = MagicMock()
 
-        # read events for 3 seconds and then interrupt
-        with move_on_after(3) as scope:
-            print("Reading events...")
-            async for event in client.read_events():
-                print(f"-> Received event: {event}")
-                mock(**event)
+        async with client.connect():
+            # read events for 3 seconds and then interrupt
+            with move_on_after(3) as scope:
+                print("Reading events...")
+                async for event in client.read_events():
+                    print(f"-> Received event: {event}")
+                    mock(**event)
 
-                if event["type"] == "session.updated":
-                    await client.send_text(role="user", text="Hello, how are you?")
+                    if event["type"] == "session.updated":
+                        await client.send_text(role="user", text="Hello, how are you?")
 
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught

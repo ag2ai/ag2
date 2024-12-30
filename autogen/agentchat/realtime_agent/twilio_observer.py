@@ -4,7 +4,7 @@
 
 import base64
 import json
-import logging
+from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Optional
 
 from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
@@ -28,20 +28,20 @@ LOG_EVENT_TYPES = [
 ]
 SHOW_TIMING_MATH = False
 
-logger = logging.getLogger(__name__)
+global_logger = getLogger(__name__)
 
 
 class TwilioAudioAdapter(RealtimeObserver):
     """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa."""
 
-    def __init__(self, websocket: "WebSocket"):
+    def __init__(self, websocket: "WebSocket", *, logger: Optional[Logger] = None):
         """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa.
 
         Args:
             websocket: WebSocket
                 the websocket connection to the Twilio service
         """
-        super().__init__()
+        super().__init__(logger=logger)
         self.websocket = websocket
 
         # Connection specific state
@@ -51,8 +51,14 @@ class TwilioAudioAdapter(RealtimeObserver):
         self.mark_queue: list[str] = []
         self.response_start_timestamp_twilio: Optional[int] = None
 
+    @property
+    def logger(self) -> Logger:
+        return self._logger or global_logger
+
     async def update(self, event: RealtimeServerEvent) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
+        logger = self.logger
+
         if event.type in LOG_EVENT_TYPES:
             logger.info(f"Received event: {event.type}", event)
 
@@ -81,6 +87,8 @@ class TwilioAudioAdapter(RealtimeObserver):
 
     async def handle_speech_started_event(self) -> None:
         """Handle interruption when the caller's speech starts."""
+        logger = self.logger
+
         logger.info("Handling speech started event.")
         if self.mark_queue and self.response_start_timestamp_twilio is not None:
             elapsed_time = self.latest_media_timestamp - self.response_start_timestamp_twilio
@@ -112,28 +120,27 @@ class TwilioAudioAdapter(RealtimeObserver):
             await self.websocket.send_json(mark_event)
             self.mark_queue.append("responsePart")
 
-    async def run(self, agent: "RealtimeAgent") -> None:
-        """Run the adapter.
-
-        Start reading messages from the Twilio websocket and send audio to OpenAI.
-        """
-        self._agent = agent
-        await self.initialize_session()
+    async def run_loop(self) -> None:
+        """Run the adapter loop."""
+        logger = self.logger
 
         async for message in self.websocket.iter_text():
-            data = json.loads(message)
-            if data["event"] == "media":
-                self.latest_media_timestamp = int(data["media"]["timestamp"])
-                await self.realtime_client.send_audio(audio=data["media"]["payload"])
-            elif data["event"] == "start":
-                self.stream_sid = data["start"]["streamSid"]
-                logger.info(f"Incoming stream has started {self.stream_sid}")
-                self.response_start_timestamp_twilio = None
-                self.latest_media_timestamp = 0
-                self.last_assistant_item = None
-            elif data["event"] == "mark":
-                if self.mark_queue:
-                    self.mark_queue.pop(0)
+            try:
+                data = json.loads(message)
+                if data["event"] == "media":
+                    self.latest_media_timestamp = int(data["media"]["timestamp"])
+                    await self.realtime_client.send_audio(audio=data["media"]["payload"])
+                elif data["event"] == "start":
+                    self.stream_sid = data["start"]["streamSid"]
+                    logger.info(f"Incoming stream has started {self.stream_sid}")
+                    self.response_start_timestamp_twilio = None
+                    self.latest_media_timestamp = 0
+                    self.last_assistant_item = None
+                elif data["event"] == "mark":
+                    if self.mark_queue:
+                        self.mark_queue.pop(0)
+            except Exception as e:
+                logger.warning(f"Error processing Twilio message: {e}", stack_info=True)
 
     async def initialize_session(self) -> None:
         """Control initial session with OpenAI."""

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import logging
+from logging import Logger, getLogger
 from typing import Any, Callable, Literal, Optional, TypeVar, Union
 
 import anyio
@@ -19,7 +19,7 @@ from .realtime_observer import RealtimeObserver
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-logger = logging.getLogger(__name__)
+global_logger = getLogger(__name__)
 
 SWARM_SYSTEM_MESSAGE = (
     "You are a helpful voice assistant. Your task is to listen to user and to coordinate the tasks based on his/her inputs."
@@ -47,6 +47,7 @@ class RealtimeAgent(ConversableAgent):
         system_message: str = "You are a helpful AI Assistant.",
         llm_config: dict[str, Any],
         voice: str = "alloy",
+        logger: Optional[Logger] = None,
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
 
@@ -72,9 +73,12 @@ class RealtimeAgent(ConversableAgent):
             silent=None,
             context_variables=None,
         )
-        self._function_observer = FunctionObserver()
+        self._logger = logger
+        self._function_observer = FunctionObserver(logger=logger)
         self._audio_adapter = audio_adapter
-        self._realtime_client = OpenAIRealtimeClient(llm_config=llm_config, voice=voice, system_message=system_message)
+        self._realtime_client = OpenAIRealtimeClient(
+            llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
+        )
         self._voice = voice
 
         self._observers: list[RealtimeObserver] = [self._function_observer, self._audio_adapter]
@@ -94,9 +98,22 @@ class RealtimeAgent(ConversableAgent):
         self._agents: Optional[list[SwarmAgent]] = None
 
     @property
+    def logger(self) -> Logger:
+        """Get the logger for the agent."""
+        return self._logger or global_logger
+
+    @property
     def realtime_client(self) -> OpenAIRealtimeClient:
         """Get the OpenAI Realtime Client."""
         return self._realtime_client
+
+    def register_observer(self, observer: RealtimeObserver) -> None:
+        """Register an observer with the Realtime Agent.
+
+        Args:
+            observer (RealtimeObserver): The observer to register.
+        """
+        self._observers.append(observer)
 
     def register_swarm(
         self,
@@ -112,6 +129,7 @@ class RealtimeAgent(ConversableAgent):
             agents (list[SwarmAgent]): The agents in the swarm.
             system_message (str): The system message for the agent.
         """
+        logger = self.logger
         if not system_message:
             if self.system_message != "You are a helpful AI Assistant.":
                 logger.warning(

@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import logging
 from contextlib import asynccontextmanager
+from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
 
 from asyncer import TaskGroup, create_task_group
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 __all__ = ["OpenAIRealtimeClient", "Role"]
 
-logger = logging.getLogger(__name__)
+global_logger = getLogger(__name__)
 
 
 class OpenAIRealtimeClient:
@@ -29,6 +29,7 @@ class OpenAIRealtimeClient:
         llm_config: dict[str, Any],
         voice: str,
         system_message: str,
+        logger: Optional[Logger] = None,
     ) -> None:
         """(Experimental) Client for OpenAI Realtime API.
 
@@ -38,6 +39,7 @@ class OpenAIRealtimeClient:
         self._llm_config = llm_config
         self._voice = voice
         self._system_message = system_message
+        self._logger = logger
 
         self._connection: Optional[AsyncRealtimeConnection] = None
 
@@ -56,6 +58,11 @@ class OpenAIRealtimeClient:
             default_headers=config.get("default_headers", None),
             default_query=config.get("default_query", None),
         )
+
+    @property
+    def logger(self) -> Logger:
+        """Get the logger for the OpenAI Realtime API."""
+        return self._logger or global_logger
 
     @property
     def connection(self) -> AsyncRealtimeConnection:
@@ -131,6 +138,7 @@ class OpenAIRealtimeClient:
         Args:
             session_options (dict[str, Any]): The session options to update.
         """
+        logger = self.logger
         logger.info(f"Sending session update: {session_options}")
         await self.connection.session.update(session=session_options)  # type: ignore[arg-type]
         logger.info("Sending session update finished")
