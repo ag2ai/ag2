@@ -16,6 +16,7 @@ from autogen.messages import (
     FunctionCallMessage,
     FunctionResponseMessage,
     GroupChatResume,
+    GroupChatRunChat,
     MessageRole,
     PostCarryoverProcessing,
     SpeakerAttempt,
@@ -25,6 +26,7 @@ from autogen.messages import (
     ToolResponseMessage,
     create_clear_agents_history,
     create_group_chat_resume,
+    create_group_chat_run_chat,
     create_post_carryover_processing,
     create_received_message_model,
     create_speaker_attempt,
@@ -485,5 +487,27 @@ def test_group_chat_resume() -> None:
     expected_call_args_list = [
         call("Prepared group chat with 2 messages, the last speaker is", "\x1b[33mCoder\x1b[0m", flush=True)
     ]
+
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_group_chat_run_chat() -> None:
+    speaker = ConversableAgent(
+        "assistant uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+    )
+    silent = False
+
+    actual = create_group_chat_run_chat(speaker, silent)
+
+    assert isinstance(actual, GroupChatRunChat)
+    assert actual.speaker_name == "assistant uno"
+    assert actual.verbose is True
+
+    mock = MagicMock()
+    actual.print(f=mock)
+
+    # print(mock.call_args_list)
+
+    expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant uno\n\x1b[0m", flush=True)]
 
     assert mock.call_args_list == expected_call_args_list

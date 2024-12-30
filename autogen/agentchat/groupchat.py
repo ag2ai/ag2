@@ -18,7 +18,12 @@ from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNex
 from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
-from ..messages import create_clear_agents_history, create_group_chat_resume, create_speaker_attempt
+from ..messages import (
+    create_clear_agents_history,
+    create_group_chat_resume,
+    create_group_chat_run_chat,
+    create_speaker_attempt,
+)
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
@@ -1149,7 +1154,8 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    iostream.print(colored(f"\nNext speaker: {speaker.name}\n", "green"), flush=True)
+                    group_chat_run_chat = create_group_chat_run_chat(speaker, silent)
+                    group_chat_run_chat.print(iostream.print)
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:

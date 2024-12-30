@@ -368,3 +368,18 @@ def create_group_chat_resume(
     last_speaker_name: str, messages: list[dict[str, Any]], silent: Optional[bool] = False
 ) -> GroupChatResume:
     return GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)
+
+
+class GroupChatRunChat(BaseModel):
+    speaker_name: str
+    verbose: Optional[bool] = False
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.verbose:
+            f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
+
+
+def create_group_chat_run_chat(speaker: Agent, silent: Optional[bool] = False) -> GroupChatRunChat:
+    return GroupChatRunChat(speaker_name=speaker.name, verbose=not silent)
