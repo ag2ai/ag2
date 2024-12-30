@@ -1262,6 +1262,10 @@ class GroupChatManager(ConversableAgent):
                 else:
                     # admin agent is not found in the participants
                     raise
+            except NoEligibleSpeaker:
+                # No eligible speaker, terminate the conversation
+                break
+
             if reply is None:
                 break
             # The speaker sends the message without requesting a reply
