@@ -24,6 +24,7 @@ import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
+from autogen.tools.dependency_injection import BaseContext, Depends
 from autogen.tools.tool import Tool
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -662,6 +663,147 @@ async def test__wrap_function_async():
 
 def get_origin(d: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:
     return {k: v._origin for k, v in d.items()}
+
+
+class TestDependencyInjection:
+    class MyContext(BaseContext, BaseModel):
+        b: int
+
+    def f_with_annotated(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    ) -> int:
+        return a + ctx.b
+
+    def f_without_annotated(
+        a: int,
+        ctx: MyContext = Depends(MyContext(b=3)),
+    ) -> int:
+        return a + ctx.b
+
+    def f_without_annotated_and_depends(
+        a: int,
+        ctx: MyContext = MyContext(b=4),
+    ) -> int:
+        return a + ctx.b
+
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        self.agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
+        self.expected_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "description": "Example function",
+                    "name": "f",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"a": {"type": "integer", "description": "a"}},
+                        "required": ["a"],
+                    },
+                },
+            }
+        ]
+
+    @pytest.mark.parametrize("test_func", [f_with_annotated, f_without_annotated, f_without_annotated_and_depends])
+    def test_remove_injected_params_from_signature(self, test_func):
+        ConversableAgent._remove_injected_params_from_signature(test_func)
+        assert str(inspect.signature(test_func)) == "(a: int) -> int"
+
+    def test_register_tool(self):
+        @self.agent.register_for_llm(description="Example function")
+        @self.agent.register_for_execution()
+        def f(
+            a: int,
+            ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
+        ) -> int:
+            return a + ctx.b
+
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert "f" in self.agent.function_map.keys()
+        assert self.agent.function_map["f"](1) == "3"
+
+    def test_register_tool_without_annotated(self):
+        @self.agent.register_for_llm(description="Example function")
+        @self.agent.register_for_execution()
+        def f(
+            a: int,
+            ctx: self.MyContext = Depends(self.MyContext(b=3)),
+        ) -> int:
+            return a + ctx.b
+
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert "f" in self.agent.function_map.keys()
+        assert self.agent.function_map["f"](1) == "4"
+
+    def test_register_tool_without_annotated_and_depends(self):
+        @self.agent.register_for_llm(description="Example function")
+        @self.agent.register_for_execution()
+        def f(
+            a: int,
+            ctx: self.MyContext = self.MyContext(b=4),
+        ) -> int:
+            return a + ctx.b
+
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert "f" in self.agent.function_map.keys()
+        assert self.agent.function_map["f"](1) == "5"
+
+    def test_register_tool_with_multiple_depends_params(self):
+        @self.agent.register_for_llm(description="Example function")
+        @self.agent.register_for_execution()
+        def f(
+            a: int,
+            ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
+            ctx2: Annotated[self.MyContext, Depends(self.MyContext(b=3))],
+        ) -> int:
+            return a + ctx.b + ctx2.b
+
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert "f" in self.agent.function_map.keys()
+        assert self.agent.function_map["f"](1) == "6"
+
+    @pytest.mark.skipif(
+        skip_openai,
+        reason=reason,
+    )
+    def test_end_to_end(self):
+        class UserContext(BaseContext, BaseModel):
+            username: str
+            password: str
+
+        user = UserContext(username="user23", password="password23")
+        users = [user]
+
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            file_location=KEY_LOC,
+            filter_dict={"tags": ["gpt-4o-mini"]},
+        )
+        agent = ConversableAgent(
+            name="agent",
+            llm_config={"config_list": config_list},
+        )
+        user_proxy = UserProxyAgent(
+            name="user_proxy_1",
+            human_input_mode="NEVER",
+            llm_config=False,
+        )
+
+        @user_proxy.register_for_execution()
+        @agent.register_for_llm(description="Login function")
+        def login(user: Annotated[UserContext, Depends(user)]) -> str:
+            if user in users:
+                return "Login successful."
+            return "Login failed"
+
+        user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
+        for message in user_proxy.chat_messages[agent]:
+            if "tool_responses" in message:
+                assert message["tool_responses"][0]["content"] == "Login successful."
+                return
+
+        assert False, "Login function was not called"
 
 
 def test_register_for_llm():

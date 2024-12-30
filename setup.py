@@ -40,6 +40,7 @@ install_requires = [
     "packaging",
     "websockets>=14,<15",
     "asyncer>=0.0.8",
+    "fast_depends>=2.4.12",
 ]
 
 test = [

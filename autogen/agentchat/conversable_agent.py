@@ -15,6 +15,7 @@ import warnings
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union
 
+from fast_depends import inject
 from openai import BadRequestError
 
 from .._pydantic import BaseModel, model_dump
@@ -37,7 +38,7 @@ from ..function_utils import get_function_schema, load_basemodels_if_needed, ser
 from ..io.base import IOStream
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import Tool
+from ..tools import BaseContext, Tool
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -2758,6 +2759,22 @@ class ConversableAgent(LLMAgent):
 
         return _decorator
 
+    @staticmethod
+    def _remove_injected_params_from_signature(func: Callable[..., Any]) -> None:
+        remove_from_signature = []
+        sig = inspect.signature(func)
+        for param in sig.parameters.values():
+            param_annotation = (
+                param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
+            )
+            if isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext):
+                remove_from_signature.append(param.name)
+
+        new_signature = sig.replace(
+            parameters=[p for p in sig.parameters.values() if p.name not in remove_from_signature]
+        )
+        func.__signature__ = new_signature
+
     def _create_tool_if_needed(
         self, func_or_tool: Union[Tool, Callable[..., Any]], name: Optional[str], description: Optional[str]
     ) -> Tool:
@@ -2770,7 +2787,8 @@ class ConversableAgent(LLMAgent):
             return tool
 
         if isinstance(func_or_tool, Callable):
-            func: Callable[..., Any] = func_or_tool
+            func: Callable[..., Any] = inject(func_or_tool)
+            ConversableAgent._remove_injected_params_from_signature(func)
 
             name = name or func.__name__
 
