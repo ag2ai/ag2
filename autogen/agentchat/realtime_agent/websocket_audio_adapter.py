@@ -32,7 +32,7 @@ SHOW_TIMING_MATH = False
 logger = logging.getLogger(__name__)
 
 
-class WebsocketAudioAdapter(RealtimeObserver):
+class WebSocketAudioAdapter(RealtimeObserver):
     def __init__(self, websocket: "WebSocket"):
         super().__init__()
         self.websocket = websocket
