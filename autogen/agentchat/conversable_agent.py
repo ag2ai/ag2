@@ -35,7 +35,7 @@ from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
-from ..messages import create_received_message_model, create_termination_and_human_reply
+from ..messages import create_execute_code_block, create_received_message_model, create_termination_and_human_reply
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import Tool
@@ -2229,13 +2229,10 @@ class ConversableAgent(LLMAgent):
             lang, code = code_block
             if not lang:
                 lang = infer_lang(code)
-            iostream.print(
-                colored(
-                    f"\n>>>>>>>> EXECUTING CODE BLOCK {i} (inferred language is {lang})...",
-                    "red",
-                ),
-                flush=True,
-            )
+
+            execute_code_block = create_execute_code_block(code, lang, i, self)
+            execute_code_block.print(iostream.print)
+
             if lang in ["bash", "shell", "sh"]:
                 exitcode, logs, image = self.run_code(code, lang=lang, **self._code_execution_config)
             elif lang in PYTHON_VARIANTS:

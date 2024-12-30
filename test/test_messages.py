@@ -12,6 +12,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.messages import (
     ClearAgentsHistory,
     ContentMessage,
+    ExecuteCodeBlock,
     FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
@@ -26,6 +27,7 @@ from autogen.messages import (
     ToolResponse,
     ToolResponseMessage,
     create_clear_agents_history,
+    create_execute_code_block,
     create_group_chat_resume,
     create_group_chat_run_chat,
     create_post_carryover_processing,
@@ -539,4 +541,28 @@ def test_termination_and_human_reply(sender: ConversableAgent, recipient: Conver
     actual.print_human_input_mode(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [call("\x1b[31m\n>>>>>>>> USING AUTO REPLY...\x1b[0m", flush=True)]
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_execute_code_block(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+    code = """print("hello world")"""
+    language = "python"
+    code_block_count = 0
+
+    actual = create_execute_code_block(code, language, code_block_count, recipient=recipient)
+
+    assert isinstance(actual, ExecuteCodeBlock)
+    assert actual.code == code
+    assert actual.language == language
+    assert actual.code_block_count == code_block_count
+
+    mock = MagicMock()
+    actual.print(f=mock)
+
+    # print(mock.call_args_list)
+
+    expected_call_args_list = [
+        call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...\x1b[0m", flush=True)
+    ]
+
     assert mock.call_args_list == expected_call_args_list

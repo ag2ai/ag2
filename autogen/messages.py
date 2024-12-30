@@ -413,3 +413,27 @@ def create_termination_and_human_reply(
         sender_name=sender.name if sender else "No sender",
         recipient_name=recipient.name,
     )
+
+
+class ExecuteCodeBlock(BaseModel):
+    code: str
+    language: str
+    code_block_count: int
+    recipient_name: str
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(
+            colored(
+                f"\n>>>>>>>> EXECUTING CODE BLOCK {self.code_block_count} (inferred language is {self.language})...",
+                "red",
+            ),
+            flush=True,
+        )
+
+
+def create_execute_code_block(code: str, language: str, code_block_count: int, recipient: Agent) -> ExecuteCodeBlock:
+    return ExecuteCodeBlock(
+        code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
+    )
