@@ -12,8 +12,6 @@ from pydantic import BaseModel
 
 from .realtime_observer import RealtimeObserver
 
-logger = getLogger(__name__)
-
 
 class FunctionObserver(RealtimeObserver):
     """Observer for handling function calls from the OpenAI Realtime API."""
@@ -29,11 +27,11 @@ class FunctionObserver(RealtimeObserver):
             event (dict[str, Any]): The event from the OpenAI Realtime API.
         """
         if event["type"] == "response.function_call_arguments.done":
-            logger.info(f"Received event: {event['type']}", event)
+            self.logger.info(f"Received event: {event['type']}", event)
             await self.call_function(
                 call_id=event["call_id"],
                 name=event["name"],
-                kwargs=event["arguments"],
+                kwargs=json.loads(event["arguments"]),
             )
 
     async def call_function(self, call_id: str, name: str, kwargs: dict[str, Any]) -> None:
@@ -52,7 +50,7 @@ class FunctionObserver(RealtimeObserver):
                 result = await func(**kwargs)
             except Exception:
                 result = "Function call failed"
-                logger.info(f"Function call failed: {name=}, {kwargs=}", stack_info=True)
+                self.logger.info(f"Function call failed: {name=}, {kwargs=}", stack_info=True)
 
             if isinstance(result, BaseModel):
                 result = result.model_dump_json()

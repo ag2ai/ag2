@@ -28,8 +28,6 @@ LOG_EVENT_TYPES = [
 ]
 SHOW_TIMING_MATH = False
 
-global_logger = getLogger(__name__)
-
 
 class TwilioAudioAdapter(RealtimeObserver):
     """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa."""
@@ -50,10 +48,6 @@ class TwilioAudioAdapter(RealtimeObserver):
         self.last_assistant_item: Optional[str] = None
         self.mark_queue: list[str] = []
         self.response_start_timestamp_twilio: Optional[int] = None
-
-    @property
-    def logger(self) -> Logger:
-        return self._logger or global_logger
 
     async def on_event(self, event: dict[str, Any]) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to Twilio."""

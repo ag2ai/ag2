@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 __all__ = ["RealtimeObserver"]
 
+global_logger = getLogger(__name__)
+
 
 class RealtimeObserver(ABC):
     """Observer for the OpenAI Realtime API."""
@@ -28,6 +30,10 @@ class RealtimeObserver(ABC):
         self._ready_event = Event()
         self._agent: Optional["RealtimeAgent"] = None
         self._logger = logger
+
+    @property
+    def logger(self) -> Logger:
+        return self._logger or global_logger
 
     @property
     def agent(self) -> "RealtimeAgent":
