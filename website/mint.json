@@ -305,9 +305,13 @@
               "pages": [
                 "docs/reference/agentchat/realtime_agent/client",
                 "docs/reference/agentchat/realtime_agent/function_observer",
+                "docs/reference/agentchat/realtime_agent/oai_realtime_client",
                 "docs/reference/agentchat/realtime_agent/realtime_agent",
+                "docs/reference/agentchat/realtime_agent/realtime_client",
                 "docs/reference/agentchat/realtime_agent/realtime_observer",
+                "docs/reference/agentchat/realtime_agent/twilio_audio_adapter",
                 "docs/reference/agentchat/realtime_agent/twilio_observer",
+                "docs/reference/agentchat/realtime_agent/websocket_audio_adapter",
                 "docs/reference/agentchat/realtime_agent/websocket_observer"
               ]
             },
@@ -623,7 +627,11 @@
             "notebooks/agentchat_realtime_swarm",
             "notebooks/agentchat_realtime_websocket",
             "notebooks/agentchat_reasoning_agent",
-            "notebooks/agentchat_captainagent_crosstool"
+            "notebooks/agentchat_captainagent_crosstool",
+            "notebooks/agentchat_realtime_websocket",
+            "notebooks/agentchat_graph_rag_falkordb",
+            "notebooks/agentchat_MathChat",
+            "notebooks/config_loader_utility_functions"
           ]
         },
         "notebooks/Gallery"
