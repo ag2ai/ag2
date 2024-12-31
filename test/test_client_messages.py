@@ -10,9 +10,11 @@ import pytest
 from autogen.client_messages import (
     ActualUsageSummary,
     ModelUsageSummary,
+    StreamMessage,
     TotalUsageSummary,
     UsageSummary,
     _change_usage_summary_format,
+    create_stream_message,
     create_usage_summary_model,
 )
 
@@ -284,5 +286,25 @@ def test_usage_summary_print_none_actual_and_total(
     # print(mock.call_args_list)
 
     expected_call_args_list = [call('No usage summary. Please call "create" first.', flush=True)]
+
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_create_stream_message() -> None:
+    stream_message = create_stream_message()
+
+    assert isinstance(stream_message, StreamMessage)
+
+    content = "random stream chunk content"
+    mock = MagicMock()
+    stream_message.print_chunk_content(content, f=mock)
+
+    # print(mock.call_args_list)
+
+    expected_call_args_list = [
+        call("\x1b[32m", end=""),
+        call("random stream chunk content", end="", flush=True),
+        call("\x1b[0m\n"),
+    ]
 
     assert mock.call_args_list == expected_call_args_list

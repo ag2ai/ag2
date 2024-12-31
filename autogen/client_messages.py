@@ -117,3 +117,21 @@ def create_usage_summary_model(
     usage_summary = UsageSummary(**summary_dict, mode=mode)
 
     return usage_summary
+
+
+class StreamMessage:
+
+    def print_chunk_content(self, content: str, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        # Set the terminal text color to green
+        f("\033[32m", end="")
+
+        f(content, end="", flush=True)
+
+        # Reset the terminal text color
+        f("\033[0m\n")
+
+
+def create_stream_message() -> StreamMessage:
+    return StreamMessage()

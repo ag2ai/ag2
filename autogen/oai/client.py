@@ -22,7 +22,7 @@ from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
 
-from ..client_messages import create_usage_summary_model
+from ..client_messages import create_stream_message, create_usage_summary_model
 
 TOOL_ENABLED = False
 try:
@@ -316,6 +316,8 @@ class OpenAIClient:
             full_function_call: Optional[dict[str, Any]] = None
             full_tool_calls: Optional[list[Optional[dict[str, Any]]]] = None
 
+            stream_message = create_stream_message()
+
             # Send the chat completion request to OpenAI's API and process the response in chunks
             for chunk in create_or_parse(**params):
                 if chunk.choices:
@@ -362,11 +364,10 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            iostream.print(content, end="", flush=True)
+                            stream_message.print_chunk_content(content, iostream.print)
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
-                            # iostream.print()
                             pass
 
             # Prepare the final ChatCompletion object based on the accumulated data
