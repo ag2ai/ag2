@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from unittest.mock import MagicMock
 
 import pytest
-from anyio import Event, fail_after, sleep
+from anyio import Event, move_on_after, sleep
 from asyncer import create_task_group
 from conftest import reason, skip_openai  # noqa: E402
 from fastapi import FastAPI, WebSocket
@@ -100,11 +100,9 @@ class TestE2E:
             )
 
             # Wait for the weather function to be called or timeout
-            try:
-                with fail_after(20) as _:
-                    await weather_func_called_event.wait()
-            except TimeoutError:
-                assert False, "Weather function was not called within the expected time"
+            with move_on_after(20) as scope:
+                await weather_func_called_event.wait()
+            assert not scope.cancel_called, "Weather function was not called within the expected time"
 
             # Verify the function call details
             weather_func_mock.assert_called_with(location="Seattle")
