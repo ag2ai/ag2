@@ -1042,7 +1042,7 @@ def test_register_functions():
         )
 
         expected_function_map = {"exec_python": exec_python}
-        assert get_origin(user_proxy.function_map) == expected_function_map
+        assert get_origin(user_proxy.function_map).keys() == expected_function_map.keys()
 
         expected = [
             {

@@ -11,6 +11,7 @@ from logging import getLogger
 from typing import Annotated, Any, Callable, Dict, ForwardRef, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 from pydantic import BaseModel, Field
+from pydantic.fields import FieldInfo
 from typing_extensions import Literal, get_args, get_origin
 
 from ._pydantic import JsonSchemaValue, evaluate_forwardref, model_dump, model_dump_json, type2schema
@@ -134,8 +135,10 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
             retval = v.__metadata__[0]
             if isinstance(retval, str):
                 return retval
+            elif isinstance(retval, FieldInfo):
+                return retval.description  # type: ignore[return-value]
             else:
-                raise ValueError(f"Invalid description {retval} for parameter {k}, should be a string.")
+                raise ValueError(f"Invalid description {retval} for parameter {k}, should be a string or FieldInfo")
         else:
             return k
 

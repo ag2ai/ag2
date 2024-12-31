@@ -13,10 +13,25 @@ import logging
 import re
 import warnings
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union
+from contextlib import contextmanager
+from typing import (
+    Any,
+    Callable,
+    ContextManager,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    get_type_hints,
+)
 
 from fast_depends import inject
 from openai import BadRequestError
+from pydantic import Field
 
 from .._pydantic import BaseModel, model_dump
 from ..cache.cache import AbstractCache
@@ -2775,6 +2790,22 @@ class ConversableAgent(LLMAgent):
         )
         func.__signature__ = new_signature
 
+    @staticmethod
+    @contextmanager
+    def _annotation_context(func: Callable[..., Any]) -> ContextManager[Callable[..., Any]]:
+        original_annotations = get_type_hints(func, include_extras=True).copy()
+
+        try:
+            for _, annotation in original_annotations.items():
+                if hasattr(annotation, "__metadata__"):
+                    metadata = annotation.__metadata__
+                    if metadata and isinstance(metadata[0], str):
+                        # Replace string metadata with Pydantic's Field
+                        annotation.__metadata__ = (Field(description=metadata[0]),)
+            yield func
+        finally:
+            func.__annotations__ = original_annotations
+
     def _create_tool_if_needed(
         self, func_or_tool: Union[Tool, Callable[..., Any]], name: Optional[str], description: Optional[str]
     ) -> Tool:
@@ -2787,7 +2818,8 @@ class ConversableAgent(LLMAgent):
             return tool
 
         if isinstance(func_or_tool, Callable):
-            func: Callable[..., Any] = inject(func_or_tool)
+            with ConversableAgent._annotation_context(func_or_tool) as func:
+                func = inject(func)
             ConversableAgent._remove_injected_params_from_signature(func)
 
             name = name or func.__name__
