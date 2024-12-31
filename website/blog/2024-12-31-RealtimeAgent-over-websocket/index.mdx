@@ -1,0 +1,204 @@
+---
+title: Simplifying Real-Time Voice Interactions with the Websocket Audio Adapter
+authors:
+  - marklysze
+  - sternakt
+  - davorrunje
+  - davorinrusevljan
+tags: [Realtime API, Voice Agents, Swarm Teams, Twilio, AI Tools]
+
+---
+
+<div class="blog-authors">
+   <p class="authors">Authors:</p>
+   <CardGroup cols={2}>
+      <Card href="https://github.com/marklysze">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/marklysze.png" />
+         </div>
+         <div>
+            <p class="name">Mark Sze</p>
+            <p>Software Engineer at AG2.ai</p>
+         </div>
+      </div>
+      </Card>
+      <Card href="https://github.com/sternakt">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/sternakt.png" />
+         </div>
+         <div>
+            <p class="name">Tvrtko Sternak</p>
+            <p>Machine Learning Engineer at Airt</p>
+         </div>
+      </div>
+      </Card>
+      <Card href="https://github.com/davorrunje">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/davorrunje.png" />
+         </div>
+         <div>
+            <p class="name">Davor Runje</p>
+            <p>CTO at Airt</p>
+         </div>
+      </div>
+      </Card>
+      <Card href="https://github.com/davorinrusevljan">
+         <div class="col card">
+         <div class="img-placeholder">
+            <img noZoom src="https://github.com/davorinrusevljan.png" />
+         </div>
+         <div>
+            <p class="name">Davorin Ruševljan</p>
+            <p>Developer</p>
+         </div>
+      </div>
+      </Card>
+   </CardGroup>
+</div>
+
+**TL;DR:**
+- **No More Twilio Setup**: Skip the complexity of configuring accounts, forwarding numbers, and managing telephony platforms.
+- **Introducing WebsocketAudioAdapter**: Stream audio directly from your browser using WebSockets.
+- **Simplified Development**: Connect to real-time agents quickly and effortlessly with minimal setup.
+
+# **Realtime over WebSockets**
+
+In our previous blog post, we introduced a way to interact with the Realtime Agent using Twilio. While effective, this approach required a setup-intensive process involving Twilio integration, account configuration, number forwarding, and other complexities. Today, we're excited to introduce the `WebsocketAudioAdapter`, a streamlined approach to real-time audio streaming directly via a web browser.
+
+This post explores the features, benefits, and implementation of the `WebsocketAudioAdapter`, showing how it transforms the way we connect with real-time agents.
+
+---
+
+## **Why We Built the WebsocketAudioAdapter**
+### **Challenges with Existing Solutions**
+Traditional methods like Twilio provide a robust telephony infrastructure, but they come with challenges:
+- **Complex Setup**: Configuring Twilio accounts, verifying numbers, and setting up forwarding can be time-consuming.
+- **Platform Dependency**: These solutions require developers to rely on external APIs, which may add latency or costs.
+- **Browser Limitations**: For teams building web-first applications, integrating with a telephony platform can feel redundant.
+
+### **Our Solution**
+The `WebsocketAudioAdapter` eliminates these challenges by allowing direct audio streaming over WebSockets. It integrates seamlessly with modern web technologies, enabling real-time voice interactions without external telephony platforms.
+
+---
+
+## **How It Works**
+At its core, the `WebsocketAudioAdapter` leverages WebSockets to handle real-time audio streaming. This means your browser becomes the communication bridge, sending audio packets to a server where a conversational AI agent processes them.
+
+Here’s a quick overview of its components and how they fit together:
+
+1. **WebSocket Connection**:
+   - The adapter establishes a WebSocket connection between the client (browser) and the server.
+   - Audio packets are streamed in real time through this connection.
+
+2. **Integration with FastAPI**:
+   - Using Python's FastAPI framework, developers can easily set up endpoints for handling WebSocket traffic.
+
+3. **Powered by Realtime Agents**:
+   - The audio adapter integrates with an AI-powered `RealtimeAgent`, allowing the bot to process audio inputs and respond intelligently.
+
+---
+
+## **Key Features**
+### **1. Simplified Setup**
+Unlike traditional methods, the WebsocketAudioAdapter requires no phone numbers, no telephony configuration, and no external accounts. It's a plug-and-play solution.
+
+### **2. Real-Time Performance**
+By streaming audio over WebSockets, the adapter ensures low latency, making conversations feel natural and seamless.
+
+### **3. Browser-Based**
+Everything happens within the user's browser, meaning no additional software is required. This makes it ideal for web applications.
+
+### **4. Flexible Integration**
+Whether you're building a chatbot, a voice assistant, or an interactive application, the adapter can integrate easily with existing frameworks and AI systems.
+
+---
+
+## **Example: Build a Voice-Enabled Weather Bot**
+Let’s walk through a practical example where we use the `WebsocketAudioAdapter` to create a voice-enabled weather bot.
+
+### **Step 1: Set Up the Server**
+We use FastAPI to define the routes for handling WebSocket connections and serving the user interface.
+
+```python
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+import uvicorn
+from pathlib import Path
+
+app = FastAPI()
+PORT = 5050
+notebook_path = Path.cwd()
+
+app.mount("/static", StaticFiles(directory=notebook_path / "static"), name="static")
+templates = Jinja2Templates(directory=notebook_path / "templates")
+
+@app.get("/", response_class=JSONResponse)
+async def index_page():
+    return {"message": "Websocket Audio Stream Server is running!"}
+
+@app.get("/start-chat/", response_class=HTMLResponse)
+async def start_chat(request):
+    return templates.TemplateResponse("chat.html", {"request": request, "port": PORT})
+```
+
+### **Step 2: Define the WebSocket Endpoint**
+Next, we create the `/media-stream` WebSocket route. This is where the real-time magic happens.
+
+```python
+@app.websocket("/media-stream")
+async def handle_media_stream(websocket: WebSocket):
+    await websocket.accept()
+    audio_adapter = WebsocketAudioAdapter(websocket)
+    realtime_agent = RealtimeAgent(
+        name="Weather Bot",
+        system_message="Hi! I can tell you the weather. Ask me anything.",
+        audio_adapter=audio_adapter
+    )
+
+    @realtime_agent.register_realtime_function(name="get_weather", description="Provides weather information.")
+    def get_weather(location: str) -> str:
+        return "The weather is sunny." if location.lower() != "seattle" else "The weather is cloudy."
+
+    await realtime_agent.run()
+```
+
+### **Step 3: Serve the Interface**
+A simple HTML interface (`chat.html`) allows users to interact with the bot. It connects to the `/media-stream` endpoint and streams audio.
+
+```html
+<script>
+  const ws = new WebSocket("ws://localhost:5050/media-stream");
+  navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      const audioContext = new AudioContext();
+      const mediaStreamSource = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(1024, 1, 1);
+      mediaStreamSource.connect(processor);
+      processor.connect(audioContext.destination);
+      processor.onaudioprocess = (event) => {
+          const audioData = event.inputBuffer.getChannelData(0);
+          ws.send(audioData);
+      };
+  });
+</script>
+```
+
+### **Step 4: Run the Server**
+Start the server using Uvicorn:
+```bash
+uvicorn app:app --host 0.0.0.0 --port 5050
+```
+
+## **Benefits in Action**
+- **Quick Prototyping**: Spin up a real-time voice application in minutes.
+- **Cost Efficiency**: Eliminate third-party telephony costs.
+- **User-Friendly**: Runs in the browser, making it accessible to anyone with a microphone.
+
+## **Conclusion**
+The `WebsocketAudioAdapter` marks a shift toward simpler, more accessible real-time audio solutions. By bypassing traditional telephony systems, it empowers developers to build and deploy voice applications faster and more efficiently. Whether you're creating an AI assistant, a voice-enabled app, or an experimental project, this adapter is your go-to tool for real-time audio streaming.
+
+Try it out and bring your voice-enabled ideas to life!
