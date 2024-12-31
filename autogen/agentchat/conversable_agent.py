@@ -53,7 +53,7 @@ from ..io.base import IOStream
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import BaseContext, Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
-from ..tools.dependency_injection import annotation_context, remove_injected_params_from_signature
+from ..tools.dependency_injection import remove_injected_params_from_signature, string_metadata_to_pydantic_field
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -2786,9 +2786,9 @@ class ConversableAgent(LLMAgent):
             return tool
 
         if isinstance(func_or_tool, Callable):
-            with annotation_context(func_or_tool) as func:
-                func = inject(func)
-            remove_injected_params_from_signature(func)
+            func = string_metadata_to_pydantic_field(func_or_tool)
+            func = inject(func)
+            func = remove_injected_params_from_signature(func)
 
             name = name or func.__name__
 

@@ -135,12 +135,10 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
         # handles Annotated
         if hasattr(v, "__metadata__"):
             retval = v.__metadata__[0]
-            if isinstance(retval, str):
-                return retval
-            elif isinstance(retval, FieldInfo):
+            if isinstance(retval, FieldInfo):
                 return retval.description  # type: ignore[return-value]
             else:
-                raise ValueError(f"Invalid description {retval} for parameter {k}, should be a string or FieldInfo")
+                raise ValueError(f"Invalid {retval} for parameter {k}, should be a FieldInfo, got {type(retval)}")
         else:
             return k
 

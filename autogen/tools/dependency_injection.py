@@ -10,7 +10,13 @@ from typing import Any, Callable, Generator, get_type_hints
 from fast_depends import Depends as FastDepends
 from pydantic import Field
 
-__all__ = ["BaseContext", "ChatContext", "Depends", "remove_injected_params_from_signature", "annotation_context"]
+__all__ = [
+    "BaseContext",
+    "ChatContext",
+    "Depends",
+    "remove_injected_params_from_signature",
+    "string_metadata_to_pydantic_field",
+]
 
 
 class BaseContext(ABC):
@@ -28,7 +34,7 @@ def Depends(x: Any) -> Any:
     return FastDepends(x)
 
 
-def remove_injected_params_from_signature(func: Callable[..., Any]) -> None:
+def remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
     remove_from_signature = []
     sig = inspect.signature(func)
     for param in sig.parameters.values():
@@ -38,19 +44,16 @@ def remove_injected_params_from_signature(func: Callable[..., Any]) -> None:
 
     new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in remove_from_signature])
     func.__signature__ = new_signature  # type: ignore[attr-defined]
+    return func
 
 
-@contextmanager
-def annotation_context(func: Callable[..., Any]) -> Generator[Callable[..., Any], None, None]:
-    original_annotations = get_type_hints(func, include_extras=True).copy()
+def string_metadata_to_pydantic_field(func: Callable[..., Any]) -> Callable[..., Any]:
+    type_hints = get_type_hints(func, include_extras=True)
 
-    try:
-        for _, annotation in original_annotations.items():
-            if hasattr(annotation, "__metadata__"):
-                metadata = annotation.__metadata__
-                if metadata and isinstance(metadata[0], str):
-                    # Replace string metadata with Pydantic's Field
-                    annotation.__metadata__ = (Field(description=metadata[0]),)
-        yield func
-    finally:
-        func.__annotations__ = original_annotations
+    for _, annotation in type_hints.items():
+        if hasattr(annotation, "__metadata__"):
+            metadata = annotation.__metadata__
+            if metadata and isinstance(metadata[0], str):
+                # Replace string metadata with Pydantic's Field
+                annotation.__metadata__ = (Field(description=metadata[0]),)
+    return func
