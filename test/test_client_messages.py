@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from autogen.usage_summary import (
+from autogen.client_messages import (
     ActualUsageSummary,
     ModelUsageSummary,
     TotalUsageSummary,

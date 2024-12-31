@@ -22,7 +22,7 @@ from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
 
-from ..usage_summary import create_usage_summary_model
+from ..client_messages import create_usage_summary_model
 
 TOOL_ENABLED = False
 try:
@@ -312,9 +312,6 @@ class OpenAIClient:
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
 
-            # Set the terminal text color to green
-            iostream.print("\033[32m", end="")
-
             # Prepare for potential function call
             full_function_call: Optional[dict[str, Any]] = None
             full_tool_calls: Optional[list[Optional[dict[str, Any]]]] = None
@@ -371,9 +368,6 @@ class OpenAIClient:
                         else:
                             # iostream.print()
                             pass
-
-            # Reset the terminal text color
-            iostream.print("\033[0m\n")
 
             # Prepare the final ChatCompletion object based on the accumulated data
             model = chunk.model.replace("gpt-35", "gpt-3.5")  # hack for Azure API

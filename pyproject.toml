@@ -64,7 +64,7 @@ files = [
     "autogen/interop",
     "autogen/agentchat/realtime_agent",
     "autogen/messages.py",
-    "autogen/usage_summary.py",
+    "autogen/client_messages.py",
     "test/test_pydantic.py",
     "test/test_function_utils.py",
     "test/io",
@@ -72,7 +72,7 @@ files = [
     "test/interop",
     "test/agentchat/realtime_agent",
     "test/test_messages.py",
-    "test/test_usage_summary.py",
+    "test/test_client_messages.py",
 ]
 exclude = [
     "autogen/math_utils\\.py",
