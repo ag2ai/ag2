@@ -669,24 +669,6 @@ class TestDependencyInjection:
     class MyContext(BaseContext, BaseModel):
         b: int
 
-    def f_with_annotated(
-        a: int,
-        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
-    ) -> int:
-        return a + ctx.b
-
-    def f_without_annotated(
-        a: int,
-        ctx: MyContext = Depends(MyContext(b=3)),
-    ) -> int:
-        return a + ctx.b
-
-    def f_without_annotated_and_depends(
-        a: int,
-        ctx: MyContext = MyContext(b=4),
-    ) -> int:
-        return a + ctx.b
-
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         self.agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
@@ -704,11 +686,6 @@ class TestDependencyInjection:
                 },
             }
         ]
-
-    @pytest.mark.parametrize("test_func", [f_with_annotated, f_without_annotated, f_without_annotated_and_depends])
-    def test_remove_injected_params_from_signature(self, test_func):
-        ConversableAgent._remove_injected_params_from_signature(test_func)
-        assert str(inspect.signature(test_func)) == "(a: int) -> int"
 
     def test_register_tool(self):
         @self.agent.register_for_llm(description="Example function")

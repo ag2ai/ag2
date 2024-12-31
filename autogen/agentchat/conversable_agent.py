@@ -53,6 +53,7 @@ from ..io.base import IOStream
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import BaseContext, Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
+from ..tools.dependency_injection import annotation_context, remove_injected_params_from_signature
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -2773,38 +2774,6 @@ class ConversableAgent(LLMAgent):
 
         return _decorator
 
-    @staticmethod
-    def _remove_injected_params_from_signature(func: Callable[..., Any]) -> None:
-        remove_from_signature = []
-        sig = inspect.signature(func)
-        for param in sig.parameters.values():
-            param_annotation = (
-                param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
-            )
-            if isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext):
-                remove_from_signature.append(param.name)
-
-        new_signature = sig.replace(
-            parameters=[p for p in sig.parameters.values() if p.name not in remove_from_signature]
-        )
-        func.__signature__ = new_signature
-
-    @staticmethod
-    @contextmanager
-    def _annotation_context(func: Callable[..., Any]) -> ContextManager[Callable[..., Any]]:
-        original_annotations = get_type_hints(func, include_extras=True).copy()
-
-        try:
-            for _, annotation in original_annotations.items():
-                if hasattr(annotation, "__metadata__"):
-                    metadata = annotation.__metadata__
-                    if metadata and isinstance(metadata[0], str):
-                        # Replace string metadata with Pydantic's Field
-                        annotation.__metadata__ = (Field(description=metadata[0]),)
-            yield func
-        finally:
-            func.__annotations__ = original_annotations
-
     def _create_tool_if_needed(
         self, func_or_tool: Union[Tool, Callable[..., Any]], name: Optional[str], description: Optional[str]
     ) -> Tool:
@@ -2817,9 +2786,9 @@ class ConversableAgent(LLMAgent):
             return tool
 
         if isinstance(func_or_tool, Callable):
-            with ConversableAgent._annotation_context(func_or_tool) as func:
+            with annotation_context(func_or_tool) as func:
                 func = inject(func)
-            ConversableAgent._remove_injected_params_from_signature(func)
+            remove_injected_params_from_signature(func)
 
             name = name or func.__name__
 
