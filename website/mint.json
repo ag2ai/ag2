@@ -628,7 +628,10 @@
             "notebooks/agentchat_realtime_websocket",
             "notebooks/agentchat_reasoning_agent",
             "notebooks/agentchat_captainagent_crosstool",
-            "notebooks/agentchat_realtime_websocket"
+            "notebooks/agentchat_realtime_websocket",
+            "notebooks/agentchat_graph_rag_falkordb",
+            "notebooks/agentchat_MathChat",
+            "notebooks/config_loader_utility_functions"
           ]
         },
         "notebooks/Gallery"
