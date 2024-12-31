@@ -240,7 +240,7 @@ print(f"Text: {text}")
     codeblocks = extract_code(
         """
 Example:
-``` python
+```python
 def scrape(url):
     import requests
     from bs4 import BeautifulSoup
@@ -251,7 +251,7 @@ def scrape(url):
     return title, text
 ```
 Test:
-``` python
+```python
 url = "https://en.wikipedia.org/wiki/Web_scraping"
 title, text = scrape(url)
 print(f"Title: {title}")
@@ -285,7 +285,7 @@ Example:
     codeblocks = extract_code(
         """
 Example:
-``` python
+```python
 def scrape(url):
    import requests
    from bs4 import BeautifulSoup

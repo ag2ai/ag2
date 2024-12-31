@@ -29,7 +29,7 @@ LOG_EVENT_TYPES = [
 SHOW_TIMING_MATH = False
 
 
-class WebsocketAudioAdapter(RealtimeObserver):
+class WebSocketAudioAdapter(RealtimeObserver):
     def __init__(self, websocket: "WebSocket", *, logger: Optional[Logger] = None) -> None:
         """Observer for handling function calls from the OpenAI Realtime API.
 
@@ -139,4 +139,4 @@ class WebsocketAudioAdapter(RealtimeObserver):
 if TYPE_CHECKING:
 
     def websocket_audio_adapter(websocket: WebSocket) -> RealtimeObserver:
-        return WebsocketAudioAdapter(websocket)
+        return WebSocketAudioAdapter(websocket)

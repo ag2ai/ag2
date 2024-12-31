@@ -39,11 +39,11 @@ class ChromaVectorDB(VectorDB):
         Args:
             client: chromadb.Client | The client object of the vector database. Default is None.
                 If provided, it will use the client object directly and ignore other arguments.
-            path: str | The path to the vector database. Default is `tmp/db`. The default was `None` for version <=0.2.24.
+            path: str | The path to the vector database. Default is `tmp/db`. The default was `None` for version `<=0.2.24`.
             embedding_function: Callable | The embedding function used to generate the vector representation
                 of the documents. Default is None, SentenceTransformerEmbeddingFunction("all-MiniLM-L6-v2") will be used.
             metadata: dict | The metadata of the vector database. Default is None. If None, it will use this
-                setting: {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32}. For more details of
+                setting: `{"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32}`. For more details of
                 the metadata, please refer to [distances](https://github.com/nmslib/hnswlib#supported-distances),
                 [hnsw](https://github.com/chroma-core/chroma/blob/566bc80f6c8ee29f7d99b6322654f32183c368c4/chromadb/segment/impl/vector/local_hnsw.py#L184),
                 and [ALGO_PARAMS](https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md).
@@ -248,7 +248,7 @@ class ChromaVectorDB(VectorDB):
             collection_name: str | The name of the collection. Default is None.
             n_results: int | The number of relevant documents to return. Default is 10.
             distance_threshold: float | The threshold for the distance score, only distance smaller than it will be
-                returned. Don't filter with it if < 0. Default is -1.
+                returned. Don't filter with it if `< 0`. Default is -1.
             kwargs: Dict | Additional keyword arguments.
 
         Returns:
@@ -279,6 +279,7 @@ class ChromaVectorDB(VectorDB):
             List[Document] | The list of Document.
 
         Example:
+            ```python
             data_dict = {
                 "key1s": [1, 2, 3],
                 "key2s": ["a", "b", "c"],
@@ -291,6 +292,7 @@ class ChromaVectorDB(VectorDB):
                 {"key1": 2, "key2": "b", "key4": "y"},
                 {"key1": 3, "key2": "c", "key4": "z"},
             ]
+            ```
         """
 
         results = []

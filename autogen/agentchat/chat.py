@@ -164,7 +164,7 @@ def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
         chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
 
         Each dictionary should contain the input arguments for
-        [`ConversableAgent.initiate_chat`](/docs/reference/agentchat/conversable_agent#initiate_chat).
+        [`ConversableAgent.initiate_chat`](/docs/reference/agentchat/conversable_agent#initiate-chat).
         For example:
             - `"sender"` - the sender agent.
             - `"recipient"` - the recipient agent.

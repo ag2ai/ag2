@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
-from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebsocketAudioAdapter
+from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
 from .realtime_test_utils import generate_voice_input, trace
 
@@ -49,7 +49,7 @@ class TestE2E:
             """Handle WebSocket connections providing audio stream and OpenAI."""
             await websocket.accept()
 
-            audio_adapter = WebsocketAudioAdapter(websocket)
+            audio_adapter = WebSocketAudioAdapter(websocket)
             agent = RealtimeAgent(
                 name="Weather Bot",
                 system_message="Hello there! I am an AI voice assistant powered by Autogen and the OpenAI Realtime API. You can ask me about weather, jokes, or anything you can imagine. Start by saying 'How can I help you?'",
