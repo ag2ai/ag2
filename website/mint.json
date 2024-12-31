@@ -498,6 +498,7 @@
         {
           "group": "Recent posts",
           "pages": [
+            "blog/2024-12-31-RealtimeAgent-over-websocket/index",
             "blog/2024-12-20-RealtimeAgent/index",
             "blog/2024-12-20-Tools-interoperability/index",
             "blog/2024-12-20-Reasoning-Update/index",
