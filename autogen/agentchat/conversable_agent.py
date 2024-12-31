@@ -2317,7 +2317,7 @@ class ConversableAgent(LLMAgent):
         func_name = func_call.get("name", "")
         func = self._function_map.get(func_name, None)
 
-        execute_function = create_execute_function(func_name, self)
+        execute_function = create_execute_function(func_name, self, verbose=verbose)
 
         is_exec_success = False
         if func is not None:
