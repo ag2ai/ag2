@@ -680,7 +680,10 @@ class TestDependencyInjection:
                     "name": "f",
                     "parameters": {
                         "type": "object",
-                        "properties": {"a": {"type": "integer", "description": "a"}},
+                        "properties": {
+                            "a": {"type": "integer", "description": "a"},
+                            "c": {"type": "integer", "description": "c description", "default": 3},
+                        },
                         "required": ["a"],
                     },
                 },
@@ -693,12 +696,13 @@ class TestDependencyInjection:
         def f(
             a: int,
             ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
+            c: Annotated[int, "c description"] = 3,
         ) -> int:
-            return a + ctx.b
+            return a + ctx.b + c
 
         assert self.agent.llm_config["tools"] == self.expected_tools
         assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "3"
+        assert self.agent.function_map["f"](1) == "6"
 
     def test_register_tool_without_annotated(self):
         @self.agent.register_for_llm(description="Example function")
@@ -706,12 +710,13 @@ class TestDependencyInjection:
         def f(
             a: int,
             ctx: self.MyContext = Depends(self.MyContext(b=3)),
+            c: Annotated[int, "c description"] = 3,
         ) -> int:
-            return a + ctx.b
+            return a + ctx.b + c
 
         assert self.agent.llm_config["tools"] == self.expected_tools
         assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "4"
+        assert self.agent.function_map["f"](1) == "7"
 
     def test_register_tool_without_annotated_and_depends(self):
         @self.agent.register_for_llm(description="Example function")
@@ -719,12 +724,13 @@ class TestDependencyInjection:
         def f(
             a: int,
             ctx: self.MyContext = self.MyContext(b=4),
+            c: Annotated[int, "c description"] = 3,
         ) -> int:
-            return a + ctx.b
+            return a + ctx.b + c
 
         assert self.agent.llm_config["tools"] == self.expected_tools
         assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "5"
+        assert self.agent.function_map["f"](1) == "8"
 
     def test_register_tool_with_multiple_depends_params(self):
         @self.agent.register_for_llm(description="Example function")
@@ -733,12 +739,13 @@ class TestDependencyInjection:
             a: int,
             ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
             ctx2: Annotated[self.MyContext, Depends(self.MyContext(b=3))],
+            c: Annotated[int, "c description"] = 3,
         ) -> int:
-            return a + ctx.b + ctx2.b
+            return a + ctx.b + ctx2.b + c
 
         assert self.agent.llm_config["tools"] == self.expected_tools
         assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "6"
+        assert self.agent.function_map["f"](1) == "9"
 
     @pytest.mark.skipif(
         skip_openai,
