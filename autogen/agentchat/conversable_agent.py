@@ -35,7 +35,12 @@ from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
-from ..messages import create_execute_code_block, create_received_message_model, create_termination_and_human_reply
+from ..messages import (
+    create_execute_code_block,
+    create_execute_function,
+    create_received_message_model,
+    create_termination_and_human_reply,
+)
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import Tool
@@ -2312,6 +2317,8 @@ class ConversableAgent(LLMAgent):
         func_name = func_call.get("name", "")
         func = self._function_map.get(func_name, None)
 
+        execute_function = create_execute_function(func_name, self)
+
         is_exec_success = False
         if func is not None:
             # Extract arguments from a json-like string and put it into a dict.
@@ -2324,10 +2331,7 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.print(
-                    colored(f"\n>>>>>>>> EXECUTING FUNCTION {func_name}...", "magenta"),
-                    flush=True,
-                )
+                execute_function.print_executing_func(iostream.print)
                 try:
                     content = func(**arguments)
                     is_exec_success = True
@@ -2336,11 +2340,7 @@ class ConversableAgent(LLMAgent):
         else:
             content = f"Error: Function {func_name} not found."
 
-        if verbose:
-            iostream.print(
-                colored(f"\nInput arguments: {arguments}\nOutput:\n{content}", "magenta"),
-                flush=True,
-            )
+        execute_function.print_arguments_and_content(arguments, content, iostream.print)
 
         return is_exec_success, {
             "name": func_name,
@@ -2369,6 +2369,8 @@ class ConversableAgent(LLMAgent):
         func_name = func_call.get("name", "")
         func = self._function_map.get(func_name, None)
 
+        execute_function = create_execute_function(func_name, self)
+
         is_exec_success = False
         if func is not None:
             # Extract arguments from a json-like string and put it into a dict.
@@ -2381,10 +2383,7 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.print(
-                    colored(f"\n>>>>>>>> EXECUTING ASYNC FUNCTION {func_name}...", "magenta"),
-                    flush=True,
-                )
+                execute_function.print_executing_func(iostream.print)
                 try:
                     if inspect.iscoroutinefunction(func):
                         content = await func(**arguments)
@@ -2396,6 +2395,8 @@ class ConversableAgent(LLMAgent):
                     content = f"Error: {e}"
         else:
             content = f"Error: Function {func_name} not found."
+
+        execute_function.print_arguments_and_content(arguments, content, iostream.print)
 
         return is_exec_success, {
             "name": func_name,

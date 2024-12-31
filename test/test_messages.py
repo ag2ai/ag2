@@ -13,6 +13,7 @@ from autogen.messages import (
     ClearAgentsHistory,
     ContentMessage,
     ExecuteCodeBlock,
+    ExecuteFunction,
     FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
@@ -29,6 +30,7 @@ from autogen.messages import (
     ToolResponseMessage,
     create_clear_agents_history,
     create_execute_code_block,
+    create_execute_function,
     create_group_chat_resume,
     create_group_chat_run_chat,
     create_post_carryover_processing,
@@ -567,6 +569,34 @@ def test_execute_code_block(sender: ConversableAgent, recipient: ConversableAgen
         call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...\x1b[0m", flush=True)
     ]
 
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_execute_function(recipient: ConversableAgent) -> None:
+    func_name = "add_num"
+    verbose = True
+
+    actual = create_execute_function(func_name, recipient=recipient, verbose=verbose)
+
+    assert isinstance(actual, ExecuteFunction)
+    assert actual.func_name == func_name
+    assert actual.recipient_name == "recipient"
+    assert actual.verbose == verbose
+
+    mock = MagicMock()
+    actual.print_executing_func(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [call("\x1b[35m\n>>>>>>>> EXECUTING FUNCTION add_num...\x1b[0m", flush=True)]
+    assert mock.call_args_list == expected_call_args_list
+
+    arguments = {"num_to_be_added": 5}
+    content = "15"
+    mock = MagicMock()
+    actual.print_arguments_and_content(arguments, content, f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [
+        call("\x1b[35m\nInput arguments: {'num_to_be_added': 5}\nOutput:\n15\x1b[0m", flush=True)
+    ]
     assert mock.call_args_list == expected_call_args_list
 
 

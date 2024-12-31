@@ -439,6 +439,35 @@ def create_execute_code_block(code: str, language: str, code_block_count: int, r
     )
 
 
+class ExecuteFunction(BaseModel):
+    func_name: str
+    recipient_name: str
+    verbose: Optional[bool] = False
+
+    def print_executing_func(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(
+            colored(f"\n>>>>>>>> EXECUTING FUNCTION {self.func_name}...", "magenta"),
+            flush=True,
+        )
+
+    def print_arguments_and_content(
+        self, arguments: dict[str, Any], content: str, f: Optional[Callable[..., Any]] = None
+    ) -> None:
+        f = f or print
+
+        if self.verbose:
+            f(
+                colored(f"\nInput arguments: {arguments}\nOutput:\n{content}", "magenta"),
+                flush=True,
+            )
+
+
+def create_execute_function(func_name: str, recipient: Agent, verbose: Optional[bool] = False) -> ExecuteFunction:
+    return ExecuteFunction(func_name=func_name, recipient_name=recipient.name, verbose=verbose)
+
+
 class SelectSpeaker(BaseModel):
     agent_names: Optional[list[str]] = None
 
