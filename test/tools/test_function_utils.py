@@ -4,16 +4,16 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import asyncio
+
 import inspect
 import unittest.mock
-from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Any, Literal, Optional
 
 import pytest
 from pydantic import BaseModel, Field
 
 from autogen._pydantic import PYDANTIC_V1, model_dump
-from autogen.function_utils import (
+from autogen.tools.function_utils import (
     get_default_values,
     get_function_schema,
     get_load_param_if_needed_function,
@@ -178,14 +178,14 @@ def test_get_function_schema_no_return_type() -> None:
         + "optional, the function should return either a string, a subclass of 'pydantic.BaseModel'."
     )
 
-    with unittest.mock.patch("autogen.function_utils.logger.warning") as mock_logger_warning:
+    with unittest.mock.patch("autogen.tools.function_utils.logger.warning") as mock_logger_warning:
         get_function_schema(f, description="function g")
 
         mock_logger_warning.assert_called_once_with(expected)
 
 
 def test_get_function_schema_unannotated_with_default() -> None:
-    with unittest.mock.patch("autogen.function_utils.logger.warning") as mock_logger_warning:
+    with unittest.mock.patch("autogen.tools.function_utils.logger.warning") as mock_logger_warning:
 
         def f(  # type: ignore[no-untyped-def]
             a: Annotated[str, "Parameter a"], b=2, c: Annotated[float, "Parameter c"] = 0.1, d="whatever", e=None

@@ -19,7 +19,7 @@ from asyncer import TaskGroup, asyncify, create_task_group, syncify
 from autogen import ON_CONDITION, AfterWorkOption, SwarmAgent, initiate_swarm_chat
 from autogen.agentchat.agent import Agent, LLMAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.function_utils import get_function_schema
+from autogen.tools import get_function_schema
 
 from .client import OpenAIRealtimeClient
 from .function_observer import FunctionObserver

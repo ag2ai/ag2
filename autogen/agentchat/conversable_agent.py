@@ -49,11 +49,10 @@ from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
 from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
-from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import BaseContext, Tool
+from ..tools import BaseContext, Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
