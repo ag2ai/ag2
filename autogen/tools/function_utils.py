@@ -11,10 +11,10 @@ from logging import getLogger
 from typing import Annotated, Any, Callable, Dict, ForwardRef, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 from pydantic import BaseModel, Field
-from pydantic.fields import FieldInfo
 from typing_extensions import Literal, get_args, get_origin
 
 from .._pydantic import JsonSchemaValue, evaluate_forwardref, model_dump, model_dump_json, type2schema
+from .dependency_injection import DescriptionField
 
 __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str"]
 
@@ -33,6 +33,8 @@ def get_typed_annotation(annotation: Any, globalns: dict[str, Any]) -> Any:
     Returns:
         The type annotation of the parameter
     """
+    if isinstance(annotation, DescriptionField):
+        annotation = annotation.description
     if isinstance(annotation, str):
         annotation = ForwardRef(annotation)
         annotation = evaluate_forwardref(annotation, globalns, globalns)
@@ -135,10 +137,12 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
         # handles Annotated
         if hasattr(v, "__metadata__"):
             retval = v.__metadata__[0]
-            if isinstance(retval, FieldInfo):
+            if isinstance(retval, DescriptionField):
                 return retval.description  # type: ignore[return-value]
             else:
-                raise ValueError(f"Invalid {retval} for parameter {k}, should be a FieldInfo, got {type(retval)}")
+                raise ValueError(
+                    f"Invalid {retval} for parameter {k}, should be a DescriptionField, got {type(retval)}"
+                )
         else:
             return k
 

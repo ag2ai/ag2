@@ -14,8 +14,9 @@ __all__ = [
     "BaseContext",
     "ChatContext",
     "Depends",
+    "DescriptionField",
     "remove_injected_params_from_signature",
-    "string_metadata_to_pydantic_field",
+    "string_metadata_to_description_field",
 ]
 
 
@@ -47,13 +48,18 @@ def remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[
     return func
 
 
-def string_metadata_to_pydantic_field(func: Callable[..., Any]) -> Callable[..., Any]:
+class DescriptionField:
+    def __init__(self, description: str) -> None:
+        self.description = description
+
+
+def string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[..., Any]:
     type_hints = get_type_hints(func, include_extras=True)
 
     for _, annotation in type_hints.items():
         if hasattr(annotation, "__metadata__"):
             metadata = annotation.__metadata__
             if metadata and isinstance(metadata[0], str):
-                # Replace string metadata with Pydantic's Field
-                annotation.__metadata__ = (Field(description=metadata[0]),)
+                # Replace string metadata with DescriptionField
+                annotation.__metadata__ = (DescriptionField(description=metadata[0]),)
     return func

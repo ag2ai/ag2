@@ -3,18 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from types import NoneType
 from typing import Annotated, Callable, get_type_hints
 
 import pytest
 from pydantic import BaseModel
-from pydantic.fields import FieldInfo
 
 from autogen.tools.dependency_injection import (
     BaseContext,
     Depends,
+    DescriptionField,
     remove_injected_params_from_signature,
-    string_metadata_to_pydantic_field,
+    string_metadata_to_description_field,
 )
 
 
@@ -66,7 +65,7 @@ class TestRemoveInjectedParamsFromSignature:
         assert str(inspect.signature(test_func)) == "(a: int) -> int"
 
 
-def test_string_metadata_to_pydantic_field() -> None:
+def test_string_metadata_to_description_field() -> None:
     def f(a: int, b: Annotated[int, "b description"]) -> int:
         return a + b
 
@@ -81,7 +80,7 @@ def test_string_metadata_to_pydantic_field() -> None:
 
     assert params_with_string_metadata == ["b"]
 
-    f = string_metadata_to_pydantic_field(f)
+    f = string_metadata_to_description_field(f)
     type_hints = get_type_hints(f, include_extras=True)
     for param, annotation in type_hints.items():
         if hasattr(annotation, "__metadata__"):
@@ -90,6 +89,5 @@ def test_string_metadata_to_pydantic_field() -> None:
                 raise AssertionError("The string metadata should have been replaced with Pydantic's Field")
 
     field_info = type_hints["b"].__metadata__[0]
-    assert isinstance(field_info, FieldInfo)
-    assert field_info.is_required() is True
+    assert isinstance(field_info, DescriptionField)
     assert field_info.description == "b description"
