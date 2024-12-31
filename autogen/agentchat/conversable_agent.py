@@ -2338,6 +2338,7 @@ class ConversableAgent(LLMAgent):
                 except Exception as e:
                     content = f"Error: {e}"
         else:
+            arguments = {}
             content = f"Error: Function {func_name} not found."
 
         execute_function.print_arguments_and_content(arguments, content, iostream.print)
@@ -2394,6 +2395,7 @@ class ConversableAgent(LLMAgent):
                 except Exception as e:
                     content = f"Error: {e}"
         else:
+            arguments = {}
             content = f"Error: Function {func_name} not found."
 
         execute_function.print_arguments_and_content(arguments, content, iostream.print)
