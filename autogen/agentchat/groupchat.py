@@ -22,6 +22,7 @@ from ..messages import (
     create_clear_agents_history,
     create_group_chat_resume,
     create_group_chat_run_chat,
+    create_select_speaker,
     create_speaker_attempt,
 )
 from ..oai.client import ModelClient
@@ -395,16 +396,15 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        iostream.print("Please select the next speaker from the following list:")
-        _n_agents = len(agents)
-        for i in range(_n_agents):
-            iostream.print(f"{i+1}: {agents[i].name}")
+        select_speaker = create_select_speaker(agents)
+        select_speaker.print_select_speaker(iostream.print)
+
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                iostream.print(f"You have tried {try_count} times. The next speaker will be selected automatically.")
+                select_speaker.print_try_count_exceeded(try_count, iostream.print)
                 break
             try:
                 i = iostream.input(
@@ -413,12 +413,12 @@ class GroupChat:
                 if i == "" or i == "q":
                     break
                 i = int(i)
-                if i > 0 and i <= _n_agents:
+                if i > 0 and i <= len(agents):
                     return agents[i - 1]
                 else:
                     raise ValueError
             except ValueError:
-                iostream.print(f"Invalid input. Please enter a number between 1 and {_n_agents}.")
+                select_speaker.print_invalid_input(iostream.print)
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:

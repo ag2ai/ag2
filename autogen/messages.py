@@ -437,3 +437,30 @@ def create_execute_code_block(code: str, language: str, code_block_count: int, r
     return ExecuteCodeBlock(
         code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
     )
+
+
+class SelectSpeaker(BaseModel):
+    agent_names: Optional[list[str]] = None
+
+    def print_select_speaker(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f("Please select the next speaker from the following list:")
+        agent_names = self.agent_names or []
+        for i, agent_name in enumerate(agent_names):
+            f(f"{i+1}: {agent_name}")
+
+    def print_try_count_exceeded(self, try_count: int = 3, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(f"You have tried {try_count} times. The next speaker will be selected automatically.")
+
+    def print_invalid_input(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
+
+
+def create_select_speaker(agents: Optional[list[Agent]] = None) -> SelectSpeaker:
+    agent_names = [agent.name for agent in agents] if agents else None
+    return SelectSpeaker(agent_names=agent_names)

@@ -20,6 +20,7 @@ from autogen.messages import (
     GroupChatRunChat,
     MessageRole,
     PostCarryoverProcessing,
+    SelectSpeaker,
     SpeakerAttempt,
     TerminationAndHumanReply,
     ToolCall,
@@ -32,6 +33,7 @@ from autogen.messages import (
     create_group_chat_run_chat,
     create_post_carryover_processing,
     create_received_message_model,
+    create_select_speaker,
     create_speaker_attempt,
     create_termination_and_human_reply,
 )
@@ -565,4 +567,38 @@ def test_execute_code_block(sender: ConversableAgent, recipient: ConversableAgen
         call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...\x1b[0m", flush=True)
     ]
 
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_select_speaker() -> None:
+    agents = [
+        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+    ]
+
+    actual = create_select_speaker(agents)  # type: ignore [arg-type]
+
+    assert isinstance(actual, SelectSpeaker)
+    assert actual.agent_names == ["bob", "charlie"]
+
+    mock = MagicMock()
+    actual.print_select_speaker(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [
+        call("Please select the next speaker from the following list:"),
+        call("1: bob"),
+        call("2: charlie"),
+    ]
+    assert mock.call_args_list == expected_call_args_list
+
+    mock = MagicMock()
+    actual.print_try_count_exceeded(try_count=3, f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [call("You have tried 3 times. The next speaker will be selected automatically.")]
+    assert mock.call_args_list == expected_call_args_list
+
+    mock = MagicMock()
+    actual.print_invalid_input(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [call("Invalid input. Please enter a number between 1 and 2.")]
     assert mock.call_args_list == expected_call_args_list
