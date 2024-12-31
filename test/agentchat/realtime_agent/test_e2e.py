@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from logging import getLogger
 from typing import Annotated, Any
 from unittest.mock import MagicMock
 
@@ -16,13 +17,16 @@ from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 import autogen
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
-from .realtime_test_utils import generate_voice_input, trace
+from .realtime_test_utils import text_to_speech, trace
+
+logger = getLogger(__name__)
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
 class TestE2E:
     @pytest.fixture
     def llm_config(self) -> dict[str, Any]:
+        """Fixture to load the LLM config."""
         config_list = autogen.config_list_from_json(
             OAI_CONFIG_LIST,
             filter_dict={
@@ -36,7 +40,17 @@ class TestE2E:
             "temperature": 0.0,
         }
 
-    async def _test_e2e(self, llm_config: dict[str, Any]) -> None:
+    @pytest.fixture
+    def openai_api_key(self, llm_config: dict[str, Any]) -> str:
+        """Fixture to get the OpenAI API key."""
+        return llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
+
+    async def _test_e2e(self, llm_config: dict[str, Any], openai_api_key: str) -> None:
+        """End-to-end test for the RealtimeAgent.
+
+        Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
+
+        """
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
         weather_func_mock = MagicMock()
@@ -60,7 +74,7 @@ class TestE2E:
             agent.register_observer(mock_observer)
 
             @agent.register_realtime_function(name="get_weather", description="Get the current weather")
-            @trace(weather_func_mock, weather_func_called_event)
+            @trace(weather_func_mock, postcall_event=weather_func_called_event)
             def get_weather(location: Annotated[str, "city"]) -> str:
                 return "The weather is cloudy." if location == "Seattle" else "The weather is sunny."
 
@@ -80,7 +94,7 @@ class TestE2E:
                     "event": "media",
                     "media": {
                         "timestamp": 0,
-                        "payload": generate_voice_input(text="How is the weather in Seattle?"),
+                        "payload": text_to_speech(text="How is the weather in Seattle?", openai_api_key=openai_api_key),
                     },
                 }
             )
@@ -102,14 +116,22 @@ class TestE2E:
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
     @pytest.mark.asyncio()
-    async def test_e2e(self, llm_config: dict[str, Any]) -> None:
+    async def test_e2e(self, llm_config: dict[str, Any], openai_api_key: str) -> None:
+        """End-to-end test for the RealtimeAgent.
+
+        Retry the test up to 3 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
+
+        """
         last_exception = None
 
-        for _ in range(3):
+        for i in range(3):
             try:
-                await self._test_e2e(llm_config)
+                await self._test_e2e(llm_config, openai_api_key=openai_api_key)
                 return  # Exit the function if the test passes
             except Exception as e:
+                logger.warning(
+                    f"Test 'TestE2E.test_e2e' failed on attempt {i + 1} with exception: {e}", stack_info=True
+                )
                 last_exception = e  # Keep track of the last exception
 
         # If the loop finishes without success, raise the last exception
