@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
+import autogen
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
