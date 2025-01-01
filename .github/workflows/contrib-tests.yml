@@ -795,6 +795,17 @@ ReasoningTest:
         run: |
           python -m pip install --upgrade pip wheel
           pip install pytest-cov>=5
+      - name: Install Graphviz based on OS
+        run: |
+          if [[ ${{ matrix.os }} == 'ubuntu-latest' ]]; then
+            sudo apt-get update
+            sudo apt-get install -y graphviz
+          elif [[ ${{ matrix.os }} == 'macos-latest' ]]; then
+            brew install graphviz
+          elif [[ ${{ matrix.os }} == 'windows-latest' ]]; then
+            choco install graphviz
+          fi
+        shell: bash
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
