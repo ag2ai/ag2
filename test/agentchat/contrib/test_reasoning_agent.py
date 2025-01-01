@@ -22,6 +22,17 @@ from autogen.agentchat.user_proxy_agent import UserProxyAgent
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from conftest import reason, skip_openai  # noqa: E402
 
+skip_reasons = [reason]
+try:
+    from graphviz import Digraph
+
+    skip_for_dependencies = False
+    skip_reason = ""
+except ImportError as e:
+    skip_for_dependencies = True
+    skip_reason = f"dependency not installed: {e.msg}"
+    pass
+
 here = os.path.abspath(os.path.dirname(__file__))
 
 # Test data
@@ -212,6 +223,7 @@ Option 3: Another option"""
     assert max_depth_found <= agent._max_depth
 
 
+@pytest.mark.skipif(skip_for_dependencies, reason=skip_reason)
 @patch("graphviz.Digraph")
 def test_visualize_tree_successful_case(mock_digraph):
     """Test successful tree visualization"""
@@ -260,6 +272,7 @@ def test_visualize_tree_successful_case(mock_digraph):
     mock_graph.render.assert_called_once_with("tree_of_thoughts", view=False, format="png", cleanup=True)
 
 
+@pytest.mark.skipif(skip_for_dependencies, reason=skip_reason)
 @patch("graphviz.Digraph")
 def test_visualize_tree_render_failure(mock_digraph):
     """Test visualization when rendering fails"""
