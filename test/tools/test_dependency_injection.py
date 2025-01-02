@@ -29,6 +29,13 @@ class TestRemoveInjectedParamsFromSignature:
         return a + ctx.b
 
     @staticmethod
+    async def f_with_annotated_async(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    ) -> int:
+        return a + ctx.b
+
+    @staticmethod
     def f_without_annotated(
         a: int,
         ctx: MyContext = Depends(MyContext(b=3)),
@@ -36,7 +43,21 @@ class TestRemoveInjectedParamsFromSignature:
         return a + ctx.b
 
     @staticmethod
+    async def f_without_annotated_async(
+        a: int,
+        ctx: MyContext = Depends(MyContext(b=3)),
+    ) -> int:
+        return a + ctx.b
+
+    @staticmethod
     def f_without_annotated_and_depends(
+        a: int,
+        ctx: MyContext = MyContext(b=4),
+    ) -> int:
+        return a + ctx.b
+
+    @staticmethod
+    async def f_without_annotated_and_depends_async(
         a: int,
         ctx: MyContext = MyContext(b=4),
     ) -> int:
@@ -59,7 +80,17 @@ class TestRemoveInjectedParamsFromSignature:
             }
         ]
 
-    @pytest.mark.parametrize("test_func", [f_with_annotated, f_without_annotated, f_without_annotated_and_depends])
+    @pytest.mark.parametrize(
+        "test_func",
+        [
+            f_with_annotated,
+            f_without_annotated,
+            f_without_annotated_and_depends,
+            f_with_annotated_async,
+            f_without_annotated_async,
+            f_without_annotated_and_depends_async,
+        ],
+    )
     def test_remove_injected_params_from_signature(self, test_func: Callable[..., int]) -> None:
         _remove_injected_params_from_signature(test_func)
         assert str(inspect.signature(test_func)) == "(a: int) -> int"

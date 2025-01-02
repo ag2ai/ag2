@@ -690,68 +690,138 @@ class TestDependencyInjection:
             }
         ]
 
-    def test_register_tool(self):
-        @self.agent.register_for_llm(description="Example function")
-        @self.agent.register_for_execution()
-        def f(
-            a: int,
-            ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
-            c: Annotated[int, "c description"] = 3,
-        ) -> int:
-            return a + ctx.b + c
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_register_tool(self, is_async):
+        if is_async:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            async def f(
+                a: int,
+                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + c
+
+        else:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            def f(
+                a: int,
+                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + c
 
         assert self.agent.llm_config["tools"] == self.expected_tools
         assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "6"
+        if is_async:
+            assert asyncio.run(self.agent.function_map["f"](1)) == "6"
+        else:
+            assert self.agent.function_map["f"](1) == "6"
 
-    def test_register_tool_without_annotated(self):
-        @self.agent.register_for_llm(description="Example function")
-        @self.agent.register_for_execution()
-        def f(
-            a: int,
-            ctx: self.MyContext = Depends(self.MyContext(b=3)),
-            c: Annotated[int, "c description"] = 3,
-        ) -> int:
-            return a + ctx.b + c
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_register_tool_without_annotated(self, is_async):
+        if is_async:
 
-        assert self.agent.llm_config["tools"] == self.expected_tools
-        assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "7"
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            async def f(
+                a: int,
+                ctx: self.MyContext = Depends(self.MyContext(b=3)),
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + c
 
-    def test_register_tool_without_annotated_and_depends(self):
-        @self.agent.register_for_llm(description="Example function")
-        @self.agent.register_for_execution()
-        def f(
-            a: int,
-            ctx: self.MyContext = self.MyContext(b=4),
-            c: Annotated[int, "c description"] = 3,
-        ) -> int:
-            return a + ctx.b + c
+        else:
 
-        assert self.agent.llm_config["tools"] == self.expected_tools
-        assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "8"
-
-    def test_register_tool_with_multiple_depends_params(self):
-        @self.agent.register_for_llm(description="Example function")
-        @self.agent.register_for_execution()
-        def f(
-            a: int,
-            ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
-            ctx2: Annotated[self.MyContext, Depends(self.MyContext(b=3))],
-            c: Annotated[int, "c description"] = 3,
-        ) -> int:
-            return a + ctx.b + ctx2.b + c
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            def f(
+                a: int,
+                ctx: self.MyContext = Depends(self.MyContext(b=3)),
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + c
 
         assert self.agent.llm_config["tools"] == self.expected_tools
         assert "f" in self.agent.function_map.keys()
-        assert self.agent.function_map["f"](1) == "9"
+        if is_async:
+            assert asyncio.run(self.agent.function_map["f"](1)) == "7"
+        else:
+            assert self.agent.function_map["f"](1) == "7"
+
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_register_tool_without_annotated_and_depends(self, is_async):
+        if is_async:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            async def f(
+                a: int,
+                ctx: self.MyContext = self.MyContext(b=4),
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + c
+
+        else:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            def f(
+                a: int,
+                ctx: self.MyContext = self.MyContext(b=4),
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + c
+
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert "f" in self.agent.function_map.keys()
+        if is_async:
+            assert asyncio.run(self.agent.function_map["f"](1)) == "8"
+        else:
+            assert self.agent.function_map["f"](1) == "8"
+
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_register_tool_with_multiple_depends_params(self, is_async):
+        if is_async:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            async def f(
+                a: int,
+                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
+                ctx2: Annotated[self.MyContext, Depends(self.MyContext(b=3))],
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + ctx2.b + c
+
+        else:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            def f(
+                a: int,
+                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
+                ctx2: Annotated[self.MyContext, Depends(self.MyContext(b=3))],
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx.b + ctx2.b + c
+
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert "f" in self.agent.function_map.keys()
+        if is_async:
+            assert asyncio.run(self.agent.function_map["f"](1)) == "9"
+        else:
+            assert self.agent.function_map["f"](1) == "9"
 
     @pytest.mark.skipif(
         skip_openai,
         reason=reason,
     )
-    def test_end_to_end(self):
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_end_to_end(self, is_async):
         class UserContext(BaseContext, BaseModel):
             username: str
             password: str
@@ -774,14 +844,27 @@ class TestDependencyInjection:
             llm_config=False,
         )
 
-        @user_proxy.register_for_execution()
-        @agent.register_for_llm(description="Login function")
-        def login(user: Annotated[UserContext, Depends(user)]) -> str:
-            if user in users:
-                return "Login successful."
-            return "Login failed"
+        if is_async:
 
-        user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
+            @user_proxy.register_for_execution()
+            @agent.register_for_llm(description="Login function")
+            async def login(user: Annotated[UserContext, Depends(user)]) -> str:
+                if user in users:
+                    return "Login successful."
+                return "Login failed"
+
+            asyncio.run(user_proxy.a_initiate_chat(agent, message="Please login", max_turns=2))
+        else:
+
+            @user_proxy.register_for_execution()
+            @agent.register_for_llm(description="Login function")
+            def login(user: Annotated[UserContext, Depends(user)]) -> str:
+                if user in users:
+                    return "Login successful."
+                return "Login failed"
+
+            user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
+
         for message in user_proxy.chat_messages[agent]:
             if "tool_responses" in message:
                 assert message["tool_responses"][0]["content"] == "Login successful."

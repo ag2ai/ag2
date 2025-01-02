@@ -4,12 +4,10 @@
 
 import inspect
 from abc import ABC
-from contextlib import contextmanager
-from typing import Any, Callable, Generator, get_type_hints
+from typing import Any, Callable, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
-from pydantic import Field
 
 __all__ = [
     "BaseContext",
