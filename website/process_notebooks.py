@@ -337,6 +337,11 @@ def add_front_matter_to_metadata_mdx(
         "tags": front_matter.get("tags", []),
         "source": front_matter.get("source_notebook"),
     }
+
+    print(f"=============== Processing {rendered_mdx.stem} ===============", flush=True)
+    print(f"{front_matter=}", flush=True)
+    print(f"{entry=}", flush=True)
+
     # Update metadata list
     existing_entry = next((item for item in metadata if item["title"] == entry["title"]), None)
     if existing_entry:
