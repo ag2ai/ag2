@@ -31,8 +31,7 @@ class BaseMessage(BaseModel):
         super().__init__(uuid=uuid, **kwargs)
 
 
-# fix the name once we figure out what it is
-class BaseMessageSomething(BaseMessage):
+class BasePrintReceivedMessage(BaseMessage):
     content: Union[str, int, float, bool]
     sender_name: str
     recipient_name: str
@@ -42,7 +41,7 @@ class BaseMessageSomething(BaseMessage):
         f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
 
-class FunctionResponseMessage(BaseMessageSomething):
+class FunctionResponseMessage(BasePrintReceivedMessage):
     name: Optional[str] = None
     role: MessageRole = "function"
     content: Union[str, int, float, bool]
@@ -74,7 +73,7 @@ class ToolResponse(BaseMessage):
         f(colored("*" * len(tool_print), "green"), flush=True)
 
 
-class ToolResponseMessage(BaseMessageSomething):
+class ToolResponseMessage(BasePrintReceivedMessage):
     role: MessageRole = "tool"
     tool_responses: list[ToolResponse]
     content: Union[str, int, float, bool]
@@ -109,7 +108,7 @@ class FunctionCall(BaseMessage):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-class FunctionCallMessage(BaseMessageSomething):
+class FunctionCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     function_call: FunctionCall
 
@@ -149,7 +148,7 @@ class ToolCall(BaseMessage):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-class ToolCallMessage(BaseMessageSomething):
+class ToolCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     refusal: Optional[str] = None
     role: Optional[MessageRole] = None
@@ -170,7 +169,7 @@ class ToolCallMessage(BaseMessageSomething):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ContentMessage(BaseMessageSomething):
+class ContentMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, Callable[..., Any]]] = None  # type: ignore [assignment]
     # todo: remove the context from the message
     context: Optional[dict[str, Any]] = None
@@ -195,7 +194,7 @@ class ContentMessage(BaseMessageSomething):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-def create_received_message_model(message: dict[str, Any], sender: "Agent", recipient: "Agent") -> BaseMessageSomething:
+def create_received_message_model(message: dict[str, Any], sender: "Agent", recipient: "Agent") -> BasePrintReceivedMessage:
     # print(f"{message=}")
     # print(f"{sender=}")
 
