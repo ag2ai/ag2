@@ -630,6 +630,9 @@ class ConversableAgentUsageSummary(BaseMessage):
     recipient_name: str
     is_client_empty: bool
 
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent", client: Optional[Any] = None):
+        super().__init__(uuid=uuid, recipient_name=recipient.name, is_client_empty=True if client is None else False)
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -637,14 +640,6 @@ class ConversableAgentUsageSummary(BaseMessage):
             f(f"No cost incurred from agent '{self.recipient_name}'.")
         else:
             f(f"Agent '{self.recipient_name}':")
-
-
-def create_conversable_agent_usage_summary(
-    recipient: "Agent", client: Optional[Any] = None
-) -> ConversableAgentUsageSummary:
-    return ConversableAgentUsageSummary(
-        recipient_name=recipient.name, is_client_empty=True if client is None else False
-    )
 
 
 class TextMessage(BaseMessage):

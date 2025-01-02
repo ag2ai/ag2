@@ -34,7 +34,6 @@ from autogen.messages import (
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
-    create_conversable_agent_usage_summary,
     create_received_message_model,
 )
 from autogen.oai.client import OpenAIWrapper
@@ -771,9 +770,6 @@ def test_generate_code_execution_reply(
     }
     assert actual.model_dump() == expected_model_dump
 
-    assert actual.sender_name == "sender"
-    assert actual.recipient_name == "recipient"
-
     mock = MagicMock()
     actual.print_executing_code_block(code_blocks=code_blocks, f=mock)
 
@@ -790,13 +786,21 @@ def test_generate_code_execution_reply(
     ],
 )
 def test_conversable_agent_usage_summary(
-    client: Optional[OpenAIWrapper], is_client_empty: bool, expected: list[_Call], recipient: ConversableAgent
+    client: Optional[OpenAIWrapper],
+    is_client_empty: bool,
+    expected: list[_Call],
+    uuid: UUID,
+    recipient: ConversableAgent,
 ) -> None:
-    actual = create_conversable_agent_usage_summary(recipient, client)
-
+    actual = ConversableAgentUsageSummary(uuid=uuid, recipient=recipient, client=client)
     assert isinstance(actual, ConversableAgentUsageSummary)
-    assert actual.recipient_name == "recipient"
-    assert actual.is_client_empty == is_client_empty
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "recipient_name": "recipient",
+        "is_client_empty": is_client_empty,
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)

@@ -37,11 +37,11 @@ from ..function_utils import get_function_schema, load_basemodels_if_needed, ser
 from ..io.base import IOStream
 from ..messages import (
     ClearConversableAgentHistory,
+    ConversableAgentUsageSummary,
     ExecuteCodeBlock,
     ExecuteFunction,
     GenerateCodeExecutionReply,
     TerminationAndHumanReply,
-    create_conversable_agent_usage_summary,
     create_received_message_model,
 )
 from ..oai.client import ModelClient, OpenAIWrapper
@@ -2872,7 +2872,7 @@ class ConversableAgent(LLMAgent):
     def print_usage_summary(self, mode: Union[str, list[str]] = ["actual", "total"]) -> None:
         """Print the usage summary."""
         iostream = IOStream.get_default()
-        conversable_agent_usage_summary = create_conversable_agent_usage_summary(recipient=self, client=self.client)
+        conversable_agent_usage_summary = ConversableAgentUsageSummary(recipient=self, client=self.client)
 
         conversable_agent_usage_summary.print(iostream.print)
 
