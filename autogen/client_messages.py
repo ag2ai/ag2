@@ -5,10 +5,14 @@
 from typing import Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
+from pydantic import BaseModel
+
 from .base_message import BaseMessage
 
+__all__ = ["UsageSummary"]
 
-class ModelUsageSummary(BaseMessage):
+
+class ModelUsageSummary(BaseModel):
     model: str
     completion_tokens: int
     cost: float
@@ -16,12 +20,12 @@ class ModelUsageSummary(BaseMessage):
     total_tokens: int
 
 
-class ActualUsageSummary(BaseMessage):
+class ActualUsageSummary(BaseModel):
     usages: Optional[list[ModelUsageSummary]] = None
     total_cost: Optional[float] = None
 
 
-class TotalUsageSummary(BaseMessage):
+class TotalUsageSummary(BaseModel):
     usages: Optional[list[ModelUsageSummary]] = None
     total_cost: Optional[float] = None
 

@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.base_message import BaseMessage
 from uuid import uuid4
+
+from autogen.base_message import BaseMessage
+
 
 def test_BaseMessage():
     uuid = uuid4()
@@ -12,4 +14,3 @@ def test_BaseMessage():
     expected_model_dump = {"uuid": uuid}
 
     assert actual.model_dump() == expected_model_dump
-    
