@@ -9,6 +9,7 @@ from typing import Dict
 
 import pytest
 from conftest import skip_openai
+from websockets.exceptions import ConnectionClosed
 
 import autogen
 from autogen.cache.cache import Cache
@@ -159,17 +160,20 @@ class TestConsoleIOWithWebsockets:
                 websocket.send("Please write a poem about spring in a city of your choice.")
 
                 while True:
-                    message = websocket.recv()
-                    message = message.decode("utf-8") if isinstance(message, bytes) else message
-                    # drop the newline character
-                    if message.endswith("\n"):
-                        message = message[:-1]
+                    try:
+                        message = websocket.recv()
+                        message = message.decode("utf-8") if isinstance(message, bytes) else message
+                        # drop the newline character
+                        if message.endswith("\n"):
+                            message = message[:-1]
 
-                    print(message, end="", flush=True)
+                        print(message, end="", flush=True)
 
-                    if "TERMINATE" in message:
-                        print()
-                        print(" - Received TERMINATE message. Exiting.", flush=True)
+                        if "TERMINATE" in message:
+                            print()
+                            print(" - Received TERMINATE message.", flush=True)
+                    except ConnectionClosed as e:
+                        print("Connection closed:", e, flush=True)
                         break
 
         assert success_dict["success"]
