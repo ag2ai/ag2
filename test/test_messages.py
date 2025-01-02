@@ -41,7 +41,6 @@ from autogen.messages import (
     create_generate_code_execution_reply,
     create_received_message_model,
     create_select_speaker,
-    create_termination_and_human_reply,
 )
 from autogen.oai.client import OpenAIWrapper
 
@@ -568,19 +567,27 @@ def test_group_chat_run_chat(uuid: UUID) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_termination_and_human_reply(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_termination_and_human_reply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     no_human_input_msg = "NO HUMAN INPUT RECEIVED."
     human_input_mode = "ALWAYS"
 
-    actual = create_termination_and_human_reply(
-        no_human_input_msg, human_input_mode, sender=sender, recipient=recipient
+    actual = TerminationAndHumanReply(
+        uuid=uuid,
+        no_human_input_msg=no_human_input_msg,
+        human_input_mode=human_input_mode,
+        sender=sender,
+        recipient=recipient,
     )
-
     assert isinstance(actual, TerminationAndHumanReply)
-    assert actual.no_human_input_msg == no_human_input_msg
-    assert actual.human_input_mode == human_input_mode
-    assert actual.sender_name == "sender"
-    assert actual.recipient_name == "recipient"
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "no_human_input_msg": no_human_input_msg,
+        "human_input_mode": human_input_mode,
+        "sender_name": "sender",
+        "recipient_name": "recipient",
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print_no_human_input_msg(f=mock)

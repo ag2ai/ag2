@@ -36,13 +36,13 @@ from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
 from ..messages import (
+    TerminationAndHumanReply,
     create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
     create_execute_code_block,
     create_execute_function,
     create_generate_code_execution_reply,
     create_received_message_model,
-    create_termination_and_human_reply,
 )
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
@@ -1823,8 +1823,8 @@ class ConversableAgent(LLMAgent):
                     reply = reply or "exit"
 
         # print the no_human_input_msg
-        termination_and_human_reply = create_termination_and_human_reply(
-            no_human_input_msg, self.human_input_mode, sender=sender, recipient=self
+        termination_and_human_reply = TerminationAndHumanReply(
+            no_human_input_msg=no_human_input_msg, human_input_mode=self.human_input_mode, sender=sender, recipient=self
         )
         termination_and_human_reply.print_no_human_input_msg(iostream.print)
 
@@ -1937,8 +1937,8 @@ class ConversableAgent(LLMAgent):
                     reply = reply or "exit"
 
         # print the no_human_input_msg
-        termination_and_human_reply = create_termination_and_human_reply(
-            no_human_input_msg, self.human_input_mode, sender=sender, recipient=self
+        termination_and_human_reply = TerminationAndHumanReply(
+            no_human_input_msg=no_human_input_msg, human_input_mode=self.human_input_mode, sender=sender, recipient=self
         )
         termination_and_human_reply.print_no_human_input_msg(iostream.print)
 

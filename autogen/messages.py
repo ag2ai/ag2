@@ -447,6 +447,23 @@ class TerminationAndHumanReply(BaseMessage):
     sender_name: str
     recipient_name: str
 
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        no_human_input_msg: str,
+        human_input_mode: str,
+        sender: Optional["Agent"] = None,
+        recipient: "Agent",
+    ):
+        super().__init__(
+            uuid=uuid,
+            no_human_input_msg=no_human_input_msg,
+            human_input_mode=human_input_mode,
+            sender_name=sender.name if sender else "No sender",
+            recipient_name=recipient.name,
+        )
+
     def print_no_human_input_msg(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -458,17 +475,6 @@ class TerminationAndHumanReply(BaseMessage):
 
         if self.human_input_mode != "NEVER":
             f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
-
-
-def create_termination_and_human_reply(
-    no_human_input_msg: str, human_input_mode: str, *, sender: Optional["Agent"] = None, recipient: "Agent"
-) -> TerminationAndHumanReply:
-    return TerminationAndHumanReply(
-        no_human_input_msg=no_human_input_msg,
-        human_input_mode=human_input_mode,
-        sender_name=sender.name if sender else "No sender",
-        recipient_name=recipient.name,
-    )
 
 
 class ExecuteCodeBlock(BaseMessage):
