@@ -585,3 +585,15 @@ def create_conversable_agent_usage_summary(
     return ConversableAgentUsageSummary(
         recipient_name=recipient.name, is_client_empty=True if client is None else False
     )
+
+
+class TextMessage(BaseModel):
+
+    def print(self, text: str, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(text)
+
+
+def create_text_message() -> TextMessage:
+    return TextMessage()

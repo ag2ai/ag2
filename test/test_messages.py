@@ -28,6 +28,7 @@ from autogen.messages import (
     SelectSpeaker,
     SpeakerAttempt,
     TerminationAndHumanReply,
+    TextMessage,
     ToolCall,
     ToolCallMessage,
     ToolResponse,
@@ -45,6 +46,7 @@ from autogen.messages import (
     create_select_speaker,
     create_speaker_attempt,
     create_termination_and_human_reply,
+    create_text_message,
 )
 from autogen.oai.client import OpenAIWrapper
 
@@ -729,6 +731,26 @@ def test_conversable_agent_usage_summary(
 
     mock = MagicMock()
     actual.print(f=mock)
+
+    # print(mock.call_args_list)
+
+    assert mock.call_args_list == expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("Hello, World!", [call("Hello, World!")]),
+        ("Over and out!", [call("Over and out!")]),
+    ],
+)
+def test_create_text_message(text: str, expected: list[_Call]) -> None:
+    actual = create_text_message()
+
+    assert isinstance(actual, TextMessage)
+
+    mock = MagicMock()
+    actual.print(text, f=mock)
 
     # print(mock.call_args_list)
 
