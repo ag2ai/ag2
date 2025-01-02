@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
-from autogen.agentchat import ConversableAgent, UserProxyAgent
+from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 from autogen.tools.tool import Tool
@@ -590,7 +590,7 @@ def test__wrap_function_sync():
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
-        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
+        amount: float = Field(default=100.0, description="Amount of money in the currency")
 
     Currency(currency="USD", amount=100.0)
 
@@ -628,7 +628,7 @@ async def test__wrap_function_async():
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
-        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
+        amount: float = Field(default=100.0, description="Amount of money in the currency")
 
     Currency(currency="USD", amount=100.0)
 
@@ -1583,6 +1583,37 @@ def test_context_variables():
     assert agent._context_variables == expected_final_context
 
 
+@pytest.mark.skipif(skip_openai, reason=reason)
+def test_invalid_functions_parameter():
+    """Test initialization with valid and invalid parameters"""
+
+    # Invalid functions parameter
+    with pytest.raises(TypeError):
+        ConversableAgent("test_agent", functions="invalid")
+
+
+def test_update_system_message():
+    """Tests the update_agent_state_before_reply functionality with multiple scenarios"""
+
+    # Test invalid update function
+    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
+        ConversableAgent("agent3", update_agent_state_before_reply=UpdateSystemMessage(123))
+
+    # Test invalid callable (wrong number of parameters)
+    def invalid_update_function(context_variables):
+        return "Invalid function"
+
+    with pytest.raises(ValueError, match="Update function must accept two parameters"):
+        ConversableAgent("agent4", update_agent_state_before_reply=UpdateSystemMessage(invalid_update_function))
+
+    # Test invalid callable (wrong return type)
+    def invalid_return_function(context_variables, messages) -> dict:
+        return {}
+
+    with pytest.raises(ValueError, match="Update function must return a string"):
+        ConversableAgent("agent5", update_agent_state_before_reply=UpdateSystemMessage(invalid_return_function))
+
+
 if __name__ == "__main__":
     # test_trigger()
     # test_context()
@@ -1595,4 +1626,5 @@ if __name__ == "__main__":
     # test_function_registration_e2e_sync()
     # test_process_gemini_carryover()
     # test_process_carryover()
-    test_context_variables()
+    # test_context_variables()
+    test_invalid_functions_parameter()

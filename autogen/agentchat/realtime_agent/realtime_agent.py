@@ -8,7 +8,6 @@ from typing import Any, Callable, Literal, Optional, TypeVar, Union
 import anyio
 from asyncer import create_task_group, syncify
 
-from autogen import SwarmAgent
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.function_utils import get_function_schema
@@ -94,8 +93,8 @@ class RealtimeAgent(ConversableAgent):
         self._answer_event: anyio.Event = anyio.Event()
         self._answer: str = ""
         self._start_swarm_chat = False
-        self._initial_agent: Optional[SwarmAgent] = None
-        self._agents: Optional[list[SwarmAgent]] = None
+        self._initial_agent: Optional[ConversableAgent] = None
+        self._agents: Optional[list[ConversableAgent]] = None
 
     @property
     def logger(self) -> Logger:
@@ -118,15 +117,15 @@ class RealtimeAgent(ConversableAgent):
     def register_swarm(
         self,
         *,
-        initial_agent: SwarmAgent,
-        agents: list[SwarmAgent],
+        initial_agent: ConversableAgent,
+        agents: list[ConversableAgent],
         system_message: Optional[str] = None,
     ) -> None:
         """Register a swarm of agents with the Realtime Agent.
 
         Args:
-            initial_agent (SwarmAgent): The initial agent.
-            agents (list[SwarmAgent]): The agents in the swarm.
+            initial_agent (ConversableAgent): The initial agent.
+            agents (list[ConversableAgent]): The agents in the swarm.
             system_message (str): The system message for the agent.
         """
         logger = self.logger

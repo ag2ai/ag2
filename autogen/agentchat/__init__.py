@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,14 +17,15 @@ from .contrib.reasoning_agent import (
 from .contrib.swarm_agent import (
     AFTER_WORK,
     ON_CONDITION,
-    UPDATE_SYSTEM_MESSAGE,
+    AfterWork,
     AfterWorkOption,
-    SwarmAgent,
+    OnCondition,
     SwarmResult,
     a_initiate_swarm_chat,
     initiate_swarm_chat,
+    register_hand_off,
 )
-from .conversable_agent import ConversableAgent, register_function
+from .conversable_agent import UPDATE_SYSTEM_MESSAGE, ConversableAgent, UpdateSystemMessage, register_function
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
 from .utils import gather_usage_summary
@@ -42,11 +43,14 @@ __all__ = [
     "ChatResult",
     "initiate_swarm_chat",
     "a_initiate_swarm_chat",
-    "SwarmAgent",
     "SwarmResult",
     "ON_CONDITION",
+    "OnCondition",
     "AFTER_WORK",
+    "AfterWork",
     "AfterWorkOption",
+    "register_hand_off",
+    "UpdateSystemMessage",
     "UPDATE_SYSTEM_MESSAGE",
     "ReasoningAgent",
     "visualize_tree",
