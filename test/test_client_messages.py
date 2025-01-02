@@ -4,6 +4,7 @@
 
 from typing import Any, Optional
 from unittest.mock import MagicMock, call
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -14,9 +15,13 @@ from autogen.client_messages import (
     TotalUsageSummary,
     UsageSummary,
     _change_usage_summary_format,
-    create_stream_message,
     create_usage_summary_model,
 )
+
+
+@pytest.fixture
+def uuid() -> UUID:
+    return uuid4()
 
 
 @pytest.mark.parametrize(
@@ -290,10 +295,14 @@ def test_usage_summary_print_none_actual_and_total(
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_create_stream_message() -> None:
-    stream_message = create_stream_message()
-
+def test_StreamMessage(uuid: UUID) -> None:
+    stream_message = StreamMessage(uuid=uuid)
     assert isinstance(stream_message, StreamMessage)
+
+    expected_model_dump = {
+        "uuid": uuid,
+    }
+    assert stream_message.model_dump() == expected_model_dump
 
     content = "random stream chunk content"
     mock = MagicMock()

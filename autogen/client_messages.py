@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any, Callable, Literal, Optional, Union
+from uuid import UUID
 
-from pydantic import BaseModel
+from .base_message import BaseMessage
 
 
-class ModelUsageSummary(BaseModel):
+class ModelUsageSummary(BaseMessage):
     model: str
     completion_tokens: int
     cost: float
@@ -15,12 +16,12 @@ class ModelUsageSummary(BaseModel):
     total_tokens: int
 
 
-class ActualUsageSummary(BaseModel):
+class ActualUsageSummary(BaseMessage):
     usages: Optional[list[ModelUsageSummary]] = None
     total_cost: Optional[float] = None
 
 
-class TotalUsageSummary(BaseModel):
+class TotalUsageSummary(BaseMessage):
     usages: Optional[list[ModelUsageSummary]] = None
     total_cost: Optional[float] = None
 
@@ -28,7 +29,7 @@ class TotalUsageSummary(BaseModel):
 Mode = Literal["both", "total", "actual"]
 
 
-class UsageSummary(BaseModel):
+class UsageSummary(BaseMessage):
     actual: ActualUsageSummary
     total: TotalUsageSummary
     mode: Mode
@@ -119,7 +120,9 @@ def create_usage_summary_model(
     return usage_summary
 
 
-class StreamMessage:
+class StreamMessage(BaseMessage):
+    def __init__(self, *, uuid: Optional[UUID] = None) -> None:
+        super().__init__(uuid=uuid)
 
     def print_chunk_content(self, content: str, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -131,7 +134,3 @@ class StreamMessage:
 
         # Reset the terminal text color
         f("\033[0m\n")
-
-
-def create_stream_message() -> StreamMessage:
-    return StreamMessage()

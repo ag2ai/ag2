@@ -9,9 +9,10 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 from termcolor import colored
 
+from .base_message import BaseMessage
 from .code_utils import content_str
 
-# once you move the code below, we can just delete this import
+# ToDo: once you move the code below, we can just delete this import
 from .oai.client import OpenAIWrapper
 
 MessageRole = Literal["assistant", "function", "tool"]
@@ -20,15 +21,8 @@ if TYPE_CHECKING:
     from .agentchat.agent import Agent
     from .coding.base import CodeBlock
 
+# ToDo: Fix the __all__ variable
 __all__ = ["BaseMessage", ...]
-
-
-class BaseMessage(BaseModel):
-    uuid: UUID
-
-    def __init__(self, uuid: Optional[UUID] = None, **kwargs: Any) -> None:
-        uuid = uuid or uuid4()
-        super().__init__(uuid=uuid, **kwargs)
 
 
 class BasePrintReceivedMessage(BaseMessage):
@@ -183,7 +177,7 @@ class ContentMessage(BasePrintReceivedMessage):
             allow_format_str_template = (
                 self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
             )
-            # move this into the function creating a message
+            # ToDo: move this into the function creating a message
             content = OpenAIWrapper.instantiate(
                 self.content,  # type: ignore [arg-type]
                 self.context,
@@ -246,6 +240,20 @@ class PostCarryoverProcessing(BaseMessage):
     summary_args: Optional[dict[str, Any]] = None
     max_turns: Optional[int] = None
 
+    def __init__(self, *, uuid: Optional[UUID] = None, chat_info: dict[str, Any]):
+        # if "message" not in chat_info:
+        #     chat_info["message"] = None
+
+        sender_name = chat_info.pop("sender").name
+        recipient_name = chat_info.pop("recipient").name
+
+        super().__init__(
+            uuid=uuid,
+            **chat_info,
+            sender_name=sender_name,
+            recipient_name=recipient_name,
+        )
+
     def _process_carryover(self) -> str:
         if not isinstance(self.carryover, list):
             return self.carryover
@@ -286,20 +294,6 @@ class PostCarryoverProcessing(BaseMessage):
             f(colored("Message:\n" + print_message, "blue"), flush=True)
             f(colored("Carryover:\n" + print_carryover, "blue"), flush=True)
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
-
-    def __init__(self, *, uuid: Optional[UUID] = None, chat_info: dict[str, Any]):
-        # if "message" not in chat_info:
-        #     chat_info["message"] = None
-
-        sender_name = chat_info.pop("sender").name
-        recipient_name = chat_info.pop("recipient").name
-
-        super().__init__(
-            uuid=uuid,
-            **chat_info,
-            sender_name=sender_name,
-            recipient_name=recipient_name,
-        )
 
 
 class ClearAgentsHistory(BaseMessage):
@@ -623,4 +617,3 @@ class TextMessage(BaseMessage):
         f = f or print
 
         f(text)
-

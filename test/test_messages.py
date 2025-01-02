@@ -4,7 +4,7 @@
 
 from typing import Any, Optional, Union
 from unittest.mock import MagicMock, _Call, call
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import termcolor.termcolor
@@ -46,7 +46,6 @@ from autogen.messages import (
     create_select_speaker,
     create_speaker_attempt,
     create_termination_and_human_reply,
-
 )
 from autogen.oai.client import OpenAIWrapper
 
@@ -57,6 +56,11 @@ def enable_color_in_tests(monkeypatch: pytest.MonkeyPatch) -> None:
         return True
 
     monkeypatch.setattr(termcolor.termcolor, "_can_do_colour", mock_can_do_colour)
+
+
+@pytest.fixture
+def uuid() -> UUID:
+    return uuid4()
 
 
 @pytest.fixture
@@ -325,7 +329,7 @@ def test_context_lambda_message(sender: ConversableAgent, recipient: Conversable
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_PostCarryoverProcessing(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_PostCarryoverProcessing(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     chat_info = {
         "carryover": ["This is a test message 1", "This is a test message 2"],
         "message": "Start chat",
@@ -336,9 +340,7 @@ def test_PostCarryoverProcessing(sender: ConversableAgent, recipient: Conversabl
         "max_turns": 5,
     }
 
-    uuid = uuid4()
     actual = PostCarryoverProcessing(uuid=uuid, chat_info=chat_info)
-
     assert isinstance(actual, PostCarryoverProcessing)
 
     expected = {
@@ -399,6 +401,7 @@ def test_PostCarryoverProcessing(sender: ConversableAgent, recipient: Conversabl
 def test__process_carryover(
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]],
     expected: str,
+    uuid: UUID,
     sender: ConversableAgent,
     recipient: ConversableAgent,
 ) -> None:
@@ -412,9 +415,7 @@ def test__process_carryover(
         "max_turns": 5,
     }
 
-    uuid = uuid4()
     post_carryover_processing = PostCarryoverProcessing(uuid=uuid, chat_info=chat_info)
-
     expected_model_dump = {
         "uuid": uuid,
         "carryover": carryover,
@@ -766,10 +767,8 @@ def test_conversable_agent_usage_summary(
         ("Over and out!", [call("Over and out!")]),
     ],
 )
-def test_TextMessage(text: str, expected: list[_Call]) -> None:
-    uuid = uuid4()
+def test_TextMessage(text: str, expected: list[_Call], uuid: UUID) -> None:
     actual = TextMessage(uuid=uuid)
-
     expected_model_dump = {"uuid": uuid}
     assert isinstance(actual, TextMessage)
     assert actual.model_dump() == expected_model_dump
