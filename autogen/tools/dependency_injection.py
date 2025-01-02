@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import sys
 from abc import ABC
+from functools import wraps
 from typing import Any, Callable, Iterable, get_type_hints
 
 from fast_depends import Depends as FastDepends
@@ -54,6 +56,10 @@ def _remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Ite
 
 
 def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
+    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
+    if sys.version_info >= (3, 9) and isinstance(func, staticmethod) and hasattr(func, "__func__"):
+        func = _fix_staticmethod(func)
+
     sig = inspect.signature(func)
     params_to_remove = [p.name for p in sig.parameters.values() if _is_base_context_param(p) or _is_depends_param(p)]
     _remove_params(func, sig, params_to_remove)
@@ -81,7 +87,25 @@ def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[
     return func
 
 
+def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
+    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
+    if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
+
+        @wraps(f.__func__)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return f.__func__(*args, **kwargs)  # type: ignore[attr-defined]
+
+        wrapper.__name__ = f.__func__.__name__
+
+        f = wrapper
+    return f
+
+
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
+    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
+    if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
+        f = _fix_staticmethod(f)
+
     f = _string_metadata_to_description_field(f)
     f = inject(f)
     f = _remove_injected_params_from_signature(f)

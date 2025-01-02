@@ -23,15 +23,13 @@ class TestRemoveInjectedParamsFromSignature:
     class MyContext(BaseContext, BaseModel):
         b: int
 
-    @staticmethod
-    def f_with_annotated(
+    def f_with_annotated(  # type: ignore[misc]
         a: int,
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     ) -> int:
         return a + ctx.b
 
-    @staticmethod
-    async def f_with_annotated_async(
+    async def f_with_annotated_async(  # type: ignore[misc]
         a: int,
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     ) -> int:
@@ -160,8 +158,8 @@ class TestRemoveInjectedParamsFromSignature:
         ],
     )
     def test_remove_injected_params_from_signature(self, test_func: Callable[..., int]) -> None:
-        _remove_injected_params_from_signature(test_func)
-        assert str(inspect.signature(test_func)) == "(a: int) -> int"
+        f = _remove_injected_params_from_signature(test_func)
+        assert str(inspect.signature(f)) == "(a: int) -> int"
 
 
 def test_string_metadata_to_description_field() -> None:
