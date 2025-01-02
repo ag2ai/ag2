@@ -77,6 +77,20 @@ class TestRemoveInjectedParamsFromSignature:
     ) -> int:
         return a + ctx
 
+    @staticmethod
+    def f_with_default_depends(
+        a: int,
+        ctx: int = Depends(lambda a: a + 2),
+    ) -> int:
+        return a + ctx
+
+    @staticmethod
+    def f_with_default_depends_async(
+        a: int,
+        ctx: int = Depends(lambda a: a + 2),
+    ) -> int:
+        return a + ctx
+
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         self.expected_tools = [
@@ -105,6 +119,8 @@ class TestRemoveInjectedParamsFromSignature:
             f_without_annotated_and_depends_async,
             f_without_MyContext,
             f_without_MyContext_async,
+            f_with_default_depends,
+            f_with_default_depends_async,
         ],
     )
     def test_remove_injected_params_from_signature(self, test_func: Callable[..., int]) -> None:
