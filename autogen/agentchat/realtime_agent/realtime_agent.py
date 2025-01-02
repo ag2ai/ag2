@@ -11,7 +11,7 @@ from asyncer import create_task_group, syncify
 from autogen import SwarmAgent
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.function_utils import get_function_schema
+from autogen.tools import get_function_schema
 
 from .function_observer import FunctionObserver
 from .oai_realtime_client import OpenAIRealtimeClient, Role

@@ -13,7 +13,7 @@ import os
 import sys
 import time
 import unittest
-from typing import Annotated, Any, Callable, Dict, Literal
+from typing import Annotated, Any, Callable, Literal
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,6 +24,7 @@ import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
+from autogen.tools.dependency_injection import BaseContext, Depends
 from autogen.tools.tool import Tool
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -664,6 +665,203 @@ def get_origin(d: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]
     return {k: v._origin for k, v in d.items()}
 
 
+class TestDependencyInjection:
+    class MyContext(BaseContext, BaseModel):
+        b: int
+
+    @pytest.fixture(autouse=True)
+    def setup(self) -> None:
+        self.agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
+        self.expected_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "description": "Example function",
+                    "name": "f",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "integer", "description": "a"},
+                            "c": {"type": "integer", "description": "c description", "default": 3},
+                        },
+                        "required": ["a"],
+                    },
+                },
+            }
+        ]
+
+    def f_with_annotated(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    async def f_with_annotated_async(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    def f_without_annotated(
+        a: int,
+        ctx: MyContext = Depends(MyContext(b=3)),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    async def f_without_annotated_async(
+        a: int,
+        ctx: MyContext = Depends(MyContext(b=3)),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    def f_with_annotated_and_depends(
+        a: int,
+        ctx: MyContext = MyContext(b=4),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    async def f_with_annotated_and_depends_async(
+        a: int,
+        ctx: MyContext = MyContext(b=4),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    def f_with_multiple_depends(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + ctx2.b + c
+
+    async def f_with_multiple_depends_async(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + ctx2.b + c
+
+    def f_wihout_base_context(
+        a: int,
+        ctx: Annotated[int, Depends(lambda a: a + 2)],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
+    async def f_wihout_base_context_async(
+        a: int,
+        ctx: Annotated[int, Depends(lambda a: a + 2)],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
+    def f_with_default_depends(
+        a: int,
+        ctx: int = Depends(lambda a: a + 2),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
+    async def f_with_default_depends_async(
+        a: int,
+        ctx: int = Depends(lambda a: a + 2),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
+    @pytest.mark.parametrize(
+        ("func", "func_name", "is_async", "expected"),
+        [
+            (f_with_annotated, "f_with_annotated", False, "6"),
+            (f_with_annotated_async, "f_with_annotated_async", True, "6"),
+            (f_without_annotated, "f_without_annotated", False, "7"),
+            (f_without_annotated_async, "f_without_annotated_async", True, "7"),
+            (f_with_annotated_and_depends, "f_with_annotated_and_depends", False, "8"),
+            (f_with_annotated_and_depends_async, "f_with_annotated_and_depends_async", True, "8"),
+            (f_with_multiple_depends, "f_with_multiple_depends", False, "9"),
+            (f_with_multiple_depends_async, "f_with_multiple_depends_async", True, "9"),
+            (f_wihout_base_context, "f_wihout_base_context", False, "7"),
+            (f_wihout_base_context_async, "f_wihout_base_context_async", True, "7"),
+            (f_with_default_depends, "f_with_default_depends", False, "7"),
+            (f_with_default_depends_async, "f_with_default_depends_async", True, "7"),
+        ],
+    )
+    def test_register_tools(self, func: Callable[..., Any], func_name: str, is_async: bool, expected: str) -> None:
+        self.agent.register_for_llm(description="Example function")(func)
+        self.agent.register_for_execution()(func)
+
+        self.expected_tools[0]["function"]["name"] = func_name
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert func_name in self.agent.function_map.keys()
+        if is_async:
+            assert asyncio.run(self.agent.function_map[func_name](1)) == expected
+        else:
+            assert self.agent.function_map[func_name](1) == expected
+
+    @pytest.mark.skipif(
+        skip_openai,
+        reason=reason,
+    )
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_end_to_end(self, is_async):
+        class UserContext(BaseContext, BaseModel):
+            username: str
+            password: str
+
+        user = UserContext(username="user23", password="password23")
+        users = [user]
+
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            file_location=KEY_LOC,
+            filter_dict={"tags": ["gpt-4o-mini"]},
+        )
+        agent = ConversableAgent(
+            name="agent",
+            llm_config={"config_list": config_list},
+        )
+        user_proxy = UserProxyAgent(
+            name="user_proxy_1",
+            human_input_mode="NEVER",
+            llm_config=False,
+        )
+
+        if is_async:
+
+            @user_proxy.register_for_execution()
+            @agent.register_for_llm(description="Login function")
+            async def login(user: Annotated[UserContext, Depends(user)]) -> str:
+                if user in users:
+                    return "Login successful."
+                return "Login failed"
+
+            asyncio.run(user_proxy.a_initiate_chat(agent, message="Please login", max_turns=2))
+        else:
+
+            @user_proxy.register_for_execution()
+            @agent.register_for_llm(description="Login function")
+            def login(user: Annotated[UserContext, Depends(user)]) -> str:
+                if user in users:
+                    return "Login successful."
+                return "Login failed"
+
+            user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
+
+        for message in user_proxy.chat_messages[agent]:
+            if "tool_responses" in message:
+                assert message["tool_responses"][0]["content"] == "Login successful."
+                return
+
+        assert False, "Login function was not called"
+
+
 def test_register_for_llm():
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
@@ -900,7 +1098,7 @@ def test_register_functions():
         )
 
         expected_function_map = {"exec_python": exec_python}
-        assert get_origin(user_proxy.function_map) == expected_function_map
+        assert get_origin(user_proxy.function_map).keys() == expected_function_map.keys()
 
         expected = [
             {

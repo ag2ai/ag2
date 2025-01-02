@@ -13,11 +13,18 @@ import logging
 import re
 import warnings
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 from openai import BadRequestError
 
-from .._pydantic import BaseModel, model_dump
+from .._pydantic import model_dump
 from ..cache.cache import AbstractCache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -33,11 +40,11 @@ from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
 from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
-from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import Tool
+from ..tools import Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
+from ..tools.dependency_injection import inject_params
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -2770,10 +2777,8 @@ class ConversableAgent(LLMAgent):
             return tool
 
         if isinstance(func_or_tool, Callable):
-            func: Callable[..., Any] = func_or_tool
-
+            func = inject_params(func_or_tool)
             name = name or func.__name__
-
             tool = Tool(name=name, description=description, func=func)
 
             return tool

@@ -22,8 +22,7 @@ from sentence_transformers import SentenceTransformer, util
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.coding import CodeExecutor, CodeExtractor, LocalCommandLineCodeExecutor, MarkdownCodeExtractor
 from autogen.coding.base import CodeBlock, CodeResult
-from autogen.function_utils import get_function_schema, load_basemodels_if_needed
-from autogen.tools import Tool
+from autogen.tools import Tool, get_function_schema, load_basemodels_if_needed
 
 
 class ToolBuilder:

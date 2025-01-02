@@ -39,7 +39,8 @@ install_requires = [
     "docker",
     "packaging",
     "websockets>=14,<15",
-    "asyncer>=0.0.8",
+    "asyncer==0.0.8",
+    "fast_depends>=2.4.12,<3",
 ]
 
 test = [
