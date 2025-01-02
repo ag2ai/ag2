@@ -63,6 +63,7 @@ files = [
     "autogen/tools",
     "autogen/interop",
     "autogen/agentchat/realtime_agent",
+    "autogen/base_message.py",
     "autogen/messages.py",
     "autogen/client_messages.py",
     "test/test_pydantic.py",
@@ -71,6 +72,7 @@ files = [
     "test/tools",
     "test/interop",
     "test/agentchat/realtime_agent",
+    "test/test_base_message.py",
     "test/test_messages.py",
     "test/test_client_messages.py",
 ]

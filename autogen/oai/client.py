@@ -22,7 +22,7 @@ from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
 
-from ..client_messages import StreamMessage, create_usage_summary_model
+from ..client_messages import StreamMessage, UsageSummary
 
 TOOL_ENABLED = False
 try:
@@ -1133,7 +1133,9 @@ class OpenAIWrapper:
             elif "total" in mode:
                 mode = "total"
 
-        usage_summary = create_usage_summary_model(self.actual_usage_summary, self.total_usage_summary, mode=mode)
+        usage_summary = UsageSummary(
+            actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+        )
         usage_summary.print(iostream.print)
 
     def clear_usage_summary(self) -> None:

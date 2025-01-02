@@ -33,10 +33,48 @@ class TotalUsageSummary(BaseModel):
 Mode = Literal["both", "total", "actual"]
 
 
+def _change_usage_summary_format(
+    actual_usage_summary: Optional[dict[str, Any]] = None, total_usage_summary: Optional[dict[str, Any]] = None
+) -> dict[str, dict[str, Any]]:
+    summary: dict[str, Any] = {}
+
+    for usage_type, usage_summary in {"actual": actual_usage_summary, "total": total_usage_summary}.items():
+        if usage_summary is None:
+            summary[usage_type] = {"usages": None, "total_cost": None}
+            continue
+
+        usage_summary_altered_format: dict[str, list[dict[str, Any]]] = {"usages": []}
+        for k, v in usage_summary.items():
+            if isinstance(k, str) and isinstance(v, dict):
+                current_usage = {key: value for key, value in v.items()}
+                current_usage["model"] = k
+                usage_summary_altered_format["usages"].append(current_usage)
+            else:
+                usage_summary_altered_format[k] = v
+        summary[usage_type] = usage_summary_altered_format
+
+    return summary
+
+
 class UsageSummary(BaseMessage):
     actual: ActualUsageSummary
     total: TotalUsageSummary
     mode: Mode
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        actual_usage_summary: Optional[dict[str, Any]] = None,
+        total_usage_summary: Optional[dict[str, Any]] = None,
+        mode: Mode = "both",
+    ):
+        # print(f"{actual_usage_summary=}")
+        # print(f"{total_usage_summary=}")
+
+        summary_dict = _change_usage_summary_format(actual_usage_summary, total_usage_summary)
+
+        super().__init__(uuid=uuid, **summary_dict, mode=mode)
 
     def _print_usage(
         self,
@@ -84,44 +122,6 @@ class UsageSummary(BaseMessage):
         else:
             raise ValueError(f'Invalid mode: {self.mode}, choose from "actual", "total", ["actual", "total"]')
         f("-" * 100, flush=True)
-
-
-def _change_usage_summary_format(
-    actual_usage_summary: Optional[dict[str, Any]] = None, total_usage_summary: Optional[dict[str, Any]] = None
-) -> dict[str, dict[str, Any]]:
-    summary: dict[str, Any] = {}
-
-    for usage_type, usage_summary in {"actual": actual_usage_summary, "total": total_usage_summary}.items():
-        if usage_summary is None:
-            summary[usage_type] = {"usages": None, "total_cost": None}
-            continue
-
-        usage_summary_altered_format: dict[str, list[dict[str, Any]]] = {"usages": []}
-        for k, v in usage_summary.items():
-            if isinstance(k, str) and isinstance(v, dict):
-                current_usage = {key: value for key, value in v.items()}
-                current_usage["model"] = k
-                usage_summary_altered_format["usages"].append(current_usage)
-            else:
-                usage_summary_altered_format[k] = v
-        summary[usage_type] = usage_summary_altered_format
-
-    return summary
-
-
-def create_usage_summary_model(
-    actual_usage_summary: Optional[dict[str, Any]] = None,
-    total_usage_summary: Optional[dict[str, Any]] = None,
-    mode: Mode = "both",
-) -> UsageSummary:
-    # print(f"{actual_usage_summary=}")
-    # print(f"{total_usage_summary=}")
-
-    summary_dict = _change_usage_summary_format(actual_usage_summary, total_usage_summary)
-
-    usage_summary = UsageSummary(**summary_dict, mode=mode)
-
-    return usage_summary
 
 
 class StreamMessage(BaseMessage):

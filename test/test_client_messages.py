@@ -15,7 +15,6 @@ from autogen.client_messages import (
     TotalUsageSummary,
     UsageSummary,
     _change_usage_summary_format,
-    create_usage_summary_model,
 )
 
 
@@ -113,38 +112,51 @@ def test__change_usage_summary_format(
 def test_usage_summary_print_same_actual_and_total(
     actual_usage_summary: Optional[dict[str, Any]],
     total_usage_summary: Optional[dict[str, Any]],
+    uuid: UUID,
 ) -> None:
-    actual = create_usage_summary_model(actual_usage_summary, total_usage_summary, "both")
+    actual = UsageSummary(
+        uuid=uuid, actual_usage_summary=actual_usage_summary, total_usage_summary=total_usage_summary, mode="both"
+    )
 
     assert isinstance(actual, UsageSummary)
     assert isinstance(actual.actual, ActualUsageSummary)
     assert isinstance(actual.total, TotalUsageSummary)
     assert actual.mode == "both"
 
-    assert isinstance(actual.actual.usages, list)
-    assert len(actual.actual.usages) == 1
-    assert isinstance(actual.actual.usages[0], ModelUsageSummary)
-    assert actual.actual.total_cost == 4.23e-05
-    assert actual.actual.usages[0].model == "gpt-4o-mini-2024-07-18"
-    assert actual.actual.usages[0].completion_tokens == 25
-    assert actual.actual.usages[0].cost == 4.23e-05
-    assert actual.actual.usages[0].prompt_tokens == 182
-    assert actual.actual.usages[0].total_tokens == 207
-
-    assert isinstance(actual.total.usages, list)
-    assert len(actual.total.usages) == 1
-    assert isinstance(actual.total.usages[0], ModelUsageSummary)
-    assert actual.total.total_cost == 4.23e-05
-    assert actual.total.usages[0].model == "gpt-4o-mini-2024-07-18"
-    assert actual.total.usages[0].completion_tokens == 25
-    assert actual.total.usages[0].cost == 4.23e-05
-    assert actual.total.usages[0].prompt_tokens == 182
-    assert actual.total.usages[0].total_tokens == 207
+    expected_model_dump = {
+        "uuid": uuid,
+        "actual": {
+            "usages": [
+                {
+                    "model": "gpt-4o-mini-2024-07-18",
+                    "completion_tokens": 25,
+                    "cost": 4.23e-05,
+                    "prompt_tokens": 182,
+                    "total_tokens": 207,
+                }
+            ],
+            "total_cost": 4.23e-05,
+        },
+        "total": {
+            "usages": [
+                {
+                    "model": "gpt-4o-mini-2024-07-18",
+                    "completion_tokens": 25,
+                    "cost": 4.23e-05,
+                    "prompt_tokens": 182,
+                    "total_tokens": 207,
+                }
+            ],
+            "total_cost": 4.23e-05,
+        },
+        "mode": "both",
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)
 
-    print(mock.call_args_list)
+    # print(mock.call_args_list)
 
     expected_call_args_list = [
         call(
@@ -199,33 +211,49 @@ def test_usage_summary_print_same_actual_and_total(
 def test_usage_summary_print_different_actual_and_total(
     actual_usage_summary: Optional[dict[str, Any]],
     total_usage_summary: Optional[dict[str, Any]],
+    uuid: UUID,
 ) -> None:
-    actual = create_usage_summary_model(actual_usage_summary, total_usage_summary, "both")
+    actual = UsageSummary(
+        uuid=uuid, actual_usage_summary=actual_usage_summary, total_usage_summary=total_usage_summary, mode="both"
+    )
 
     assert isinstance(actual, UsageSummary)
     assert isinstance(actual.actual, ActualUsageSummary)
     assert isinstance(actual.total, TotalUsageSummary)
     assert actual.mode == "both"
-
     assert isinstance(actual.actual.usages, list)
     assert len(actual.actual.usages) == 1
     assert isinstance(actual.actual.usages[0], ModelUsageSummary)
-    assert actual.actual.total_cost == 4.23e-05
-    assert actual.actual.usages[0].model == "gpt-4o-mini-2024-07-18"
-    assert actual.actual.usages[0].completion_tokens == 25
-    assert actual.actual.usages[0].cost == 4.23e-05
-    assert actual.actual.usages[0].prompt_tokens == 182
-    assert actual.actual.usages[0].total_tokens == 207
 
-    assert isinstance(actual.total.usages, list)
-    assert len(actual.total.usages) == 1
-    assert isinstance(actual.total.usages[0], ModelUsageSummary)
-    assert actual.total.total_cost == 4.23e-05 * 40
-    assert actual.total.usages[0].model == "gpt-4o-mini-2024-07-18"
-    assert actual.total.usages[0].completion_tokens == 25 * 40
-    assert actual.total.usages[0].cost == 4.23e-05 * 40
-    assert actual.total.usages[0].prompt_tokens == 182 * 40
-    assert actual.total.usages[0].total_tokens == 207 * 40
+    expected_model_dump = {
+        "uuid": uuid,
+        "actual": {
+            "usages": [
+                {
+                    "model": "gpt-4o-mini-2024-07-18",
+                    "completion_tokens": 25,
+                    "cost": 4.23e-05,
+                    "prompt_tokens": 182,
+                    "total_tokens": 207,
+                }
+            ],
+            "total_cost": 4.23e-05,
+        },
+        "total": {
+            "usages": [
+                {
+                    "model": "gpt-4o-mini-2024-07-18",
+                    "completion_tokens": 1000,
+                    "cost": 0.001692,
+                    "prompt_tokens": 7280,
+                    "total_tokens": 8280,
+                }
+            ],
+            "total_cost": 0.001692,
+        },
+        "mode": "both",
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)
@@ -271,19 +299,24 @@ def test_usage_summary_print_different_actual_and_total(
 def test_usage_summary_print_none_actual_and_total(
     actual_usage_summary: Optional[dict[str, Any]],
     total_usage_summary: Optional[dict[str, Any]],
+    uuid: UUID,
 ) -> None:
-    actual = create_usage_summary_model(actual_usage_summary, total_usage_summary, "both")
+    actual = UsageSummary(
+        uuid=uuid, actual_usage_summary=actual_usage_summary, total_usage_summary=total_usage_summary, mode="both"
+    )
 
     assert isinstance(actual, UsageSummary)
     assert isinstance(actual.actual, ActualUsageSummary)
     assert isinstance(actual.total, TotalUsageSummary)
     assert actual.mode == "both"
 
-    assert actual.actual.usages is None
-    assert actual.actual.total_cost is None
-
-    assert actual.total.usages is None
-    assert actual.total.total_cost is None
+    expected_model_dump = {
+        "uuid": uuid,
+        "actual": {"usages": None, "total_cost": None},
+        "total": {"usages": None, "total_cost": None},
+        "mode": "both",
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)

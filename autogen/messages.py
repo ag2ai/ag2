@@ -4,9 +4,8 @@
 
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from pydantic import BaseModel
 from termcolor import colored
 
 from .base_message import BaseMessage
