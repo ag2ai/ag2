@@ -38,7 +38,6 @@ from autogen.messages import (
     create_conversable_agent_usage_summary,
     create_generate_code_execution_reply,
     create_received_message_model,
-    create_select_speaker,
 )
 from autogen.oai.client import OpenAIWrapper
 
@@ -663,16 +662,20 @@ def test_execute_function(uuid: UUID, recipient: ConversableAgent) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_select_speaker() -> None:
+def test_select_speaker(uuid: UUID) -> None:
     agents = [
         ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
         ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
     ]
 
-    actual = create_select_speaker(agents)  # type: ignore [arg-type]
-
+    actual = SelectSpeaker(uuid=uuid, agents=agents)  # type: ignore [arg-type]
     assert isinstance(actual, SelectSpeaker)
-    assert actual.agent_names == ["bob", "charlie"]
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "agent_names": ["bob", "charlie"],
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print_select_speaker(f=mock)

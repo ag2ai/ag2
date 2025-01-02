@@ -22,8 +22,8 @@ from ..messages import (
     ClearAgentsHistory,
     GroupChatResume,
     GroupChatRunChat,
+    SelectSpeaker,
     SpeakerAttempt,
-    create_select_speaker,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -396,7 +396,7 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        select_speaker = create_select_speaker(agents)
+        select_speaker = SelectSpeaker(agents=agents)
         select_speaker.print_select_speaker(iostream.print)
 
         try_count = 0

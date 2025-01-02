@@ -535,6 +535,10 @@ class ExecuteFunction(BaseMessage):
 class SelectSpeaker(BaseMessage):
     agent_names: Optional[list[str]] = None
 
+    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
+        agent_names = [agent.name for agent in agents] if agents else None
+        super().__init__(uuid=uuid, agent_names=agent_names)
+
     def print_select_speaker(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -552,11 +556,6 @@ class SelectSpeaker(BaseMessage):
         f = f or print
 
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
-
-
-def create_select_speaker(agents: Optional[list["Agent"]] = None) -> SelectSpeaker:
-    agent_names = [agent.name for agent in agents] if agents else None
-    return SelectSpeaker(agent_names=agent_names)
 
 
 class ClearConversableAgentHistory(BaseMessage):
