@@ -51,7 +51,8 @@ jobs:
 
       - name: Build documentation
         run: |
-          ./scripts/docs_build.sh
+          ./docs_build.sh
+        working-directory: scripts
 
       - name: Prepare website content
         run: |
@@ -91,7 +92,8 @@ jobs:
 
       - name: Build documentation
         run: |
-          ./scripts/docs_build.sh
+          ./docs_build.sh
+        working-directory: scripts
 
       - name: Prepare website content
         run: |
