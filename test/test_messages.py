@@ -35,7 +35,6 @@ from autogen.messages import (
     ToolResponse,
     ToolResponseMessage,
     create_conversable_agent_usage_summary,
-    create_generate_code_execution_reply,
     create_received_message_model,
 )
 from autogen.oai.client import OpenAIWrapper
@@ -756,11 +755,22 @@ def test_clear_conversable_agent_history(uuid: UUID, recipient: ConversableAgent
     ],
 )
 def test_generate_code_execution_reply(
-    code_blocks: list[CodeBlock], expected: list[_Call], sender: ConversableAgent, recipient: ConversableAgent
+    code_blocks: list[CodeBlock],
+    expected: list[_Call],
+    uuid: UUID,
+    sender: ConversableAgent,
+    recipient: ConversableAgent,
 ) -> None:
-    actual = create_generate_code_execution_reply(sender=sender, recipient=recipient)
-
+    actual = GenerateCodeExecutionReply(uuid=uuid, sender=sender, recipient=recipient)
     assert isinstance(actual, GenerateCodeExecutionReply)
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "sender_name": "sender",
+        "recipient_name": "recipient",
+    }
+    assert actual.model_dump() == expected_model_dump
+
     assert actual.sender_name == "sender"
     assert actual.recipient_name == "recipient"
 

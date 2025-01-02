@@ -39,9 +39,9 @@ from ..messages import (
     ClearConversableAgentHistory,
     ExecuteCodeBlock,
     ExecuteFunction,
+    GenerateCodeExecutionReply,
     TerminationAndHumanReply,
     create_conversable_agent_usage_summary,
-    create_generate_code_execution_reply,
     create_received_message_model,
 )
 from ..oai.client import ModelClient, OpenAIWrapper
@@ -1524,7 +1524,7 @@ class ConversableAgent(LLMAgent):
         # iterate through the last n messages in reverse
         # if code blocks are found, execute the code blocks and return the output
         # if no code blocks are found, continue
-        generate_code_execution_reply = create_generate_code_execution_reply(sender=sender, recipient=self)
+        generate_code_execution_reply = GenerateCodeExecutionReply(sender=sender, recipient=self)
         for message in reversed(messages_to_scan):
             if not message["content"]:
                 continue

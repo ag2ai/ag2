@@ -595,6 +595,13 @@ class GenerateCodeExecutionReply(BaseMessage):
     sender_name: Optional[str] = None
     recipient_name: str
 
+    def __init__(self, *, uuid: Optional[UUID] = None, sender: Optional["Agent"] = None, recipient: "Agent"):
+        super().__init__(
+            uuid=uuid,
+            sender_name=sender.name if sender else None,
+            recipient_name=recipient.name,
+        )
+
     def print_executing_code_block(
         self, code_blocks: list["CodeBlock"], f: Optional[Callable[..., Any]] = None
     ) -> None:
@@ -617,15 +624,6 @@ class GenerateCodeExecutionReply(BaseMessage):
                 ),
                 flush=True,
             )
-
-
-def create_generate_code_execution_reply(
-    sender: Optional["Agent"] = None, *, recipient: "Agent"
-) -> GenerateCodeExecutionReply:
-    return GenerateCodeExecutionReply(
-        sender_name=sender.name if sender else None,
-        recipient_name=recipient.name,
-    )
 
 
 class ConversableAgentUsageSummary(BaseMessage):
