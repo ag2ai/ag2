@@ -7,7 +7,7 @@ from uuid import uuid4
 from autogen.base_message import BaseMessage
 
 
-def test_BaseMessage():
+def test_BaseMessage() -> None:
     uuid = uuid4()
 
     actual = BaseMessage(uuid=uuid)

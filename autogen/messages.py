@@ -299,6 +299,17 @@ class ClearAgentsHistory(BaseMessage):
     agent_name: Optional[str] = None
     nr_messages_to_preserve: Optional[int] = None
 
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        agent: Optional["Agent"] = None,
+        nr_messages_to_preserve: Optional[int] = None,
+    ):
+        return super().__init__(
+            uuid=uuid, agent_name=agent.name if agent else None, nr_messages_to_preserve=nr_messages_to_preserve
+        )
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -312,12 +323,6 @@ class ClearAgentsHistory(BaseMessage):
                 f(f"Clearing history for all agents except last {self.nr_messages_to_preserve} messages.")
             else:
                 f("Clearing history for all agents.")
-
-
-def create_clear_agents_history(
-    agent: Optional["Agent"] = None, nr_messages_to_preserve: Optional[int] = None
-) -> ClearAgentsHistory:
-    return ClearAgentsHistory(agent_name=agent.name if agent else None, nr_messages_to_preserve=nr_messages_to_preserve)
 
 
 class SpeakerAttempt(BaseMessage):

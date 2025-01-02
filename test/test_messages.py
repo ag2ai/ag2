@@ -34,7 +34,6 @@ from autogen.messages import (
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
-    create_clear_agents_history,
     create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
     create_execute_code_block,
@@ -450,17 +449,18 @@ def test__process_carryover(
         ),
     ],
 )
-def test_clear_agents_history(
-    agent: Optional[ConversableAgent], nr_messages_to_preserve: Optional[int], expected: str
+def test_ClearAgentsHistory(
+    agent: Optional[ConversableAgent], nr_messages_to_preserve: Optional[int], expected: str, uuid: UUID
 ) -> None:
-    actual = create_clear_agents_history(agent=agent, nr_messages_to_preserve=nr_messages_to_preserve)
-
+    actual = ClearAgentsHistory(uuid=uuid, agent=agent, nr_messages_to_preserve=nr_messages_to_preserve)
     assert isinstance(actual, ClearAgentsHistory)
-    if agent:
-        assert actual.agent_name == "clear_agent"
-    else:
-        assert actual.agent_name is None
-    assert actual.nr_messages_to_preserve == nr_messages_to_preserve
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "agent_name": "clear_agent" if agent else None,
+        "nr_messages_to_preserve": nr_messages_to_preserve,
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)

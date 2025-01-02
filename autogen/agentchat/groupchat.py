@@ -19,7 +19,7 @@ from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages import (
-    create_clear_agents_history,
+    ClearAgentsHistory,
     create_group_chat_resume,
     create_group_chat_run_chat,
     create_select_speaker,
@@ -1622,7 +1622,7 @@ class GroupChatManager(ConversableAgent):
                 "The last tool call message will be saved to prevent errors caused by tool response without tool call."
             )
         # clear history
-        clear_agents_history = create_clear_agents_history(
+        clear_agents_history = ClearAgentsHistory(
             agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve
         )
         clear_agents_history.print(iostream.print)
