@@ -13,7 +13,7 @@ __all__ = [
     "BaseContext",
     "ChatContext",
     "Depends",
-    "DescriptionField",
+    "Field",
     "inject_params",
 ]
 
@@ -46,9 +46,13 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
     return func
 
 
-class DescriptionField:
+class Field:
     def __init__(self, description: str) -> None:
-        self.description = description
+        self._description = description
+
+    @property
+    def description(self) -> str:
+        return self._description
 
 
 def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -59,7 +63,7 @@ def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[
             metadata = annotation.__metadata__
             if metadata and isinstance(metadata[0], str):
                 # Replace string metadata with DescriptionField
-                annotation.__metadata__ = (DescriptionField(description=metadata[0]),)
+                annotation.__metadata__ = (Field(description=metadata[0]),)
     return func
 
 

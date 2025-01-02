@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from autogen.tools.dependency_injection import (
     BaseContext,
     Depends,
-    DescriptionField,
+    Field,
     _remove_injected_params_from_signature,
     _string_metadata_to_description_field,
 )
@@ -120,5 +120,5 @@ def test_string_metadata_to_description_field() -> None:
                 raise AssertionError("The string metadata should have been replaced with Pydantic's Field")
 
     field_info = type_hints["b"].__metadata__[0]
-    assert isinstance(field_info, DescriptionField)
+    assert isinstance(field_info, Field)
     assert field_info.description == "b description"
