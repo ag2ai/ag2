@@ -564,3 +564,24 @@ def create_generate_code_execution_reply(
         sender_name=sender.name if sender else None,
         recipient_name=recipient.name,
     )
+
+
+class ConversableAgentUsageSummary(BaseModel):
+    recipient_name: str
+    is_client_empty: bool
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.is_client_empty:
+            f(f"No cost incurred from agent '{self.recipient_name}'.")
+        else:
+            f(f"Agent '{self.recipient_name}':")
+
+
+def create_conversable_agent_usage_summary(
+    recipient: Agent, client: Optional[OpenAIWrapper] = None
+) -> ConversableAgentUsageSummary:
+    return ConversableAgentUsageSummary(
+        recipient_name=recipient.name, is_client_empty=True if client is None else False
+    )

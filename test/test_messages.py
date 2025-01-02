@@ -14,6 +14,7 @@ from autogen.messages import (
     ClearAgentsHistory,
     ClearConversableAgentHistory,
     ContentMessage,
+    ConversableAgentUsageSummary,
     ExecuteCodeBlock,
     ExecuteFunction,
     FunctionCall,
@@ -33,6 +34,7 @@ from autogen.messages import (
     ToolResponseMessage,
     create_clear_agents_history,
     create_clear_conversable_agent_history,
+    create_conversable_agent_usage_summary,
     create_execute_code_block,
     create_execute_function,
     create_generate_code_execution_reply,
@@ -44,6 +46,7 @@ from autogen.messages import (
     create_speaker_attempt,
     create_termination_and_human_reply,
 )
+from autogen.oai.client import OpenAIWrapper
 
 
 @pytest.fixture(autouse=True)
@@ -702,6 +705,30 @@ def test_generate_code_execution_reply(
 
     mock = MagicMock()
     actual.print_executing_code_block(code_blocks=code_blocks, f=mock)
+
+    # print(mock.call_args_list)
+
+    assert mock.call_args_list == expected
+
+
+@pytest.mark.parametrize(
+    "client, is_client_empty, expected",
+    [
+        (OpenAIWrapper(api_key="dummy api key"), False, [call("Agent 'recipient':")]),
+        (None, True, [call("No cost incurred from agent 'recipient'.")]),
+    ],
+)
+def test_conversable_agent_usage_summary(
+    client: Optional[OpenAIWrapper], is_client_empty: bool, expected: list[_Call], recipient: ConversableAgent
+) -> None:
+    actual = create_conversable_agent_usage_summary(recipient, client)
+
+    assert isinstance(actual, ConversableAgentUsageSummary)
+    assert actual.recipient_name == "recipient"
+    assert actual.is_client_empty == is_client_empty
+
+    mock = MagicMock()
+    actual.print(f=mock)
 
     # print(mock.call_args_list)
 

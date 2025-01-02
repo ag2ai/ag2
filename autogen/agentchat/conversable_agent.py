@@ -37,6 +37,7 @@ from ..function_utils import get_function_schema, load_basemodels_if_needed, ser
 from ..io.base import IOStream
 from ..messages import (
     create_clear_conversable_agent_history,
+    create_conversable_agent_usage_summary,
     create_execute_code_block,
     create_execute_function,
     create_generate_code_execution_reply,
@@ -2871,11 +2872,11 @@ class ConversableAgent(LLMAgent):
     def print_usage_summary(self, mode: Union[str, list[str]] = ["actual", "total"]) -> None:
         """Print the usage summary."""
         iostream = IOStream.get_default()
+        conversable_agent_usage_summary = create_conversable_agent_usage_summary(recipient=self, client=self.client)
 
-        if self.client is None:
-            iostream.print(f"No cost incurred from agent '{self.name}'.")
-        else:
-            iostream.print(f"Agent '{self.name}':")
+        conversable_agent_usage_summary.print(iostream.print)
+
+        if self.client is not None:
             self.client.print_usage_summary(mode)
 
     def get_actual_usage(self) -> Union[None, dict[str, int]]:
