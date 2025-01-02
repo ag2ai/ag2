@@ -3,20 +3,36 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from copy import deepcopy
-from typing import Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel
 from termcolor import colored
 
-from .agentchat.agent import Agent
 from .code_utils import content_str
-from .coding.base import CodeBlock
+
+# once you move the code below, we can just delete this import
 from .oai.client import OpenAIWrapper
 
 MessageRole = Literal["assistant", "function", "tool"]
 
+if TYPE_CHECKING:
+    from .agentchat.agent import Agent
+    from .coding.base import CodeBlock
+
+__all__ = ["BaseMessage", ...]
+
 
 class BaseMessage(BaseModel):
+    uuid: UUID
+
+    def __init__(self, uuid: Optional[UUID] = None, **kwargs: Any) -> None:
+        uuid = uuid or uuid4()
+        super().__init__(uuid=uuid, **kwargs)
+
+
+# fix the name once we figure out what it is
+class BaseMessageSomething(BaseMessage):
     content: Union[str, int, float, bool]
     sender_name: str
     recipient_name: str
@@ -26,7 +42,7 @@ class BaseMessage(BaseModel):
         f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
 
-class FunctionResponseMessage(BaseMessage):
+class FunctionResponseMessage(BaseMessageSomething):
     name: Optional[str] = None
     role: MessageRole = "function"
     content: Union[str, int, float, bool]
@@ -44,7 +60,7 @@ class FunctionResponseMessage(BaseMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ToolResponse(BaseModel):
+class ToolResponse(BaseMessage):
     tool_call_id: Optional[str] = None
     role: MessageRole = "tool"
     content: Union[str, int, float, bool]
@@ -58,7 +74,7 @@ class ToolResponse(BaseModel):
         f(colored("*" * len(tool_print), "green"), flush=True)
 
 
-class ToolResponseMessage(BaseMessage):
+class ToolResponseMessage(BaseMessageSomething):
     role: MessageRole = "tool"
     tool_responses: list[ToolResponse]
     content: Union[str, int, float, bool]
@@ -72,7 +88,7 @@ class ToolResponseMessage(BaseMessage):
             f("\n", "-" * 80, flush=True, sep="")
 
 
-class FunctionCall(BaseModel):
+class FunctionCall(BaseMessage):
     name: Optional[str] = None
     arguments: Optional[str] = None
 
@@ -93,7 +109,7 @@ class FunctionCall(BaseModel):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-class FunctionCallMessage(BaseMessage):
+class FunctionCallMessage(BaseMessageSomething):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     function_call: FunctionCall
 
@@ -109,7 +125,7 @@ class FunctionCallMessage(BaseMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ToolCall(BaseModel):
+class ToolCall(BaseMessage):
     id: Optional[str] = None
     function: FunctionCall
     type: str
@@ -133,7 +149,7 @@ class ToolCall(BaseModel):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-class ToolCallMessage(BaseMessage):
+class ToolCallMessage(BaseMessageSomething):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     refusal: Optional[str] = None
     role: Optional[MessageRole] = None
@@ -154,8 +170,9 @@ class ToolCallMessage(BaseMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ContentMessage(BaseMessage):
+class ContentMessage(BaseMessageSomething):
     content: Optional[Union[str, int, float, bool, Callable[..., Any]]] = None  # type: ignore [assignment]
+    # todo: remove the context from the message
     context: Optional[dict[str, Any]] = None
     llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None
 
@@ -167,6 +184,7 @@ class ContentMessage(BaseMessage):
             allow_format_str_template = (
                 self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
             )
+            # move this into the function creating a message
             content = OpenAIWrapper.instantiate(
                 self.content,  # type: ignore [arg-type]
                 self.context,
@@ -177,7 +195,7 @@ class ContentMessage(BaseMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-def create_received_message_model(message: dict[str, Any], sender: Agent, recipient: Agent) -> BaseMessage:
+def create_received_message_model(message: dict[str, Any], sender: "Agent", recipient: "Agent") -> BaseMessageSomething:
     # print(f"{message=}")
     # print(f"{sender=}")
 
@@ -213,7 +231,7 @@ def create_received_message_model(message: dict[str, Any], sender: Agent, recipi
     )
 
 
-class PostCarryoverProcessing(BaseModel):
+class PostCarryoverProcessing(BaseMessage):
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
     message: Optional[Union[str, dict[str, Any], Callable[..., Any]]] = None
     verbose: bool = False
@@ -265,18 +283,22 @@ class PostCarryoverProcessing(BaseModel):
             f(colored("Carryover:\n" + print_carryover, "blue"), flush=True)
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
 
+    def __init__(self, *, uuid: UUID, chat_info: dict[str, Any]):
+        # if "message" not in chat_info:
+        #     chat_info["message"] = None
 
-def create_post_carryover_processing(chat_info: dict[str, Any]) -> PostCarryoverProcessing:
-    if "message" not in chat_info:
-        chat_info["message"] = None
-    return PostCarryoverProcessing(
-        **chat_info,
-        sender_name=chat_info["sender"].name,
-        recipient_name=chat_info["recipient"].name,
-    )
+        sender_name = chat_info.pop("sender").name
+        recipient_name = chat_info.pop("recipient").name
+
+        super().__init__(
+            uuid=uuid,
+            **chat_info,
+            sender_name=sender_name,
+            recipient_name=recipient_name,
+        )
 
 
-class ClearAgentsHistory(BaseModel):
+class ClearAgentsHistory(BaseMessage):
     agent_name: Optional[str] = None
     nr_messages_to_preserve: Optional[int] = None
 
@@ -296,12 +318,12 @@ class ClearAgentsHistory(BaseModel):
 
 
 def create_clear_agents_history(
-    agent: Optional[Agent] = None, nr_messages_to_preserve: Optional[int] = None
+    agent: Optional["Agent"] = None, nr_messages_to_preserve: Optional[int] = None
 ) -> ClearAgentsHistory:
     return ClearAgentsHistory(agent_name=agent.name if agent else None, nr_messages_to_preserve=nr_messages_to_preserve)
 
 
-class SpeakerAttempt(BaseModel):
+class SpeakerAttempt(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
@@ -349,7 +371,7 @@ def create_speaker_attempt(
     )
 
 
-class GroupChatResume(BaseModel):
+class GroupChatResume(BaseMessage):
     last_speaker_name: str
     messages: list[dict[str, Any]]
     verbose: Optional[bool] = False
@@ -371,7 +393,7 @@ def create_group_chat_resume(
     return GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)
 
 
-class GroupChatRunChat(BaseModel):
+class GroupChatRunChat(BaseMessage):
     speaker_name: str
     verbose: Optional[bool] = False
 
@@ -382,11 +404,11 @@ class GroupChatRunChat(BaseModel):
             f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
 
 
-def create_group_chat_run_chat(speaker: Agent, silent: Optional[bool] = False) -> GroupChatRunChat:
+def create_group_chat_run_chat(speaker: "Agent", silent: Optional[bool] = False) -> GroupChatRunChat:
     return GroupChatRunChat(speaker_name=speaker.name, verbose=not silent)
 
 
-class TerminationAndHumanReply(BaseModel):
+class TerminationAndHumanReply(BaseMessage):
     no_human_input_msg: str
     human_input_mode: str
     sender_name: str
@@ -406,7 +428,7 @@ class TerminationAndHumanReply(BaseModel):
 
 
 def create_termination_and_human_reply(
-    no_human_input_msg: str, human_input_mode: str, *, sender: Optional[Agent] = None, recipient: Agent
+    no_human_input_msg: str, human_input_mode: str, *, sender: Optional["Agent"] = None, recipient: "Agent"
 ) -> TerminationAndHumanReply:
     return TerminationAndHumanReply(
         no_human_input_msg=no_human_input_msg,
@@ -416,7 +438,7 @@ def create_termination_and_human_reply(
     )
 
 
-class ExecuteCodeBlock(BaseModel):
+class ExecuteCodeBlock(BaseMessage):
     code: str
     language: str
     code_block_count: int
@@ -434,13 +456,13 @@ class ExecuteCodeBlock(BaseModel):
         )
 
 
-def create_execute_code_block(code: str, language: str, code_block_count: int, recipient: Agent) -> ExecuteCodeBlock:
+def create_execute_code_block(code: str, language: str, code_block_count: int, recipient: "Agent") -> ExecuteCodeBlock:
     return ExecuteCodeBlock(
         code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
     )
 
 
-class ExecuteFunction(BaseModel):
+class ExecuteFunction(BaseMessage):
     func_name: str
     recipient_name: str
     verbose: Optional[bool] = False
@@ -465,11 +487,11 @@ class ExecuteFunction(BaseModel):
             )
 
 
-def create_execute_function(func_name: str, recipient: Agent, verbose: Optional[bool] = False) -> ExecuteFunction:
+def create_execute_function(func_name: str, recipient: "Agent", verbose: Optional[bool] = False) -> ExecuteFunction:
     return ExecuteFunction(func_name=func_name, recipient_name=recipient.name, verbose=verbose)
 
 
-class SelectSpeaker(BaseModel):
+class SelectSpeaker(BaseMessage):
     agent_names: Optional[list[str]] = None
 
     def print_select_speaker(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -491,12 +513,12 @@ class SelectSpeaker(BaseModel):
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
 
 
-def create_select_speaker(agents: Optional[list[Agent]] = None) -> SelectSpeaker:
+def create_select_speaker(agents: Optional[list["Agent"]] = None) -> SelectSpeaker:
     agent_names = [agent.name for agent in agents] if agents else None
     return SelectSpeaker(agent_names=agent_names)
 
 
-class ClearConversableAgentHistory(BaseModel):
+class ClearConversableAgentHistory(BaseMessage):
     agent_name: str
     nr_messages_to_preserve: Optional[int] = None
 
@@ -523,7 +545,7 @@ class ClearConversableAgentHistory(BaseModel):
 
 
 def create_clear_conversable_agent_history(
-    agent: Agent, nr_messages_to_preserve: Optional[int] = None
+    agent: "Agent", nr_messages_to_preserve: Optional[int] = None
 ) -> ClearConversableAgentHistory:
     return ClearConversableAgentHistory(
         agent_name=agent.name,
@@ -531,11 +553,13 @@ def create_clear_conversable_agent_history(
     )
 
 
-class GenerateCodeExecutionReply(BaseModel):
+class GenerateCodeExecutionReply(BaseMessage):
     sender_name: Optional[str] = None
     recipient_name: str
 
-    def print_executing_code_block(self, code_blocks: list[CodeBlock], f: Optional[Callable[..., Any]] = None) -> None:
+    def print_executing_code_block(
+        self, code_blocks: list["CodeBlock"], f: Optional[Callable[..., Any]] = None
+    ) -> None:
         f = f or print
 
         num_code_blocks = len(code_blocks)
@@ -558,7 +582,7 @@ class GenerateCodeExecutionReply(BaseModel):
 
 
 def create_generate_code_execution_reply(
-    sender: Optional[Agent] = None, *, recipient: Agent
+    sender: Optional["Agent"] = None, *, recipient: "Agent"
 ) -> GenerateCodeExecutionReply:
     return GenerateCodeExecutionReply(
         sender_name=sender.name if sender else None,
@@ -566,7 +590,7 @@ def create_generate_code_execution_reply(
     )
 
 
-class ConversableAgentUsageSummary(BaseModel):
+class ConversableAgentUsageSummary(BaseMessage):
     recipient_name: str
     is_client_empty: bool
 
@@ -580,14 +604,14 @@ class ConversableAgentUsageSummary(BaseModel):
 
 
 def create_conversable_agent_usage_summary(
-    recipient: Agent, client: Optional[OpenAIWrapper] = None
+    recipient: "Agent", client: Optional[Any] = None
 ) -> ConversableAgentUsageSummary:
     return ConversableAgentUsageSummary(
         recipient_name=recipient.name, is_client_empty=True if client is None else False
     )
 
 
-class TextMessage(BaseModel):
+class TextMessage(BaseMessage):
 
     def print(self, text: str, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print

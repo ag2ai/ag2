@@ -4,6 +4,7 @@
 
 from typing import Any, Optional, Union
 from unittest.mock import MagicMock, _Call, call
+from uuid import uuid4
 
 import pytest
 import termcolor.termcolor
@@ -41,7 +42,6 @@ from autogen.messages import (
     create_generate_code_execution_reply,
     create_group_chat_resume,
     create_group_chat_run_chat,
-    create_post_carryover_processing,
     create_received_message_model,
     create_select_speaker,
     create_speaker_attempt,
@@ -333,10 +333,13 @@ def test_create_post_carryover_processing(sender: ConversableAgent, recipient: C
         "max_turns": 5,
     }
 
-    actual = create_post_carryover_processing(chat_info)
+    uuid = uuid4()
+    actual = PostCarryoverProcessing(uuid=uuid, chat_info=chat_info)
 
     assert isinstance(actual, PostCarryoverProcessing)
 
+    # todo: replace with dictionary
+    assert actual.model_dump == {...}
     assert actual.carryover == ["This is a test message 1", "This is a test message 2"]
     assert actual.message == "Start chat"
     assert actual.verbose is True
@@ -403,7 +406,8 @@ def test__process_carryover(
         "max_turns": 5,
     }
 
-    post_carryover_processing = create_post_carryover_processing(chat_info)
+    # todo: create uuid and compare with model_dump()
+    post_carryover_processing = PostCarryoverProcessing(chat_info)
     assert post_carryover_processing.carryover == carryover
 
     actual = post_carryover_processing._process_carryover()
