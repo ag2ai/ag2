@@ -477,11 +477,16 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: d
     # If there is front matter in the mdx file, we need to remove it
     if content.startswith("---"):
         front_matter_end = content.find("---", 3)
-        yaml_content = content[4:front_matter_end]
-        print(f"YAML content found: \n{yaml_content}", flush=True)
-        front_matter = yaml.safe_load(yaml_content)
-        print(f"After YAML load front_matter: {json.dumps(front_matter, indent=2)}", flush=True)
-
+        print(f"\n=== Processing MDX front matter for {rendered_mdx.name} ===")
+        print(f"Original front_matter: {json.dumps(front_matter, indent=2)}", flush=True)
+        
+        front_matter_in_rendered_mdx = yaml.safe_load(content[4:front_matter_end])
+        print(f"Front matter from rendered MDX: {json.dumps(front_matter_in_rendered_mdx, indent=2)}", flush=True)
+        
+        # Merge while preserving original values
+        front_matter = {**front_matter, **front_matter_in_rendered_mdx}
+        print(f"Merged front_matter: {json.dumps(front_matter, indent=2)}", flush=True)
+        content = content[front_matter_end + 3 :]
 
     # Clean heading IDs using regex - matches from # to the end of ID block
     content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
