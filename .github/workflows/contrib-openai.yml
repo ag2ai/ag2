@@ -174,9 +174,8 @@ jobs:
         run: |
           docker --version
           python -m pip install --upgrade pip wheel
-          pip install -e .[teachable]
+          pip install -e .[teachable,test]
           python -c "import autogen"
-          pip install pytest-cov>=5
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -211,7 +210,7 @@ jobs:
         run: |
           docker --version
           python -m pip install --upgrade pip wheel
-          pip install -e .
+          pip install -e ".[test]"
           python -c "import autogen"
           pip install pytest-cov>=5 pytest-asyncio
       - name: Install packages for test when needed
@@ -290,9 +289,8 @@ jobs:
         run: |
           docker --version
           python -m pip install --upgrade pip wheel
-          pip install -e .[lmm]
+          pip install -e .[lmm,test]
           python -c "import autogen"
-          pip install pytest-cov>=5
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
