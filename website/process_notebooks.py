@@ -316,6 +316,11 @@ def get_error_info(nb: NotebookNode) -> NotebookError | None:
 def add_front_matter_to_metadata_mdx(
     front_matter: dict[str, str | list[str]], website_dir: Path, rendered_mdx: Path
 ) -> None:
+
+    source = front_matter.get("source_notebook")
+    if isinstance(source, str) and source.startswith("/website/docs/"):
+        return
+
     metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
 
     metadata = []
@@ -335,7 +340,7 @@ def add_front_matter_to_metadata_mdx(
         "description": front_matter.get("description", ""),
         "image": front_matter.get("image"),
         "tags": front_matter.get("tags", []),
-        "source": front_matter.get("source_notebook"),
+        "source": source,
     }
     # Update metadata list
     existing_entry = next((item for item in metadata if item["title"] == entry["title"]), None)
