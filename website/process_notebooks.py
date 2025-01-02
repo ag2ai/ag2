@@ -338,10 +338,6 @@ def add_front_matter_to_metadata_mdx(
         "source": front_matter.get("source_notebook"),
     }
 
-    print(f"=============== Processing {rendered_mdx.stem} ===============", flush=True)
-    print(f"{front_matter=}", flush=True)
-    print(f"{entry=}", flush=True)
-
     # Update metadata list
     existing_entry = next((item for item in metadata if item["title"] == entry["title"]), None)
     if existing_entry:
@@ -475,11 +471,17 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: d
     with open(rendered_mdx, encoding="utf-8") as f:
         content = f.read()
 
+    print(f"\n=== Processing {rendered_mdx.name} ===")
+    print(f"Initial front_matter: {json.dumps(front_matter, indent=2)}", flush=True)
+
     # If there is front matter in the mdx file, we need to remove it
     if content.startswith("---"):
         front_matter_end = content.find("---", 3)
-        front_matter = yaml.safe_load(content[4:front_matter_end])
-        content = content[front_matter_end + 3 :]
+        yaml_content = content[4:front_matter_end]
+        print(f"YAML content found: \n{yaml_content}", flush=True)
+        front_matter = yaml.safe_load(yaml_content)
+        print(f"After YAML load front_matter: {json.dumps(front_matter, indent=2)}", flush=True)
+
 
     # Clean heading IDs using regex - matches from # to the end of ID block
     content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
