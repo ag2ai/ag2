@@ -39,6 +39,7 @@ from ..messages import (
     create_clear_conversable_agent_history,
     create_execute_code_block,
     create_execute_function,
+    create_generate_code_execution_reply,
     create_received_message_model,
     create_termination_and_human_reply,
 )
@@ -1522,6 +1523,7 @@ class ConversableAgent(LLMAgent):
         # iterate through the last n messages in reverse
         # if code blocks are found, execute the code blocks and return the output
         # if no code blocks are found, continue
+        generate_code_execution_reply = create_generate_code_execution_reply(sender=sender, recipient=self)
         for message in reversed(messages_to_scan):
             if not message["content"]:
                 continue
@@ -1529,23 +1531,7 @@ class ConversableAgent(LLMAgent):
             if len(code_blocks) == 0:
                 continue
 
-            num_code_blocks = len(code_blocks)
-            if num_code_blocks == 1:
-                iostream.print(
-                    colored(
-                        f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {code_blocks[0].language})...",
-                        "red",
-                    ),
-                    flush=True,
-                )
-            else:
-                iostream.print(
-                    colored(
-                        f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x.language for x in code_blocks])}])...",
-                        "red",
-                    ),
-                    flush=True,
-                )
+            generate_code_execution_reply.print_executing_code_block(code_blocks, iostream.print)
 
             # found code blocks, execute code.
             code_result = self._code_executor.execute_code_blocks(code_blocks)

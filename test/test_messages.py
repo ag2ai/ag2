@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any, Optional, Union
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock, _Call, call
 
 import pytest
 import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.coding.base import CodeBlock
 from autogen.messages import (
     ClearAgentsHistory,
     ClearConversableAgentHistory,
@@ -18,6 +19,7 @@ from autogen.messages import (
     FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
+    GenerateCodeExecutionReply,
     GroupChatResume,
     GroupChatRunChat,
     MessageRole,
@@ -33,6 +35,7 @@ from autogen.messages import (
     create_clear_conversable_agent_history,
     create_execute_code_block,
     create_execute_function,
+    create_generate_code_execution_reply,
     create_group_chat_resume,
     create_group_chat_run_chat,
     create_post_carryover_processing,
@@ -663,3 +666,43 @@ def test_clear_conversable_agent_history(recipient: ConversableAgent) -> None:
         )
     ]
     assert mock.call_args_list == expected_call_args_list
+
+
+@pytest.mark.parametrize(
+    "code_blocks, expected",
+    [
+        (
+            [
+                CodeBlock(code="print('hello world')", language="python"),
+            ],
+            [call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...\x1b[0m", flush=True)],
+        ),
+        (
+            [
+                CodeBlock(code="print('hello world')", language="python"),
+                CodeBlock(code="print('goodbye world')", language="python"),
+            ],
+            [
+                call(
+                    "\x1b[31m\n>>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...\x1b[0m",
+                    flush=True,
+                )
+            ],
+        ),
+    ],
+)
+def test_generate_code_execution_reply(
+    code_blocks: list[CodeBlock], expected: list[_Call], sender: ConversableAgent, recipient: ConversableAgent
+) -> None:
+    actual = create_generate_code_execution_reply(sender=sender, recipient=recipient)
+
+    assert isinstance(actual, GenerateCodeExecutionReply)
+    assert actual.sender_name == "sender"
+    assert actual.recipient_name == "recipient"
+
+    mock = MagicMock()
+    actual.print_executing_code_block(code_blocks=code_blocks, f=mock)
+
+    # print(mock.call_args_list)
+
+    assert mock.call_args_list == expected

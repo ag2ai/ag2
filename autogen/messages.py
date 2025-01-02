@@ -10,6 +10,7 @@ from termcolor import colored
 
 from .agentchat.agent import Agent
 from .code_utils import content_str
+from .coding.base import CodeBlock
 from .oai.client import OpenAIWrapper
 
 MessageRole = Literal["assistant", "function", "tool"]
@@ -527,4 +528,39 @@ def create_clear_conversable_agent_history(
     return ClearConversableAgentHistory(
         agent_name=agent.name,
         nr_messages_to_preserve=nr_messages_to_preserve,
+    )
+
+
+class GenerateCodeExecutionReply(BaseModel):
+    sender_name: Optional[str] = None
+    recipient_name: str
+
+    def print_executing_code_block(self, code_blocks: list[CodeBlock], f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        num_code_blocks = len(code_blocks)
+        if num_code_blocks == 1:
+            f(
+                colored(
+                    f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {code_blocks[0].language})...",
+                    "red",
+                ),
+                flush=True,
+            )
+        else:
+            f(
+                colored(
+                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x.language for x in code_blocks])}])...",
+                    "red",
+                ),
+                flush=True,
+            )
+
+
+def create_generate_code_execution_reply(
+    sender: Optional[Agent] = None, *, recipient: Agent
+) -> GenerateCodeExecutionReply:
+    return GenerateCodeExecutionReply(
+        sender_name=sender.name if sender else None,
+        recipient_name=recipient.name,
     )
