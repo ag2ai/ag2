@@ -69,6 +69,9 @@ def recipient() -> ConversableAgent:
     return ConversableAgent("recipient", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 
 
+# todo: create uuid and compare with model_dump()
+
+
 def test_tool_responses(sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {
         "role": "tool",
@@ -322,7 +325,7 @@ def test_context_lambda_message(sender: ConversableAgent, recipient: Conversable
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_create_post_carryover_processing(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_PostCarryoverProcessing(sender: ConversableAgent, recipient: ConversableAgent) -> None:
     chat_info = {
         "carryover": ["This is a test message 1", "This is a test message 2"],
         "message": "Start chat",
@@ -338,15 +341,18 @@ def test_create_post_carryover_processing(sender: ConversableAgent, recipient: C
 
     assert isinstance(actual, PostCarryoverProcessing)
 
-    # todo: replace with dictionary
-    assert actual.model_dump == {...}
-    assert actual.carryover == ["This is a test message 1", "This is a test message 2"]
-    assert actual.message == "Start chat"
-    assert actual.verbose is True
-    assert actual.sender_name == "sender"
-    assert actual.recipient_name == "recipient"
-    assert actual.summary_method == "last_msg"
-    assert actual.max_turns == 5
+    expected = {
+        "uuid": uuid,
+        "carryover": ["This is a test message 1", "This is a test message 2"],
+        "message": "Start chat",
+        "verbose": True,
+        "sender_name": "sender",
+        "recipient_name": "recipient",
+        "summary_method": "last_msg",
+        "summary_args": None,
+        "max_turns": 5,
+    }
+    assert actual.model_dump() == expected, f"{actual.model_dump()} != {expected}"
 
     mock = MagicMock()
     actual.print(f=mock)
@@ -406,9 +412,21 @@ def test__process_carryover(
         "max_turns": 5,
     }
 
-    # todo: create uuid and compare with model_dump()
-    post_carryover_processing = PostCarryoverProcessing(chat_info)
-    assert post_carryover_processing.carryover == carryover
+    uuid = uuid4()
+    post_carryover_processing = PostCarryoverProcessing(uuid=uuid, chat_info=chat_info)
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "carryover": carryover,
+        "message": "Start chat",
+        "verbose": True,
+        "sender_name": "sender",
+        "recipient_name": "recipient",
+        "summary_method": "last_msg",
+        "summary_args": None,
+        "max_turns": 5,
+    }
+    assert post_carryover_processing.model_dump() == expected_model_dump
 
     actual = post_carryover_processing._process_carryover()
     assert actual == expected

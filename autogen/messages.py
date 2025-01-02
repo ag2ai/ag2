@@ -194,7 +194,9 @@ class ContentMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-def create_received_message_model(message: dict[str, Any], sender: "Agent", recipient: "Agent") -> BasePrintReceivedMessage:
+def create_received_message_model(
+    message: dict[str, Any], sender: "Agent", recipient: "Agent"
+) -> BasePrintReceivedMessage:
     # print(f"{message=}")
     # print(f"{sender=}")
 
