@@ -33,8 +33,12 @@ def Depends(x: Any) -> Any:
 
     return FastDepends(x)
 
+
 def _is_base_context_param(param: inspect.Parameter) -> bool:
-    return isinstance(param.annotation, type) and issubclass(param.annotation, BaseContext)
+    # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
+    param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
+    return isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext)
+
 
 def _is_depends_param(param: inspect.Parameter) -> bool:
     return isinstance(param.default, model.Depends) or (
@@ -42,9 +46,12 @@ def _is_depends_param(param: inspect.Parameter) -> bool:
         and type(param.annotation.__metadata__) == tuple
         and isinstance(param.annotation.__metadata__[0], model.Depends)
     )
+
+
 def _remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
     new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in params])
     func.__signature__ = new_signature  # type: ignore[attr-defined]
+
 
 def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
     sig = inspect.signature(func)

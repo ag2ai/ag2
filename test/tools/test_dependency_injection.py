@@ -12,6 +12,8 @@ from autogen.tools.dependency_injection import (
     BaseContext,
     Depends,
     Field,
+    _is_base_context_param,
+    _is_depends_param,
     _remove_injected_params_from_signature,
     _string_metadata_to_description_field,
 )
@@ -107,6 +109,40 @@ class TestRemoveInjectedParamsFromSignature:
                 },
             }
         ]
+
+    @staticmethod
+    def f_all_params(
+        a: int,
+        b: Annotated[int, "b description"],
+        ctx1: Annotated[MyContext, Depends(MyContext(b=2))],
+        ctx2: Annotated[int, Depends(lambda a: a + 2)],
+        ctx3: MyContext = Depends(MyContext(b=3)),
+        ctx4: MyContext = MyContext(b=4),
+        ctx5: int = Depends(lambda a: a + 2),
+    ) -> int:
+        return a
+
+    def test_is_base_context_param(self) -> None:
+        sig = inspect.signature(self.f_all_params)
+        assert _is_base_context_param(sig.parameters["a"]) is False
+        assert _is_base_context_param(sig.parameters["b"]) is False
+        assert _is_base_context_param(sig.parameters["ctx1"]) is True
+        assert _is_base_context_param(sig.parameters["ctx2"]) is False
+        assert _is_base_context_param(sig.parameters["ctx3"]) is True
+        assert _is_base_context_param(sig.parameters["ctx4"]) is True
+        assert _is_base_context_param(sig.parameters["ctx5"]) is False
+
+    def test_is_depends_param(self) -> None:
+        sig = inspect.signature(self.f_all_params)
+        assert _is_depends_param(sig.parameters["a"]) is False
+        assert _is_depends_param(sig.parameters["b"]) is False
+        # Whenever a parameter is annotated with Depends, it is considered also as Depends parameter
+        assert _is_depends_param(sig.parameters["ctx1"]) is True
+        assert _is_depends_param(sig.parameters["ctx2"]) is True
+        assert _is_depends_param(sig.parameters["ctx3"]) is True
+        assert _is_depends_param(sig.parameters["ctx5"]) is True
+
+        assert _is_depends_param(sig.parameters["ctx4"]) is False
 
     @pytest.mark.parametrize(
         "test_func",
