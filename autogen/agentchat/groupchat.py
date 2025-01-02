@@ -20,10 +20,10 @@ from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages import (
     ClearAgentsHistory,
+    SpeakerAttempt,
     create_group_chat_resume,
     create_group_chat_run_chat,
     create_select_speaker,
-    create_speaker_attempt,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -854,7 +854,7 @@ class GroupChat:
         # Output the query and requery results
         if self.select_speaker_auto_verbose:
             iostream = IOStream.get_default()
-            speaker_attempt = create_speaker_attempt(
+            speaker_attempt = SpeakerAttempt(
                 mentions=mentions,
                 attempt=attempt,
                 attempts_left=attempts_left,

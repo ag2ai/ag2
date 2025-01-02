@@ -350,6 +350,23 @@ class SpeakerAttempt(BaseMessage):
     attempts_left: int
     verbose: Optional[bool] = False
 
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        mentions: dict[str, int],
+        attempt: int,
+        attempts_left: int,
+        select_speaker_auto_verbose: Optional[bool] = False,
+    ):
+        super().__init__(
+            uuid=uuid,
+            mentions=deepcopy(mentions),
+            attempt=attempt,
+            attempts_left=attempts_left,
+            verbose=select_speaker_auto_verbose,
+        )
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -382,14 +399,6 @@ class SpeakerAttempt(BaseMessage):
                 ),
                 flush=True,
             )
-
-
-def create_speaker_attempt(
-    mentions: dict[str, int], attempt: int, attempts_left: int, select_speaker_auto_verbose: Optional[bool] = False
-) -> SpeakerAttempt:
-    return SpeakerAttempt(
-        mentions=deepcopy(mentions), attempt=attempt, attempts_left=attempts_left, verbose=select_speaker_auto_verbose
-    )
 
 
 class GroupChatResume(BaseMessage):

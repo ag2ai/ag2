@@ -43,7 +43,6 @@ from autogen.messages import (
     create_group_chat_run_chat,
     create_received_message_model,
     create_select_speaker,
-    create_speaker_attempt,
     create_termination_and_human_reply,
 )
 from autogen.oai.client import OpenAIWrapper
@@ -482,18 +481,24 @@ def test_ClearAgentsHistory(
         ({}, "\x1b[31m>>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.\x1b[0m"),
     ],
 )
-def test_speaker_attempt(mentions: dict[str, int], expected: str) -> None:
+def test_speaker_attempt(mentions: dict[str, int], expected: str, uuid: UUID) -> None:
     attempt = 1
     attempts_left = 2
     verbose = True
 
-    actual = create_speaker_attempt(mentions, attempt, attempts_left, verbose)
-
+    actual = SpeakerAttempt(
+        uuid=uuid, mentions=mentions, attempt=attempt, attempts_left=attempts_left, select_speaker_auto_verbose=verbose
+    )
     assert isinstance(actual, SpeakerAttempt)
-    assert actual.mentions == mentions
-    assert actual.attempt == attempt
-    assert actual.attempts_left == attempts_left
-    assert actual.verbose == verbose
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "mentions": mentions,
+        "attempt": attempt,
+        "attempts_left": attempts_left,
+        "verbose": verbose,
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)
