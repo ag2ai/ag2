@@ -262,6 +262,7 @@ class PostCarryoverProcessing(BaseMessage):
         # if "message" not in chat_info:
         #     chat_info["message"] = None
 
+        chat_info = deepcopy(chat_info)
         sender_name = chat_info.pop("sender").name
         recipient_name = chat_info.pop("recipient").name
 
