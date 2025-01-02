@@ -195,16 +195,16 @@ class ContentMessage(BasePrintReceivedMessage):
 
 
 def create_received_message_model(
-    message: dict[str, Any], sender: "Agent", recipient: "Agent"
+    message: dict[str, Any], sender: "Agent", recipient: "Agent", *, uuid: Optional[UUID] = None
 ) -> BasePrintReceivedMessage:
     # print(f"{message=}")
     # print(f"{sender=}")
 
     role = message.get("role")
     if role == "function":
-        return FunctionResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name)
+        return FunctionResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
     if role == "tool":
-        return ToolResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name)
+        return ToolResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
 
     # Role is neither function nor tool
 
@@ -213,6 +213,7 @@ def create_received_message_model(
             **message,
             sender_name=sender.name,
             recipient_name=recipient.name,
+            uuid=uuid,
         )
 
     if "tool_calls" in message and message["tool_calls"]:
@@ -220,6 +221,7 @@ def create_received_message_model(
             **message,
             sender_name=sender.name,
             recipient_name=recipient.name,
+            uuid=uuid,
         )
 
     # Now message is a simple content message
@@ -229,6 +231,7 @@ def create_received_message_model(
         sender_name=sender.name,
         recipient_name=recipient.name,
         llm_config=recipient.llm_config,  # type: ignore [attr-defined]
+        uuid=uuid,
     )
 
 
@@ -284,7 +287,7 @@ class PostCarryoverProcessing(BaseMessage):
             f(colored("Carryover:\n" + print_carryover, "blue"), flush=True)
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
 
-    def __init__(self, *, uuid: UUID, chat_info: dict[str, Any]):
+    def __init__(self, *, uuid: Optional[UUID] = None, chat_info: dict[str, Any]):
         # if "message" not in chat_info:
         #     chat_info["message"] = None
 
@@ -613,12 +616,11 @@ def create_conversable_agent_usage_summary(
 
 
 class TextMessage(BaseMessage):
+    def __init__(self, *, uuid: Optional[UUID] = None):
+        super().__init__(uuid=uuid)
 
     def print(self, text: str, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f(text)
 
-
-def create_text_message() -> TextMessage:
-    return TextMessage()

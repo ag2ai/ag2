@@ -46,7 +46,7 @@ from autogen.messages import (
     create_select_speaker,
     create_speaker_attempt,
     create_termination_and_human_reply,
-    create_text_message,
+
 )
 from autogen.oai.client import OpenAIWrapper
 
@@ -766,10 +766,13 @@ def test_conversable_agent_usage_summary(
         ("Over and out!", [call("Over and out!")]),
     ],
 )
-def test_create_text_message(text: str, expected: list[_Call]) -> None:
-    actual = create_text_message()
+def test_TextMessage(text: str, expected: list[_Call]) -> None:
+    uuid = uuid4()
+    actual = TextMessage(uuid=uuid)
 
+    expected_model_dump = {"uuid": uuid}
     assert isinstance(actual, TextMessage)
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(text, f=mock)

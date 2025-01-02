@@ -132,7 +132,7 @@ def __post_carryover_processing(chat_info: dict[str, Any]) -> None:
             UserWarning,
         )
 
-    post_carryover_processing = PostCarryoverProcessing.create(chat_info=chat_info)
+    post_carryover_processing = PostCarryoverProcessing(chat_info=chat_info)
     post_carryover_processing.print(iostream.print)
 
 
