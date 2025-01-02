@@ -406,6 +406,16 @@ class GroupChatResume(BaseMessage):
     messages: list[dict[str, Any]]
     verbose: Optional[bool] = False
 
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        last_speaker_name: str,
+        messages: list[dict[str, Any]],
+        silent: Optional[bool] = False,
+    ):
+        super().__init__(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -415,12 +425,6 @@ class GroupChatResume(BaseMessage):
                 colored(self.last_speaker_name, "yellow"),
                 flush=True,
             )
-
-
-def create_group_chat_resume(
-    last_speaker_name: str, messages: list[dict[str, Any]], silent: Optional[bool] = False
-) -> GroupChatResume:
-    return GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)
 
 
 class GroupChatRunChat(BaseMessage):

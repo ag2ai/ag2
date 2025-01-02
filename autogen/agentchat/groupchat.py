@@ -20,8 +20,8 @@ from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages import (
     ClearAgentsHistory,
+    GroupChatResume,
     SpeakerAttempt,
-    create_group_chat_resume,
     create_group_chat_run_chat,
     create_select_speaker,
 )
@@ -1360,7 +1360,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = create_group_chat_resume(last_speaker_name, messages, silent)
+            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
             group_chat_resume.print(iostream.print)
 
         # Update group chat settings for resuming
@@ -1465,7 +1465,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = create_group_chat_resume(last_speaker_name, messages, silent)
+            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
             group_chat_resume.print(iostream.print)
 
         # Update group chat settings for resuming

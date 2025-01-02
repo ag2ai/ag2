@@ -39,7 +39,6 @@ from autogen.messages import (
     create_execute_code_block,
     create_execute_function,
     create_generate_code_execution_reply,
-    create_group_chat_resume,
     create_group_chat_run_chat,
     create_received_message_model,
     create_select_speaker,
@@ -510,7 +509,7 @@ def test_speaker_attempt(mentions: dict[str, int], expected: str, uuid: UUID) ->
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_group_chat_resume() -> None:
+def test_group_chat_resume(uuid: UUID) -> None:
     last_speaker_name = "Coder"
     messages = [
         {"content": "You are an expert at coding.", "role": "system", "name": "chat_manager"},
@@ -518,12 +517,16 @@ def test_group_chat_resume() -> None:
     ]
     silent = False
 
-    actual = create_group_chat_resume(last_speaker_name, messages, silent)
-
+    actual = GroupChatResume(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, silent=silent)
     assert isinstance(actual, GroupChatResume)
-    assert actual.last_speaker_name == last_speaker_name
-    assert actual.messages == messages
-    assert actual.verbose is True
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "last_speaker_name": last_speaker_name,
+        "messages": messages,
+        "verbose": True,
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)
