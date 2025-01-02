@@ -303,16 +303,13 @@
             {
               "group": "agentchat.realtime_agent",
               "pages": [
-                "docs/reference/agentchat/realtime_agent/client",
                 "docs/reference/agentchat/realtime_agent/function_observer",
                 "docs/reference/agentchat/realtime_agent/oai_realtime_client",
                 "docs/reference/agentchat/realtime_agent/realtime_agent",
                 "docs/reference/agentchat/realtime_agent/realtime_client",
                 "docs/reference/agentchat/realtime_agent/realtime_observer",
                 "docs/reference/agentchat/realtime_agent/twilio_audio_adapter",
-                "docs/reference/agentchat/realtime_agent/twilio_observer",
-                "docs/reference/agentchat/realtime_agent/websocket_audio_adapter",
-                "docs/reference/agentchat/realtime_agent/websocket_observer"
+                "docs/reference/agentchat/realtime_agent/websocket_audio_adapter"
               ]
             },
             "docs/reference/agentchat/agent",
