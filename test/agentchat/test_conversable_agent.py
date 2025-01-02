@@ -671,7 +671,12 @@ class TestDependencyInjection:
 
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        self.agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
+        llm_config = {
+            "config_list": [
+                {"model": "gpt-4o", "api_key": MOCK_OPEN_AI_API_KEY},
+            ],
+        }
+        self.agent = ConversableAgent(name="agent", llm_config={"config_list": llm_config})
         self.expected_tools = [
             {
                 "type": "function",
