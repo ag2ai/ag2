@@ -472,7 +472,7 @@ def test_ClearAgentsHistory(
         ({}, "\x1b[31m>>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.\x1b[0m"),
     ],
 )
-def test_speaker_attempt(mentions: dict[str, int], expected: str, uuid: UUID) -> None:
+def test_SpeakerAttempt(mentions: dict[str, int], expected: str, uuid: UUID) -> None:
     attempt = 1
     attempts_left = 2
     verbose = True
@@ -501,7 +501,7 @@ def test_speaker_attempt(mentions: dict[str, int], expected: str, uuid: UUID) ->
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_group_chat_resume(uuid: UUID) -> None:
+def test_GroupChatResume(uuid: UUID) -> None:
     last_speaker_name = "Coder"
     messages = [
         {"content": "You are an expert at coding.", "role": "system", "name": "chat_manager"},
@@ -532,7 +532,7 @@ def test_group_chat_resume(uuid: UUID) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_group_chat_run_chat(uuid: UUID) -> None:
+def test_GroupChatRunChat(uuid: UUID) -> None:
     speaker = ConversableAgent(
         "assistant uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
     )
@@ -561,7 +561,7 @@ def test_group_chat_run_chat(uuid: UUID) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_termination_and_human_reply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     no_human_input_msg = "NO HUMAN INPUT RECEIVED."
     human_input_mode = "ALWAYS"
 
@@ -596,7 +596,7 @@ def test_termination_and_human_reply(uuid: UUID, sender: ConversableAgent, recip
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_execute_code_block(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_ExecuteCodeBlock(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     code = """print("hello world")"""
     language = "python"
     code_block_count = 0
@@ -627,7 +627,7 @@ def test_execute_code_block(uuid: UUID, sender: ConversableAgent, recipient: Con
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_execute_function(uuid: UUID, recipient: ConversableAgent) -> None:
+def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     func_name = "add_num"
     verbose = True
 
@@ -659,7 +659,7 @@ def test_execute_function(uuid: UUID, recipient: ConversableAgent) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_select_speaker(uuid: UUID) -> None:
+def test_SelectSpeaker(uuid: UUID) -> None:
     agents = [
         ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
         ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
@@ -697,7 +697,7 @@ def test_select_speaker(uuid: UUID) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_clear_conversable_agent_history(uuid: UUID, recipient: ConversableAgent) -> None:
+def test_ClearConversableAgentHistory(uuid: UUID, recipient: ConversableAgent) -> None:
     nr_messages_to_preserve = 5
 
     actual = ClearConversableAgentHistory(uuid=uuid, agent=recipient, nr_messages_to_preserve=nr_messages_to_preserve)
@@ -753,7 +753,7 @@ def test_clear_conversable_agent_history(uuid: UUID, recipient: ConversableAgent
         ),
     ],
 )
-def test_generate_code_execution_reply(
+def test_GenerateCodeExecutionReply(
     code_blocks: list[CodeBlock],
     expected: list[_Call],
     uuid: UUID,
@@ -785,7 +785,7 @@ def test_generate_code_execution_reply(
         (None, True, [call("No cost incurred from agent 'recipient'.")]),
     ],
 )
-def test_conversable_agent_usage_summary(
+def test_ConversableAgentUsageSummary(
     client: Optional[OpenAIWrapper],
     is_client_empty: bool,
     expected: list[_Call],
