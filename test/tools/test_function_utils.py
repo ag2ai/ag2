@@ -303,7 +303,7 @@ class Currency(BaseModel):
 
 
 def test_get_function_schema_pydantic() -> None:
-    from autogen.tools.dependency_injection import string_metadata_to_description_field
+    from autogen.tools.dependency_injection import _string_metadata_to_description_field
 
     def currency_calculator(  # type: ignore[empty-body]
         base: Annotated[Currency, "Base currency: amount and currency symbol"],
@@ -311,7 +311,7 @@ def test_get_function_schema_pydantic() -> None:
     ) -> Currency:
         pass
 
-    currency_calculator = string_metadata_to_description_field(currency_calculator)
+    currency_calculator = _string_metadata_to_description_field(currency_calculator)
 
     expected = {
         "type": "function",

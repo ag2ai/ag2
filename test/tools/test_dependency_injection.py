@@ -12,8 +12,8 @@ from autogen.tools.dependency_injection import (
     BaseContext,
     Depends,
     DescriptionField,
-    remove_injected_params_from_signature,
-    string_metadata_to_description_field,
+    _remove_injected_params_from_signature,
+    _string_metadata_to_description_field,
 )
 
 
@@ -61,7 +61,7 @@ class TestRemoveInjectedParamsFromSignature:
 
     @pytest.mark.parametrize("test_func", [f_with_annotated, f_without_annotated, f_without_annotated_and_depends])
     def test_remove_injected_params_from_signature(self, test_func: Callable[..., int]) -> None:
-        remove_injected_params_from_signature(test_func)
+        _remove_injected_params_from_signature(test_func)
         assert str(inspect.signature(test_func)) == "(a: int) -> int"
 
 
@@ -80,7 +80,7 @@ def test_string_metadata_to_description_field() -> None:
 
     assert params_with_string_metadata == ["b"]
 
-    f = string_metadata_to_description_field(f)
+    f = _string_metadata_to_description_field(f)
     type_hints = get_type_hints(f, include_extras=True)
     for param, annotation in type_hints.items():
         if hasattr(annotation, "__metadata__"):

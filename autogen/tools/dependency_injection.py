@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from typing import Any, Callable, Generator, get_type_hints
 
 from fast_depends import Depends as FastDepends
+from fast_depends import inject
 from pydantic import Field
 
 __all__ = [
@@ -15,8 +16,7 @@ __all__ = [
     "ChatContext",
     "Depends",
     "DescriptionField",
-    "remove_injected_params_from_signature",
-    "string_metadata_to_description_field",
+    "inject_params",
 ]
 
 
@@ -35,7 +35,7 @@ def Depends(x: Any) -> Any:
     return FastDepends(x)
 
 
-def remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
+def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
     remove_from_signature = []
     sig = inspect.signature(func)
     for param in sig.parameters.values():
@@ -53,7 +53,7 @@ class DescriptionField:
         self.description = description
 
 
-def string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[..., Any]:
+def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[..., Any]:
     type_hints = get_type_hints(func, include_extras=True)
 
     for _, annotation in type_hints.items():
@@ -63,3 +63,11 @@ def string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[.
                 # Replace string metadata with DescriptionField
                 annotation.__metadata__ = (DescriptionField(description=metadata[0]),)
     return func
+
+
+def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
+    f = _string_metadata_to_description_field(f)
+    f = inject(f)
+    f = _remove_injected_params_from_signature(f)
+
+    return f
