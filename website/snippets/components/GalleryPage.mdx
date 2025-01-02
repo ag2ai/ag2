@@ -14,9 +14,13 @@ export const GalleryPage = ({
   const defaultImageIfNoImage = allowDefaultImage ?? true;
   const allTags = [...new Set(galleryItems.flatMap((item) => item.tags))];
 
-   const handleDivClick = (e, targetLink) => {
+   const handleCardClick = (e, targetLink) => {
     if (!e.target.closest('a')) {
-      window.location.href = targetLink;
+      if (target === '_blank') {
+        window.open(targetLink, '_blank');
+      } else {
+        window.location.href = targetLink;
+      }
     }
   };
 
@@ -149,7 +153,7 @@ export const GalleryPage = ({
       <CardGroup cols={3}>
         {galleryItems.map((item, index) => (
           <Card key={index}>
-            <div className="card-container" onClick={(e) => handleDivClick(e, item.link)}>
+            <div className="card-container" onClick={(e) => handleCardClick(e, item.link)}>
               {imageFunc(item)}
               <h5 className="card-title">{item.title}</h5>
               {badges(item)}
