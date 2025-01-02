@@ -36,7 +36,6 @@ from autogen.messages import (
     ToolResponseMessage,
     create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
-    create_execute_function,
     create_generate_code_execution_reply,
     create_received_message_model,
     create_select_speaker,
@@ -632,16 +631,20 @@ def test_execute_code_block(uuid: UUID, sender: ConversableAgent, recipient: Con
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_execute_function(recipient: ConversableAgent) -> None:
+def test_execute_function(uuid: UUID, recipient: ConversableAgent) -> None:
     func_name = "add_num"
     verbose = True
 
-    actual = create_execute_function(func_name, recipient=recipient, verbose=verbose)
-
+    actual = ExecuteFunction(uuid=uuid, func_name=func_name, recipient=recipient, verbose=verbose)
     assert isinstance(actual, ExecuteFunction)
-    assert actual.func_name == func_name
-    assert actual.recipient_name == "recipient"
-    assert actual.verbose == verbose
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "func_name": func_name,
+        "recipient_name": "recipient",
+        "verbose": verbose,
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print_executing_func(f=mock)

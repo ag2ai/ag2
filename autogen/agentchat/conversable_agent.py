@@ -37,10 +37,10 @@ from ..function_utils import get_function_schema, load_basemodels_if_needed, ser
 from ..io.base import IOStream
 from ..messages import (
     ExecuteCodeBlock,
+    ExecuteFunction,
     TerminationAndHumanReply,
     create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
-    create_execute_function,
     create_generate_code_execution_reply,
     create_received_message_model,
 )
@@ -2298,7 +2298,7 @@ class ConversableAgent(LLMAgent):
         func_name = func_call.get("name", "")
         func = self._function_map.get(func_name, None)
 
-        execute_function = create_execute_function(func_name, self, verbose=verbose)
+        execute_function = ExecuteFunction(func_name=func_name, recipient=self, verbose=verbose)
 
         is_exec_success = False
         if func is not None:
@@ -2351,7 +2351,7 @@ class ConversableAgent(LLMAgent):
         func_name = func_call.get("name", "")
         func = self._function_map.get(func_name, None)
 
-        execute_function = create_execute_function(func_name, self)
+        execute_function = ExecuteFunction(func_name=func_name, recipient=self)
 
         is_exec_success = False
         if func is not None:

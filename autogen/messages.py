@@ -507,6 +507,11 @@ class ExecuteFunction(BaseMessage):
     recipient_name: str
     verbose: Optional[bool] = False
 
+    def __init__(
+        self, *, uuid: Optional[UUID] = None, func_name: str, recipient: "Agent", verbose: Optional[bool] = False
+    ):
+        super().__init__(uuid=uuid, func_name=func_name, recipient_name=recipient.name, verbose=verbose)
+
     def print_executing_func(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -525,10 +530,6 @@ class ExecuteFunction(BaseMessage):
                 colored(f"\nInput arguments: {arguments}\nOutput:\n{content}", "magenta"),
                 flush=True,
             )
-
-
-def create_execute_function(func_name: str, recipient: "Agent", verbose: Optional[bool] = False) -> ExecuteFunction:
-    return ExecuteFunction(func_name=func_name, recipient_name=recipient.name, verbose=verbose)
 
 
 class SelectSpeaker(BaseMessage):
