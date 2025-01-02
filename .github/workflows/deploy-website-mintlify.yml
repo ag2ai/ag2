@@ -105,6 +105,11 @@ jobs:
           python ./process_notebooks.py render
         working-directory: website
 
+      - name: check the contents website/snippets/data/NotebooksMetadata.mdx
+        run: |
+          cat ./snippets/data/NotebooksMetadata.mdx
+        working-directory: website
+
       - name: Prepare website content
         run: |
           # Create a temporary directory for filtered content
@@ -112,6 +117,11 @@ jobs:
 
           # Copy files except .ipynb, node_modules, .quarto, .gitignore, and temp_website
           find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -path "./temp_website/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
+
+      - name: check the contents temp_website/snippets/data/NotebooksMetadata.mdx
+        run: |
+          cat ./snippets/data/NotebooksMetadata.mdx
+        working-directory: ./website/temp_website
 
       - name: Deploy to Mintlify
         uses: peaceiris/actions-gh-pages@v3
