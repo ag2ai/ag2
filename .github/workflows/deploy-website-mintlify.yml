@@ -50,7 +50,8 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Build documentation
-        run: ../scripts/docs_build.sh
+        run: ./scripts/docs_build.sh
+        working-directory: .
 
       - name: Prepare website content
         run: |
@@ -89,7 +90,8 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Build documentation
-        run: ../scripts/docs_build.sh
+        run: ./scripts/docs_build.sh
+        working-directory: .
 
       - name: Prepare website content
         run: |
