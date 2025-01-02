@@ -493,3 +493,38 @@ class SelectSpeaker(BaseModel):
 def create_select_speaker(agents: Optional[list[Agent]] = None) -> SelectSpeaker:
     agent_names = [agent.name for agent in agents] if agents else None
     return SelectSpeaker(agent_names=agent_names)
+
+
+class ClearConversableAgentHistory(BaseModel):
+    agent_name: str
+    nr_messages_to_preserve: Optional[int] = None
+
+    def print_preserving_message(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.nr_messages_to_preserve:
+            f(
+                f"Preserving one more message for {self.agent_name} to not divide history between tool call and "
+                f"tool response."
+            )
+
+    def print_warning(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        if self.nr_messages_to_preserve:
+            f(
+                colored(
+                    "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
+                    "yellow",
+                ),
+                flush=True,
+            )
+
+
+def create_clear_conversable_agent_history(
+    agent: Agent, nr_messages_to_preserve: Optional[int] = None
+) -> ClearConversableAgentHistory:
+    return ClearConversableAgentHistory(
+        agent_name=agent.name,
+        nr_messages_to_preserve=nr_messages_to_preserve,
+    )

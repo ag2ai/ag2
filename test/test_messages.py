@@ -11,6 +11,7 @@ import termcolor.termcolor
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.messages import (
     ClearAgentsHistory,
+    ClearConversableAgentHistory,
     ContentMessage,
     ExecuteCodeBlock,
     ExecuteFunction,
@@ -29,6 +30,7 @@ from autogen.messages import (
     ToolResponse,
     ToolResponseMessage,
     create_clear_agents_history,
+    create_clear_conversable_agent_history,
     create_execute_code_block,
     create_execute_function,
     create_group_chat_resume,
@@ -631,4 +633,33 @@ def test_select_speaker() -> None:
     actual.print_invalid_input(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [call("Invalid input. Please enter a number between 1 and 2.")]
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_clear_conversable_agent_history(recipient: ConversableAgent) -> None:
+    nr_messages_to_preserve = 5
+
+    actual = create_clear_conversable_agent_history(recipient, nr_messages_to_preserve)
+
+    assert isinstance(actual, ClearConversableAgentHistory)
+    assert actual.agent_name == "recipient"
+    assert actual.nr_messages_to_preserve == nr_messages_to_preserve
+
+    mock = MagicMock()
+    actual.print_preserving_message(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [
+        call("Preserving one more message for recipient to not divide history between tool call and tool response.")
+    ]
+    assert mock.call_args_list == expected_call_args_list
+
+    mock = MagicMock()
+    actual.print_warning(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [
+        call(
+            "\x1b[33mWARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.\x1b[0m",
+            flush=True,
+        )
+    ]
     assert mock.call_args_list == expected_call_args_list

@@ -36,6 +36,7 @@ from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
 from ..messages import (
+    create_clear_conversable_agent_history,
     create_execute_code_block,
     create_execute_function,
     create_received_message_model,
@@ -1381,6 +1382,9 @@ class ConversableAgent(LLMAgent):
             nr_messages_to_preserve: the number of newest messages to preserve in the chat history.
         """
         iostream = IOStream.get_default()
+        clear_conversable_agent_history = create_clear_conversable_agent_history(
+            agent=self, nr_messages_to_preserve=nr_messages_to_preserve
+        )
         if recipient is None:
             if nr_messages_to_preserve:
                 for key in self._oai_messages:
@@ -1390,24 +1394,14 @@ class ConversableAgent(LLMAgent):
                     first_msg_to_save = self._oai_messages[key][-nr_messages_to_preserve_internal]
                     if "tool_responses" in first_msg_to_save:
                         nr_messages_to_preserve_internal += 1
-                        iostream.print(
-                            f"Preserving one more message for {self.name} to not divide history between tool call and "
-                            f"tool response."
-                        )
+                        clear_conversable_agent_history.print_preserving_message(iostream.print)
                     # Remove messages from history except last `nr_messages_to_preserve` messages.
                     self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
             else:
                 self._oai_messages.clear()
         else:
             self._oai_messages[recipient].clear()
-            if nr_messages_to_preserve:
-                iostream.print(
-                    colored(
-                        "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
-                        "yellow",
-                    ),
-                    flush=True,
-                )
+            clear_conversable_agent_history.print_warning(iostream.print)
 
     def generate_oai_reply(
         self,
