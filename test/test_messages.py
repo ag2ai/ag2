@@ -36,7 +36,6 @@ from autogen.messages import (
     ToolResponseMessage,
     create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
-    create_execute_code_block,
     create_execute_function,
     create_generate_code_execution_reply,
     create_received_message_model,
@@ -602,17 +601,24 @@ def test_termination_and_human_reply(uuid: UUID, sender: ConversableAgent, recip
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_execute_code_block(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_execute_code_block(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     code = """print("hello world")"""
     language = "python"
     code_block_count = 0
 
-    actual = create_execute_code_block(code, language, code_block_count, recipient=recipient)
-
+    actual = ExecuteCodeBlock(
+        uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient=recipient
+    )
     assert isinstance(actual, ExecuteCodeBlock)
-    assert actual.code == code
-    assert actual.language == language
-    assert actual.code_block_count == code_block_count
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "code": code,
+        "language": language,
+        "code_block_count": code_block_count,
+        "recipient_name": "recipient",
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)

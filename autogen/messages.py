@@ -483,6 +483,13 @@ class ExecuteCodeBlock(BaseMessage):
     code_block_count: int
     recipient_name: str
 
+    def __init__(
+        self, *, uuid: Optional[UUID] = None, code: str, language: str, code_block_count: int, recipient: "Agent"
+    ):
+        super().__init__(
+            uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
+        )
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -493,12 +500,6 @@ class ExecuteCodeBlock(BaseMessage):
             ),
             flush=True,
         )
-
-
-def create_execute_code_block(code: str, language: str, code_block_count: int, recipient: "Agent") -> ExecuteCodeBlock:
-    return ExecuteCodeBlock(
-        code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
-    )
 
 
 class ExecuteFunction(BaseMessage):

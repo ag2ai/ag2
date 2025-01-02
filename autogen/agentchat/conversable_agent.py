@@ -36,10 +36,10 @@ from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
 from ..messages import (
+    ExecuteCodeBlock,
     TerminationAndHumanReply,
     create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
-    create_execute_code_block,
     create_execute_function,
     create_generate_code_execution_reply,
     create_received_message_model,
@@ -2216,7 +2216,7 @@ class ConversableAgent(LLMAgent):
             if not lang:
                 lang = infer_lang(code)
 
-            execute_code_block = create_execute_code_block(code, lang, i, self)
+            execute_code_block = ExecuteCodeBlock(code=code, language=lang, code_block_count=i, recipient=self)
             execute_code_block.print(iostream.print)
 
             if lang in ["bash", "shell", "sh"]:
