@@ -25,5 +25,5 @@ jobs:
       - name: Sleep for 5 minutes
         run: sleep 300
 
-      - name: Check links using container
+      - name: Check for broken links
         run: ./scripts/broken-links-check.sh

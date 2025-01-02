@@ -1,4 +1,5 @@
 http://localhost
+http://0.0.0.0
 linkedin.com
 x.com
 twitter.com
@@ -10,7 +11,9 @@ https://code.visualstudio.com/docs/devcontainers/containers
 https://thesequence.substack.com/p/my-five-favorite-ai-papers-of-2023
 https://www.llama.com/docs/how-to-guides/prompting/
 https://azure.microsoft.com/en-us/get-started/azure-portal
-https://github.com/pgvector/pgvector?tab=readme-ov-file
+https://azure.microsoft.com/en-us/products/ai-services/openai-service
+https://azure.microsoft.com/en-us/pricing/purchase-options/azure-account?icid=azurefreeaccount
+https://github.com/pgvector/pgvector
 https://github.com/ag2ai/ag2/blob/b1adac515931bf236ac59224269eeec683a162ba/test/oai/test_client.py
 https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md
 https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff148ac/src/openai/resources/completions.py
@@ -23,7 +26,6 @@ https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/agent_builder.p
 https://github.com/qdrant/qdrant-client/blob/master/qdrant_client/qdrant_client.py
 https://qdrant.github.io/qdrant/redoc/index.html#tag/collections/operation/create_collection
 https://qdrant.github.io/qdrant/redoc/index.html#tag/collections/operation/create_field_index
-https://github.com/pgvector/pgvector?tab=readme-ov-file#hnsw
 https://github.com/chroma-core/chroma/blob/566bc80f6c8ee29f7d99b6322654f32183c368c4/chromadb/segment/impl/vector/local_hnsw.py
 https://github.com/nmslib/hnswlib#supported-distances
 https://github.com/ollama/ollama/blob/main/docs/api.md#parameters

@@ -25,7 +25,7 @@ __version__ = version["__version__"]
 current_os = platform.system()
 
 install_requires = [
-    "openai>=1.57",
+    "openai>=1.58",
     "diskcache",
     "termcolor",
     "flaml",
@@ -51,6 +51,7 @@ test = [
     "pytest-asyncio",
     "pytest>=8,<9",
     "pandas",
+    "fastapi>=0.115.0,<1",
 ]
 
 jupyter_executor = [
@@ -90,7 +91,7 @@ interop_langchain = ["langchain-community>=0.3.12,<1"]
 interop_pydantic_ai = ["pydantic-ai==0.0.13"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai
 
-types = ["mypy==1.9.0"] + test + jupyter_executor + interop + ["fastapi>=0.115.0,<1"]
+types = ["mypy==1.9.0"] + test + jupyter_executor + interop
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
@@ -136,7 +137,7 @@ extra_require = {
     "jupyter-executor": jupyter_executor,
     "types": types,
     "long-context": ["llmlingua<0.3"],
-    "anthropic": ["anthropic>=0.23.1"],
+    "anthropic": ["anthropic[vertex]>=0.23.1"],
     "cerebras": ["cerebras_cloud_sdk>=1.0.0"],
     "mistral": ["mistralai>=1.0.1"],
     "groq": ["groq>=0.9.0"],
