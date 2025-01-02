@@ -21,8 +21,8 @@ from ..io.base import IOStream
 from ..messages import (
     ClearAgentsHistory,
     GroupChatResume,
+    GroupChatRunChat,
     SpeakerAttempt,
-    create_group_chat_run_chat,
     create_select_speaker,
 )
 from ..oai.client import ModelClient
@@ -1154,7 +1154,7 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    group_chat_run_chat = create_group_chat_run_chat(speaker, silent)
+                    group_chat_run_chat = GroupChatRunChat(speaker=speaker, silent=silent)
                     group_chat_run_chat.print(iostream.print)
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)

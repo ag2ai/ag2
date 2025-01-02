@@ -431,15 +431,14 @@ class GroupChatRunChat(BaseMessage):
     speaker_name: str
     verbose: Optional[bool] = False
 
+    def __init__(self, *, uuid: Optional[UUID] = None, speaker: "Agent", silent: Optional[bool] = False):
+        super().__init__(uuid=uuid, speaker_name=speaker.name, verbose=not silent)
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         if self.verbose:
             f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
-
-
-def create_group_chat_run_chat(speaker: "Agent", silent: Optional[bool] = False) -> GroupChatRunChat:
-    return GroupChatRunChat(speaker_name=speaker.name, verbose=not silent)
 
 
 class TerminationAndHumanReply(BaseMessage):

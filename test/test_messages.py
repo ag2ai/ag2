@@ -39,7 +39,6 @@ from autogen.messages import (
     create_execute_code_block,
     create_execute_function,
     create_generate_code_execution_reply,
-    create_group_chat_run_chat,
     create_received_message_model,
     create_select_speaker,
     create_termination_and_human_reply,
@@ -540,15 +539,22 @@ def test_group_chat_resume(uuid: UUID) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_group_chat_run_chat() -> None:
+def test_group_chat_run_chat(uuid: UUID) -> None:
     speaker = ConversableAgent(
         "assistant uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
     )
     silent = False
 
-    actual = create_group_chat_run_chat(speaker, silent)
-
+    actual = GroupChatRunChat(uuid=uuid, speaker=speaker, silent=silent)
     assert isinstance(actual, GroupChatRunChat)
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "speaker_name": "assistant uno",
+        "verbose": True,
+    }
+    assert actual.model_dump() == expected_model_dump
+
     assert actual.speaker_name == "assistant uno"
     assert actual.verbose is True
 
