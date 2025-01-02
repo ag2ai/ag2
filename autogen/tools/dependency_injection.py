@@ -4,7 +4,7 @@
 
 import inspect
 from abc import ABC
-from typing import Any, Callable, get_type_hints
+from typing import Any, Callable, Iterable, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
@@ -33,27 +33,23 @@ def Depends(x: Any) -> Any:
 
     return FastDepends(x)
 
+def _is_base_context_param(param: inspect.Parameter) -> bool:
+    return isinstance(param.annotation, type) and issubclass(param.annotation, BaseContext)
+
+def _is_depends_param(param: inspect.Parameter) -> bool:
+    return isinstance(param.default, model.Depends) or (
+        hasattr(param.annotation, "__metadata__")
+        and type(param.annotation.__metadata__) == tuple
+        and isinstance(param.annotation.__metadata__[0], model.Depends)
+    )
+def _remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
+    new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in params])
+    func.__signature__ = new_signature  # type: ignore[attr-defined]
 
 def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
-    remove_from_signature = []
     sig = inspect.signature(func)
-    for param in sig.parameters.values():
-        param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
-        if isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext):
-            remove_from_signature.append(param.name)
-            continue
-
-        # Check if the parameter has a Depends annotation
-        param_annotation = param.annotation
-        if isinstance(param.default, model.Depends) or (
-            hasattr(param_annotation, "__metadata__")
-            and type(param_annotation.__metadata__) == tuple
-            and isinstance(param_annotation.__metadata__[0], model.Depends)
-        ):
-            remove_from_signature.append(param.name)
-
-    new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in remove_from_signature])
-    func.__signature__ = new_signature  # type: ignore[attr-defined]
+    params_to_remove = [p.name for p in sig.parameters.values() if _is_base_context_param(p) or _is_depends_param(p)]
+    _remove_params(func, sig, params_to_remove)
     return func
 
 
