@@ -13,7 +13,7 @@ import os
 import sys
 import time
 import unittest
-from typing import Annotated, Any, Callable, Dict, Literal
+from typing import Annotated, Any, Callable, Literal
 from unittest.mock import MagicMock
 
 import pytest
@@ -690,162 +690,104 @@ class TestDependencyInjection:
             }
         ]
 
-    @pytest.mark.parametrize("is_async", [False, True])
-    def test_register_tool(self, is_async):
-        if is_async:
+    def f_with_annotated(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
 
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            async def f(
-                a: int,
-                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + c
+    async def f_with_annotated_async(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
 
-        else:
+    def f_without_annotated(
+        a: int,
+        ctx: MyContext = Depends(MyContext(b=3)),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
 
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            def f(
-                a: int,
-                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + c
+    async def f_without_annotated_async(
+        a: int,
+        ctx: MyContext = Depends(MyContext(b=3)),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
 
+    def f_with_annotated_and_depends(
+        a: int,
+        ctx: MyContext = MyContext(b=4),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    async def f_with_annotated_and_depends_async(
+        a: int,
+        ctx: MyContext = MyContext(b=4),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + c
+
+    def f_with_multiple_depends(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + ctx2.b + c
+
+    async def f_with_multiple_depends_async(
+        a: int,
+        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx.b + ctx2.b + c
+
+    def f_wihout_base_context(
+        a: int,
+        ctx: Annotated[int, Depends(lambda a: a + 2)],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
+    async def f_wihout_base_context_async(
+        a: int,
+        ctx: Annotated[int, Depends(lambda a: a + 2)],
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
+    @pytest.mark.parametrize(
+        ("func", "func_name", "is_async", "expected"),
+        [
+            (f_with_annotated, "f_with_annotated", False, "6"),
+            (f_with_annotated_async, "f_with_annotated_async", True, "6"),
+            (f_without_annotated, "f_without_annotated", False, "7"),
+            (f_without_annotated_async, "f_without_annotated_async", True, "7"),
+            (f_with_annotated_and_depends, "f_with_annotated_and_depends", False, "8"),
+            (f_with_annotated_and_depends_async, "f_with_annotated_and_depends_async", True, "8"),
+            (f_with_multiple_depends, "f_with_multiple_depends", False, "9"),
+            (f_with_multiple_depends_async, "f_with_multiple_depends_async", True, "9"),
+            (f_wihout_base_context, "f_wihout_base_context", False, "7"),
+            (f_wihout_base_context_async, "f_wihout_base_context_async", True, "7"),
+        ],
+    )
+    def test_register_tools(self, func: Callable[..., Any], func_name: str, is_async: bool, expected: str) -> None:
+        self.agent.register_for_llm(description="Example function")(func)
+        self.agent.register_for_execution()(func)
+
+        self.expected_tools[0]["function"]["name"] = func_name
         assert self.agent.llm_config["tools"] == self.expected_tools
-        assert "f" in self.agent.function_map.keys()
+        assert func_name in self.agent.function_map.keys()
         if is_async:
-            assert asyncio.run(self.agent.function_map["f"](1)) == "6"
+            assert asyncio.run(self.agent.function_map[func_name](1)) == expected
         else:
-            assert self.agent.function_map["f"](1) == "6"
-
-    @pytest.mark.parametrize("is_async", [False, True])
-    def test_register_tool_without_annotated(self, is_async):
-        if is_async:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            async def f(
-                a: int,
-                ctx: self.MyContext = Depends(self.MyContext(b=3)),
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + c
-
-        else:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            def f(
-                a: int,
-                ctx: self.MyContext = Depends(self.MyContext(b=3)),
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + c
-
-        assert self.agent.llm_config["tools"] == self.expected_tools
-        assert "f" in self.agent.function_map.keys()
-        if is_async:
-            assert asyncio.run(self.agent.function_map["f"](1)) == "7"
-        else:
-            assert self.agent.function_map["f"](1) == "7"
-
-    @pytest.mark.parametrize("is_async", [False, True])
-    def test_register_tool_without_annotated_and_depends(self, is_async):
-        if is_async:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            async def f(
-                a: int,
-                ctx: self.MyContext = self.MyContext(b=4),
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + c
-
-        else:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            def f(
-                a: int,
-                ctx: self.MyContext = self.MyContext(b=4),
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + c
-
-        assert self.agent.llm_config["tools"] == self.expected_tools
-        assert "f" in self.agent.function_map.keys()
-        if is_async:
-            assert asyncio.run(self.agent.function_map["f"](1)) == "8"
-        else:
-            assert self.agent.function_map["f"](1) == "8"
-
-    @pytest.mark.parametrize("is_async", [False, True])
-    def test_register_tool_with_multiple_depends_params(self, is_async):
-        if is_async:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            async def f(
-                a: int,
-                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
-                ctx2: Annotated[self.MyContext, Depends(self.MyContext(b=3))],
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + ctx2.b + c
-
-        else:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            def f(
-                a: int,
-                ctx: Annotated[self.MyContext, Depends(self.MyContext(b=2))],
-                ctx2: Annotated[self.MyContext, Depends(self.MyContext(b=3))],
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx.b + ctx2.b + c
-
-        assert self.agent.llm_config["tools"] == self.expected_tools
-        assert "f" in self.agent.function_map.keys()
-        if is_async:
-            assert asyncio.run(self.agent.function_map["f"](1)) == "9"
-        else:
-            assert self.agent.function_map["f"](1) == "9"
-
-    @pytest.mark.parametrize("is_async", [False, True])
-    def test_register_tool_without_base_context(self, is_async):
-        if is_async:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            async def f(
-                a: int,
-                ctx: Annotated[int, Depends(lambda a: a + 2)],
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx + c
-
-        else:
-
-            @self.agent.register_for_llm(description="Example function")
-            @self.agent.register_for_execution()
-            def f(
-                a: int,
-                ctx: Annotated[int, Depends(lambda a: a + 2)],
-                c: Annotated[int, "c description"] = 3,
-            ) -> int:
-                return a + ctx + c
-
-        assert self.agent.llm_config["tools"] == self.expected_tools
-        assert "f" in self.agent.function_map.keys()
-        if is_async:
-            assert asyncio.run(self.agent.function_map["f"](1)) == "7"
-        else:
-            assert self.agent.function_map["f"](1) == "7"
+            assert self.agent.function_map[func_name](1) == expected
 
     @pytest.mark.skipif(
         skip_openai,
