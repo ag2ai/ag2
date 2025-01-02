@@ -762,6 +762,20 @@ class TestDependencyInjection:
     ) -> int:
         return a + ctx + c
 
+    def f_with_default_depends(
+        a: int,
+        ctx: int = Depends(lambda a: a + 2),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
+    async def f_with_default_depends_async(
+        a: int,
+        ctx: int = Depends(lambda a: a + 2),
+        c: Annotated[int, "c description"] = 3,
+    ) -> int:
+        return a + ctx + c
+
     @pytest.mark.parametrize(
         ("func", "func_name", "is_async", "expected"),
         [
@@ -775,6 +789,8 @@ class TestDependencyInjection:
             (f_with_multiple_depends_async, "f_with_multiple_depends_async", True, "9"),
             (f_wihout_base_context, "f_wihout_base_context", False, "7"),
             (f_wihout_base_context_async, "f_wihout_base_context_async", True, "7"),
+            (f_with_default_depends, "f_with_default_depends", False, "7"),
+            (f_with_default_depends_async, "f_with_default_depends_async", True, "7"),
         ],
     )
     def test_register_tools(self, func: Callable[..., Any], func_name: str, is_async: bool, expected: str) -> None:

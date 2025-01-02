@@ -45,7 +45,7 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
 
         # Check if the parameter has a Depends annotation
         param_annotation = param.annotation
-        if (
+        if isinstance(param.default, model.Depends) or (
             hasattr(param_annotation, "__metadata__")
             and type(param_annotation.__metadata__) == tuple
             and isinstance(param_annotation.__metadata__[0], model.Depends)
