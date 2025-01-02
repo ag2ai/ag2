@@ -34,7 +34,6 @@ from autogen.messages import (
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
-    create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
     create_generate_code_execution_reply,
     create_received_message_model,
@@ -700,14 +699,18 @@ def test_select_speaker(uuid: UUID) -> None:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_clear_conversable_agent_history(recipient: ConversableAgent) -> None:
+def test_clear_conversable_agent_history(uuid: UUID, recipient: ConversableAgent) -> None:
     nr_messages_to_preserve = 5
 
-    actual = create_clear_conversable_agent_history(recipient, nr_messages_to_preserve)
-
+    actual = ClearConversableAgentHistory(uuid=uuid, agent=recipient, nr_messages_to_preserve=nr_messages_to_preserve)
     assert isinstance(actual, ClearConversableAgentHistory)
-    assert actual.agent_name == "recipient"
-    assert actual.nr_messages_to_preserve == nr_messages_to_preserve
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "agent_name": "recipient",
+        "nr_messages_to_preserve": nr_messages_to_preserve,
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print_preserving_message(f=mock)

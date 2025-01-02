@@ -562,6 +562,13 @@ class ClearConversableAgentHistory(BaseMessage):
     agent_name: str
     nr_messages_to_preserve: Optional[int] = None
 
+    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", nr_messages_to_preserve: Optional[int] = None):
+        super().__init__(
+            uuid=uuid,
+            agent_name=agent.name,
+            nr_messages_to_preserve=nr_messages_to_preserve,
+        )
+
     def print_preserving_message(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -582,15 +589,6 @@ class ClearConversableAgentHistory(BaseMessage):
                 ),
                 flush=True,
             )
-
-
-def create_clear_conversable_agent_history(
-    agent: "Agent", nr_messages_to_preserve: Optional[int] = None
-) -> ClearConversableAgentHistory:
-    return ClearConversableAgentHistory(
-        agent_name=agent.name,
-        nr_messages_to_preserve=nr_messages_to_preserve,
-    )
 
 
 class GenerateCodeExecutionReply(BaseMessage):

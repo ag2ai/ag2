@@ -36,10 +36,10 @@ from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
 from ..messages import (
+    ClearConversableAgentHistory,
     ExecuteCodeBlock,
     ExecuteFunction,
     TerminationAndHumanReply,
-    create_clear_conversable_agent_history,
     create_conversable_agent_usage_summary,
     create_generate_code_execution_reply,
     create_received_message_model,
@@ -1384,7 +1384,7 @@ class ConversableAgent(LLMAgent):
             nr_messages_to_preserve: the number of newest messages to preserve in the chat history.
         """
         iostream = IOStream.get_default()
-        clear_conversable_agent_history = create_clear_conversable_agent_history(
+        clear_conversable_agent_history = ClearConversableAgentHistory(
             agent=self, nr_messages_to_preserve=nr_messages_to_preserve
         )
         if recipient is None:
