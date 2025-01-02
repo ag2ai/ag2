@@ -816,6 +816,37 @@ class TestDependencyInjection:
         else:
             assert self.agent.function_map["f"](1) == "9"
 
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_register_tool_without_base_context(self, is_async):
+        if is_async:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            async def f(
+                a: int,
+                ctx: Annotated[int, Depends(lambda a: a + 2)],
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx + c
+
+        else:
+
+            @self.agent.register_for_llm(description="Example function")
+            @self.agent.register_for_execution()
+            def f(
+                a: int,
+                ctx: Annotated[int, Depends(lambda a: a + 2)],
+                c: Annotated[int, "c description"] = 3,
+            ) -> int:
+                return a + ctx + c
+
+        assert self.agent.llm_config["tools"] == self.expected_tools
+        assert "f" in self.agent.function_map.keys()
+        if is_async:
+            assert asyncio.run(self.agent.function_map["f"](1)) == "7"
+        else:
+            assert self.agent.function_map["f"](1) == "7"
+
     @pytest.mark.skipif(
         skip_openai,
         reason=reason,

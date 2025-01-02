@@ -8,6 +8,7 @@ from typing import Any, Callable, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
+from fast_depends.dependencies import model
 
 __all__ = [
     "BaseContext",
@@ -39,6 +40,16 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
     for param in sig.parameters.values():
         param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
         if isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext):
+            remove_from_signature.append(param.name)
+            continue
+
+        # Check if the parameter has a Depends annotation
+        param_annotation = param.annotation
+        if (
+            hasattr(param_annotation, "__metadata__")
+            and type(param_annotation.__metadata__) == tuple
+            and isinstance(param_annotation.__metadata__[0], model.Depends)
+        ):
             remove_from_signature.append(param.name)
 
     new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in remove_from_signature])
