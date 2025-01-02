@@ -78,6 +78,10 @@ jobs:
         with:
           lfs: true
           fetch-depth: 0
+      - name: check the contents website/snippets/data/NotebooksMetadata.mdx
+        run: |
+          cat ./snippets/data/NotebooksMetadata.mdx
+        working-directory: website
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -99,12 +103,14 @@ jobs:
         run: |
           python ./process_api_reference.py
         working-directory: website
-
+      - name: check the contents website/snippets/data/NotebooksMetadata.mdx
+        run: |
+          cat ./snippets/data/NotebooksMetadata.mdx
+        working-directory: website
       - name: Convert Jupyter notebooks to MDX
         run: |
           python ./process_notebooks.py render
         working-directory: website
-
       - name: check the contents website/snippets/data/NotebooksMetadata.mdx
         run: |
           cat ./snippets/data/NotebooksMetadata.mdx
