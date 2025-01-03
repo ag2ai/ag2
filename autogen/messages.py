@@ -246,12 +246,12 @@ def create_received_message_model(
 
 class PostCarryoverProcessing(BaseMessage):
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
-    message: Optional[Union[str, dict[str, Any], Callable[..., Any]]] = None
+    message: str
     verbose: bool = False
 
     sender_name: str
     recipient_name: str
-    summary_method: Union[str, Callable[..., Any]]
+    summary_method: str
     summary_args: Optional[dict[str, Any]] = None
     max_turns: Optional[int] = None
 
@@ -262,6 +262,22 @@ class PostCarryoverProcessing(BaseMessage):
         chat_info = deepcopy(chat_info)
         sender_name = chat_info.pop("sender").name
         recipient_name = chat_info.pop("recipient").name
+
+        # Fix Callable in chat_info
+        if callable(chat_info.get("summary_method")):
+            chat_info["summary_method"] = chat_info["summary_method"].__name__
+
+        message = chat_info.get("message")
+        print_message = ""
+        if isinstance(message, str):
+            print_message = message
+        elif callable(message):
+            print_message = "Callable: " + message.__name__
+        elif isinstance(message, dict):
+            print_message = "Dict: " + str(message)
+        elif message is None:
+            print_message = "None"
+        chat_info["message"] = print_message
 
         super().__init__(
             uuid=uuid,
@@ -290,14 +306,6 @@ class PostCarryoverProcessing(BaseMessage):
 
         print_carryover = self._process_carryover()
 
-        if isinstance(self.message, str):
-            print_message = self.message
-        elif callable(self.message):
-            print_message = "Callable: " + self.message.__name__
-        elif isinstance(self.message, dict):
-            print_message = "Dict: " + str(self.message)
-        elif self.message is None:
-            print_message = "None"
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
         f(
             colored(
@@ -307,7 +315,7 @@ class PostCarryoverProcessing(BaseMessage):
             flush=True,
         )
         if self.verbose:
-            f(colored("Message:\n" + print_message, "blue"), flush=True)
+            f(colored("Message:\n" + self.message, "blue"), flush=True)
             f(colored("Carryover:\n" + print_carryover, "blue"), flush=True)
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
 
