@@ -15,6 +15,7 @@ import autogen
 from autogen.cache.cache import Cache
 from autogen.io import IOWebsockets
 from autogen.io.base import IOStream
+from autogen.messages.agent_messages import TextMessage
 
 KEY_LOC = "notebook"
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
@@ -39,6 +40,8 @@ class TestConsoleIOWithWebsockets:
 
             print(" - on_connect(): Receiving message from client.", flush=True)
 
+            text_message = TextMessage()
+
             msg = iostream.input()
 
             print(f" - on_connect(): Received message '{msg}' from client.", flush=True)
@@ -48,7 +51,7 @@ class TestConsoleIOWithWebsockets:
             for msg in ["Hello, World!", "Over and out!"]:
                 print(f" - on_connect(): Sending message '{msg}' to client.", flush=True)
 
-                iostream.print(msg)
+                text_message.print(msg, iostream.print)
 
             print(" - on_connect(): Receiving message from client.", flush=True)
 
