@@ -10,6 +10,7 @@ import inspect
 import logging
 import sys
 import uuid
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
 from pydantic import BaseModel, schema_json_of
@@ -306,8 +307,10 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
 
+        _is_o1 = "model" in params and params["model"].startswith("o1")
+
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params:
+        if params.get("stream", False) and "messages" in params and not _is_o1:
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
@@ -416,10 +419,45 @@ class OpenAIClient:
         else:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
+            if _is_o1:
+                # add a warning that o1 model does not support stream
+                if params.get("stream", False):
+                    warnings.warn("The o1 model does not support streaming. The stream will be set to False.")
+                if params.get("tools", False):
+                    raise ValueError("The o1 model does not support tools.")
+                params, _system_msg_dict = self._process_o1_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
+            # remove the system_message from the response and add it in the prompt at the start.
+            if _is_o1:
+                params["messages"][0]["content"] = params["messages"][0]["content"].split("\n\n", 1)[1]
+                params["messages"].insert(0, _system_msg_dict)
 
         return response
+
+    def _process_o1_params(self, params):
+        """
+        Cater for the o1 model parameters
+        please refer: https://platform.openai.com/docs/guides/reasoning#limitations
+        """
+        # Unsupported parameters
+        params.pop("temperature", None)
+        params.pop("frequency_penalty", None)
+        params.pop("presence_penalty", None)
+        params.pop("top_p", None)
+
+        # Replace max_tokens with max_completion_tokens as reasoning tokens are now factored in
+        # and max_tokens isn't valid
+        if "max_tokens" in params:
+            params["max_completion_tokens"] = params.pop("max_tokens")
+
+        if "messages" in params:
+            # o1 doesn't support role='system' messages, only 'user' and 'assistant'
+            # pop the system_message from the messages and add it in the prompt at the start.
+            _system_message = params["messages"][0]["content"]
+            sys_msg_dict = params["messages"].pop(0)
+            params["messages"][0]["content"] = _system_message + "\n\n" + params["messages"][0]["content"]
+        return params, sys_msg_dict
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
         """Calculate the cost of the response."""
