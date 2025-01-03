@@ -316,6 +316,11 @@ def get_error_info(nb: NotebookNode) -> NotebookError | None:
 def add_front_matter_to_metadata_mdx(
     front_matter: dict[str, str | list[str]], website_dir: Path, rendered_mdx: Path
 ) -> None:
+
+    source = front_matter.get("source_notebook")
+    if isinstance(source, str) and source.startswith("/website/docs/"):
+        return
+
     metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
 
     metadata = []
@@ -335,7 +340,7 @@ def add_front_matter_to_metadata_mdx(
         "description": front_matter.get("description", ""),
         "image": front_matter.get("image"),
         "tags": front_matter.get("tags", []),
-        "source": front_matter.get("source_notebook"),
+        "source": source,
     }
     # Update metadata list
     existing_entry = next((item for item in metadata if item["title"] == entry["title"]), None)
@@ -473,7 +478,9 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: d
     # If there is front matter in the mdx file, we need to remove it
     if content.startswith("---"):
         front_matter_end = content.find("---", 3)
-        front_matter = yaml.safe_load(content[4:front_matter_end])
+        mdx_front_matter = yaml.safe_load(content[4:front_matter_end])
+        # Merge while preserving original values
+        front_matter = {**front_matter, **mdx_front_matter}
         content = content[front_matter_end + 3 :]
 
     # Clean heading IDs using regex - matches from # to the end of ID block
