@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -33,7 +33,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 import ollama
 from fix_busted_json import repair_json
@@ -43,7 +43,7 @@ from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
-from autogen.oai.client_utils import should_hide_tools, validate_parameter
+from autogen.oai.client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 
 
 class OllamaClient:
@@ -87,8 +87,8 @@ class OllamaClient:
         Args:
             None
         """
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Ollama, it will be ignored.", UserWarning)
+        # Store the response format, if provided (for structured outputs)
+        self._response_format: Optional[Type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """
@@ -215,7 +215,7 @@ class OllamaClient:
                 params, "manual_tool_call_step2", str, False, self.TOOL_CALL_MANUAL_STEP2, None, None
             )
 
-        # Convert AutoGen messages to Ollama messages
+        # Convert AG2 messages to Ollama messages
         ollama_messages = self.oai_messages_to_ollama_messages(
             messages,
             (
@@ -229,6 +229,13 @@ class OllamaClient:
         ollama_params = self.parse_params(params)
 
         ollama_params["messages"] = ollama_messages
+
+        # If response_format exists, we want structured outputs
+        # Based on:
+        # https://ollama.com/blog/structured-outputs
+        if params.get("response_format"):
+            self._response_format = params["response_format"]
+            ollama_params["format"] = params.get("response_format").model_json_schema()
 
         # Token counts will be returned
         prompt_tokens = 0
@@ -334,10 +341,18 @@ class OllamaClient:
                         # Blank the message content
                         response_content = ""
 
+            if ollama_finish == "stop":
+                # Not a tool call, so let's check if we need to process structured output
+                if self._response_format and response_content:
+                    try:
+                        parsed_response = self._convert_json_response(response_content)
+                        response_content = _format_json_response(parsed_response, response_content)
+                    except ValueError as e:
+                        response_content = str(e)
         else:
             raise RuntimeError("Failed to get response from Ollama.")
 
-        # Convert response to AutoGen response
+        # Convert response to AG2 response
         message = ChatCompletionMessage(
             role="assistant",
             content=response_content,
@@ -466,6 +481,31 @@ class OllamaClient:
             ollama_messages.append({"role": "user", "content": "Please continue."})
 
         return ollama_messages
+
+    def _convert_json_response(self, response: str) -> Any:
+        """Extract and validate JSON response from the output for structured outputs.
+
+        Args:
+            response (str): The response from the API.
+
+        Returns:
+            Any: The parsed JSON response.
+        """
+        if not self._response_format:
+            return response
+
+        try:
+            # Parse JSON and validate against the Pydantic model
+            return self._response_format.model_validate_json(response)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
+            )
+
+
+def _format_json_response(response: Any, original_answer: str) -> str:
+    """Formats the JSON response for structured outputs using the format method if it exists."""
+    return response.format() if isinstance(response, FormatterProtocol) else original_answer
 
 
 def response_to_tool_call(response_string: str) -> Any:
