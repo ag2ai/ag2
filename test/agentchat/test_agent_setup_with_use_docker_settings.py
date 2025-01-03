@@ -15,8 +15,7 @@ from autogen.code_utils import (
     is_docker_running,
 )
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import reason, skip_openai
+from ..conftest import reason, skip_openai
 
 
 def docker_running():

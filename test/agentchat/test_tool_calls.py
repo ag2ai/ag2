@@ -12,19 +12,19 @@ import os
 import sys
 
 import pytest
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen.math_utils import eval_math_responses
 from autogen.oai.client import TOOL_ENABLED
+
+from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 try:
     from openai import OpenAI
 except ImportError:
     skip_openai = True
 else:
-    sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-    from conftest import skip_openai
+    from ..conftest import skip_openai
 
 
 @pytest.mark.skipif(skip_openai or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")

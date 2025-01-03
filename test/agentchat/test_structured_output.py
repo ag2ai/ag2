@@ -5,20 +5,16 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-import os
-import sys
-from typing import List
 from unittest.mock import MagicMock
 
 import pytest
 from openai.types.chat.parsed_chat_completion import ChatCompletion, ChatCompletionMessage, Choice
 from pydantic import BaseModel, ValidationError
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from ..conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)

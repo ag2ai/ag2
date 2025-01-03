@@ -19,11 +19,8 @@ from autogen import OpenAIWrapper, UserProxyAgent
 from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
 from autogen.oai.openai_utils import detect_gpt_assistant_api_version, retrieve_assistants_by_name
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from conftest import reason, skip_openai  # noqa: E402
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ...conftest import reason, skip_openai  # noqa: E402
+from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 if not skip_openai:
     openai_config_list = autogen.config_list_from_json(

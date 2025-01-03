@@ -8,18 +8,14 @@
 
 import os
 import re
-import sys
 
 import pytest
 
 from autogen import UserProxyAgent, config_list_from_json
 from autogen.oai.openai_utils import filter_config
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"

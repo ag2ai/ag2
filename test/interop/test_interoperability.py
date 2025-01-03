@@ -4,12 +4,12 @@
 
 import sys
 from tempfile import TemporaryDirectory
-from typing import Any
 
 import pytest
-from conftest import MOCK_OPEN_AI_API_KEY
 
 from autogen.interop import Interoperability
+
+from ..conftest import MOCK_OPEN_AI_API_KEY
 
 
 class TestInteroperability:
