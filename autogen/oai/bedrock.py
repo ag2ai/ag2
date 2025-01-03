@@ -49,6 +49,9 @@ from pydantic import BaseModel
 
 from autogen.oai.client_utils import validate_parameter
 
+from ..telemetry.base_telemetry import EventKind
+from ..telemetry.intrumentation_manager import get_current_telemetry
+
 
 class BedrockClient:
     """Client for Amazon's Bedrock Converse API."""
@@ -602,6 +605,12 @@ def convert_stop_reason_to_finish_reason(
 # NOTE: As this will be quite dynamic, it's expected that the developer will use the "price" parameter in their config
 # These may be removed.
 PRICES_PER_K_TOKENS = {
+    "meta.llama3-3-70b-instruct-v1:0": (0.00072, 0.00072),
+    "meta.llama3-2-90b-instruct-v1:0": (0.00072, 0.00072),
+    "meta.llama3-2-11b-instruct-v1:0": (0.00016, 0.00016),
+    "meta.llama3-2-3b-instruct-v1:0": (0.00015, 0.00015),
+    "meta.llama3-2-1b-instruct-v1:0": (0.0001, 0.0001),
+    "meta.llama3-1-8b-instruct-v1:0": (0.00022, 0.00022),
     "meta.llama3-8b-instruct-v1:0": (0.0003, 0.0006),
     "meta.llama3-70b-instruct-v1:0": (0.00265, 0.0035),
     "mistral.mistral-7b-instruct-v0:2": (0.00015, 0.0002),
@@ -618,6 +627,22 @@ def calculate_cost(input_tokens: int, output_tokens: int, model_id: str) -> floa
         input_cost_per_k, output_cost_per_k = PRICES_PER_K_TOKENS[model_id]
         input_cost = (input_tokens / 1000) * input_cost_per_k
         output_cost = (output_tokens / 1000) * output_cost_per_k
+
+        # Record cost with telemetry
+        telemetry = get_current_telemetry()
+        if telemetry:
+            telemetry.record_event(
+                EventKind.COST,
+                {
+                    "ag2.cost": input_cost + output_cost,
+                    "ag2.cost_type": "LLM",
+                    "ag2.llm.provider": "Amazon Bedrock",
+                    "ag2.llm.model": model_id,
+                    "ag2.llm.input_tokens": input_tokens,
+                    "ag2.llm.output_tokens": output_tokens,
+                },
+            )
+
         return input_cost + output_cost
     else:
         warnings.warn(

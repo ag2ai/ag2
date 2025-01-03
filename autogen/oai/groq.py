@@ -41,11 +41,24 @@ from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
+from ..telemetry.base_telemetry import EventKind
+from ..telemetry.intrumentation_manager import get_current_telemetry
+
 # Cost per thousand tokens - Input / Output (NOTE: Convert $/Million to $/K)
 GROQ_PRICING_1K = {
+    "llama-3.3-70b-versatile": (0.00059, 0.00079),
+    "llama-3.2-90b-vision-preview": (0.0009, 0.0009),
+    "llama-3.2-11b-vision-preview": (0.00018, 0.00018),
+    "llama-3.2-3b-preview": (0.00006, 0.00006),
+    "llama-3.2-1b-preview": (0.00004, 0.00004),
+    "llama-3.1-8b-instant": (0.00005, 0.00008),
+    "llama-guard-3-8b": (0.0002, 0.0002),
+    "llama3-groq-70b-8192-tool-use-preview": (0.00089, 0.00089),
+    "llama3-groq-8b-8192-tool-use-preview": (0.00019, 0.00019),
     "llama3-70b-8192": (0.00059, 0.00079),
     "mixtral-8x7b-32768": (0.00024, 0.00024),
     "llama3-8b-8192": (0.00005, 0.00008),
+    "gemma2-9b-it": (0.0002, 0.0002),
     "gemma-7b-it": (0.00007, 0.00007),
 }
 
@@ -280,6 +293,22 @@ def calculate_groq_cost(input_tokens: int, output_tokens: int, model: str) -> fl
         input_cost_per_k, output_cost_per_k = GROQ_PRICING_1K[model]
         input_cost = (input_tokens / 1000) * input_cost_per_k
         output_cost = (output_tokens / 1000) * output_cost_per_k
+
+        # Record cost with telemetry
+        telemetry = get_current_telemetry()
+        if telemetry:
+            telemetry.record_event(
+                EventKind.COST,
+                {
+                    "ag2.cost": input_cost + output_cost,
+                    "ag2.cost_type": "LLM",
+                    "ag2.llm.provider": "Groq",
+                    "ag2.llm.model": model,
+                    "ag2.llm.input_tokens": input_tokens,
+                    "ag2.llm.output_tokens": output_tokens,
+                },
+            )
+
         total = input_cost + output_cost
     else:
         warnings.warn(f"Cost calculation not available for model {model}", UserWarning)

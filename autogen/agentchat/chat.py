@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 import asyncio
 import datetime
+import inspect
 import logging
 import warnings
 from collections import abc, defaultdict
@@ -19,6 +20,8 @@ from .utils import consolidate_chat_info
 
 logger = logging.getLogger(__name__)
 Prerequisite = tuple[int, int]
+from ..telemetry.base_telemetry import SpanKind
+from ..telemetry.intrumentation_manager import get_current_telemetry
 
 
 @dataclass
@@ -192,11 +195,21 @@ def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
     Returns:
         (list): a list of ChatResult objects corresponding to the finished chats in the chat_queue.
     """
-
     consolidate_chat_info(chat_queue)
     _validate_recipients(chat_queue)
     current_chat_queue = chat_queue.copy()
     finished_chats = []
+
+    telemetry = get_current_telemetry()
+    if telemetry:
+        chat_span_context = telemetry.start_span(
+            kind=SpanKind.CHATS,
+            attributes={
+                "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                "ag2.chat_queue_length": len(chat_queue),
+            },
+        )
+
     while current_chat_queue:
         chat_info = current_chat_queue.pop(0)
         _chat_carryover = chat_info.get("carryover", [])
@@ -214,8 +227,16 @@ def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
             __post_carryover_processing(chat_info)
 
         sender = chat_info["sender"]
+
+        # MS
+        chat_info["telemetry_parent_context"] = chat_span_context
+
         chat_res = sender.initiate_chat(**chat_info)
         finished_chats.append(chat_res)
+
+    if telemetry:
+        telemetry.end_span()
+
     return finished_chats
 
 
@@ -289,6 +310,17 @@ async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatRe
     prerequisites = __create_async_prerequisites(chat_queue)
     chat_order_by_id = __find_async_chat_order(num_chats, prerequisites)
     finished_chat_futures = dict()
+
+    telemetry = get_current_telemetry()
+    if telemetry:
+        _ = telemetry.start_span(
+            kind=SpanKind.CHATS,
+            attributes={
+                "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                "ag2.chat_queue_length": len(chat_queue),
+            },
+        )
+
     for chat_id in chat_order_by_id:
         chat_info = chat_book[chat_id]
         prerequisite_chat_ids = chat_info.get("prerequisites", [])
@@ -303,4 +335,8 @@ async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatRe
     for chat in finished_chat_futures:
         chat_result = finished_chat_futures[chat].result()
         finished_chats[chat] = chat_result
+
+    if telemetry:
+        telemetry.end_span()
+
     return finished_chats

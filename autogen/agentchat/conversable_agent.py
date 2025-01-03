@@ -37,6 +37,8 @@ from ..function_utils import get_function_schema, load_basemodels_if_needed, ser
 from ..io.base import IOStream
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
+from ..telemetry.base_telemetry import EventKind, SpanKind
+from ..telemetry.intrumentation_manager import get_current_telemetry
 from ..tools import Tool
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
@@ -266,6 +268,22 @@ class ConversableAgent(LLMAgent):
             "update_agent_state": [],
         }
 
+        # Telemetry
+        telemetry = get_current_telemetry()
+        if telemetry:
+            telemetry.record_event(
+                EventKind.AGENT_CREATION,
+                {
+                    "ag2.agent.id": str(id(self)),
+                    "ag2.agent.type": self.__class__.__name__,
+                    "ag2.agent.name": name,
+                    "ag2.agent.system_message": system_message,
+                    "ag2.agent.description": description or "",
+                    "ag2.agent.has_llm_config": bool(llm_config),
+                    "ag2.agent.human_input_mode": human_input_mode,
+                },
+            )
+
     def _validate_llm_config(self, llm_config):
         assert llm_config in (None, False) or isinstance(
             llm_config, dict
@@ -434,10 +452,34 @@ class ConversableAgent(LLMAgent):
         Returns:
             Tuple[bool, str]: A tuple where the first element indicates the completion of the chat, and the second element contains the summary of the last chat if any chats were initiated.
         """
+        telemetry = get_current_telemetry()
+        if telemetry:
+            chat_span_context = telemetry.start_span(
+                kind=SpanKind.NESTED_CHAT,
+                attributes={
+                    "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                    "ag2.chat_queue_length": len(chat_queue),
+                    "ag2.agent.sender.id": str(id(sender)),
+                    "ag2.agent.sender": sender.name,
+                    "ag2.agent.recipient.id": str(id(recipient)),
+                    "ag2.agent.recipient": recipient.name,
+                    "ag2.messages": messages,
+                },
+            )
+
         chat_to_run = ConversableAgent._get_chats_to_run(chat_queue, recipient, messages, sender, config)
         if not chat_to_run:
             return True, None
         res = initiate_chats(chat_to_run)
+
+        if telemetry:
+
+            # Update nested chat span with history and result
+            telemetry.set_attribute(chat_span_context, "ag2.chat_result.chat_history", res[-1].chat_history)
+            telemetry.set_attribute(chat_span_context, "ag2.chat_result.summary", res[-1].summary)
+
+            telemetry.end_span()
+
         return True, res[-1].summary
 
     @staticmethod
@@ -784,6 +826,21 @@ class ConversableAgent(LLMAgent):
         # unless it's "function".
         valid = self._append_oai_message(message, "assistant", recipient, is_sending=True)
         if valid:
+
+            telemetry = get_current_telemetry()
+            if telemetry:
+                telemetry.record_event(
+                    event_kind=EventKind.AGENT_SEND_MSG,
+                    attributes={
+                        "ag2.agent.sender.id": str(id(self)),
+                        "ag2.agent.sender": self.name,
+                        "ag2.agent.recipient.id": str(id(recipient)),
+                        "ag2.agent.recipient": recipient.name,
+                        "ag2.message": message,
+                        "ag2.silent": silent,
+                    },
+                )
+
             recipient.receive(message, self, request_reply, silent)
         else:
             raise ValueError(
@@ -1123,6 +1180,20 @@ class ConversableAgent(LLMAgent):
         Returns:
             ChatResult: an ChatResult object.
         """
+        telemetry = get_current_telemetry()
+        if telemetry:
+            chat_span_context = telemetry.start_span(
+                kind=SpanKind.CHAT,
+                attributes={
+                    "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                    "ag2.agent.sender.id": str(id(self)),
+                    "ag2.agent.sender": self.name,
+                    "ag2.agent.recipient.id": str(id(recipient)),
+                    "ag2.agent.recipient": recipient.name,
+                },
+                parent_context=kwargs.get("telemetry_parent_context"),
+            )
+
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -1132,23 +1203,50 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
-            for _ in range(max_turns):
-                if _ == 0:
+            for i in range(max_turns):
+
+                if telemetry:
+                    _ = telemetry.start_span(
+                        kind=SpanKind.ROUND,
+                        attributes={
+                            "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                            "ag2.round": i + 1,
+                            "ag2.rounds_max": max_turns,
+                        },
+                        parent_context=chat_span_context,
+                    )
+
+                if i == 0:
                     if isinstance(message, Callable):
                         msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
                     else:
                         msg2send = self.generate_init_message(message, **kwargs)
+
+                    if telemetry:
+                        # Set the starting message in telemetry
+                        telemetry.set_attribute(chat_span_context, "ag2.chat.initial_message", msg2send)
                 else:
                     msg2send = self.generate_reply(messages=self.chat_messages[recipient], sender=recipient)
                 if msg2send is None:
+                    if telemetry:
+                        telemetry.end_span()
                     break
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
+
+                if telemetry:
+                    telemetry.end_span()  # Round Span
+
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
                 msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
             else:
                 msg2send = self.generate_init_message(message, **kwargs)
+
+            if telemetry:
+                # Set the starting message in telemetry
+                telemetry.set_attribute(chat_span_context, "ag2.chat.initial_message", msg2send)
+
             self.send(msg2send, recipient, silent=silent)
         summary = self._summarize_chat(
             summary_method,
@@ -1165,6 +1263,14 @@ class ConversableAgent(LLMAgent):
             cost=gather_usage_summary([self, recipient]),
             human_input=self._human_input,
         )
+
+        if telemetry:
+            # Update initiate chat span with history and result
+            telemetry.set_attribute(chat_span_context, "ag2.chat_result.chat_history", chat_result.chat_history)
+            telemetry.set_attribute(chat_span_context, "ag2.chat_result.summary", chat_result.summary)
+
+            telemetry.end_span()  # Chat Span
+
         return chat_result
 
     async def a_initiate_chat(
@@ -1190,6 +1296,9 @@ class ConversableAgent(LLMAgent):
         Returns:
             ChatResult: an ChatResult object.
         """
+
+        # TODO TELEMETRY
+
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -1260,6 +1369,19 @@ class ConversableAgent(LLMAgent):
         Returns:
             str: a chat summary from the agent.
         """
+        telemetry = get_current_telemetry()
+        if telemetry:
+            summary_span_context = telemetry.start_span(
+                kind=SpanKind.SUMMARY,
+                attributes={
+                    "ag2.agent.sender.id": str(id(self)),
+                    "ag2.agent.sender": self.name,
+                    "ag2.agent.recipient.id": str(id(recipient)),
+                    "ag2.agent.recipient": recipient.name,
+                    "ag2.summary.function": summary_method,
+                },
+            )
+
         summary = ""
         if summary_method is None:
             return summary
@@ -1276,6 +1398,12 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "If not None, the summary_method must be a string from [`reflection_with_llm`, `last_msg`] or a callable."
             )
+
+        if telemetry:
+
+            telemetry.set_attribute(summary_span_context, "ag2.summary", summary)
+            telemetry.end_span()
+
         return summary
 
     @staticmethod
@@ -1385,6 +1513,14 @@ class ConversableAgent(LLMAgent):
         return self._finished_chats
 
     async def a_initiate_chats(self, chat_queue: list[dict[str, Any]]) -> dict[int, ChatResult]:
+        """(Experimental) Initiate chats with multiple agents.
+
+        Args:
+            chat_queue (List[Dict]): a list of dictionaries containing the information of the chats.
+                Each dictionary should contain the input arguments for [`initiate_chat`](conversable_agent#initiate_chat)
+
+        Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+        """
         _chat_queue = self._check_chat_queue_for_sender(chat_queue)
         self._finished_chats = await a_initiate_chats(_chat_queue)
         return self._finished_chats
@@ -1517,6 +1653,7 @@ class ConversableAgent(LLMAgent):
                     tool_call.pop("id")
                 if tool_call.get("type") is None:
                     tool_call.pop("type")
+
         return extracted_response
 
     async def a_generate_oai_reply(
@@ -1697,7 +1834,9 @@ class ConversableAgent(LLMAgent):
                     loop.close()
             else:
                 _, func_return = self.execute_function(message["function_call"])
+
             return True, func_return
+
         return False, None
 
     async def a_generate_function_call_reply(
@@ -1780,6 +1919,19 @@ class ConversableAgent(LLMAgent):
                     "role": "tool",
                     "content": content,
                 }
+
+            telemetry = get_current_telemetry()
+            if telemetry:
+                telemetry.record_event(
+                    EventKind.TOOL_EXECUTION,
+                    {
+                        "ag2.tool_call_id": tool_call_id,
+                        "ag2.function.content": content,
+                        "ag2.function.name": function_call.get("name", None),
+                        "ag2.function.arguments": function_call.get("arguments", {}),
+                    },
+                )
+
             tool_returns.append(tool_call_response)
         if tool_returns:
             return True, {
@@ -1787,6 +1939,7 @@ class ConversableAgent(LLMAgent):
                 "tool_responses": tool_returns,
                 "content": "\n\n".join([self._str_for_tool_response(tool_return) for tool_return in tool_returns]),
             }
+
         return False, None
 
     async def _a_execute_tool_call(self, tool_call):
@@ -2088,6 +2241,20 @@ class ConversableAgent(LLMAgent):
             logger.error(error_msg)
             raise AssertionError(error_msg)
 
+        telemetry = get_current_telemetry()
+        if telemetry:
+            reply_span_context = telemetry.start_span(
+                kind=SpanKind.REPLY,
+                attributes={
+                    "ag2.reply_function": inspect.currentframe().f_code.co_name,
+                    "ag2.agent.sender.id": str(id(sender)),
+                    "ag2.agent.sender": sender.name,
+                    "ag2.agent.recipient.id": str(id(self)),
+                    "ag2.agent.recipient": self.name,
+                    "ag2.messages.start": messages if messages else "",
+                },
+            )
+
         if messages is None:
             messages = self._oai_messages[sender]
 
@@ -2102,6 +2269,8 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_all_messages_before_reply(messages)
 
+        final_reply = self._default_auto_reply
+
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if "exclude" in kwargs and reply_func in kwargs["exclude"]:
@@ -2109,7 +2278,29 @@ class ConversableAgent(LLMAgent):
             if inspect.iscoroutinefunction(reply_func):
                 continue
             if self._match_trigger(reply_func_tuple["trigger"], sender):
+
+                if telemetry:
+                    reply_func_span_context = telemetry.start_span(
+                        kind=SpanKind.REPLY_FUNCTION,
+                        attributes={
+                            "ag2.reply_function": reply_func.__name__,
+                            "ag2.reply_module": reply_func.__module__,
+                            "ag2.agent.sender.id": str(id(sender)),
+                            "ag2.agent.sender": sender.name,
+                            "ag2.agent.recipient.id": str(id(self)),
+                            "ag2.agent.recipient": self.name,
+                            "ag2.messages": messages if messages else "",
+                        },
+                    )
+
                 final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
+
+                if telemetry:
+                    # Update reply span with reply value and final status
+                    telemetry.set_attribute(reply_func_span_context, "ag2.reply", reply)
+                    telemetry.set_attribute(reply_func_span_context, "ag2.final", final)
+                    telemetry.end_span()
+
                 if logging_enabled():
                     log_event(
                         self,
@@ -2119,9 +2310,18 @@ class ConversableAgent(LLMAgent):
                         final=final,
                         reply=reply,
                     )
+
                 if final:
-                    return reply
-        return self._default_auto_reply
+                    final_reply = reply
+                    break
+
+        if telemetry:
+            # Update initiate chat span with history and result
+            telemetry.set_attribute(reply_span_context, "ag2.reply", final_reply)
+            telemetry.set_attribute(reply_span_context, "ag2.messages.end", messages if messages else "")
+            telemetry.end_span()  # Reply Span
+
+        return final_reply
 
     async def a_generate_reply(
         self,
@@ -2161,6 +2361,20 @@ class ConversableAgent(LLMAgent):
             logger.error(error_msg)
             raise AssertionError(error_msg)
 
+        telemetry = get_current_telemetry()
+        if telemetry:
+            reply_span_context = telemetry.start_span(
+                kind=SpanKind.REPLY,
+                attributes={
+                    "ag2.reply_function": inspect.currentframe().f_code.co_name,
+                    "ag2.agent.sender.id": str(id(sender)),
+                    "ag2.agent.sender": sender.name,
+                    "ag2.agent.recipient.id": str(id(self)),
+                    "ag2.agent.recipient": self.name,
+                    "ag2.messages.start": messages if messages else "",
+                },
+            )
+
         if messages is None:
             messages = self._oai_messages[sender]
 
@@ -2175,21 +2389,53 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_last_received_message(messages)
 
+        final_reply = self._default_auto_reply
+
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if "exclude" in kwargs and reply_func in kwargs["exclude"]:
                 continue
 
             if self._match_trigger(reply_func_tuple["trigger"], sender):
+
+                if telemetry:
+                    reply_func_span_context = telemetry.start_span(
+                        kind=SpanKind.REPLY_FUNCTION,
+                        attributes={
+                            "ag2.reply_function": reply_func.__name__,
+                            "ag2.reply_module": reply_func.__module__,
+                            "ag2.agent.sender.id": str(id(sender)),
+                            "ag2.agent.sender": sender.name,
+                            "ag2.agent.recipient.id": str(id(self)),
+                            "ag2.agent.recipient": self.name,
+                            "ag2.messages": messages if messages else "",
+                        },
+                    )
+
                 if inspect.iscoroutinefunction(reply_func):
                     final, reply = await reply_func(
                         self, messages=messages, sender=sender, config=reply_func_tuple["config"]
                     )
                 else:
                     final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
+
+                if telemetry:
+                    # Update reply span with reply value and final status
+                    telemetry.set_attribute(reply_func_span_context, "ag2.reply", reply)
+                    telemetry.set_attribute(reply_func_span_context, "ag2.final", final)
+                    telemetry.end_span()
+
                 if final:
-                    return reply
-        return self._default_auto_reply
+                    final_reply = reply
+                    break
+
+        if telemetry:
+            # Update initiate chat span with history and result
+            telemetry.set_attribute(reply_span_context, "ag2.reply", final_reply)
+            telemetry.set_attribute(reply_span_context, "ag2.messages.end", messages if messages else "")
+            telemetry.end_span()  # Reply Span
+
+        return final_reply
 
     def _match_trigger(self, trigger: Union[None, str, type, Agent, Callable, list], sender: Optional[Agent]) -> bool:
         """Check if the sender matches the trigger.
@@ -2237,7 +2483,6 @@ class ConversableAgent(LLMAgent):
             str: human input.
         """
         iostream = IOStream.get_default()
-
         reply = iostream.input(prompt)
         self._human_input.append(reply)
         return reply
@@ -2315,6 +2560,7 @@ class ConversableAgent(LLMAgent):
             logs_all += "\n" + logs
             if exitcode != 0:
                 return exitcode, logs_all
+
         return exitcode, logs_all
 
     @staticmethod

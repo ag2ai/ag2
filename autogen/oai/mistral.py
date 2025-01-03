@@ -53,6 +53,24 @@ from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
+from ..telemetry.base_telemetry import EventKind
+from ..telemetry.intrumentation_manager import get_current_telemetry
+
+MISTRAL_PRICING_1K = {
+    "mistral-large-latest": (0.002, 0.006),
+    "pixtral-large-latest": (0.002, 0.006),
+    "mistral-small-latest": (0.0002, 0.0006),
+    "codestral-latest": (0.0002, 0.0006),
+    "ministral-8b-latest": (0.0001, 0.0001),
+    "ministral-3b-latest": (0.00004, 0.0001),
+    "mistral-moderation-latest": (0.0001, 0),
+    "pixtral-12b": (0.00015, 0.00015),
+    "mistral-nemo": (0.00015, 0.00015),
+    "open-mistral-7b": (0.00025, 0.00025),
+    "open-mixtral-8x7b": (0.0007, 0.0007),
+    "open-mixtral-8x22b": (0.002, 0.006),
+}
+
 
 class MistralAIClient:
     """Client for Mistral.AI's API."""
@@ -258,28 +276,33 @@ def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str
     return mistral_tools
 
 
-def calculate_mistral_cost(input_tokens: int, output_tokens: int, model_name: str) -> float:
+def calculate_mistral_cost(input_tokens: int, output_tokens: int, model: str) -> float:
     """Calculate the cost of the mistral response."""
+    total = 0.0
 
-    # Prices per 1 thousand tokens
     # https://mistral.ai/technology/
-    model_cost_map = {
-        "open-mistral-7b": {"input": 0.00025, "output": 0.00025},
-        "open-mixtral-8x7b": {"input": 0.0007, "output": 0.0007},
-        "open-mixtral-8x22b": {"input": 0.002, "output": 0.006},
-        "mistral-small-latest": {"input": 0.001, "output": 0.003},
-        "mistral-medium-latest": {"input": 0.00275, "output": 0.0081},
-        "mistral-large-latest": {"input": 0.0003, "output": 0.0003},
-        "mistral-large-2407": {"input": 0.0003, "output": 0.0003},
-        "open-mistral-nemo-2407": {"input": 0.0003, "output": 0.0003},
-        "codestral-2405": {"input": 0.001, "output": 0.003},
-    }
+    if model in MISTRAL_PRICING_1K:
+        input_cost_per_k, output_cost_per_k = MISTRAL_PRICING_1K[model]
+        input_cost = (input_tokens / 1000) * input_cost_per_k
+        output_cost = (output_tokens / 1000) * output_cost_per_k
+        total = input_cost + output_cost
 
-    # Ensure we have the model they are using and return the total cost
-    if model_name in model_cost_map:
-        costs = model_cost_map[model_name]
+        # Record cost with telemetry
+        telemetry = get_current_telemetry()
+        if telemetry:
+            telemetry.record_event(
+                EventKind.COST,
+                {
+                    "ag2.cost": total,
+                    "ag2.cost_type": "LLM",
+                    "ag2.llm.provider": "Mistral AI",
+                    "ag2.llm.model": model,
+                    "ag2.llm.input_tokens": input_tokens,
+                    "ag2.llm.output_tokens": output_tokens,
+                },
+            )
 
-        return (input_tokens * costs["input"] / 1000) + (output_tokens * costs["output"] / 1000)
     else:
-        warnings.warn(f"Cost calculation is not implemented for model {model_name}, will return $0.", UserWarning)
-        return 0
+        warnings.warn(f"Cost calculation not available for model {model}", UserWarning)
+
+    return total

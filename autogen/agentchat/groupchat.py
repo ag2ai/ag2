@@ -5,6 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
+import inspect
 import json
 import logging
 import random
@@ -20,6 +21,8 @@ from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
+from ..telemetry.base_telemetry import EventKind, SpanKind
+from ..telemetry.intrumentation_manager import get_current_telemetry
 from .agent import Agent
 from .contrib.capabilities import transform_messages
 from .conversable_agent import ConversableAgent
@@ -276,6 +279,19 @@ class GroupChat:
         if self.select_speaker_auto_verbose is None or not isinstance(self.select_speaker_auto_verbose, bool):
             raise ValueError("select_speaker_auto_verbose cannot be None or non-bool")
 
+        # Telemetry
+        telemetry = get_current_telemetry()
+        if telemetry:
+            telemetry.record_event(
+                EventKind.GROUPCHAT_CREATION,
+                {
+                    "messages": self.messages,
+                    "max_round": self.max_round,
+                    "speaker_selection_method": self.speaker_selection_method,
+                    "agents": [agent.name for agent in self.agents],
+                },
+            )
+
     @property
     def agent_names(self) -> list[str]:
         """Return the names of the agents in the group chat."""
@@ -425,6 +441,14 @@ class GroupChat:
         self,
         last_speaker: Agent,
     ) -> tuple[Optional[Agent], list[Agent], Optional[list[dict]]]:
+        """Prepare and select the next agent.
+
+        Args:
+            last_speaker (Agent): The last speaker.
+
+        Returns:
+            tuple[Agent, list[Agent], list[dict]]: The next agent, the list of agents, the messages, the reason for the selection.
+        """
         # If self.speaker_selection_method is a callable, call it to get the next speaker.
         # If self.speaker_selection_method is a string, return it.
         speaker_selection_method = self.speaker_selection_method
@@ -434,7 +458,7 @@ class GroupChat:
                 raise NoEligibleSpeaker("Custom speaker selection function returned None. Terminating conversation.")
             elif isinstance(selected_agent, Agent):
                 if selected_agent in self.agents:
-                    return selected_agent, self.agents, None
+                    return selected_agent, self.agents, None, f"Callable, {self.speaker_selection_method.__name__}"
                 else:
                     raise ValueError(
                         f"Custom speaker selection function returned an agent {selected_agent.name} not in the group chat."
@@ -492,12 +516,12 @@ class GroupChat:
             agents = [agent for agent in self.agents if agent.can_execute_function(funcs)]
             if len(agents) == 1:
                 # only one agent can execute the function
-                return agents[0], agents, None
+                return agents[0], agents, None, "Only agent that can execute a function"
             elif not agents:
                 # find all the agents with function_map
                 agents = [agent for agent in self.agents if agent.function_map]
                 if len(agents) == 1:
-                    return agents[0], agents, None
+                    return agents[0], agents, None, "First agent that can execute a function"
                 elif not agents:
                     raise ValueError(
                         f"No agent can execute the function {', '.join(funcs)}. "
@@ -524,7 +548,7 @@ class GroupChat:
 
         # If there is only one eligible agent, just return it to avoid the speaker selection prompt
         if len(graph_eligible_agents) == 1:
-            return graph_eligible_agents[0], graph_eligible_agents, None
+            return graph_eligible_agents[0], graph_eligible_agents, None, "Only one eligible agent"
 
         # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
         if len(graph_eligible_agents) == 0:
@@ -532,12 +556,16 @@ class GroupChat:
 
         # Use the selected speaker selection method
         select_speaker_messages = None
+        selection_reason = ""
         if speaker_selection_method.lower() == "manual":
             selected_agent = self.manual_select_speaker(graph_eligible_agents)
+            selection_reason = "Manually selected by user"
         elif speaker_selection_method.lower() == "round_robin":
             selected_agent = self.next_agent(last_speaker, graph_eligible_agents)
+            selection_reason = "Round robin selection"
         elif speaker_selection_method.lower() == "random":
             selected_agent = self.random_select_speaker(graph_eligible_agents)
+            selection_reason = "Random selection"
         else:  # auto
             selected_agent = None
             select_speaker_messages = self.messages.copy()
@@ -546,34 +574,112 @@ class GroupChat:
                 select_speaker_messages[-1] = dict(select_speaker_messages[-1], function_call=None)
             if select_speaker_messages[-1].get("tool_calls", False):
                 select_speaker_messages[-1] = dict(select_speaker_messages[-1], tool_calls=None)
-        return selected_agent, graph_eligible_agents, select_speaker_messages
+        return selected_agent, graph_eligible_agents, select_speaker_messages, selection_reason
 
     def select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
         """Select the next speaker (with requery)."""
+        final_agent = None
+        telemetry = get_current_telemetry()
+        if telemetry:
+            speaker_select_span = telemetry.start_span(
+                kind=SpanKind.GROUPCHAT_SELECT_SPEAKER,
+                attributes={
+                    "ag2.agent.last_speaker.id": str(id(last_speaker)),
+                    "ag2.agent.last_speaker": last_speaker.name,
+                    "ag2.agent.selector.id": str(id(selector)),
+                    "ag2.agent.selector": selector.name,
+                    "ag2.agents": [agent.name for agent in self.agents],
+                },
+            )
 
         # Prepare the list of available agents and select an agent if selection method allows (non-auto)
-        selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
+        selected_agent, agents, messages, selection_reason = self._prepare_and_select_agents(last_speaker)
         if selected_agent:
-            return selected_agent
+            final_agent = selected_agent
         elif self.speaker_selection_method == "manual":
             # An agent has not been selected while in manual mode, so move to the next agent
-            return self.next_agent(last_speaker)
+            final_agent = self.next_agent(last_speaker)
+            selection_reason = "Next agent as user didn't select it manually"
+        else:
+            # auto speaker selection with internal 2-agent chat
+            final_agent = self._auto_select_speaker(last_speaker, selector, messages, agents)
+            selection_reason = "Auto speaker selection"
 
-        # auto speaker selection with 2-agent chat
-        return self._auto_select_speaker(last_speaker, selector, messages, agents)
+        if telemetry:
+            telemetry.set_attribute(
+                speaker_select_span, "ag2.agent.selected.id", str(id(final_agent)) if final_agent else None
+            )
+            telemetry.set_attribute(
+                speaker_select_span, "ag2.agent.selected", final_agent.name if final_agent else None
+            )
+            telemetry.set_attribute(speaker_select_span, "ag2.transition_reason", selection_reason)
+            telemetry.end_span()
+
+            if final_agent:
+                telemetry.record_event(
+                    event_kind=EventKind.AGENT_TRANSITION,
+                    attributes={
+                        "ag2.agent.last_speaker.id": str(id(last_speaker)),
+                        "ag2.agent.last_speaker": last_speaker.name,
+                        "ag2.agent.next_speaker.id": str(id(final_agent)),
+                        "ag2.agent.next_speaker": final_agent.name,
+                        "ag2.transition_reason": selection_reason,
+                    },
+                )
+
+        return final_agent
 
     async def a_select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
         """Select the next speaker (with requery), asynchronously."""
+        final_agent = None
+        telemetry = get_current_telemetry()
+        if telemetry:
+            speaker_select_span = telemetry.start_span(
+                kind=SpanKind.GROUPCHAT_SELECT_SPEAKER,
+                attributes={
+                    "ag2.agent.last_speaker.id": str(id(last_speaker)),
+                    "ag2.agent.last_speaker": last_speaker.name,
+                    "ag2.agent.selector.id": str(id(selector)),
+                    "ag2.agent.selector": selector.name,
+                    "ag2.agents": [agent.name for agent in self.agents],
+                },
+            )
 
-        selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
+        selected_agent, agents, messages, selection_reason = self._prepare_and_select_agents(last_speaker)
         if selected_agent:
-            return selected_agent
+            final_agent = selected_agent
         elif self.speaker_selection_method == "manual":
             # An agent has not been selected while in manual mode, so move to the next agent
-            return self.next_agent(last_speaker)
+            final_agent = self.next_agent(last_speaker)
+            selection_reason = "Next agent as user didn't select it manually"
+        else:
+            # auto speaker selection with 2-agent chat
+            final_agent = await self.a_auto_select_speaker(last_speaker, selector, messages, agents)
+            selection_reason = "Auto speaker selection"
 
-        # auto speaker selection with 2-agent chat
-        return await self.a_auto_select_speaker(last_speaker, selector, messages, agents)
+        if telemetry:
+            telemetry.set_attribute(
+                speaker_select_span, "ag2.agent.selected.id", str(id(final_agent)) if final_agent else None
+            )
+            telemetry.set_attribute(
+                speaker_select_span, "ag2.agent.selected", final_agent.name if final_agent else None
+            )
+            telemetry.set_attribute(speaker_select_span, "ag2.transition_reason", selection_reason)
+            telemetry.end_span()
+
+            if final_agent:
+                telemetry.record_event(
+                    kind=EventKind.AGENT_TRANSITION,
+                    attributes={
+                        "ag2.agent.last_speaker.id": str(id(last_speaker)),
+                        "ag2.agent.last_speaker": last_speaker.name,
+                        "ag2.agent.next_speaker.id": str(id(final_agent)),
+                        "ag2.agent.next_speaker": final_agent.name,
+                        "ag2.transition_reason": selection_reason,
+                    },
+                )
+
+        return final_agent
 
     def _finalize_speaker(self, last_speaker: Agent, final: bool, name: str, agents: Optional[list[Agent]]) -> Agent:
         if not final:
@@ -690,9 +796,8 @@ class GroupChat:
             agents Optional[List[Agent]]: Valid list of agents for speaker selection
 
         Returns:
-            Dict: a counter for mentioned agents.
+            Agent: Selected agent (or None)
         """
-
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
             agents = self.agents
@@ -774,9 +879,8 @@ class GroupChat:
             agents Optional[List[Agent]]: Valid list of agents for speaker selection
 
         Returns:
-            Dict: a counter for mentioned agents.
+            Agent: Selected agent (or None)
         """
-
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
             agents = self.agents
@@ -1134,6 +1238,17 @@ class GroupChatManager(ConversableAgent):
         config: Optional[GroupChat] = None,
     ) -> tuple[bool, Optional[str]]:
         """Run a group chat."""
+        telemetry = get_current_telemetry()
+        if telemetry:
+            groupchat_span_context = telemetry.start_span(
+                kind=SpanKind.GROUP_CHAT,
+                attributes={
+                    "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                    "ag2.agent.sender.id": str(id(self)),
+                    "ag2.agent.sender": self.name,
+                },
+            )
+
         if messages is None:
             messages = self._oai_messages[sender]
         message = messages[-1]
@@ -1155,6 +1270,18 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = a.client_cache
                 a.client_cache = self.client_cache
         for i in range(groupchat.max_round):
+
+            if telemetry:
+                _ = telemetry.start_span(
+                    kind=SpanKind.ROUND,
+                    attributes={
+                        "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                        "ag2.round": i + 1,
+                        "ag2.rounds_max": groupchat.max_round,
+                    },
+                    parent_context=groupchat_span_context,
+                )
+
             self._last_speaker = speaker
             groupchat.append(message, speaker)
             # broadcast the message to all agents except the speaker
@@ -1180,13 +1307,27 @@ class GroupChatManager(ConversableAgent):
                     reply = speaker.generate_reply(sender=self)
                 else:
                     # admin agent is not found in the participants
+                    if telemetry:
+                        telemetry.set_attribute(
+                            groupchat_span_context, "ag2.groupchat.termination", "Admin agent not found"
+                        )
+                        telemetry.end_span()  # Round span
+
                     raise
             except NoEligibleSpeaker:
                 # No eligible speaker, terminate the conversation
+                if telemetry:
+                    telemetry.set_attribute(groupchat_span_context, "ag2.groupchat.termination", "No eligible speaker")
+                    telemetry.end_span()  # Round span
+
                 break
 
             if reply is None:
                 # no reply is generated, exit the chat
+                if telemetry:
+                    telemetry.set_attribute(groupchat_span_context, "ag2.groupchat.termination", "No reply")
+                    telemetry.end_span()  # Round span
+
                 break
 
             # check for "clear history" phrase in reply and activate clear history function if found
@@ -1201,10 +1342,21 @@ class GroupChatManager(ConversableAgent):
             # The speaker sends the message without requesting a reply
             speaker.send(reply, self, request_reply=False, silent=silent)
             message = self.last_message(speaker)
+
+            if telemetry:
+                telemetry.end_span()  # Round span
+
+        if telemetry and not groupchat_span_context.has_attribute("ag2.groupchat.termination"):
+            telemetry.set_attribute(groupchat_span_context, "ag2.groupchat.termination", "Max rounds reached")
+
         if self.client_cache is not None:
             for a in groupchat.agents:
                 a.client_cache = a.previous_cache
                 a.previous_cache = None
+
+        if telemetry:
+            telemetry.end_span()  # Group chat span
+
         return True, None
 
     async def a_run_chat(
@@ -1214,6 +1366,17 @@ class GroupChatManager(ConversableAgent):
         config: Optional[GroupChat] = None,
     ):
         """Run a group chat asynchronously."""
+        telemetry = get_current_telemetry()
+        if telemetry:
+            groupchat_span_context = telemetry.start_span(
+                kind=SpanKind.GROUP_CHAT,
+                attributes={
+                    "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                    "ag2.agent.sender.id": str(id(self)),
+                    "ag2.agent.sender": self.name,
+                },
+            )
+
         if messages is None:
             messages = self._oai_messages[sender]
         message = messages[-1]
@@ -1235,6 +1398,18 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = a.client_cache
                 a.client_cache = self.client_cache
         for i in range(groupchat.max_round):
+
+            if telemetry:
+                _ = telemetry.start_span(
+                    kind=SpanKind.ROUND,
+                    attributes={
+                        "ag2.chat_function": inspect.currentframe().f_code.co_name,
+                        "ag2.round": i + 1,
+                        "ag2.rounds_max": groupchat.max_round,
+                    },
+                    parent_context=groupchat_span_context,
+                )
+
             groupchat.append(message, speaker)
 
             if self._is_termination_msg(message):
@@ -1261,20 +1436,44 @@ class GroupChatManager(ConversableAgent):
                     reply = await speaker.a_generate_reply(sender=self)
                 else:
                     # admin agent is not found in the participants
+                    if telemetry:
+                        telemetry.set_attribute(
+                            groupchat_span_context, "ag2.groupchat.termination", "Admin agent not found"
+                        )
+                        telemetry.end_span()  # Round span
+
                     raise
             except NoEligibleSpeaker:
                 # No eligible speaker, terminate the conversation
-                break
+                if telemetry:
+                    telemetry.set_attribute(groupchat_span_context, "ag2.groupchat.termination", "No eligible speaker")
+                    telemetry.end_span()  # Round span
 
+                break
             if reply is None:
+                if telemetry:
+                    telemetry.set_attribute(groupchat_span_context, "ag2.groupchat.termination", "No reply")
+                    telemetry.end_span()  # Round span
+
                 break
             # The speaker sends the message without requesting a reply
             await speaker.a_send(reply, self, request_reply=False, silent=silent)
             message = self.last_message(speaker)
+
+            if telemetry:
+                telemetry.end_span()  # Round span
+
+        if telemetry and not groupchat_span_context.has_attribute("ag2.groupchat.termination"):
+            telemetry.set_attribute(groupchat_span_context, "ag2.groupchat.termination", "Max rounds reached")
+
         if self.client_cache is not None:
             for a in groupchat.agents:
                 a.client_cache = a.previous_cache
                 a.previous_cache = None
+
+        if telemetry:
+            telemetry.end_span()  # Group chat span
+
         return True, None
 
     def resume(

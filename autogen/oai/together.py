@@ -48,6 +48,9 @@ from together import Together, error
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
+from ..telemetry.base_telemetry import EventKind
+from ..telemetry.intrumentation_manager import get_current_telemetry
+
 
 class TogetherClient:
     """Client for Together.AI's API."""
@@ -248,6 +251,8 @@ chat_lang_code_model_sizes = {
     "garage-bAInd/Platypus2-70B-instruct": 70,
     "google/gemma-2b-it": 2,
     "google/gemma-7b-it": 7,
+    "google/gemma-2-9b-it": 9,
+    "google/gemma-2-27b-it": 27,
     "Gryphe/MythoMax-L2-13b": 13,
     "lmsys/vicuna-13b-v1.5": 13,
     "lmsys/vicuna-7b-v1.5": 7,
@@ -255,11 +260,18 @@ chat_lang_code_model_sizes = {
     "codellama/CodeLlama-34b-Instruct-hf": 34,
     "codellama/CodeLlama-70b-Instruct-hf": 70,
     "codellama/CodeLlama-7b-Instruct-hf": 7,
+    "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo": 90,
+    "meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo": 11,
+    "meta-llama/Llama-3.2-3B-Instruct-Turbo": 3,
+    "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo": 70,
+    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": 405,
+    "meta-llama/Meta-Llama-3-70B-Instruct-Turbo": 70,
+    "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo": 8,
+    "meta-llama/Llama-3-70b-chat-hf": 70,
+    "meta-llama/Llama-3-8b-chat-hf": 8,
     "meta-llama/Llama-2-70b-chat-hf": 70,
     "meta-llama/Llama-2-13b-chat-hf": 13,
     "meta-llama/Llama-2-7b-chat-hf": 7,
-    "meta-llama/Llama-3-8b-chat-hf": 8,
-    "meta-llama/Llama-3-70b-chat-hf": 70,
     "mistralai/Mistral-7B-Instruct-v0.1": 7,
     "mistralai/Mistral-7B-Instruct-v0.2": 7,
     "mistralai/Mistral-7B-Instruct-v0.3": 7,
@@ -269,6 +281,9 @@ chat_lang_code_model_sizes = {
     "NousResearch/Nous-Hermes-2-Yi-34B": 34,
     "openchat/openchat-3.5-1210": 7,
     "Open-Orca/Mistral-7B-OpenOrca": 7,
+    "Qwen/Qwen2-72B-Instruct": 72,
+    "Qwen/Qwen2.5-72B-Instruct-Turbo": 72,
+    "Qwen/Qwen2.5-7B-Instruct-Turbo": 7,
     "Qwen/Qwen1.5-0.5B-Chat": 0.5,
     "Qwen/Qwen1.5-1.8B-Chat": 1.8,
     "Qwen/Qwen1.5-4B-Chat": 4,
@@ -277,7 +292,6 @@ chat_lang_code_model_sizes = {
     "Qwen/Qwen1.5-32B-Chat": 32,
     "Qwen/Qwen1.5-72B-Chat": 72,
     "Qwen/Qwen1.5-110B-Chat": 110,
-    "Qwen/Qwen2-72B-Instruct": 72,
     "snorkelai/Snorkel-Mistral-PairRM-DPO": 7,
     "togethercomputer/alpaca-7b": 7,
     "teknium/OpenHermes-2-Mistral-7B": 7,
@@ -309,35 +323,80 @@ mixture_model_sizes = {
 # Cost per million tokens based on up to X Billion parameters, e.g. up 56B is $0.6/million
 mixture_costs = {56: 0.6, 176: 1.2, 480: 2.4}
 
+# Cost per million tokens for Llama Turbo models
+llama_turbo_costs = {3: 0.06, 8: 0.18, 11: 0.18, 70: 0.88, 90: 1.2, 405: 3.5}
+
+# Qwen costs per million tokens
+qwen_costs = {
+    "qwen/qwen2-72b-instruct": 0.90,
+    "qwen/qwen2.5-7b-instruct-turbo": 0.30,
+}
+
 
 def calculate_together_cost(input_tokens: int, output_tokens: int, model_name: str) -> float:
     """Cost calculation for inference"""
 
+    total = 0.0
     if model_name in chat_lang_code_model_sizes or model_name in mixture_model_sizes:
-        cost_per_mil = 0
 
-        # Chat, Language, Code models
-        if model_name in chat_lang_code_model_sizes:
-            size_in_b = chat_lang_code_model_sizes[model_name]
+        # Llama prices (All Turbo pricing)
+        if "meta-llama/Llama" in model_name or "meta-llama/Meta-Llama" in model_name:
+            if "turbo" in model_name.lower():
+                size_in_b = chat_lang_code_model_sizes[model_name]
 
-            for top_size in chat_lang_code_model_costs.keys():
-                if size_in_b <= top_size:
-                    cost_per_mil = chat_lang_code_model_costs[top_size]
-                    break
+                for top_size in llama_turbo_costs.keys():
+                    if size_in_b <= top_size:
+                        cost_per_mil = llama_turbo_costs[top_size]
+                        break
+
+                total = cost_per_mil * ((input_tokens + output_tokens) / 1e6)
+
+        elif model_name.lower() in qwen_costs:
+            cost_per_mil = qwen_costs[model_name.lower()]
+            total = cost_per_mil * ((input_tokens + output_tokens) / 1e6)
 
         else:
-            # Mixture-of-experts
-            size_in_b = mixture_model_sizes[model_name]
+            cost_per_mil = 0
 
-            for top_size in mixture_costs.keys():
-                if size_in_b <= top_size:
-                    cost_per_mil = mixture_costs[top_size]
-                    break
+            # Chat, Language, Code models
+            if model_name in chat_lang_code_model_sizes:
+                size_in_b = chat_lang_code_model_sizes[model_name]
 
-        if cost_per_mil == 0:
-            warnings.warn("Model size doesn't align with cost structure.", UserWarning)
+                for top_size in chat_lang_code_model_costs.keys():
+                    if size_in_b <= top_size:
+                        cost_per_mil = chat_lang_code_model_costs[top_size]
+                        break
 
-        return cost_per_mil * ((input_tokens + output_tokens) / 1e6)
+            else:
+                # Mixture-of-experts
+                size_in_b = mixture_model_sizes[model_name]
+
+                for top_size in mixture_costs.keys():
+                    if size_in_b <= top_size:
+                        cost_per_mil = mixture_costs[top_size]
+                        break
+
+            if cost_per_mil == 0:
+                warnings.warn("Model size doesn't align with cost structure.", UserWarning)
+
+            total = cost_per_mil * ((input_tokens + output_tokens) / 1e6)
+
+        # Record cost with telemetry
+        telemetry = get_current_telemetry()
+        if telemetry:
+            telemetry.record_event(
+                EventKind.COST,
+                {
+                    "ag2.cost": total,
+                    "ag2.cost_type": "LLM",
+                    "ag2.llm.provider": "Together AI",
+                    "ag2.llm.model": model_name,
+                    "ag2.llm.input_tokens": input_tokens,
+                    "ag2.llm.output_tokens": output_tokens,
+                },
+            )
+
+        return total
 
     else:
         # Model is not in our list of models, can't determine the cost
