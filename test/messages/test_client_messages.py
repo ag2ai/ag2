@@ -4,7 +4,7 @@
 
 from typing import Any, Optional
 from unittest.mock import MagicMock, call
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 
@@ -16,11 +16,6 @@ from autogen.messages.client_messages import (
     UsageSummary,
     _change_usage_summary_format,
 )
-
-
-@pytest.fixture
-def uuid() -> UUID:
-    return uuid4()
 
 
 @pytest.mark.parametrize(

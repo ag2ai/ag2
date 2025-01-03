@@ -4,7 +4,7 @@
 
 from typing import Any, Optional, Union
 from unittest.mock import MagicMock, _Call, call
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 import termcolor.termcolor
@@ -48,11 +48,6 @@ def enable_color_in_tests(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def uuid() -> UUID:
-    return uuid4()
-
-
-@pytest.fixture
 def sender() -> ConversableAgent:
     return ConversableAgent("sender", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 
@@ -60,9 +55,6 @@ def sender() -> ConversableAgent:
 @pytest.fixture
 def recipient() -> ConversableAgent:
     return ConversableAgent("recipient", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
-
-
-# todo: create uuid and compare with model_dump()
 
 
 def test_tool_responses(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
