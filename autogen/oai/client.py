@@ -305,7 +305,8 @@ class OpenAIClient:
         else:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
-
+        if "stream" in params and params:
+            params["stream"] = False
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
         if params.get("stream", False) and "messages" in params:
             response_contents = [""] * params.get("n", 1)
@@ -416,10 +417,28 @@ class OpenAIClient:
         else:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
+            if params["model"].startswith("o1"):
+                params, _system_msg_dict = self._limitations_removal_o1(params)
             params["stream"] = False
             response = create_or_parse(**params)
 
         return response
+
+    def _limitations_removal_o1(self, params):
+        """
+        Removes the limitations for the o1 model that are supported by the other openai models.
+        please refer: https://platform.openai.com/docs/guides/reasoning#limitations
+        """
+        params.pop("temperature", None)
+        params.pop("frequency_penalty", None)
+        params.pop("presence_penalty", None)
+        params.pop("top_p", None)
+        if "messages" in params:
+            # pop the system_message from the messages and add it in the prompt at the start.
+            _system_message = params["messages"][0]["content"]
+            sys_msg_dict = params["messages"].pop(0)
+            params["messages"][0]["content"] = _system_message + "\n" + params["messages"][0]["content"]
+        return params, sys_msg_dict
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
         """Calculate the cost of the response."""
