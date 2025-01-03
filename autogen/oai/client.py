@@ -307,7 +307,8 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
 
-        _is_o1 = params["model"].startswith("o1")
+        _is_o1 = "model" in params and params["model"].startswith("o1")
+
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
         if params.get("stream", False) and "messages" in params and not _is_o1:
             response_contents = [""] * params.get("n", 1)
@@ -420,9 +421,11 @@ class OpenAIClient:
             params = params.copy()
             if _is_o1:
                 # add a warning that o1 model does not support stream
-                if params["stream"]:
+                if params.get("stream", False):
                     warnings.warn("The o1 model does not support streaming. The stream will be set to False.")
-                params, _system_msg_dict = self._limitations_removal_o1(params)
+                if params.get("tools", False):
+                    raise ValueError("The o1 model does not support tools.")
+                params, _system_msg_dict = self._process_o1_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
             # remove the system_message from the response and add it in the prompt at the start.
@@ -432,16 +435,24 @@ class OpenAIClient:
 
         return response
 
-    def _limitations_removal_o1(self, params):
+    def _process_o1_params(self, params):
         """
-        Removes the limitations for the o1 model that are supported by the other openai models.
+        Cater for the o1 model parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
+        # Unsupported parameters
         params.pop("temperature", None)
         params.pop("frequency_penalty", None)
         params.pop("presence_penalty", None)
         params.pop("top_p", None)
+
+        # Replace max_tokens with max_completion_tokens as reasoning tokens are now factored in
+        # and max_tokens isn't valid
+        if "max_tokens" in params:
+            params["max_completion_tokens"] = params.pop("max_tokens")
+
         if "messages" in params:
+            # o1 doesn't support role='system' messages, only 'user' and 'assistant'
             # pop the system_message from the messages and add it in the prompt at the start.
             _system_message = params["messages"][0]["content"]
             sys_msg_dict = params["messages"].pop(0)
