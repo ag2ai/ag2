@@ -10,11 +10,11 @@ import json
 import os
 
 import pytest
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 from autogen.agentchat.contrib.agent_builder import AgentBuilder
 
-from ..conftest import reason, skip_openai  # noqa: E402
+from ...conftest import reason, skip_openai  # noqa: E402
+from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 try:
     import chromadb

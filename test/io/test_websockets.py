@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 from typing import Dict
 
 import pytest
-from conftest import skip_openai
 from websockets.exceptions import ConnectionClosed
 
 import autogen
@@ -16,6 +15,8 @@ from autogen.cache.cache import Cache
 from autogen.io import IOWebsockets
 from autogen.io.base import IOStream
 from autogen.messages.agent_messages import TextMessage
+
+from ..conftest import skip_openai
 
 KEY_LOC = "notebook"
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
