@@ -78,11 +78,11 @@ import os
 import re
 import time
 import warnings
-from typing import Annotated, Any, Dict, List, Optional, Protocol, Tuple, Type, Union, runtime_checkable
+from typing import Any, Optional, Type
 
 from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
 from anthropic import __version__ as anthropic_version
-from anthropic.types import Completion, Message, TextBlock, ToolUseBlock
+from anthropic.types import Message, TextBlock, ToolUseBlock
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
@@ -385,7 +385,7 @@ class AnthropicClient:
             return
 
         # Get the schema of the Pydantic model
-        schema = self._response_format.schema()
+        schema = self._response_format.model_json_schema()
 
         # Add instructions for JSON formatting
         format_content = f"""Please provide your response as a JSON object that matches the following schema:
@@ -428,7 +428,7 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
         try:
             # Parse JSON and validate against the Pydantic model
             json_data = json.loads(json_str)
-            return self._response_format.parse_obj(json_data)
+            return self._response_format.model_validate(json_data)
         except Exception as e:
             raise ValueError(
                 f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
