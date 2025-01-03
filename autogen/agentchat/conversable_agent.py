@@ -35,7 +35,7 @@ from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
 from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
-from ..messages.messages import (
+from ..messages.agent_messages import (
     ClearConversableAgentHistory,
     ConversableAgentUsageSummary,
     ExecuteCodeBlock,

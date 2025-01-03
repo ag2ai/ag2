@@ -11,7 +11,7 @@ import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock
-from autogen.messages.messages import (
+from autogen.messages.agent_messages import (
     ClearAgentsHistory,
     ClearConversableAgentHistory,
     ContentMessage,
