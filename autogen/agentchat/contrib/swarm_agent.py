@@ -34,6 +34,7 @@ class AfterWorkOption(Enum):
     TERMINATE = "TERMINATE"
     REVERT_TO_USER = "REVERT_TO_USER"
     STAY = "STAY"
+    SWARM_MANAGER = "SWARM_MANAGER"
 
 
 @dataclass

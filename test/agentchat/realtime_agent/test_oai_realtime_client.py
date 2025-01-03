@@ -60,7 +60,6 @@ class TestOAIRealtimeClient:
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.asyncio()
     async def test_not_connected(self, client: OpenAIRealtimeClient) -> None:
-
         with pytest.raises(RuntimeError, match=r"Client is not connected, call connect\(\) first."):
             with move_on_after(1) as scope:
                 async for _ in client.read_events():
@@ -71,7 +70,6 @@ class TestOAIRealtimeClient:
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.asyncio()
     async def test_start_read_events(self, client: OpenAIRealtimeClient) -> None:
-
         mock = MagicMock()
 
         async with client.connect():
@@ -94,7 +92,6 @@ class TestOAIRealtimeClient:
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.asyncio()
     async def test_send_text(self, client: OpenAIRealtimeClient) -> None:
-
         mock = MagicMock()
 
         async with client.connect():
@@ -121,21 +118,3 @@ class TestOAIRealtimeClient:
 
         assert calls_kwargs[3]["type"] == "conversation.item.created"
         assert calls_kwargs[3]["item"]["content"][0]["text"] == "Hello, how are you?"
-
-    @pytest.mark.skip(reason="Not implemented")
-    @pytest.mark.skipif(skip_openai, reason=reason)
-    @pytest.mark.asyncio()
-    async def test_send_audio(self, client: OpenAIRealtimeClient) -> None:
-        raise NotImplementedError
-
-    @pytest.mark.skip(reason="Not implemented")
-    @pytest.mark.skipif(skip_openai, reason=reason)
-    @pytest.mark.asyncio()
-    async def test_truncate_audio(self, client: OpenAIRealtimeClient) -> None:
-        raise NotImplementedError
-
-    @pytest.mark.skip(reason="Not implemented")
-    @pytest.mark.skipif(skip_openai, reason=reason)
-    @pytest.mark.asyncio()
-    async def test_initialize_session(self, client: OpenAIRealtimeClient) -> None:
-        raise NotImplementedError
