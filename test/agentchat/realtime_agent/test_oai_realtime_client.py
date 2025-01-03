@@ -7,13 +7,13 @@ from unittest.mock import MagicMock
 
 import pytest
 from anyio import move_on_after
-from asyncer import create_task_group
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
 from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
+
+from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 
 class TestOAIRealtimeClient:

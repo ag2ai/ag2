@@ -2,20 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 import sys
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
 import pytest
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../agentchat"))
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
-
 import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
+
+from ...agentchat.test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
 
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
     from autogen.interop.crewai import CrewAIInteroperability

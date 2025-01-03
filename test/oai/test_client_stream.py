@@ -6,17 +6,14 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
-import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 from unittest.mock import MagicMock
 
 import pytest
 
 from autogen import OpenAIWrapper, config_list_from_json
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import skip_openai  # noqa: E402
+from ..conftest import skip_openai  # noqa: E402
 
 try:
     from openai import OpenAI

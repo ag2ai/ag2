@@ -7,7 +7,6 @@
 #!/usr/bin/env python3 -m pytest
 
 import os
-import sys
 import tempfile
 import unittest
 from io import StringIO
@@ -15,7 +14,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from conftest import skip_docker
 
 import autogen
 from autogen.code_utils import (
@@ -33,6 +31,8 @@ from autogen.code_utils import (
     infer_lang,
     is_docker_running,
 )
+
+from .conftest import skip_docker
 
 KEY_LOC = "notebook"
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
