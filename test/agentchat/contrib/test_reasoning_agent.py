@@ -17,10 +17,9 @@ import pytest
 
 import autogen
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
-from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from conftest import reason, skip_openai  # noqa: E402
+from ...conftest import reason, skip_openai  # noqa: E402
 
 skip_reasons = [reason]
 try:

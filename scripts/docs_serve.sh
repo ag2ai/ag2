@@ -3,7 +3,16 @@
 set -e
 set -x
 
-cd website &&
-    yarn install --frozen-lockfile --ignore-engines &&
-    pydoc-markdown &&
-    yarn start
+# Source the docs_build.sh script from the same directory
+source "$(dirname "$0")/docs_build.sh"
+
+# Run the docs_build function from docs_build.sh
+docs_build
+
+# Install npm packages
+echo "Running npm install..."
+npm install
+
+# Add the command to serve the documentation
+echo "Serving documentation..."
+npm run mintlify:dev

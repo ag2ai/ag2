@@ -4,16 +4,18 @@
 
 import os
 import sys
-import unittest
 
 import pytest
-from conftest import reason, skip_openai
 from langchain.tools import tool as langchain_tool
 from pydantic import BaseModel, Field
 
+import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 from autogen.interop.langchain import LangChainInteroperability
+
+from ...agentchat.test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ...conftest import reason, skip_openai
 
 
 # skip if python version is not >= 3.9
@@ -50,7 +52,13 @@ class TestLangChainInteroperability:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            filter_dict={
+                "tags": ["gpt-4o"],
+            },
+            file_location=KEY_LOC,
+        )
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",
@@ -101,7 +109,13 @@ class TestLangChainInteroperabilityWithoutPydanticInput:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            filter_dict={
+                "tags": ["gpt-4o"],
+            },
+            file_location=KEY_LOC,
+        )
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",
@@ -110,6 +124,15 @@ class TestLangChainInteroperabilityWithoutPydanticInput:
         chatbot = AssistantAgent(
             name="chatbot",
             llm_config={"config_list": config_list},
+            system_message="""
+When using the search tool, input should be:
+{
+    "tool_input": {
+        "query": ...,
+        "max_length": ...
+    }
+}
+""",
         )
 
         self.tool.register_for_execution(user_proxy)

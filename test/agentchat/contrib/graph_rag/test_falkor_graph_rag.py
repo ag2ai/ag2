@@ -7,8 +7,9 @@
 import sys
 
 import pytest
-from conftest import reason, skip_openai  # noqa: E402
 from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
+
+from ....conftest import reason, skip_openai  # noqa: E402
 
 try:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType

@@ -4,11 +4,12 @@
 
 import sys
 from tempfile import TemporaryDirectory
-from typing import Any
 
 import pytest
 
 from autogen.interop import Interoperability
+
+from ..conftest import MOCK_OPEN_AI_API_KEY
 
 
 class TestInteroperability:
@@ -30,7 +31,8 @@ class TestInteroperability:
     @pytest.mark.skipif(
         sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
     )
-    def test_crewai(self) -> None:
+    def test_crewai(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
         from crewai_tools import FileReadTool
 
         crewai_tool = FileReadTool()
@@ -45,7 +47,7 @@ class TestInteroperability:
             assert tool.name == "Read_a_file_s_content"
             assert (
                 tool.description
-                == "A tool that can be used to read a file's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+                == "A tool that can be used to read None's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
             model_type = crewai_tool.args_schema

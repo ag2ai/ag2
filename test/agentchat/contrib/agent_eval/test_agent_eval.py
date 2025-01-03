@@ -9,12 +9,13 @@
 import json
 
 import pytest
-from conftest import reason, skip_openai  # noqa: E402
 
 import autogen
 from autogen.agentchat.contrib.agent_eval.agent_eval import generate_criteria, quantify_criteria
 from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 from autogen.agentchat.contrib.agent_eval.task import Task
+
+from ....conftest import reason, skip_openai  # noqa: E402
 
 KEY_LOC = "notebook"
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"

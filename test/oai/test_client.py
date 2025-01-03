@@ -8,7 +8,6 @@
 
 import os
 import shutil
-import sys
 import time
 
 import pytest
@@ -17,8 +16,7 @@ from autogen import OpenAIWrapper, config_list_from_json
 from autogen.cache.cache import Cache
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import skip_openai  # noqa: E402
+from ..conftest import skip_openai  # noqa: E402
 
 TOOL_ENABLED = False
 try:

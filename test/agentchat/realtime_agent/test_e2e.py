@@ -9,12 +9,12 @@ from unittest.mock import MagicMock
 import pytest
 from anyio import Event, move_on_after, sleep
 from asyncer import create_task_group
-from conftest import reason, skip_openai  # noqa: E402
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
+from ...conftest import reason, skip_openai  # noqa: E402
 from .realtime_test_utils import Credentials, text_to_speech, trace
 
 logger = getLogger(__name__)

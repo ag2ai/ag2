@@ -10,7 +10,6 @@ import asyncio
 import copy
 import inspect
 import os
-import sys
 import time
 import unittest
 from typing import Annotated, Any, Callable, Literal
@@ -18,17 +17,14 @@ from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel, Field
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
-from autogen.tools.dependency_injection import BaseContext, Depends
-from autogen.tools.tool import Tool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from ..conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 here = os.path.abspath(os.path.dirname(__file__))
 

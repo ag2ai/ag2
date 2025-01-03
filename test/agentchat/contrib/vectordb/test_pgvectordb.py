@@ -9,9 +9,8 @@ import sys
 import urllib.parse
 
 import pytest
-from conftest import reason
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from ....conftest import reason
 
 try:
     import pgvector
