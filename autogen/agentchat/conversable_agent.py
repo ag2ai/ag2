@@ -2589,8 +2589,9 @@ class ConversableAgent(LLMAgent):
                 raise ValueError(
                     f"The function signature must be of the type dict. Received function signature type {type(func_sig)}"
                 )
-
-            self._assert_valid_name(func_sig["name"])
+            if "name" not in func_sig:
+                raise ValueError(f"The function signature must have a 'name' key. Received: {func_sig}")
+            self._assert_valid_name(func_sig["name"]), func_sig
             if "functions" in self.llm_config.keys():
                 if any(func["name"] == func_sig["name"] for func in self.llm_config["functions"]):
                     warnings.warn(f"Function '{func_sig['name']}' is being overridden.", UserWarning)
@@ -2755,53 +2756,24 @@ class ConversableAgent(LLMAgent):
                 RuntimeError: if the LLM config is not set up before registering a function.
 
             """
-            nonlocal name, description
+            tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
 
-            tool = self._create_tool_if_needed(func_or_tool, name, description)
-
-            self._register_for_llm(tool.func, tool.name, tool.description, api_style)
+            self._register_for_llm(tool, api_style)
 
             return tool
 
         return _decorator
 
-    def _create_tool_if_needed(
-        self, func_or_tool: Union[Tool, Callable[..., Any]], name: Optional[str], description: Optional[str]
-    ) -> Tool:
-
-        if isinstance(func_or_tool, Tool):
-            tool: Tool = func_or_tool
-            tool._name = name or tool.name
-            tool._description = description or tool.description
-
-            return tool
-
-        if isinstance(func_or_tool, Callable):
-            func = inject_params(func_or_tool)
-            name = name or func.__name__
-            tool = Tool(name=name, description=description, func=func)
-
-            return tool
-
-        raise ValueError(
-            "Parameter 'func_or_tool' must be a function or a Tool instance, it is '{type(func_or_tool)}' instead."
-        )
-
-    def _register_for_llm(
-        self, func: Callable[..., Any], name: str, description: str, api_style: Literal["tool", "function"]
-    ) -> None:
-        # get JSON schema for the function
-        f = get_function_schema(func, name=name, description=description)
+    def _register_for_llm(self, tool: Tool, api_style: Literal["tool", "function"]) -> None:
 
         # register the function to the agent if there is LLM config, raise an exception otherwise
         if self.llm_config is None:
             raise RuntimeError("LLM config must be setup before registering a function for LLM.")
 
         if api_style == "function":
-            f = f["function"]
-            self.update_function_signature(f, is_remove=False)
+            self.update_function_signature(tool.function_schema, is_remove=False)
         elif api_style == "tool":
-            self.update_tool_signature(f, is_remove=False)
+            self.update_tool_signature(tool.tool_schema, is_remove=False)
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 
@@ -2845,7 +2817,7 @@ class ConversableAgent(LLMAgent):
             """
             nonlocal name
 
-            tool = self._create_tool_if_needed(func_or_tool=func_or_tool, name=name, description=None)
+            tool = Tool(func_or_tool=func_or_tool, name=name)
 
             self.register_function({tool.name: self._wrap_function(tool.func)})
 

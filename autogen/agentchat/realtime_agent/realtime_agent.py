@@ -8,11 +8,10 @@ from typing import Any, Callable, Literal, Optional, TypeVar, Union
 import anyio
 from asyncer import create_task_group, syncify
 
-from autogen import SwarmAgent
-from autogen.agentchat.agent import Agent
-from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.tools import get_function_schema
-
+from ... import SwarmAgent
+from ...tools import Tool, get_function_schema
+from ..agent import Agent
+from ..conversable_agent import ConversableAgent
 from .function_observer import FunctionObserver
 from .oai_realtime_client import OpenAIRealtimeClient, Role
 from .realtime_observer import RealtimeObserver
@@ -83,7 +82,7 @@ class RealtimeAgent(ConversableAgent):
 
         self._observers: list[RealtimeObserver] = [self._function_observer, self._audio_adapter]
 
-        self._registred_realtime_functions: dict[str, tuple[dict[str, Any], Callable[..., Any]]] = {}
+        self._registred_realtime_tools: dict[str, Tool] = {}
 
         # is this all Swarm related?
         self._oai_system_message = [{"content": system_message, "role": "system"}]  # todo still needed? see below
@@ -106,6 +105,11 @@ class RealtimeAgent(ConversableAgent):
     def realtime_client(self) -> OpenAIRealtimeClient:
         """Get the OpenAI Realtime Client."""
         return self._realtime_client
+
+    @property
+    def registred_realtime_tools(self) -> dict[str, Tool]:
+        """Get the registered realtime tools."""
+        return self._registred_realtime_tools
 
     def register_observer(self, observer: RealtimeObserver) -> None:
         """Register an observer with the Realtime Agent.
@@ -171,32 +175,33 @@ class RealtimeAgent(ConversableAgent):
     def register_realtime_function(
         self,
         *,
-        description: str,
         name: Optional[str] = None,
-    ) -> Callable[[F], F]:
-        def _decorator(func: F, name: Optional[str] = name) -> F:
+        description: Optional[str] = None,
+    ) -> Callable[[Union[F, Tool]], Tool]:
+        """Decorator for registering a function to be used by an agent.
+
+        Args:
+            name (str): The name of the function.
+            description (str): The description of the function.
+
+        Returns:
+            Callable[[Union[F, Tool]], Tool]: The decorator for registering a function.
+        """
+
+        def _decorator(func_or_tool: Union[F, Tool]) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:
-                func (callable[..., Any]): the function to be registered.
-                name (str): the name of the function.
+                func_or_tool (Union[F, Tool]): The function or tool to register.
 
             Returns:
-                The function to be registered, with the _description attribute set to the function description.
-
-            Raises:
-                ValueError: if the function description is not provided and not propagated by a previous decorator.
-                RuntimeError: if the LLM config is not set up before registering a function.
+                Tool: The registered tool.
             """
-            # get JSON schema for the function
-            name = name or func.__name__
+            tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
 
-            schema = get_function_schema(func, name=name, description=description)["function"]
-            schema["type"] = "function"
+            self._registred_realtime_tools[tool.name] = tool
 
-            self._registred_realtime_functions[name] = (schema, func)
-
-            return func
+            return tool
 
         return _decorator
 
