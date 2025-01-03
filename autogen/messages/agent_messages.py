@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from copy import deepcopy
+import json
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
@@ -662,3 +663,25 @@ class TextMessage(BaseMessage):
         f = f or print
 
         f(text)
+
+
+class PrintMessage(BaseMessage):
+    def __init__(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False, uuid: Optional[UUID] = None):
+        self.objects = [self._to_json(x) for x in objects ]
+        self.sep = sep
+        self.end = end
+
+        super().__init__(uuid=uuid)
+
+    def _to_json(self, obj: Any):
+        if hasattr(obj, "model_dump_json"):
+            return obj.model_dump_json()
+        try:
+            return json.dumps(obj)
+        except Exception:
+            return repr(obj)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(*self.objects, sep=self.sep, end=self.end, flush=True)

@@ -860,7 +860,8 @@ class ConversableAgent(LLMAgent):
         message = self._message_to_dict(message)
         message_model = create_received_message_model(message=message, sender=sender, recipient=self)
         iostream = IOStream.get_default()
-        message_model.print(iostream.print)
+        # message_model.print(iostream.print)
+        iostream.send(message_model)
 
     def _process_received_message(self, message: Union[dict, str], sender: Agent, silent: bool):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
