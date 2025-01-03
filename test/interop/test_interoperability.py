@@ -45,7 +45,7 @@ class TestInteroperability:
             assert tool.name == "Read_a_file_s_content"
             assert (
                 tool.description
-                == "A tool that can be used to read a file's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+                == "A tool that can be used to read None's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
             model_type = crewai_tool.args_schema
