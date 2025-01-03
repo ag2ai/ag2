@@ -256,18 +256,20 @@ class PostCarryoverProcessing(BaseMessage):
     max_turns: Optional[int] = None
 
     def __init__(self, *, uuid: Optional[UUID] = None, chat_info: dict[str, Any]):
-        # if "message" not in chat_info:
-        #     chat_info["message"] = None
+        carryover = chat_info.get("carryover", "")
+        message = chat_info.get("message")
+        verbose = chat_info.get("verbose", False)
 
-        chat_info = deepcopy(chat_info)
-        sender_name = chat_info.pop("sender").name
-        recipient_name = chat_info.pop("recipient").name
+        sender_name = chat_info["sender"].name
+        recipient_name = chat_info["recipient"].name
+        summary_args = chat_info.get("summary_args", None)
+        max_turns = chat_info.get("max_turns", None)
 
         # Fix Callable in chat_info
-        if callable(chat_info.get("summary_method")):
-            chat_info["summary_method"] = chat_info["summary_method"].__name__
+        summary_method = chat_info.get("summary_method", "")
+        if callable(summary_method):
+            summary_method = summary_method.__name__
 
-        message = chat_info.get("message")
         print_message = ""
         if isinstance(message, str):
             print_message = message
@@ -277,11 +279,15 @@ class PostCarryoverProcessing(BaseMessage):
             print_message = "Dict: " + str(message)
         elif message is None:
             print_message = "None"
-        chat_info["message"] = print_message
 
         super().__init__(
             uuid=uuid,
-            **chat_info,
+            carryover=carryover,
+            message=print_message,
+            verbose=verbose,
+            summary_method=summary_method,
+            summary_args=summary_args,
+            max_turns=max_turns,
             sender_name=sender_name,
             recipient_name=recipient_name,
         )
