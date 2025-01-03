@@ -260,8 +260,8 @@ class PostCarryoverProcessing(BaseMessage):
         message = chat_info.get("message")
         verbose = chat_info.get("verbose", False)
 
-        sender_name = chat_info.get("sender").name  # type: ignore [union-attr]
-        recipient_name = chat_info.get("recipient").name  # type: ignore [union-attr]
+        sender_name = chat_info["sender"].name
+        recipient_name = chat_info["recipient"].name
         summary_args = chat_info.get("summary_args", None)
         max_turns = chat_info.get("max_turns", None)
 
