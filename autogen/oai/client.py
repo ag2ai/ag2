@@ -422,6 +422,9 @@ class OpenAIClient:
                 # add a warning that o1 model does not support stream
                 if params["stream"]:
                     warnings.warn("The o1 model does not support streaming. The stream will be set to False.")
+                # break the workflow if tools are enabled, as o1 model does not support tools
+                if params["tools"]:
+                    raise ValueError("The o1 model does not support tools.")
                 params, _system_msg_dict = self._limitations_removal_o1(params)
             params["stream"] = False
             response = create_or_parse(**params)
