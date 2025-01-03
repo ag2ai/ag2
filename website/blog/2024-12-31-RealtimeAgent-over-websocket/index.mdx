@@ -1,5 +1,5 @@
 ---
-title: Simplifying Real-Time Voice Interactions with the Websocket Audio Adapter
+title: Real-Time Voice Interactions with the WebSocket Audio Adapter
 authors:
   - marklysze
   - sternakt
@@ -62,37 +62,37 @@ tags: [Realtime API, Voice Agents, AI Tools]
 ![Realtime agent communication over websocket](img/websocket_communication_diagram.png)
 
 **TL;DR:**
-- **No More Twilio Setup**: Skip the complexity of configuring accounts, forwarding numbers, and managing telephony platforms.
-- **Introducing [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter)**: Stream audio directly from your browser using WebSockets.
+- **Demo implementation**: Implement a website using websockets and communicate using voice with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent)
+- **Introducing [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter)**: Stream audio directly from your browser using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).
 - **Simplified Development**: Connect to real-time agents quickly and effortlessly with minimal setup.
 
 # **Realtime over WebSockets**
 
-In our [previous blog post](/blog/2024-12-20-RealtimeAgent/index), we introduced a way to interact with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) using [**`TwilioAudioAdapter`**](/docs/reference/agentchat/realtime_agent/twilio_audio_adapter#twilioaudioadapter). While effective, this approach required a setup-intensive process involving [Twilio](https://www.twilio.com/) integration, account configuration, number forwarding, and other complexities. Today, we're excited to introduce the WebsocketAudioAdapter, a streamlined approach to real-time audio streaming directly via a web browser.
+In our [previous blog post](/blog/2024-12-20-RealtimeAgent/index), we introduced a way to interact with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) using [**`TwilioAudioAdapter`**](/docs/reference/agentchat/realtime_agent/twilio_audio_adapter#twilioaudioadapter). While effective, this approach required a setup-intensive process involving [Twilio](https://www.twilio.com/) integration, account configuration, number forwarding, and other complexities. Today, we're excited to introduce the[**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter), a streamlined approach to real-time audio streaming directly via a web browser.
 
 This post explores the features, benefits, and implementation of the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter), showing how it transforms the way we connect with real-time agents.
 
 ## **Why We Built the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter)**
 ### **Challenges with Existing Solutions**
 Previously introduced [**`TwilioAudioAdapter`**](/docs/reference/agentchat/realtime_agent/twilio_audio_adapter#twilioaudioadapter) provides a robust way to cennect to your [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent), it comes with challenges:
+- **Browser Limitations**: For teams building web-first applications, integrating with a telephony platform can feel redundant.
 - **Complex Setup**: Configuring Twilio accounts, verifying numbers, and setting up forwarding can be time-consuming.
 - **Platform Dependency**: This solution requires developers to rely on external API, which adds latency and costs.
-- **Browser Limitations**: For teams building web-first applications, integrating with a telephony platform can feel redundant.
 
 ### **Our Solution**
-The [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) eliminates these challenges by allowing direct audio streaming over WebSockets. It integrates seamlessly with modern web technologies, enabling real-time voice interactions without external telephony platforms.
+The [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) eliminates these challenges by allowing direct audio streaming over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/). It integrates seamlessly with modern web technologies, enabling real-time voice interactions without external telephony platforms.
 
 ## **How It Works**
-At its core, the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) leverages WebSockets to handle real-time audio streaming. This means your browser becomes the communication bridge, sending audio packets to a server where a [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) agent processes them.
+At its core, the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) leverages [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) to handle real-time audio streaming. This means your browser becomes the communication bridge, sending audio packets to a server where a [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) agent processes them.
 
 Here’s a quick overview of its components and how they fit together:
 
 1. **WebSocket Connection**:
-   - The adapter establishes a WebSocket connection between the client (browser) and the server.
+   - The adapter establishes a [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) connection between the client (browser) and the server.
    - Audio packets are streamed in real time through this connection.
 
 2. **Integration with FastAPI**:
-   - Using Python's [FastAPI](https://fastapi.tiangolo.com/) framework, developers can easily set up endpoints for handling WebSocket traffic.
+   - Using Python's [FastAPI](https://fastapi.tiangolo.com/) framework, developers can easily set up endpoints for handling  [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) traffic.
 
 3. **Powered by Realtime Agents**:
    - The audio adapter integrates with an AI-powered [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent), allowing the agent to process audio inputs and respond intelligently.
@@ -102,7 +102,7 @@ Here’s a quick overview of its components and how they fit together:
 Unlike [**`TwilioAudioAdapter`**](/docs/reference/agentchat/realtime_agent/twilio_audio_adapter#twilioaudioadapter), the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) requires no phone numbers, no telephony configuration, and no external accounts. It's a plug-and-play solution.
 
 ### **2. Real-Time Performance**
-By streaming audio over WebSockets, the adapter ensures low latency, making conversations feel natural and seamless.
+By streaming audio over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/), the adapter ensures low latency, making conversations feel natural and seamless.
 
 ### **3. Browser-Based**
 Everything happens within the user's browser, meaning no additional software is required. This makes it ideal for web applications.
@@ -137,7 +137,7 @@ templates = Jinja2Templates(directory=notebook_path / "templates")
 
 @app.get("/", response_class=JSONResponse)
 async def index_page():
-    return {"message": "Websocket Audio Stream Server is running!"}
+    return {"message": "WebSocket Audio Stream Server is running!"}
 
 @app.get("/start-chat/", response_class=HTMLResponse)
 async def start_chat(request):
@@ -151,7 +151,7 @@ Next, we create the `/media-stream` WebSocket route. This is where the real-time
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
     await websocket.accept()
-    audio_adapter = WebsocketAudioAdapter(websocket)
+    audio_adapter = WebSocketAudioAdapter(websocket)
     realtime_agent = RealtimeAgent(
         name="Weather Bot",
         system_message="Hi! I can tell you the weather. Ask me anything.",
