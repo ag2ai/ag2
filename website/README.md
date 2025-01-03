@@ -25,11 +25,7 @@ pip install pydoc-markdown pyyaml termcolor nbclient
 3. Finally, run the following commands to build and serve the documentation:
 
 ```console
-cd website
-python ./process_api_reference.py
-python ./process_notebooks.py render
-npm install
-npm run mintlify:dev
+./scripts/docs_serve.sh
 ```
 
 The last command starts a local development server and opens up a browser window.
@@ -52,11 +48,7 @@ docker run -it -p 8081:3000 -v $(pwd):/home/autogen/ag2 ag2ai_dev_img bash
 Once at the CLI in Docker run the following commands:
 
 ```console
-cd website
-python ./process_api_reference.py
-python ./process_notebooks.py render
-npm install
-npm run mintlify:dev
+./scripts/docs_serve.sh
 ```
 
 Once done you should be able to access the documentation at `http://127.0.0.1:8081`
