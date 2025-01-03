@@ -403,8 +403,7 @@ class ConversableAgent(LLMAgent):
         chat_queue: list[dict[str, Any]], recipient: Agent, messages: Union[str, Callable], sender: Agent, config: Any
     ) -> list[dict[str, Any]]:
         """A simple chat reply function.
-        This function initiate one or a sequence of chats between the "recipient" and the agents in the
-        chat_queue.
+        This function initiate one or a sequence of chats between the "recipient" and the agents in the chat_queue.
 
         It extracts and returns a summary from the nested chat based on the "summary_method" in each chat in chat_queue.
 

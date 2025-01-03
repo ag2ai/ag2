@@ -83,3 +83,18 @@ repos:
     rev: 1.8.5
     hooks:
       - id: nbqa-black
+  - repo: https://github.com/pycqa/pylint
+    rev: v3.3.3
+    hooks:
+      - id: pylint
+        name: pylint
+        entry: pylint
+        language: system
+        types: [python]
+        args: # Optional: arguments for Pylint; remove or modify as needed
+          [
+            '--errors-only',
+            '--disable=C,R',
+            '--disable=import-error',
+          ]
+        additional_dependencies: []  # Optional: add any additional dependencies (e.g., plugins)
