@@ -22,7 +22,7 @@ from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
 
-from ..client_messages import StreamMessage, UsageSummary
+from ..messages.client_messages import StreamMessage, UsageSummary
 
 TOOL_ENABLED = False
 try:

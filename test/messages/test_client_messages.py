@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from autogen.client_messages import (
+from autogen.messages.client_messages import (
     ActualUsageSummary,
     ModelUsageSummary,
     StreamMessage,
