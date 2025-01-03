@@ -182,23 +182,14 @@ class ToolCallMessage(BasePrintReceivedMessage):
 
 
 class ContentMessage(BasePrintReceivedMessage):
-    content: Optional[Union[str, int, float, bool, Callable[..., Any]]] = None  # type: ignore [assignment]
-    # todo: remove the context from the message
-    context: Optional[dict[str, Any]] = None
-    allow_format_str_template: bool = False
+    content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
         super().print(f)
 
         if self.content is not None:
-            # ToDo: move this into the function creating a message
-            content = OpenAIWrapper.instantiate(
-                self.content,  # type: ignore [arg-type]
-                self.context,
-                self.allow_format_str_template,
-            )
-            f(content_str(content), flush=True)
+            f(content_str(self.content), flush=True)  # type: ignore [arg-type]
 
         f("\n", "-" * 80, flush=True, sep="")
 
@@ -234,14 +225,21 @@ def create_received_message_model(
         )
 
     # Now message is a simple content message
+    content = message.get("content")
+    allow_format_str_template = (
+        recipient.llm_config.get("allow_format_str_template", False) if recipient.llm_config else False  # type: ignore [attr-defined]
+    )
+    if content is not None and "context" in message:
+        content = OpenAIWrapper.instantiate(
+            content,  # type: ignore [arg-type]
+            message["context"],
+            allow_format_str_template,
+        )
 
     return ContentMessage(
-        **message,
+        content=content,
         sender_name=sender.name,
         recipient_name=recipient.name,
-        allow_format_str_template=(
-            recipient.llm_config.get("allow_format_str_template", False) if recipient.llm_config else False  # type: ignore [attr-defined]
-        ),
         uuid=uuid,
     )
 

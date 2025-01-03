@@ -269,10 +269,13 @@ def test_context_message(uuid: UUID, sender: ConversableAgent, recipient: Conver
     actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ContentMessage)
-
-    assert actual.content == "hello {name}"
-    assert actual.context == {"name": "there"}
-    assert actual.allow_format_str_template is False
+    expected_model_dump = {
+        "uuid": uuid,
+        "content": "hello {name}",
+        "sender_name": "sender",
+        "recipient_name": "recipient",
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)
@@ -301,10 +304,13 @@ def test_context_lambda_message(uuid: UUID, sender: ConversableAgent, recipient:
     actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ContentMessage)
-
-    assert callable(actual.content)
-    assert actual.context == {"name": "there"}
-    assert actual.allow_format_str_template is False
+    expected_model_dump = {
+        "uuid": uuid,
+        "content": "hello there",
+        "sender_name": "sender",
+        "recipient_name": "recipient",
+    }
+    assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
     actual.print(f=mock)
