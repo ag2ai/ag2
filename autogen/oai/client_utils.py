@@ -8,7 +8,14 @@
 
 import logging
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
+
+
+@runtime_checkable
+class FormatterProtocol(Protocol):
+    """Structured Output classes with a format method"""
+
+    def format(self) -> str: ...
 
 
 def validate_parameter(
