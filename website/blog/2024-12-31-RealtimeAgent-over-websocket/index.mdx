@@ -112,66 +112,45 @@ Whether you're building a chatbot, a voice assistant, or an interactive applicat
 
 ## **Example: Build a Voice-Enabled Weather Bot**
 Let’s walk through a practical example where we use the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) to create a voice-enabled weather bot.
-The full example is in [this notebook](/notebooks/agentchat_realtime_websocket), you can run it locally by cloning the AG2 repo and executing the notebook.
+The full example is in [this repository](https://github.com/sternakt/RealtimeAgent-WebSocketAudioAdapter/tree/main).
 
-### **Step 1: Set Up the Server**
-We use [FastAPI](https://fastapi.tiangolo.com/) to serve the chat interface and handle WebSocket connections. A key part is configuring the server to load and render HTML templates dynamically for the user interface.
+To run the demo example, follow these steps:
 
-- **Template Loading**: Use `Jinja2Templates` to load `chat.html` from the `templates` directory. The template is dynamically rendered with variables like the server's `port`.
-- **Static Files**: Serve assets (e.g., JavaScript, CSS) from the `static` directory.
-
-```python
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-import uvicorn
-from pathlib import Path
-
-app = FastAPI()
-PORT = 5050
-notebook_path = Path.cwd()
-
-app.mount("/static", StaticFiles(directory=notebook_path / "static"), name="static")
-templates = Jinja2Templates(directory=notebook_path / "templates")
-
-@app.get("/", response_class=JSONResponse)
-async def index_page():
-    return {"message": "WebSocket Audio Stream Server is running!"}
-
-@app.get("/start-chat/", response_class=HTMLResponse)
-async def start_chat(request):
-    return templates.TemplateResponse("chat.html", {"request": request, "port": PORT})
-```
-
-### **Step 2: Define the WebSocket Endpoint**
-Next, we create the `/media-stream` WebSocket route. This is where the real-time magic happens.
-
-```python
-@app.websocket("/media-stream")
-async def handle_media_stream(websocket: WebSocket):
-    await websocket.accept()
-    audio_adapter = WebSocketAudioAdapter(websocket)
-    realtime_agent = RealtimeAgent(
-        name="Weather Bot",
-        system_message="Hi! I can tell you the weather. Ask me anything.",
-        audio_adapter=audio_adapter
-    )
-
-    @realtime_agent.register_realtime_function(name="get_weather", description="Provides weather information.")
-    def get_weather(location: str) -> str:
-        return "The weather is sunny." if location.lower() != "seattle" else "The weather is cloudy."
-
-    await realtime_agent.run()
-```
-
-### **Step 3: Run the Server**
-Start the server using Uvicorn:
+### **1. Clone the Repository**
 ```bash
-uvicorn app:app --host 0.0.0.0 --port 5050
+git clone https://github.com/sternakt/RealtimeAgent-WebSocketAudioAdapter.git
+cd RealtimeAgent-WebSocketAudioAdapter
 ```
 
-After you start the server you should your application running in the logs:
+### **2. Set Up Environment Variables**
+Create a `.env` file based on the provided `.env.example`:
+```bash
+cp .env.example .env
+```
+In the .env file, update the `OPENAI_API_KEY` to your OpenAI API key.
+
+### (Optional) Create and use a virtual environment
+
+To reduce cluttering your global Python environment on your machine, you can create a virtual environment. On your command line, enter:
+
+```
+python3 -m venv env
+source env/bin/activate
+```
+
+### **3. Install Dependencies**
+Install the required Python packages using `pip`:
+```bash
+pip install -r requirements.txt
+```
+
+### **4. Start the Server**
+Run the application with Uvicorn:
+```bash
+uvicorn realtime_over_websockets.main:app --port 5050
+```
+
+After you start the server you should see your application running in the logs:
 
 ```bash
 INFO:     Started server process [64425]
@@ -181,7 +160,140 @@ INFO:     Uvicorn running on http://0.0.0.0:5050 (Press CTRL+C to quit)
 ```
 
 ### Ready to Chat? 🚀
-Now you can simply open [**localhost:5050/start-chat**](http://localhost:5050/start-chat) in your browser, and dive into an interactive conversation with the RealtimeAgent! 🎤✨
+Now you can simply open [**localhost:5050/start-chat**](http://localhost:5050/start-chat) in your browser, and dive into an interactive conversation with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent)! 🎤✨
+
+
+## Code review
+Let’s dive in and break down how this example works—from setting up the server to handling real-time audio streaming with [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).
+
+### **Set Up the FastAPI app**
+We use [FastAPI](https://fastapi.tiangolo.com/) to serve the chat interface and handle WebSocket connections. A key part is configuring the server to load and render HTML templates dynamically for the user interface.
+
+- **Template Loading**: Use `Jinja2Templates` to load `chat.html` from the `templates` directory. The template is dynamically rendered with variables like the server's `port`.
+- **Static Files**: Serve assets (e.g., JavaScript, CSS) from the `static` directory.
+
+```python
+app = FastAPI()
+
+
+@app.get("/", response_class=JSONResponse)
+async def index_page() -> dict[str, str]:
+    return {"message": "WebSocket Audio Stream Server is running!"}
+
+
+website_files_path = Path(__file__).parent / "website_files"
+
+app.mount(
+    "/static", StaticFiles(directory=website_files_path / "static"), name="static"
+)
+
+templates = Jinja2Templates(directory=website_files_path / "templates")
+
+
+@app.get("/start-chat/", response_class=HTMLResponse)
+async def start_chat(request: Request) -> HTMLResponse:
+    """Endpoint to return the HTML page for audio chat."""
+    port = request.url.port
+    return templates.TemplateResponse("chat.html", {"request": request, "port": port})
+```
+
+### Defining the WebSocket Endpoint
+
+The `/media-stream` WebSocket route is where real-time audio interaction is processed and streamed to the AI assistant. Let’s break it down step-by-step:
+
+1. **Accept the WebSocket Connection**
+   The WebSocket connection is established when a client connects to `/media-stream`. Using `await websocket.accept()`, we ensure the connection is live and ready for communication.
+
+```python
+@app.websocket("/media-stream")
+async def handle_media_stream(websocket: WebSocket) -> None:
+    """Handle WebSocket connections providing audio stream and OpenAI."""
+    await websocket.accept()
+```
+
+2. **Initialize Logging**
+   A logger instance (`getLogger("uvicorn.error")`) is set up to monitor and debug the server's activities, helping track events during the connection and interaction process.
+
+```python
+    logger = getLogger("uvicorn.error")
+```
+3. **Set Up the `WebSocketAudioAdapter`**
+   The [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) bridges the client’s audio stream with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent). It streams audio data over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) in real time, ensuring seamless communication between the browser and the agent.
+
+```python
+    audio_adapter = WebSocketAudioAdapter(websocket, logger=logger)
+```
+
+4. **Configure the Realtime Agent**
+   The `RealtimeAgent` is the AI assistant driving the interaction. Key parameters include:
+   - **Name**: The agent identity, here called `"Weather Bot"`.
+   - **System Message**: System message for the agent.
+   - **Language Model Configuration**: Defined by `realtime_llm_config` for LLM settings.
+   - **Audio Adapter**: Connects the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter) for handling audio.
+   - **Logger**: Logs the agent's activities for better observability.
+
+```python
+    realtime_agent = RealtimeAgent(
+        name="Weather Bot",
+        system_message="Hello there! I am an AI voice assistant powered by Autogen and the OpenAI Realtime API. You can ask me about weather, jokes, or anything you can imagine. Start by saying 'How can I help you'?",
+        llm_config=realtime_llm_config,
+        audio_adapter=audio_adapter,
+        logger=logger,
+    )
+```
+
+5. **Define a Custom Realtime Function**
+   The `get_weather` function is registered as a realtime callable function. When the user asks about the weather, the agent can call the function to get an accurate weather report and respond based on the provided information:
+   - Returns `"The weather is cloudy."` for `"Seattle"`.
+   - Returns `"The weather is sunny."` for other locations.
+
+```python
+    @realtime_agent.register_realtime_function(  # type: ignore [misc]
+        name="get_weather", description="Get the current weather"
+    )
+    def get_weather(location: Annotated[str, "city"]) -> str:
+        return (
+            "The weather is cloudy."
+            if location == "Seattle"
+            else "The weather is sunny."
+        )
+```
+
+6. **Run the Realtime Agent**
+   The `await realtime_agent.run()` method starts the agent, handling incoming audio streams, processing user queries, and responding in real time.
+
+Here is the full code for the `/media-stream` endpoint:
+
+```python
+@app.websocket("/media-stream")
+async def handle_media_stream(websocket: WebSocket) -> None:
+    """Handle WebSocket connections providing audio stream and OpenAI."""
+    await websocket.accept()
+
+    logger = getLogger("uvicorn.error")
+
+    audio_adapter = WebSocketAudioAdapter(websocket, logger=logger)
+
+    realtime_agent = RealtimeAgent(
+        name="Weather Bot",
+        system_message="Hello there! I am an AI voice assistant powered by Autogen and the OpenAI Realtime API. You can ask me about weather, jokes, or anything you can imagine. Start by saying 'How can I help you'?",
+        llm_config=realtime_llm_config,
+        audio_adapter=audio_adapter,
+        logger=logger,
+    )
+
+    @realtime_agent.register_realtime_function(  # type: ignore [misc]
+        name="get_weather", description="Get the current weather"
+    )
+    def get_weather(location: Annotated[str, "city"]) -> str:
+        return (
+            "The weather is cloudy."
+            if location == "Seattle"
+            else "The weather is sunny."
+        )
+
+    await realtime_agent.run()
+```
 
 ## **Benefits in Action**
 - **Quick Prototyping**: Spin up a real-time voice application in minutes.
