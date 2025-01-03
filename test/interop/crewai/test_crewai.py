@@ -11,6 +11,7 @@ import pytest
 from conftest import reason, skip_openai
 
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
+    os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "test")
     from crewai_tools import FileReadTool
 else:
     FileReadTool = MagicMock()
@@ -31,7 +32,6 @@ else:
 class TestCrewAIInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-
         crewai_tool = FileReadTool()
         self.model_type = crewai_tool.args_schema
         self.tool = CrewAIInteroperability.convert_tool(crewai_tool)

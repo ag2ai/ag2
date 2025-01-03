@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 import sys
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -31,6 +32,7 @@ class TestInteroperability:
         sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
     )
     def test_crewai(self) -> None:
+        os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "test")
         from crewai_tools import FileReadTool
 
         crewai_tool = FileReadTool()
