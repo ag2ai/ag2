@@ -10,6 +10,7 @@ import inspect
 import logging
 import sys
 import uuid
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
 from pydantic import BaseModel, schema_json_of
@@ -418,13 +419,15 @@ class OpenAIClient:
             params = params.copy()
             if params["model"].startswith("o1"):
                 params, _system_msg_dict = self._limitations_removal_o1(params)
+            # add a warning that o1 model does not support stream
+            warnings.warn("The o1 model does not support streaming. The response will be non-streaming.")
             params["stream"] = False
             response = create_or_parse(**params)
             # remove the system_message from the response and add it in the prompt at the start.
             if params["model"].startswith("o1"):
                 params["messages"][0]["content"] = params["messages"][0]["content"].split("\n\n", 1)[1]
                 params["messages"].insert(0, _system_msg_dict)
-            print(params)
+
         return response
 
     def _limitations_removal_o1(self, params):
