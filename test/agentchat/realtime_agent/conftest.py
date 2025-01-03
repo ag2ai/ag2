@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from conftest import MOCK_OPEN_AI_API_KEY  # noqa: E402
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 
+from ...conftest import MOCK_OPEN_AI_API_KEY  # noqa: E402
+from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 from .realtime_test_utils import Credentials
 
 

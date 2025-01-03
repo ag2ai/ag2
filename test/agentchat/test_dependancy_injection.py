@@ -2,21 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
-import sys
 from typing import Annotated, Any, Callable
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, Depends
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from ..conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 
 class TestDependencyInjection:
