@@ -8,14 +8,12 @@ from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
 import pytest
-from conftest import reason, skip_openai
 
-if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-    os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "test")
-    from crewai_tools import FileReadTool
-else:
-    FileReadTool = MagicMock()
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../agentchat"))
+from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
+from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
+import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 
@@ -31,7 +29,10 @@ else:
 )
 class TestCrewAIInteroperability:
     @pytest.fixture(autouse=True)
-    def setup(self) -> None:
+    def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
+        from crewai_tools import FileReadTool
+
         crewai_tool = FileReadTool()
         self.model_type = crewai_tool.args_schema
         self.tool = CrewAIInteroperability.convert_tool(crewai_tool)
@@ -61,7 +62,13 @@ class TestCrewAIInteroperability:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            filter_dict={
+                "tags": ["gpt-4o-mini"],
+            },
+            file_location=KEY_LOC,
+        )
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",

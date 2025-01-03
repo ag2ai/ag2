@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 import sys
 from tempfile import TemporaryDirectory
 from typing import Any
 
 import pytest
+from conftest import MOCK_OPEN_AI_API_KEY
 
 from autogen.interop import Interoperability
 
@@ -31,8 +31,8 @@ class TestInteroperability:
     @pytest.mark.skipif(
         sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
     )
-    def test_crewai(self) -> None:
-        os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "test")
+    def test_crewai(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
         from crewai_tools import FileReadTool
 
         crewai_tool = FileReadTool()
