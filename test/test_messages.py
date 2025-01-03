@@ -65,7 +65,7 @@ def recipient() -> ConversableAgent:
 # todo: create uuid and compare with model_dump()
 
 
-def test_tool_responses(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_tool_responses(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {
         "role": "tool",
         "tool_responses": [
@@ -74,7 +74,7 @@ def test_tool_responses(sender: ConversableAgent, recipient: ConversableAgent) -
         ],
         "content": "Timer is done!\\n\\nStopwatch is done!",
     }
-    actual = create_received_message_model(message, sender=sender, recipient=recipient)
+    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ToolResponseMessage)
     assert actual.role == "tool"
@@ -124,8 +124,10 @@ def test_tool_responses(sender: ConversableAgent, recipient: ConversableAgent) -
         {"name": "get_random_number", "role": "function", "content": 2},
     ],
 )
-def test_function_response(sender: ConversableAgent, recipient: ConversableAgent, message: dict[str, Any]) -> None:
-    actual = create_received_message_model(message, sender=sender, recipient=recipient)
+def test_function_response(
+    uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, message: dict[str, Any]
+) -> None:
+    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, FunctionResponseMessage)
 
@@ -153,10 +155,10 @@ def test_function_response(sender: ConversableAgent, recipient: ConversableAgent
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_function_call(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_function_call(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {"content": "Let's play a game.", "function_call": {"name": "get_random_number", "arguments": "{}"}}
 
-    actual = create_received_message_model(message, sender=sender, recipient=recipient)
+    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, FunctionCallMessage)
 
@@ -191,7 +193,9 @@ def test_function_call(sender: ConversableAgent, recipient: ConversableAgent) ->
     "role",
     ["assistant", None],
 )
-def test_tool_calls(sender: ConversableAgent, recipient: ConversableAgent, role: Optional[MessageRole]) -> None:
+def test_tool_calls(
+    uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, role: Optional[MessageRole]
+) -> None:
     message = {
         "content": None,
         "refusal": None,
@@ -212,7 +216,7 @@ def test_tool_calls(sender: ConversableAgent, recipient: ConversableAgent, role:
         ],
     }
 
-    actual = create_received_message_model(message, sender=sender, recipient=recipient)
+    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ToolCallMessage)
 
@@ -259,16 +263,16 @@ def test_tool_calls(sender: ConversableAgent, recipient: ConversableAgent, role:
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_context_message(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_context_message(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {"content": "hello {name}", "context": {"name": "there"}}
 
-    actual = create_received_message_model(message, sender=sender, recipient=recipient)
+    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ContentMessage)
 
     assert actual.content == "hello {name}"
     assert actual.context == {"name": "there"}
-    assert actual.llm_config is False
+    assert actual.allow_format_str_template is False
 
     mock = MagicMock()
     actual.print(f=mock)
@@ -286,7 +290,7 @@ def test_context_message(sender: ConversableAgent, recipient: ConversableAgent) 
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_context_lambda_message(sender: ConversableAgent, recipient: ConversableAgent) -> None:
+def test_context_lambda_message(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     message = {
         "content": lambda context: f"hello {context['name']}",
         "context": {
@@ -294,13 +298,13 @@ def test_context_lambda_message(sender: ConversableAgent, recipient: Conversable
         },
     }
 
-    actual = create_received_message_model(message, sender=sender, recipient=recipient)
+    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
     assert isinstance(actual, ContentMessage)
 
     assert callable(actual.content)
     assert actual.context == {"name": "there"}
-    assert actual.llm_config is False
+    assert actual.allow_format_str_template is False
 
     mock = MagicMock()
     actual.print(f=mock)

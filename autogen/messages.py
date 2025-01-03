@@ -185,21 +185,18 @@ class ContentMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, Callable[..., Any]]] = None  # type: ignore [assignment]
     # todo: remove the context from the message
     context: Optional[dict[str, Any]] = None
-    llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None
+    allow_format_str_template: bool = False
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
         super().print(f)
 
         if self.content is not None:
-            allow_format_str_template = (
-                self.llm_config.get("allow_format_str_template", False) if self.llm_config else False
-            )
             # ToDo: move this into the function creating a message
             content = OpenAIWrapper.instantiate(
                 self.content,  # type: ignore [arg-type]
                 self.context,
-                allow_format_str_template,
+                self.allow_format_str_template,
             )
             f(content_str(content), flush=True)
 
@@ -207,7 +204,7 @@ class ContentMessage(BasePrintReceivedMessage):
 
 
 def create_received_message_model(
-    message: dict[str, Any], sender: "Agent", recipient: "Agent", *, uuid: Optional[UUID] = None
+    *, uuid: Optional[UUID] = None, message: dict[str, Any], sender: "Agent", recipient: "Agent"
 ) -> BasePrintReceivedMessage:
     # print(f"{message=}")
     # print(f"{sender=}")
@@ -242,7 +239,9 @@ def create_received_message_model(
         **message,
         sender_name=sender.name,
         recipient_name=recipient.name,
-        llm_config=recipient.llm_config,  # type: ignore [attr-defined]
+        allow_format_str_template=(
+            recipient.llm_config.get("allow_format_str_template", False) if recipient.llm_config else False  # type: ignore [attr-defined]
+        ),
         uuid=uuid,
     )
 
