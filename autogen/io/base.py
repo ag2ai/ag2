@@ -10,6 +10,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Optional, Protocol, runtime_checkable
 
+from autogen.messages.base_message import BaseMessage
+
 __all__ = ("OutputStream", "InputStream", "IOStream")
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,9 @@ class OutputStream(Protocol):
             flush (bool, optional): Whether to flush the output. Defaults to False.
         """
         ...  # pragma: no cover
+
+    def send(self, message: BaseMessage):
+        
 
 
 @runtime_checkable
