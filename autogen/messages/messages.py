@@ -8,15 +8,15 @@ from uuid import UUID
 
 from termcolor import colored
 
-from .base_message import BaseMessage
-from .code_utils import content_str
+from ..code_utils import content_str
 
 # ToDo: once you move the code below, we can just delete this import
-from .oai.client import OpenAIWrapper
+from ..oai.client import OpenAIWrapper
+from .base_message import BaseMessage
 
 if TYPE_CHECKING:
-    from .agentchat.agent import Agent
-    from .coding.base import CodeBlock
+    from ..agentchat.agent import Agent
+    from ..coding.base import CodeBlock
 
 
 __all__ = [

@@ -4,7 +4,7 @@
 
 from uuid import uuid4
 
-from autogen.base_message import BaseMessage
+from autogen.messages.base_message import BaseMessage
 
 
 def test_BaseMessage() -> None:

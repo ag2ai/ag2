@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from .base_message import BaseMessage
+from .messages.base_message import BaseMessage
 
 __all__ = ["UsageSummary"]
 

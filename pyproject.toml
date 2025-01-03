@@ -63,8 +63,9 @@ files = [
     "autogen/tools",
     "autogen/interop",
     "autogen/agentchat/realtime_agent",
-    "autogen/base_message.py",
-    "autogen/messages.py",
+    "autogen/messages/__init__.py",
+    "autogen/messages/base_message.py",
+    "autogen/messages/messages.py",
     "autogen/client_messages.py",
     "test/test_pydantic.py",
     "test/test_function_utils.py",
@@ -72,8 +73,8 @@ files = [
     "test/tools",
     "test/interop",
     "test/agentchat/realtime_agent",
-    "test/test_base_message.py",
-    "test/test_messages.py",
+    "test/messages/test_base_message.py",
+    "test/messages/test_messages.py",
     "test/test_client_messages.py",
 ]
 exclude = [

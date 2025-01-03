@@ -18,7 +18,7 @@ from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNex
 from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
-from ..messages import (
+from ..messages.messages import (
     ClearAgentsHistory,
     GroupChatResume,
     GroupChatRunChat,
