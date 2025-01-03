@@ -420,7 +420,11 @@ class OpenAIClient:
                 params, _system_msg_dict = self._limitations_removal_o1(params)
             params["stream"] = False
             response = create_or_parse(**params)
-
+            # remove the system_message from the response and add it in the prompt at the start.
+            if params["model"].startswith("o1"):
+                params["messages"][0]["content"] = params["messages"][0]["content"].split("\n\n", 1)[1]
+                params["messages"].insert(0, _system_msg_dict)
+            print(params)
         return response
 
     def _limitations_removal_o1(self, params):
@@ -436,7 +440,7 @@ class OpenAIClient:
             # pop the system_message from the messages and add it in the prompt at the start.
             _system_message = params["messages"][0]["content"]
             sys_msg_dict = params["messages"].pop(0)
-            params["messages"][0]["content"] = _system_message + "\n" + params["messages"][0]["content"]
+            params["messages"][0]["content"] = _system_message + "\n\n" + params["messages"][0]["content"]
         return params, sys_msg_dict
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
