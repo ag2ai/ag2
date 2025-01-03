@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Callable, Literal
+import inspect
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+
+from ..tools.function_utils import get_function_schema
+from .dependency_injection import inject_params
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -23,17 +27,32 @@ class Tool:
         func (Callable[..., Any]): The function to be executed when the tool is called.
     """
 
-    def __init__(self, *, name: str, description: str, func: Callable[..., Any]) -> None:
+    def __init__(
+        self,
+        *,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        func_or_tool: Union["Tool", Callable[..., Any]],
+    ) -> None:
         """Create a new Tool object.
 
         Args:
             name (str): The name of the tool.
             description (str): The description of the tool.
-            func (Callable[..., Any]): The function that will be executed when the tool is called.
+            func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
         """
-        self._name = name
-        self._description = description
-        self._func = func
+        if isinstance(func_or_tool, Tool):
+            self._name: str = name or func_or_tool.name
+            self._description: str = description or func_or_tool.description
+            self._func: Callable[..., Any] = func_or_tool.func
+        elif inspect.isfunction(func_or_tool):
+            self._func = inject_params(func_or_tool)
+            self._name = name or func_or_tool.__name__
+            self._description = description or func_or_tool.__doc__ or ""
+        else:
+            raise ValueError(
+                f"Parameter 'func_or_tool' must be a function or a Tool instance, it is '{type(func_or_tool)}' instead."
+            )
 
     @property
     def name(self) -> str:
@@ -83,3 +102,35 @@ class Tool:
             The result of executing the tool's function.
         """
         return self._func(*args, **kwargs)
+
+    @property
+    def tool_schema(self) -> dict[str, Any]:
+        """Get the schema for the tool.
+
+        This is the preferred way of handling function calls with OpeaAI and compatible frameworks.
+
+        """
+        return get_function_schema(self.func, name=self.name, description=self.description)
+
+    @property
+    def function_schema(self) -> dict[str, Any]:
+        """Get the schema for the function.
+
+        This is the old way of handling function calls with OpenAI and compatible frameworks.
+        It is provided for backward compatibility.
+
+        """
+        schema = get_function_schema(self.func, name=self.name, description=self.description)
+        return schema["function"]  # type: ignore[no-any-return]
+
+    @property
+    def realtime_tool_schema(self) -> dict[str, Any]:
+        """Get the schema for the tool.
+
+        This is the preferred way of handling function calls with OpeaAI and compatible frameworks.
+
+        """
+        schema = get_function_schema(self.func, name=self.name, description=self.description)
+        schema = {"type": schema["type"], **schema["function"]}
+
+        return schema

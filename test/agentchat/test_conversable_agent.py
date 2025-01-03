@@ -814,11 +814,24 @@ def test_register_for_llm_without_description():
         mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
         agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
 
-        with pytest.raises(ValueError, match=" Input should be a valid string"):
+        @agent.register_for_llm()
+        def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
+            pass
 
-            @agent.register_for_llm()
-            def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
-                pass
+        assert exec_python.description == ""
+
+
+def test_register_for_llm_with_docstring():
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
+        agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
+
+        @agent.register_for_llm()
+        def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
+            """Execute a Python cell."""
+            pass
+
+        assert exec_python.description == "Execute a Python cell."
 
 
 def test_register_for_llm_without_LLM():
