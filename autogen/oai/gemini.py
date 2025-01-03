@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -50,7 +50,7 @@ import time
 import warnings
 from collections.abc import Mapping
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Type
 
 import google.generativeai as genai
 import PIL
@@ -79,15 +79,13 @@ from vertexai.generative_models import (
     Tool as vaiTool,
 )
 
+from autogen.oai.client_utils import FormatterProtocol
+
 logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
-    """Client for Google's Gemini API.
-
-    Please visit this [page](https://github.com/microsoft/autogen/issues/2387) for the roadmap of Gemini integration
-    of AutoGen.
-    """
+    """Client for Google's Gemini API."""
 
     # Mapping, where Key is a term used by Autogen, and Value is a term used by Gemini
     PARAMS_MAPPING = {
@@ -151,8 +149,8 @@ class GeminiClient:
                 "location" not in kwargs
             ), "Google Cloud project and compute location cannot be set when using an API Key!"
 
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
+        # Store the response format, if provided (for structured outputs)
+        self._response_format: Optional[Type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """
@@ -235,6 +233,14 @@ class GeminiClient:
         # Maps the function call ids to function names so we can inject it into FunctionResponse messages
         self.tool_call_function_map: dict[str, str] = {}
 
+        # If response_format exists, we want structured outputs
+        # Based on
+        # https://ai.google.dev/gemini-api/docs/structured-output?lang=python#supply-schema-in-config
+        if params.get("response_format"):
+            self._response_format = params.get("response_format")
+            generation_config["response_mime_type"] = "application/json"
+            generation_config["response_schema"] = params.get("response_format")
+
         # A. create and call the chat model.
         gemini_messages = self._oai_messages_to_gemini_messages(messages)
         if self.use_vertexai:
@@ -301,8 +307,12 @@ class GeminiClient:
         else:
             autogen_tool_calls = None
 
-        prompt_tokens = response.usage_metadata.prompt_token_count
-        completion_tokens = response.usage_metadata.candidates_token_count
+        if self._response_format and ans:
+            try:
+                parsed_response = self._convert_json_response(ans)
+                ans = _format_json_response(parsed_response, ans)
+            except ValueError as e:
+                ans = str(e)
 
         # 3. convert output
         message = ChatCompletionMessage(
@@ -311,6 +321,9 @@ class GeminiClient:
         choices = [
             Choice(finish_reason="tool_calls" if autogen_tool_calls is not None else "stop", index=0, message=message)
         ]
+
+        prompt_tokens = response.usage_metadata.prompt_token_count
+        completion_tokens = response.usage_metadata.candidates_token_count
 
         response_oai = ChatCompletion(
             id=str(random.randint(0, 1000)),
@@ -525,6 +538,27 @@ class GeminiClient:
 
         return rst
 
+    def _convert_json_response(self, response: str) -> Any:
+        """Extract and validate JSON response from the output for structured outputs.
+
+        Args:
+            response (str): The response from the API.
+
+        Returns:
+            Any: The parsed JSON response.
+        """
+        if not self._response_format:
+            return response
+
+        try:
+            # Parse JSON and validate against the Pydantic model
+            json_data = json.loads(response)
+            return self._response_format.model_validate(json_data)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
+            )
+
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
 
@@ -684,6 +718,11 @@ def get_image_data(image_file: str, use_b64=True) -> bytes:
         return base64.b64encode(content).decode("utf-8")
     else:
         return content
+
+
+def _format_json_response(response: Any, original_answer: str) -> str:
+    """Formats the JSON response for structured outputs using the format method if it exists."""
+    return response.format() if isinstance(response, FormatterProtocol) else original_answer
 
 
 def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: int, model_name: str) -> float:
