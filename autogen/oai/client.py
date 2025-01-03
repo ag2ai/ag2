@@ -307,8 +307,9 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
 
+        _is_o1 = params["model"].startswith("o1")
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params:
+        if params.get("stream", False) and "messages" in params and not _is_o1:
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
@@ -417,14 +418,15 @@ class OpenAIClient:
         else:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
-            if params["model"].startswith("o1"):
+            if _is_o1:
+                # add a warning that o1 model does not support stream
+                if params["stream"]:
+                    warnings.warn("The o1 model does not support streaming. The stream will be set to False.")
                 params, _system_msg_dict = self._limitations_removal_o1(params)
-            # add a warning that o1 model does not support stream
-            warnings.warn("The o1 model does not support streaming. The response will be non-streaming.")
             params["stream"] = False
             response = create_or_parse(**params)
             # remove the system_message from the response and add it in the prompt at the start.
-            if params["model"].startswith("o1"):
+            if _is_o1:
                 params["messages"][0]["content"] = params["messages"][0]["content"].split("\n\n", 1)[1]
                 params["messages"].insert(0, _system_msg_dict)
 
