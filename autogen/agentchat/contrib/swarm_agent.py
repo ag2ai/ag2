@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import copy
 import json
+import re
 import warnings
 from dataclasses import dataclass
 from enum import Enum
@@ -19,6 +20,39 @@ from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
 from ..groupchat import GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
+
+@dataclass
+class UpdateCondition:
+    """Update the condition string before they reply
+
+    Args:
+        update_function: The string or function to update the condition string. Can be a string or a Callable.
+            If a string, it will be used as a template and substitute the context variables.
+            If a Callable, it should have the signature:
+                def my_update_function(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+    """
+
+    update_function: Union[Callable, str]
+
+    def __post_init__(self):
+        if isinstance(self.update_function, str):
+            assert self.update_function.strip(), " please provide a non-empty string or a callable"
+            # find all {var} in the string
+            vars = re.findall(r"\{(\w+)\}", self.update_function)
+            if len(vars) == 0:
+                warnings.warn("Update function string contains no variables. This is probably unintended.")
+
+        elif isinstance(self.update_function, Callable):
+            sig = signature(self.update_function)
+            if len(sig.parameters) != 2:
+                raise ValueError(
+                    "Update function must accept two parameters of type ConversableAgent and List[Dict[str, Any]], respectively"
+                )
+            if sig.return_annotation != str:
+                raise ValueError("Update function must return a string")
+        else:
+            raise ValueError("Update function must be either a string or a callable")
+        
 
 # Created tool executor's name
 __TOOL_EXECUTOR_NAME__ = "_Swarm_Tool_Executor"
@@ -73,7 +107,7 @@ class OnCondition:
     """
 
     target: Union[ConversableAgent, dict[str, Any]] = None
-    condition: str = ""
+    condition: Union[str, UpdateCondition] = ""
     available: Optional[Union[Callable, str]] = None
 
     def __post_init__(self):
@@ -84,7 +118,10 @@ class OnCondition:
             ), "'target' must be a ConversableAgent or a dict"
 
         # Ensure they have a condition
-        assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
+        if isinstance(self.condition, str):
+            assert self.condition.strip(), "'condition' must be a non-empty string"
+        else:
+            assert isinstance(self.condition, UpdateCondition), "'condition' must be a string or UpdateOnConditionStr"
 
         if self.available is not None:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
@@ -687,15 +724,25 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
             elif isinstance(on_condition.available, str):
                 is_available = agent.get_context(on_condition.available) or False
 
+        # first remove the function if it exists 
+        if func_name in agent._function_map:
+            agent.update_tool_signature(func_name, is_remove=True)
+            del agent._function_map[func_name]
+        
+        # then add the function if it is available, so that the function signature is updated
         if is_available:
-            if func_name not in agent._function_map:
-                agent._add_single_function(func, func_name, on_condition.condition)
-        else:
-            # Remove function using the stored name
-            if func_name in agent._function_map:
-                agent.update_tool_signature(func_name, is_remove=True)
-                del agent._function_map[func_name]
-
+            condition = on_condition.condition
+            if isinstance(condition, UpdateCondition):
+                if isinstance(condition.update_function, str):
+                    condition = OpenAIWrapper.instantiate(
+                                    template=condition.update_function,
+                                    context=agent._context_variables,
+                                    allow_format_str_template=True,
+                                )
+                else:
+                    condition = condition.update_function(agent, messages)
+            agent._add_single_function(func, func_name, condition)
+        
 
 def _generate_swarm_tool_reply(
     agent: ConversableAgent,

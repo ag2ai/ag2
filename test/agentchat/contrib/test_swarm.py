@@ -22,6 +22,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     a_initiate_swarm_chat,
     initiate_swarm_chat,
     register_hand_off,
+    UpdateCondition,
 )
 from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
@@ -995,6 +996,123 @@ async def test_a_initiate_swarm_chat():
     )
 
     assert context_vars == test_context
+
+
+def test_update_on_condition_str():
+    """Test UpdateOnConditionStr updates condition strings properly for handoffs"""
+
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=testing_llm_config)
+
+    # Test container to capture condition
+    class ConditionContainer:
+        def __init__(self):
+            self.captured_condition = None
+
+    condition_container = ConditionContainer()
+
+    # Test with string template
+    register_hand_off(
+        agent1,
+        hand_to=OnCondition(
+            target=agent2,
+            condition=UpdateCondition(
+                update_function="Transfer when {test_var} is active"
+            )
+        )
+    )
+
+    # Mock LLM responses
+    def mock_generate_oai_reply_tool_1_2(*args, **kwargs):
+        # Get the function description (condition) from the agent's function map
+        func_name = "transfer_agent1_to_agent2"
+        # Store the condition for verification by accessing the function's description
+        func = args[0]._function_map[func_name]
+        condition_container.captured_condition = func._description
+        return True, {
+            "role": "assistant",
+            "name": "agent1",
+            "tool_calls": [{"type": "function", "function": {"name": func_name}}],
+        }
+
+    agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply_tool_1_2)
+    agent2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Response from agent2"))
+
+    # Test string template substitution
+    chat_result, context_vars, last_speaker = initiate_swarm_chat(
+        initial_agent=agent1,
+        messages=TEST_MESSAGES,
+        agents=[agent1, agent2],
+        context_variables={"test_var": "condition1"},
+        max_rounds=3,
+    )
+
+    assert condition_container.captured_condition == "Transfer when condition1 is active"
+
+    # Test with callable function
+    def custom_update_function(agent: ConversableAgent, messages: list[dict]) -> str:
+        return f"Transfer based on {agent.get_context('test_var')} with {len(messages)} messages"
+
+    agent3 = ConversableAgent("agent3", llm_config=testing_llm_config)
+    register_hand_off(
+        agent2,
+        hand_to=OnCondition(
+            target=agent3,
+            condition=UpdateCondition(
+                update_function=custom_update_function
+            )
+        )
+    )
+
+    # Reset condition container
+    condition_container.captured_condition = None
+
+    def mock_generate_oai_reply_tool_2_3(*args, **kwargs):
+        # Get the function description (condition) from the agent's function map
+        func_name = "transfer_agent2_to_agent3"
+        # Store the condition for verification by accessing the function's description
+        func = args[0]._function_map[func_name]
+        condition_container.captured_condition = func._description
+        return True, {
+            "role": "assistant",
+            "name": "agent1",
+            "tool_calls": [{"type": "function", "function": {"name": func_name}}],
+        }
+
+
+    agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply_tool_2_3)
+    agent3.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Response from agent3"))
+
+    # Test callable function update
+    chat_result, context_vars, last_speaker = initiate_swarm_chat(
+        initial_agent=agent2,
+        messages=TEST_MESSAGES,
+        agents=[agent2, agent3],
+        context_variables={"test_var": "condition2"},
+        max_rounds=3,
+    )
+
+    assert condition_container.captured_condition == "Transfer based on condition2 with 1 messages"
+
+    # Test invalid update function
+    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
+        UpdateCondition(update_function=123)
+
+    # Test invalid callable signature
+    def invalid_update_function(x: int) -> str:
+        return "test"
+
+    with pytest.raises(ValueError, match="Update function must accept two parameters"):
+        UpdateCondition(update_function=invalid_update_function)
 
 
 if __name__ == "__main__":
