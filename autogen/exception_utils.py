@@ -44,3 +44,14 @@ class UndefinedNextAgent(Exception):
     def __init__(self, message: str = "The provided agents list does not overlap with agents in the group."):
         self.message = message
         super().__init__(self.message)
+
+
+class O1ModelToolNotSupportedError(Exception):
+    """Exception raised when tools are used with o1 models."""
+
+    def __init__(
+        self,
+        message: str = "Tools are not supported with O1 models. Refer to the documentation at https://platform.openai.com/docs/guides/reasoning#limitations",
+    ):
+        self.message = message
+        super().__init__(self.message)

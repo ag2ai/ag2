@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, 
 from pydantic import BaseModel, schema_json_of
 
 from autogen.cache import Cache
+from autogen.exception_utils import O1ModelToolNotSupportedError
 from autogen.io.base import IOStream
 from autogen.logger.logger_utils import get_current_ts
 from autogen.oai.client_utils import logging_formatter
@@ -424,7 +425,7 @@ class OpenAIClient:
                 if params.get("stream", False):
                     warnings.warn("The o1 model does not support streaming. The stream will be set to False.")
                 if params.get("tools", False):
-                    raise ValueError("The o1 model does not support tools.")
+                    raise O1ModelToolNotSupportedError()
                 params, _system_msg_dict = self._process_o1_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
