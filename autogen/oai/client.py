@@ -442,11 +442,19 @@ class OpenAIClient:
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
         # Unsupported parameters
-        params.pop("temperature", None)
-        params.pop("frequency_penalty", None)
-        params.pop("presence_penalty", None)
-        params.pop("top_p", None)
-
+        unsupported_params = [
+            "temperature",
+            "frequency_penalty",
+            "presence_penalty",
+            "top_p",
+            "logprobs",
+            "top_logprobs",
+            "logit_bias",
+        ]
+        for param in unsupported_params:
+            if param in params:
+                warnings.warn(f"`{param}` is not supported with o1 model and will be ignored.")
+                params.pop(param)
         # Replace max_tokens with max_completion_tokens as reasoning tokens are now factored in
         # and max_tokens isn't valid
         if "max_tokens" in params:
