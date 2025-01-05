@@ -46,12 +46,14 @@ class UndefinedNextAgent(Exception):
         super().__init__(self.message)
 
 
-class O1ModelToolNotSupportedError(Exception):
-    """Exception raised when tools are used with o1 models."""
+class ModelToolNotSupportedError(Exception):
+    """
+    Exception raised when attempting to use tools with models that do not support them.
+    """
 
     def __init__(
         self,
-        message: str = "Tools are not supported with O1 models. Refer to the documentation at https://platform.openai.com/docs/guides/reasoning#limitations",
+        model: str,
     ):
-        self.message = message
+        self.message = f"Tools are not supported with {model} models. Refer to the documentation at https://platform.openai.com/docs/guides/reasoning#limitations"
         super().__init__(self.message)
