@@ -699,3 +699,7 @@ Please provide your rating along with a brief explanation of your assessment.
 
     def _is_terminal(self, node):
         return node.depth >= self._max_depth or "TERMINATE" in node.content
+
+    @property
+    def method(self):
+        return self._method
