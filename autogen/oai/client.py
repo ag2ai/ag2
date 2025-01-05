@@ -464,12 +464,17 @@ class OpenAIClient:
         if "max_tokens" in params:
             params["max_completion_tokens"] = params.pop("max_tokens")
         sys_msg_dict = {}  # placeholder if messages are not present
-        if "messages" in params:
-            # o1 doesn't support role='system' messages, only 'user' and 'assistant'
+
+        # TODO - When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
+        system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
+
+        if "messages" in params and system_not_allowed:
+            # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
             # pop the system_message from the messages and add it in the prompt at the start.
             _system_message = params["messages"][0]["content"]
             sys_msg_dict = params["messages"].pop(0)
             params["messages"][0]["content"] = _system_message + "\n\n" + params["messages"][0]["content"]
+
         return params, sys_msg_dict
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
