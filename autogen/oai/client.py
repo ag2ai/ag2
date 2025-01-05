@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, 
 from pydantic import BaseModel, schema_json_of
 
 from autogen.cache import Cache
-from autogen.exception_utils import O1ModelToolNotSupportedError
+from autogen.exception_utils import ModelToolNotSupportedError
 from autogen.io.base import IOStream
 from autogen.logger.logger_utils import get_current_ts
 from autogen.oai.client_utils import logging_formatter
@@ -308,6 +308,7 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
 
+        # needs to be updated when the o3 is released to generalize
         _is_o1 = "model" in params and params["model"].startswith("o1")
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
@@ -421,12 +422,14 @@ class OpenAIClient:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
             if _is_o1:
-                # add a warning that o1 model does not support stream
+                # add a warning that model does not support stream
                 if params.get("stream", False):
-                    warnings.warn("The o1 model does not support streaming. The stream will be set to False.")
+                    warnings.warn(
+                        f"The {params.get('model')} model does not support streaming. The stream will be set to False."
+                    )
                 if params.get("tools", False):
-                    raise O1ModelToolNotSupportedError()
-                params, _system_msg_dict = self._process_o1_params(params)
+                    raise ModelToolNotSupportedError(params.get("model"))
+                params, _system_msg_dict = self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
             # remove the system_message from the response and add it in the prompt at the start.
@@ -436,9 +439,9 @@ class OpenAIClient:
 
         return response
 
-    def _process_o1_params(self, params):
+    def _process_reasoning_model_params(self, params):
         """
-        Cater for the o1 model parameters
+        Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
         # Unsupported parameters
@@ -451,15 +454,16 @@ class OpenAIClient:
             "top_logprobs",
             "logit_bias",
         ]
+        model_name = params.get("model")
         for param in unsupported_params:
             if param in params:
-                warnings.warn(f"`{param}` is not supported with o1 model and will be ignored.")
+                warnings.warn(f"`{param}` is not supported with {model_name} model and will be ignored.")
                 params.pop(param)
         # Replace max_tokens with max_completion_tokens as reasoning tokens are now factored in
         # and max_tokens isn't valid
         if "max_tokens" in params:
             params["max_completion_tokens"] = params.pop("max_tokens")
-
+        sys_msg_dict = {}  # placeholder if messages are not present
         if "messages" in params:
             # o1 doesn't support role='system' messages, only 'user' and 'assistant'
             # pop the system_message from the messages and add it in the prompt at the start.
