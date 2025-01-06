@@ -17,7 +17,9 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
 
-from ..conftest import MOCK_OPEN_AI_API_KEY, skip_docker  # noqa: E402
+# add ../.. to sys.path to import conftest
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from conftest import MOCK_OPEN_AI_API_KEY, skip_docker  # noqa: E402
 
 try:
     from autogen.coding.jupyter import (
