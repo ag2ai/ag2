@@ -2362,7 +2362,7 @@ class ConversableAgent(LLMAgent):
             "content": content,
         }
 
-    async def a_execute_function(self, func_call):
+    async def a_execute_function(self, func_call, verbose: bool = False) -> tuple[bool, dict[str, Any]]:
         """Execute an async function call and return the result.
 
         Override this function to modify the way async functions and tools are executed.
@@ -2383,8 +2383,6 @@ class ConversableAgent(LLMAgent):
         func_name = func_call.get("name", "")
         func = self._function_map.get(func_name, None)
 
-        execute_function = ExecuteFunction(func_name=func_name, recipient=self)
-
         is_exec_success = False
         if func is not None:
             # Extract arguments from a json-like string and put it into a dict.
@@ -2397,7 +2395,8 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                execute_function.print_executing_func(iostream.print)
+                execute_function = ExecuteFunction(func_name=func_name, recipient=self)
+                execute_function.print(iostream.print)
                 try:
                     if inspect.iscoroutinefunction(func):
                         content = await func(**arguments)
@@ -2411,7 +2410,11 @@ class ConversableAgent(LLMAgent):
             arguments = {}
             content = f"Error: Function {func_name} not found."
 
-        execute_function.print_arguments_and_content(arguments, content, iostream.print)
+        if verbose:
+            execute_function_arguments_content = ExecuteFunctionArgumentsContent(
+                func_name=func_name, arguments=arguments, content=content, recipient=self
+            )
+            execute_function_arguments_content.print(arguments, content, iostream.print)
 
         return is_exec_success, {
             "name": func_name,

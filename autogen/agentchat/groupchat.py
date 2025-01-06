@@ -407,7 +407,7 @@ class GroupChat:
             try_count += 1
             if try_count >= 3:
                 select_speaker_try_count_exceeded = SelectSpeakerTryCountExceeded(try_count=try_count, agents=agents)
-                select_speaker_try_count_exceeded.print(try_count, iostream.print)
+                select_speaker_try_count_exceeded.print(iostream.print)
                 break
             try:
                 i = iostream.input(
