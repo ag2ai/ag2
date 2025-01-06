@@ -305,7 +305,10 @@ class GPTAssistantAgent(ConversableAgent):
                 actions = []
                 for tool_call in run.required_action.submit_tool_outputs.tool_calls:
                     function = tool_call.function
-                    is_exec_success, tool_response = self.execute_function(function.dict(), self._verbose)
+                    tool_call_id = tool_call.id
+                    is_exec_success, tool_response = self.execute_function(
+                        function.dict(), call_id=tool_call_id, verbose=self._verbose
+                    )
                     tool_response["metadata"] = {
                         "tool_call_id": tool_call.id,
                         "run_id": run.id,

@@ -1623,6 +1623,7 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
         message = messages[-1]
         if "function_call" in message and message["function_call"]:
+            call_id = message.get("id", None)
             func_call = message["function_call"]
             func = self._function_map.get(func_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
@@ -1635,11 +1636,11 @@ class ConversableAgent(LLMAgent):
                     loop = asyncio.new_event_loop()
                     close_loop = True
 
-                _, func_return = loop.run_until_complete(self.a_execute_function(func_call))
+                _, func_return = loop.run_until_complete(self.a_execute_function(func_call, call_id=call_id))
                 if close_loop:
                     loop.close()
             else:
-                _, func_return = self.execute_function(message["function_call"])
+                _, func_return = self.execute_function(message["function_call"], call_id=call_id)
             return True, func_return
         return False, None
 
@@ -1661,13 +1662,14 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
         message = messages[-1]
         if "function_call" in message:
+            call_id = message.get("id", None)
             func_call = message["function_call"]
             func_name = func_call.get("name", "")
             func = self._function_map.get(func_name, None)
             if func and inspect.iscoroutinefunction(func):
-                _, func_return = await self.a_execute_function(func_call)
+                _, func_return = await self.a_execute_function(func_call, call_id=call_id)
             else:
-                _, func_return = self.execute_function(func_call)
+                _, func_return = self.execute_function(func_call, call_id=call_id)
             return True, func_return
 
         return False, None
@@ -1690,6 +1692,7 @@ class ConversableAgent(LLMAgent):
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
             function_call = tool_call.get("function", {})
+            tool_call_id = tool_call.get("id", None)
             func = self._function_map.get(function_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
                 try:
@@ -1701,15 +1704,15 @@ class ConversableAgent(LLMAgent):
                     loop = asyncio.new_event_loop()
                     close_loop = True
 
-                _, func_return = loop.run_until_complete(self.a_execute_function(function_call))
+                _, func_return = loop.run_until_complete(self.a_execute_function(function_call, call_id=tool_call_id))
                 if close_loop:
                     loop.close()
             else:
-                _, func_return = self.execute_function(function_call)
+                _, func_return = self.execute_function(function_call, call_id=tool_call_id)
             content = func_return.get("content", "")
             if content is None:
                 content = ""
-            tool_call_id = tool_call.get("id", None)
+
             if tool_call_id is not None:
                 tool_call_response = {
                     "tool_call_id": tool_call_id,
@@ -2290,13 +2293,16 @@ class ConversableAgent(LLMAgent):
             result.append(char)
         return "".join(result)
 
-    def execute_function(self, func_call, verbose: bool = False) -> tuple[bool, dict[str, Any]]:
+    def execute_function(
+        self, func_call, call_id: Optional[str] = None, verbose: bool = False
+    ) -> tuple[bool, dict[str, Any]]:
         """Execute a function call and return the result.
 
         Override this function to modify the way to execute function and tool calls.
 
         Args:
             func_call: a dictionary extracted from openai message at "function_call" or "tool_calls" with keys "name" and "arguments".
+            call_id: a string to identify the tool call.
 
         Returns:
             A tuple of (is_exec_success, result_dict).
@@ -2323,7 +2329,9 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.send(ExecuteFunction(func_name=func_name, arguments=arguments, recipient=self))
+                iostream.send(
+                    ExecuteFunction(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
+                )
                 try:
                     content = func(**arguments)
                     is_exec_success = True
@@ -2334,7 +2342,11 @@ class ConversableAgent(LLMAgent):
             content = f"Error: Function {func_name} not found."
 
         if verbose:
-            iostream.send(ExecutedFunction(func_name=func_name, arguments=arguments, content=content, recipient=self))
+            iostream.send(
+                ExecutedFunction(
+                    func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
+                )
+            )
 
         return is_exec_success, {
             "name": func_name,
@@ -2342,13 +2354,16 @@ class ConversableAgent(LLMAgent):
             "content": content,
         }
 
-    async def a_execute_function(self, func_call, verbose: bool = False) -> tuple[bool, dict[str, Any]]:
+    async def a_execute_function(
+        self, func_call, call_id: Optional[str] = None, verbose: bool = False
+    ) -> tuple[bool, dict[str, Any]]:
         """Execute an async function call and return the result.
 
         Override this function to modify the way async functions and tools are executed.
 
         Args:
             func_call: a dictionary extracted from openai message at key "function_call" or "tool_calls" with keys "name" and "arguments".
+            call_id: a string to identify the tool call.
 
         Returns:
             A tuple of (is_exec_success, result_dict).
@@ -2375,7 +2390,9 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.send(ExecuteFunction(func_name=func_name, arguments=arguments, recipient=self))
+                iostream.send(
+                    ExecuteFunction(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
+                )
                 try:
                     if inspect.iscoroutinefunction(func):
                         content = await func(**arguments)
@@ -2390,7 +2407,11 @@ class ConversableAgent(LLMAgent):
             content = f"Error: Function {func_name} not found."
 
         if verbose:
-            iostream.send(ExecutedFunction(func_name=func_name, arguments=arguments, content=content, recipient=self))
+            iostream.send(
+                ExecutedFunction(
+                    func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
+                )
+            )
 
         return is_exec_success, {
             "name": func_name,
