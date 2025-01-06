@@ -1736,11 +1736,11 @@ class ConversableAgent(LLMAgent):
         return False, None
 
     async def _a_execute_tool_call(self, tool_call):
-        id = tool_call["id"]
+        tool_call_id = tool_call["id"]
         function_call = tool_call.get("function", {})
-        _, func_return = await self.a_execute_function(function_call)
+        _, func_return = await self.a_execute_function(function_call, call_id=tool_call_id)
         return {
-            "tool_call_id": id,
+            "tool_call_id": tool_call_id,
             "role": "tool",
             "content": func_return.get("content", ""),
         }
