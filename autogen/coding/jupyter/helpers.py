@@ -19,10 +19,8 @@ def is_jupyter_kernel_gateway_installed() -> bool:
             check=True,
         )
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         logger.warning(
             "jupyter-kernel-gateway is required for JupyterCodeExecutor, please install it with `pip install ag2[jupyter-executor]`"
         )
-        logger.warning(e, exc_info=True)
-        print(e)
         return False
