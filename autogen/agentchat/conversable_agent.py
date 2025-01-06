@@ -47,6 +47,7 @@ from ..messages.agent_messages import (
     ConversableAgentUsageSummary,
     ExecuteCodeBlock,
     ExecuteFunction,
+    ExecuteFunctionArgumentsContent,
     GenerateCodeExecutionReply,
     TerminationAndHumanReply,
     create_received_message_model,
@@ -2313,8 +2314,6 @@ class ConversableAgent(LLMAgent):
         func_name = func_call.get("name", "")
         func = self._function_map.get(func_name, None)
 
-        execute_function = ExecuteFunction(func_name=func_name, recipient=self, verbose=verbose)
-
         is_exec_success = False
         if func is not None:
             # Extract arguments from a json-like string and put it into a dict.
@@ -2327,7 +2326,8 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                execute_function.print_executing_func(iostream.print)
+                execute_function = ExecuteFunction(func_name=func_name, recipient=self)
+                execute_function.print(iostream.print)
                 try:
                     content = func(**arguments)
                     is_exec_success = True
@@ -2337,7 +2337,11 @@ class ConversableAgent(LLMAgent):
             arguments = {}
             content = f"Error: Function {func_name} not found."
 
-        execute_function.print_arguments_and_content(arguments, content, iostream.print)
+        if verbose:
+            execute_function_arguments_content = ExecuteFunctionArgumentsContent(
+                func_name=func_name, arguments=arguments, content=content, recipient=self
+            )
+            execute_function_arguments_content.print(arguments, content, iostream.print)
 
         return is_exec_success, {
             "name": func_name,

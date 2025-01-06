@@ -517,14 +517,11 @@ class ExecuteCodeBlock(BaseMessage):
 class ExecuteFunction(BaseMessage):
     func_name: str
     recipient_name: str
-    verbose: Optional[bool] = False
 
-    def __init__(
-        self, *, uuid: Optional[UUID] = None, func_name: str, recipient: "Agent", verbose: Optional[bool] = False
-    ):
-        super().__init__(uuid=uuid, func_name=func_name, recipient_name=recipient.name, verbose=verbose)
+    def __init__(self, *, uuid: Optional[UUID] = None, func_name: str, recipient: "Agent"):
+        super().__init__(uuid=uuid, func_name=func_name, recipient_name=recipient.name)
 
-    def print_executing_func(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f(
@@ -532,16 +529,33 @@ class ExecuteFunction(BaseMessage):
             flush=True,
         )
 
-    def print_arguments_and_content(
-        self, arguments: dict[str, Any], content: str, f: Optional[Callable[..., Any]] = None
-    ) -> None:
+
+class ExecuteFunctionArgumentsContent(BaseMessage):
+    func_name: str
+    arguments: dict[str, Any]
+    content: str
+    recipient_name: str
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        func_name: str,
+        arguments: dict[str, Any],
+        content: str,
+        recipient: "Agent",
+    ):
+        super().__init__(
+            uuid=uuid, func_name=func_name, arguments=arguments, content=content, recipient_name=recipient.name
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.verbose:
-            f(
-                colored(f"\nInput arguments: {arguments}\nOutput:\n{content}", "magenta"),
-                flush=True,
-            )
+        f(
+            colored(f"\nInput arguments: {self.arguments}\nOutput:\n{self.content}", "magenta"),
+            flush=True,
+        )
 
 
 class SelectSpeaker(BaseMessage):
