@@ -645,26 +645,35 @@ class ClearConversableAgentHistoryWarning(BaseMessage):
 
 
 class GenerateCodeExecutionReply(BaseMessage):
+    code_block_languages: list[str]
     sender_name: Optional[str] = None
     recipient_name: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, sender: Optional["Agent"] = None, recipient: "Agent"):
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        code_blocks: list["CodeBlock"],
+        sender: Optional["Agent"] = None,
+        recipient: "Agent",
+    ):
+        code_block_languages = [code_block.language for code_block in code_blocks]
+
         super().__init__(
             uuid=uuid,
+            code_block_languages=code_block_languages,
             sender_name=sender.name if sender else None,
             recipient_name=recipient.name,
         )
 
-    def print_executing_code_block(
-        self, code_blocks: list["CodeBlock"], f: Optional[Callable[..., Any]] = None
-    ) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        num_code_blocks = len(code_blocks)
+        num_code_blocks = len(self.code_block_languages)
         if num_code_blocks == 1:
             f(
                 colored(
-                    f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {code_blocks[0].language})...",
+                    f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {self.code_block_languages[0]})...",
                     "red",
                 ),
                 flush=True,
@@ -672,7 +681,7 @@ class GenerateCodeExecutionReply(BaseMessage):
         else:
             f(
                 colored(
-                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x.language for x in code_blocks])}])...",
+                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x for x in self.code_block_languages])}])...",
                     "red",
                 ),
                 flush=True,
