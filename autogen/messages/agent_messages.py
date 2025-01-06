@@ -527,21 +527,22 @@ class ExecuteCodeBlock(BaseMessage):
 
 class ExecuteFunction(BaseMessage):
     func_name: str
+    arguments: dict[str, Any]
     recipient_name: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, func_name: str, recipient: "Agent"):
-        super().__init__(uuid=uuid, func_name=func_name, recipient_name=recipient.name)
+    def __init__(self, *, uuid: Optional[UUID] = None, func_name: str, arguments: dict[str, Any], recipient: "Agent"):
+        super().__init__(uuid=uuid, func_name=func_name, arguments=arguments, recipient_name=recipient.name)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f(
-            colored(f"\n>>>>>>>> EXECUTING FUNCTION {self.func_name}...", "magenta"),
+            colored(f"\n>>>>>>>> EXECUTING FUNCTION {self.func_name}...\nInput arguments: {self.arguments}", "magenta"),
             flush=True,
         )
 
 
-class ExecuteFunctionArgumentsContent(BaseMessage):
+class ExecutedFunction(BaseMessage):
     func_name: str
     arguments: dict[str, Any]
     content: str
@@ -564,7 +565,10 @@ class ExecuteFunctionArgumentsContent(BaseMessage):
         f = f or print
 
         f(
-            colored(f"\nInput arguments: {self.arguments}\nOutput:\n{self.content}", "magenta"),
+            colored(
+                f"\n>>>>>>>> EXECUTED FUNCTION {self.func_name}...\nInput arguments: {self.arguments}\nOutput:\n{self.content}",
+                "magenta",
+            ),
             flush=True,
         )
 
