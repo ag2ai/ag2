@@ -1541,7 +1541,6 @@ class ConversableAgent(LLMAgent):
         # iterate through the last n messages in reverse
         # if code blocks are found, execute the code blocks and return the output
         # if no code blocks are found, continue
-        generate_code_execution_reply = GenerateCodeExecutionReply(sender=sender, recipient=self)
         for message in reversed(messages_to_scan):
             if not message["content"]:
                 continue
@@ -1549,7 +1548,10 @@ class ConversableAgent(LLMAgent):
             if len(code_blocks) == 0:
                 continue
 
-            generate_code_execution_reply.print_executing_code_block(code_blocks, iostream.print)
+            generate_code_execution_reply = GenerateCodeExecutionReply(
+                code_blocks=code_blocks, sender=sender, recipient=self
+            )
+            generate_code_execution_reply.print(iostream.print)
 
             # found code blocks, execute code.
             code_result = self._code_executor.execute_code_blocks(code_blocks)

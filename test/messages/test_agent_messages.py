@@ -809,18 +809,19 @@ def test_GenerateCodeExecutionReply(
     sender: ConversableAgent,
     recipient: ConversableAgent,
 ) -> None:
-    actual = GenerateCodeExecutionReply(uuid=uuid, sender=sender, recipient=recipient)
+    actual = GenerateCodeExecutionReply(uuid=uuid, code_blocks=code_blocks, sender=sender, recipient=recipient)
     assert isinstance(actual, GenerateCodeExecutionReply)
 
     expected_model_dump = {
         "uuid": uuid,
+        "code_block_languages": [x.language for x in code_blocks],
         "sender_name": "sender",
         "recipient_name": "recipient",
     }
     assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
-    actual.print_executing_code_block(code_blocks=code_blocks, f=mock)
+    actual.print(f=mock)
 
     # print(mock.call_args_list)
 
