@@ -653,14 +653,16 @@ def test_ExecuteCodeBlock(uuid: UUID, sender: ConversableAgent, recipient: Conve
 
 def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     func_name = "add_num"
+    call_id = "call_12345xyz"
     arguments = {"num_to_be_added": 5}
 
-    actual = ExecuteFunction(uuid=uuid, func_name=func_name, arguments=arguments, recipient=recipient)
+    actual = ExecuteFunction(uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient=recipient)
     assert isinstance(actual, ExecuteFunction)
 
     expected_model_dump = {
         "uuid": uuid,
         "func_name": func_name,
+        "call_id": call_id,
         "arguments": arguments,
         "recipient_name": "recipient",
     }
@@ -671,7 +673,7 @@ def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     # print(mock.call_args_list)
     expected_call_args_list = [
         call(
-            "\x1b[35m\n>>>>>>>> EXECUTING FUNCTION add_num...\nInput arguments: {'num_to_be_added': 5}\x1b[0m",
+            "\x1b[35m\n>>>>>>>> EXECUTING FUNCTION add_num...\nCall ID: call_12345xyz\nInput arguments: {'num_to_be_added': 5}\x1b[0m",
             flush=True,
         )
     ]
@@ -680,15 +682,19 @@ def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
 
 def test_ExecutedFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     func_name = "add_num"
+    call_id = "call_12345xyz"
     arguments = {"num_to_be_added": 5}
     content = "15"
 
-    actual = ExecutedFunction(uuid=uuid, func_name=func_name, arguments=arguments, content=content, recipient=recipient)
+    actual = ExecutedFunction(
+        uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=recipient
+    )
     assert isinstance(actual, ExecutedFunction)
 
     expected_model_dump = {
         "uuid": uuid,
         "func_name": func_name,
+        "call_id": call_id,
         "arguments": arguments,
         "content": content,
         "recipient_name": "recipient",
@@ -700,7 +706,7 @@ def test_ExecutedFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     # print(mock.call_args_list)
     expected_call_args_list = [
         call(
-            "\x1b[35m\n>>>>>>>> EXECUTED FUNCTION add_num...\nInput arguments: {'num_to_be_added': 5}\nOutput:\n15\x1b[0m",
+            "\x1b[35m\n>>>>>>>> EXECUTED FUNCTION add_num...\nCall ID: call_12345xyz\nInput arguments: {'num_to_be_added': 5}\nOutput:\n15\x1b[0m",
             flush=True,
         )
     ]
