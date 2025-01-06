@@ -52,7 +52,7 @@ class TestConsoleIOWithWebsockets:
             for msg in ["Hello, World!", "Over and out!"]:
                 print(f" - on_connect(): Sending message '{msg}' to client.", flush=True)
 
-                text_message.print(msg, iostream.print)
+                text_message.print_text(msg, iostream.print)
 
             print(" - on_connect(): Receiving message from client.", flush=True)
 
