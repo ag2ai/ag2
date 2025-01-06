@@ -194,8 +194,8 @@ class IOWebsockets(IOStream):
             end (str, optional): The end of the output. Defaults to "\n".
             flush (bool, optional): Whether to flush the output. Defaults to False.
         """
-        message = PrintMessage(*objects, sep=sep, end=end)
-        self.send(message)
+        print_message = PrintMessage(*objects, sep=sep, end=end)
+        self.send(print_message)
 
     def send(self, message: BaseMessage) -> None:
         """Send a message to the output stream.
