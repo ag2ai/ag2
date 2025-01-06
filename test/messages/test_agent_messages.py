@@ -18,8 +18,8 @@ from autogen.messages.agent_messages import (
     ContentMessage,
     ConversableAgentUsageSummary,
     ExecuteCodeBlock,
+    ExecutedFunction,
     ExecuteFunction,
-    ExecuteFunctionArgumentsContent,
     FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
@@ -653,13 +653,15 @@ def test_ExecuteCodeBlock(uuid: UUID, sender: ConversableAgent, recipient: Conve
 
 def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     func_name = "add_num"
+    arguments = {"num_to_be_added": 5}
 
-    actual = ExecuteFunction(uuid=uuid, func_name=func_name, recipient=recipient)
+    actual = ExecuteFunction(uuid=uuid, func_name=func_name, arguments=arguments, recipient=recipient)
     assert isinstance(actual, ExecuteFunction)
 
     expected_model_dump = {
         "uuid": uuid,
         "func_name": func_name,
+        "arguments": arguments,
         "recipient_name": "recipient",
     }
     assert actual.model_dump() == expected_model_dump
@@ -667,19 +669,22 @@ def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     mock = MagicMock()
     actual.print(f=mock)
     # print(mock.call_args_list)
-    expected_call_args_list = [call("\x1b[35m\n>>>>>>>> EXECUTING FUNCTION add_num...\x1b[0m", flush=True)]
+    expected_call_args_list = [
+        call(
+            "\x1b[35m\n>>>>>>>> EXECUTING FUNCTION add_num...\nInput arguments: {'num_to_be_added': 5}\x1b[0m",
+            flush=True,
+        )
+    ]
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_ExecuteFunctionArgumentsContent(uuid: UUID, recipient: ConversableAgent) -> None:
+def test_ExecutedFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     func_name = "add_num"
     arguments = {"num_to_be_added": 5}
     content = "15"
 
-    actual = ExecuteFunctionArgumentsContent(
-        uuid=uuid, func_name=func_name, arguments=arguments, content=content, recipient=recipient
-    )
-    assert isinstance(actual, ExecuteFunctionArgumentsContent)
+    actual = ExecutedFunction(uuid=uuid, func_name=func_name, arguments=arguments, content=content, recipient=recipient)
+    assert isinstance(actual, ExecutedFunction)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -694,7 +699,10 @@ def test_ExecuteFunctionArgumentsContent(uuid: UUID, recipient: ConversableAgent
     actual.print(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [
-        call("\x1b[35m\nInput arguments: {'num_to_be_added': 5}\nOutput:\n15\x1b[0m", flush=True)
+        call(
+            "\x1b[35m\n>>>>>>>> EXECUTED FUNCTION add_num...\nInput arguments: {'num_to_be_added': 5}\nOutput:\n15\x1b[0m",
+            flush=True,
+        )
     ]
     assert mock.call_args_list == expected_call_args_list
 

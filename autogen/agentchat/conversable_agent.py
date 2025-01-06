@@ -46,8 +46,8 @@ from ..messages.agent_messages import (
     ClearConversableAgentHistoryWarning,
     ConversableAgentUsageSummary,
     ExecuteCodeBlock,
+    ExecutedFunction,
     ExecuteFunction,
-    ExecuteFunctionArgumentsContent,
     GenerateCodeExecutionReply,
     TerminationAndHumanReply,
     UsingAutoReply,
@@ -2323,7 +2323,7 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.send(ExecuteFunction(func_name=func_name, recipient=self))
+                iostream.send(ExecuteFunction(func_name=func_name, arguments=arguments, recipient=self))
                 try:
                     content = func(**arguments)
                     is_exec_success = True
@@ -2334,11 +2334,7 @@ class ConversableAgent(LLMAgent):
             content = f"Error: Function {func_name} not found."
 
         if verbose:
-            iostream.send(
-                ExecuteFunctionArgumentsContent(
-                    func_name=func_name, arguments=arguments, content=content, recipient=self
-                )
-            )
+            iostream.send(ExecutedFunction(func_name=func_name, arguments=arguments, content=content, recipient=self))
 
         return is_exec_success, {
             "name": func_name,
@@ -2379,7 +2375,7 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.send(ExecuteFunction(func_name=func_name, recipient=self))
+                iostream.send(ExecuteFunction(func_name=func_name, arguments=arguments, recipient=self))
                 try:
                     if inspect.iscoroutinefunction(func):
                         content = await func(**arguments)
@@ -2394,11 +2390,7 @@ class ConversableAgent(LLMAgent):
             content = f"Error: Function {func_name} not found."
 
         if verbose:
-            iostream.send(
-                ExecuteFunctionArgumentsContent(
-                    func_name=func_name, arguments=arguments, content=content, recipient=self
-                )
-            )
+            iostream.send(ExecutedFunction(func_name=func_name, arguments=arguments, content=content, recipient=self))
 
         return is_exec_success, {
             "name": func_name,
