@@ -23,6 +23,8 @@ from ..messages.agent_messages import (
     GroupChatResume,
     GroupChatRunChat,
     SelectSpeaker,
+    SelectSpeakerInvalidInput,
+    SelectSpeakerTryCountExceeded,
     SpeakerAttempt,
 )
 from ..oai.client import ModelClient
@@ -397,14 +399,15 @@ class GroupChat:
             agents = self.agents
 
         select_speaker = SelectSpeaker(agents=agents)
-        select_speaker.print_select_speaker(iostream.print)
+        select_speaker.print(iostream.print)
 
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                select_speaker.print_try_count_exceeded(try_count, iostream.print)
+                select_speaker_try_count_exceeded = SelectSpeakerTryCountExceeded(try_count=try_count, agents=agents)
+                select_speaker_try_count_exceeded.print(try_count, iostream.print)
                 break
             try:
                 i = iostream.input(
@@ -418,7 +421,8 @@ class GroupChat:
                 else:
                     raise ValueError
             except ValueError:
-                select_speaker.print_invalid_input(iostream.print)
+                select_speaker_invalid_input = SelectSpeakerInvalidInput(agents=agents)
+                select_speaker_invalid_input.print(iostream.print)
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:

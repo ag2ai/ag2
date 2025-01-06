@@ -581,7 +581,7 @@ class SelectSpeaker(BaseMessage):
         agent_names = [agent.name for agent in agents] if agents else None
         super().__init__(uuid=uuid, agent_names=agent_names)
 
-    def print_select_speaker(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f("Please select the next speaker from the following list:")
@@ -589,12 +589,29 @@ class SelectSpeaker(BaseMessage):
         for i, agent_name in enumerate(agent_names):
             f(f"{i+1}: {agent_name}")
 
-    def print_try_count_exceeded(self, try_count: int = 3, f: Optional[Callable[..., Any]] = None) -> None:
+
+class SelectSpeakerTryCountExceeded(BaseMessage):
+    try_count: int
+    agent_names: Optional[list[str]] = None
+
+    def __init__(self, *, uuid: Optional[UUID] = None, try_count: int, agents: Optional[list["Agent"]] = None):
+        agent_names = [agent.name for agent in agents] if agents else None
+        super().__init__(uuid=uuid, try_count=try_count, agent_names=agent_names)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(f"You have tried {try_count} times. The next speaker will be selected automatically.")
+        f(f"You have tried {self.try_count} times. The next speaker will be selected automatically.")
 
-    def print_invalid_input(self, f: Optional[Callable[..., Any]] = None) -> None:
+
+class SelectSpeakerInvalidInput(BaseMessage):
+    agent_names: Optional[list[str]] = None
+
+    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
+        agent_names = [agent.name for agent in agents] if agents else None
+        super().__init__(uuid=uuid, agent_names=agent_names)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
