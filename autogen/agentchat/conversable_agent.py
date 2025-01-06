@@ -50,7 +50,7 @@ from ..messages.agent_messages import (
     ExecuteFunctionArgumentsContent,
     GenerateCodeExecutionReply,
     TerminationAndHumanReply,
-    TerminationAndHumanReplyHumanInputMode,
+    UsingAutoReply,
     create_received_message_model,
 )
 from ..oai.client import ModelClient, OpenAIWrapper
@@ -1878,11 +1878,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.send(
-                TerminationAndHumanReplyHumanInputMode(
-                    human_input_mode=self.human_input_mode, sender=sender, recipient=self
-                )
-            )
+            iostream.send(UsingAutoReply(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 
@@ -1997,11 +1993,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.send(
-                TerminationAndHumanReplyHumanInputMode(
-                    human_input_mode=self.human_input_mode, sender=sender, recipient=self
-                )
-            )
+            iostream.send(UsingAutoReply(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 

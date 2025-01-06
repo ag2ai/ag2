@@ -474,7 +474,7 @@ class TerminationAndHumanReply(BaseMessage):
         f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
 
 
-class TerminationAndHumanReplyHumanInputMode(BaseMessage):
+class UsingAutoReply(BaseMessage):
     human_input_mode: str
     sender_name: str
     recipient_name: str
