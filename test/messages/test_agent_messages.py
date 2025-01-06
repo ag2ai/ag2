@@ -830,13 +830,13 @@ def test_ConversableAgentUsageSummary(
     ],
 )
 def test_TextMessage(text: str, expected: list[_Call], uuid: UUID) -> None:
-    actual = TextMessage(uuid=uuid)
-    expected_model_dump = {"uuid": uuid}
+    actual = TextMessage(uuid=uuid, text=text)
+    expected_model_dump = {"uuid": uuid, "text": text}
     assert isinstance(actual, TextMessage)
     assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
-    actual.print_text(text, f=mock)
+    actual.print(f=mock)
 
     # print(mock.call_args_list)
 
