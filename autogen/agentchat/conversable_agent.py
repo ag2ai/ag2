@@ -43,6 +43,7 @@ from ..formatting_utils import colored
 from ..io.base import IOStream
 from ..messages.agent_messages import (
     ClearConversableAgentHistory,
+    ClearConversableAgentHistoryWarning,
     ConversableAgentUsageSummary,
     ExecuteCodeBlock,
     ExecuteFunction,
@@ -1392,10 +1393,8 @@ class ConversableAgent(LLMAgent):
             nr_messages_to_preserve: the number of newest messages to preserve in the chat history.
         """
         iostream = IOStream.get_default()
-        clear_conversable_agent_history = ClearConversableAgentHistory(
-            agent=self, nr_messages_to_preserve=nr_messages_to_preserve
-        )
         if recipient is None:
+            no_messages_preserved = 0
             if nr_messages_to_preserve:
                 for key in self._oai_messages:
                     nr_messages_to_preserve_internal = nr_messages_to_preserve
@@ -1404,14 +1403,22 @@ class ConversableAgent(LLMAgent):
                     first_msg_to_save = self._oai_messages[key][-nr_messages_to_preserve_internal]
                     if "tool_responses" in first_msg_to_save:
                         nr_messages_to_preserve_internal += 1
-                        clear_conversable_agent_history.print_preserving_message(iostream.print)
+                        # clear_conversable_agent_history.print_preserving_message(iostream.print)
+                        no_messages_preserved += 1
                     # Remove messages from history except last `nr_messages_to_preserve` messages.
                     self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
+                clear_conversable_agent_history = ClearConversableAgentHistory(
+                    agent=self, no_messages_preserved=no_messages_preserved
+                )
+                clear_conversable_agent_history.print(iostream.print)
             else:
                 self._oai_messages.clear()
         else:
             self._oai_messages[recipient].clear()
-            clear_conversable_agent_history.print_warning(iostream.print)
+            # clear_conversable_agent_history.print_warning(iostream.print)
+            if nr_messages_to_preserve:
+                clear_conversable_agent_history_warning = ClearConversableAgentHistoryWarning(agent=self)
+                clear_conversable_agent_history_warning.print(iostream.print)
 
     def generate_oai_reply(
         self,
