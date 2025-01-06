@@ -11,15 +11,12 @@ import re
 import uuid
 from pathlib import Path
 from queue import Empty
-from typing import Any, List
+from typing import Any
 
-# this is needed for CI to work. The import of this file should fail if jupyter-kernel-gateway is not installed
-import jupyter_kernel_gateway
 from jupyter_client import KernelManager  # type: ignore[attr-defined]
 from jupyter_client.kernelspec import KernelSpecManager
 from pydantic import BaseModel, Field, field_validator
 
-from ...agentchat.agent import LLMAgent
 from ..base import CodeBlock, CodeExtractor, IPythonCodeResult
 from ..markdown_code_extractor import MarkdownCodeExtractor
 
