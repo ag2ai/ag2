@@ -66,6 +66,7 @@ files = [
     "autogen/messages/agent_messages.py",
     "autogen/messages/base_message.py",
     "autogen/messages/client_messages.py",
+    "autogen/messages/print_message.py",
     "test/test_pydantic.py",
     "test/io",
     "test/tools",
@@ -76,6 +77,7 @@ files = [
     "test/messages/test_agent_messages.py",
     "test/messages/test_base_message.py",
     "test/messages/test_client_messages.py",
+    "test/messages/test_print_message.py",
 ]
 exclude = [
     "autogen/math_utils\\.py",

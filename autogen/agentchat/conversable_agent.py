@@ -1417,7 +1417,7 @@ class ConversableAgent(LLMAgent):
             self._oai_messages[recipient].clear()
             # clear_conversable_agent_history.print_warning(iostream.print)
             if nr_messages_to_preserve:
-                clear_conversable_agent_history_warning = ClearConversableAgentHistoryWarning(agent=self)
+                clear_conversable_agent_history_warning = ClearConversableAgentHistoryWarning(recipient=self)
                 clear_conversable_agent_history_warning.print(iostream.print)
 
     def generate_oai_reply(
