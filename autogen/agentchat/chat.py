@@ -132,8 +132,7 @@ def __post_carryover_processing(chat_info: dict[str, Any]) -> None:
             UserWarning,
         )
 
-    post_carryover_processing = PostCarryoverProcessing(chat_info=chat_info)
-    iostream.send(post_carryover_processing)
+    iostream.send(PostCarryoverProcessing(chat_info=chat_info))
 
 
 def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
