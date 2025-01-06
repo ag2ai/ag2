@@ -13,6 +13,8 @@ from functools import partial
 from time import sleep
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Protocol, Union
 
+from autogen.messages.base_message import BaseMessage
+
 from .base import IOStream
 
 # Check if the websockets module is available
@@ -194,6 +196,14 @@ class IOWebsockets(IOStream):
         """
         xs = sep.join(map(str, objects)) + end
         self._websocket.send(xs)
+
+    def send(self, message: BaseMessage) -> None:
+        """Send a message to the output stream.
+
+        Args:
+            message (Any): The message to send.
+        """
+        raise NotImplementedError("send() method is not implemented for IOWebsockets")
 
     def input(self, prompt: str = "", *, password: bool = False) -> str:
         """Read a line from the input stream.
