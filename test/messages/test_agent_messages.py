@@ -33,12 +33,12 @@ from autogen.messages.agent_messages import (
     SelectSpeakerTryCountExceeded,
     SpeakerAttempt,
     TerminationAndHumanReply,
-    TerminationAndHumanReplyHumanInputMode,
     TextMessage,
     ToolCall,
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
+    UsingAutoReply,
     create_received_message_model,
 )
 from autogen.oai.client import OpenAIWrapper
@@ -594,18 +594,16 @@ def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipien
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_TerminationAndHumanReplyHumanInputMode(
-    uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
-) -> None:
+def test_UsingAutoReply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     human_input_mode = "ALWAYS"
 
-    actual = TerminationAndHumanReplyHumanInputMode(
+    actual = UsingAutoReply(
         uuid=uuid,
         human_input_mode=human_input_mode,
         sender=sender,
         recipient=recipient,
     )
-    assert isinstance(actual, TerminationAndHumanReplyHumanInputMode)
+    assert isinstance(actual, UsingAutoReply)
 
     expected_model_dump = {
         "uuid": uuid,
