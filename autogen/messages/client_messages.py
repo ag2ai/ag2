@@ -125,16 +125,18 @@ class UsageSummary(BaseMessage):
 
 
 class StreamMessage(BaseMessage):
-    def __init__(self, *, uuid: Optional[UUID] = None) -> None:
-        super().__init__(uuid=uuid)
+    content: str
 
-    def print_chunk_content(self, content: str, f: Optional[Callable[..., Any]] = None) -> None:
+    def __init__(self, *, uuid: Optional[UUID] = None, content: str) -> None:
+        super().__init__(uuid=uuid, content=content)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         # Set the terminal text color to green
         f("\033[32m", end="")
 
-        f(content, end="", flush=True)
+        f(self.content, end="", flush=True)
 
         # Reset the terminal text color
         f("\033[0m\n")

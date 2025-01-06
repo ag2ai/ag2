@@ -13,8 +13,8 @@ from functools import partial
 from time import sleep
 from typing import Any, Callable, Optional, Protocol, Union
 
-from ..messages.agent_messages import PrintMessage
 from ..messages.base_message import BaseMessage
+from ..messages.print_message import PrintMessage
 from .base import IOStream
 
 # Check if the websockets module is available

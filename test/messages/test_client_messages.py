@@ -324,17 +324,18 @@ def test_usage_summary_print_none_actual_and_total(
 
 
 def test_StreamMessage(uuid: UUID) -> None:
-    stream_message = StreamMessage(uuid=uuid)
+    content = "random stream chunk content"
+    stream_message = StreamMessage(uuid=uuid, content=content)
     assert isinstance(stream_message, StreamMessage)
 
     expected_model_dump = {
         "uuid": uuid,
+        "content": content,
     }
     assert stream_message.model_dump() == expected_model_dump
 
-    content = "random stream chunk content"
     mock = MagicMock()
-    stream_message.print_chunk_content(content, f=mock)
+    stream_message.print(f=mock)
 
     # print(mock.call_args_list)
 

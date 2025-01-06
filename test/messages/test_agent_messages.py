@@ -14,6 +14,7 @@ from autogen.coding.base import CodeBlock
 from autogen.messages.agent_messages import (
     ClearAgentsHistory,
     ClearConversableAgentHistory,
+    ClearConversableAgentHistoryWarning,
     ContentMessage,
     ConversableAgentUsageSummary,
     ExecuteCodeBlock,
@@ -700,28 +701,37 @@ def test_SelectSpeaker(uuid: UUID) -> None:
 
 
 def test_ClearConversableAgentHistory(uuid: UUID, recipient: ConversableAgent) -> None:
-    nr_messages_to_preserve = 5
+    no_messages_preserved = 5
 
-    actual = ClearConversableAgentHistory(uuid=uuid, agent=recipient, nr_messages_to_preserve=nr_messages_to_preserve)
+    actual = ClearConversableAgentHistory(uuid=uuid, agent=recipient, no_messages_preserved=no_messages_preserved)
     assert isinstance(actual, ClearConversableAgentHistory)
 
     expected_model_dump = {
         "uuid": uuid,
         "agent_name": "recipient",
-        "nr_messages_to_preserve": nr_messages_to_preserve,
+        "recipient_name": "recipient",
+        "no_messages_preserved": no_messages_preserved,
     }
     assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
-    actual.print_preserving_message(f=mock)
+    actual.print(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [
-        call("Preserving one more message for recipient to not divide history between tool call and tool response.")
+        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
+        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
+        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
+        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
+        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
     ]
     assert mock.call_args_list == expected_call_args_list
 
+
+def test_ClearConversableAgentHistoryWarning(uuid: UUID, recipient: ConversableAgent) -> None:
+    actual = ClearConversableAgentHistoryWarning(uuid=uuid, recipient=recipient)
+
     mock = MagicMock()
-    actual.print_warning(f=mock)
+    actual.print(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [
         call(

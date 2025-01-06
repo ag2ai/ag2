@@ -316,8 +316,6 @@ class OpenAIClient:
             full_function_call: Optional[dict[str, Any]] = None
             full_tool_calls: Optional[list[Optional[dict[str, Any]]]] = None
 
-            stream_message = StreamMessage()
-
             # Send the chat completion request to OpenAI's API and process the response in chunks
             for chunk in create_or_parse(**params):
                 if chunk.choices:
@@ -364,7 +362,8 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            stream_message.print_chunk_content(content, iostream.print)
+                            stream_message = StreamMessage(content=content)
+                            stream_message.print(iostream.print)
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
