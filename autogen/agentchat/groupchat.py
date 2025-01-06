@@ -398,16 +398,14 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        select_speaker = SelectSpeaker(agents=agents)
-        iostream.send(select_speaker)
+        iostream.send(SelectSpeaker(agents=agents))
 
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                select_speaker_try_count_exceeded = SelectSpeakerTryCountExceeded(try_count=try_count, agents=agents)
-                iostream.send(select_speaker_try_count_exceeded)
+                iostream.send(SelectSpeakerTryCountExceeded(try_count=try_count, agents=agents))
                 break
             try:
                 i = iostream.input(
@@ -421,8 +419,7 @@ class GroupChat:
                 else:
                     raise ValueError
             except ValueError:
-                select_speaker_invalid_input = SelectSpeakerInvalidInput(agents=agents)
-                iostream.send(select_speaker_invalid_input)
+                iostream.send(SelectSpeakerInvalidInput(agents=agents))
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:
@@ -858,13 +855,14 @@ class GroupChat:
         # Output the query and requery results
         if self.select_speaker_auto_verbose:
             iostream = IOStream.get_default()
-            speaker_attempt = SpeakerAttempt(
-                mentions=mentions,
-                attempt=attempt,
-                attempts_left=attempts_left,
-                select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+            iostream.send(
+                SpeakerAttempt(
+                    mentions=mentions,
+                    attempt=attempt,
+                    attempts_left=attempts_left,
+                    select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                )
             )
-            iostream.send(speaker_attempt)
 
         if len(mentions) == 1:
             # Success on retry, we have just one name mentioned
@@ -1158,8 +1156,7 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    group_chat_run_chat = GroupChatRunChat(speaker=speaker, silent=silent)
-                    iostream.send(group_chat_run_chat)
+                    iostream.send(GroupChatRunChat(speaker=speaker, silent=silent))
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
@@ -1364,8 +1361,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            iostream.send(group_chat_resume)
+            iostream.send(GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1469,8 +1465,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            iostream.send(group_chat_resume)
+            iostream.send(GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1626,10 +1621,7 @@ class GroupChatManager(ConversableAgent):
                 "The last tool call message will be saved to prevent errors caused by tool response without tool call."
             )
         # clear history
-        clear_agents_history = ClearAgentsHistory(
-            agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve
-        )
-        iostream.send(clear_agents_history)
+        iostream.send(ClearAgentsHistory(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve))
         if agent_to_memory_clear:
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
         else:

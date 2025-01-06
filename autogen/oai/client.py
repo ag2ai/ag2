@@ -362,8 +362,7 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            stream_message = StreamMessage(content=content)
-                            iostream.send(stream_message)
+                            iostream.send(StreamMessage(content=content))
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
@@ -1132,10 +1131,11 @@ class OpenAIWrapper:
             elif "total" in mode:
                 mode = "total"
 
-        usage_summary = UsageSummary(
-            actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+        iostream.send(
+            UsageSummary(
+                actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+            )
         )
-        iostream.send(usage_summary)
 
     def clear_usage_summary(self) -> None:
         """Clear the usage summary."""
