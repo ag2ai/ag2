@@ -455,7 +455,6 @@ class GroupChatRunChat(BaseMessage):
 
 class TerminationAndHumanReply(BaseMessage):
     no_human_input_msg: str
-    human_input_mode: str
     sender_name: str
     recipient_name: str
 
@@ -464,29 +463,46 @@ class TerminationAndHumanReply(BaseMessage):
         *,
         uuid: Optional[UUID] = None,
         no_human_input_msg: str,
-        human_input_mode: str,
         sender: Optional["Agent"] = None,
         recipient: "Agent",
     ):
         super().__init__(
             uuid=uuid,
             no_human_input_msg=no_human_input_msg,
+            sender_name=sender.name if sender else "No sender",
+            recipient_name=recipient.name,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
+
+
+class TerminationAndHumanReplyHumanInputMode(BaseMessage):
+    human_input_mode: str
+    sender_name: str
+    recipient_name: str
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        human_input_mode: str,
+        sender: Optional["Agent"] = None,
+        recipient: "Agent",
+    ):
+        super().__init__(
+            uuid=uuid,
             human_input_mode=human_input_mode,
             sender_name=sender.name if sender else "No sender",
             recipient_name=recipient.name,
         )
 
-    def print_no_human_input_msg(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.no_human_input_msg:
-            f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
-
-    def print_human_input_mode(self, f: Optional[Callable[..., Any]] = None) -> None:
-        f = f or print
-
-        if self.human_input_mode != "NEVER":
-            f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+        f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
 
 
 class ExecuteCodeBlock(BaseMessage):

@@ -50,6 +50,7 @@ from ..messages.agent_messages import (
     ExecuteFunctionArgumentsContent,
     GenerateCodeExecutionReply,
     TerminationAndHumanReply,
+    TerminationAndHumanReplyHumanInputMode,
     create_received_message_model,
 )
 from ..oai.client import ModelClient, OpenAIWrapper
@@ -1839,10 +1840,11 @@ class ConversableAgent(LLMAgent):
                     reply = reply or "exit"
 
         # print the no_human_input_msg
-        termination_and_human_reply = TerminationAndHumanReply(
-            no_human_input_msg=no_human_input_msg, human_input_mode=self.human_input_mode, sender=sender, recipient=self
-        )
-        termination_and_human_reply.print_no_human_input_msg(iostream.print)
+        if no_human_input_msg:
+            termination_and_human_reply = TerminationAndHumanReply(
+                no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
+            )
+            termination_and_human_reply.print(iostream.print)
 
         # stop the conversation
         if reply == "exit":
@@ -1881,7 +1883,11 @@ class ConversableAgent(LLMAgent):
 
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
-        termination_and_human_reply.print_human_input_mode(iostream.print)
+        if self.human_input_mode != "NEVER":
+            termination_and_human_reply_human_input_mode = TerminationAndHumanReplyHumanInputMode(
+                human_input_mode=self.human_input_mode, sender=sender, recipient=self
+            )
+            termination_and_human_reply_human_input_mode.print(iostream.print)
 
         return False, None
 
@@ -1953,10 +1959,11 @@ class ConversableAgent(LLMAgent):
                     reply = reply or "exit"
 
         # print the no_human_input_msg
-        termination_and_human_reply = TerminationAndHumanReply(
-            no_human_input_msg=no_human_input_msg, human_input_mode=self.human_input_mode, sender=sender, recipient=self
-        )
-        termination_and_human_reply.print_no_human_input_msg(iostream.print)
+        if no_human_input_msg:
+            termination_and_human_reply = TerminationAndHumanReply(
+                no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
+            )
+            termination_and_human_reply.print(iostream.print)
 
         # stop the conversation
         if reply == "exit":
@@ -1995,7 +2002,11 @@ class ConversableAgent(LLMAgent):
 
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
-        termination_and_human_reply.print_human_input_mode(iostream.print)
+        if self.human_input_mode != "NEVER":
+            termination_and_human_reply_human_input_mode = TerminationAndHumanReplyHumanInputMode(
+                human_input_mode=self.human_input_mode, sender=sender, recipient=self
+            )
+            termination_and_human_reply_human_input_mode.print(iostream.print)
 
         return False, None
 
