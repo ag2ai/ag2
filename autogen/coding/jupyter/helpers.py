@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import subprocess
+from logging import getLogger
+
+logger = getLogger(__name__)
 
 __all__ = ["is_jupyter_kernel_gateway_installed"]
 
@@ -10,11 +13,16 @@ __all__ = ["is_jupyter_kernel_gateway_installed"]
 def is_jupyter_kernel_gateway_installed() -> bool:
     try:
         subprocess.run(
-            ["jupyter-kernel-gateway", "--version"],
+            ["jupyter", "kernelgateway", "--version"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
         )
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        logger.warning(
+            "jupyter-kernel-gateway is required for JupyterCodeExecutor, please install it with `pip install ag2[jupyter-executor]`"
+        )
+        logger.warning(e, exc_info=True)
+        print(e)
         return False
