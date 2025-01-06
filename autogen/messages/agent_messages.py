@@ -382,9 +382,6 @@ class SpeakerAttempt(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if not self.verbose:
-            return
-
         if len(self.mentions) == 1:
             # Success on retry, we have just one name mentioned
             selected_agent_name = next(iter(self.mentions))
@@ -431,12 +428,11 @@ class GroupChatResume(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.verbose:
-            f(
-                f"Prepared group chat with {len(self.messages)} messages, the last speaker is",
-                colored(self.last_speaker_name, "yellow"),
-                flush=True,
-            )
+        f(
+            f"Prepared group chat with {len(self.messages)} messages, the last speaker is",
+            colored(self.last_speaker_name, "yellow"),
+            flush=True,
+        )
 
 
 class GroupChatRunChat(BaseMessage):
@@ -449,8 +445,7 @@ class GroupChatRunChat(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.verbose:
-            f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
+        f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
 
 
 class TerminationAndHumanReply(BaseMessage):
