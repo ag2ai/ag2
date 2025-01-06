@@ -31,6 +31,7 @@ from autogen.messages.agent_messages import (
     SelectSpeaker,
     SpeakerAttempt,
     TerminationAndHumanReply,
+    TerminationAndHumanReplyHumanInputMode,
     TextMessage,
     ToolCall,
     ToolCallMessage,
@@ -567,12 +568,10 @@ def test_GroupChatRunChat(uuid: UUID) -> None:
 
 def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     no_human_input_msg = "NO HUMAN INPUT RECEIVED."
-    human_input_mode = "ALWAYS"
 
     actual = TerminationAndHumanReply(
         uuid=uuid,
         no_human_input_msg=no_human_input_msg,
-        human_input_mode=human_input_mode,
         sender=sender,
         recipient=recipient,
     )
@@ -581,6 +580,33 @@ def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipien
     expected_model_dump = {
         "uuid": uuid,
         "no_human_input_msg": no_human_input_msg,
+        "sender_name": "sender",
+        "recipient_name": "recipient",
+    }
+    assert actual.model_dump() == expected_model_dump
+
+    mock = MagicMock()
+    actual.print(f=mock)
+    # print(mock.call_args_list)
+    expected_call_args_list = [call("\x1b[31m\n>>>>>>>> NO HUMAN INPUT RECEIVED.\x1b[0m", flush=True)]
+    assert mock.call_args_list == expected_call_args_list
+
+
+def test_TerminationAndHumanReplyHumanInputMode(
+    uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+) -> None:
+    human_input_mode = "ALWAYS"
+
+    actual = TerminationAndHumanReplyHumanInputMode(
+        uuid=uuid,
+        human_input_mode=human_input_mode,
+        sender=sender,
+        recipient=recipient,
+    )
+    assert isinstance(actual, TerminationAndHumanReplyHumanInputMode)
+
+    expected_model_dump = {
+        "uuid": uuid,
         "human_input_mode": human_input_mode,
         "sender_name": "sender",
         "recipient_name": "recipient",
@@ -588,13 +614,7 @@ def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipien
     assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
-    actual.print_no_human_input_msg(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [call("\x1b[31m\n>>>>>>>> NO HUMAN INPUT RECEIVED.\x1b[0m", flush=True)]
-    assert mock.call_args_list == expected_call_args_list
-
-    mock = MagicMock()
-    actual.print_human_input_mode(f=mock)
+    actual.print(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [call("\x1b[31m\n>>>>>>>> USING AUTO REPLY...\x1b[0m", flush=True)]
     assert mock.call_args_list == expected_call_args_list
