@@ -30,8 +30,13 @@ class OutputStream(Protocol):
         """
         ...  # pragma: no cover
 
-    def send(self, message: BaseMessage):
-        
+    def send(self, message: BaseMessage) -> None:
+        """Send data to the output stream.
+
+        Args:
+            message (BaseMessage): BaseMessage from autogen.messages.base_message
+        """
+        ...
 
 
 @runtime_checkable

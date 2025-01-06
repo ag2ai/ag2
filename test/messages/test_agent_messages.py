@@ -826,7 +826,7 @@ def test_TextMessage(text: str, expected: list[_Call], uuid: UUID) -> None:
     assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
-    actual.print(text, f=mock)
+    actual.print_text(text, f=mock)
 
     # print(mock.call_args_list)
 

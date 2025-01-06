@@ -31,7 +31,7 @@ class IOConsole(IOStream):
         self.send(print_message)
         # print(*objects, sep=sep, end=end, flush=flush)
 
-    def send(self, message: BaseMessage):
+    def send(self, message: BaseMessage) -> None:
         """Send a message to the output stream.
 
         Args:
