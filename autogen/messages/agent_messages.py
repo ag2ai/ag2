@@ -666,10 +666,12 @@ class ConversableAgentUsageSummary(BaseMessage):
 
 
 class TextMessage(BaseMessage):
-    def __init__(self, *, uuid: Optional[UUID] = None):
-        super().__init__(uuid=uuid)
+    text: str
 
-    def print_text(self, text: str, f: Optional[Callable[..., Any]] = None) -> None:
+    def __init__(self, *, uuid: Optional[UUID] = None, text: str):
+        super().__init__(uuid=uuid, text=text)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(text)
+        f(self.text)

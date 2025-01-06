@@ -41,8 +41,6 @@ class TestConsoleIOWithWebsockets:
 
             print(" - on_connect(): Receiving message from client.", flush=True)
 
-            text_message = TextMessage()
-
             msg = iostream.input()
 
             print(f" - on_connect(): Received message '{msg}' from client.", flush=True)
@@ -52,7 +50,8 @@ class TestConsoleIOWithWebsockets:
             for msg in ["Hello, World!", "Over and out!"]:
                 print(f" - on_connect(): Sending message '{msg}' to client.", flush=True)
 
-                text_message.print_text(msg, iostream.print)
+                text_message = TextMessage(text=msg)
+                text_message.print(iostream.print)
 
             print(" - on_connect(): Receiving message from client.", flush=True)
 
