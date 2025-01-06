@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import json
 from tempfile import TemporaryDirectory
 from typing import Dict
 
@@ -83,7 +84,12 @@ class TestConsoleIOWithWebsockets:
                         f"   - Asserting received message '{message}' is the same as the expected message '{expected}'",
                         flush=True,
                     )
-                    assert message == expected
+                    try:
+                        message_dict = json.loads(message)
+                        actual = message_dict["objects"][0]
+                    except json.JSONDecodeError:
+                        actual = message
+                    assert actual == expected
 
                 print(" - Sending message 'Yes' to server.", flush=True)
                 websocket.send("Yes")

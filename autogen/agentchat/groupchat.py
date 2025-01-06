@@ -399,7 +399,7 @@ class GroupChat:
             agents = self.agents
 
         select_speaker = SelectSpeaker(agents=agents)
-        select_speaker.print(iostream.print)
+        iostream.send(select_speaker)
 
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
@@ -407,7 +407,7 @@ class GroupChat:
             try_count += 1
             if try_count >= 3:
                 select_speaker_try_count_exceeded = SelectSpeakerTryCountExceeded(try_count=try_count, agents=agents)
-                select_speaker_try_count_exceeded.print(iostream.print)
+                iostream.send(select_speaker_try_count_exceeded)
                 break
             try:
                 i = iostream.input(
@@ -422,7 +422,7 @@ class GroupChat:
                     raise ValueError
             except ValueError:
                 select_speaker_invalid_input = SelectSpeakerInvalidInput(agents=agents)
-                select_speaker_invalid_input.print(iostream.print)
+                iostream.send(select_speaker_invalid_input)
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:
@@ -864,7 +864,7 @@ class GroupChat:
                 attempts_left=attempts_left,
                 select_speaker_auto_verbose=self.select_speaker_auto_verbose,
             )
-            speaker_attempt.print(iostream.print)
+            iostream.send(speaker_attempt)
 
         if len(mentions) == 1:
             # Success on retry, we have just one name mentioned
@@ -1159,7 +1159,7 @@ class GroupChatManager(ConversableAgent):
                 if not silent:
                     iostream = IOStream.get_default()
                     group_chat_run_chat = GroupChatRunChat(speaker=speaker, silent=silent)
-                    group_chat_run_chat.print(iostream.print)
+                    iostream.send(group_chat_run_chat)
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
@@ -1365,7 +1365,7 @@ class GroupChatManager(ConversableAgent):
         if not silent:
             iostream = IOStream.get_default()
             group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            group_chat_resume.print(iostream.print)
+            iostream.send(group_chat_resume)
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1470,7 +1470,7 @@ class GroupChatManager(ConversableAgent):
         if not silent:
             iostream = IOStream.get_default()
             group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            group_chat_resume.print(iostream.print)
+            iostream.send(group_chat_resume)
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1629,7 +1629,7 @@ class GroupChatManager(ConversableAgent):
         clear_agents_history = ClearAgentsHistory(
             agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve
         )
-        clear_agents_history.print(iostream.print)
+        iostream.send(clear_agents_history)
         if agent_to_memory_clear:
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
         else:

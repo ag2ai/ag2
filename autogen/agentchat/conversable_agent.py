@@ -1412,7 +1412,7 @@ class ConversableAgent(LLMAgent):
                 clear_conversable_agent_history = ClearConversableAgentHistory(
                     agent=self, no_messages_preserved=no_messages_preserved
                 )
-                clear_conversable_agent_history.print(iostream.print)
+                iostream.send(clear_conversable_agent_history)
             else:
                 self._oai_messages.clear()
         else:
@@ -1420,7 +1420,7 @@ class ConversableAgent(LLMAgent):
             # clear_conversable_agent_history.print_warning(iostream.print)
             if nr_messages_to_preserve:
                 clear_conversable_agent_history_warning = ClearConversableAgentHistoryWarning(recipient=self)
-                clear_conversable_agent_history_warning.print(iostream.print)
+                iostream.send(clear_conversable_agent_history_warning)
 
     def generate_oai_reply(
         self,
@@ -1551,7 +1551,7 @@ class ConversableAgent(LLMAgent):
             generate_code_execution_reply = GenerateCodeExecutionReply(
                 code_blocks=code_blocks, sender=sender, recipient=self
             )
-            generate_code_execution_reply.print(iostream.print)
+            iostream.send(generate_code_execution_reply)
 
             # found code blocks, execute code.
             code_result = self._code_executor.execute_code_blocks(code_blocks)
@@ -1846,7 +1846,7 @@ class ConversableAgent(LLMAgent):
             termination_and_human_reply = TerminationAndHumanReply(
                 no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
             )
-            termination_and_human_reply.print(iostream.print)
+            iostream.send(termination_and_human_reply)
 
         # stop the conversation
         if reply == "exit":
@@ -1889,7 +1889,7 @@ class ConversableAgent(LLMAgent):
             termination_and_human_reply_human_input_mode = TerminationAndHumanReplyHumanInputMode(
                 human_input_mode=self.human_input_mode, sender=sender, recipient=self
             )
-            termination_and_human_reply_human_input_mode.print(iostream.print)
+            iostream.send(termination_and_human_reply_human_input_mode)
 
         return False, None
 
@@ -1965,7 +1965,7 @@ class ConversableAgent(LLMAgent):
             termination_and_human_reply = TerminationAndHumanReply(
                 no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
             )
-            termination_and_human_reply.print(iostream.print)
+            iostream.send(termination_and_human_reply)
 
         # stop the conversation
         if reply == "exit":
@@ -2008,7 +2008,7 @@ class ConversableAgent(LLMAgent):
             termination_and_human_reply_human_input_mode = TerminationAndHumanReplyHumanInputMode(
                 human_input_mode=self.human_input_mode, sender=sender, recipient=self
             )
-            termination_and_human_reply_human_input_mode.print(iostream.print)
+            iostream.send(termination_and_human_reply_human_input_mode)
 
         return False, None
 
@@ -2246,7 +2246,7 @@ class ConversableAgent(LLMAgent):
                 lang = infer_lang(code)
 
             execute_code_block = ExecuteCodeBlock(code=code, language=lang, code_block_count=i, recipient=self)
-            execute_code_block.print(iostream.print)
+            iostream.send(execute_code_block)
 
             if lang in ["bash", "shell", "sh"]:
                 exitcode, logs, image = self.run_code(code, lang=lang, **self._code_execution_config)
@@ -2340,7 +2340,7 @@ class ConversableAgent(LLMAgent):
             # Try to execute the function
             if arguments is not None:
                 execute_function = ExecuteFunction(func_name=func_name, recipient=self)
-                execute_function.print(iostream.print)
+                iostream.send(execute_function)
                 try:
                     content = func(**arguments)
                     is_exec_success = True
@@ -2354,7 +2354,7 @@ class ConversableAgent(LLMAgent):
             execute_function_arguments_content = ExecuteFunctionArgumentsContent(
                 func_name=func_name, arguments=arguments, content=content, recipient=self
             )
-            execute_function_arguments_content.print(arguments, content, iostream.print)
+            iostream.send(execute_function_arguments_content)
 
         return is_exec_success, {
             "name": func_name,
@@ -2396,7 +2396,7 @@ class ConversableAgent(LLMAgent):
             # Try to execute the function
             if arguments is not None:
                 execute_function = ExecuteFunction(func_name=func_name, recipient=self)
-                execute_function.print(iostream.print)
+                iostream.send(execute_function)
                 try:
                     if inspect.iscoroutinefunction(func):
                         content = await func(**arguments)
@@ -2414,7 +2414,7 @@ class ConversableAgent(LLMAgent):
             execute_function_arguments_content = ExecuteFunctionArgumentsContent(
                 func_name=func_name, arguments=arguments, content=content, recipient=self
             )
-            execute_function_arguments_content.print(arguments, content, iostream.print)
+            iostream.send(execute_function_arguments_content)
 
         return is_exec_success, {
             "name": func_name,
@@ -2879,7 +2879,7 @@ class ConversableAgent(LLMAgent):
         iostream = IOStream.get_default()
         conversable_agent_usage_summary = ConversableAgentUsageSummary(recipient=self, client=self.client)
 
-        conversable_agent_usage_summary.print(iostream.print)
+        iostream.send(conversable_agent_usage_summary)
 
         if self.client is not None:
             self.client.print_usage_summary(mode)
