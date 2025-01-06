@@ -379,7 +379,7 @@ class GroupChat:
 
         agentlist = f"{[agent.name for agent in agents]}"
 
-        return_prompt = self.select_speaker_prompt_template.format(agentlist=agentlist)
+        return_prompt = f"{self.select_speaker_prompt_template}".replace("{agentlist}", agentlist)
         return return_prompt
 
     def introductions_msg(self, agents: Optional[list[Agent]] = None) -> str:

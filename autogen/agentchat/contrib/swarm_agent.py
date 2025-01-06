@@ -346,17 +346,29 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
             del message["name"]
 
 
-def _update_groupchat_selection_message(
+def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
-    context_variables: dict[str, Any],
+    last_swarm_agent: ConversableAgent,
     after_work_next_agent_selection_msg: Optional[Union[str, UpdateCondition]],
 ) -> None:
-    """Update or restore the groupchat speaker selection message (for 'auto' selection)
+    """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message
+    and setting the LLM Config to use.
+
+    Tool Executor and Nested Chat agents will be removed from the available agents list.
 
     Args:
         groupchat: GroupChat instance.
+        last_swarm_agent: The last swarm agent for which the LLM config is used
         after_work_next_agent_selection_msg: Optional message to use for the agent selection (in internal group chat).
     """
+
+    # LLM Config
+    if last_swarm_agent.llm_config is None or "config_list" not in last_swarm_agent.llm_config:
+        raise ValueError("LLM Config must be set for the from agent to use the SWARM_MANAGER after work option")
+
+    groupchat.select_speaker_auto_llm_config = {"config_list": last_swarm_agent.llm_config["config_list"]}
+
+    # Prompt template
     if after_work_next_agent_selection_msg is None:
         # If there's no selection message, restore the default
         groupchat.select_speaker_prompt_template = __SELECT_SPEAKER_PROMPT_TEMPLATE__
@@ -364,11 +376,28 @@ def _update_groupchat_selection_message(
         if isinstance(after_work_next_agent_selection_msg, str):
             groupchat.select_speaker_prompt_template = after_work_next_agent_selection_msg
         elif isinstance(after_work_next_agent_selection_msg, UpdateCondition):
-            groupchat.select_speaker_prompt_template = OpenAIWrapper.instantiate(
-                template=after_work_next_agent_selection_msg.update_function,
-                context=context_variables,
-                allow_format_str_template=True,
-            )
+            groupchat.select_speaker_prompt_template = after_work_next_agent_selection_msg.update_function
+
+    # Run through group chat's string substitution first for {agentlist}
+    # We need to do this so that the next substitution doesn't fail with agentlist
+    # and we can remove the tool executor and nested chats from the available agents list
+    agent_list = [
+        agent
+        for agent in groupchat.agents
+        if agent.name != __TOOL_EXECUTOR_NAME__ and not agent.name.startswith("nested_chat_")
+    ]
+
+    _working_string = groupchat.select_speaker_prompt(agent_list)
+
+    # Then substitute context variables
+    groupchat.select_speaker_prompt_template = OpenAIWrapper.instantiate(
+        template=_working_string,
+        context=last_swarm_agent._context_variables,
+        allow_format_str_template=True,
+    )
+
+    # Temporary visibility into speaker selection
+    groupchat.select_speaker_auto_verbose = True
 
 
 def _determine_next_agent(
@@ -457,10 +486,7 @@ def _determine_next_agent(
         elif after_work_condition == AfterWorkOption.STAY:
             return last_speaker
         elif after_work_condition == AfterWorkOption.SWARM_MANAGER:
-            groupchat.select_speaker_auto_llm_config = last_speaker.llm_config
-            _update_groupchat_selection_message(
-                groupchat, last_speaker._context_variables, after_work_next_agent_selection_msg
-            )
+            _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_next_agent_selection_msg)
             return "auto"
     else:
         raise ValueError("Invalid After Work condition or return value from callable")
