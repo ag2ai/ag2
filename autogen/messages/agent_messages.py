@@ -573,35 +573,38 @@ class SelectSpeaker(BaseMessage):
 
 class ClearConversableAgentHistory(BaseMessage):
     agent_name: str
-    nr_messages_to_preserve: Optional[int] = None
+    no_messages_preserved: Optional[int] = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", nr_messages_to_preserve: Optional[int] = None):
+    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", no_messages_preserved: Optional[int] = None):
         super().__init__(
             uuid=uuid,
             agent_name=agent.name,
-            nr_messages_to_preserve=nr_messages_to_preserve,
+            no_messages_preserved=no_messages_preserved,
         )
 
-    def print_preserving_message(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.nr_messages_to_preserve:
+        for _ in range(self.no_messages_preserved):
             f(
                 f"Preserving one more message for {self.agent_name} to not divide history between tool call and "
                 f"tool response."
             )
 
-    def print_warning(self, f: Optional[Callable[..., Any]] = None) -> None:
+
+class ClearConversableAgentHistoryWarning(BaseMessage):
+    agent_name: str
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.nr_messages_to_preserve:
-            f(
-                colored(
-                    "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
-                    "yellow",
-                ),
-                flush=True,
-            )
+        f(
+            colored(
+                "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
+                "yellow",
+            ),
+            flush=True,
+        )
 
 
 class GenerateCodeExecutionReply(BaseMessage):
