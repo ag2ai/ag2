@@ -29,6 +29,8 @@ from autogen.messages.agent_messages import (
     MessageRole,
     PostCarryoverProcessing,
     SelectSpeaker,
+    SelectSpeakerInvalidInput,
+    SelectSpeakerTryCountExceeded,
     SpeakerAttempt,
     TerminationAndHumanReply,
     TerminationAndHumanReplyHumanInputMode,
@@ -715,7 +717,7 @@ def test_SelectSpeaker(uuid: UUID) -> None:
     assert actual.model_dump() == expected_model_dump
 
     mock = MagicMock()
-    actual.print_select_speaker(f=mock)
+    actual.print(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [
         call("Please select the next speaker from the following list:"),
@@ -724,14 +726,40 @@ def test_SelectSpeaker(uuid: UUID) -> None:
     ]
     assert mock.call_args_list == expected_call_args_list
 
+
+def test_SelectSpeakerTryCountExceeded(uuid: UUID) -> None:
+    agents = [
+        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+    ]
+    try_count = 3
+
+    actual = SelectSpeakerTryCountExceeded(uuid=uuid, try_count=try_count, agents=agents)  # type: ignore [arg-type]
+    assert isinstance(actual, SelectSpeakerTryCountExceeded)
+
     mock = MagicMock()
-    actual.print_try_count_exceeded(try_count=3, f=mock)
+    actual.print(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [call("You have tried 3 times. The next speaker will be selected automatically.")]
     assert mock.call_args_list == expected_call_args_list
 
+
+def test_SelectSpeakerInvalidInput(uuid: UUID) -> None:
+    agents = [
+        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+    ]
+
+    actual = SelectSpeakerInvalidInput(uuid=uuid, agents=agents)  # type: ignore [arg-type]
+    assert isinstance(actual, SelectSpeakerInvalidInput)
+
+    expected_model_dump = {
+        "uuid": uuid,
+        "agent_names": ["bob", "charlie"],
+    }
+    assert actual.model_dump() == expected_model_dump
     mock = MagicMock()
-    actual.print_invalid_input(f=mock)
+    actual.print(f=mock)
     # print(mock.call_args_list)
     expected_call_args_list = [call("Invalid input. Please enter a number between 1 and 2.")]
     assert mock.call_args_list == expected_call_args_list
