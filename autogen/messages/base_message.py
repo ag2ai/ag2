@@ -29,35 +29,6 @@ class BaseMessage(BaseModel, ABC):
         """
         ...
 
-    # def model_dump(
-    #     self,
-    #     *,
-    #     mode="python",
-    #     include=None,
-    #     exclude=None,
-    #     context=None,
-    #     by_alias=False,
-    #     exclude_unset=False,
-    #     exclude_defaults=False,
-    #     exclude_none=False,
-    #     round_trip=False,
-    #     warnings=True,
-    #     serialize_as_any=False
-    # ):
-    #     return super().model_dump(
-    #         mode=mode,
-    #         include=include,
-    #         exclude=exclude,
-    #         context=context,
-    #         by_alias=by_alias,
-    #         exclude_unset=exclude_unset,
-    #         exclude_defaults=exclude_defaults,
-    #         exclude_none=exclude_none,
-    #         round_trip=round_trip,
-    #         warnings=warnings,
-    #         serialize_as_any=serialize_as_any,
-    #     )
-
 
 def camel2snake(name: str) -> str:
     return "".join(["_" + i.lower() if i.isupper() else i for i in name]).lstrip("_")
@@ -67,9 +38,20 @@ _message_classes: dict[str, Type[BaseModel]] = {}
 
 
 def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
+    """Wrap a message class with a type field to be used in a union type
+
+    This is needed for proper serialization and deserialization of messages in a union type.
+
+    Args:
+        message_cls (Type[BaseMessage]): Message class to wrap
+    """
     global _message_classes
 
+    if not message_cls.__name__.endswith("Message"):
+        raise ValueError("Message class name must end with 'Message'")
+
     type_name = camel2snake(message_cls.__name__)
+    type_name = type_name[: -len("_message")]
 
     class WrapperBase(BaseModel):
         # these types are generated dynamically so we need to disable the type checker
@@ -85,6 +67,9 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
                     super().__init__(content=message_cls(**data, content=content), **data)
                 else:
                     super().__init__(content=message_cls(**data), **data)
+
+        def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+            self.content.print(f)  # type: ignore[attr-defined]
 
     Wrapper = create_model(message_cls.__name__, __base__=WrapperBase)
 

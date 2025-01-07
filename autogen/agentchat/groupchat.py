@@ -19,13 +19,13 @@ from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages.agent_messages import (
-    ClearAgentsHistory,
-    GroupChatResume,
+    ClearAgentsHistoryMessage,
+    GroupChatResumeMessage,
     GroupChatRunChat,
     SelectSpeaker,
     SelectSpeakerInvalidInput,
     SelectSpeakerTryCountExceeded,
-    SpeakerAttempt,
+    SpeakerAttemptMessage,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -856,7 +856,7 @@ class GroupChat:
         if self.select_speaker_auto_verbose:
             iostream = IOStream.get_default()
             iostream.send(
-                SpeakerAttempt(
+                SpeakerAttemptMessage(
                     mentions=mentions,
                     attempt=attempt,
                     attempts_left=attempts_left,
@@ -1361,7 +1361,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.send(GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1465,7 +1465,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.send(GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1621,7 +1621,9 @@ class GroupChatManager(ConversableAgent):
                 "The last tool call message will be saved to prevent errors caused by tool response without tool call."
             )
         # clear history
-        iostream.send(ClearAgentsHistory(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve))
+        iostream.send(
+            ClearAgentsHistoryMessage(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve)
+        )
         if agent_to_memory_clear:
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
         else:

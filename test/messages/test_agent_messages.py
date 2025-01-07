@@ -12,7 +12,7 @@ import termcolor.termcolor
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock
 from autogen.messages.agent_messages import (
-    ClearAgentsHistory,
+    ClearAgentsHistoryMessage,
     ClearConversableAgentHistory,
     ClearConversableAgentHistoryWarning,
     ContentMessage,
@@ -24,14 +24,14 @@ from autogen.messages.agent_messages import (
     FunctionCallMessage,
     FunctionResponseMessage,
     GenerateCodeExecutionReply,
-    GroupChatResume,
+    GroupChatResumeMessage,
     GroupChatRunChat,
     MessageRole,
-    PostCarryoverProcessing,
+    PostCarryoverProcessingMessage,
     SelectSpeaker,
     SelectSpeakerInvalidInput,
     SelectSpeakerTryCountExceeded,
-    SpeakerAttempt,
+    SpeakerAttemptMessage,
     TerminationAndHumanReply,
     TextMessage,
     ToolCall,
@@ -152,38 +152,50 @@ def test_function_response(
     assert mock.call_args_list == expected_call_args_list
 
 
-def test_function_call(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    message = {"content": "Let's play a game.", "function_call": {"name": "get_random_number", "arguments": "{}"}}
+class TestFunctionCallMessage:
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        fc_message = {
+            "content": "Let's play a game.",
+            "function_call": {"name": "get_random_number", "arguments": "{}"},
+        }
 
-    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+        message = create_received_message_model(uuid=uuid, message=fc_message, sender=sender, recipient=recipient)
 
-    assert isinstance(actual, FunctionCallMessage)
+        assert isinstance(message, FunctionCallMessage)
 
-    assert actual.content == "Let's play a game."
-    assert actual.sender_name == "sender"
-    assert actual.recipient_name == "recipient"
+        actual = message.model_dump()
+        expected = {
+            "type": "function_call",
+            "content": {
+                "content": "Let's play a game.",
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+                "uuid": uuid,
+                "function_call": {"name": "get_random_number", "arguments": "{}"},
+            },
+        }
+        assert actual == expected, actual
 
-    assert isinstance(actual.function_call, FunctionCall)
-    assert actual.function_call.name == "get_random_number"
-    assert actual.function_call.arguments == "{}"
+        mock = MagicMock()
+        message.print(f=mock)
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        # print(mock.call_args_list)
 
-    # print(mock.call_args_list)
+        expected_call_args_list = [
+            call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
+            call("Let's play a game.", flush=True),
+            call("\x1b[32m***** Suggested function call: get_random_number *****\x1b[0m", flush=True),
+            call("Arguments: \n", "{}", flush=True, sep=""),
+            call("\x1b[32m******************************************************\x1b[0m", flush=True),
+            call(
+                "\n",
+                "--------------------------------------------------------------------------------",
+                flush=True,
+                sep="",
+            ),
+        ]
 
-    expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
-        call("Let's play a game.", flush=True),
-        call("\x1b[32m***** Suggested function call: get_random_number *****\x1b[0m", flush=True),
-        call("Arguments: \n", "{}", flush=True, sep=""),
-        call("\x1b[32m******************************************************\x1b[0m", flush=True),
-        call(
-            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
-        ),
-    ]
-
-    assert mock.call_args_list == expected_call_args_list
+        assert mock.call_args_list == expected_call_args_list
 
 
 @pytest.mark.parametrize(
@@ -336,8 +348,8 @@ def test_PostCarryoverProcessing(uuid: UUID, sender: ConversableAgent, recipient
         "max_turns": 5,
     }
 
-    actual = PostCarryoverProcessing(uuid=uuid, chat_info=chat_info)
-    assert isinstance(actual, PostCarryoverProcessing)
+    actual = PostCarryoverProcessingMessage(uuid=uuid, chat_info=chat_info)
+    assert isinstance(actual, PostCarryoverProcessingMessage)
 
     expected = {
         "uuid": uuid,
@@ -411,7 +423,7 @@ def test__process_carryover(
         "max_turns": 5,
     }
 
-    post_carryover_processing = PostCarryoverProcessing(uuid=uuid, chat_info=chat_info)
+    post_carryover_processing = PostCarryoverProcessingMessage(uuid=uuid, chat_info=chat_info)
     expected_model_dump = {
         "uuid": uuid,
         "carryover": carryover,
@@ -449,8 +461,8 @@ def test__process_carryover(
 def test_ClearAgentsHistory(
     agent: Optional[ConversableAgent], nr_messages_to_preserve: Optional[int], expected: str, uuid: UUID
 ) -> None:
-    actual = ClearAgentsHistory(uuid=uuid, agent=agent, nr_messages_to_preserve=nr_messages_to_preserve)
-    assert isinstance(actual, ClearAgentsHistory)
+    actual = ClearAgentsHistoryMessage(uuid=uuid, agent=agent, nr_messages_to_preserve=nr_messages_to_preserve)
+    assert isinstance(actual, ClearAgentsHistoryMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -484,10 +496,10 @@ def test_SpeakerAttempt(mentions: dict[str, int], expected: str, uuid: UUID) -> 
     attempts_left = 2
     verbose = True
 
-    actual = SpeakerAttempt(
+    actual = SpeakerAttemptMessage(
         uuid=uuid, mentions=mentions, attempt=attempt, attempts_left=attempts_left, select_speaker_auto_verbose=verbose
     )
-    assert isinstance(actual, SpeakerAttempt)
+    assert isinstance(actual, SpeakerAttemptMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -516,8 +528,8 @@ def test_GroupChatResume(uuid: UUID) -> None:
     ]
     silent = False
 
-    actual = GroupChatResume(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-    assert isinstance(actual, GroupChatResume)
+    actual = GroupChatResumeMessage(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, silent=silent)
+    assert isinstance(actual, GroupChatResumeMessage)
 
     expected_model_dump = {
         "uuid": uuid,
