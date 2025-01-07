@@ -304,7 +304,7 @@ class TestToolCallMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-class TestTestToolCallMessage:
+class TestTextMessage:
     def test_print_context_message(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
         message = {"content": "hello {name}", "context": {"name": "there"}}
 
@@ -312,7 +312,7 @@ class TestTestToolCallMessage:
 
         assert isinstance(actual, TextMessage)
         expected_model_dump = {
-            "type": "content",
+            "type": "text",
             "content": {
                 "uuid": uuid,
                 "content": "hello {name}",
@@ -354,7 +354,7 @@ class TestTestToolCallMessage:
 
         assert isinstance(actual, TextMessage)
         expected_model_dump = {
-            "type": "content",
+            "type": "text",
             "content": {
                 "uuid": uuid,
                 "content": "hello there",
