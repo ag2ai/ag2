@@ -7,9 +7,10 @@ import json
 from typing import Any, Callable, Optional
 from uuid import UUID
 
-from .base_message import BaseMessage
+from .base_message import BaseMessage, wrap_message
 
 
+@wrap_message
 class PrintMessage(BaseMessage):
     objects: list[str]
     sep: str
