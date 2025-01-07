@@ -17,8 +17,6 @@ import autogen.runtime_logging
 
 from ..conftest import Credentials, skip_openai  # noqa: E402
 
-# from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
-
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
     Keep your explanations short.

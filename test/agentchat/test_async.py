@@ -14,8 +14,6 @@ import autogen
 
 from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
-# from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
-
 
 def get_market_news(ind, ind_upper):
     data = {
