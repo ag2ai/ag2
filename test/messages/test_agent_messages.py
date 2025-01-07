@@ -206,78 +206,90 @@ class TestFunctionCallMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-@pytest.mark.parametrize(
-    "role",
-    ["assistant", None],
-)
-def test_tool_calls(
-    uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, role: Optional[MessageRole]
-) -> None:
-    message = {
-        "content": None,
-        "refusal": None,
-        "role": role,
-        "audio": None,
-        "function_call": None,
-        "tool_calls": [
-            {
-                "id": "call_rJfVpHU3MXuPRR2OAdssVqUV",
-                "function": {"arguments": '{"num_seconds": "1"}', "name": "timer"},
-                "type": "function",
+class TestToolCallMessage:
+    @pytest.mark.parametrize(
+        "role",
+        ["assistant", None],
+    )
+    def test_print(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, role: Optional[MessageRole]
+    ) -> None:
+        message = {
+            "content": None,
+            "refusal": None,
+            "role": role,
+            "audio": None,
+            "function_call": None,
+            "tool_calls": [
+                {
+                    "id": "call_rJfVpHU3MXuPRR2OAdssVqUV",
+                    "function": {"arguments": '{"num_seconds": "1"}', "name": "timer"},
+                    "type": "function",
+                },
+                {
+                    "id": "call_zFZVYovdsklFYgqxttcOHwlr",
+                    "function": {"arguments": '{"num_seconds": "2"}', "name": "stopwatch"},
+                    "type": "function",
+                },
+            ],
+        }
+
+        actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+        assert isinstance(actual, ToolCallMessage)
+
+        expected = {
+            "type": "tool_call",
+            "content": {
+                "content": None,
+                "refusal": None,
+                "role": role,
+                "audio": None,
+                "function_call": None,
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+                "uuid": uuid,
+                "tool_calls": [
+                    {
+                        "id": "call_rJfVpHU3MXuPRR2OAdssVqUV",
+                        "function": {"arguments": '{"num_seconds": "1"}', "name": "timer"},
+                        "type": "function",
+                    },
+                    {
+                        "id": "call_zFZVYovdsklFYgqxttcOHwlr",
+                        "function": {"arguments": '{"num_seconds": "2"}', "name": "stopwatch"},
+                        "type": "function",
+                    },
+                ],
             },
-            {
-                "id": "call_zFZVYovdsklFYgqxttcOHwlr",
-                "function": {"arguments": '{"num_seconds": "2"}', "name": "stopwatch"},
-                "type": "function",
-            },
-        ],
-    }
+        }
+        assert actual.model_dump() == expected
 
-    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+        mock = MagicMock()
+        actual.print(f=mock)
 
-    assert isinstance(actual, ToolCallMessage)
+        # print(mock.call_args_list)
 
-    assert actual.content is None
-    assert actual.refusal is None
-    assert actual.role == role
-    assert actual.audio is None
-    assert actual.function_call is None
-    assert actual.sender_name == "sender"
-    assert actual.recipient_name == "recipient"
+        expected_call_args_list = [
+            call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
+            call("\x1b[32m***** Suggested tool call (call_rJfVpHU3MXuPRR2OAdssVqUV): timer *****\x1b[0m", flush=True),
+            call("Arguments: \n", '{"num_seconds": "1"}', flush=True, sep=""),
+            call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
+            call(
+                "\x1b[32m***** Suggested tool call (call_zFZVYovdsklFYgqxttcOHwlr): stopwatch *****\x1b[0m", flush=True
+            ),
+            call("Arguments: \n", '{"num_seconds": "2"}', flush=True, sep=""),
+            call(
+                "\x1b[32m**************************************************************************\x1b[0m", flush=True
+            ),
+            call(
+                "\n",
+                "--------------------------------------------------------------------------------",
+                flush=True,
+                sep="",
+            ),
+        ]
 
-    assert len(actual.tool_calls) == 2
-
-    assert isinstance(actual.tool_calls[0], ToolCall)
-    assert actual.tool_calls[0].id == "call_rJfVpHU3MXuPRR2OAdssVqUV"
-    assert actual.tool_calls[0].function.name == "timer"  # type: ignore [union-attr]
-    assert actual.tool_calls[0].function.arguments == '{"num_seconds": "1"}'  # type: ignore [union-attr]
-    assert actual.tool_calls[0].type == "function"
-
-    assert isinstance(actual.tool_calls[1], ToolCall)
-    assert actual.tool_calls[1].id == "call_zFZVYovdsklFYgqxttcOHwlr"
-    assert actual.tool_calls[1].function.name == "stopwatch"  # type: ignore [union-attr]
-    assert actual.tool_calls[1].function.arguments == '{"num_seconds": "2"}'  # type: ignore [union-attr]
-    assert actual.tool_calls[1].type == "function"
-
-    mock = MagicMock()
-    actual.print(f=mock)
-
-    # print(mock.call_args_list)
-
-    expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
-        call("\x1b[32m***** Suggested tool call (call_rJfVpHU3MXuPRR2OAdssVqUV): timer *****\x1b[0m", flush=True),
-        call("Arguments: \n", '{"num_seconds": "1"}', flush=True, sep=""),
-        call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
-        call("\x1b[32m***** Suggested tool call (call_zFZVYovdsklFYgqxttcOHwlr): stopwatch *****\x1b[0m", flush=True),
-        call("Arguments: \n", '{"num_seconds": "2"}', flush=True, sep=""),
-        call("\x1b[32m**************************************************************************\x1b[0m", flush=True),
-        call(
-            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
-        ),
-    ]
-
-    assert mock.call_args_list == expected_call_args_list
+        assert mock.call_args_list == expected_call_args_list
 
 
 def test_context_message(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
