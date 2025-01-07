@@ -6,9 +6,8 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
-import sys
-from typing import Annotated, Literal, TypeVar
+from tempfile import TemporaryDirectory
+from typing import Annotated, Generator, Literal, TypeVar
 
 import pytest
 
@@ -18,24 +17,23 @@ from autogen.agentchat.chat import _post_process_carryover_item
 
 from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
-# config_list = (
-#     []
-#     if skip_openai
-#     else autogen.config_list_from_json(
-#         OAI_CONFIG_LIST,
-#         file_location=KEY_LOC,
-#     )
-# )
 
-# config_list_4omini = (
-#     []
-#     if skip_openai
-#     else autogen.config_list_from_json(
-#         OAI_CONFIG_LIST,
-#         file_location=KEY_LOC,
-#         filter_dict={"tags": ["gpt-4o-mini"]},
-#     )
-# )
+@pytest.fixture
+def work_dir() -> Generator[str, None, None]:
+    with TemporaryDirectory() as temp_dir:
+        yield temp_dir
+
+
+@pytest.fixture
+def groupchat_work_dir() -> Generator[str, None, None]:
+    with TemporaryDirectory() as temp_dir:
+        yield temp_dir
+
+
+@pytest.fixture
+def tasks_work_dir() -> Generator[str, None, None]:
+    with TemporaryDirectory() as temp_dir:
+        yield temp_dir
 
 
 def test_chat_messages_for_summary():
@@ -60,7 +58,9 @@ def test_chat_messages_for_summary():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_group(credentials_gpt_4o_mini: Credentials):
+def test_chats_group(
+    credentials_gpt_4o_mini: Credentials, work_dir: str, groupchat_work_dir: str, tasks_work_dir: str
+) -> None:
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",
         """Give lucky numbers for them.""",
@@ -74,7 +74,7 @@ def test_chats_group(credentials_gpt_4o_mini: Credentials):
         human_input_mode="NEVER",
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "groupchat",
+            "work_dir": work_dir,
             "use_docker": False,
         },
         is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
@@ -114,7 +114,7 @@ def test_chats_group(credentials_gpt_4o_mini: Credentials):
         llm_config=credentials_gpt_4o_mini.llm_config,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "groupchat",
+            "work_dir": groupchat_work_dir,
             "use_docker": False,
         },
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
@@ -125,7 +125,7 @@ def test_chats_group(credentials_gpt_4o_mini: Credentials):
         llm_config=credentials_gpt_4o_mini.llm_config,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "groupchat",
+            "work_dir": groupchat_work_dir,
             "use_docker": False,
         },
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
@@ -137,7 +137,7 @@ def test_chats_group(credentials_gpt_4o_mini: Credentials):
         is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
@@ -222,7 +222,7 @@ def test_chats(credentials_gpt_4o_mini: Credentials):
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
@@ -299,7 +299,7 @@ def test_chats(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_general(credentials_gpt_4o_mini: Credentials):
+def test_chats_general(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",
         """Give lucky numbers for them.""",
@@ -334,7 +334,7 @@ def test_chats_general(credentials_gpt_4o_mini: Credentials):
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
@@ -346,7 +346,7 @@ def test_chats_general(credentials_gpt_4o_mini: Credentials):
         max_consecutive_auto_reply=3,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
@@ -403,7 +403,7 @@ def test_chats_general(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_exceptions(credentials_gpt_4o: Credentials):
+def test_chats_exceptions(credentials_gpt_4o: Credentials, tasks_work_dir: str):
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",
         """Give lucky numbers for them.""",
@@ -424,7 +424,7 @@ def test_chats_exceptions(credentials_gpt_4o: Credentials):
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
@@ -435,7 +435,7 @@ def test_chats_exceptions(credentials_gpt_4o: Credentials):
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
@@ -487,7 +487,7 @@ def test_chats_exceptions(credentials_gpt_4o: Credentials):
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_w_func(credentials_gpt_4o_mini: Credentials):
+def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
     llm_config = {
         "config_list": credentials_gpt_4o_mini.config_list,
         "timeout": 120,
@@ -507,12 +507,12 @@ def test_chats_w_func(credentials_gpt_4o_mini: Credentials):
         max_consecutive_auto_reply=10,
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },
     )
 
-    CurrencySymbol = TypeVar("CurrencySymbol", Literal["USD", "EUR"])
+    CurrencySymbol = TypeVar("CurrencySymbol", bound=Literal["USD", "EUR"])
 
     def exchange_rate(base_currency: CurrencySymbol, quote_currency: CurrencySymbol) -> float:
         if base_currency == quote_currency:
@@ -543,7 +543,7 @@ def test_chats_w_func(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials):
+def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str) -> None:
     llm_config_40mini = credentials_gpt_4o_mini.llm_config
 
     research_task = """
@@ -593,7 +593,7 @@ def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials):
         is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
         code_execution_config={
             "last_n_messages": 1,
-            "work_dir": "tasks",
+            "work_dir": tasks_work_dir,
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
@@ -614,7 +614,7 @@ def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials):
                 "message": my_writing_task,
                 "max_turns": 2,  # max number of turns for the conversation (added for demo purposes, generally not necessarily needed)
                 "summary_method": "reflection_with_llm",
-                "work_dir": "tasks",
+                "work_dir": tasks_work_dir,
             },
         ]
     )
