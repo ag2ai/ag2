@@ -62,56 +62,64 @@ def recipient() -> ConversableAgent:
     return ConversableAgent("recipient", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 
 
-def test_tool_responses(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    message = {
-        "role": "tool",
-        "tool_responses": [
-            {"tool_call_id": "call_rJfVpHU3MXuPRR2OAdssVqUV", "role": "tool", "content": "Timer is done!"},
-            {"tool_call_id": "call_zFZVYovdsklFYgqxttcOHwlr", "role": "tool", "content": "Stopwatch is done!"},
-        ],
-        "content": "Timer is done!\\n\\nStopwatch is done!",
-    }
-    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+class TestToolResponseMessage:
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        message = {
+            "role": "tool",
+            "tool_responses": [
+                {"tool_call_id": "call_rJfVpHU3MXuPRR2OAdssVqUV", "role": "tool", "content": "Timer is done!"},
+                {"tool_call_id": "call_zFZVYovdsklFYgqxttcOHwlr", "role": "tool", "content": "Stopwatch is done!"},
+            ],
+            "content": "Timer is done!\\n\\nStopwatch is done!",
+        }
+        actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+        assert isinstance(actual, ToolResponseMessage)
 
-    assert isinstance(actual, ToolResponseMessage)
-    assert actual.role == "tool"
-    assert actual.sender_name == "sender"
-    assert actual.recipient_name == "recipient"
-    assert actual.content == "Timer is done!\\n\\nStopwatch is done!"
-    assert len(actual.tool_responses) == 2
+        expected = {
+            "type": "tool_response",
+            "content": {
+                "role": "tool",
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+                "uuid": uuid,
+                "content": "Timer is done!\\n\\nStopwatch is done!",
+                "tool_responses": [
+                    {"tool_call_id": "call_rJfVpHU3MXuPRR2OAdssVqUV", "role": "tool", "content": "Timer is done!"},
+                    {"tool_call_id": "call_zFZVYovdsklFYgqxttcOHwlr", "role": "tool", "content": "Stopwatch is done!"},
+                ],
+            },
+        }
 
-    assert isinstance(actual.tool_responses[0], ToolResponse)
-    assert actual.tool_responses[0].tool_call_id == "call_rJfVpHU3MXuPRR2OAdssVqUV"
-    assert actual.tool_responses[0].role == "tool"
-    assert actual.tool_responses[0].content == "Timer is done!"
+        assert actual.model_dump() == expected
 
-    assert isinstance(actual.tool_responses[1], ToolResponse)
-    assert actual.tool_responses[1].tool_call_id == "call_zFZVYovdsklFYgqxttcOHwlr"
-    assert actual.tool_responses[1].role == "tool"
-    assert actual.tool_responses[1].content == "Stopwatch is done!"
+        mock = MagicMock()
+        actual.print(f=mock)
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        # print(mock.call_args_list)
 
-    # print(mock.call_args_list)
+        expected_call_args_list = [
+            call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
+            call("\x1b[32m***** Response from calling tool (call_rJfVpHU3MXuPRR2OAdssVqUV) *****\x1b[0m", flush=True),
+            call("Timer is done!", flush=True),
+            call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
+            call(
+                "\n",
+                "--------------------------------------------------------------------------------",
+                flush=True,
+                sep="",
+            ),
+            call("\x1b[32m***** Response from calling tool (call_zFZVYovdsklFYgqxttcOHwlr) *****\x1b[0m", flush=True),
+            call("Stopwatch is done!", flush=True),
+            call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
+            call(
+                "\n",
+                "--------------------------------------------------------------------------------",
+                flush=True,
+                sep="",
+            ),
+        ]
 
-    expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
-        call("\x1b[32m***** Response from calling tool (call_rJfVpHU3MXuPRR2OAdssVqUV) *****\x1b[0m", flush=True),
-        call("Timer is done!", flush=True),
-        call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
-        call(
-            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
-        ),
-        call("\x1b[32m***** Response from calling tool (call_zFZVYovdsklFYgqxttcOHwlr) *****\x1b[0m", flush=True),
-        call("Stopwatch is done!", flush=True),
-        call("\x1b[32m**********************************************************************\x1b[0m", flush=True),
-        call(
-            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
-        ),
-    ]
-
-    assert mock.call_args_list == expected_call_args_list
+        assert mock.call_args_list == expected_call_args_list
 
 
 @pytest.mark.parametrize(
