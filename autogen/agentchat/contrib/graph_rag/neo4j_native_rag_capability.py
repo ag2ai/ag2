@@ -1,0 +1,81 @@
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from autogen import Agent, ConversableAgent, UserProxyAgent
+
+from .graph_query_engine import GraphStoreQueryResult
+from .graph_rag_capability import GraphRagCapability
+from .neo4j_native_graph_query_engine import Neo4jNativeGraphQueryEngine
+
+
+class Neo4jNativeGraphCapability(GraphRagCapability):
+    """
+    The Neo4j native graph capability integrates Neo4j natice query engine into a graph rag agent.
+
+
+    For usage, please refer to example notebook/agentchat_graph_rag_neo4j_native_sdk.ipynb
+    """
+
+    def __init__(self, query_engine: Neo4jNativeGraphQueryEngine):
+        """
+        initialize GraphRAG capability with a graph query engine
+        """
+        self.query_engine = query_engine
+
+    def add_to_agent(self, agent: ConversableAgent):
+        """
+        Add Neo4j GraphRAG capability to a ConversableAgent.
+        llm_config of the agent must be None/False (default) to make sure the returned message only contains information retrieved from the graph DB instead of any LLMs.
+        """
+
+        self.graph_rag_agent = agent
+
+        # Validate the agent config
+        if agent.llm_config not in (None, False):
+            raise Exception(
+                "Agents with GraphRAG capabilities do not use an LLM configuration. Please set your llm_config to None or False."
+            )
+
+        # Register method to generate the reply using a Neo4j query
+        # All other reply methods will be removed
+        agent.register_reply(
+            [ConversableAgent, None], self._reply_using_native_neo4j_query, position=0, remove_other_reply_funcs=True
+        )
+
+    def _reply_using_native_neo4j_query(
+        self,
+        recipient: ConversableAgent,
+        messages: Optional[list[dict]] = None,
+        sender: Optional[Agent] = None,
+        config: Optional[Any] = None,
+    ) -> tuple[bool, Union[str, dict, None]]:
+        """
+        Query neo4j and return the message. Internally, it queries the Property graph
+        and returns the answer from the graph query engine.
+
+        Args:
+            recipient: The agent instance that will receive the message.
+            messages: A list of messages in the conversation history with the sender.
+            sender: The agent instance that sent the message.
+            config: Optional configuration for message processing.
+
+        Returns:
+            A tuple containing a boolean indicating success and the assistant's reply.
+        """
+        question = self._get_last_question(messages[-1])
+
+        result: GraphStoreQueryResult = self.query_engine.query(question)
+
+        return True, result.answer
+
+    def _get_last_question(self, message: Union[dict, str]):
+        """Retrieves the last message from the conversation history."""
+        if isinstance(message, str):
+            return message
+        if isinstance(message, dict):
+            if "content" in message:
+                return message["content"]
+        return None
