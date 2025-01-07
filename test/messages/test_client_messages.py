@@ -321,15 +321,15 @@ class TestUsageSummaryMessage:
 
 class TestStreamMessage:
     def test_print(self, uuid: UUID) -> None:
-        content = "random stream chunk content"
-        stream_message = StreamMessage(uuid=uuid, content=content)
+        chunk_content = "random stream chunk content"
+        stream_message = StreamMessage(uuid=uuid, chunk_content=chunk_content)
         assert isinstance(stream_message, StreamMessage)
 
         expected_model_dump = {
             "type": "stream",
             "content": {
                 "uuid": uuid,
-                "content": content,
+                "chunk_content": chunk_content,
             },
         }
         assert stream_message.model_dump() == expected_model_dump
