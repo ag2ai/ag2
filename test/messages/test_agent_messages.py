@@ -31,7 +31,9 @@ from autogen.messages.agent_messages import (
     SelectSpeakerInvalidInputMessage,
     SelectSpeakerMessage,
     SelectSpeakerTryCountExceededMessage,
-    SpeakerAttemptMessage,
+    SpeakerAttemptFailedMultipleAgentsMessage,
+    SpeakerAttemptFailedNoAgentsMessage,
+    SpeakerAttemptSuccessfullMessage,
     TerminationAndHumanReplyMessage,
     TextMessage,
     ToolCall,
@@ -539,15 +541,99 @@ class TestClearAgentsHistoryMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-class TestSpeakerAttemptMessage:
+class TestSpeakerAttemptSuccessfullMessage:
     @pytest.mark.parametrize(
         "mentions, expected",
         [
             ({"agent_1": 1}, "\x1b[32m>>>>>>>> Select speaker attempt 1 of 3 successfully selected: agent_1\x1b[0m"),
+        ],
+    )
+    def test_print(self, mentions: dict[str, int], expected: str, uuid: UUID) -> None:
+        attempt = 1
+        attempts_left = 2
+        verbose = True
+
+        actual = SpeakerAttemptSuccessfullMessage(
+            uuid=uuid,
+            mentions=mentions,
+            attempt=attempt,
+            attempts_left=attempts_left,
+            select_speaker_auto_verbose=verbose,
+        )
+        assert isinstance(actual, SpeakerAttemptSuccessfullMessage)
+
+        expected_model_dump = {
+            "type": "speaker_attempt_successfull",
+            "content": {
+                "uuid": uuid,
+                "mentions": mentions,
+                "attempt": attempt,
+                "attempts_left": attempts_left,
+                "verbose": verbose,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        expected_call_args_list = [call(expected, flush=True)]
+
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestSpeakerAttemptFailedMultipleAgentsMessage:
+    @pytest.mark.parametrize(
+        "mentions, expected",
+        [
             (
                 {"agent_1": 1, "agent_2": 2},
                 "\x1b[31m>>>>>>>> Select speaker attempt 1 of 3 failed as it included multiple agent names.\x1b[0m",
             ),
+        ],
+    )
+    def test_print(self, mentions: dict[str, int], expected: str, uuid: UUID) -> None:
+        attempt = 1
+        attempts_left = 2
+        verbose = True
+
+        actual = SpeakerAttemptFailedMultipleAgentsMessage(
+            uuid=uuid,
+            mentions=mentions,
+            attempt=attempt,
+            attempts_left=attempts_left,
+            select_speaker_auto_verbose=verbose,
+        )
+        assert isinstance(actual, SpeakerAttemptFailedMultipleAgentsMessage)
+
+        expected_model_dump = {
+            "type": "speaker_attempt_failed_multiple_agents",
+            "content": {
+                "uuid": uuid,
+                "mentions": mentions,
+                "attempt": attempt,
+                "attempts_left": attempts_left,
+                "verbose": verbose,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        expected_call_args_list = [call(expected, flush=True)]
+
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestSpeakerAttemptFailedNoAgentsMessage:
+    @pytest.mark.parametrize(
+        "mentions, expected",
+        [
             ({}, "\x1b[31m>>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.\x1b[0m"),
         ],
     )
@@ -556,17 +642,17 @@ class TestSpeakerAttemptMessage:
         attempts_left = 2
         verbose = True
 
-        actual = SpeakerAttemptMessage(
+        actual = SpeakerAttemptFailedNoAgentsMessage(
             uuid=uuid,
             mentions=mentions,
             attempt=attempt,
             attempts_left=attempts_left,
             select_speaker_auto_verbose=verbose,
         )
-        assert isinstance(actual, SpeakerAttemptMessage)
+        assert isinstance(actual, SpeakerAttemptFailedNoAgentsMessage)
 
         expected_model_dump = {
-            "type": "speaker_attempt",
+            "type": "speaker_attempt_failed_no_agents",
             "content": {
                 "uuid": uuid,
                 "mentions": mentions,

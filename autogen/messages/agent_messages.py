@@ -11,8 +11,6 @@ from pydantic import BaseModel
 from termcolor import colored
 
 from ..code_utils import content_str
-
-# ToDo: once you move the code below, we can just delete this import
 from ..oai.client import OpenAIWrapper
 from .base_message import BaseMessage, wrap_message
 
@@ -29,7 +27,9 @@ __all__ = [
     "ContentMessage",
     "PostCarryoverProcessingMessage",
     "ClearAgentsHistoryMessage",
-    "SpeakerAttemptMessage",
+    "SpeakerAttemptSuccessfullMessage",
+    "SpeakerAttemptFailedMultipleAgentsMessage",
+    "SpeakerAttemptFailedNoAgentsMessage",
     "GroupChatResumeMessage",
     "GroupChatRunChatMessage",
     "TerminationAndHumanReplyMessage",
@@ -367,7 +367,7 @@ class ClearAgentsHistoryMessage(BaseMessage):
 
 # todo: break into multiple messages
 @wrap_message
-class SpeakerAttemptMessage(BaseMessage):
+class SpeakerAttemptSuccessfullMessage(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
@@ -393,32 +393,86 @@ class SpeakerAttemptMessage(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if len(self.mentions) == 1:
-            # Success on retry, we have just one name mentioned
-            selected_agent_name = next(iter(self.mentions))
-            f(
-                colored(
-                    f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} successfully selected: {selected_agent_name}",
-                    "green",
-                ),
-                flush=True,
-            )
-        elif len(self.mentions) > 1:
-            f(
-                colored(
-                    f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} failed as it included multiple agent names.",
-                    "red",
-                ),
-                flush=True,
-            )
-        else:
-            f(
-                colored(
-                    f">>>>>>>> Select speaker attempt #{self.attempt} failed as it did not include any agent names.",
-                    "red",
-                ),
-                flush=True,
-            )
+        selected_agent_name = next(iter(self.mentions))
+        f(
+            colored(
+                f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} successfully selected: {selected_agent_name}",
+                "green",
+            ),
+            flush=True,
+        )
+
+
+@wrap_message
+class SpeakerAttemptFailedMultipleAgentsMessage(BaseMessage):
+    mentions: dict[str, int]
+    attempt: int
+    attempts_left: int
+    verbose: Optional[bool] = False
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        mentions: dict[str, int],
+        attempt: int,
+        attempts_left: int,
+        select_speaker_auto_verbose: Optional[bool] = False,
+    ):
+        super().__init__(
+            uuid=uuid,
+            mentions=deepcopy(mentions),
+            attempt=attempt,
+            attempts_left=attempts_left,
+            verbose=select_speaker_auto_verbose,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(
+            colored(
+                f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} failed as it included multiple agent names.",
+                "red",
+            ),
+            flush=True,
+        )
+
+
+@wrap_message
+class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
+    mentions: dict[str, int]
+    attempt: int
+    attempts_left: int
+    verbose: Optional[bool] = False
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        mentions: dict[str, int],
+        attempt: int,
+        attempts_left: int,
+        select_speaker_auto_verbose: Optional[bool] = False,
+    ):
+        super().__init__(
+            uuid=uuid,
+            mentions=deepcopy(mentions),
+            attempt=attempt,
+            attempts_left=attempts_left,
+            verbose=select_speaker_auto_verbose,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(
+            colored(
+                f">>>>>>>> Select speaker attempt #{self.attempt} failed as it did not include any agent names.",
+                "red",
+            ),
+            flush=True,
+        )
 
 
 @wrap_message

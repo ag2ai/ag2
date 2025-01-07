@@ -25,7 +25,9 @@ from ..messages.agent_messages import (
     SelectSpeakerInvalidInputMessage,
     SelectSpeakerMessage,
     SelectSpeakerTryCountExceededMessage,
-    SpeakerAttemptMessage,
+    SpeakerAttemptFailedMultipleAgentsMessage,
+    SpeakerAttemptFailedNoAgentsMessage,
+    SpeakerAttemptSuccessfullMessage,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -855,14 +857,35 @@ class GroupChat:
         # Output the query and requery results
         if self.select_speaker_auto_verbose:
             iostream = IOStream.get_default()
-            iostream.send(
-                SpeakerAttemptMessage(
-                    mentions=mentions,
-                    attempt=attempt,
-                    attempts_left=attempts_left,
-                    select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+            no_of_mentions = len(mentions)
+            if no_of_mentions == 1:
+                # Success on retry, we have just one name mentioned
+                iostream.send(
+                    SpeakerAttemptSuccessfullMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
                 )
-            )
+            elif no_of_mentions == 1:
+                iostream.send(
+                    SpeakerAttemptFailedMultipleAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
+            else:
+                iostream.send(
+                    SpeakerAttemptFailedNoAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
 
         if len(mentions) == 1:
             # Success on retry, we have just one name mentioned
