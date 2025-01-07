@@ -52,10 +52,10 @@ pip install ag2
 
 ## Imports
 
-The functionality demonstrated in this guide is located in the `autogen.tools.dependency_injection` module. This module provides key components for dependency injection:
+The functionality demonstrated in this guide is located in the [`autogen.tools.dependency_injection`](/docs/reference/tools/dependency_injection) module. This module provides key components for dependency injection:
 
-- `BaseContext`: abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
-- `Depends`: a function used to declare and inject dependencies, either from a context (like `BaseContext`) or a function, ensuring sensitive data is provided securely without direct exposure.
+- [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext): abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
+- [`Depends`](/docs/reference/tools/dependency_injection#depends): a function used to declare and inject dependencies, either from a context (like [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext)) or a function, ensuring sensitive data is provided securely without direct exposure.
 
 ```python
 import os
@@ -68,10 +68,8 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools.dependency_injection import BaseContext, Depends
 ```
 
-## Context and Dependency Setup
-
-### Define a BaseContext Class
-We start by defining a `BaseContext` class for accounts. This will act as the base structure for dependency injection.
+## Define a BaseContext Class
+We start by defining a [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext) class for accounts. This will act as the base structure for dependency injection. By using this approach, sensitive information like usernames and passwords is never exposed to the LLM.
 
 ```python
 class Account(BaseContext, BaseModel):
@@ -89,7 +87,7 @@ account_ballace_dict = {
 }
 ```
 
-### Helper Functions
+## Helper Functions
 To ensure that the provided account is valid and retrieve its balance, we create two helper functions.
 
 ```python
@@ -112,8 +110,8 @@ Dependency injection simplifies passing data to a function. Here, we'll inject a
 Configure the agents for the interaction.
 
 - `config_list` defines the LLM configurations, including the model and API key.
-- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+- [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) represents the AI agent, configured with the LLM settings.
 
 
 ```python
@@ -189,15 +187,15 @@ Your balance is 200 USD.
 
 ## Injecting Parameters Without BaseContext
 
-Sometimes, you might not want to use `BaseContext`. Here's how to inject simple parameters directly.
+Sometimes, you might not want to use [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext). Here's how to inject simple parameters directly.
 
 ### Agent Configuration
 
 Configure the agents for the interaction.
 
 - `config_list` defines the LLM configurations, including the model and API key.
-- `UserProxyAgent` simulates user inputs without requiring actual human interaction (set to `NEVER`).
-- `AssistantAgent` represents the AI agent, configured with the LLM settings.
+- [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) represents the AI agent, configured with the LLM settings.
 
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -213,7 +211,9 @@ user_proxy = UserProxyAgent(
 ```
 
 ### Register the Function with Direct Parameter Injection
-In this section, we demonstrate how to register a function with **direct parameter injection** using `Depends`. Instead of injecting a full context like `Account`, we inject individual parameters (e.g., username and password) directly into the function.
+Instead of injecting a full context like `Account`, you can directly inject individual parameters, such as the username and password, into a function. This allows for more granular control over the data injected into the function, and still ensures that sensitive information is managed securely.
+
+Here’s how you can set it up:
 
 ```python
 def get_username() -> str:
@@ -227,6 +227,9 @@ def get_password() -> str:
 def get_balance_2(
     username: Annotated[str, Depends(get_username)],
     password: Annotated[str, Depends(get_password)],
+    # or use lambdas
+    # username: Annotated[str, Depends(lambda: "bob")],
+    # password: Annotated[str, Depends(lambda: "password456")],
 ) -> str:
     account = Account(username=username, password=password)
     return _get_balance(account)
@@ -274,9 +277,9 @@ Your balance is 200 USD.
 --------------------------------------------------------------------------------
 ```
 
-## Using Different Contexts for Different Agents
+## Assigning Different Contexts to Multiple Agents
 
-In this section, we demonstrate how to assign different contexts (e.g., different account data) to different agents in the same group chat. By doing this, we ensure that each assistant interacts with its own unique set of data, such as using `alice_account` for one assistant and `bob_account` for another.
+You can assign different contexts, such as distinct account data, to different agents within the same group chat. This ensures that each assistant works with its own unique set of data—e.g., one assistant can use `alice_account`, while another can use `bob_account`.
 
 ### GroupChat Configuration
 Let's configure a `GroupChat` with two assistant agents.
