@@ -74,7 +74,7 @@ class FunctionResponseMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ToolResponse(BaseMessage):
+class ToolResponse(BaseModel):
     tool_call_id: Optional[str] = None
     role: MessageRole = "tool"
     content: Union[str, int, float, bool]
@@ -141,8 +141,7 @@ class FunctionCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-@wrap_message
-class ToolCall(BaseMessage):
+class ToolCall(BaseModel):
     id: Optional[str] = None
     function: FunctionCall
     type: str
