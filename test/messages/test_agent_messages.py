@@ -27,7 +27,6 @@ from autogen.messages.agent_messages import (
     GroupChatResumeMessage,
     GroupChatRunChatMessage,
     MessageRole,
-    MoveToTestTextMessage,
     PostCarryoverProcessingMessage,
     SelectSpeakerInvalidInputMessage,
     SelectSpeakerMessage,
@@ -1166,26 +1165,3 @@ class TestConversableAgentUsageSummaryMessage:
         # print(mock.call_args_list)
         expected_call_args_list = [call("Agent 'recipient':")]
         assert mock.call_args_list == expected_call_args_list
-
-
-class TestTextMessage:
-    @pytest.mark.parametrize(
-        "text, expected",
-        [
-            ("Hello, World!", [call("Hello, World!")]),
-            ("Over and out!", [call("Over and out!")]),
-        ],
-    )
-    def test_print(self, text: str, expected: list[_Call], uuid: UUID) -> None:
-        actual = MoveToTestTextMessage(uuid=uuid, text=text)
-        assert isinstance(actual, MoveToTestTextMessage)
-
-        expected_model_dump = {"type": "text", "content": {"uuid": uuid, "text": text}}
-        assert actual.model_dump() == expected_model_dump
-
-        mock = MagicMock()
-        actual.print(f=mock)
-
-        # print(mock.call_args_list)
-
-        assert mock.call_args_list == expected
