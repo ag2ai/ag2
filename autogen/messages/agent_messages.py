@@ -40,7 +40,6 @@ __all__ = [
     "GenerateCodeExecutionReplyMessage",
     "ConversableAgentUsageSummaryMessage",
     "ConversableAgentUsageSummaryNoCostIncurredMessage",
-    "MoveToTestTextMessage",
 ]
 
 MessageRole = Literal["assistant", "function", "tool"]
@@ -828,17 +827,3 @@ class ConversableAgentUsageSummaryMessage(BaseMessage):
         f = f or print
 
         f(f"Agent '{self.recipient_name}':")
-
-
-# todo: move to test
-@wrap_message
-class MoveToTestTextMessage(BaseMessage):
-    text: str
-
-    def __init__(self, *, uuid: Optional[UUID] = None, text: str):
-        super().__init__(uuid=uuid, text=text)
-
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
-        f = f or print
-
-        f(self.text)

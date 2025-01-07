@@ -7,8 +7,9 @@
 import json
 from pprint import pprint
 from tempfile import TemporaryDirectory
-from typing import Dict
+from typing import Any, Callable, Dict, Optional
 from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
 from websockets.exceptions import ConnectionClosed
@@ -17,7 +18,7 @@ import autogen
 from autogen.cache.cache import Cache
 from autogen.io import IOWebsockets
 from autogen.io.base import IOStream
-from autogen.messages.agent_messages import MoveToTestTextMessage
+from autogen.messages.base_message import BaseMessage, wrap_message
 
 from ..conftest import skip_openai
 
@@ -31,6 +32,19 @@ except ImportError:  # pragma: no cover
     skip_test = True
 else:
     skip_test = False
+
+
+@wrap_message
+class TestTextMessage(BaseMessage):
+    text: str
+
+    def __init__(self, *, uuid: Optional[UUID] = None, text: str):
+        super().__init__(uuid=uuid, text=text)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(self.text)
 
 
 @pytest.mark.skipif(skip_test, reason="websockets module is not available")
@@ -53,7 +67,7 @@ class TestConsoleIOWithWebsockets:
             for msg in ["Hello, World!", "Over and out!"]:
                 print(f" - on_connect(): Sending message '{msg}' to client.", flush=True)
 
-                text_message = MoveToTestTextMessage(text=msg)
+                text_message = TestTextMessage(text=msg)
                 text_message.print(iostream.print)
 
             print(" - on_connect(): Receiving message from client.", flush=True)
