@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .base_message import BaseMessage
 
-__all__ = ["UsageSummary"]
+__all__ = ["UsageSummaryMessage"]
 
 
 class ModelUsageSummary(BaseModel):
@@ -56,7 +56,7 @@ def _change_usage_summary_format(
     return summary
 
 
-class UsageSummary(BaseMessage):
+class UsageSummaryMessage(BaseMessage):
     actual: ActualUsageSummary
     total: TotalUsageSummary
     mode: Mode

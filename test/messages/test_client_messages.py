@@ -13,7 +13,7 @@ from autogen.messages.client_messages import (
     ModelUsageSummary,
     StreamMessage,
     TotalUsageSummary,
-    UsageSummary,
+    UsageSummaryMessage,
     _change_usage_summary_format,
 )
 
@@ -109,11 +109,11 @@ def test_usage_summary_print_same_actual_and_total(
     total_usage_summary: Optional[dict[str, Any]],
     uuid: UUID,
 ) -> None:
-    actual = UsageSummary(
+    actual = UsageSummaryMessage(
         uuid=uuid, actual_usage_summary=actual_usage_summary, total_usage_summary=total_usage_summary, mode="both"
     )
 
-    assert isinstance(actual, UsageSummary)
+    assert isinstance(actual, UsageSummaryMessage)
     assert isinstance(actual.actual, ActualUsageSummary)
     assert isinstance(actual.total, TotalUsageSummary)
     assert actual.mode == "both"
@@ -208,11 +208,11 @@ def test_usage_summary_print_different_actual_and_total(
     total_usage_summary: Optional[dict[str, Any]],
     uuid: UUID,
 ) -> None:
-    actual = UsageSummary(
+    actual = UsageSummaryMessage(
         uuid=uuid, actual_usage_summary=actual_usage_summary, total_usage_summary=total_usage_summary, mode="both"
     )
 
-    assert isinstance(actual, UsageSummary)
+    assert isinstance(actual, UsageSummaryMessage)
     assert isinstance(actual.actual, ActualUsageSummary)
     assert isinstance(actual.total, TotalUsageSummary)
     assert actual.mode == "both"
@@ -296,11 +296,11 @@ def test_usage_summary_print_none_actual_and_total(
     total_usage_summary: Optional[dict[str, Any]],
     uuid: UUID,
 ) -> None:
-    actual = UsageSummary(
+    actual = UsageSummaryMessage(
         uuid=uuid, actual_usage_summary=actual_usage_summary, total_usage_summary=total_usage_summary, mode="both"
     )
 
-    assert isinstance(actual, UsageSummary)
+    assert isinstance(actual, UsageSummaryMessage)
     assert isinstance(actual.actual, ActualUsageSummary)
     assert isinstance(actual.total, TotalUsageSummary)
     assert actual.mode == "both"
