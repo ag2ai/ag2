@@ -32,8 +32,8 @@ import os
 import random
 import sys
 import time
-from typing import Any, Dict, List
 import warnings
+from typing import Any, Dict, List
 
 from cohere import Client as Cohere
 from cohere.types import ToolParameterDefinitionsValue, ToolResult
@@ -42,9 +42,8 @@ from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
-from autogen import Agent, AssistantAgent, GroupChat, UserProxyAgent, ConversableAgent
-from autogen.oai.client_utils import validate_parameter, logging_formatter
-
+from autogen import Agent, AssistantAgent, ConversableAgent, GroupChat, UserProxyAgent
+from autogen.oai.client_utils import logging_formatter, validate_parameter
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
