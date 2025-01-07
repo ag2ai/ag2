@@ -76,6 +76,10 @@ class MathReasoning(BaseModel):
 def mock_assistant(mock_credentials: Credentials) -> autogen.AssistantAgent:
     """Set up a mocked AssistantAgent with a predefined response format."""
     config_list = mock_credentials.config_list
+
+    for config in config_list:
+        config["response_format"] = MathReasoning
+
     llm_config = {"config_list": config_list, "cache_seed": 43}
 
     assistant = autogen.AssistantAgent(
