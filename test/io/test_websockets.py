@@ -124,7 +124,7 @@ class TestConsoleIOWithWebsockets:
 
             llm_config = {
                 "config_list": config_list,
-                # "stream": True,
+                "stream": True,
             }
 
             agent = autogen.ConversableAgent(
