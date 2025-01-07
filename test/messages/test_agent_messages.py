@@ -122,42 +122,52 @@ class TestToolResponseMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-@pytest.mark.parametrize(
-    "message",
-    [
-        {"name": "get_random_number", "role": "function", "content": "76"},
-        {"name": "get_random_number", "role": "function", "content": 2},
-    ],
-)
-def test_function_response(
-    uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, message: dict[str, Any]
-) -> None:
-    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+class TestFunctionResponseMessage:
+    @pytest.mark.parametrize(
+        "message",
+        [
+            {"name": "get_random_number", "role": "function", "content": "76"},
+            {"name": "get_random_number", "role": "function", "content": 2},
+        ],
+    )
+    def test_print(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, message: dict[str, Any]
+    ) -> None:
+        actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+        assert isinstance(actual, FunctionResponseMessage)
 
-    assert isinstance(actual, FunctionResponseMessage)
+        expected_model_dump = {
+            "type": "function_response",
+            "content": {
+                "name": "get_random_number",
+                "role": "function",
+                "content": message["content"],
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+                "uuid": uuid,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
 
-    assert actual.name == "get_random_number"
-    assert actual.role == "function"
-    assert actual.content == message["content"]
-    assert actual.sender_name == "sender"
-    assert actual.recipient_name == "recipient"
+        mock = MagicMock()
+        actual.print(f=mock)
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        # print(mock.call_args_list)
 
-    # print(mock.call_args_list)
+        expected_call_args_list = [
+            call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
+            call("\x1b[32m***** Response from calling function (get_random_number) *****\x1b[0m", flush=True),
+            call(message["content"], flush=True),
+            call("\x1b[32m**************************************************************\x1b[0m", flush=True),
+            call(
+                "\n",
+                "--------------------------------------------------------------------------------",
+                flush=True,
+                sep="",
+            ),
+        ]
 
-    expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
-        call("\x1b[32m***** Response from calling function (get_random_number) *****\x1b[0m", flush=True),
-        call(message["content"], flush=True),
-        call("\x1b[32m**************************************************************\x1b[0m", flush=True),
-        call(
-            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
-        ),
-    ]
-
-    assert mock.call_args_list == expected_call_args_list
+        assert mock.call_args_list == expected_call_args_list
 
 
 class TestFunctionCallMessage:
