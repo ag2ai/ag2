@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from .base_message import BaseMessage
+from .base_message import BaseMessage, wrap_message
 
 __all__ = ["UsageSummaryMessage"]
 
@@ -56,6 +56,7 @@ def _change_usage_summary_format(
     return summary
 
 
+@wrap_message
 class UsageSummaryMessage(BaseMessage):
     actual: ActualUsageSummary
     total: TotalUsageSummary
@@ -124,6 +125,7 @@ class UsageSummaryMessage(BaseMessage):
         f("-" * 100, flush=True)
 
 
+@wrap_message
 class StreamMessage(BaseMessage):
     content: str
 
