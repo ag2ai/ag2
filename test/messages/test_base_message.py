@@ -43,7 +43,7 @@ class TestBaseMessage:
         message = TestMessage(uuid=uuid, sender="sender", receiver="receiver", content="Hello, World!")
 
         expected = {
-            "type": "test_message",
+            "type": "test",
             "content": {
                 "uuid": uuid,
                 "sender": "sender",
