@@ -7,15 +7,21 @@
 
 from typing import Annotated, Optional
 
-from markitdown import MarkItDown
-
 from autogen.oai.client import OpenAIWrapper
 from autogen.tools import Tool
+from autogen.tools.md_converter import (
+    MarkdownConverter,
+    MarkItDownConverter,
+    DoclingConverter,
+)
 
 
 def markdown_convert(
     source: Annotated[str, "Path to a local file or a URL"],
-    # mlm_client: Annotated[Optional[OpenAIWrapper], "Multimodal LLM client"] = None,
+    converter: Annotated[
+        str, "The converter to use: 'markitdown' or 'docling'"
+    ] = "markitdown",
+    mlm_client: Annotated[Optional[OpenAIWrapper], "Multimodal LLM client"] = None,
     mlm_model: Annotated[Optional[str], "Multimodal LLM model"] = None,
 ) -> str:
     """
@@ -23,16 +29,23 @@ def markdown_convert(
 
     Args:
         source (str): Path to a local file or a URL.
+        converter (str): The converter to use: 'markitdown' or 'docling'. Defaults to 'markitdown'.
         mlm_client (OpenAIWrapper, optional): Multimodal LLM client. Defaults to None.
         mlm_model (str, optional): Multimodal LLM model. Defaults to None.
 
     Returns:
         str: The result of the conversion.
     """
-    mlm_client = None
-    md = MarkItDown(llm_client=mlm_client, llm_model=mlm_model)
-    result = md.convert(source)
-    return str(result.text_content)
+    if converter == "markitdown":
+        md_converter: MarkdownConverter = MarkItDownConverter(
+            mlm_client=mlm_client, mlm_model=mlm_model
+        )
+    elif converter == "docling":
+        md_converter = DoclingConverter()
+    else:
+        raise ValueError(f"Unknown converter: {converter}")
+
+    return md_converter.convert(source)
 
 
 markdown_convert_tool = Tool(
