@@ -828,3 +828,16 @@ def _generate_swarm_tool_reply(
 
         return True, tool_message
     return False, None
+
+
+class SwarmAgent(ConversableAgent):
+    """SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD)"""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        super().__init__(*args, **kwargs)
