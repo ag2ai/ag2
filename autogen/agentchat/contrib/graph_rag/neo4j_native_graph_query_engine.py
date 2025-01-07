@@ -48,6 +48,9 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         embedding_dimension: embedding dimension that matches the embedding model.
         llm: language model used to create knowledge graph, which needs to return json format response.
         query_llm: language model used to query knowledge graph
+        entities: custom entities to guide the graph construction.
+        relations: custom relations to guide the graph construction.
+        potential_schema: potential schema, as a list of triplets (entity -> relationship -> entity, to guide the graph construction.
         """
         self.uri = host + ":" + str(port)
         self.driver = GraphDatabase.driver(self.uri, auth=(username, password))
@@ -64,11 +67,11 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
 
     def init_db(self, input_doc: Document | None = None):
         """
-        Initialize the Neo4j graph database with the input documents or records.
-        Usually, it takes the following steps,
-        1. connecting to the Neo4j graph database.
-        2. extract graph nodes, edges based on input data, graph schema and etc.
-        3. build indexes etc.
+        Initialize the Neo4j graph database with the input document. The query engine only supports text and pdf input.
+        It takes the following steps:
+        1. Connect to the Neo4j graph database.
+        2. Extract graph nodes and relationships based on input data and build a knowledge graph.
+        3. Build a vector index for the knowledge graph for retrieval.
 
         Args:
         input_doc: a list of input documents that are used to build the graph in database.

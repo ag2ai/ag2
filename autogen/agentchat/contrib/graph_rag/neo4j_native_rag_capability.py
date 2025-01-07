@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
-from autogen import Agent, ConversableAgent, UserProxyAgent
+from autogen import Agent, ConversableAgent
 
 from .graph_query_engine import GraphStoreQueryResult
 from .graph_rag_capability import GraphRagCapability
@@ -21,13 +21,13 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
 
     def __init__(self, query_engine: Neo4jNativeGraphQueryEngine):
         """
-        initialize GraphRAG capability with a graph query engine
+        initialize GraphRAG capability with a neo4j native graph query engine
         """
         self.query_engine = query_engine
 
     def add_to_agent(self, agent: ConversableAgent):
         """
-        Add Neo4j GraphRAG capability to a ConversableAgent.
+        Add native Neo4j GraphRAG capability to a ConversableAgent.
         llm_config of the agent must be None/False (default) to make sure the returned message only contains information retrieved from the graph DB instead of any LLMs.
         """
 
@@ -53,8 +53,7 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:
         """
-        Query neo4j and return the message. Internally, it queries the Property graph
-        and returns the answer from the graph query engine.
+        Query neo4j native query engine and return the message.
 
         Args:
             recipient: The agent instance that will receive the message.
