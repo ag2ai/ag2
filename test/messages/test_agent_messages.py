@@ -15,7 +15,6 @@ from autogen.messages.agent_messages import (
     ClearAgentsHistoryMessage,
     ClearConversableAgentHistoryMessage,
     ClearConversableAgentHistoryWarningMessage,
-    ContentMessage,
     ConversableAgentUsageSummaryMessage,
     ConversableAgentUsageSummaryNoCostIncurredMessage,
     ExecuteCodeBlockMessage,
@@ -28,6 +27,7 @@ from autogen.messages.agent_messages import (
     GroupChatResumeMessage,
     GroupChatRunChatMessage,
     MessageRole,
+    MoveToTestTextMessage,
     PostCarryoverProcessingMessage,
     SelectSpeakerInvalidInputMessage,
     SelectSpeakerMessage,
@@ -311,7 +311,7 @@ class TestTestToolCallMessage:
 
         actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
-        assert isinstance(actual, ContentMessage)
+        assert isinstance(actual, TextMessage)
         expected_model_dump = {
             "type": "content",
             "content": {
@@ -353,7 +353,7 @@ class TestTestToolCallMessage:
 
         actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
-        assert isinstance(actual, ContentMessage)
+        assert isinstance(actual, TextMessage)
         expected_model_dump = {
             "type": "content",
             "content": {
@@ -1177,8 +1177,8 @@ class TestTextMessage:
         ],
     )
     def test_print(self, text: str, expected: list[_Call], uuid: UUID) -> None:
-        actual = TextMessage(uuid=uuid, text=text)
-        assert isinstance(actual, TextMessage)
+        actual = MoveToTestTextMessage(uuid=uuid, text=text)
+        assert isinstance(actual, MoveToTestTextMessage)
 
         expected_model_dump = {"type": "text", "content": {"uuid": uuid, "text": text}}
         assert actual.model_dump() == expected_model_dump

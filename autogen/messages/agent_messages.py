@@ -24,7 +24,7 @@ __all__ = [
     "ToolResponseMessage",
     "FunctionCallMessage",
     "ToolCallMessage",
-    "ContentMessage",
+    "TextMessage",
     "PostCarryoverProcessingMessage",
     "ClearAgentsHistoryMessage",
     "SpeakerAttemptSuccessfullMessage",
@@ -40,7 +40,7 @@ __all__ = [
     "GenerateCodeExecutionReplyMessage",
     "ConversableAgentUsageSummaryMessage",
     "ConversableAgentUsageSummaryNoCostIncurredMessage",
-    "TextMessage",
+    "MoveToTestTextMessage",
 ]
 
 MessageRole = Literal["assistant", "function", "tool"]
@@ -189,7 +189,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
 
 
 @wrap_message
-class ContentMessage(BasePrintReceivedMessage):
+class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -204,7 +204,7 @@ class ContentMessage(BasePrintReceivedMessage):
 
 def create_received_message_model(
     *, uuid: Optional[UUID] = None, message: dict[str, Any], sender: "Agent", recipient: "Agent"
-) -> BasePrintReceivedMessage:
+) -> Union[FunctionResponseMessage, ToolResponseMessage, FunctionCallMessage, ToolCallMessage, TextMessage]:
     # print(f"{message=}")
     # print(f"{sender=}")
 
@@ -244,7 +244,7 @@ def create_received_message_model(
             allow_format_str_template,
         )
 
-    return ContentMessage(
+    return TextMessage(
         content=content,
         sender_name=sender.name,
         recipient_name=recipient.name,
@@ -830,8 +830,9 @@ class ConversableAgentUsageSummaryMessage(BaseMessage):
         f(f"Agent '{self.recipient_name}':")
 
 
+# todo: move to test
 @wrap_message
-class TextMessage(BaseMessage):
+class MoveToTestTextMessage(BaseMessage):
     text: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, text: str):
