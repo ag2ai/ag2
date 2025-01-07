@@ -58,15 +58,15 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
         type: Literal[type_name] = type_name  # type: ignore[valid-type]
         content: message_cls  # type: ignore[valid-type]
 
-        def __init__(self, **data: Any):
+        def __init__(self, *args: Any, **data: Any):
             if set(data.keys()) <= {"type", "content"} and "content" in data:
-                super().__init__(**data)
+                super().__init__(*args, **data)
             else:
                 if "content" in data:
                     content = data.pop("content")
-                    super().__init__(content=message_cls(**data, content=content), **data)
+                    super().__init__(*args, content=message_cls(*args, **data, content=content), **data)
                 else:
-                    super().__init__(content=message_cls(**data), **data)
+                    super().__init__(content=message_cls(*args, **data), **data)
 
         def print(self, f: Optional[Callable[..., Any]] = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
