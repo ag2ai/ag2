@@ -33,7 +33,7 @@ from .conversable_agent import ConversableAgent
 
 logger = logging.getLogger(__name__)
 
-__SELECT_SPEAKER_PROMPT_TEMPLATE__ = (
+SELECT_SPEAKER_PROMPT_TEMPLATE = (
     "Read the above conversation. Then select the next role from {agentlist} to play. Only return the role."
 )
 
@@ -138,7 +138,7 @@ class GroupChat:
                 {roles}.
                 Read the following conversation.
                 Then select the next role from {agentlist} to play. Only return the role."""
-    select_speaker_prompt_template: str = __SELECT_SPEAKER_PROMPT_TEMPLATE__
+    select_speaker_prompt_template: str = SELECT_SPEAKER_PROMPT_TEMPLATE
     select_speaker_auto_multiple_template: str = """You provided more than one name in your text, please return just the name of the next speaker. To determine the speaker use these prioritised rules:
     1. If the context refers to themselves as a speaker e.g. "As the..." , choose that speaker's name
     2. If it refers to the "next" speaker name, choose that name

@@ -19,7 +19,7 @@ from autogen.tools import get_function_schema
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
-from ..groupchat import __SELECT_SPEAKER_PROMPT_TEMPLATE__, GroupChat, GroupChatManager
+from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
 
 
@@ -142,7 +142,7 @@ class OnCondition:
         if isinstance(self.condition, str):
             assert self.condition.strip(), "'condition' must be a non-empty string"
         else:
-            assert isinstance(self.condition, UpdateCondition), "'condition' must be a string or UpdateOnCondition"
+            assert isinstance(self.condition, UpdateCondition), "'condition' must be a string or UpdateCondition"
 
         if self.available is not None:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
@@ -362,37 +362,38 @@ def _prepare_groupchat_auto_speaker(
         last_swarm_agent: The last swarm agent for which the LLM config is used
         after_work_next_agent_selection_msg: Optional message to use for the agent selection (in internal group chat).
     """
+
+    def run_select_speaker_prompt_filtered(template: str) -> str:
+        # Run through group chat's string substitution first for {agentlist}
+        # We need to do this so that the next substitution doesn't fail with agentlist
+        # and we can remove the tool executor and nested chats from the available agents list
+        agent_list = [
+            agent
+            for agent in groupchat.agents
+            if agent.name != __TOOL_EXECUTOR_NAME__ and not agent.name.startswith("nested_chat_")
+        ]
+
+        groupchat.select_speaker_prompt_template = template
+        return groupchat.select_speaker_prompt(agent_list)
+
     if after_work_next_agent_selection_msg is None:
-        # If there's no selection message, restore the default
-        groupchat.select_speaker_prompt_template = __SELECT_SPEAKER_PROMPT_TEMPLATE__
-    else:
-        if isinstance(after_work_next_agent_selection_msg, str):
-            groupchat.select_speaker_prompt_template = after_work_next_agent_selection_msg
-        elif isinstance(after_work_next_agent_selection_msg, Callable):
-            groupchat.select_speaker_prompt_template = after_work_next_agent_selection_msg(
-                last_swarm_agent, groupchat.messages
-            )
+        # If there's no selection message, restore the default and filter out the tool executor and nested chat agents
+        groupchat.select_speaker_prompt_template = run_select_speaker_prompt_filtered(SELECT_SPEAKER_PROMPT_TEMPLATE)
+    elif isinstance(after_work_next_agent_selection_msg, str):
+        groupchat.select_speaker_prompt_template = run_select_speaker_prompt_filtered(
+            after_work_next_agent_selection_msg
+        )
 
-    # Run through group chat's string substitution first for {agentlist}
-    # We need to do this so that the next substitution doesn't fail with agentlist
-    # and we can remove the tool executor and nested chats from the available agents list
-    agent_list = [
-        agent
-        for agent in groupchat.agents
-        if agent.name != __TOOL_EXECUTOR_NAME__ and not agent.name.startswith("nested_chat_")
-    ]
-
-    _working_string = groupchat.select_speaker_prompt(agent_list)
-
-    # Then substitute context variables
-    groupchat.select_speaker_prompt_template = OpenAIWrapper.instantiate(
-        template=_working_string,
-        context=last_swarm_agent._context_variables,
-        allow_format_str_template=True,
-    )
-
-    # Temporary visibility into speaker selection
-    groupchat.select_speaker_auto_verbose = True
+        # Substitute context variables
+        groupchat.select_speaker_prompt_template = OpenAIWrapper.instantiate(
+            template=groupchat.select_speaker_prompt_template,
+            context=last_swarm_agent._context_variables,
+            allow_format_str_template=True,
+        )
+    elif isinstance(after_work_next_agent_selection_msg, Callable):
+        groupchat.select_speaker_prompt_template = after_work_next_agent_selection_msg(
+            last_swarm_agent, groupchat.messages
+        )
 
 
 def _determine_next_agent(
