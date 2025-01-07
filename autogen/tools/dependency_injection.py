@@ -20,12 +20,14 @@ __all__ = [
     "inject_params",
 ]
 
+
 class BaseContext(ABC):
     """Base class for context classes.
 
     This is the base class for defining various context types that may be used
     throughout the application. It serves as a parent for specific context classes.
     """
+
     pass
 
 
@@ -35,10 +37,11 @@ class ChatContext(BaseContext):
     This class is used to represent a chat context that holds a list of messages.
     It inherits from `BaseContext` and adds the `messages` attribute.
     """
+
     messages: list[str] = []
 
 
-def Depends(x: Any) -> FastDepends:
+def Depends(x: Any) -> Any:
     """Creates a dependency for injection based on the provided context or type.
 
     Args:
@@ -89,6 +92,7 @@ class Field:
     This class is used to store a description for an annotated field, often used for
     documenting or validating fields in a context or data model.
     """
+
     def __init__(self, description: str) -> None:
         """Initializes the Field with a description.
 
