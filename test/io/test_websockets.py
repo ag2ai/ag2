@@ -86,7 +86,7 @@ class TestConsoleIOWithWebsockets:
                     )
                     try:
                         message_dict = json.loads(message)
-                        actual = message_dict["objects"][0]
+                        actual = message_dict["content"]["objects"][0]
                     except json.JSONDecodeError:
                         actual = message
                     assert actual == expected
