@@ -303,16 +303,13 @@
             {
               "group": "agentchat.realtime_agent",
               "pages": [
-                "docs/reference/agentchat/realtime_agent/client",
                 "docs/reference/agentchat/realtime_agent/function_observer",
                 "docs/reference/agentchat/realtime_agent/oai_realtime_client",
                 "docs/reference/agentchat/realtime_agent/realtime_agent",
                 "docs/reference/agentchat/realtime_agent/realtime_client",
                 "docs/reference/agentchat/realtime_agent/realtime_observer",
                 "docs/reference/agentchat/realtime_agent/twilio_audio_adapter",
-                "docs/reference/agentchat/realtime_agent/twilio_observer",
-                "docs/reference/agentchat/realtime_agent/websocket_audio_adapter",
-                "docs/reference/agentchat/realtime_agent/websocket_observer"
+                "docs/reference/agentchat/realtime_agent/websocket_audio_adapter"
               ]
             },
             "docs/reference/agentchat/agent",
@@ -428,6 +425,7 @@
         {
           "group": "tools",
           "pages": [
+            "docs/reference/tools/dependency_injection",
             "docs/reference/tools/function_utils",
             "docs/reference/tools/tool"
           ]
@@ -435,7 +433,6 @@
         "docs/reference/browser_utils",
         "docs/reference/code_utils",
         "docs/reference/exception_utils",
-        "docs/reference/function_utils",
         "docs/reference/graph_utils",
         "docs/reference/math_utils",
         "docs/reference/retrieve_utils",
@@ -507,6 +504,7 @@
         {
           "group": "Recent posts",
           "pages": [
+            "blog/2025-01-07-Tools-Dependency-Injection/index",
             "blog/2024-12-20-RealtimeAgent/index",
             "blog/2024-12-20-Tools-interoperability/index",
             "blog/2024-12-20-Reasoning-Update/index",
@@ -638,7 +636,8 @@
             "notebooks/config_loader_utility_functions",
             "notebooks/gpt_assistant_agent_function_call",
             "notebooks/lats_search",
-            "notebooks/tools_interoperability"
+            "notebooks/tools_interoperability",
+            "notebooks/tools_dependency_injection"
           ]
         },
         "notebooks/Gallery"

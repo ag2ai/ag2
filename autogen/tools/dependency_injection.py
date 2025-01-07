@@ -20,16 +20,33 @@ __all__ = [
     "inject_params",
 ]
 
-
 class BaseContext(ABC):
+    """Base class for context classes.
+
+    This is the base class for defining various context types that may be used
+    throughout the application. It serves as a parent for specific context classes.
+    """
     pass
 
 
 class ChatContext(BaseContext):
+    """ChatContext class that extends BaseContext.
+
+    This class is used to represent a chat context that holds a list of messages.
+    It inherits from `BaseContext` and adds the `messages` attribute.
+    """
     messages: list[str] = []
 
 
-def Depends(x: Any) -> Any:
+def Depends(x: Any) -> FastDepends:
+    """Creates a dependency for injection based on the provided context or type.
+
+    Args:
+        x: The context or dependency to be injected.
+
+    Returns:
+        A FastDepends object that will resolve the dependency for injection.
+    """
     if isinstance(x, BaseContext):
         return FastDepends(lambda: x)
 
@@ -67,7 +84,17 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
 
 
 class Field:
+    """Represents a description field for use in type annotations.
+
+    This class is used to store a description for an annotated field, often used for
+    documenting or validating fields in a context or data model.
+    """
     def __init__(self, description: str) -> None:
+        """Initializes the Field with a description.
+
+        Args:
+            description: The description text for the field.
+        """
         self._description = description
 
     @property
@@ -102,6 +129,17 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Injects parameters into a function, removing injected dependencies from its signature.
+
+    This function is used to modify a function by injecting dependencies and removing
+    injected parameters from the function's signature.
+
+    Args:
+        f: The function to modify with dependency injection.
+
+    Returns:
+        The modified function with injected dependencies and updated signature.
+    """
     # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
     if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
         f = _fix_staticmethod(f)
