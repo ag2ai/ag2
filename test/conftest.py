@@ -70,7 +70,7 @@ class Credentials:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
 
-def get_credentials(filter_dict: dict[str, Any], temperature: float = 0.6) -> Credentials:
+def get_credentials(filter_dict: dict[str, Any], temperature: float = 0.0) -> Credentials:
     """Fixture to load the LLM config."""
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
@@ -87,9 +87,25 @@ def get_credentials(filter_dict: dict[str, Any], temperature: float = 0.6) -> Cr
     )
 
 
+def get_openai_credentials(filter_dict: dict[str, Any], temperature: float = 0.0) -> Credentials:
+    config_list = [
+        conf
+        for conf in get_credentials(filter_dict, temperature).config_list
+        if "api_type" not in conf or conf["api_type"] == "openai"
+    ]
+    assert config_list, "No OpenAI config list found"
+
+    return Credentials(
+        llm_config={
+            "config_list": config_list,
+            "temperature": temperature,
+        }
+    )
+
+
 @pytest.fixture
 def credentials_gpt_4o_mini() -> Credentials:
-    return get_credentials(filter_dict={"tags": ["gpt-4o-mini"]})
+    return get_openai_credentials(filter_dict={"tags": ["gpt-4o-mini"]})
 
 
 @pytest.fixture
@@ -99,17 +115,17 @@ def credentials_azure_gpt_4o_mini() -> Credentials:
 
 @pytest.fixture
 def credentials_gpt_4o() -> Credentials:
-    return get_credentials(filter_dict={"tags": ["gpt-4o"]})
+    return get_openai_credentials(filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
-    return get_credentials(filter_dict={"tags": ["gpt-4o-realtime"]})
+    return get_openai_credentials(filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6)
 
 
 @pytest.fixture
 def credentials_gpt_35_turbo_instruct() -> Credentials:
-    return get_credentials(filter_dict={"tags": ["gpt-3.5-turbo-instruct"]})
+    return get_openai_credentials(filter_dict={"tags": ["gpt-3.5-turbo-instruct"]})
 
 
 @pytest.fixture
