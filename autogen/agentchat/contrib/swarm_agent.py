@@ -24,36 +24,35 @@ from ..user_proxy_agent import UserProxyAgent
 
 
 @dataclass
-class UpdateCondition:
-    """Update the condition string before they reply
+class ContextStr:
+    """A string that requires context variable substitution.
+
+    Use the format method to substitute context variables into the string.
 
     Args:
-        update_function: The string or function to update the condition string. Can be a string or a Callable.
-            If a string, it will be used as a template and substitute the context variables.
-            If a Callable, it should have the signature:
-                def my_update_function(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+        template: The string to be substituted with context variables. It is expected that the string will contain {var} placeholders
+            and that string format will be able to replace all values.
     """
 
-    update_function: Union[Callable, str]
+    template: str
 
-    def __post_init__(self):
-        if isinstance(self.update_function, str):
-            assert self.update_function.strip(), " please provide a non-empty string or a callable"
-            # find all {var} in the string
-            vars = re.findall(r"\{(\w+)\}", self.update_function)
-            if len(vars) == 0:
-                warnings.warn("Update function string contains no variables. This is probably unintended.")
+    def __init__(self, template: str):
+        self.template = template
 
-        elif isinstance(self.update_function, Callable):
-            sig = signature(self.update_function)
-            if len(sig.parameters) != 2:
-                raise ValueError(
-                    "Update function must accept two parameters of type ConversableAgent and List[Dict[str, Any]], respectively"
-                )
-            if sig.return_annotation != str:
-                raise ValueError("Update function must return a string")
-        else:
-            raise ValueError("Update function must be either a string or a callable")
+    def format(self, context_variables: dict[str, Any]) -> str:
+        """Substitute context variables into the string.
+
+        Args:
+            context_variables: The context variables to substitute into the string.
+        """
+        return OpenAIWrapper.instantiate(
+            template=self.template,
+            context=context_variables,
+            allow_format_str_template=True,
+        )
+
+    def __str__(self) -> str:
+        return f"ContextStr, unformatted: {self.template}"
 
 
 # Created tool executor's name
@@ -82,7 +81,7 @@ class AfterWork:
     """
 
     agent: Union[AfterWorkOption, ConversableAgent, str, Callable]
-    next_agent_selection_msg: Optional[Union[str, Callable]] = None
+    next_agent_selection_msg: Optional[Union[str, ContextStr, Callable]] = None
 
     def __post_init__(self):
         if isinstance(self.agent, str):
@@ -91,8 +90,8 @@ class AfterWork:
         # next_agent_selection_msg is only valid for when agent is AfterWorkOption.SWARM_MANAGER, but isn't mandatory
         if self.next_agent_selection_msg is not None:
 
-            if not isinstance(self.next_agent_selection_msg, (str, Callable)):
-                raise ValueError("next_agent_selection_msg must be a string or a Callable")
+            if not isinstance(self.next_agent_selection_msg, (str, ContextStr, Callable)):
+                raise ValueError("next_agent_selection_msg must be a string, ContextStr, or a Callable")
 
             if self.agent != AfterWorkOption.SWARM_MANAGER:
                 warnings.warn(
@@ -122,13 +121,18 @@ class OnCondition:
         target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/topics/swarm#registering-handoffs-to-a-nested-chat
-        condition (str): The condition for transitioning to the target agent, evaluated by the LLM to determine whether to call the underlying function/tool which does the transition.
-        available (Union[Callable, str]): Optional condition to determine if this OnCondition is available. Can be a Callable or a string.
-            If a string, it will look up the value of the context variable with that name, which should be a bool.
+        condition (Union[str, ContextStr, Callable]): The condition for transitioning to the target agent, evaluated by the LLM.
+            If a string or Callable, no automatic context variable substitution occurs.
+            If a ContextStr, context variable substitution occurs.
+        available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
+            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
+            The Callable signature is:
+                def my_available_func(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> bool
+
     """
 
     target: Union[ConversableAgent, dict[str, Any]] = None
-    condition: Union[str, UpdateCondition] = ""
+    condition: Union[str, ContextStr, Callable] = ""
     available: Optional[Union[Callable, str]] = None
 
     def __post_init__(self):
@@ -142,7 +146,9 @@ class OnCondition:
         if isinstance(self.condition, str):
             assert self.condition.strip(), "'condition' must be a non-empty string"
         else:
-            assert isinstance(self.condition, UpdateCondition), "'condition' must be a string or UpdateCondition"
+            assert isinstance(
+                self.condition, (ContextStr, Callable)
+            ), "'condition' must be a string, ContextStr, or callable"
 
         if self.available is not None:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
@@ -351,19 +357,23 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
 def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
     last_swarm_agent: ConversableAgent,
-    after_work_next_agent_selection_msg: Optional[Union[str, Callable]],
+    after_work_next_agent_selection_msg: Optional[Union[str, ContextStr, Callable]],
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
 
     Tool Executor and Nested Chat agents will be removed from the available agents list.
 
     Args:
-        groupchat: GroupChat instance.
-        last_swarm_agent: The last swarm agent for which the LLM config is used
-        after_work_next_agent_selection_msg: Optional message to use for the agent selection (in internal group chat).
+        groupchat (GroupChat): GroupChat instance.
+        last_swarm_agent (ConversableAgent): The last swarm agent for which the LLM config is used
+        after_work_next_agent_selection_msg (Union[str, ContextStr, Callable]): Optional message to use for the agent selection (in internal group chat).
+            if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
+            if a ContextStr, it will substitute the agentlist first and then the context variables
+            if a Callable, it will not substitute the agentlist or context variables, signature:
+                def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
     """
 
-    def run_select_speaker_prompt_filtered(template: str) -> str:
+    def substitute_agentlist(template: str) -> str:
         # Run through group chat's string substitution first for {agentlist}
         # We need to do this so that the next substitution doesn't fail with agentlist
         # and we can remove the tool executor and nested chats from the available agents list
@@ -378,21 +388,21 @@ def _prepare_groupchat_auto_speaker(
 
     if after_work_next_agent_selection_msg is None:
         # If there's no selection message, restore the default and filter out the tool executor and nested chat agents
-        groupchat.select_speaker_prompt_template = run_select_speaker_prompt_filtered(SELECT_SPEAKER_PROMPT_TEMPLATE)
+        groupchat.select_speaker_prompt_template = substitute_agentlist(SELECT_SPEAKER_PROMPT_TEMPLATE)
     elif isinstance(after_work_next_agent_selection_msg, str):
-        groupchat.select_speaker_prompt_template = run_select_speaker_prompt_filtered(
-            after_work_next_agent_selection_msg
-        )
+        # No context variable substitution for string, but agentlist will be substituted
+        groupchat.select_speaker_prompt_template = substitute_agentlist(after_work_next_agent_selection_msg)
+    elif isinstance(after_work_next_agent_selection_msg, ContextStr):
+        # Replace the agentlist in the string first, putting it into a new ContextStr
+        agent_list_replaced_string = ContextStr(substitute_agentlist(after_work_next_agent_selection_msg.template))
 
-        # Substitute context variables
-        groupchat.select_speaker_prompt_template = OpenAIWrapper.instantiate(
-            template=groupchat.select_speaker_prompt_template,
-            context=last_swarm_agent._context_variables,
-            allow_format_str_template=True,
+        # Then replace the context variables
+        groupchat.select_speaker_prompt_template = agent_list_replaced_string.format(
+            last_swarm_agent._context_variables
         )
     elif isinstance(after_work_next_agent_selection_msg, Callable):
-        groupchat.select_speaker_prompt_template = after_work_next_agent_selection_msg(
-            last_swarm_agent, groupchat.messages
+        groupchat.select_speaker_prompt_template = substitute_agentlist(
+            after_work_next_agent_selection_msg(last_swarm_agent, groupchat.messages)
         )
 
 
@@ -845,15 +855,10 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
         # then add the function if it is available, so that the function signature is updated
         if is_available:
             condition = on_condition.condition
-            if isinstance(condition, UpdateCondition):
-                if isinstance(condition.update_function, str):
-                    condition = OpenAIWrapper.instantiate(
-                        template=condition.update_function,
-                        context=agent._context_variables,
-                        allow_format_str_template=True,
-                    )
-                else:
-                    condition = condition.update_function(agent, messages)
+            if isinstance(condition, ContextStr):
+                condition = condition.format(context_variables=agent._context_variables)
+            elif isinstance(condition, Callable):
+                condition = condition(agent, messages)
             agent._add_single_function(func, func_name, condition)
 
 
