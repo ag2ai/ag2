@@ -4,7 +4,6 @@
 
 import os
 import sys
-from unittest.mock import MagicMock
 
 import pytest
 from langchain.tools import tool as langchain_tool
@@ -29,12 +28,9 @@ class TestLangChainInteroperability:
         class SearchInput(BaseModel):
             query: str = Field(description="should be a search query")
 
-        self.mock = MagicMock()
-
         @langchain_tool("search-tool", args_schema=SearchInput, return_direct=True)  # type: ignore[misc]
         def search(query: SearchInput) -> str:
             """Look up things online."""
-            self.mock(query)
             return "LangChain Integration"
 
         self.model_type = search.args_schema
@@ -78,7 +74,12 @@ class TestLangChainInteroperability:
 
         user_proxy.initiate_chat(recipient=chatbot, message="search for LangChain", max_turns=2)
 
-        self.mock.assert_called_once()
+        for message in user_proxy.chat_messages[chatbot]:
+            if "tool_responses" in message:
+                assert message["tool_responses"][0]["content"] == "LangChain Integration"
+                return
+
+        assert False, "No tool response found in chat messages"
 
     def test_get_unsupported_reason(self) -> None:
         assert LangChainInteroperability.get_unsupported_reason() is None
