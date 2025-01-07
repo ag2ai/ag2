@@ -614,387 +614,466 @@ class TestGroupChatResumeMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-def test_GroupChatRunChat(uuid: UUID) -> None:
-    speaker = ConversableAgent(
-        "assistant uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
-    )
-    silent = False
-
-    actual = GroupChatRunChatMessage(uuid=uuid, speaker=speaker, silent=silent)
-    assert isinstance(actual, GroupChatRunChatMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "speaker_name": "assistant uno",
-        "verbose": True,
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    assert actual.speaker_name == "assistant uno"
-    assert actual.verbose is True
-
-    mock = MagicMock()
-    actual.print(f=mock)
-
-    # print(mock.call_args_list)
-
-    expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant uno\n\x1b[0m", flush=True)]
-
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    no_human_input_msg = "NO HUMAN INPUT RECEIVED."
-
-    actual = TerminationAndHumanReplyMessage(
-        uuid=uuid,
-        no_human_input_msg=no_human_input_msg,
-        sender=sender,
-        recipient=recipient,
-    )
-    assert isinstance(actual, TerminationAndHumanReplyMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "no_human_input_msg": no_human_input_msg,
-        "sender_name": "sender",
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [call("\x1b[31m\n>>>>>>>> NO HUMAN INPUT RECEIVED.\x1b[0m", flush=True)]
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_UsingAutoReply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    human_input_mode = "ALWAYS"
-
-    actual = UsingAutoReplyMessage(
-        uuid=uuid,
-        human_input_mode=human_input_mode,
-        sender=sender,
-        recipient=recipient,
-    )
-    assert isinstance(actual, UsingAutoReplyMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "human_input_mode": human_input_mode,
-        "sender_name": "sender",
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [call("\x1b[31m\n>>>>>>>> USING AUTO REPLY...\x1b[0m", flush=True)]
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_ExecuteCodeBlock(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    code = """print("hello world")"""
-    language = "python"
-    code_block_count = 0
-
-    actual = ExecuteCodeBlockMessage(
-        uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient=recipient
-    )
-    assert isinstance(actual, ExecuteCodeBlockMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "code": code,
-        "language": language,
-        "code_block_count": code_block_count,
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    mock = MagicMock()
-    actual.print(f=mock)
-
-    # print(mock.call_args_list)
-
-    expected_call_args_list = [
-        call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...\x1b[0m", flush=True)
-    ]
-
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
-    func_name = "add_num"
-    call_id = "call_12345xyz"
-    arguments = {"num_to_be_added": 5}
-
-    actual = ExecuteFunctionMessage(
-        uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient=recipient
-    )
-    assert isinstance(actual, ExecuteFunctionMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "func_name": func_name,
-        "call_id": call_id,
-        "arguments": arguments,
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [
-        call(
-            "\x1b[35m\n>>>>>>>> EXECUTING FUNCTION add_num...\nCall ID: call_12345xyz\nInput arguments: {'num_to_be_added': 5}\x1b[0m",
-            flush=True,
+class TestGroupChatRunChatMessage:
+    def test_print(self, uuid: UUID) -> None:
+        speaker = ConversableAgent(
+            "assistant uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
         )
-    ]
-    assert mock.call_args_list == expected_call_args_list
+        silent = False
+
+        actual = GroupChatRunChatMessage(uuid=uuid, speaker=speaker, silent=silent)
+        assert isinstance(actual, GroupChatRunChatMessage)
+
+        expected_model_dump = {
+            "type": "group_chat_run_chat",
+            "content": {
+                "uuid": uuid,
+                "speaker_name": "assistant uno",
+                "verbose": True,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant uno\n\x1b[0m", flush=True)]
+
+        assert mock.call_args_list == expected_call_args_list
 
 
-def test_ExecutedFunction(uuid: UUID, recipient: ConversableAgent) -> None:
-    func_name = "add_num"
-    call_id = "call_12345xyz"
-    arguments = {"num_to_be_added": 5}
-    content = "15"
+class TestTerminationAndHumanReplyMessage:
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        no_human_input_msg = "NO HUMAN INPUT RECEIVED."
 
-    actual = ExecutedFunctionMessage(
-        uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=recipient
-    )
-    assert isinstance(actual, ExecutedFunctionMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "func_name": func_name,
-        "call_id": call_id,
-        "arguments": arguments,
-        "content": content,
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [
-        call(
-            "\x1b[35m\n>>>>>>>> EXECUTED FUNCTION add_num...\nCall ID: call_12345xyz\nInput arguments: {'num_to_be_added': 5}\nOutput:\n15\x1b[0m",
-            flush=True,
+        actual = TerminationAndHumanReplyMessage(
+            uuid=uuid,
+            no_human_input_msg=no_human_input_msg,
+            sender=sender,
+            recipient=recipient,
         )
-    ]
-    assert mock.call_args_list == expected_call_args_list
+        assert isinstance(actual, TerminationAndHumanReplyMessage)
+
+        expected_model_dump = {
+            "type": "termination_and_human_reply",
+            "content": {
+                "uuid": uuid,
+                "no_human_input_msg": no_human_input_msg,
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [call("\x1b[31m\n>>>>>>>> NO HUMAN INPUT RECEIVED.\x1b[0m", flush=True)]
+        assert mock.call_args_list == expected_call_args_list
 
 
-def test_SelectSpeaker(uuid: UUID) -> None:
-    agents = [
-        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-    ]
+class TestUsingAutoReplyMessage:
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        human_input_mode = "ALWAYS"
 
-    actual = SelectSpeakerMessage(uuid=uuid, agents=agents)  # type: ignore [arg-type]
-    assert isinstance(actual, SelectSpeakerMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "agent_names": ["bob", "charlie"],
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [
-        call("Please select the next speaker from the following list:"),
-        call("1: bob"),
-        call("2: charlie"),
-    ]
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_SelectSpeakerTryCountExceeded(uuid: UUID) -> None:
-    agents = [
-        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-    ]
-    try_count = 3
-
-    actual = SelectSpeakerTryCountExceededMessage(uuid=uuid, try_count=try_count, agents=agents)  # type: ignore [arg-type]
-    assert isinstance(actual, SelectSpeakerTryCountExceededMessage)
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [call("You have tried 3 times. The next speaker will be selected automatically.")]
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_SelectSpeakerInvalidInput(uuid: UUID) -> None:
-    agents = [
-        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-    ]
-
-    actual = SelectSpeakerInvalidInputMessage(uuid=uuid, agents=agents)  # type: ignore [arg-type]
-    assert isinstance(actual, SelectSpeakerInvalidInputMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "agent_names": ["bob", "charlie"],
-    }
-    assert actual.model_dump() == expected_model_dump
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [call("Invalid input. Please enter a number between 1 and 2.")]
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_ClearConversableAgentHistory(uuid: UUID, recipient: ConversableAgent) -> None:
-    no_messages_preserved = 5
-
-    actual = ClearConversableAgentHistoryMessage(
-        uuid=uuid, agent=recipient, no_messages_preserved=no_messages_preserved
-    )
-    assert isinstance(actual, ClearConversableAgentHistoryMessage)
-
-    expected_model_dump = {
-        "uuid": uuid,
-        "agent_name": "recipient",
-        "recipient_name": "recipient",
-        "no_messages_preserved": no_messages_preserved,
-    }
-    assert actual.model_dump() == expected_model_dump
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [
-        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
-        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
-        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
-        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
-        call("Preserving one more message for recipient to not divide history between tool call and tool response."),
-    ]
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_ClearConversableAgentHistoryWarning(uuid: UUID, recipient: ConversableAgent) -> None:
-    actual = ClearConversableAgentHistoryWarningMessage(uuid=uuid, recipient=recipient)
-
-    mock = MagicMock()
-    actual.print(f=mock)
-    # print(mock.call_args_list)
-    expected_call_args_list = [
-        call(
-            "\x1b[33mWARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.\x1b[0m",
-            flush=True,
+        actual = UsingAutoReplyMessage(
+            uuid=uuid,
+            human_input_mode=human_input_mode,
+            sender=sender,
+            recipient=recipient,
         )
-    ]
-    assert mock.call_args_list == expected_call_args_list
+        assert isinstance(actual, UsingAutoReplyMessage)
+
+        expected_model_dump = {
+            "type": "using_auto_reply",
+            "content": {
+                "uuid": uuid,
+                "human_input_mode": human_input_mode,
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [call("\x1b[31m\n>>>>>>>> USING AUTO REPLY...\x1b[0m", flush=True)]
+        assert mock.call_args_list == expected_call_args_list
 
 
-@pytest.mark.parametrize(
-    "code_blocks, expected",
-    [
-        (
-            [
-                CodeBlock(code="print('hello world')", language="python"),
-            ],
-            [call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...\x1b[0m", flush=True)],
-        ),
-        (
-            [
-                CodeBlock(code="print('hello world')", language="python"),
-                CodeBlock(code="print('goodbye world')", language="python"),
-            ],
-            [
-                call(
-                    "\x1b[31m\n>>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...\x1b[0m",
-                    flush=True,
-                )
-            ],
-        ),
-    ],
-)
-def test_GenerateCodeExecutionReply(
-    code_blocks: list[CodeBlock],
-    expected: list[_Call],
-    uuid: UUID,
-    sender: ConversableAgent,
-    recipient: ConversableAgent,
-) -> None:
-    actual = GenerateCodeExecutionReplyMessage(uuid=uuid, code_blocks=code_blocks, sender=sender, recipient=recipient)
-    assert isinstance(actual, GenerateCodeExecutionReplyMessage)
+class TestExecuteCodeBlockMessage:
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        code = """print("hello world")"""
+        language = "python"
+        code_block_count = 0
 
-    expected_model_dump = {
-        "uuid": uuid,
-        "code_block_languages": [x.language for x in code_blocks],
-        "sender_name": "sender",
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
+        actual = ExecuteCodeBlockMessage(
+            uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient=recipient
+        )
+        assert isinstance(actual, ExecuteCodeBlockMessage)
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        expected_model_dump = {
+            "type": "execute_code_block",
+            "content": {
+                "uuid": uuid,
+                "code": code,
+                "language": language,
+                "code_block_count": code_block_count,
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
 
-    # print(mock.call_args_list)
+        mock = MagicMock()
+        actual.print(f=mock)
 
-    assert mock.call_args_list == expected
+        # print(mock.call_args_list)
+
+        expected_call_args_list = [
+            call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK 0 (inferred language is python)...\x1b[0m", flush=True)
+        ]
+
+        assert mock.call_args_list == expected_call_args_list
 
 
-@pytest.mark.parametrize(
-    "client, is_client_empty, expected",
-    [
-        (OpenAIWrapper(api_key="dummy api key"), False, [call("Agent 'recipient':")]),
-        (None, True, [call("No cost incurred from agent 'recipient'.")]),
-    ],
-)
-def test_ConversableAgentUsageSummary(
-    client: Optional[OpenAIWrapper],
-    is_client_empty: bool,
-    expected: list[_Call],
-    uuid: UUID,
-    recipient: ConversableAgent,
-) -> None:
-    actual = ConversableAgentUsageSummaryMessage(uuid=uuid, recipient=recipient, client=client)
-    assert isinstance(actual, ConversableAgentUsageSummaryMessage)
+class TestExecuteFunctionMessage:
+    def test_print(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        func_name = "add_num"
+        call_id = "call_12345xyz"
+        arguments = {"num_to_be_added": 5}
 
-    expected_model_dump = {
-        "uuid": uuid,
-        "recipient_name": "recipient",
-        "is_client_empty": is_client_empty,
-    }
-    assert actual.model_dump() == expected_model_dump
+        actual = ExecuteFunctionMessage(
+            uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient=recipient
+        )
+        assert isinstance(actual, ExecuteFunctionMessage)
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        expected_model_dump = {
+            "type": "execute_function",
+            "content": {
+                "uuid": uuid,
+                "func_name": func_name,
+                "call_id": call_id,
+                "arguments": arguments,
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
 
-    # print(mock.call_args_list)
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [
+            call(
+                "\x1b[35m\n>>>>>>>> EXECUTING FUNCTION add_num...\nCall ID: call_12345xyz\nInput arguments: {'num_to_be_added': 5}\x1b[0m",
+                flush=True,
+            )
+        ]
+        assert mock.call_args_list == expected_call_args_list
 
-    assert mock.call_args_list == expected
+
+class TestExecutedFunctionMessage:
+    def test_print(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        func_name = "add_num"
+        call_id = "call_12345xyz"
+        arguments = {"num_to_be_added": 5}
+        content = "15"
+
+        actual = ExecutedFunctionMessage(
+            uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=recipient
+        )
+        assert isinstance(actual, ExecutedFunctionMessage)
+
+        expected_model_dump = {
+            "type": "executed_function",
+            "content": {
+                "uuid": uuid,
+                "func_name": func_name,
+                "call_id": call_id,
+                "arguments": arguments,
+                "content": content,
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [
+            call(
+                "\x1b[35m\n>>>>>>>> EXECUTED FUNCTION add_num...\nCall ID: call_12345xyz\nInput arguments: {'num_to_be_added': 5}\nOutput:\n15\x1b[0m",
+                flush=True,
+            )
+        ]
+        assert mock.call_args_list == expected_call_args_list
 
 
-@pytest.mark.parametrize(
-    "text, expected",
-    [
-        ("Hello, World!", [call("Hello, World!")]),
-        ("Over and out!", [call("Over and out!")]),
-    ],
-)
-def test_TextMessage(text: str, expected: list[_Call], uuid: UUID) -> None:
-    actual = TextMessage(uuid=uuid, text=text)
-    expected_model_dump = {"uuid": uuid, "text": text}
-    assert isinstance(actual, TextMessage)
-    assert actual.model_dump() == expected_model_dump
+class TestSelectSpeakerMessage:
+    def test_print(self, uuid: UUID) -> None:
+        agents = [
+            ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+            ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ]
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        actual = SelectSpeakerMessage(uuid=uuid, agents=agents)  # type: ignore [arg-type]
+        assert isinstance(actual, SelectSpeakerMessage)
 
-    # print(mock.call_args_list)
+        expected_model_dump = {
+            "type": "select_speaker",
+            "content": {
+                "uuid": uuid,
+                "agent_names": ["bob", "charlie"],
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
 
-    assert mock.call_args_list == expected
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [
+            call("Please select the next speaker from the following list:"),
+            call("1: bob"),
+            call("2: charlie"),
+        ]
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestSelectSpeakerTryCountExceededMessage:
+    def test_print(self, uuid: UUID) -> None:
+        agents = [
+            ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+            ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ]
+        try_count = 3
+
+        actual = SelectSpeakerTryCountExceededMessage(uuid=uuid, try_count=try_count, agents=agents)  # type: ignore [arg-type]
+        assert isinstance(actual, SelectSpeakerTryCountExceededMessage)
+
+        expected_model_dump = {
+            "type": "select_speaker_try_count_exceeded",
+            "content": {
+                "uuid": uuid,
+                "try_count": try_count,
+                "agent_names": ["bob", "charlie"],
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [call("You have tried 3 times. The next speaker will be selected automatically.")]
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestSelectSpeakerInvalidInputMessage:
+    def test_print(self, uuid: UUID) -> None:
+        agents = [
+            ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+            ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ]
+
+        actual = SelectSpeakerInvalidInputMessage(uuid=uuid, agents=agents)  # type: ignore [arg-type]
+        assert isinstance(actual, SelectSpeakerInvalidInputMessage)
+
+        expected_model_dump = {
+            "type": "select_speaker_invalid_input",
+            "content": {
+                "uuid": uuid,
+                "agent_names": ["bob", "charlie"],
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [call("Invalid input. Please enter a number between 1 and 2.")]
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestClearConversableAgentHistoryMessage:
+    def test_print(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        no_messages_preserved = 5
+
+        actual = ClearConversableAgentHistoryMessage(
+            uuid=uuid, agent=recipient, no_messages_preserved=no_messages_preserved
+        )
+        assert isinstance(actual, ClearConversableAgentHistoryMessage)
+
+        expected_model_dump = {
+            "type": "clear_conversable_agent_history",
+            "content": {
+                "uuid": uuid,
+                "agent_name": "recipient",
+                "recipient_name": "recipient",
+                "no_messages_preserved": no_messages_preserved,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [
+            call(
+                "Preserving one more message for recipient to not divide history between tool call and tool response."
+            ),
+            call(
+                "Preserving one more message for recipient to not divide history between tool call and tool response."
+            ),
+            call(
+                "Preserving one more message for recipient to not divide history between tool call and tool response."
+            ),
+            call(
+                "Preserving one more message for recipient to not divide history between tool call and tool response."
+            ),
+            call(
+                "Preserving one more message for recipient to not divide history between tool call and tool response."
+            ),
+        ]
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestClearConversableAgentHistoryWarningMessage:
+    def test_print(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        actual = ClearConversableAgentHistoryWarningMessage(uuid=uuid, recipient=recipient)
+        assert isinstance(actual, ClearConversableAgentHistoryWarningMessage)
+
+        expected_model_dump = {
+            "type": "clear_conversable_agent_history_warning",
+            "content": {
+                "uuid": uuid,
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [
+            call(
+                "\x1b[33mWARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.\x1b[0m",
+                flush=True,
+            )
+        ]
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestGenerateCodeExecutionReplyMessage:
+    @pytest.mark.parametrize(
+        "code_blocks, expected",
+        [
+            (
+                [
+                    CodeBlock(code="print('hello world')", language="python"),
+                ],
+                [call("\x1b[31m\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is python)...\x1b[0m", flush=True)],
+            ),
+            (
+                [
+                    CodeBlock(code="print('hello world')", language="python"),
+                    CodeBlock(code="print('goodbye world')", language="python"),
+                ],
+                [
+                    call(
+                        "\x1b[31m\n>>>>>>>> EXECUTING 2 CODE BLOCKS (inferred languages are [python, python])...\x1b[0m",
+                        flush=True,
+                    )
+                ],
+            ),
+        ],
+    )
+    def test_print(
+        self,
+        code_blocks: list[CodeBlock],
+        expected: list[_Call],
+        uuid: UUID,
+        sender: ConversableAgent,
+        recipient: ConversableAgent,
+    ) -> None:
+        actual = GenerateCodeExecutionReplyMessage(
+            uuid=uuid, code_blocks=code_blocks, sender=sender, recipient=recipient
+        )
+        assert isinstance(actual, GenerateCodeExecutionReplyMessage)
+
+        expected_model_dump = {
+            "type": "generate_code_execution_reply",
+            "content": {
+                "uuid": uuid,
+                "code_block_languages": [x.language for x in code_blocks],
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        assert mock.call_args_list == expected
+
+
+class TestConversableAgentUsageSummaryMessage:
+    @pytest.mark.parametrize(
+        "client, is_client_empty, expected",
+        [
+            (OpenAIWrapper(api_key="dummy api key"), False, [call("Agent 'recipient':")]),
+            (None, True, [call("No cost incurred from agent 'recipient'.")]),
+        ],
+    )
+    def test_print(
+        self,
+        client: Optional[OpenAIWrapper],
+        is_client_empty: bool,
+        expected: list[_Call],
+        uuid: UUID,
+        recipient: ConversableAgent,
+    ) -> None:
+        actual = ConversableAgentUsageSummaryMessage(uuid=uuid, recipient=recipient, client=client)
+        assert isinstance(actual, ConversableAgentUsageSummaryMessage)
+
+        expected_model_dump = {
+            "type": "conversable_agent_usage_summary",
+            "content": {
+                "uuid": uuid,
+                "recipient_name": "recipient",
+                "is_client_empty": is_client_empty,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        assert mock.call_args_list == expected
+
+
+class TestTextMessage:
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("Hello, World!", [call("Hello, World!")]),
+            ("Over and out!", [call("Over and out!")]),
+        ],
+    )
+    def test_print(self, text: str, expected: list[_Call], uuid: UUID) -> None:
+        actual = TextMessage(uuid=uuid, text=text)
+        assert isinstance(actual, TextMessage)
+
+        expected_model_dump = {"type": "text", "content": {"uuid": uuid, "text": text}}
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        assert mock.call_args_list == expected
