@@ -91,7 +91,7 @@ interop_crewai = [
     "crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'",
     "weaviate-client==4.10.2; python_version>='3.10' and python_version<'3.13'",
 ]
-interop_langchain = ["langchain-community>=0.3.14,<0.4"]
+interop_langchain = ["langchain-community>=0.3.12,<1"]
 interop_pydantic_ai = ["pydantic-ai==0.0.13"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai
 
