@@ -38,7 +38,7 @@ class PydanticAITool(Tool):
             parameters_json_schema (Dict[str, Any]): A schema describing the parameters
                                                      that the function accepts.
         """
-        super().__init__(name=name, description=description, func=func)
+        super().__init__(name=name, description=description, func_or_tool=func)
         self._func_schema = {
             "type": "function",
             "function": {

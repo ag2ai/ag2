@@ -9,48 +9,28 @@ from unittest.mock import MagicMock
 import pytest
 from anyio import Event, move_on_after, sleep
 from asyncer import create_task_group
-from conftest import reason, skip_openai  # noqa: E402
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
-import autogen
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
-from .realtime_test_utils import text_to_speech, trace
+from ...conftest import reason, skip_openai  # noqa: E402
+from .realtime_test_utils import Credentials, text_to_speech, trace
 
 logger = getLogger(__name__)
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
 class TestE2E:
-    @pytest.fixture
-    def llm_config(self) -> dict[str, Any]:
-        """Fixture to load the LLM config."""
-        config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
-            filter_dict={
-                "tags": ["gpt-4o-realtime"],
-            },
-            file_location=KEY_LOC,
-        )
-        assert config_list, "No config list found"
-        return {
-            "config_list": config_list,
-            "temperature": 0.0,
-        }
-
-    @pytest.fixture
-    def openai_api_key(self, llm_config: dict[str, Any]) -> str:
-        """Fixture to get the OpenAI API key."""
-        return llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
-
-    async def _test_e2e(self, llm_config: dict[str, Any], openai_api_key: str) -> None:
+    async def _test_e2e(self, credentials: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
 
         """
+        llm_config = credentials.llm_config
+        openai_api_key = credentials.openai_api_key
+
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
         weather_func_mock = MagicMock()
@@ -102,7 +82,8 @@ class TestE2E:
             # Wait for the weather function to be called or timeout
             with move_on_after(20) as scope:
                 await weather_func_called_event.wait()
-            assert not scope.cancel_called, "Weather function was not called within the expected time"
+            assert weather_func_called_event.is_set(), "Weather function was not called within the expected time"
+            assert not scope.cancel_called, "Cancel scope was called before the weather function was called"
 
             # Verify the function call details
             weather_func_mock.assert_called_with(location="Seattle")
@@ -114,24 +95,22 @@ class TestE2E:
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
     @pytest.mark.asyncio()
-    async def test_e2e(self, llm_config: dict[str, Any], openai_api_key: str) -> None:
+    async def test_e2e(self, credentials: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 3 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
 
         """
-        last_exception = None
-
-        for i in range(3):
+        i = 0
+        count = 3
+        while True:
             try:
-                await self._test_e2e(llm_config, openai_api_key=openai_api_key)
+                await self._test_e2e(credentials=credentials)
                 return  # Exit the function if the test passes
             except Exception as e:
                 logger.warning(
                     f"Test 'TestE2E.test_e2e' failed on attempt {i + 1} with exception: {e}", stack_info=True
                 )
-                last_exception = e  # Keep track of the last exception
-
-        # If the loop finishes without success, raise the last exception
-        if last_exception:
-            raise last_exception
+                if i + 1 >= count:
+                    raise
+            i += 1

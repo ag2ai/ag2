@@ -5,19 +5,21 @@
 import os
 import random
 import sys
-import unittest
 from inspect import signature
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import pytest
-from conftest import reason, skip_openai
 from pydantic import BaseModel
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool as PydanticAITool
 
+import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
+
+from ...agentchat.test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ...conftest import reason, skip_openai
 
 
 # skip if python version is not >= 3.9
@@ -47,7 +49,13 @@ class TestPydanticAIInteroperabilityWithotContext:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            filter_dict={
+                "tags": ["gpt-4o"],
+            },
+            file_location=KEY_LOC,
+        )
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",
@@ -193,7 +201,13 @@ class TestPydanticAIInteroperabilityWithContext:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            filter_dict={
+                "tags": ["gpt-4o"],
+            },
+            file_location=KEY_LOC,
+        )
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",

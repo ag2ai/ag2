@@ -4,16 +4,17 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import asyncio
+
 import inspect
 import unittest.mock
-from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Any, Literal, Optional
 
 import pytest
 from pydantic import BaseModel, Field
 
 from autogen._pydantic import PYDANTIC_V1, model_dump
-from autogen.function_utils import (
+from autogen.tools.dependency_injection import Field as AG2Field
+from autogen.tools.function_utils import (
     get_default_values,
     get_function_schema,
     get_load_param_if_needed_function,
@@ -35,9 +36,9 @@ def f(a: Annotated[str, "Parameter a"], b: int = 2, c: Annotated[float, "Paramet
 
 
 def g(  # type: ignore[empty-body]
-    a: Annotated[str, "Parameter a"],
+    a: Annotated[str, AG2Field(description="Parameter a")],
     b: int = 2,
-    c: Annotated[float, "Parameter c"] = 0.1,
+    c: Annotated[float, AG2Field(description="Parameter c")] = 0.1,
     *,
     d: dict[str, tuple[Optional[int], list[float]]],
 ) -> str:
@@ -45,9 +46,9 @@ def g(  # type: ignore[empty-body]
 
 
 async def a_g(  # type: ignore[empty-body]
-    a: Annotated[str, "Parameter a"],
+    a: Annotated[str, AG2Field(description="Parameter a")],
     b: int = 2,
-    c: Annotated[float, "Parameter c"] = 0.1,
+    c: Annotated[float, AG2Field(description="Parameter c")] = 0.1,
     *,
     d: dict[str, tuple[Optional[int], list[float]]],
 ) -> str:
@@ -74,11 +75,11 @@ def test_get_parameter_json_schema() -> None:
     assert get_parameter_json_schema("c", str, {}) == {"type": "string", "description": "c"}
     assert get_parameter_json_schema("c", str, {"c": "ccc"}) == {"type": "string", "description": "c", "default": "ccc"}
 
-    assert get_parameter_json_schema("a", Annotated[str, "parameter a"], {}) == {
+    assert get_parameter_json_schema("a", Annotated[str, AG2Field(description="parameter a")], {}) == {
         "type": "string",
         "description": "parameter a",
     }
-    assert get_parameter_json_schema("a", Annotated[str, "parameter a"], {"a": "3.14"}) == {
+    assert get_parameter_json_schema("a", Annotated[str, AG2Field(description="parameter a")], {"a": "3.14"}) == {
         "type": "string",
         "description": "parameter a",
         "default": "3.14",
@@ -147,7 +148,7 @@ def test_get_missing_annotations() -> None:
 
 
 def test_get_parameters() -> None:
-    def f(a: Annotated[str, "Parameter a"], b=1, c: Annotated[float, "Parameter c"] = 1.0):  # type: ignore[no-untyped-def]
+    def f(a: Annotated[str, AG2Field(description="Parameter a")], b=1, c: Annotated[float, AG2Field(description="Parameter c")] = 1.0):  # type: ignore[no-untyped-def]
         pass
 
     typed_signature = get_typed_signature(f)
@@ -170,7 +171,7 @@ def test_get_parameters() -> None:
 
 
 def test_get_function_schema_no_return_type() -> None:
-    def f(a: Annotated[str, "Parameter a"], b: int, c: float = 0.1):  # type: ignore[no-untyped-def]
+    def f(a: Annotated[str, AG2Field(description="Parameter a")], b: int, c: float = 0.1):  # type: ignore[no-untyped-def]
         pass
 
     expected = (
@@ -178,17 +179,21 @@ def test_get_function_schema_no_return_type() -> None:
         + "optional, the function should return either a string, a subclass of 'pydantic.BaseModel'."
     )
 
-    with unittest.mock.patch("autogen.function_utils.logger.warning") as mock_logger_warning:
+    with unittest.mock.patch("autogen.tools.function_utils.logger.warning") as mock_logger_warning:
         get_function_schema(f, description="function g")
 
         mock_logger_warning.assert_called_once_with(expected)
 
 
 def test_get_function_schema_unannotated_with_default() -> None:
-    with unittest.mock.patch("autogen.function_utils.logger.warning") as mock_logger_warning:
+    with unittest.mock.patch("autogen.tools.function_utils.logger.warning") as mock_logger_warning:
 
         def f(  # type: ignore[no-untyped-def]
-            a: Annotated[str, "Parameter a"], b=2, c: Annotated[float, "Parameter c"] = 0.1, d="whatever", e=None
+            a: Annotated[str, AG2Field(description="Parameter a")],
+            b=2,
+            c: Annotated[float, AG2Field(description="Parameter c")] = 0.1,
+            d="whatever",
+            e=None,
         ) -> str:
             return "ok"
 
@@ -296,11 +301,15 @@ class Currency(BaseModel):
 
 
 def test_get_function_schema_pydantic() -> None:
+    from autogen.tools.dependency_injection import _string_metadata_to_description_field
+
     def currency_calculator(  # type: ignore[empty-body]
         base: Annotated[Currency, "Base currency: amount and currency symbol"],
         quote_currency: Annotated[CurrencySymbol, "Quote currency symbol (default: 'EUR')"] = "EUR",
     ) -> Currency:
         pass
+
+    currency_calculator = _string_metadata_to_description_field(currency_calculator)
 
     expected = {
         "type": "function",

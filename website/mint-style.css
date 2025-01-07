@@ -328,13 +328,18 @@ a.colab-badge > img, a.github-badge  > img {
   line-height: 1.5;
 }
 .examples-gallery-container .card {
-  padding: 1rem;
   transition: all 0.3s ease;
   border: 1px solid #e8e8e8;
   border-radius: 4px;
   cursor: pointer;
   overflow: hidden;
+  display: flex;
 }
+.examples-gallery-container .card-container {
+  padding: 1rem;
+  flex:1;
+}
+
 .examples-gallery-container .card-description {
   color: #727272;
   display: -webkit-box;
@@ -358,6 +363,13 @@ a.colab-badge > img, a.github-badge  > img {
 }
 .examples-gallery-container .card .px-6.py-5 {
   padding: 0;
+  height: 100%;
+}
+.examples-gallery-container .card .px-6.py-5 > div,
+.examples-gallery-container .card .px-6.py-5 > div > div,
+.examples-gallery-container .card .px-6.py-5 > div > div > div.card-container
+{
+  height: 100%;
 }
 .examples-gallery-container .tag {
   display: inline-block;

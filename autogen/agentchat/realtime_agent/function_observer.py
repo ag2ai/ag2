@@ -4,7 +4,6 @@
 
 import asyncio
 import json
-from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Optional
 
 from asyncer import asyncify
@@ -12,11 +11,14 @@ from pydantic import BaseModel
 
 from .realtime_observer import RealtimeObserver
 
+if TYPE_CHECKING:
+    from logging import Logger
+
 
 class FunctionObserver(RealtimeObserver):
     """Observer for handling function calls from the OpenAI Realtime API."""
 
-    def __init__(self, *, logger: Optional[Logger] = None) -> None:
+    def __init__(self, *, logger: Optional["Logger"] = None) -> None:
         """Observer for handling function calls from the OpenAI Realtime API."""
         super().__init__(logger=logger)
 
@@ -43,8 +45,8 @@ class FunctionObserver(RealtimeObserver):
             kwargs (Any[str, Any]): The arguments to pass to the function.
         """
 
-        if name in self.agent._registred_realtime_functions:
-            _, func = self.agent._registred_realtime_functions[name]
+        if name in self.agent.registred_realtime_tools:
+            func = self.agent.registred_realtime_tools[name].func
             func = func if asyncio.iscoroutinefunction(func) else asyncify(func)
             try:
                 result = await func(**kwargs)
@@ -61,11 +63,13 @@ class FunctionObserver(RealtimeObserver):
                     result = str(result)
 
             await self.realtime_client.send_function_result(call_id, result)
+        else:
+            self.logger.warning(f"Function {name} called, but is not registered with the realtime agent.")
 
     async def initialize_session(self) -> None:
         """Add registered tools to OpenAI with a session update."""
         session_update = {
-            "tools": [schema for schema, _ in self.agent._registred_realtime_functions.values()],
+            "tools": [tool.realtime_tool_schema for tool in self.agent.registred_realtime_tools.values()],
             "tool_choice": "auto",
         }
         await self.realtime_client.session_update(session_update)

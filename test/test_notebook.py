@@ -10,7 +10,8 @@ import os
 import sys
 
 import pytest
-from conftest import skip_openai
+
+from .conftest import skip_openai
 
 try:
     import openai

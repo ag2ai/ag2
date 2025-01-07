@@ -2,20 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import os
-import re
-import sys
 
 import pytest
 
-from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
+from autogen import UserProxyAgent, config_list_from_json
 from autogen.agentchat.contrib.captainagent import CaptainAgent
-from autogen.agentchat.contrib.tool_retriever import ToolBuilder
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ...conftest import reason, skip_openai  # noqa: E402
+from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 try:
     import chromadb

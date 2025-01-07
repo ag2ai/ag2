@@ -11,11 +11,10 @@ import io
 import json
 import logging
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
-from unittest import TestCase, mock
+from typing import Any, Optional
+from unittest import mock
 
 import pytest
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager

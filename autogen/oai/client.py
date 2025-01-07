@@ -22,6 +22,8 @@ from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
 
+from ..messages.client_messages import StreamMessage, UsageSummary
+
 TOOL_ENABLED = False
 try:
     import openai
@@ -310,12 +312,11 @@ class OpenAIClient:
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
 
-            # Set the terminal text color to green
-            iostream.print("\033[32m", end="")
-
             # Prepare for potential function call
             full_function_call: Optional[dict[str, Any]] = None
             full_tool_calls: Optional[list[Optional[dict[str, Any]]]] = None
+
+            stream_message = StreamMessage()
 
             # Send the chat completion request to OpenAI's API and process the response in chunks
             for chunk in create_or_parse(**params):
@@ -363,15 +364,11 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            iostream.print(content, end="", flush=True)
+                            stream_message.print_chunk_content(content, iostream.print)
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
-                            # iostream.print()
                             pass
-
-            # Reset the terminal text color
-            iostream.print("\033[0m\n")
 
             # Prepare the final ChatCompletion object based on the accumulated data
             model = chunk.model.replace("gpt-35", "gpt-3.5")  # hack for Azure API
@@ -1121,26 +1118,6 @@ class OpenAIWrapper:
         """Print the usage summary."""
         iostream = IOStream.get_default()
 
-        def print_usage(usage_summary: Optional[dict[str, Any]], usage_type: str = "total") -> None:
-            word_from_type = "including" if usage_type == "total" else "excluding"
-            if usage_summary is None:
-                iostream.print("No actual cost incurred (all completions are using cache).", flush=True)
-                return
-
-            iostream.print(f"Usage summary {word_from_type} cached usage: ", flush=True)
-            iostream.print(f"Total cost: {round(usage_summary['total_cost'], 5)}", flush=True)
-            for model, counts in usage_summary.items():
-                if model == "total_cost":
-                    continue  #
-                iostream.print(
-                    f"* Model '{model}': cost: {round(counts['cost'], 5)}, prompt_tokens: {counts['prompt_tokens']}, completion_tokens: {counts['completion_tokens']}, total_tokens: {counts['total_tokens']}",
-                    flush=True,
-                )
-
-        if self.total_usage_summary is None:
-            iostream.print('No usage summary. Please call "create" first.', flush=True)
-            return
-
         if isinstance(mode, list):
             if len(mode) == 0 or len(mode) > 2:
                 raise ValueError(f'Invalid mode: {mode}, choose from "actual", "total", ["actual", "total"]')
@@ -1151,24 +1128,10 @@ class OpenAIWrapper:
             elif "total" in mode:
                 mode = "total"
 
-        iostream.print("-" * 100, flush=True)
-        if mode == "both":
-            print_usage(self.actual_usage_summary, "actual")
-            iostream.print()
-            if self.total_usage_summary != self.actual_usage_summary:
-                print_usage(self.total_usage_summary, "total")
-            else:
-                iostream.print(
-                    "All completions are non-cached: the total cost with cached completions is the same as actual cost.",
-                    flush=True,
-                )
-        elif mode == "total":
-            print_usage(self.total_usage_summary, "total")
-        elif mode == "actual":
-            print_usage(self.actual_usage_summary, "actual")
-        else:
-            raise ValueError(f'Invalid mode: {mode}, choose from "actual", "total", ["actual", "total"]')
-        iostream.print("-" * 100, flush=True)
+        usage_summary = UsageSummary(
+            actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+        )
+        usage_summary.print(iostream.print)
 
     def clear_usage_summary(self) -> None:
         """Clear the usage summary."""

@@ -17,6 +17,40 @@ export const notebooksMetadata = [
         "source": "/notebook/agentchat_RetrieveChat_mongodb.ipynb"
     },
     {
+        "title": "Mitigating Prompt hacking with JSON Mode in Autogen",
+        "link": "/notebooks/JSON_mode_example",
+        "description": "Use JSON mode and Agent Descriptions to mitigate prompt manipulation and control speaker transition.",
+        "image": null,
+        "tags": [
+            "JSON",
+            "description",
+            "prompt hacking",
+            "group chat",
+            "orchestration"
+        ],
+        "source": "/notebook/JSON_mode_example.ipynb"
+    },
+    {
+        "title": "Auto Generated Agent Chat: Using MathChat to Solve Math Problems",
+        "link": "/notebooks/agentchat_MathChat",
+        "description": "Using MathChat to Solve Math Problems",
+        "image": null,
+        "tags": [
+            "math"
+        ],
+        "source": "/notebook/agentchat_MathChat.ipynb"
+    },
+    {
+        "title": "Using RetrieveChat for Retrieve Augmented Code Generation and Question Answering",
+        "link": "/notebooks/agentchat_RetrieveChat",
+        "description": "Explore the use of AutoGen's RetrieveChat for tasks like code generation from docstrings, answering complex questions with human feedback, and exploiting features like Update Context, custom prompts, and few-shot learning.",
+        "image": null,
+        "tags": [
+            "RAG"
+        ],
+        "source": "/notebook/agentchat_RetrieveChat.ipynb"
+    },
+    {
         "title": "Using RetrieveChat Powered by PGVector for Retrieve Augmented Code Generation and Question Answering",
         "link": "/notebooks/agentchat_RetrieveChat_pgvector",
         "description": "Explore the use of AutoGen's RetrieveChat for tasks like code generation from docstrings, answering complex questions with human feedback, and exploiting features like Update Context, custom prompts, and few-shot learning.",
@@ -96,6 +130,18 @@ export const notebooksMetadata = [
             "CaptainAgent"
         ],
         "source": "/notebook/agentchat_captainagent.ipynb"
+    },
+    {
+        "title": "Cross-Framework LLM Tool for CaptainAgent",
+        "link": "/notebooks/agentchat_captainagent_crosstool",
+        "description": "Cross-Framework LLM Tool for CaptainAgent",
+        "image": null,
+        "tags": [
+            "tools",
+            "langchain",
+            "crewai"
+        ],
+        "source": "/notebook/agentchat_captainagent_crosstool.ipynb"
     },
     {
         "title": "Usage tracking with AutoGen",
@@ -190,6 +236,27 @@ export const notebooksMetadata = [
             "tool/function"
         ],
         "source": "/notebook/agentchat_function_call_currency_calculator.ipynb"
+    },
+    {
+        "title": "Using FalkorGraphRagCapability with agents for GraphRAG Question & Answering",
+        "link": "/notebooks/agentchat_graph_rag_falkordb",
+        "description": "Using FalkorGraphRagCapability with agents for GraphRAG Question & Answering",
+        "image": null,
+        "tags": [
+            "RAG",
+            "FalkorDB"
+        ],
+        "source": "/notebook/agentchat_graph_rag_falkordb.ipynb"
+    },
+    {
+        "title": "Using Neo4j's graph database with AG2 agents for Question & Answering",
+        "link": "/notebooks/agentchat_graph_rag_neo4j",
+        "description": "Neo4j GraphRAG utilises a knowledge graph and can be added as a capability to agents.",
+        "image": null,
+        "tags": [
+            "RAG"
+        ],
+        "source": "/notebook/agentchat_graph_rag_neo4j.ipynb"
     },
     {
         "title": "Groupchat with Llamaindex agents",
@@ -556,7 +623,30 @@ export const notebooksMetadata = [
         "source": "/notebook/agentchat_planning.ipynb"
     },
     {
-        "title": "ReasoningAgent (Tree of Thoughts with Beam Search)",
+        "title": "RealtimeAgent in a Swarm Orchestration",
+        "link": "/notebooks/agentchat_realtime_swarm",
+        "description": "Swarm Ochestration",
+        "image": null,
+        "tags": [
+            "orchestration",
+            "group chat",
+            "swarm"
+        ],
+        "source": "/notebook/agentchat_realtime_swarm.ipynb"
+    },
+    {
+        "title": "RealtimeAgent with local websocket connection",
+        "link": "/notebooks/agentchat_realtime_websocket",
+        "description": "RealtimeAgent using websockets",
+        "image": null,
+        "tags": [
+            "realtime",
+            "websockets"
+        ],
+        "source": "/notebook/agentchat_realtime_websocket.ipynb"
+    },
+    {
+        "title": "ReasoningAgent - Advanced LLM Reasoning with Multiple Search Strategies",
         "link": "/notebooks/agentchat_reasoning_agent",
         "description": "Use ReasoningAgent for o1 style reasoning in Agentic workflows with LLMs using AG2",
         "image": null,
@@ -634,6 +724,18 @@ export const notebooksMetadata = [
             "swarm"
         ],
         "source": "/notebook/agentchat_swarm.ipynb"
+    },
+    {
+        "title": "Enhanced Swarm Orchestration with AG2",
+        "link": "/notebooks/agentchat_swarm_enhanced",
+        "description": "Swarm Ochestration",
+        "image": null,
+        "tags": [
+            "orchestration",
+            "group chat",
+            "swarm"
+        ],
+        "source": "/notebook/agentchat_swarm_enhanced.ipynb"
     },
     {
         "title": "Using a local Telemetry server to monitor a GraphRAG agent",
@@ -843,6 +945,17 @@ export const notebooksMetadata = [
         "source": "/notebook/autogen_uniformed_api_calling.ipynb"
     },
     {
+        "title": "Config loader utility functions",
+        "link": "/notebooks/config_loader_utility_functions",
+        "description": "Config loader utility functions",
+        "image": null,
+        "tags": [
+            "utility",
+            "config"
+        ],
+        "source": "/notebook/config_loader_utility_functions.ipynb"
+    },
+    {
         "title": "From Dad Jokes To Sad Jokes: Function Calling with GPTAssistantAgent",
         "link": "/notebooks/gpt_assistant_agent_function_call",
         "description": "Use tools in a GPTAssistantAgent Multi-Agent System by utilizing functions such as calling an API and writing to a file.",
@@ -867,144 +980,6 @@ export const notebooksMetadata = [
         "source": "/notebook/lats_search.ipynb"
     },
     {
-        "title": "Tool Use",
-        "link": "/notebooks/tool-use",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/tutorial/tool-use.ipynb"
-    },
-    {
-        "title": "Mitigating Prompt hacking with JSON Mode in Autogen",
-        "link": "/notebooks/JSON_mode_example",
-        "description": "Use JSON mode and Agent Descriptions to mitigate prompt manipulation and control speaker transition.",
-        "image": null,
-        "tags": [
-            "JSON",
-            "description",
-            "prompt hacking",
-            "group chat",
-            "orchestration"
-        ],
-        "source": "/notebook/JSON_mode_example.ipynb"
-    },
-    {
-        "title": "Using RetrieveChat for Retrieve Augmented Code Generation and Question Answering",
-        "link": "/notebooks/agentchat_RetrieveChat",
-        "description": "Explore the use of AutoGen's RetrieveChat for tasks like code generation from docstrings, answering complex questions with human feedback, and exploiting features like Update Context, custom prompts, and few-shot learning.",
-        "image": null,
-        "tags": [
-            "RAG"
-        ],
-        "source": "/notebook/agentchat_RetrieveChat.ipynb"
-    },
-    {
-        "title": "Anthropic Claude",
-        "link": "/notebooks/cloud-anthropic",
-        "description": "Define and load a custom model",
-        "image": null,
-        "tags": [
-            "custom model"
-        ],
-        "source": "/website/docs/topics/non-openai-models/cloud-anthropic.ipynb"
-    },
-    {
-        "title": "Amazon Bedrock",
-        "link": "/notebooks/cloud-bedrock",
-        "description": "Define and load a custom model",
-        "image": null,
-        "tags": [
-            "custom model"
-        ],
-        "source": "/website/docs/topics/non-openai-models/cloud-bedrock.ipynb"
-    },
-    {
-        "title": "ReAct",
-        "link": "/notebooks/react",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/prompting-and-reasoning/react.ipynb"
-    },
-    {
-        "title": "Allowing Human Feedback in Agents",
-        "link": "/notebooks/human-in-the-loop",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/tutorial/human-in-the-loop.ipynb"
-    },
-    {
-        "title": "Task Decomposition",
-        "link": "/notebooks/task_decomposition",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/task_decomposition.ipynb"
-    },
-    {
-        "title": "Using Neo4j's graph database with AG2 agents for Question & Answering",
-        "link": "/notebooks/agentchat_graph_rag_neo4j",
-        "description": "Neo4j GraphRAG utilises a knowledge graph and can be added as a capability to agents.",
-        "image": null,
-        "tags": [
-            "RAG"
-        ],
-        "source": "/notebook/agentchat_graph_rag_neo4j.ipynb"
-    },
-    {
-        "title": "Swarm Orchestration",
-        "link": "/notebooks/swarm",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/swarm.ipynb"
-    },
-    {
-        "title": "LiteLLM with WatsonX",
-        "link": "/notebooks/cloud-litellm-watsonx",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/cloud-litellm-watsonx.ipynb"
-    },
-    {
-        "title": "Introduction to AutoGen",
-        "link": "/notebooks/introduction",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/tutorial/introduction.ipynb"
-    },
-    {
-        "title": "Conversation Patterns",
-        "link": "/notebooks/conversation-patterns",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/tutorial/conversation-patterns.ipynb"
-    },
-    {
-        "title": "Enhanced Swarm Orchestration with AG2",
-        "link": "/notebooks/agentchat_swarm_enhanced",
-        "description": "Swarm Ochestration",
-        "image": null,
-        "tags": [
-            "orchestration",
-            "group chat",
-            "swarm"
-        ],
-        "source": "/notebook/agentchat_swarm_enhanced.ipynb"
-    },
-    {
-        "title": "Cerebras",
-        "link": "/notebooks/cloud-cerebras",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/cloud-cerebras.ipynb"
-    },
-    {
         "title": "Cross-Framework LLM Tool Integration with AG2",
         "link": "/notebooks/tools_interoperability",
         "description": "Cross-Framework LLM Tool Integration with AG2",
@@ -1016,278 +991,5 @@ export const notebooksMetadata = [
             "pydanticai"
         ],
         "source": "/notebook/tools_interoperability.ipynb"
-    },
-    {
-        "title": "RealtimeAgent in a Swarm Orchestration",
-        "link": "/notebooks/agentchat_realtime_swarm",
-        "description": "Swarm Ochestration",
-        "image": null,
-        "tags": [
-            "orchestration",
-            "group chat",
-            "swarm"
-        ],
-        "source": "/notebook/agentchat_realtime_swarm.ipynb"
-    },
-    {
-        "title": "RealtimeAgent using websockets",
-        "link": "/notebooks/agentchat_realtime_websocket",
-        "description": "Realtime agent using websockets",
-        "image": null,
-        "tags": [
-            "realtime",
-            "websockets"
-        ],
-        "source": "/notebook/agentchat_realtime_websocket.ipynb"
-    },
-    {
-        "title": "ReasoningAgent - Advanced LLM Reasoning with Multiple Search Strategies",
-        "link": "/notebooks/agentchat_reasoning_agent",
-        "description": "Use ReasoningAgent for o1 style reasoning in Agentic workflows with LLMs using AG2",
-        "image": null,
-        "tags": [
-            "reasoning agent",
-            "tree of thoughts"
-        ],
-        "source": "/notebook/agentchat_reasoning_agent.ipynb"
-    },
-    {
-        "title": "LLM Configuration",
-        "link": "/notebooks/llm_configuration",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/llm_configuration.ipynb"
-    },
-    {
-        "title": "Command Line Code Executor",
-        "link": "/notebooks/cli-code-executor",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/code-execution/cli-code-executor.ipynb"
-    },
-    {
-        "title": "Custom Code Executor",
-        "link": "/notebooks/custom-executor",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/code-execution/custom-executor.ipynb"
-    },
-    {
-        "title": "Jupyter Code Executor",
-        "link": "/notebooks/jupyter-code-executor",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/code-execution/jupyter-code-executor.ipynb"
-    },
-    {
-        "title": "User Defined Functions",
-        "link": "/notebooks/user-defined-functions",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/code-execution/user-defined-functions.ipynb"
-    },
-    {
-        "title": "Customize Speaker Selection",
-        "link": "/notebooks/customized_speaker_selection",
-        "description": "Custom Speaker Selection Function",
-        "image": null,
-        "tags": [
-            "orchestration",
-            "group chat"
-        ],
-        "source": "/website/docs/topics/groupchat/customized_speaker_selection.ipynb"
-    },
-    {
-        "title": "Resuming a GroupChat",
-        "link": "/notebooks/resuming_groupchat",
-        "description": "Resume Group Chat",
-        "image": null,
-        "tags": [
-            "resume",
-            "orchestration",
-            "group chat"
-        ],
-        "source": "/website/docs/topics/groupchat/resuming_groupchat.ipynb"
-    },
-    {
-        "title": "Using Transform Messages during Speaker Selection",
-        "link": "/notebooks/transform_messages_speaker_selection",
-        "description": "Custom Speaker Selection Function",
-        "image": null,
-        "tags": [
-            "orchestration",
-            "long context handling",
-            "group chat"
-        ],
-        "source": "/website/docs/topics/groupchat/transform_messages_speaker_selection.ipynb"
-    },
-    {
-        "title": "Using Custom Model Client classes with Auto Speaker Selection",
-        "link": "/notebooks/using_custom_model_client_classes",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/groupchat/using_custom_model_client_classes.ipynb"
-    },
-    {
-        "title": "Cohere",
-        "link": "/notebooks/cloud-cohere",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/cloud-cohere.ipynb"
-    },
-    {
-        "title": "Using Gemini in AutoGen with Other LLMs",
-        "link": "/notebooks/cloud-gemini",
-        "description": "Using Gemini with AutoGen",
-        "image": null,
-        "tags": [
-            "gemini"
-        ],
-        "source": "/website/docs/topics/non-openai-models/cloud-gemini.ipynb"
-    },
-    {
-        "title": "Use AutoGen with Gemini via VertexAI",
-        "link": "/notebooks/cloud-gemini_vertexai",
-        "description": "Using Gemini with AutoGen via VertexAI",
-        "image": null,
-        "tags": [
-            "gemini",
-            "vertexai"
-        ],
-        "source": "/website/docs/topics/non-openai-models/cloud-gemini_vertexai.ipynb"
-    },
-    {
-        "title": "Groq",
-        "link": "/notebooks/cloud-groq",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/cloud-groq.ipynb"
-    },
-    {
-        "title": "Mistral AI",
-        "link": "/notebooks/cloud-mistralai",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/cloud-mistralai.ipynb"
-    },
-    {
-        "title": "Together.AI",
-        "link": "/notebooks/cloud-togetherai",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/cloud-togetherai.ipynb"
-    },
-    {
-        "title": "LiteLLM with Ollama",
-        "link": "/notebooks/local-litellm-ollama",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/local-litellm-ollama.ipynb"
-    },
-    {
-        "title": "LM Studio",
-        "link": "/notebooks/local-lm-studio",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/local-lm-studio.ipynb"
-    },
-    {
-        "title": "Ollama",
-        "link": "/notebooks/local-ollama",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/non-openai-models/local-ollama.ipynb"
-    },
-    {
-        "title": "LLM Reflection",
-        "link": "/notebooks/reflection",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/topics/prompting-and-reasoning/reflection.ipynb"
-    },
-    {
-        "title": "Terminating Conversations Between Agents",
-        "link": "/notebooks/chat-termination",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/tutorial/chat-termination.ipynb"
-    },
-    {
-        "title": "Code Executors",
-        "link": "/notebooks/code-executors",
-        "description": "",
-        "image": null,
-        "tags": [],
-        "source": "/website/docs/tutorial/code-executors.ipynb"
-    },
-    {
-        "title": "Cross-Framework LLM Tool for CaptainAgent",
-        "link": "/notebooks/agentchat_captainagent_crosstool",
-        "description": "Cross-Framework LLM Tool for CaptainAgent",
-        "image": null,
-        "tags": [
-            "tools",
-            "langchain",
-            "crewai"
-        ],
-        "source": "/notebook/agentchat_captainagent_crosstool.ipynb"
-    },
-    {
-        "title": "RealtimeAgent with local websocket connection",
-        "link": "/notebooks/agentchat_realtime_websocket",
-        "description": "RealtimeAgent using websockets",
-        "image": null,
-        "tags": [
-            "realtime",
-            "websockets"
-        ],
-        "source": "/notebook/agentchat_realtime_websocket.ipynb"
-    },
-    {
-        "title": "Using FalkorGraphRagCapability with agents for GraphRAG Question & Answering",
-        "link": "/notebooks/agentchat_graph_rag_falkordb",
-        "description": "Using FalkorGraphRagCapability with agents for GraphRAG Question & Answering",
-        "image": null,
-        "tags": [
-            "RAG",
-            "FalkorDB"
-        ],
-        "source": "/notebook/agentchat_graph_rag_falkordb.ipynb"
-    },
-    {
-        "title": "Auto Generated Agent Chat: Using MathChat to Solve Math Problems",
-        "link": "/notebooks/agentchat_MathChat",
-        "description": "Using MathChat to Solve Math Problems",
-        "image": null,
-        "tags": [
-            "math"
-        ],
-        "source": "/notebook/agentchat_MathChat.ipynb"
-    },
-    {
-        "title": "Config loader utility functions",
-        "link": "/notebooks/config_loader_utility_functions",
-        "description": "Config loader utility functions",
-        "image": null,
-        "tags": [
-            "utility",
-            "config"
-        ],
-        "source": "/notebook/config_loader_utility_functions.ipynb"
     }
 ];

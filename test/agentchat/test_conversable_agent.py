@@ -10,24 +10,21 @@ import asyncio
 import copy
 import inspect
 import os
-import sys
 import time
 import unittest
-from typing import Annotated, Any, Callable, Dict, Literal
+from typing import Annotated, Any, Callable, Literal
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel, Field
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
-from autogen.tools.tool import Tool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from ..conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
+from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -813,11 +810,24 @@ def test_register_for_llm_without_description():
         mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
         agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
 
-        with pytest.raises(ValueError, match=" Input should be a valid string"):
+        @agent.register_for_llm()
+        def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
+            pass
 
-            @agent.register_for_llm()
-            def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
-                pass
+        assert exec_python.description == ""
+
+
+def test_register_for_llm_with_docstring():
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
+        agent = ConversableAgent(name="agent", llm_config={"config_list": gpt4_config_list})
+
+        @agent.register_for_llm()
+        def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
+            """Execute a Python cell."""
+            pass
+
+        assert exec_python.description == "Execute a Python cell."
 
 
 def test_register_for_llm_without_LLM():
@@ -900,7 +910,7 @@ def test_register_functions():
         )
 
         expected_function_map = {"exec_python": exec_python}
-        assert get_origin(user_proxy.function_map) == expected_function_map
+        assert get_origin(user_proxy.function_map).keys() == expected_function_map.keys()
 
         expected = [
             {

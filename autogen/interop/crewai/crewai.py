@@ -67,7 +67,7 @@ class CrewAIInteroperability:
         return Tool(
             name=name,
             description=description,
-            func=func,
+            func_or_tool=func,
         )
 
     @classmethod

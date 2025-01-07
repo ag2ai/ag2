@@ -5,19 +5,17 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import os
-import sys
 import tempfile
 import time
 
 import pytest
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import skip_openai, skip_redis  # noqa: E402
+from ..conftest import skip_openai, skip_redis  # noqa: E402
+from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 try:
     from openai import OpenAI

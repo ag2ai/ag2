@@ -16,7 +16,7 @@ class TestTool:
         def f(x: str) -> str:
             return x + "!"
 
-        self.tool = Tool(name="test_tool", description="A test tool", func=f)
+        self.tool = Tool(name="test_tool", description="A test tool", func_or_tool=f)
 
     def test_init(self) -> None:
         assert self.tool.name == "test_tool"

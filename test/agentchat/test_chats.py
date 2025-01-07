@@ -11,14 +11,13 @@ import sys
 from typing import Annotated, Literal
 
 import pytest
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, filter_config, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import reason, skip_openai  # noqa: E402
+from ..conftest import reason, skip_openai  # noqa: E402
+from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
 config_list = (
     []

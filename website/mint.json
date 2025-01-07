@@ -402,6 +402,12 @@
           ]
         },
         {
+          "group": "messages",
+          "pages": [
+            "docs/reference/messages/agent_messages"
+          ]
+        },
+        {
           "group": "oai",
           "pages": [
             "docs/reference/oai/anthropic",
@@ -422,6 +428,7 @@
         {
           "group": "tools",
           "pages": [
+            "docs/reference/tools/function_utils",
             "docs/reference/tools/tool"
           ]
         },
@@ -479,6 +486,8 @@
       "group": "Talks",
       "pages": [
         "talks/future_talks/index",
+        "talks/2024-12-19/index",
+        "talks/2024-12-12/index",
         "talks/2024-11-28/index",
         "talks/2024-11-25/index",
         "talks/2024-11-18/index",
@@ -546,6 +555,9 @@
           "pages": [
             "notebooks/Notebooks",
             "notebooks/agentchat_RetrieveChat_mongodb",
+            "notebooks/JSON_mode_example",
+            "notebooks/agentchat_MathChat",
+            "notebooks/agentchat_RetrieveChat",
             "notebooks/agentchat_RetrieveChat_pgvector",
             "notebooks/agentchat_RetrieveChat_qdrant",
             "notebooks/agentchat_agentops",
@@ -553,6 +565,7 @@
             "notebooks/agentchat_auto_feedback_from_code_execution",
             "notebooks/agentchat_azr_ai_search",
             "notebooks/agentchat_captainagent",
+            "notebooks/agentchat_captainagent_crosstool",
             "notebooks/agentchat_cost_token_tracking",
             "notebooks/agentchat_custom_model",
             "notebooks/agentchat_dalle_and_gpt4v",
@@ -561,6 +574,8 @@
             "notebooks/agentchat_function_call_async",
             "notebooks/agentchat_function_call_code_writing",
             "notebooks/agentchat_function_call_currency_calculator",
+            "notebooks/agentchat_graph_rag_falkordb",
+            "notebooks/agentchat_graph_rag_neo4j",
             "notebooks/agentchat_group_chat_with_llamaindex_agents",
             "notebooks/agentchat_groupchat",
             "notebooks/agentchat_groupchat_RAG",
@@ -592,6 +607,8 @@
             "notebooks/agentchat_oai_code_interpreter",
             "notebooks/agentchat_openlit",
             "notebooks/agentchat_planning",
+            "notebooks/agentchat_realtime_swarm",
+            "notebooks/agentchat_realtime_websocket",
             "notebooks/agentchat_reasoning_agent",
             "notebooks/agentchat_society_of_mind",
             "notebooks/agentchat_sql_spider",
@@ -599,6 +616,7 @@
             "notebooks/agentchat_structured_outputs",
             "notebooks/agentchat_surfer",
             "notebooks/agentchat_swarm",
+            "notebooks/agentchat_swarm_enhanced",
             "notebooks/agentchat_swarm_graphrag_telemetry_trip_planner",
             "notebooks/agentchat_swarm_graphrag_trip_planner",
             "notebooks/agentchat_swarm_w_groupchat_legacy",
@@ -617,21 +635,10 @@
             "notebooks/autobuild_agent_library",
             "notebooks/autobuild_basic",
             "notebooks/autogen_uniformed_api_calling",
+            "notebooks/config_loader_utility_functions",
             "notebooks/gpt_assistant_agent_function_call",
             "notebooks/lats_search",
-            "notebooks/JSON_mode_example",
-            "notebooks/agentchat_RetrieveChat",
-            "notebooks/agentchat_graph_rag_neo4j",
-            "notebooks/agentchat_swarm_enhanced",
-            "notebooks/tools_interoperability",
-            "notebooks/agentchat_realtime_swarm",
-            "notebooks/agentchat_realtime_websocket",
-            "notebooks/agentchat_reasoning_agent",
-            "notebooks/agentchat_captainagent_crosstool",
-            "notebooks/agentchat_realtime_websocket",
-            "notebooks/agentchat_graph_rag_falkordb",
-            "notebooks/agentchat_MathChat",
-            "notebooks/config_loader_utility_functions"
+            "notebooks/tools_interoperability"
           ]
         },
         "notebooks/Gallery"

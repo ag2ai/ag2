@@ -6,21 +6,15 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
-import sys
-import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import MOCK_OPEN_AI_API_KEY
 
 from autogen import GroupChat, GroupChatManager
 from autogen.agentchat.contrib.llamaindex_conversable_agent import LLamaIndexConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import reason, skip_openai
+from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
 
 skip_reasons = [reason]
 try:
