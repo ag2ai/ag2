@@ -45,6 +45,7 @@ from ..messages.agent_messages import (
     ClearConversableAgentHistoryMessage,
     ClearConversableAgentHistoryWarningMessage,
     ConversableAgentUsageSummaryMessage,
+    ConversableAgentUsageSummaryNoCostIncurredMessage,
     ExecuteCodeBlockMessage,
     ExecutedFunctionMessage,
     ExecuteFunctionMessage,
@@ -2876,7 +2877,10 @@ class ConversableAgent(LLMAgent):
     def print_usage_summary(self, mode: Union[str, list[str]] = ["actual", "total"]) -> None:
         """Print the usage summary."""
         iostream = IOStream.get_default()
-        iostream.send(ConversableAgentUsageSummaryMessage(recipient=self, client=self.client))
+        if self.client is None:
+            iostream.send(ConversableAgentUsageSummaryNoCostIncurredMessage(recipient=self))
+        else:
+            iostream.send(ConversableAgentUsageSummaryMessage(recipient=self))
 
         if self.client is not None:
             self.client.print_usage_summary(mode)

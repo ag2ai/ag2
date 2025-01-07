@@ -17,6 +17,7 @@ from autogen.messages.agent_messages import (
     ClearConversableAgentHistoryWarningMessage,
     ContentMessage,
     ConversableAgentUsageSummaryMessage,
+    ConversableAgentUsageSummaryNoCostIncurredMessage,
     ExecuteCodeBlockMessage,
     ExecutedFunctionMessage,
     ExecuteFunctionMessage,
@@ -1115,31 +1116,20 @@ class TestGenerateCodeExecutionReplyMessage:
         assert mock.call_args_list == expected
 
 
-class TestConversableAgentUsageSummaryMessage:
-    @pytest.mark.parametrize(
-        "client, is_client_empty, expected",
-        [
-            (OpenAIWrapper(api_key="dummy api key"), False, [call("Agent 'recipient':")]),
-            (None, True, [call("No cost incurred from agent 'recipient'.")]),
-        ],
-    )
+class TestConversableAgentUsageSummaryNoCostIncurredMessage:
     def test_print(
         self,
-        client: Optional[OpenAIWrapper],
-        is_client_empty: bool,
-        expected: list[_Call],
         uuid: UUID,
         recipient: ConversableAgent,
     ) -> None:
-        actual = ConversableAgentUsageSummaryMessage(uuid=uuid, recipient=recipient, client=client)
-        assert isinstance(actual, ConversableAgentUsageSummaryMessage)
+        actual = ConversableAgentUsageSummaryNoCostIncurredMessage(uuid=uuid, recipient=recipient)
+        assert isinstance(actual, ConversableAgentUsageSummaryNoCostIncurredMessage)
 
         expected_model_dump = {
-            "type": "conversable_agent_usage_summary",
+            "type": "conversable_agent_usage_summary_no_cost_incurred",
             "content": {
                 "uuid": uuid,
                 "recipient_name": "recipient",
-                "is_client_empty": is_client_empty,
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1148,8 +1138,34 @@ class TestConversableAgentUsageSummaryMessage:
         actual.print(f=mock)
 
         # print(mock.call_args_list)
+        expected_call_args_list = [call("No cost incurred from agent 'recipient'.")]
+        assert mock.call_args_list == expected_call_args_list
 
-        assert mock.call_args_list == expected
+
+class TestConversableAgentUsageSummaryMessage:
+    def test_print(
+        self,
+        uuid: UUID,
+        recipient: ConversableAgent,
+    ) -> None:
+        actual = ConversableAgentUsageSummaryMessage(uuid=uuid, recipient=recipient)
+        assert isinstance(actual, ConversableAgentUsageSummaryMessage)
+
+        expected_model_dump = {
+            "type": "conversable_agent_usage_summary",
+            "content": {
+                "uuid": uuid,
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+        expected_call_args_list = [call("Agent 'recipient':")]
+        assert mock.call_args_list == expected_call_args_list
 
 
 class TestTextMessage:
