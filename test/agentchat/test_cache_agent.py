@@ -72,12 +72,12 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
 
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     with Cache.redis(random_cache_seed, redis_url) as cache_client:
-        cold_cache_messages = run_groupchat_conversation(cache=cache_client)
+        cold_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_groupchat_conversation(cache=cache_client)
+        warm_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
@@ -102,12 +102,12 @@ def test_disk_cache(credentials_gpt_4o_mini: Credentials):
 
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     with Cache.disk(random_cache_seed) as cache_client:
-        cold_cache_messages = run_groupchat_conversation(cache=cache_client)
+        cold_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_groupchat_conversation(cache=cache_client)
+        warm_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
