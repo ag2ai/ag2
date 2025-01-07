@@ -13,32 +13,32 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock
 from autogen.messages.agent_messages import (
     ClearAgentsHistoryMessage,
-    ClearConversableAgentHistory,
-    ClearConversableAgentHistoryWarning,
+    ClearConversableAgentHistoryMessage,
+    ClearConversableAgentHistoryWarningMessage,
     ContentMessage,
-    ConversableAgentUsageSummary,
-    ExecuteCodeBlock,
-    ExecutedFunction,
-    ExecuteFunction,
+    ConversableAgentUsageSummaryMessage,
+    ExecuteCodeBlockMessage,
+    ExecutedFunctionMessage,
+    ExecuteFunctionMessage,
     FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
-    GenerateCodeExecutionReply,
+    GenerateCodeExecutionReplyMessage,
     GroupChatResumeMessage,
-    GroupChatRunChat,
+    GroupChatRunChatMessage,
     MessageRole,
     PostCarryoverProcessingMessage,
-    SelectSpeaker,
-    SelectSpeakerInvalidInput,
-    SelectSpeakerTryCountExceeded,
+    SelectSpeakerInvalidInputMessage,
+    SelectSpeakerMessage,
+    SelectSpeakerTryCountExceededMessage,
     SpeakerAttemptMessage,
-    TerminationAndHumanReply,
+    TerminationAndHumanReplyMessage,
     TextMessage,
     ToolCall,
     ToolCallMessage,
     ToolResponse,
     ToolResponseMessage,
-    UsingAutoReply,
+    UsingAutoReplyMessage,
     create_received_message_model,
 )
 from autogen.oai.client import OpenAIWrapper
@@ -557,8 +557,8 @@ def test_GroupChatRunChat(uuid: UUID) -> None:
     )
     silent = False
 
-    actual = GroupChatRunChat(uuid=uuid, speaker=speaker, silent=silent)
-    assert isinstance(actual, GroupChatRunChat)
+    actual = GroupChatRunChatMessage(uuid=uuid, speaker=speaker, silent=silent)
+    assert isinstance(actual, GroupChatRunChatMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -583,13 +583,13 @@ def test_GroupChatRunChat(uuid: UUID) -> None:
 def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     no_human_input_msg = "NO HUMAN INPUT RECEIVED."
 
-    actual = TerminationAndHumanReply(
+    actual = TerminationAndHumanReplyMessage(
         uuid=uuid,
         no_human_input_msg=no_human_input_msg,
         sender=sender,
         recipient=recipient,
     )
-    assert isinstance(actual, TerminationAndHumanReply)
+    assert isinstance(actual, TerminationAndHumanReplyMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -609,13 +609,13 @@ def test_TerminationAndHumanReply(uuid: UUID, sender: ConversableAgent, recipien
 def test_UsingAutoReply(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
     human_input_mode = "ALWAYS"
 
-    actual = UsingAutoReply(
+    actual = UsingAutoReplyMessage(
         uuid=uuid,
         human_input_mode=human_input_mode,
         sender=sender,
         recipient=recipient,
     )
-    assert isinstance(actual, UsingAutoReply)
+    assert isinstance(actual, UsingAutoReplyMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -637,10 +637,10 @@ def test_ExecuteCodeBlock(uuid: UUID, sender: ConversableAgent, recipient: Conve
     language = "python"
     code_block_count = 0
 
-    actual = ExecuteCodeBlock(
+    actual = ExecuteCodeBlockMessage(
         uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient=recipient
     )
-    assert isinstance(actual, ExecuteCodeBlock)
+    assert isinstance(actual, ExecuteCodeBlockMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -668,8 +668,10 @@ def test_ExecuteFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     call_id = "call_12345xyz"
     arguments = {"num_to_be_added": 5}
 
-    actual = ExecuteFunction(uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient=recipient)
-    assert isinstance(actual, ExecuteFunction)
+    actual = ExecuteFunctionMessage(
+        uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient=recipient
+    )
+    assert isinstance(actual, ExecuteFunctionMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -698,10 +700,10 @@ def test_ExecutedFunction(uuid: UUID, recipient: ConversableAgent) -> None:
     arguments = {"num_to_be_added": 5}
     content = "15"
 
-    actual = ExecutedFunction(
+    actual = ExecutedFunctionMessage(
         uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=recipient
     )
-    assert isinstance(actual, ExecutedFunction)
+    assert isinstance(actual, ExecutedFunctionMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -731,8 +733,8 @@ def test_SelectSpeaker(uuid: UUID) -> None:
         ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
     ]
 
-    actual = SelectSpeaker(uuid=uuid, agents=agents)  # type: ignore [arg-type]
-    assert isinstance(actual, SelectSpeaker)
+    actual = SelectSpeakerMessage(uuid=uuid, agents=agents)  # type: ignore [arg-type]
+    assert isinstance(actual, SelectSpeakerMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -758,8 +760,8 @@ def test_SelectSpeakerTryCountExceeded(uuid: UUID) -> None:
     ]
     try_count = 3
 
-    actual = SelectSpeakerTryCountExceeded(uuid=uuid, try_count=try_count, agents=agents)  # type: ignore [arg-type]
-    assert isinstance(actual, SelectSpeakerTryCountExceeded)
+    actual = SelectSpeakerTryCountExceededMessage(uuid=uuid, try_count=try_count, agents=agents)  # type: ignore [arg-type]
+    assert isinstance(actual, SelectSpeakerTryCountExceededMessage)
 
     mock = MagicMock()
     actual.print(f=mock)
@@ -774,8 +776,8 @@ def test_SelectSpeakerInvalidInput(uuid: UUID) -> None:
         ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
     ]
 
-    actual = SelectSpeakerInvalidInput(uuid=uuid, agents=agents)  # type: ignore [arg-type]
-    assert isinstance(actual, SelectSpeakerInvalidInput)
+    actual = SelectSpeakerInvalidInputMessage(uuid=uuid, agents=agents)  # type: ignore [arg-type]
+    assert isinstance(actual, SelectSpeakerInvalidInputMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -792,8 +794,10 @@ def test_SelectSpeakerInvalidInput(uuid: UUID) -> None:
 def test_ClearConversableAgentHistory(uuid: UUID, recipient: ConversableAgent) -> None:
     no_messages_preserved = 5
 
-    actual = ClearConversableAgentHistory(uuid=uuid, agent=recipient, no_messages_preserved=no_messages_preserved)
-    assert isinstance(actual, ClearConversableAgentHistory)
+    actual = ClearConversableAgentHistoryMessage(
+        uuid=uuid, agent=recipient, no_messages_preserved=no_messages_preserved
+    )
+    assert isinstance(actual, ClearConversableAgentHistoryMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -817,7 +821,7 @@ def test_ClearConversableAgentHistory(uuid: UUID, recipient: ConversableAgent) -
 
 
 def test_ClearConversableAgentHistoryWarning(uuid: UUID, recipient: ConversableAgent) -> None:
-    actual = ClearConversableAgentHistoryWarning(uuid=uuid, recipient=recipient)
+    actual = ClearConversableAgentHistoryWarningMessage(uuid=uuid, recipient=recipient)
 
     mock = MagicMock()
     actual.print(f=mock)
@@ -861,8 +865,8 @@ def test_GenerateCodeExecutionReply(
     sender: ConversableAgent,
     recipient: ConversableAgent,
 ) -> None:
-    actual = GenerateCodeExecutionReply(uuid=uuid, code_blocks=code_blocks, sender=sender, recipient=recipient)
-    assert isinstance(actual, GenerateCodeExecutionReply)
+    actual = GenerateCodeExecutionReplyMessage(uuid=uuid, code_blocks=code_blocks, sender=sender, recipient=recipient)
+    assert isinstance(actual, GenerateCodeExecutionReplyMessage)
 
     expected_model_dump = {
         "uuid": uuid,
@@ -894,8 +898,8 @@ def test_ConversableAgentUsageSummary(
     uuid: UUID,
     recipient: ConversableAgent,
 ) -> None:
-    actual = ConversableAgentUsageSummary(uuid=uuid, recipient=recipient, client=client)
-    assert isinstance(actual, ConversableAgentUsageSummary)
+    actual = ConversableAgentUsageSummaryMessage(uuid=uuid, recipient=recipient, client=client)
+    assert isinstance(actual, ConversableAgentUsageSummaryMessage)
 
     expected_model_dump = {
         "uuid": uuid,

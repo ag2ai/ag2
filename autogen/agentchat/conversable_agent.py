@@ -42,15 +42,15 @@ from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
 from ..io.base import IOStream
 from ..messages.agent_messages import (
-    ClearConversableAgentHistory,
-    ClearConversableAgentHistoryWarning,
-    ConversableAgentUsageSummary,
-    ExecuteCodeBlock,
-    ExecutedFunction,
-    ExecuteFunction,
-    GenerateCodeExecutionReply,
-    TerminationAndHumanReply,
-    UsingAutoReply,
+    ClearConversableAgentHistoryMessage,
+    ClearConversableAgentHistoryWarningMessage,
+    ConversableAgentUsageSummaryMessage,
+    ExecuteCodeBlockMessage,
+    ExecutedFunctionMessage,
+    ExecuteFunctionMessage,
+    GenerateCodeExecutionReplyMessage,
+    TerminationAndHumanReplyMessage,
+    UsingAutoReplyMessage,
     create_received_message_model,
 )
 from ..oai.client import ModelClient, OpenAIWrapper
@@ -1409,14 +1409,16 @@ class ConversableAgent(LLMAgent):
                         no_messages_preserved += 1
                     # Remove messages from history except last `nr_messages_to_preserve` messages.
                     self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
-                iostream.send(ClearConversableAgentHistory(agent=self, no_messages_preserved=no_messages_preserved))
+                iostream.send(
+                    ClearConversableAgentHistoryMessage(agent=self, no_messages_preserved=no_messages_preserved)
+                )
             else:
                 self._oai_messages.clear()
         else:
             self._oai_messages[recipient].clear()
             # clear_conversable_agent_history.print_warning(iostream.print)
             if nr_messages_to_preserve:
-                iostream.send(ClearConversableAgentHistoryWarning(recipient=self))
+                iostream.send(ClearConversableAgentHistoryWarningMessage(recipient=self))
 
     def generate_oai_reply(
         self,
@@ -1544,7 +1546,7 @@ class ConversableAgent(LLMAgent):
             if len(code_blocks) == 0:
                 continue
 
-            iostream.send(GenerateCodeExecutionReply(code_blocks=code_blocks, sender=sender, recipient=self))
+            iostream.send(GenerateCodeExecutionReplyMessage(code_blocks=code_blocks, sender=sender, recipient=self))
 
             # found code blocks, execute code.
             code_result = self._code_executor.execute_code_blocks(code_blocks)
@@ -1840,7 +1842,7 @@ class ConversableAgent(LLMAgent):
         # print the no_human_input_msg
         if no_human_input_msg:
             iostream.send(
-                TerminationAndHumanReply(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
+                TerminationAndHumanReplyMessage(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
             )
 
         # stop the conversation
@@ -1881,7 +1883,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.send(UsingAutoReply(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
+            iostream.send(UsingAutoReplyMessage(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 
@@ -1955,7 +1957,7 @@ class ConversableAgent(LLMAgent):
         # print the no_human_input_msg
         if no_human_input_msg:
             iostream.send(
-                TerminationAndHumanReply(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
+                TerminationAndHumanReplyMessage(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
             )
 
         # stop the conversation
@@ -1996,7 +1998,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.send(UsingAutoReply(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
+            iostream.send(UsingAutoReplyMessage(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 
@@ -2233,7 +2235,7 @@ class ConversableAgent(LLMAgent):
             if not lang:
                 lang = infer_lang(code)
 
-            iostream.send(ExecuteCodeBlock(code=code, language=lang, code_block_count=i, recipient=self))
+            iostream.send(ExecuteCodeBlockMessage(code=code, language=lang, code_block_count=i, recipient=self))
 
             if lang in ["bash", "shell", "sh"]:
                 exitcode, logs, image = self.run_code(code, lang=lang, **self._code_execution_config)
@@ -2330,7 +2332,7 @@ class ConversableAgent(LLMAgent):
             # Try to execute the function
             if arguments is not None:
                 iostream.send(
-                    ExecuteFunction(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
+                    ExecuteFunctionMessage(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
                 )
                 try:
                     content = func(**arguments)
@@ -2343,7 +2345,7 @@ class ConversableAgent(LLMAgent):
 
         if verbose:
             iostream.send(
-                ExecutedFunction(
+                ExecutedFunctionMessage(
                     func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
                 )
             )
@@ -2391,7 +2393,7 @@ class ConversableAgent(LLMAgent):
             # Try to execute the function
             if arguments is not None:
                 iostream.send(
-                    ExecuteFunction(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
+                    ExecuteFunctionMessage(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
                 )
                 try:
                     if inspect.iscoroutinefunction(func):
@@ -2408,7 +2410,7 @@ class ConversableAgent(LLMAgent):
 
         if verbose:
             iostream.send(
-                ExecutedFunction(
+                ExecutedFunctionMessage(
                     func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
                 )
             )
@@ -2874,7 +2876,7 @@ class ConversableAgent(LLMAgent):
     def print_usage_summary(self, mode: Union[str, list[str]] = ["actual", "total"]) -> None:
         """Print the usage summary."""
         iostream = IOStream.get_default()
-        iostream.send(ConversableAgentUsageSummary(recipient=self, client=self.client))
+        iostream.send(ConversableAgentUsageSummaryMessage(recipient=self, client=self.client))
 
         if self.client is not None:
             self.client.print_usage_summary(mode)

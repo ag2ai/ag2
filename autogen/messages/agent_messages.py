@@ -31,14 +31,14 @@ __all__ = [
     "ClearAgentsHistoryMessage",
     "SpeakerAttemptMessage",
     "GroupChatResumeMessage",
-    "GroupChatRunChat",
-    "TerminationAndHumanReply",
-    "ExecuteCodeBlock",
-    "ExecuteFunction",
-    "SelectSpeaker",
-    "ClearConversableAgentHistory",
-    "GenerateCodeExecutionReply",
-    "ConversableAgentUsageSummary",
+    "GroupChatRunChatMessage",
+    "TerminationAndHumanReplyMessage",
+    "ExecuteCodeBlockMessage",
+    "ExecuteFunctionMessage",
+    "SelectSpeakerMessage",
+    "ClearConversableAgentHistoryMessage",
+    "GenerateCodeExecutionReplyMessage",
+    "ConversableAgentUsageSummaryMessage",
     "TextMessage",
 ]
 
@@ -74,7 +74,6 @@ class FunctionResponseMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-@wrap_message
 class ToolResponse(BaseMessage):
     tool_call_id: Optional[str] = None
     role: MessageRole = "tool"
@@ -450,7 +449,7 @@ class GroupChatResumeMessage(BaseMessage):
 
 
 @wrap_message
-class GroupChatRunChat(BaseMessage):
+class GroupChatRunChatMessage(BaseMessage):
     speaker_name: str
     verbose: Optional[bool] = False
 
@@ -464,7 +463,7 @@ class GroupChatRunChat(BaseMessage):
 
 
 @wrap_message
-class TerminationAndHumanReply(BaseMessage):
+class TerminationAndHumanReplyMessage(BaseMessage):
     no_human_input_msg: str
     sender_name: str
     recipient_name: str
@@ -491,7 +490,7 @@ class TerminationAndHumanReply(BaseMessage):
 
 
 @wrap_message
-class UsingAutoReply(BaseMessage):
+class UsingAutoReplyMessage(BaseMessage):
     human_input_mode: str
     sender_name: str
     recipient_name: str
@@ -518,7 +517,7 @@ class UsingAutoReply(BaseMessage):
 
 
 @wrap_message
-class ExecuteCodeBlock(BaseMessage):
+class ExecuteCodeBlockMessage(BaseMessage):
     code: str
     language: str
     code_block_count: int
@@ -544,7 +543,7 @@ class ExecuteCodeBlock(BaseMessage):
 
 
 @wrap_message
-class ExecuteFunction(BaseMessage):
+class ExecuteFunctionMessage(BaseMessage):
     func_name: str
     call_id: Optional[str] = None
     arguments: dict[str, Any]
@@ -576,7 +575,7 @@ class ExecuteFunction(BaseMessage):
 
 
 @wrap_message
-class ExecutedFunction(BaseMessage):
+class ExecutedFunctionMessage(BaseMessage):
     func_name: str
     call_id: Optional[str] = None
     arguments: dict[str, Any]
@@ -615,7 +614,7 @@ class ExecutedFunction(BaseMessage):
 
 
 @wrap_message
-class SelectSpeaker(BaseMessage):
+class SelectSpeakerMessage(BaseMessage):
     agent_names: Optional[list[str]] = None
 
     def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
@@ -632,7 +631,7 @@ class SelectSpeaker(BaseMessage):
 
 
 @wrap_message
-class SelectSpeakerTryCountExceeded(BaseMessage):
+class SelectSpeakerTryCountExceededMessage(BaseMessage):
     try_count: int
     agent_names: Optional[list[str]] = None
 
@@ -647,7 +646,7 @@ class SelectSpeakerTryCountExceeded(BaseMessage):
 
 
 @wrap_message
-class SelectSpeakerInvalidInput(BaseMessage):
+class SelectSpeakerInvalidInputMessage(BaseMessage):
     agent_names: Optional[list[str]] = None
 
     def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
@@ -661,7 +660,7 @@ class SelectSpeakerInvalidInput(BaseMessage):
 
 
 @wrap_message
-class ClearConversableAgentHistory(BaseMessage):
+class ClearConversableAgentHistoryMessage(BaseMessage):
     agent_name: str
     recipient_name: str
     no_messages_preserved: int
@@ -685,7 +684,7 @@ class ClearConversableAgentHistory(BaseMessage):
 
 
 @wrap_message
-class ClearConversableAgentHistoryWarning(BaseMessage):
+class ClearConversableAgentHistoryWarningMessage(BaseMessage):
     recipient_name: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
@@ -707,7 +706,7 @@ class ClearConversableAgentHistoryWarning(BaseMessage):
 
 
 @wrap_message
-class GenerateCodeExecutionReply(BaseMessage):
+class GenerateCodeExecutionReplyMessage(BaseMessage):
     code_block_languages: list[str]
     sender_name: Optional[str] = None
     recipient_name: str
@@ -752,7 +751,7 @@ class GenerateCodeExecutionReply(BaseMessage):
 
 
 @wrap_message
-class ConversableAgentUsageSummary(BaseMessage):
+class ConversableAgentUsageSummaryMessage(BaseMessage):
     recipient_name: str
     is_client_empty: bool
 
