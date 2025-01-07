@@ -93,6 +93,11 @@ def credentials_gpt_4o_mini() -> Credentials:
 
 
 @pytest.fixture
+def credentials_azure_gpt_4o_mini() -> Credentials:
+    return get_credentials(filter_dict={"tags": ["gpt-4o-mini"], "api_type": ["azure"]})
+
+
+@pytest.fixture
 def credentials_gpt_4o() -> Credentials:
     return get_credentials(filter_dict={"tags": ["gpt-4o"]})
 
@@ -100,6 +105,11 @@ def credentials_gpt_4o() -> Credentials:
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
     return get_credentials(filter_dict={"tags": ["gpt-4o-realtime"]})
+
+
+@pytest.fixture
+def credentials_gpt_35_turbo_instruct() -> Credentials:
+    return get_credentials(filter_dict={"tags": ["gpt-3.5-turbo-instruct"]})
 
 
 @pytest.fixture

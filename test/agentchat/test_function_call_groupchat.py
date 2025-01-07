@@ -7,6 +7,7 @@
 #!/usr/bin/env python3 -m pytest
 
 import asyncio
+from copy import deepcopy
 
 import pytest
 
@@ -48,9 +49,9 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
             return random.randint(0, 100)
 
     # llm_config without functions
-    llm_config_no_function = credentials_gpt_4o_mini.llm_config.deepcopy()
+    llm_config_no_function = credentials_gpt_4o_mini.llm_config
     llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list.deepcopy(),
+        "config_list": credentials_gpt_4o_mini.config_list,
         key: value,
     }
 
