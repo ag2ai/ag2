@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from abc import ABC
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 from uuid import UUID
@@ -12,7 +13,7 @@ from ..code_utils import content_str
 
 # ToDo: once you move the code below, we can just delete this import
 from ..oai.client import OpenAIWrapper
-from .base_message import BaseMessage
+from .base_message import BaseMessage, wrap_message
 
 if TYPE_CHECKING:
     from ..agentchat.agent import Agent
@@ -43,7 +44,7 @@ __all__ = [
 MessageRole = Literal["assistant", "function", "tool"]
 
 
-class BasePrintReceivedMessage(BaseMessage):
+class BasePrintReceivedMessage(BaseMessage, ABC):
     content: Union[str, int, float, bool]
     sender_name: str
     recipient_name: str
@@ -53,6 +54,7 @@ class BasePrintReceivedMessage(BaseMessage):
         f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
 
+@wrap_message
 class FunctionResponseMessage(BasePrintReceivedMessage):
     name: Optional[str] = None
     role: MessageRole = "function"
@@ -71,6 +73,7 @@ class FunctionResponseMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
+@wrap_message
 class ToolResponse(BaseMessage):
     tool_call_id: Optional[str] = None
     role: MessageRole = "tool"
@@ -85,6 +88,7 @@ class ToolResponse(BaseMessage):
         f(colored("*" * len(tool_print), "green"), flush=True)
 
 
+@wrap_message
 class ToolResponseMessage(BasePrintReceivedMessage):
     role: MessageRole = "tool"
     tool_responses: list[ToolResponse]
@@ -99,6 +103,7 @@ class ToolResponseMessage(BasePrintReceivedMessage):
             f("\n", "-" * 80, flush=True, sep="")
 
 
+@wrap_message
 class FunctionCall(BaseMessage):
     name: Optional[str] = None
     arguments: Optional[str] = None
@@ -120,6 +125,7 @@ class FunctionCall(BaseMessage):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
+@wrap_message
 class FunctionCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     function_call: FunctionCall
@@ -136,6 +142,7 @@ class FunctionCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
+@wrap_message
 class ToolCall(BaseMessage):
     id: Optional[str] = None
     function: FunctionCall
@@ -160,6 +167,7 @@ class ToolCall(BaseMessage):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
+@wrap_message
 class ToolCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     refusal: Optional[str] = None
@@ -181,6 +189,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
+@wrap_message
 class ContentMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
 
@@ -244,6 +253,7 @@ def create_received_message_model(
     )
 
 
+@wrap_message
 class PostCarryoverProcessing(BaseMessage):
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
     message: str
@@ -326,6 +336,7 @@ class PostCarryoverProcessing(BaseMessage):
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
 
 
+@wrap_message
 class ClearAgentsHistory(BaseMessage):
     agent_name: Optional[str] = None
     nr_messages_to_preserve: Optional[int] = None
@@ -356,6 +367,7 @@ class ClearAgentsHistory(BaseMessage):
                 f("Clearing history for all agents.")
 
 
+@wrap_message
 class SpeakerAttempt(BaseMessage):
     mentions: dict[str, int]
     attempt: int
@@ -410,6 +422,7 @@ class SpeakerAttempt(BaseMessage):
             )
 
 
+@wrap_message
 class GroupChatResume(BaseMessage):
     last_speaker_name: str
     messages: list[dict[str, Any]]
@@ -435,6 +448,7 @@ class GroupChatResume(BaseMessage):
         )
 
 
+@wrap_message
 class GroupChatRunChat(BaseMessage):
     speaker_name: str
     verbose: Optional[bool] = False
@@ -448,6 +462,7 @@ class GroupChatRunChat(BaseMessage):
         f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
 
 
+@wrap_message
 class TerminationAndHumanReply(BaseMessage):
     no_human_input_msg: str
     sender_name: str
@@ -474,6 +489,7 @@ class TerminationAndHumanReply(BaseMessage):
         f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
 
 
+@wrap_message
 class UsingAutoReply(BaseMessage):
     human_input_mode: str
     sender_name: str
@@ -500,6 +516,7 @@ class UsingAutoReply(BaseMessage):
         f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
 
 
+@wrap_message
 class ExecuteCodeBlock(BaseMessage):
     code: str
     language: str
@@ -525,6 +542,7 @@ class ExecuteCodeBlock(BaseMessage):
         )
 
 
+@wrap_message
 class ExecuteFunction(BaseMessage):
     func_name: str
     call_id: Optional[str] = None
@@ -556,6 +574,7 @@ class ExecuteFunction(BaseMessage):
         )
 
 
+@wrap_message
 class ExecutedFunction(BaseMessage):
     func_name: str
     call_id: Optional[str] = None
@@ -594,6 +613,7 @@ class ExecutedFunction(BaseMessage):
         )
 
 
+@wrap_message
 class SelectSpeaker(BaseMessage):
     agent_names: Optional[list[str]] = None
 
@@ -610,6 +630,7 @@ class SelectSpeaker(BaseMessage):
             f(f"{i+1}: {agent_name}")
 
 
+@wrap_message
 class SelectSpeakerTryCountExceeded(BaseMessage):
     try_count: int
     agent_names: Optional[list[str]] = None
@@ -624,6 +645,7 @@ class SelectSpeakerTryCountExceeded(BaseMessage):
         f(f"You have tried {self.try_count} times. The next speaker will be selected automatically.")
 
 
+@wrap_message
 class SelectSpeakerInvalidInput(BaseMessage):
     agent_names: Optional[list[str]] = None
 
@@ -637,6 +659,7 @@ class SelectSpeakerInvalidInput(BaseMessage):
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
 
 
+@wrap_message
 class ClearConversableAgentHistory(BaseMessage):
     agent_name: str
     recipient_name: str
@@ -660,6 +683,7 @@ class ClearConversableAgentHistory(BaseMessage):
             )
 
 
+@wrap_message
 class ClearConversableAgentHistoryWarning(BaseMessage):
     recipient_name: str
 
@@ -681,6 +705,7 @@ class ClearConversableAgentHistoryWarning(BaseMessage):
         )
 
 
+@wrap_message
 class GenerateCodeExecutionReply(BaseMessage):
     code_block_languages: list[str]
     sender_name: Optional[str] = None
@@ -725,6 +750,7 @@ class GenerateCodeExecutionReply(BaseMessage):
             )
 
 
+@wrap_message
 class ConversableAgentUsageSummary(BaseMessage):
     recipient_name: str
     is_client_empty: bool
@@ -741,6 +767,7 @@ class ConversableAgentUsageSummary(BaseMessage):
             f(f"Agent '{self.recipient_name}':")
 
 
+@wrap_message
 class TextMessage(BaseMessage):
     text: str
 
