@@ -21,10 +21,10 @@ from ..io.base import IOStream
 from ..messages.agent_messages import (
     ClearAgentsHistoryMessage,
     GroupChatResumeMessage,
-    GroupChatRunChat,
-    SelectSpeaker,
-    SelectSpeakerInvalidInput,
-    SelectSpeakerTryCountExceeded,
+    GroupChatRunChatMessage,
+    SelectSpeakerInvalidInputMessage,
+    SelectSpeakerMessage,
+    SelectSpeakerTryCountExceededMessage,
     SpeakerAttemptMessage,
 )
 from ..oai.client import ModelClient
@@ -398,14 +398,14 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        iostream.send(SelectSpeaker(agents=agents))
+        iostream.send(SelectSpeakerMessage(agents=agents))
 
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                iostream.send(SelectSpeakerTryCountExceeded(try_count=try_count, agents=agents))
+                iostream.send(SelectSpeakerTryCountExceededMessage(try_count=try_count, agents=agents))
                 break
             try:
                 i = iostream.input(
@@ -419,7 +419,7 @@ class GroupChat:
                 else:
                     raise ValueError
             except ValueError:
-                iostream.send(SelectSpeakerInvalidInput(agents=agents))
+                iostream.send(SelectSpeakerInvalidInputMessage(agents=agents))
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:
@@ -1156,7 +1156,7 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    iostream.send(GroupChatRunChat(speaker=speaker, silent=silent))
+                    iostream.send(GroupChatRunChatMessage(speaker=speaker, silent=silent))
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
