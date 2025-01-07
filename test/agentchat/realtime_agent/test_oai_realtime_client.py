@@ -11,8 +11,7 @@ from anyio import move_on_after
 from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
 from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
 
-from ...conftest import reason, skip_openai  # noqa: E402
-from .realtime_test_utils import Credentials
+from ...conftest import Credentials, reason, skip_openai  # noqa: E402
 
 
 class TestOAIRealtimeClient:

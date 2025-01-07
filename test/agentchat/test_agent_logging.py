@@ -15,8 +15,9 @@ import pytest
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ..conftest import Credentials, skip_openai  # noqa: E402
+
+# from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
@@ -42,18 +43,18 @@ EVENTS_QUERY = (
     "SELECT source_id, source_name, event_name, agent_module, agent_class_name, json_state, timestamp FROM events"
 )
 
-if not skip_openai:
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        filter_dict={
-            "tags": ["gpt-4o-mini"],
-        },
-        file_location=KEY_LOC,
-    )
+# if not skip_openai:
+#     config_list = autogen.config_list_from_json(
+#         OAI_CONFIG_LIST,
+#         filter_dict={
+#             "tags": ["gpt-4o-mini"],
+#         },
+#         file_location=KEY_LOC,
+#     )
 
-    llm_config = {"config_list": config_list}
+#     llm_config = {"config_list": config_list}
 
-    num_of_configs = len(config_list)
+#     num_of_configs = len(config_list)
 ###############################################################
 
 
@@ -71,14 +72,14 @@ def db_connection():
     sys.platform in ["darwin", "win32"] or skip_openai,
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
-def test_two_agents_logging(db_connection):
+def test_two_agents_logging(credentials: Credentials, db_connection):
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
         "teacher",
         system_message=TEACHER_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=llm_config,
+        llm_config=credentials.llm_config,
         max_consecutive_auto_reply=2,
     )
 
@@ -86,7 +87,7 @@ def test_two_agents_logging(db_connection):
         "student",
         system_message=STUDENT_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=llm_config,
+        llm_config=credentials.llm_config,
         max_consecutive_auto_reply=1,
     )
 
@@ -162,7 +163,7 @@ def test_two_agents_logging(db_connection):
     cur.execute(OAI_CLIENTS_QUERY)
     rows = cur.fetchall()
 
-    assert len(rows) == num_of_configs * 2  # two agents
+    assert len(rows) == len(credentials.config_list) * 2  # two agents
 
     session_id = rows[0]["session_id"]
     for row in rows:
@@ -194,14 +195,14 @@ def test_two_agents_logging(db_connection):
     sys.platform in ["darwin", "win32"] or skip_openai,
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
-def test_groupchat_logging(db_connection):
+def test_groupchat_logging(credentials: Credentials, db_connection):
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
         "teacher",
         system_message=TEACHER_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=llm_config,
+        llm_config=credentials.llm_config,
         max_consecutive_auto_reply=2,
     )
 
@@ -209,7 +210,7 @@ def test_groupchat_logging(db_connection):
         "student",
         system_message=STUDENT_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=llm_config,
+        llm_config=credentials.llm_config,
         max_consecutive_auto_reply=1,
     )
 
@@ -217,7 +218,7 @@ def test_groupchat_logging(db_connection):
         agents=[teacher, student], messages=[], max_round=3, speaker_selection_method="round_robin"
     )
 
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=credentials.llm_config)
 
     student.initiate_chat(
         group_chat_manager,
@@ -242,7 +243,7 @@ def test_groupchat_logging(db_connection):
     # Verify oai clients
     cur.execute(OAI_CLIENTS_QUERY)
     rows = cur.fetchall()
-    assert len(rows) == num_of_configs * 3  # three agents
+    assert len(rows) == len(credentials.config_list) * 2  # two agents
 
     # Verify oai wrappers
     cur.execute(OAI_WRAPPERS_QUERY)

@@ -8,7 +8,7 @@
 
 import os
 import sys
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeVar
 
 import pytest
 
@@ -16,27 +16,26 @@ import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, filter_config, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import reason, skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
-config_list = (
-    []
-    if skip_openai
-    else autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-    )
-)
+# config_list = (
+#     []
+#     if skip_openai
+#     else autogen.config_list_from_json(
+#         OAI_CONFIG_LIST,
+#         file_location=KEY_LOC,
+#     )
+# )
 
-config_list_4omini = (
-    []
-    if skip_openai
-    else autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
-)
+# config_list_4omini = (
+#     []
+#     if skip_openai
+#     else autogen.config_list_from_json(
+#         OAI_CONFIG_LIST,
+#         file_location=KEY_LOC,
+#         filter_dict={"tags": ["gpt-4o-mini"]},
+#     )
+# )
 
 
 def test_chat_messages_for_summary():
@@ -61,7 +60,7 @@ def test_chat_messages_for_summary():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_group():
+def test_chats_group(credentials_gpt_4o_mini: Credentials):
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",
         """Give lucky numbers for them.""",
@@ -83,12 +82,12 @@ def test_chats_group():
 
     financial_assistant = AssistantAgent(
         name="Financial_assistant",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
     )
 
     writer = AssistantAgent(
         name="Writer",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
         system_message="""
         You are a professional writer, known for
         your insightful and engaging articles.
@@ -102,7 +101,7 @@ def test_chats_group():
         system_message="""Critic. Double check plan, claims, code from other agents and provide feedback. Check whether the plan includes adding verifiable info such as source URL.
         Reply "TERMINATE" in the end when everything is done.
         """,
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
     )
 
     groupchat_1 = GroupChat(agents=[user_proxy, financial_assistant, critic], messages=[], max_round=3)
@@ -112,7 +111,7 @@ def test_chats_group():
     manager_1 = GroupChatManager(
         groupchat=groupchat_1,
         name="Research_manager",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
         code_execution_config={
             "last_n_messages": 1,
             "work_dir": "groupchat",
@@ -123,7 +122,7 @@ def test_chats_group():
     manager_2 = GroupChatManager(
         groupchat=groupchat_2,
         name="Writing_manager",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
         code_execution_config={
             "last_n_messages": 1,
             "work_dir": "groupchat",
@@ -170,7 +169,7 @@ def test_chats_group():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats():
+def test_chats(credentials_gpt_4o_mini: Credentials):
     import random
 
     class Function:
@@ -197,17 +196,17 @@ def test_chats():
     func = Function()
     financial_assistant_1 = AssistantAgent(
         name="Financial_assistant_1",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
     financial_assistant_2 = AssistantAgent(
         name="Financial_assistant_2",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
         function_map={"get_random_number": func.get_random_number},
     )
     writer = AssistantAgent(
         name="Writer",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         system_message="""
             You are a professional writer, known for
@@ -300,7 +299,7 @@ def test_chats():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_general():
+def test_chats_general(credentials_gpt_4o_mini: Credentials):
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",
         """Give lucky numbers for them.""",
@@ -311,15 +310,15 @@ def test_chats_general():
 
     financial_assistant_1 = AssistantAgent(
         name="Financial_assistant_1",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
     )
     financial_assistant_2 = AssistantAgent(
         name="Financial_assistant_2",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
     )
     writer = AssistantAgent(
         name="Writer",
-        llm_config={"config_list": config_list_4omini},
+        llm_config=credentials_gpt_4o_mini.llm_config,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
         system_message="""
             You are a professional writer, known for
@@ -404,7 +403,7 @@ def test_chats_general():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_exceptions():
+def test_chats_exceptions(credentials_gpt_4o: Credentials):
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",
         """Give lucky numbers for them.""",
@@ -413,11 +412,11 @@ def test_chats_exceptions():
 
     financial_assistant_1 = AssistantAgent(
         name="Financial_assistant_1",
-        llm_config={"config_list": config_list},
+        llm_config=credentials_gpt_4o.llm_config,
     )
     financial_assistant_2 = AssistantAgent(
         name="Financial_assistant_2",
-        llm_config={"config_list": config_list},
+        llm_config=credentials_gpt_4o.llm_config,
     )
     user = UserProxyAgent(
         name="User",
@@ -488,9 +487,9 @@ def test_chats_exceptions():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_chats_w_func():
+def test_chats_w_func(credentials_gpt_4o_mini: Credentials):
     llm_config = {
-        "config_list": config_list_4omini,
+        "config_list": credentials_gpt_4o_mini.config_list,
         "timeout": 120,
     }
 
@@ -513,7 +512,7 @@ def test_chats_w_func():
         },
     )
 
-    CurrencySymbol = Literal["USD", "EUR"]
+    CurrencySymbol = TypeVar("CurrencySymbol", Literal["USD", "EUR"])
 
     def exchange_rate(base_currency: CurrencySymbol, quote_currency: CurrencySymbol) -> float:
         if base_currency == quote_currency:
@@ -544,8 +543,8 @@ def test_chats_w_func():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_udf_message_in_chats():
-    llm_config_35 = {"config_list": config_list_4omini}
+def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials):
+    llm_config_40mini = credentials_gpt_4o_mini.llm_config
 
     research_task = """
     ## NVDA (NVIDIA Corporation)
@@ -575,11 +574,11 @@ def test_udf_message_in_chats():
 
     researcher = autogen.AssistantAgent(
         name="Financial_researcher",
-        llm_config=llm_config_35,
+        llm_config=llm_config_40mini,
     )
     writer = autogen.AssistantAgent(
         name="Writer",
-        llm_config=llm_config_35,
+        llm_config=llm_config_40mini,
         system_message="""
             You are a professional writer, known for
             your insightful and engaging articles.

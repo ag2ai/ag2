@@ -13,25 +13,18 @@ from pydantic import BaseModel, ValidationError
 
 import autogen
 
-from ..conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_structured_output():
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={
-            "model": ["gpt-4o", "gpt-4o-mini"],
-        },
-    )
-
+def test_structured_output(credentials_gpt_4o: Credentials):
     class ResponseModel(BaseModel):
         question: str
         short_answer: str
         reasoning: str
         difficulty: float
+
+    config_list = credentials_gpt_4o.config_list
 
     for config in config_list:
         config["response_format"] = ResponseModel
@@ -80,9 +73,9 @@ class MathReasoning(BaseModel):
 
 
 @pytest.fixture
-def mock_assistant():
+def mock_assistant(mock_credentials: Credentials) -> autogen.AssistantAgent:
     """Set up a mocked AssistantAgent with a predefined response format."""
-    config_list = [{"model": "gpt-4o", "api_key": MOCK_OPEN_AI_API_KEY, "response_format": MathReasoning}]
+    config_list = mock_credentials.config_list
     llm_config = {"config_list": config_list, "cache_seed": 43}
 
     assistant = autogen.AssistantAgent(
@@ -112,7 +105,7 @@ def mock_assistant():
     return assistant
 
 
-def test_structured_output_formatting(mock_assistant):
+def test_structured_output_formatting(mock_assistant: autogen.AssistantAgent) -> None:
     """Test that the AssistantAgent correctly formats structured output."""
     user_proxy = autogen.UserProxyAgent(
         name="User_proxy",
