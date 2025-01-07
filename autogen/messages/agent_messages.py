@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
+from pydantic import BaseModel
 from termcolor import colored
 
 from ..code_utils import content_str
@@ -26,10 +27,10 @@ __all__ = [
     "FunctionCallMessage",
     "ToolCallMessage",
     "ContentMessage",
-    "PostCarryoverProcessing",
-    "ClearAgentsHistory",
-    "SpeakerAttempt",
-    "GroupChatResume",
+    "PostCarryoverProcessingMessage",
+    "ClearAgentsHistoryMessage",
+    "SpeakerAttemptMessage",
+    "GroupChatResumeMessage",
     "GroupChatRunChat",
     "TerminationAndHumanReply",
     "ExecuteCodeBlock",
@@ -103,8 +104,7 @@ class ToolResponseMessage(BasePrintReceivedMessage):
             f("\n", "-" * 80, flush=True, sep="")
 
 
-@wrap_message
-class FunctionCall(BaseMessage):
+class FunctionCall(BaseModel):
     name: Optional[str] = None
     arguments: Optional[str] = None
 
@@ -254,7 +254,7 @@ def create_received_message_model(
 
 
 @wrap_message
-class PostCarryoverProcessing(BaseMessage):
+class PostCarryoverProcessingMessage(BaseMessage):
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
     message: str
     verbose: bool = False
@@ -337,7 +337,7 @@ class PostCarryoverProcessing(BaseMessage):
 
 
 @wrap_message
-class ClearAgentsHistory(BaseMessage):
+class ClearAgentsHistoryMessage(BaseMessage):
     agent_name: Optional[str] = None
     nr_messages_to_preserve: Optional[int] = None
 
@@ -367,8 +367,9 @@ class ClearAgentsHistory(BaseMessage):
                 f("Clearing history for all agents.")
 
 
+# todo: break into multiple messages
 @wrap_message
-class SpeakerAttempt(BaseMessage):
+class SpeakerAttemptMessage(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
@@ -423,7 +424,7 @@ class SpeakerAttempt(BaseMessage):
 
 
 @wrap_message
-class GroupChatResume(BaseMessage):
+class GroupChatResumeMessage(BaseMessage):
     last_speaker_name: str
     messages: list[dict[str, Any]]
     verbose: Optional[bool] = False
