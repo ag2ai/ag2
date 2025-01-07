@@ -39,6 +39,7 @@ __all__ = [
     "ClearConversableAgentHistoryMessage",
     "GenerateCodeExecutionReplyMessage",
     "ConversableAgentUsageSummaryMessage",
+    "ConversableAgentUsageSummaryNoCostIncurredMessage",
     "TextMessage",
 ]
 
@@ -804,20 +805,29 @@ class GenerateCodeExecutionReplyMessage(BaseMessage):
 
 
 @wrap_message
-class ConversableAgentUsageSummaryMessage(BaseMessage):
+class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
     recipient_name: str
-    is_client_empty: bool
 
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent", client: Optional[Any] = None):
-        super().__init__(uuid=uuid, recipient_name=recipient.name, is_client_empty=True if client is None else False)
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+        super().__init__(uuid=uuid, recipient_name=recipient.name)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.is_client_empty:
-            f(f"No cost incurred from agent '{self.recipient_name}'.")
-        else:
-            f(f"Agent '{self.recipient_name}':")
+        f(f"No cost incurred from agent '{self.recipient_name}'.")
+
+
+@wrap_message
+class ConversableAgentUsageSummaryMessage(BaseMessage):
+    recipient_name: str
+
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+        super().__init__(uuid=uuid, recipient_name=recipient.name)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(f"Agent '{self.recipient_name}':")
 
 
 @wrap_message
