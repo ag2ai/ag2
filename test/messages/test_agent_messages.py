@@ -292,283 +292,326 @@ class TestToolCallMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-def test_context_message(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    message = {"content": "hello {name}", "context": {"name": "there"}}
+class TestTestToolCallMessage:
+    def test_print_context_message(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        message = {"content": "hello {name}", "context": {"name": "there"}}
 
-    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+        actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
-    assert isinstance(actual, ContentMessage)
-    expected_model_dump = {
-        "uuid": uuid,
-        "content": "hello {name}",
-        "sender_name": "sender",
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
+        assert isinstance(actual, ContentMessage)
+        expected_model_dump = {
+            "type": "content",
+            "content": {
+                "uuid": uuid,
+                "content": "hello {name}",
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        mock = MagicMock()
+        actual.print(f=mock)
 
-    # print(mock.call_args_list)
+        # print(mock.call_args_list)
 
-    expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
-        call("hello {name}", flush=True),
-        call(
-            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
-        ),
-    ]
+        expected_call_args_list = [
+            call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
+            call("hello {name}", flush=True),
+            call(
+                "\n",
+                "--------------------------------------------------------------------------------",
+                flush=True,
+                sep="",
+            ),
+        ]
 
-    assert mock.call_args_list == expected_call_args_list
+        assert mock.call_args_list == expected_call_args_list
 
+    def test_print_context_lambda_message(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        message = {
+            "content": lambda context: f"hello {context['name']}",
+            "context": {
+                "name": "there",
+            },
+        }
 
-def test_context_lambda_message(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    message = {
-        "content": lambda context: f"hello {context['name']}",
-        "context": {
-            "name": "there",
-        },
-    }
+        actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
-    actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
+        assert isinstance(actual, ContentMessage)
+        expected_model_dump = {
+            "type": "content",
+            "content": {
+                "uuid": uuid,
+                "content": "hello there",
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
 
-    assert isinstance(actual, ContentMessage)
-    expected_model_dump = {
-        "uuid": uuid,
-        "content": "hello there",
-        "sender_name": "sender",
-        "recipient_name": "recipient",
-    }
-    assert actual.model_dump() == expected_model_dump
+        mock = MagicMock()
+        actual.print(f=mock)
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        # print(mock.call_args_list)
 
-    # print(mock.call_args_list)
+        expected_call_args_list = [
+            call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
+            call("hello there", flush=True),
+            call(
+                "\n",
+                "--------------------------------------------------------------------------------",
+                flush=True,
+                sep="",
+            ),
+        ]
 
-    expected_call_args_list = [
-        call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
-        call("hello there", flush=True),
-        call(
-            "\n", "--------------------------------------------------------------------------------", flush=True, sep=""
-        ),
-    ]
-
-    assert mock.call_args_list == expected_call_args_list
-
-
-def test_PostCarryoverProcessing(uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-    chat_info = {
-        "carryover": ["This is a test message 1", "This is a test message 2"],
-        "message": "Start chat",
-        "verbose": True,
-        "sender": sender,
-        "recipient": recipient,
-        "summary_method": "last_msg",
-        "max_turns": 5,
-    }
-
-    actual = PostCarryoverProcessingMessage(uuid=uuid, chat_info=chat_info)
-    assert isinstance(actual, PostCarryoverProcessingMessage)
-
-    expected = {
-        "uuid": uuid,
-        "carryover": ["This is a test message 1", "This is a test message 2"],
-        "message": "Start chat",
-        "verbose": True,
-        "sender_name": "sender",
-        "recipient_name": "recipient",
-        "summary_method": "last_msg",
-        "summary_args": None,
-        "max_turns": 5,
-    }
-    assert actual.model_dump() == expected, f"{actual.model_dump()} != {expected}"
-
-    mock = MagicMock()
-    actual.print(f=mock)
-
-    # print(mock.call_args_list)
-
-    expected_call_args_list = [
-        call(
-            "\x1b[34m\n********************************************************************************\x1b[0m",
-            flush=True,
-            sep="",
-        ),
-        call("\x1b[34mStarting a new chat....\x1b[0m", flush=True),
-        call("\x1b[34mMessage:\nStart chat\x1b[0m", flush=True),
-        call("\x1b[34mCarryover:\nThis is a test message 1\nThis is a test message 2\x1b[0m", flush=True),
-        call(
-            "\x1b[34m\n********************************************************************************\x1b[0m",
-            flush=True,
-            sep="",
-        ),
-    ]
-
-    assert mock.call_args_list == expected_call_args_list
+        assert mock.call_args_list == expected_call_args_list
 
 
-@pytest.mark.parametrize(
-    "carryover, expected",
-    [
-        ("This is a test message 1", "This is a test message 1"),
-        (
-            ["This is a test message 1", "This is a test message 2"],
-            "This is a test message 1\nThis is a test message 2",
-        ),
-        (
-            [
-                {"content": "This is a test message 1"},
-                {"content": "This is a test message 2"},
-            ],
-            "This is a test message 1\nThis is a test message 2",
-        ),
-        ([1, 2, 3], "1\n2\n3"),
-    ],
-)
-def test__process_carryover(
-    carryover: Union[str, list[Union[str, dict[str, Any], Any]]],
-    expected: str,
-    uuid: UUID,
-    sender: ConversableAgent,
-    recipient: ConversableAgent,
-) -> None:
-    chat_info = {
-        "carryover": carryover,
-        "message": "Start chat",
-        "verbose": True,
-        "sender": sender,
-        "recipient": recipient,
-        "summary_method": "last_msg",
-        "max_turns": 5,
-    }
+class TestPostCarryoverProcessingMessage:
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        chat_info = {
+            "carryover": ["This is a test message 1", "This is a test message 2"],
+            "message": "Start chat",
+            "verbose": True,
+            "sender": sender,
+            "recipient": recipient,
+            "summary_method": "last_msg",
+            "max_turns": 5,
+        }
 
-    post_carryover_processing = PostCarryoverProcessingMessage(uuid=uuid, chat_info=chat_info)
-    expected_model_dump = {
-        "uuid": uuid,
-        "carryover": carryover,
-        "message": "Start chat",
-        "verbose": True,
-        "sender_name": "sender",
-        "recipient_name": "recipient",
-        "summary_method": "last_msg",
-        "summary_args": None,
-        "max_turns": 5,
-    }
-    assert post_carryover_processing.model_dump() == expected_model_dump
+        actual = PostCarryoverProcessingMessage(uuid=uuid, chat_info=chat_info)
+        assert isinstance(actual, PostCarryoverProcessingMessage)
 
-    actual = post_carryover_processing._process_carryover()
-    assert actual == expected
+        expected = {
+            "type": "post_carryover_processing",
+            "content": {
+                "uuid": uuid,
+                "carryover": ["This is a test message 1", "This is a test message 2"],
+                "message": "Start chat",
+                "verbose": True,
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+                "summary_method": "last_msg",
+                "summary_args": None,
+                "max_turns": 5,
+            },
+        }
+        assert actual.model_dump() == expected, f"{actual.model_dump()} != {expected}"
 
+        mock = MagicMock()
+        actual.print(f=mock)
 
-@pytest.mark.parametrize(
-    "agent, nr_messages_to_preserve, expected",
-    [
-        (None, None, "Clearing history for all agents."),
-        (None, 5, "Clearing history for all agents except last 5 messages."),
-        (
-            ConversableAgent("clear_agent", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-            None,
-            "Clearing history for clear_agent.",
-        ),
-        (
-            ConversableAgent("clear_agent", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-            5,
-            "Clearing history for clear_agent except last 5 messages.",
-        ),
-    ],
-)
-def test_ClearAgentsHistory(
-    agent: Optional[ConversableAgent], nr_messages_to_preserve: Optional[int], expected: str, uuid: UUID
-) -> None:
-    actual = ClearAgentsHistoryMessage(uuid=uuid, agent=agent, nr_messages_to_preserve=nr_messages_to_preserve)
-    assert isinstance(actual, ClearAgentsHistoryMessage)
+        # print(mock.call_args_list)
 
-    expected_model_dump = {
-        "uuid": uuid,
-        "agent_name": "clear_agent" if agent else None,
-        "nr_messages_to_preserve": nr_messages_to_preserve,
-    }
-    assert actual.model_dump() == expected_model_dump
+        expected_call_args_list = [
+            call(
+                "\x1b[34m\n********************************************************************************\x1b[0m",
+                flush=True,
+                sep="",
+            ),
+            call("\x1b[34mStarting a new chat....\x1b[0m", flush=True),
+            call("\x1b[34mMessage:\nStart chat\x1b[0m", flush=True),
+            call("\x1b[34mCarryover:\nThis is a test message 1\nThis is a test message 2\x1b[0m", flush=True),
+            call(
+                "\x1b[34m\n********************************************************************************\x1b[0m",
+                flush=True,
+                sep="",
+            ),
+        ]
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        assert mock.call_args_list == expected_call_args_list
 
-    # print(mock.call_args_list)
-
-    expected_call_args_list = [call(expected)]
-    assert mock.call_args_list == expected_call_args_list
-
-
-@pytest.mark.parametrize(
-    "mentions, expected",
-    [
-        ({"agent_1": 1}, "\x1b[32m>>>>>>>> Select speaker attempt 1 of 3 successfully selected: agent_1\x1b[0m"),
-        (
-            {"agent_1": 1, "agent_2": 2},
-            "\x1b[31m>>>>>>>> Select speaker attempt 1 of 3 failed as it included multiple agent names.\x1b[0m",
-        ),
-        ({}, "\x1b[31m>>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.\x1b[0m"),
-    ],
-)
-def test_SpeakerAttempt(mentions: dict[str, int], expected: str, uuid: UUID) -> None:
-    attempt = 1
-    attempts_left = 2
-    verbose = True
-
-    actual = SpeakerAttemptMessage(
-        uuid=uuid, mentions=mentions, attempt=attempt, attempts_left=attempts_left, select_speaker_auto_verbose=verbose
+    @pytest.mark.parametrize(
+        "carryover, expected",
+        [
+            ("This is a test message 1", "This is a test message 1"),
+            (
+                ["This is a test message 1", "This is a test message 2"],
+                "This is a test message 1\nThis is a test message 2",
+            ),
+            (
+                [
+                    {"content": "This is a test message 1"},
+                    {"content": "This is a test message 2"},
+                ],
+                "This is a test message 1\nThis is a test message 2",
+            ),
+            ([1, 2, 3], "1\n2\n3"),
+        ],
     )
-    assert isinstance(actual, SpeakerAttemptMessage)
+    def test__process_carryover(
+        self,
+        carryover: Union[str, list[Union[str, dict[str, Any], Any]]],
+        expected: str,
+        uuid: UUID,
+        sender: ConversableAgent,
+        recipient: ConversableAgent,
+    ) -> None:
+        chat_info = {
+            "carryover": carryover,
+            "message": "Start chat",
+            "verbose": True,
+            "sender": sender,
+            "recipient": recipient,
+            "summary_method": "last_msg",
+            "max_turns": 5,
+        }
 
-    expected_model_dump = {
-        "uuid": uuid,
-        "mentions": mentions,
-        "attempt": attempt,
-        "attempts_left": attempts_left,
-        "verbose": verbose,
-    }
-    assert actual.model_dump() == expected_model_dump
+        post_carryover_processing = PostCarryoverProcessingMessage(uuid=uuid, chat_info=chat_info)
+        expected_model_dump = {
+            "type": "post_carryover_processing",
+            "content": {
+                "uuid": uuid,
+                "carryover": carryover,
+                "message": "Start chat",
+                "verbose": True,
+                "sender_name": "sender",
+                "recipient_name": "recipient",
+                "summary_method": "last_msg",
+                "summary_args": None,
+                "max_turns": 5,
+            },
+        }
+        assert post_carryover_processing.model_dump() == expected_model_dump
 
-    mock = MagicMock()
-    actual.print(f=mock)
-
-    # print(mock.call_args_list)
-
-    expected_call_args_list = [call(expected, flush=True)]
-
-    assert mock.call_args_list == expected_call_args_list
+        actual = post_carryover_processing.content._process_carryover()  # type: ignore[attr-defined]
+        assert actual == expected
 
 
-def test_GroupChatResume(uuid: UUID) -> None:
-    last_speaker_name = "Coder"
-    messages = [
-        {"content": "You are an expert at coding.", "role": "system", "name": "chat_manager"},
-        {"content": "Let's get coding, should I use Python?", "name": "Coder", "role": "assistant"},
-    ]
-    silent = False
+class TestClearAgentsHistoryMessage:
+    @pytest.mark.parametrize(
+        "agent, nr_messages_to_preserve, expected",
+        [
+            (None, None, "Clearing history for all agents."),
+            (None, 5, "Clearing history for all agents except last 5 messages."),
+            (
+                ConversableAgent(
+                    "clear_agent", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+                ),
+                None,
+                "Clearing history for clear_agent.",
+            ),
+            (
+                ConversableAgent(
+                    "clear_agent", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+                ),
+                5,
+                "Clearing history for clear_agent except last 5 messages.",
+            ),
+        ],
+    )
+    def test_print(
+        self, agent: Optional[ConversableAgent], nr_messages_to_preserve: Optional[int], expected: str, uuid: UUID
+    ) -> None:
+        actual = ClearAgentsHistoryMessage(uuid=uuid, agent=agent, nr_messages_to_preserve=nr_messages_to_preserve)
+        assert isinstance(actual, ClearAgentsHistoryMessage)
 
-    actual = GroupChatResumeMessage(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-    assert isinstance(actual, GroupChatResumeMessage)
+        expected_model_dump = {
+            "type": "clear_agents_history",
+            "content": {
+                "uuid": uuid,
+                "agent_name": "clear_agent" if agent else None,
+                "nr_messages_to_preserve": nr_messages_to_preserve,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
 
-    expected_model_dump = {
-        "uuid": uuid,
-        "last_speaker_name": last_speaker_name,
-        "messages": messages,
-        "verbose": True,
-    }
-    assert actual.model_dump() == expected_model_dump
+        mock = MagicMock()
+        actual.print(f=mock)
 
-    mock = MagicMock()
-    actual.print(f=mock)
+        # print(mock.call_args_list)
 
-    # print(mock.call_args_list)
+        expected_call_args_list = [call(expected)]
+        assert mock.call_args_list == expected_call_args_list
 
-    expected_call_args_list = [
-        call("Prepared group chat with 2 messages, the last speaker is", "\x1b[33mCoder\x1b[0m", flush=True)
-    ]
 
-    assert mock.call_args_list == expected_call_args_list
+class TestSpeakerAttemptMessage:
+    @pytest.mark.parametrize(
+        "mentions, expected",
+        [
+            ({"agent_1": 1}, "\x1b[32m>>>>>>>> Select speaker attempt 1 of 3 successfully selected: agent_1\x1b[0m"),
+            (
+                {"agent_1": 1, "agent_2": 2},
+                "\x1b[31m>>>>>>>> Select speaker attempt 1 of 3 failed as it included multiple agent names.\x1b[0m",
+            ),
+            ({}, "\x1b[31m>>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.\x1b[0m"),
+        ],
+    )
+    def test_print(self, mentions: dict[str, int], expected: str, uuid: UUID) -> None:
+        attempt = 1
+        attempts_left = 2
+        verbose = True
+
+        actual = SpeakerAttemptMessage(
+            uuid=uuid,
+            mentions=mentions,
+            attempt=attempt,
+            attempts_left=attempts_left,
+            select_speaker_auto_verbose=verbose,
+        )
+        assert isinstance(actual, SpeakerAttemptMessage)
+
+        expected_model_dump = {
+            "type": "speaker_attempt",
+            "content": {
+                "uuid": uuid,
+                "mentions": mentions,
+                "attempt": attempt,
+                "attempts_left": attempts_left,
+                "verbose": verbose,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        expected_call_args_list = [call(expected, flush=True)]
+
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestGroupChatResumeMessage:
+    def test_print(self, uuid: UUID) -> None:
+        last_speaker_name = "Coder"
+        messages = [
+            {"content": "You are an expert at coding.", "role": "system", "name": "chat_manager"},
+            {"content": "Let's get coding, should I use Python?", "name": "Coder", "role": "assistant"},
+        ]
+        silent = False
+
+        actual = GroupChatResumeMessage(
+            uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, silent=silent
+        )
+        assert isinstance(actual, GroupChatResumeMessage)
+
+        expected_model_dump = {
+            "type": "group_chat_resume",
+            "content": {
+                "uuid": uuid,
+                "last_speaker_name": last_speaker_name,
+                "messages": messages,
+                "verbose": True,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+
+        # print(mock.call_args_list)
+
+        expected_call_args_list = [
+            call("Prepared group chat with 2 messages, the last speaker is", "\x1b[33mCoder\x1b[0m", flush=True)
+        ]
+
+        assert mock.call_args_list == expected_call_args_list
 
 
 def test_GroupChatRunChat(uuid: UUID) -> None:
