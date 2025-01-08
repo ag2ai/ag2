@@ -8,13 +8,13 @@
 
 import os
 import sys
+from typing import Generator
 
 import pytest
 
 from autogen import AssistantAgent, config_list_from_json
 
-from ....conftest import skip_openai  # noqa: E402
-from ...test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ....conftest import Credentials, reason, skip_openai  # noqa: E402
 
 try:
     import fastembed
@@ -37,21 +37,14 @@ except ImportError:
 else:
     skip = False or skip_openai
 
-test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
-
 
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or not QDRANT_INSTALLED or skip,
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
-def test_retrievechat():
+def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     conversations = {}
     # ChatCompletion.start_logging(conversations)  # deprecated in v0.2
-
-    config_list = config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-    )
 
     assistant = AssistantAgent(
         name="assistant",
@@ -59,7 +52,7 @@ def test_retrievechat():
         llm_config={
             "timeout": 600,
             "seed": 42,
-            "config_list": config_list,
+            "config_list": credentials_gpt_4o_mini.config_list,
         },
     )
 
@@ -99,6 +92,7 @@ def test_qdrant_filter():
 
 @pytest.mark.skipif(not QDRANT_INSTALLED, reason="qdrant_client is not installed")
 def test_qdrant_search():
+    test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
     client = QdrantClient(":memory:")
     create_qdrant_from_dir(test_dir, client=client)
 

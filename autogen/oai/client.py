@@ -22,7 +22,7 @@ from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
 
-from ..messages.client_messages import StreamMessage, UsageSummary
+from ..messages.client_messages import StreamMessage, UsageSummaryMessage
 
 TOOL_ENABLED = False
 try:
@@ -316,8 +316,6 @@ class OpenAIClient:
             full_function_call: Optional[dict[str, Any]] = None
             full_tool_calls: Optional[list[Optional[dict[str, Any]]]] = None
 
-            stream_message = StreamMessage()
-
             # Send the chat completion request to OpenAI's API and process the response in chunks
             for chunk in create_or_parse(**params):
                 if chunk.choices:
@@ -364,7 +362,7 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            stream_message.print_chunk_content(content, iostream.print)
+                            iostream.send(StreamMessage(content=content))
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
@@ -1133,10 +1131,11 @@ class OpenAIWrapper:
             elif "total" in mode:
                 mode = "total"
 
-        usage_summary = UsageSummary(
-            actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+        iostream.send(
+            UsageSummaryMessage(
+                actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+            )
         )
-        usage_summary.print(iostream.print)
 
     def clear_usage_summary(self) -> None:
         """Clear the usage summary."""
