@@ -15,15 +15,27 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Optional
 from google import genai
 from google.genai import types
 from google.genai.live import AsyncSession
+import asyncio
 
 from .realtime_client import Role
+import json
 
 if TYPE_CHECKING:
     from .realtime_client import RealtimeClientProtocol
+from websockets.asyncio.client import connect
+
+
+
 
 __all__ = ["GeminiRealtimeClient", "Role"]
 
 global_logger = getLogger(__name__)
+
+
+HOST = "generativelanguage.googleapis.com"
+# uri = f"wss://{host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={api_key}"
+
+
 
 # TODO: Configuable or hardcode? Align with OAI class?
 GEMINI_CONFIG = {
@@ -34,6 +46,7 @@ GEMINI_CONFIG = {
     "generation_config": {"response_modalities": ["AUDIO"], "speech_config": "Charon"},
 }
 API_VERSION = "v1alpha"
+
 
 
 class GeminiRealtimeClient:
@@ -56,7 +69,7 @@ class GeminiRealtimeClient:
         self._system_message = system_message
         self._logger = logger
         self._connection: Optional[AsyncSession] = None
-        self._model: str = config["model"]
+        self._model: str = config["model"] # As of 01/08/2025, only gemini-2.0-flash-exp support Multimodal Live API 
 
         config = llm_config["config_list"][0]
         self._client = genai.Client(
@@ -68,6 +81,14 @@ class GeminiRealtimeClient:
             debug_config=config.get("debug_config", None),
             http_options={"api_version": API_VERSION},
         )
+
+        self.api_key = config.get("api_key", None)
+        # self.host = "generativelanguage.googleapis.com"
+        # self.uri = f"wss://{host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={api_key}"
+
+        self._final_config = {}
+        self._pending_session_updates = []
+        self._is_reading_events = False      
 
     @property
     def logger(self) -> Logger:
@@ -82,7 +103,8 @@ class GeminiRealtimeClient:
         return self._connection
 
     # TODO: The following is to support the function_declarations. How about code_execution tool and google_search tool?
-    # TODO: https://github.com/google-gemini/cookbook/blob/main/gemini-2/live_api_tool_use.ipynb
+    # https://github.com/google-gemini/cookbook/blob/main/gemini-2/live_api_tool_use.ipynb
+    # gemini-2/websockets/live_api_tool_use.ipynb
     async def send_function_result(self, call_id: str, result: str) -> None:  # Looks like Gemini doesn't results.
         """Send the result of a function call to the Gemini Realtime API.
 
@@ -90,62 +112,141 @@ class GeminiRealtimeClient:
             call_id (str): The ID of the function call.
             result (str): The result of the function call.
         """
-        tool_response = types.LiveClientToolResponse(
-            function_responses=[
-                types.FunctionResponse(
-                    # name=fc.name
-                    id=call_id,
-                    response={"result": "ok"},
-                )
-            ]
-        )
-        await self.connection.send(tool_response)
+        msg = {
+        'tool_response': {
+            'function_responses': [{
+                'id': call_id,
+                'response':{'result': {'string_value': result}}
+            }]
+            }
+        }
+        await self.connection.send(json.dumps(msg))
 
-    # TODO: No role?
-    async def send_text(self, *, role: Role, text: str) -> None:
+
+    # https://github.com/google-gemini/cookbook/blob/18bb4f2bd03c66839dc388bb1e9ae7e7819b1cd0/gemini-2/websockets/live_api_starter.py#L106
+    async def send_text(self, *, role: Role, text: str, turn_complete=True) -> None:
         """Send a text message to the Gemini Realtime API.
 
         Args:
             role (str): The role of the message.
             text (str): The text of the message.
         """
-        await self.connection.send(text, end_of_turn=True)
+        msg = {
+            "client_content": {
+                "turn_complete": turn_complete,
+                "turns": [{"role": role, "parts": [{"text": text}]}],
+            }
+        }
+        await self.connection.send(json.dumps(msg))
 
-    # TODO: the audio is str for OAI.
-    async def send_audio(self, audio_stream: AsyncIterator[bytes]) -> None:
+    # https://github.com/google-gemini/cookbook/blob/18bb4f2bd03c66839dc388bb1e9ae7e7819b1cd0/gemini-2/websockets/live_api_starter.py#L201
+    async def send_audio(self, audio: str) -> None:
         """Send audio to the Gemini Realtime API.
 
         Args:
             audio (str): The audio to send.
         """
-        await self.connection.start_stream(stream=audio_stream, mime_type="audio/pcm")
+        msg = {
+                    "realtime_input": {
+                        "media_chunks": [
+                            {
+                                "data": audio,
+                                "mime_type": "audio/pcm",
+                            }
+                        ]
+                    }
+                }
+        await self.connection.send(json.dumps(msg))
+    
+    # TODO: probably need to figure out a way to implement this. 
+    async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
+        pass
 
+
+    
+    async def read_events(self):
+        """Read Audio Events"""
+        if self._connection is None:
+            raise RuntimeError("Client is not connected, call connect() first.")
+        
+        self._is_reading_events = True
+        try:
+            async for raw_response in self.connection:
+                response = json.loads(raw_response.decode("ascii"))
+                b64data = response["serverContent"]["modelTurn"]["parts"][0][
+                    "inlineData"
+                ]["data"]
+                event = {
+                "type": "response.audio.delta",
+                "delta": b64data,
+                }
+                yield event
+        finally:
+            self._connection = None
+
+    
+        
     # TODO: didn't find relevant API: https://github.com/google-gemini/cookbook/blob/main/gemini-2/live_api_tool_use.ipynb
     # async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
     #     """Truncate audio in the Gemini Realtime API.
+    async def _initialize_session(self) -> None:
+        setup = {
+            "setup": {
+                "model": self._model,
+                "tools": [], #TODO: what to pass here ? 
+                "generation_config": {
+                    "response_modalities": ["AUDIO"] #TODO: do we add TEXT here? 
+                    }}}
+        await self.ws.send(json.dumps(setup))
+        setup_response = json.loads(await self.ws.recv())
+        Logger.debug(setup_response)  
+
+    async def session_update(self, session_options: dict[str, Any]) -> None:
+        """Can we send the setup again to the socket"""
+        pass
+
+
 
     @asynccontextmanager
     async def connect(self) -> AsyncGenerator[None, None]:
         """Connect to the Gemini Realtime API."""
+        uri = f"wss://{HOST}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={self.api_key}"
         try:
-            async with self._client.aio.live.connect(
-                model=self._model,
-                config=GEMINI_CONFIG,
-            ) as self._connection:
+            async with connect(uri, additional_headers={'Content-Type': 'application/json'}) as ws:
+                self.ws = ws
+                await self._initialize_session()
                 yield
         finally:
-            self._connection = None
+            self.ws = None
+        # try:
+        #     async with self._client.aio.live.connect(
+        #         model=self._model,
+        #         config=GEMINI_CONFIG,
+        #     ) as self._connection:
+        #         yield
+        # finally:
+        #     self._connection = None
 
     # TODO: Decide what to return here: message, meesage,txt, message.data, message.tool_call or whatever.
-    async def read_events(self) -> AsyncGenerator[types.LiveServerMessage, None]:
-        """Read messages from the Gemini Realtime API."""
-        if self._connection is None:
-            raise RuntimeError("Client is not connected, call connect() first.")
-        try:
-            async for message in self._connection.receive():
-                yield message
-        finally:
-            self._connection = None
+    # async def read_events(self) -> AsyncGenerator[types.LiveServerMessage, None]:
+    #     """Read messages from the Gemini Realtime API."""
+    #     if self._connection is None:
+    #         raise RuntimeError("Client is not connected, call connect() first.")
+    #     try:
+    #         async for message in self._connection.receive():
+    #             yield message.
+    #     finally:
+    #         self._connection = None
+
+
+    # async def session_update(self, session_options: dict[str, Any]) -> None:
+    #     """Record or apply session updates."""
+    #     if self._is_reading_events:
+    #         logger.warn("Is reading events. Session update would be ignored.")
+    #     # Record session updates
+    #     else:
+    #         self._pending_session_updates.append(session_options)
+
 
 
 # needed for mypy to check if GeminiRealtimeClient implements RealtimeClientProtocol
