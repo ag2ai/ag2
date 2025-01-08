@@ -8,6 +8,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from markitdown import MarkItDown
+
 from autogen.oai.client import OpenAIWrapper
 
 
@@ -44,7 +46,6 @@ class MarkItDownConverter(MarkdownConverter):
         self.mlm_model = mlm_model
 
     def convert(self, source: str) -> str:
-        from markitdown import MarkItDown
 
         md = MarkItDown(llm_client=self.mlm_client, llm_model=self.mlm_model)
         result = md.convert(source)

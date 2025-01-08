@@ -84,6 +84,11 @@ neo4j = [
     "llama-index-core==0.12.5",
 ]
 
+tool_convert = [
+    "markitdown==0.0.1",
+    "docling==2.14.0",
+]
+
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
 twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
@@ -154,6 +159,7 @@ extra_require = {
     "interop-pydantic-ai": interop_pydantic_ai,
     "interop": interop,
     "neo4j": neo4j,
+    "tool-convert": tool_convert,
 }
 
 setuptools.setup(
