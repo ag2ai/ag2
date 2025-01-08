@@ -10,6 +10,8 @@ from unittest.mock import MagicMock
 from anyio import Event
 from openai import NotGiven, OpenAI
 
+__all__ = ["Credentials", "text_to_speech", "trace"]
+
 
 def text_to_speech(
     *,
@@ -71,3 +73,27 @@ def trace(
         return _inner  # type: ignore[return-value]
 
     return decorator
+
+
+class Credentials:
+    """Credentials for the OpenAI API."""
+
+    def __init__(self, llm_config: dict[str, Any]) -> None:
+        self.llm_config = llm_config
+
+    def sanitize(self) -> dict[str, Any]:
+        llm_config = self.llm_config.copy()
+        for config in llm_config["config_list"]:
+            if "api_key" in config:
+                config["api_key"] = "********"
+        return llm_config
+
+    def __repr__(self) -> str:
+        return repr(self.sanitize())
+
+    def __str___(self) -> str:
+        return str(self.sanitize())
+
+    @property
+    def openai_api_key(self) -> str:
+        return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]

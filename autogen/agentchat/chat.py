@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 from ..formatting_utils import colored
 from ..io.base import IOStream
+from ..messages.agent_messages import PostCarryoverProcessingMessage
 from .utils import consolidate_chat_info
 
 logger = logging.getLogger(__name__)
@@ -130,32 +131,8 @@ def __post_carryover_processing(chat_info: dict[str, Any]) -> None:
             "message is not provided in a chat_queue entry. input() will be called to get the initial message.",
             UserWarning,
         )
-    print_carryover = (
-        ("\n").join([_post_process_carryover_item(t) for t in chat_info["carryover"]])
-        if isinstance(chat_info["carryover"], list)
-        else chat_info["carryover"]
-    )
-    message = chat_info.get("message")
-    if isinstance(message, str):
-        print_message = message
-    elif callable(message):
-        print_message = "Callable: " + message.__name__
-    elif isinstance(message, dict):
-        print_message = "Dict: " + str(message)
-    elif message is None:
-        print_message = "None"
-    iostream.print(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
-    iostream.print(
-        colored(
-            "Starting a new chat....",
-            "blue",
-        ),
-        flush=True,
-    )
-    if chat_info.get("verbose", False):
-        iostream.print(colored("Message:\n" + print_message, "blue"), flush=True)
-        iostream.print(colored("Carryover:\n" + print_carryover, "blue"), flush=True)
-    iostream.print(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
+
+    iostream.send(PostCarryoverProcessingMessage(chat_info=chat_info))
 
 
 def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:

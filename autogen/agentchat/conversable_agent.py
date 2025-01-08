@@ -13,11 +13,18 @@ import logging
 import re
 import warnings
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 from openai import BadRequestError
 
-from .._pydantic import BaseModel, model_dump
+from .._pydantic import model_dump
 from ..cache.cache import AbstractCache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -33,11 +40,24 @@ from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
 from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..formatting_utils import colored
-from ..function_utils import get_function_schema, load_basemodels_if_needed, serialize_to_str
 from ..io.base import IOStream
+from ..messages.agent_messages import (
+    ClearConversableAgentHistoryMessage,
+    ClearConversableAgentHistoryWarningMessage,
+    ConversableAgentUsageSummaryMessage,
+    ConversableAgentUsageSummaryNoCostIncurredMessage,
+    ExecuteCodeBlockMessage,
+    ExecutedFunctionMessage,
+    ExecuteFunctionMessage,
+    GenerateCodeExecutionReplyMessage,
+    TerminationAndHumanReplyMessage,
+    UsingAutoReplyMessage,
+    create_received_message_model,
+)
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import Tool
+from ..tools import Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
+from ..tools.dependency_injection import inject_params
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -841,66 +861,11 @@ class ConversableAgent(LLMAgent):
             )
 
     def _print_received_message(self, message: Union[dict, str], sender: Agent, skip_head: bool = False):
-        iostream = IOStream.get_default()
-        # print the message received
-        if not skip_head:
-            iostream.print(colored(sender.name, "yellow"), "(to", f"{self.name}):\n", flush=True)
         message = self._message_to_dict(message)
-
-        if message.get("tool_responses"):  # Handle tool multi-call responses
-            for tool_response in message["tool_responses"]:
-                self._print_received_message(tool_response, sender, skip_head=True)
-            if message.get("role") == "tool":
-                return  # If role is tool, then content is just a concatenation of all tool_responses
-
-        if message.get("role") in ["function", "tool"]:
-            if message["role"] == "function":
-                id_key = "name"
-            else:
-                id_key = "tool_call_id"
-            id = message.get(id_key, "No id found")
-            func_print = f"***** Response from calling {message['role']} ({id}) *****"
-            iostream.print(colored(func_print, "green"), flush=True)
-            iostream.print(message["content"], flush=True)
-            iostream.print(colored("*" * len(func_print), "green"), flush=True)
-        else:
-            content = message.get("content")
-            if content is not None:
-                if "context" in message:
-                    content = OpenAIWrapper.instantiate(
-                        content,
-                        message["context"],
-                        self.llm_config and self.llm_config.get("allow_format_str_template", False),
-                    )
-                iostream.print(content_str(content), flush=True)
-            if "function_call" in message and message["function_call"]:
-                function_call = dict(message["function_call"])
-                func_print = (
-                    f"***** Suggested function call: {function_call.get('name', '(No function name found)')} *****"
-                )
-                iostream.print(colored(func_print, "green"), flush=True)
-                iostream.print(
-                    "Arguments: \n",
-                    function_call.get("arguments", "(No arguments found)"),
-                    flush=True,
-                    sep="",
-                )
-                iostream.print(colored("*" * len(func_print), "green"), flush=True)
-            if "tool_calls" in message and message["tool_calls"]:
-                for tool_call in message["tool_calls"]:
-                    id = tool_call.get("id", "No tool call id found")
-                    function_call = dict(tool_call.get("function", {}))
-                    func_print = f"***** Suggested tool call ({id}): {function_call.get('name', '(No function name found)')} *****"
-                    iostream.print(colored(func_print, "green"), flush=True)
-                    iostream.print(
-                        "Arguments: \n",
-                        function_call.get("arguments", "(No arguments found)"),
-                        flush=True,
-                        sep="",
-                    )
-                    iostream.print(colored("*" * len(func_print), "green"), flush=True)
-
-        iostream.print("\n", "-" * 80, flush=True, sep="")
+        message_model = create_received_message_model(message=message, sender=sender, recipient=self)
+        iostream = IOStream.get_default()
+        # message_model.print(iostream.print)
+        iostream.send(message_model)
 
     def _process_received_message(self, message: Union[dict, str], sender: Agent, silent: bool):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
@@ -1068,7 +1033,7 @@ class ConversableAgent(LLMAgent):
                 return recipient.last_message(sender)["content"]
             ```
             summary_args (dict): a dictionary of arguments to be passed to the summary_method.
-                One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or receiver agent) to reflect
+                One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or recipient agent) to reflect
                 on the conversation and extract a summary when summary_method is "reflection_with_llm".
                 The default summary_prompt is DEFAULT_SUMMARY_PROMPT, i.e., "Summarize takeaway from the conversation. Do not add any introductory phrases. If the intended request is NOT properly addressed, please point it out."
                 Another available key is "summary_role", which is the role of the message sent to the agent in charge of summarizing. Default is "system".
@@ -1432,6 +1397,7 @@ class ConversableAgent(LLMAgent):
         """
         iostream = IOStream.get_default()
         if recipient is None:
+            no_messages_preserved = 0
             if nr_messages_to_preserve:
                 for key in self._oai_messages:
                     nr_messages_to_preserve_internal = nr_messages_to_preserve
@@ -1440,24 +1406,20 @@ class ConversableAgent(LLMAgent):
                     first_msg_to_save = self._oai_messages[key][-nr_messages_to_preserve_internal]
                     if "tool_responses" in first_msg_to_save:
                         nr_messages_to_preserve_internal += 1
-                        iostream.print(
-                            f"Preserving one more message for {self.name} to not divide history between tool call and "
-                            f"tool response."
-                        )
+                        # clear_conversable_agent_history.print_preserving_message(iostream.print)
+                        no_messages_preserved += 1
                     # Remove messages from history except last `nr_messages_to_preserve` messages.
                     self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
+                iostream.send(
+                    ClearConversableAgentHistoryMessage(agent=self, no_messages_preserved=no_messages_preserved)
+                )
             else:
                 self._oai_messages.clear()
         else:
             self._oai_messages[recipient].clear()
+            # clear_conversable_agent_history.print_warning(iostream.print)
             if nr_messages_to_preserve:
-                iostream.print(
-                    colored(
-                        "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
-                        "yellow",
-                    ),
-                    flush=True,
-                )
+                iostream.send(ClearConversableAgentHistoryWarningMessage(recipient=self))
 
     def generate_oai_reply(
         self,
@@ -1585,23 +1547,7 @@ class ConversableAgent(LLMAgent):
             if len(code_blocks) == 0:
                 continue
 
-            num_code_blocks = len(code_blocks)
-            if num_code_blocks == 1:
-                iostream.print(
-                    colored(
-                        f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {code_blocks[0].language})...",
-                        "red",
-                    ),
-                    flush=True,
-                )
-            else:
-                iostream.print(
-                    colored(
-                        f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x.language for x in code_blocks])}])...",
-                        "red",
-                    ),
-                    flush=True,
-                )
+            iostream.send(GenerateCodeExecutionReplyMessage(code_blocks=code_blocks, sender=sender, recipient=self))
 
             # found code blocks, execute code.
             code_result = self._code_executor.execute_code_blocks(code_blocks)
@@ -1680,6 +1626,7 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
         message = messages[-1]
         if "function_call" in message and message["function_call"]:
+            call_id = message.get("id", None)
             func_call = message["function_call"]
             func = self._function_map.get(func_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
@@ -1692,11 +1639,11 @@ class ConversableAgent(LLMAgent):
                     loop = asyncio.new_event_loop()
                     close_loop = True
 
-                _, func_return = loop.run_until_complete(self.a_execute_function(func_call))
+                _, func_return = loop.run_until_complete(self.a_execute_function(func_call, call_id=call_id))
                 if close_loop:
                     loop.close()
             else:
-                _, func_return = self.execute_function(message["function_call"])
+                _, func_return = self.execute_function(message["function_call"], call_id=call_id)
             return True, func_return
         return False, None
 
@@ -1718,13 +1665,14 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
         message = messages[-1]
         if "function_call" in message:
+            call_id = message.get("id", None)
             func_call = message["function_call"]
             func_name = func_call.get("name", "")
             func = self._function_map.get(func_name, None)
             if func and inspect.iscoroutinefunction(func):
-                _, func_return = await self.a_execute_function(func_call)
+                _, func_return = await self.a_execute_function(func_call, call_id=call_id)
             else:
-                _, func_return = self.execute_function(func_call)
+                _, func_return = self.execute_function(func_call, call_id=call_id)
             return True, func_return
 
         return False, None
@@ -1747,6 +1695,7 @@ class ConversableAgent(LLMAgent):
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
             function_call = tool_call.get("function", {})
+            tool_call_id = tool_call.get("id", None)
             func = self._function_map.get(function_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
                 try:
@@ -1758,15 +1707,15 @@ class ConversableAgent(LLMAgent):
                     loop = asyncio.new_event_loop()
                     close_loop = True
 
-                _, func_return = loop.run_until_complete(self.a_execute_function(function_call))
+                _, func_return = loop.run_until_complete(self.a_execute_function(function_call, call_id=tool_call_id))
                 if close_loop:
                     loop.close()
             else:
-                _, func_return = self.execute_function(function_call)
+                _, func_return = self.execute_function(function_call, call_id=tool_call_id)
             content = func_return.get("content", "")
             if content is None:
                 content = ""
-            tool_call_id = tool_call.get("id", None)
+
             if tool_call_id is not None:
                 tool_call_response = {
                     "tool_call_id": tool_call_id,
@@ -1790,11 +1739,11 @@ class ConversableAgent(LLMAgent):
         return False, None
 
     async def _a_execute_tool_call(self, tool_call):
-        id = tool_call["id"]
+        tool_call_id = tool_call["id"]
         function_call = tool_call.get("function", {})
-        _, func_return = await self.a_execute_function(function_call)
+        _, func_return = await self.a_execute_function(function_call, call_id=tool_call_id)
         return {
-            "tool_call_id": id,
+            "tool_call_id": tool_call_id,
             "role": "tool",
             "content": func_return.get("content", ""),
         }
@@ -1893,7 +1842,9 @@ class ConversableAgent(LLMAgent):
 
         # print the no_human_input_msg
         if no_human_input_msg:
-            iostream.print(colored(f"\n>>>>>>>> {no_human_input_msg}", "red"), flush=True)
+            iostream.send(
+                TerminationAndHumanReplyMessage(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
+            )
 
         # stop the conversation
         if reply == "exit":
@@ -1933,7 +1884,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.print(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+            iostream.send(UsingAutoReplyMessage(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 
@@ -2006,7 +1957,9 @@ class ConversableAgent(LLMAgent):
 
         # print the no_human_input_msg
         if no_human_input_msg:
-            iostream.print(colored(f"\n>>>>>>>> {no_human_input_msg}", "red"), flush=True)
+            iostream.send(
+                TerminationAndHumanReplyMessage(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
+            )
 
         # stop the conversation
         if reply == "exit":
@@ -2046,7 +1999,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.print(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+            iostream.send(UsingAutoReplyMessage(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 
@@ -2282,13 +2235,9 @@ class ConversableAgent(LLMAgent):
             lang, code = code_block
             if not lang:
                 lang = infer_lang(code)
-            iostream.print(
-                colored(
-                    f"\n>>>>>>>> EXECUTING CODE BLOCK {i} (inferred language is {lang})...",
-                    "red",
-                ),
-                flush=True,
-            )
+
+            iostream.send(ExecuteCodeBlockMessage(code=code, language=lang, code_block_count=i, recipient=self))
+
             if lang in ["bash", "shell", "sh"]:
                 exitcode, logs, image = self.run_code(code, lang=lang, **self._code_execution_config)
             elif lang in PYTHON_VARIANTS:
@@ -2347,13 +2296,16 @@ class ConversableAgent(LLMAgent):
             result.append(char)
         return "".join(result)
 
-    def execute_function(self, func_call, verbose: bool = False) -> tuple[bool, dict[str, Any]]:
+    def execute_function(
+        self, func_call, call_id: Optional[str] = None, verbose: bool = False
+    ) -> tuple[bool, dict[str, Any]]:
         """Execute a function call and return the result.
 
         Override this function to modify the way to execute function and tool calls.
 
         Args:
             func_call: a dictionary extracted from openai message at "function_call" or "tool_calls" with keys "name" and "arguments".
+            call_id: a string to identify the tool call.
 
         Returns:
             A tuple of (is_exec_success, result_dict).
@@ -2380,9 +2332,8 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.print(
-                    colored(f"\n>>>>>>>> EXECUTING FUNCTION {func_name}...", "magenta"),
-                    flush=True,
+                iostream.send(
+                    ExecuteFunctionMessage(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
                 )
                 try:
                     content = func(**arguments)
@@ -2390,12 +2341,14 @@ class ConversableAgent(LLMAgent):
                 except Exception as e:
                     content = f"Error: {e}"
         else:
+            arguments = {}
             content = f"Error: Function {func_name} not found."
 
         if verbose:
-            iostream.print(
-                colored(f"\nInput arguments: {arguments}\nOutput:\n{content}", "magenta"),
-                flush=True,
+            iostream.send(
+                ExecutedFunctionMessage(
+                    func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
+                )
             )
 
         return is_exec_success, {
@@ -2404,13 +2357,16 @@ class ConversableAgent(LLMAgent):
             "content": content,
         }
 
-    async def a_execute_function(self, func_call):
+    async def a_execute_function(
+        self, func_call, call_id: Optional[str] = None, verbose: bool = False
+    ) -> tuple[bool, dict[str, Any]]:
         """Execute an async function call and return the result.
 
         Override this function to modify the way async functions and tools are executed.
 
         Args:
             func_call: a dictionary extracted from openai message at key "function_call" or "tool_calls" with keys "name" and "arguments".
+            call_id: a string to identify the tool call.
 
         Returns:
             A tuple of (is_exec_success, result_dict).
@@ -2437,9 +2393,8 @@ class ConversableAgent(LLMAgent):
 
             # Try to execute the function
             if arguments is not None:
-                iostream.print(
-                    colored(f"\n>>>>>>>> EXECUTING ASYNC FUNCTION {func_name}...", "magenta"),
-                    flush=True,
+                iostream.send(
+                    ExecuteFunctionMessage(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
                 )
                 try:
                     if inspect.iscoroutinefunction(func):
@@ -2451,7 +2406,15 @@ class ConversableAgent(LLMAgent):
                 except Exception as e:
                     content = f"Error: {e}"
         else:
+            arguments = {}
             content = f"Error: Function {func_name} not found."
+
+        if verbose:
+            iostream.send(
+                ExecutedFunctionMessage(
+                    func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
+                )
+            )
 
         return is_exec_success, {
             "name": func_name,
@@ -2582,8 +2545,9 @@ class ConversableAgent(LLMAgent):
                 raise ValueError(
                     f"The function signature must be of the type dict. Received function signature type {type(func_sig)}"
                 )
-
-            self._assert_valid_name(func_sig["name"])
+            if "name" not in func_sig:
+                raise ValueError(f"The function signature must have a 'name' key. Received: {func_sig}")
+            self._assert_valid_name(func_sig["name"]), func_sig
             if "functions" in self.llm_config.keys():
                 if any(func["name"] == func_sig["name"] for func in self.llm_config["functions"]):
                     warnings.warn(f"Function '{func_sig['name']}' is being overridden.", UserWarning)
@@ -2748,55 +2712,24 @@ class ConversableAgent(LLMAgent):
                 RuntimeError: if the LLM config is not set up before registering a function.
 
             """
-            nonlocal name, description
+            tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
 
-            tool = self._create_tool_if_needed(func_or_tool, name, description)
-
-            self._register_for_llm(tool.func, tool.name, tool.description, api_style)
+            self._register_for_llm(tool, api_style)
 
             return tool
 
         return _decorator
 
-    def _create_tool_if_needed(
-        self, func_or_tool: Union[Tool, Callable[..., Any]], name: Optional[str], description: Optional[str]
-    ) -> Tool:
-
-        if isinstance(func_or_tool, Tool):
-            tool: Tool = func_or_tool
-            tool._name = name or tool.name
-            tool._description = description or tool.description
-
-            return tool
-
-        if isinstance(func_or_tool, Callable):
-            func: Callable[..., Any] = func_or_tool
-
-            name = name or func.__name__
-
-            tool = Tool(name=name, description=description, func=func)
-
-            return tool
-
-        raise ValueError(
-            "Parameter 'func_or_tool' must be a function or a Tool instance, it is '{type(func_or_tool)}' instead."
-        )
-
-    def _register_for_llm(
-        self, func: Callable[..., Any], name: str, description: str, api_style: Literal["tool", "function"]
-    ) -> None:
-        # get JSON schema for the function
-        f = get_function_schema(func, name=name, description=description)
+    def _register_for_llm(self, tool: Tool, api_style: Literal["tool", "function"]) -> None:
 
         # register the function to the agent if there is LLM config, raise an exception otherwise
         if self.llm_config is None:
             raise RuntimeError("LLM config must be setup before registering a function for LLM.")
 
         if api_style == "function":
-            f = f["function"]
-            self.update_function_signature(f, is_remove=False)
+            self.update_function_signature(tool.function_schema, is_remove=False)
         elif api_style == "tool":
-            self.update_tool_signature(f, is_remove=False)
+            self.update_tool_signature(tool.tool_schema, is_remove=False)
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 
@@ -2840,7 +2773,7 @@ class ConversableAgent(LLMAgent):
             """
             nonlocal name
 
-            tool = self._create_tool_if_needed(func_or_tool=func_or_tool, name=name, description=None)
+            tool = Tool(func_or_tool=func_or_tool, name=name)
 
             self.register_function({tool.name: self._wrap_function(tool.func)})
 
@@ -2944,11 +2877,12 @@ class ConversableAgent(LLMAgent):
     def print_usage_summary(self, mode: Union[str, list[str]] = ["actual", "total"]) -> None:
         """Print the usage summary."""
         iostream = IOStream.get_default()
-
         if self.client is None:
-            iostream.print(f"No cost incurred from agent '{self.name}'.")
+            iostream.send(ConversableAgentUsageSummaryNoCostIncurredMessage(recipient=self))
         else:
-            iostream.print(f"Agent '{self.name}':")
+            iostream.send(ConversableAgentUsageSummaryMessage(recipient=self))
+
+        if self.client is not None:
             self.client.print_usage_summary(mode)
 
     def get_actual_usage(self) -> Union[None, dict[str, int]]:

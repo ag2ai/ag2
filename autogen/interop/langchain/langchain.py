@@ -58,7 +58,7 @@ class LangChainInteroperability:
         return Tool(
             name=langchain_tool.name,
             description=langchain_tool.description,
-            func=func,
+            func_or_tool=func,
         )
 
     @classmethod

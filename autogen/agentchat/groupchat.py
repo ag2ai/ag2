@@ -18,6 +18,17 @@ from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNex
 from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
+from ..messages.agent_messages import (
+    ClearAgentsHistoryMessage,
+    GroupChatResumeMessage,
+    GroupChatRunChatMessage,
+    SelectSpeakerInvalidInputMessage,
+    SelectSpeakerMessage,
+    SelectSpeakerTryCountExceededMessage,
+    SpeakerAttemptFailedMultipleAgentsMessage,
+    SpeakerAttemptFailedNoAgentsMessage,
+    SpeakerAttemptSuccessfullMessage,
+)
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
@@ -389,16 +400,14 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        iostream.print("Please select the next speaker from the following list:")
-        _n_agents = len(agents)
-        for i in range(_n_agents):
-            iostream.print(f"{i+1}: {agents[i].name}")
+        iostream.send(SelectSpeakerMessage(agents=agents))
+
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                iostream.print(f"You have tried {try_count} times. The next speaker will be selected automatically.")
+                iostream.send(SelectSpeakerTryCountExceededMessage(try_count=try_count, agents=agents))
                 break
             try:
                 i = iostream.input(
@@ -407,12 +416,12 @@ class GroupChat:
                 if i == "" or i == "q":
                     break
                 i = int(i)
-                if i > 0 and i <= _n_agents:
+                if i > 0 and i <= len(agents):
                     return agents[i - 1]
                 else:
                     raise ValueError
             except ValueError:
-                iostream.print(f"Invalid input. Please enter a number between 1 and {_n_agents}.")
+                iostream.send(SelectSpeakerInvalidInputMessage(agents=agents))
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:
@@ -840,15 +849,43 @@ class GroupChat:
 
         Used by auto_select_speaker and a_auto_select_speaker.
         """
-
-        # Output the query and requery results
-        if self.select_speaker_auto_verbose:
-            iostream = IOStream.get_default()
-
         # Validate the speaker name selected
         select_name = messages[-1]["content"].strip()
 
         mentions = self._mentioned_agents(select_name, agents)
+
+        # Output the query and requery results
+        if self.select_speaker_auto_verbose:
+            iostream = IOStream.get_default()
+            no_of_mentions = len(mentions)
+            if no_of_mentions == 1:
+                # Success on retry, we have just one name mentioned
+                iostream.send(
+                    SpeakerAttemptSuccessfullMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
+            elif no_of_mentions == 1:
+                iostream.send(
+                    SpeakerAttemptFailedMultipleAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
+            else:
+                iostream.send(
+                    SpeakerAttemptFailedNoAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
 
         if len(mentions) == 1:
             # Success on retry, we have just one name mentioned
@@ -857,26 +894,8 @@ class GroupChat:
             # Add the selected agent to the response so we can return it
             messages.append({"role": "user", "content": f"[AGENT SELECTED]{selected_agent_name}"})
 
-            if self.select_speaker_auto_verbose:
-                iostream.print(
-                    colored(
-                        f">>>>>>>> Select speaker attempt {attempt} of {attempt + attempts_left} successfully selected: {selected_agent_name}",
-                        "green",
-                    ),
-                    flush=True,
-                )
-
         elif len(mentions) > 1:
             # More than one name on requery so add additional reminder prompt for next retry
-
-            if self.select_speaker_auto_verbose:
-                iostream.print(
-                    colored(
-                        f">>>>>>>> Select speaker attempt {attempt} of {attempt + attempts_left} failed as it included multiple agent names.",
-                        "red",
-                    ),
-                    flush=True,
-                )
 
             if attempts_left:
                 # Message to return to the chat for the next attempt
@@ -898,15 +917,6 @@ class GroupChat:
 
         else:
             # No names at all on requery so add additional reminder prompt for next retry
-
-            if self.select_speaker_auto_verbose:
-                iostream.print(
-                    colored(
-                        f">>>>>>>> Select speaker attempt #{attempt} failed as it did not include any agent names.",
-                        "red",
-                    ),
-                    flush=True,
-                )
 
             if attempts_left:
                 # Message to return to the chat for the next attempt
@@ -1169,7 +1179,7 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    iostream.print(colored(f"\nNext speaker: {speaker.name}\n", "green"), flush=True)
+                    iostream.send(GroupChatRunChatMessage(speaker=speaker, silent=silent))
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
@@ -1374,11 +1384,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.print(
-                f"Prepared group chat with {len(messages)} messages, the last speaker is",
-                colored(last_speaker_name, "yellow"),
-                flush=True,
-            )
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1482,11 +1488,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.print(
-                f"Prepared group chat with {len(messages)} messages, the last speaker is",
-                colored(last_speaker_name, "yellow"),
-                flush=True,
-            )
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1642,23 +1644,18 @@ class GroupChatManager(ConversableAgent):
                 "The last tool call message will be saved to prevent errors caused by tool response without tool call."
             )
         # clear history
+        iostream.send(
+            ClearAgentsHistoryMessage(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve)
+        )
         if agent_to_memory_clear:
-            if nr_messages_to_preserve:
-                iostream.print(
-                    f"Clearing history for {agent_to_memory_clear.name} except last {nr_messages_to_preserve} messages."
-                )
-            else:
-                iostream.print(f"Clearing history for {agent_to_memory_clear.name}.")
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
         else:
             if nr_messages_to_preserve:
-                iostream.print(f"Clearing history for all agents except last {nr_messages_to_preserve} messages.")
                 # clearing history for groupchat here
                 temp = groupchat.messages[-nr_messages_to_preserve:]
                 groupchat.messages.clear()
                 groupchat.messages.extend(temp)
             else:
-                iostream.print("Clearing history for all agents.")
                 # clearing history for groupchat here
                 groupchat.messages.clear()
             # clearing history for agents

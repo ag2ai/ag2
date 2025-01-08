@@ -7,49 +7,27 @@ from unittest.mock import MagicMock
 
 import pytest
 from anyio import move_on_after
-from asyncer import create_task_group
-from conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
 
-import autogen
 from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
 from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
+
+from ...conftest import reason, skip_openai  # noqa: E402
+from .realtime_test_utils import Credentials
 
 
 class TestOAIRealtimeClient:
     @pytest.fixture
-    def llm_config(self) -> dict[str, Any]:
-        config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
-            filter_dict={
-                "tags": ["gpt-4o-realtime"],
-            },
-            file_location=KEY_LOC,
-        )
-        assert config_list, "No config list found"
-        return {
-            "config_list": config_list,
-            "temperature": 0.8,
-        }
-
-    @pytest.fixture
-    def client(self, llm_config: dict[str, Any]) -> RealtimeClientProtocol:
+    def client(self, credentials: Credentials) -> RealtimeClientProtocol:
+        llm_config = credentials.llm_config
         return OpenAIRealtimeClient(
             llm_config=llm_config,
             voice="alloy",
             system_message="You are a helpful AI assistant with voice capabilities.",
         )
 
-    def test_init(self) -> None:
-        llm_config = {
-            "config_list": [
-                {
-                    "model": "gpt-4o",
-                    "api_key": MOCK_OPEN_AI_API_KEY,
-                },
-            ],
-            "temperature": 0.8,
-        }
+    def test_init(self, mock_credentials: Credentials) -> None:
+        llm_config = mock_credentials.llm_config
+
         client = OpenAIRealtimeClient(
             llm_config=llm_config,
             voice="alloy",

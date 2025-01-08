@@ -2,21 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 import sys
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 
 import pytest
-from conftest import reason, skip_openai
 
-if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-    from crewai_tools import FileReadTool
-else:
-    FileReadTool = MagicMock()
-
+import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
+
+from ...agentchat.test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
 
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
     from autogen.interop.crewai import CrewAIInteroperability
@@ -30,7 +27,9 @@ else:
 )
 class TestCrewAIInteroperability:
     @pytest.fixture(autouse=True)
-    def setup(self) -> None:
+    def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
+        from crewai_tools import FileReadTool
 
         crewai_tool = FileReadTool()
         self.model_type = crewai_tool.args_schema
@@ -52,7 +51,7 @@ class TestCrewAIInteroperability:
             assert self.tool.name == "Read_a_file_s_content"
             assert (
                 self.tool.description
-                == "A tool that can be used to read a file's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+                == "A tool that can be used to read None's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
             args = self.model_type(file_path=file_path)
@@ -61,7 +60,13 @@ class TestCrewAIInteroperability:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     def test_with_llm(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            filter_dict={
+                "tags": ["gpt-4o-mini"],
+            },
+            file_location=KEY_LOC,
+        )
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",

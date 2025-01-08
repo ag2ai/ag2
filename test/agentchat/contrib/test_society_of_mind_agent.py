@@ -15,11 +15,8 @@ import pytest
 import autogen
 from autogen.agentchat.contrib.society_of_mind_agent import SocietyOfMindAgent
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from conftest import skip_openai  # noqa: E402
+from ...conftest import skip_openai  # noqa: E402
+from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 if not skip_openai:
     config_list = autogen.config_list_from_json(env_or_file=OAI_CONFIG_LIST, file_location=KEY_LOC)

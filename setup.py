@@ -39,7 +39,8 @@ install_requires = [
     "docker",
     "packaging",
     "websockets>=14,<15",
-    "asyncer>=0.0.8",
+    "asyncer==0.0.8",
+    "fast_depends>=2.4.12,<3",
 ]
 
 test = [
@@ -86,7 +87,10 @@ neo4j = [
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
 twilio = ["fastapi>=0.115.0,<1", "uvicorn>=0.30.6,<1", "twilio>=9.3.2"]
 
-interop_crewai = ["crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'"]
+interop_crewai = [
+    "crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'",
+    "weaviate-client==4.10.2; python_version>='3.10' and python_version<'3.13'",
+]
 interop_langchain = ["langchain-community>=0.3.12,<1"]
 interop_pydantic_ai = ["pydantic-ai==0.0.13"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai

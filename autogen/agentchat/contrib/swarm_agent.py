@@ -13,8 +13,8 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel
 
-from autogen.function_utils import get_function_schema
 from autogen.oai import OpenAIWrapper
+from autogen.tools import get_function_schema
 
 from ..agent import Agent
 from ..chat import ChatResult
@@ -352,6 +352,8 @@ def _determine_next_agent(
             return None if user_agent is None else user_agent
         elif after_work_condition == AfterWorkOption.STAY:
             return last_speaker
+        elif after_work_condition == AfterWorkOption.SWARM_MANAGER:
+            return "auto"
     else:
         raise ValueError("Invalid After Work condition or return value from callable")
 

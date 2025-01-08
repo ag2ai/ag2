@@ -4,11 +4,13 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import logging
 import sys
 from typing import Literal
 
 import pytest
-from conftest import reason, skip_openai  # noqa: E402
+
+from ....conftest import reason, skip_openai  # noqa: E402
 
 try:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
@@ -22,7 +24,30 @@ except ImportError:
 else:
     skip = False
 
+# Configure the logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
+
+
+# Test fixture for creating and initializing a query engine with a JSON input file
+@pytest.fixture(scope="module")
+def neo4j_query_engine_with_json():
+    input_path = "./test/agentchat/contrib/graph_rag/layout_parser_paper_parsed_elements.json"
+    input_documents = [Document(doctype=DocumentType.JSON, path_or_url=input_path)]
+    # Create Neo4jGraphQueryEngine
+    query_engine = Neo4jGraphQueryEngine(
+        username="neo4j",  # Change if you reset username
+        password="password",  # Change if you reset password
+        host="bolt://172.17.0.3",  # Change
+        port=7687,  # if needed
+        database="neo4j",  # Change if you want to store the graphh in your custom database
+    )
+
+    # Ingest data and create a new property graph
+    query_engine.init_db(input_doc=input_documents)
+    return query_engine
 
 
 # Test fixture for creating and initializing a query engine
@@ -108,7 +133,7 @@ def test_neo4j_query_engine(neo4j_query_engine):
     # Query the database
     query_result: GraphStoreQueryResult = neo4j_query_engine.query(question=question)
 
-    print(query_result.answer)
+    logger.info(query_result.answer)
 
     assert query_result.answer.find("BUZZ") >= 0
 
@@ -131,7 +156,7 @@ def test_neo4j_add_records(neo4j_query_engine):
     question = "Who acted in 'The Matrix'?"
     query_result: GraphStoreQueryResult = neo4j_query_engine.query(question=question)
 
-    print(query_result.answer)
+    logger.info(query_result.answer)
 
     assert query_result.answer.find("Keanu Reeves") >= 0
 
@@ -147,5 +172,20 @@ def test_neo4j_auto(neo4j_query_engine_auto):
     question = "Which company is the employer?"
     query_result: GraphStoreQueryResult = neo4j_query_engine_auto.query(question=question)
 
-    print(query_result.answer)
+    logger.info(query_result.answer)
     assert query_result.answer.find("BUZZ") >= 0
+
+
+@pytest.mark.skipif(
+    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    reason=reason,
+)
+def test_neo4j_json_auto(neo4j_query_engine_with_json):
+    """
+    Test querying with auto-generated property graph from a JSON file.
+    """
+    question = "What are current layout detection models in the LayoutParser model zoo?"
+    query_result: GraphStoreQueryResult = neo4j_query_engine_with_json.query(question=question)
+
+    logger.info(query_result.answer)
+    assert query_result.answer.find("PRImA") >= 0

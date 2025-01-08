@@ -4,10 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import os
-import sys
 import tempfile
-from typing import Any, Dict, List, Union
 
 import pytest
 
@@ -15,11 +12,8 @@ import autogen
 from autogen.agentchat.contrib.capabilities.transform_messages import TransformMessages
 from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimiter, MessageTokenLimiter
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../.."))
-from conftest import skip_openai  # noqa: E402
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
-from test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ....conftest import skip_openai  # noqa: E402
+from ...test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
 
 
 @pytest.mark.skipif(skip_openai, reason="Requested to skip openai test.")

@@ -8,7 +8,7 @@ import itertools
 import os
 import sys
 import tempfile
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import pytest
 
@@ -28,9 +28,7 @@ except ImportError:
 else:
     skip_requirement = False
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../.."))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from conftest import MOCK_OPEN_AI_API_KEY, skip_openai  # noqa: E402
+from ....conftest import MOCK_OPEN_AI_API_KEY, skip_openai  # noqa: E402
 
 filter_dict = {"model": ["gpt-4o-mini"]}
 
