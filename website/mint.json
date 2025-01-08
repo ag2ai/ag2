@@ -626,7 +626,8 @@
             "notebooks/config_loader_utility_functions",
             "notebooks/gpt_assistant_agent_function_call",
             "notebooks/lats_search",
-            "notebooks/tools_interoperability"
+            "notebooks/tools_interoperability",
+            "notebooks/agentchat_tabular_data_rag_workflow"
           ]
         },
         "notebooks/Gallery"
