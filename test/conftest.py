@@ -114,7 +114,7 @@ def credentials_azure_gpt_35_turbo() -> Credentials:
 
 @pytest.fixture
 def credentials_azure_gpt_35_turbo_instruct() -> Credentials:
-    return get_openai_credentials(
+    return get_credentials(
         filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
     )
 
