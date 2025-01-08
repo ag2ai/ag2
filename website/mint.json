@@ -401,7 +401,8 @@
         {
           "group": "messages",
           "pages": [
-            "docs/reference/messages/agent_messages"
+            "docs/reference/messages/agent_messages",
+            "docs/reference/messages/base_message"
           ]
         },
         {
@@ -638,8 +639,9 @@
             "notebooks/gpt_assistant_agent_function_call",
             "notebooks/lats_search",
             "notebooks/tools_interoperability",
-            "notebooks/tools_dependency_injection",
-            "notebooks/agentchat_tabular_data_rag_workflow"
+            "notebooks/agentchat_tabular_data_rag_workflow",
+            "notebooks/agentchat_realtime_webrtc",
+            "notebooks/tools_dependency_injection"
           ]
         },
         "notebooks/Gallery"
