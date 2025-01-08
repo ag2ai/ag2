@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from autogen import OpenAIWrapper, config_list_from_json
+from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED
 
@@ -33,8 +33,8 @@ else:
 
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
-def test_aoai_chat_completion(credentials_azure_gpt_4o_mini: Credentials):
-    config_list = credentials_azure_gpt_4o_mini.config_list
+def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
+    config_list = credentials_azure_gpt_35_turbo.config_list
     client = OpenAIWrapper(config_list=config_list)
     response = client.create(messages=[{"role": "user", "content": "2+2="}], cache_seed=None)
     print(response)

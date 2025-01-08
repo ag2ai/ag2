@@ -28,12 +28,12 @@ from ...conftest import Credentials, reason, skip_openai  # noqa: E402
 )
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 def test_gpt_assistant_chat_openai(
-    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure_gpt_4o_mini: Credentials
+    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
 ) -> None:
     if provider == "openai":
         _test_gpt_assistant_chat(credentials_gpt_4o_mini)
     elif provider == "azure":
-        _test_gpt_assistant_chat(credentials_azure_gpt_4o_mini)
+        _test_gpt_assistant_chat(credentials_azure)
     else:
         raise ValueError(f"Invalid provider: {provider}")
 
@@ -108,12 +108,12 @@ def _test_gpt_assistant_chat(credentials: Credentials) -> None:
 )
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 def test_get_assistant_instructions(
-    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure_gpt_4o_mini: Credentials
+    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
 ) -> None:
     if provider == "openai":
         _test_get_assistant_instructions(credentials_gpt_4o_mini)
     elif provider == "azure":
-        _test_get_assistant_instructions(credentials_azure_gpt_4o_mini)
+        _test_get_assistant_instructions(credentials_azure)
     else:
         raise ValueError(f"Invalid provider: {provider}")
 
@@ -144,12 +144,12 @@ def _test_get_assistant_instructions(credentials: Credentials) -> None:
 )
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 def test_gpt_assistant_instructions_overwrite(
-    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure_gpt_4o_mini: Credentials
+    provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
 ) -> None:
     if provider == "openai":
         _test_gpt_assistant_instructions_overwrite(credentials_gpt_4o_mini)
     elif provider == "azure":
-        _test_gpt_assistant_instructions_overwrite(credentials_azure_gpt_4o_mini)
+        _test_gpt_assistant_instructions_overwrite(credentials_azure)
     else:
         raise ValueError(f"Invalid provider: {provider}")
 
