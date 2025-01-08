@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-import autogen
 from autogen.code_utils import (
     UNKNOWN,
     check_can_use_docker_or_throw,
@@ -32,10 +31,8 @@ from autogen.code_utils import (
     is_docker_running,
 )
 
-from .conftest import skip_docker
+from .conftest import Credentials, skip_docker
 
-KEY_LOC = "notebook"
-OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 here = os.path.abspath(os.path.dirname(__file__))
 
 if skip_docker or not is_docker_running() or not decide_use_docker(use_docker=None):
@@ -391,12 +388,12 @@ def test_create_virtual_env_with_extra_args():
         assert venv_context.env_name == os.path.split(temp_dir)[1]
 
 
-def _test_improve():
+def _test_improve(credentials_all: Credentials):
     try:
         import openai
     except ImportError:
         return
-    config_list = autogen.config_list_openai_aoai(KEY_LOC)
+    config_list = credentials_all.config_list
     improved, _ = improve_function(
         "autogen/math_utils.py",
         "solve_problem",

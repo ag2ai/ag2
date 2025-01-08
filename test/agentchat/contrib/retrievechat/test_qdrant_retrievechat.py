@@ -37,13 +37,6 @@ except ImportError:
 else:
     skip = False or skip_openai
 
-test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
-
-
-@pytest.fixture
-def test_dir() -> Generator[str, None, None]:
-    return test_dir
-
 
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or not QDRANT_INSTALLED or skip,
@@ -99,6 +92,7 @@ def test_qdrant_filter():
 
 @pytest.mark.skipif(not QDRANT_INSTALLED, reason="qdrant_client is not installed")
 def test_qdrant_search():
+    test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
     client = QdrantClient(":memory:")
     create_qdrant_from_dir(test_dir, client=client)
 

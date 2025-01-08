@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -70,7 +70,7 @@ class Credentials:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
 
-def get_credentials(filter_dict: dict[str, Any], temperature: float = 0.0) -> Credentials:
+def get_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
     """Fixture to load the LLM config."""
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
@@ -87,7 +87,7 @@ def get_credentials(filter_dict: dict[str, Any], temperature: float = 0.0) -> Cr
     )
 
 
-def get_openai_credentials(filter_dict: dict[str, Any], temperature: float = 0.0) -> Credentials:
+def get_openai_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
     config_list = [
         conf
         for conf in get_credentials(filter_dict, temperature).config_list
@@ -101,6 +101,11 @@ def get_openai_credentials(filter_dict: dict[str, Any], temperature: float = 0.0
             "temperature": temperature,
         }
     )
+
+
+@pytest.fixture
+def credentials_all() -> Credentials:
+    return get_credentials()
 
 
 @pytest.fixture
