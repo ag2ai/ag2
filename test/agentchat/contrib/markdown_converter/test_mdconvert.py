@@ -96,7 +96,7 @@ SERP_TEST_EXCLUDES = [
     skip_all,
     reason="do not run if dependency is not installed",
 )
-def test_mdconvert_remote() -> None:
+def test_mdconvert_remote_markitdown() -> None:
 
     # By URL
     converter = create_converter()
@@ -109,7 +109,20 @@ def test_mdconvert_remote() -> None:
     skip_all,
     reason="do not run if dependency is not installed",
 )
-def test_mdconvert_local() -> None:
+def test_mdconvert_remote_docling() -> None:
+
+    # By URL
+    converter = create_converter("docling")
+    result = converter(PDF_TEST_URL)
+    for test_string in PDF_TEST_STRINGS:
+        assert test_string in result
+
+
+@pytest.mark.skipif(
+    skip_all,
+    reason="do not run if dependency is not installed",
+)
+def test_mdconvert_local_markitdown() -> None:
     converter = create_converter()
     # Test XLSX processing
 
@@ -129,15 +142,6 @@ def test_mdconvert_local() -> None:
     for test_string in PPTX_TEST_STRINGS:
         text_content = result.replace("\\", "")
         assert test_string in text_content
-
-    # Test HTML processing
-    # result = converter(BLOG_TEST_URL)
-    # logger.debug(f"Blog conversion result: {result}")
-    # for test_string in BLOG_TEST_STRINGS:
-    #    text_content = result.replace("\\", "")
-    #    if test_string not in text_content:
-    #        logger.error(f"Failed to find '{test_string}' in:\n{text_content}")
-    #    assert test_string in text_content
 
     # Test Wikipedia processing
     result = converter(WIKIPEDIA_TEST_URL)
@@ -166,12 +170,80 @@ def test_mdconvert_local() -> None:
         assert test_string in text_content
 
 
-# @pytest.mark.skipif(
-#    skip_exiftool,
-#    reason="do not run if exiftool is not installed",
-# )
-def test_mdconvert_exiftool() -> None:
+@pytest.mark.skipif(
+    skip_all,
+    reason="do not run if dependency is not installed",
+)
+def test_mdconvert_local_docling() -> None:
+    converter = create_converter("docling")
+    # Test XLSX processing
+
+    result = converter(os.path.join(TEST_FILES_DIR, "test.xlsx"))
+    for test_string in XLSX_TEST_STRINGS:
+        text_content = result.replace("\\", "")
+        assert test_string in text_content
+
+    # Test DOCX processing
+    result = converter(os.path.join(TEST_FILES_DIR, "test.docx"))
+    for test_string in DOCX_TEST_STRINGS:
+        text_content = result.replace("\\", "")
+        assert test_string in text_content
+
+    # Test PPTX processing
+    result = converter(os.path.join(TEST_FILES_DIR, "test.pptx"))
+    for test_string in PPTX_TEST_STRINGS:
+        text_content = result.replace("\\", "")
+        assert test_string in text_content
+
+    # Test Wikipedia processing
+    result = converter(WIKIPEDIA_TEST_URL)
+    logger.debug(f"Wikipedia conversion result: {result}")
+    text_content = result.replace("\\", "")
+    for test_string in WIKIPEDIA_TEST_EXCLUDES:
+        if test_string in text_content:
+            logger.error(f"Unexpectedly found '{test_string}' in:\n{text_content}")
+        assert test_string not in text_content
+    for test_string in WIKIPEDIA_TEST_STRINGS:
+        if test_string not in text_content:
+            logger.error(f"Failed to find '{test_string}' in:\n{text_content}")
+        assert test_string in text_content
+
+    # Test Bing processing
+    result = converter(SERP_TEST_URL)
+    logger.debug(f"SERP conversion result: {result}")
+    text_content = result.replace("\\", "")
+    for test_string in SERP_TEST_EXCLUDES:
+        if test_string in text_content:
+            logger.error(f"Unexpectedly found '{test_string}' in:\n{text_content}")
+        assert test_string not in text_content
+    for test_string in SERP_TEST_STRINGS:
+        if test_string not in text_content:
+            logger.error(f"Failed to find '{test_string}' in:\n{text_content}")
+        assert test_string in text_content
+
+
+@pytest.mark.skipif(
+    skip_exiftool,
+    reason="do not run if exiftool is not installed",
+)
+def test_mdconvert_exiftool_markitdown() -> None:
     converter = create_converter()
+    # Test JPG metadata processing
+    result = converter(os.path.join(TEST_FILES_DIR, "test_image.jpg"))
+    logger.debug(f"Image metadata result: {result}")
+    for key in JPG_TEST_EXIFTOOL:
+        target = f"{key}: {JPG_TEST_EXIFTOOL[key]}"
+        if target not in result:
+            logger.error(f"Failed to find '{target}' in:\n{result}")
+        assert target in result
+
+
+@pytest.mark.skipif(
+    skip_exiftool,
+    reason="do not run if exiftool is not installed",
+)
+def test_mdconvert_exiftool_docling() -> None:
+    converter = create_converter("docling")
     # Test JPG metadata processing
     result = converter(os.path.join(TEST_FILES_DIR, "test_image.jpg"))
     logger.debug(f"Image metadata result: {result}")
@@ -192,5 +264,5 @@ if __name__ == "__main__":
     )
 
     # test_mdconvert_remote()
-    test_mdconvert_local()
+    test_mdconvert_local_markitdown()
     # test_mdconvert_exiftool()
