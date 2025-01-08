@@ -7,6 +7,7 @@ name: python-package
 on:
   release:
     types: [published]
+  workflow_dispatch: null
 permissions: {}
   # actions: read
   # checks: read
