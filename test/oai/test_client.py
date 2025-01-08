@@ -17,8 +17,9 @@ from autogen import OpenAIWrapper, config_list_from_json
 from autogen.cache.cache import Cache
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, OpenAIClient
 
-from ..conftest import skip_openai  # noqa: E402
+from ..conftest import reason, skip_openai  # noqa: E402
 
+reason += " openai>=1 not installed"
 TOOL_ENABLED = False
 try:
     import openai
@@ -36,7 +37,7 @@ KEY_LOC = "notebook"
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_aoai_chat_completion():
     config_list = config_list_from_json(
         env_or_file=OAI_CONFIG_LIST,
@@ -95,7 +96,7 @@ def test_oai_tool_calling_extraction():
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_chat_completion():
     config_list = config_list_from_json(
         env_or_file=OAI_CONFIG_LIST,
@@ -107,7 +108,7 @@ def test_chat_completion():
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_completion():
     config_list = config_list_from_json(
         env_or_file=OAI_CONFIG_LIST,
@@ -120,7 +121,7 @@ def test_completion():
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 @pytest.mark.parametrize(
     "cache_seed",
     [
@@ -139,7 +140,7 @@ def test_cost(cache_seed):
     print(response.cost)
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_customized_cost():
     config_list = config_list_from_json(
         env_or_file=OAI_CONFIG_LIST, file_location=KEY_LOC, filter_dict={"tags": ["gpt-3.5-turbo-instruct"]}
@@ -153,7 +154,7 @@ def test_customized_cost():
     ), f"Due to customized pricing, cost should be > 4. Message: {response.choices[0].message.content}"
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_usage_summary():
     config_list = config_list_from_json(
         env_or_file=OAI_CONFIG_LIST,
@@ -189,7 +190,7 @@ def test_usage_summary():
     ), "total_cost should be equal to response.cost * 2"
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_legacy_cache():
     config_list = config_list_from_json(
         env_or_file=OAI_CONFIG_LIST,
@@ -258,7 +259,7 @@ def test_legacy_cache():
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(21)))
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_cache():
     config_list = config_list_from_json(
         env_or_file=OAI_CONFIG_LIST,
@@ -327,7 +328,7 @@ def test_cache():
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_oai_reasoning_remove_unsupported_params():
     """Test that unsupported parameters are removed with appropriate warnings"""
     client = OpenAIClient(OpenAI(), None)
@@ -369,7 +370,7 @@ def test_oai_reasoning_remove_unsupported_params():
     assert len(warning_records) == 7  # One for each unsupported param
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_oai_reasoning_max_tokens_replacement():
     """Test that max_tokens is replaced with max_completion_tokens"""
     client = OpenAIClient(OpenAI(), None)
@@ -383,7 +384,7 @@ def test_oai_reasoning_max_tokens_replacement():
     assert processed_params["max_completion_tokens"] == 100
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 @pytest.mark.parametrize(
     "model_name,should_merge",
     [
