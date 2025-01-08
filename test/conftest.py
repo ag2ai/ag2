@@ -4,7 +4,6 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -101,6 +100,11 @@ def get_openai_credentials(filter_dict: Optional[dict[str, Any]] = None, tempera
             "temperature": temperature,
         }
     )
+
+
+@pytest.fixture
+def credentials_azure() -> Credentials:
+    return get_credentials(filter_dict={"api_type": ["azure"]})
 
 
 @pytest.fixture

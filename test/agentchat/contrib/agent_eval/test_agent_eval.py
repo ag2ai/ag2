@@ -10,15 +10,11 @@ import json
 
 import pytest
 
-import autogen
 from autogen.agentchat.contrib.agent_eval.agent_eval import generate_criteria, quantify_criteria
 from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 from autogen.agentchat.contrib.agent_eval.task import Task
 
-from ....conftest import reason, skip_openai  # noqa: E402
-
-KEY_LOC = "notebook"
-OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
+from ....conftest import Credentials, reason, skip_openai  # noqa: E402
 
 
 def remove_ground_truth(test_case: str):
@@ -30,31 +26,8 @@ def remove_ground_truth(test_case: str):
     return str(test_details), correctness
 
 
-if not skip_openai:
-    openai_config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        # The Retrieval tool requires at least gpt-3.5-turbo-1106 (newer versions are supported) or gpt-4-turbo-preview models.
-        # https://platform.openai.com/docs/models/overview
-        filter_dict={
-            "api_type": ["openai"],
-            "model": [
-                "gpt-4o-mini",
-                "gpt-4o",
-                "gpt-4-turbo",
-                "gpt-4-turbo-preview",
-                "gpt-4-0125-preview",
-                "gpt-4-1106-preview",
-            ],
-        },
-    )
-
-    aoai_config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"api_type": ["azure"]},
-    )
-
+@pytest.fixture
+def task() -> Task:
     success_str = open("test/test_files/agenteval-in-out/samples/sample_math_response_successful.txt").read()
     response_successful = remove_ground_truth(success_str)[0]
     failed_str = open("test/test_files/agenteval-in-out/samples/sample_math_response_failed.txt").read()
@@ -67,14 +40,15 @@ if not skip_openai:
             "failed_response": response_failed,
         }
     )
+    return task
 
 
 @pytest.mark.skipif(
     skip_openai,
     reason=reason,
 )
-def test_generate_criteria():
-    criteria = generate_criteria(task=task, llm_config={"config_list": aoai_config_list})
+def test_generate_criteria(credentials_azure: Credentials, task: Task):
+    criteria = generate_criteria(task=task, llm_config={"config_list": credentials_azure.config_list})
     assert criteria
     assert len(criteria) > 0
     assert criteria[0].description
@@ -86,7 +60,7 @@ def test_generate_criteria():
     skip_openai,
     reason=reason,
 )
-def test_quantify_criteria():
+def test_quantify_criteria(credentials_azure: Credentials, task: Task):
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"
     criteria = open(criteria_file).read()
     criteria = Criterion.parse_json_str(criteria)
@@ -95,7 +69,7 @@ def test_quantify_criteria():
     test_case, ground_truth = remove_ground_truth(test_case)
 
     quantified = quantify_criteria(
-        llm_config={"config_list": aoai_config_list},
+        llm_config={"config_list": credentials_azure.config_list},
         criteria=criteria,
         task=task,
         test_case=test_case,
