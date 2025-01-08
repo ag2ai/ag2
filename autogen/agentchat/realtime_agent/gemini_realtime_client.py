@@ -33,7 +33,7 @@ HOST = "generativelanguage.googleapis.com"
 # uri = f"wss://{host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={api_key}"
 
 
-# TODO: Configuable or hardcode? Align with OAI class?
+# TODO: Configurable or hardcode? Align with OAI class?
 GEMINI_CONFIG = {
     # TODO: function call description: https://ai.google.dev/gemini-api/docs/models/gemini-v2#compositional-function-calling
     # TODO: function call example: https://github.com/google-gemini/cookbook/blob/main/gemini-2/live_api_tool_use.ipynb
@@ -64,7 +64,9 @@ class GeminiRealtimeClient:
         self._system_message = system_message
         self._logger = logger
         self._connection: Optional[AsyncSession] = None
-        self._model: str = config["model"]  # As of 01/08/2025, only gemini-2.0-flash-exp support Multimodal Live API
+        self._model: str = llm_config[
+            "model"
+        ]  # As of 01/08/2025, only gemini-2.0-flash-exp support Multimodal Live API
 
         config = llm_config["config_list"][0]
         self._client = genai.Client(
@@ -151,14 +153,46 @@ class GeminiRealtimeClient:
     async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
         pass
 
+    def _consolidate_session_updates(self) -> dict[str, Any]:
+        """Combine all pending session updates into a single configuration."""
+        final_config = {}
+        for update in self._pending_session_updates:
+            final_config.update(update)
+        return final_config
+
+    async def _initialize_session(self) -> None:
+        final_session_config = self._consolidate_session_updates()
+        await self.connection.send(json.dumps(final_session_config))
+
+    async def session_update(self, session_options: dict[str, Any]) -> None:
+        """Record or apply session updates."""
+        if self._is_reading_events:
+            self.logger.warning("Is reading events. Session update would be ignored.")
+        # Record session updates
+        else:
+            self._pending_session_updates.append(session_options)
+
+    @asynccontextmanager
+    async def connect(self) -> AsyncGenerator[None, None]:
+        """Connect to the Gemini Realtime API."""
+        uri = f"wss://{HOST}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={self.api_key}"
+        try:
+            async with connect(uri, additional_headers={"Content-Type": "application/json"}) as self._connection:
+                yield
+        finally:
+            self._connection = None
+
     async def read_events(self):
         """Read Audio Events"""
         if self._connection is None:
             raise RuntimeError("Client is not connected, call connect() first.")
 
+        # Last moment you can send the sessions updates, before the conversion starts. The moment conversation starts. Check inside the send text, send audio.
+        await self._initialize_session()
+
         self._is_reading_events = True
-        try:
-            async for raw_response in self.connection:
+        async for raw_response in self.connection:
+            try:
                 response = json.loads(raw_response.decode("ascii"))
                 b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"]["data"]
                 event = {
@@ -166,49 +200,14 @@ class GeminiRealtimeClient:
                     "delta": b64data,
                 }
                 yield event
-        finally:
-            self._connection = None
+            except KeyError:
+                self.logger.error("Failed to parse audio event: %s", response)
 
     # TODO: didn't find relevant API: https://github.com/google-gemini/cookbook/blob/main/gemini-2/live_api_tool_use.ipynb
     # async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
     #     """Truncate audio in the Gemini Realtime API.
-    async def _initialize_session(self) -> None:
-        setup = {
-            "setup": {
-                "model": self._model,
-                "tools": [],  # TODO: what to pass here ?
-                "generation_config": {"response_modalities": ["AUDIO"]},  # TODO: do we add TEXT here?
-            }
-        }
-        await self.ws.send(json.dumps(setup))
-        setup_response = json.loads(await self.ws.recv())
-        Logger.debug(setup_response)
 
-    async def session_update(self, session_options: dict[str, Any]) -> None:
-        """Can we send the setup again to the socket"""
-        pass
-
-    @asynccontextmanager
-    async def connect(self) -> AsyncGenerator[None, None]:
-        """Connect to the Gemini Realtime API."""
-        uri = f"wss://{HOST}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={self.api_key}"
-        try:
-            async with connect(uri, additional_headers={"Content-Type": "application/json"}) as ws:
-                self.ws = ws
-                await self._initialize_session()
-                yield
-        finally:
-            self.ws = None
-        # try:
-        #     async with self._client.aio.live.connect(
-        #         model=self._model,
-        #         config=GEMINI_CONFIG,
-        #     ) as self._connection:
-        #         yield
-        # finally:
-        #     self._connection = None
-
-    # TODO: Decide what to return here: message, meesage,txt, message.data, message.tool_call or whatever.
+    # TODO: Decide what to return here: message, message,txt, message.data, message.tool_call or whatever.
     # async def read_events(self) -> AsyncGenerator[types.LiveServerMessage, None]:
     #     """Read messages from the Gemini Realtime API."""
     #     if self._connection is None:
@@ -218,14 +217,6 @@ class GeminiRealtimeClient:
     #             yield message.
     #     finally:
     #         self._connection = None
-
-    # async def session_update(self, session_options: dict[str, Any]) -> None:
-    #     """Record or apply session updates."""
-    #     if self._is_reading_events:
-    #         logger.warn("Is reading events. Session update would be ignored.")
-    #     # Record session updates
-    #     else:
-    #         self._pending_session_updates.append(session_options)
 
 
 # needed for mypy to check if GeminiRealtimeClient implements RealtimeClientProtocol
