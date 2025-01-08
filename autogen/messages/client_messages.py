@@ -7,9 +7,9 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from .base_message import BaseMessage
+from .base_message import BaseMessage, wrap_message
 
-__all__ = ["UsageSummary"]
+__all__ = ["UsageSummaryMessage"]
 
 
 class ModelUsageSummary(BaseModel):
@@ -56,7 +56,8 @@ def _change_usage_summary_format(
     return summary
 
 
-class UsageSummary(BaseMessage):
+@wrap_message
+class UsageSummaryMessage(BaseMessage):
     actual: ActualUsageSummary
     total: TotalUsageSummary
     mode: Mode
@@ -124,17 +125,20 @@ class UsageSummary(BaseMessage):
         f("-" * 100, flush=True)
 
 
+@wrap_message
 class StreamMessage(BaseMessage):
-    def __init__(self, *, uuid: Optional[UUID] = None) -> None:
-        super().__init__(uuid=uuid)
+    chunk_content: str
 
-    def print_chunk_content(self, content: str, f: Optional[Callable[..., Any]] = None) -> None:
+    def __init__(self, *, uuid: Optional[UUID] = None, chunk_content: str) -> None:
+        super().__init__(uuid=uuid, chunk_content=chunk_content)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         # Set the terminal text color to green
         f("\033[32m", end="")
 
-        f(content, end="", flush=True)
+        f(self.chunk_content, end="", flush=True)
 
         # Reset the terminal text color
         f("\033[0m\n")

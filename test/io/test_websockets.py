@@ -4,8 +4,12 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import json
+from pprint import pprint
 from tempfile import TemporaryDirectory
-from typing import Dict
+from typing import Any, Callable, Dict, Optional
+from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
 from websockets.exceptions import ConnectionClosed
@@ -14,7 +18,7 @@ import autogen
 from autogen.cache.cache import Cache
 from autogen.io import IOWebsockets
 from autogen.io.base import IOStream
-from autogen.messages.agent_messages import TextMessage
+from autogen.messages.base_message import BaseMessage, wrap_message
 
 from ..conftest import skip_openai
 
@@ -30,6 +34,19 @@ else:
     skip_test = False
 
 
+@wrap_message
+class TestTextMessage(BaseMessage):
+    text: str
+
+    def __init__(self, *, uuid: Optional[UUID] = None, text: str):
+        super().__init__(uuid=uuid, text=text)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(self.text)
+
+
 @pytest.mark.skipif(skip_test, reason="websockets module is not available")
 class TestConsoleIOWithWebsockets:
     def test_input_print(self) -> None:
@@ -41,8 +58,6 @@ class TestConsoleIOWithWebsockets:
 
             print(" - on_connect(): Receiving message from client.", flush=True)
 
-            text_message = TextMessage()
-
             msg = iostream.input()
 
             print(f" - on_connect(): Received message '{msg}' from client.", flush=True)
@@ -52,7 +67,8 @@ class TestConsoleIOWithWebsockets:
             for msg in ["Hello, World!", "Over and out!"]:
                 print(f" - on_connect(): Sending message '{msg}' to client.", flush=True)
 
-                text_message.print(msg, iostream.print)
+                text_message = TestTextMessage(text=msg)
+                text_message.print(iostream.print)
 
             print(" - on_connect(): Receiving message from client.", flush=True)
 
@@ -84,7 +100,12 @@ class TestConsoleIOWithWebsockets:
                         f"   - Asserting received message '{message}' is the same as the expected message '{expected}'",
                         flush=True,
                     )
-                    assert message == expected
+                    try:
+                        message_dict = json.loads(message)
+                        actual = message_dict["content"]["objects"][0]
+                    except json.JSONDecodeError:
+                        actual = message
+                    assert actual == expected
 
                 print(" - Sending message 'Yes' to server.", flush=True)
                 websocket.send("Yes")
@@ -95,9 +116,9 @@ class TestConsoleIOWithWebsockets:
     def test_chat(self) -> None:
         print("Testing setup", flush=True)
 
-        success_dict = {"success": False}
+        mock = MagicMock()
 
-        def on_connect(iostream: IOWebsockets, success_dict: dict[str, bool] = success_dict) -> None:
+        def on_connect(iostream: IOWebsockets) -> None:
             print(f" - on_connect(): Connected to client using IOWebsockets {iostream}", flush=True)
 
             print(" - on_connect(): Receiving message from client.", flush=True)
@@ -143,13 +164,21 @@ class TestConsoleIOWithWebsockets:
                         f" - on_connect(): Initiating chat with agent {agent} using message '{initial_msg}'",
                         flush=True,
                     )
-                    user_proxy.initiate_chat(  # noqa: F704
-                        agent,
-                        message=initial_msg,
-                        cache=cache,
-                    )
+                    try:
+                        user_proxy.initiate_chat(  # noqa: F704
+                            agent,
+                            message=initial_msg,
+                            cache=cache,
+                        )
+                    except Exception as e:
+                        print(f" - on_connect(): Exception {e} raised during chat.", flush=True)
+                        import traceback
 
-            success_dict["success"] = True
+                        print(traceback.format_exc())
+                        raise e
+
+            print(" - on_connect(): Chat completed with success.", flush=True)
+            mock("Success")
 
             return
 
@@ -167,18 +196,22 @@ class TestConsoleIOWithWebsockets:
                     try:
                         message = websocket.recv()
                         message = message.decode("utf-8") if isinstance(message, bytes) else message
+                        message_dict = json.loads(message)
                         # drop the newline character
-                        if message.endswith("\n"):
-                            message = message[:-1]
+                        # if message.endswith("\n"):
+                        #     message = message[:-1]
 
-                        print(message, end="", flush=True)
+                        print("*" * 80)
+                        print("Received message:")
+                        pprint(message_dict)
+                        print()
 
-                        if "TERMINATE" in message:
-                            print()
-                            print(" - Received TERMINATE message.", flush=True)
+                        # if "TERMINATE" in message:
+                        #     print()
+                        #     print(" - Received TERMINATE message.", flush=True)
                     except ConnectionClosed as e:
                         print("Connection closed:", e, flush=True)
                         break
 
-        assert success_dict["success"]
+        mock.assert_called_once_with("Success")
         print("Test passed.", flush=True)
