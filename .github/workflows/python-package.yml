@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: |
           uv pip install --system twine
-          python setup.py sdist bdist_wheel
+          uv build
       - name: Publish pyautogen to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}

@@ -12,7 +12,7 @@ on:
       - "test/test_browser_utils.py"
       - "test/test_retrieve_utils.py"
       - ".github/workflows/contrib-tests.yml"
-      - "setup.py"
+      - "pyproject.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}

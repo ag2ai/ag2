@@ -33,7 +33,7 @@ jobs:
             workflows:
               - ".github/workflows/**"
             setup:
-              - "setup.py"
+              - "pyproject.toml"
       - name: autogen has changes
         run: echo "autogen has changes"
         if: steps.filter.outputs.autogen == 'true'

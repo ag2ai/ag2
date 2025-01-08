@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.version }}
-      # All additional modules should be defined in setup.py
+      # All additional modules should be defined in pyproject.toml
       - run: uv pip install --system ".[types]"
       # Any additional configuration should be defined in pyproject.toml
       - run: |

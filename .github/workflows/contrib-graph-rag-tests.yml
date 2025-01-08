@@ -10,7 +10,7 @@ on:
       - "autogen/agentchat/contrib/graph_rag/**"
       - "test/agentchat/contrib/graph_rag/**"
       - ".github/workflows/contrib-tests.yml"
-      - "setup.py"
+      - "pyproject.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
