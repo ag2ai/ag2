@@ -17,13 +17,9 @@ from websockets.exceptions import ConnectionClosed
 import autogen
 from autogen.cache.cache import Cache
 from autogen.io import IOWebsockets
-from autogen.io.base import IOStream
 from autogen.messages.base_message import BaseMessage, wrap_message
 
-from ..conftest import skip_openai
-
-KEY_LOC = "notebook"
-OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
+from ..conftest import Credentials, skip_openai
 
 # Check if the websockets module is available
 try:
@@ -113,7 +109,7 @@ class TestConsoleIOWithWebsockets:
         print("Test passed.", flush=True)
 
     @pytest.mark.skipif(skip_openai, reason="requested to skip")
-    def test_chat(self) -> None:
+    def test_chat(self, credentials_gpt_4o_mini: Credentials) -> None:
         print("Testing setup", flush=True)
 
         mock = MagicMock()
@@ -125,19 +121,8 @@ class TestConsoleIOWithWebsockets:
 
             initial_msg = iostream.input()
 
-            config_list = autogen.config_list_from_json(
-                OAI_CONFIG_LIST,
-                filter_dict={
-                    "model": [
-                        "gpt-4o-mini",
-                        "gpt-4o",
-                    ],
-                },
-                file_location=KEY_LOC,
-            )
-
             llm_config = {
-                "config_list": config_list,
+                "config_list": credentials_gpt_4o_mini.config_list,
                 "stream": True,
             }
 

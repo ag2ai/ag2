@@ -18,8 +18,7 @@ from autogen.agentchat.contrib.math_user_proxy_agent import (
     _remove_print,
 )
 
-from ..conftest import skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials, skip_openai  # noqa: E402
 
 try:
     from openai import OpenAI
@@ -33,25 +32,20 @@ else:
     skip or sys.platform in ["darwin", "win32"],
     reason="do not run on MacOS or windows",
 )
-def test_math_user_proxy_agent():
+def test_math_user_proxy_agent(
+    credentials_gpt_4o_mini: Credentials,
+):
     from autogen.agentchat.assistant_agent import AssistantAgent
 
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
 
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={
-            "tags": ["gpt-4o-mini"],
-        },
-    )
     assistant = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
         llm_config={
             "cache_seed": 42,
-            "config_list": config_list,
+            "config_list": credentials_gpt_4o_mini.config_list,
         },
     )
 
