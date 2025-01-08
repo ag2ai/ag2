@@ -124,6 +124,8 @@ class OnCondition:
         condition (Union[str, ContextStr, Callable]): The condition for transitioning to the target agent, evaluated by the LLM.
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
+            The Callable signature is:
+                def my_condition_string(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
         available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             The Callable signature is:
