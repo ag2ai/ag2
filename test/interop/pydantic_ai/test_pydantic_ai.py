@@ -18,8 +18,7 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
-from ...agentchat.test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
-from ...conftest import reason, skip_openai
+from ...conftest import Credentials, reason, skip_openai
 
 
 # skip if python version is not >= 3.9
@@ -48,23 +47,13 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert self.tool.func() in ["1", "2", "3", "4", "5", "6"]
 
     @pytest.mark.skipif(skip_openai, reason=reason)
-    def test_with_llm(self) -> None:
-        config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
-            filter_dict={
-                "tags": ["gpt-4o"],
-            },
-            file_location=KEY_LOC,
-        )
+    def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",
         )
 
-        chatbot = AssistantAgent(
-            name="chatbot",
-            llm_config={"config_list": config_list},
-        )
+        chatbot = AssistantAgent(name="chatbot", llm_config=credentials_gpt_4o.llm_config)
 
         self.tool.register_for_execution(user_proxy)
         self.tool.register_for_llm(chatbot)
@@ -200,14 +189,7 @@ class TestPydanticAIInteroperabilityWithContext:
         assert chatbot.llm_config["tools"] == expected_tools  # type: ignore[index]
 
     @pytest.mark.skipif(skip_openai, reason=reason)
-    def test_with_llm(self) -> None:
-        config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
-            filter_dict={
-                "tags": ["gpt-4o"],
-            },
-            file_location=KEY_LOC,
-        )
+    def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",
@@ -215,7 +197,7 @@ class TestPydanticAIInteroperabilityWithContext:
 
         chatbot = AssistantAgent(
             name="chatbot",
-            llm_config={"config_list": config_list},
+            llm_config=credentials_gpt_4o.llm_config,
         )
 
         self.tool.register_for_execution(user_proxy)

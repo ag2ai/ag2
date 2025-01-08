@@ -8,12 +8,10 @@ import os
 
 import pytest
 
-import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.agent_optimizer import AgentOptimizer
 
-from ...conftest import reason, skip_openai
-from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ...conftest import Credentials, reason, skip_openai
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -22,13 +20,10 @@ here = os.path.abspath(os.path.dirname(__file__))
     skip_openai,
     reason=reason,
 )
-def test_record_conversation():
+def test_record_conversation(credentials_all: Credentials):
     problem = "Simplify $\\sqrt[3]{1+8} \\cdot \\sqrt[3]{1+\\sqrt[3]{8}}"
 
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-    )
+    config_list = credentials_all.config_list
     llm_config = {
         "config_list": config_list,
         "timeout": 60,
@@ -64,13 +59,10 @@ def test_record_conversation():
     skip_openai,
     reason=reason,
 )
-def test_step():
+def test_step(credentials_all: Credentials):
     problem = "Simplify $\\sqrt[3]{1+8} \\cdot \\sqrt[3]{1+\\sqrt[3]{8}}"
 
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-    )
+    config_list = credentials_all.config_list
     llm_config = {
         "config_list": config_list,
         "timeout": 60,
