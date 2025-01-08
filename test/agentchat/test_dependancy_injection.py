@@ -12,34 +12,12 @@ import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, Depends
 
-from ..conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
 
 class TestDependencyInjection:
     class MyContext(BaseContext, BaseModel):
         b: int
-
-    @pytest.fixture()
-    def mock_llm_config(self) -> None:
-        return {
-            "config_list": [
-                {"model": "gpt-4o", "api_key": MOCK_OPEN_AI_API_KEY},
-            ],
-        }
-
-    @pytest.fixture()
-    def llm_config(self) -> None:
-        config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
-            filter_dict={
-                "tags": ["gpt-4o-mini"],
-            },
-            file_location=KEY_LOC,
-        )
-        return {
-            "config_list": config_list,
-        }
 
     @pytest.fixture()
     def expected_tools(self) -> list[dict[str, Any]]:
@@ -167,14 +145,14 @@ class TestDependencyInjection:
     @pytest.mark.asyncio()
     async def test_register_tools(
         self,
-        mock_llm_config: dict[str, Any],
+        mock_credentials: Credentials,
         expected_tools: list[dict[str, Any]],
         func: Callable[..., Any],
         func_name: str,
         is_async: bool,
         expected: str,
     ) -> None:
-        agent = ConversableAgent(name="agent", llm_config=mock_llm_config)
+        agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
         agent.register_for_llm(description="Example function")(func)
         agent.register_for_execution()(func)
 
@@ -191,12 +169,12 @@ class TestDependencyInjection:
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.parametrize("is_async", [False, True])
     @pytest.mark.asyncio()
-    async def test_end2end(self, llm_config: dict[str, Any], is_async: bool) -> None:
+    async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
         class UserContext(BaseContext, BaseModel):
             username: str
             password: str
 
-        agent = ConversableAgent(name="agent", llm_config=llm_config)
+        agent = ConversableAgent(name="agent", llm_config=credentials_gpt_4o_mini.llm_config)
         user = UserContext(username="user23", password="password23")
         users = [user]
 
