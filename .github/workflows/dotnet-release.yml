@@ -38,8 +38,7 @@ jobs:
         python-version: 3.11
     - name: Install jupyter and ipykernel
       run: |
-        uv pip install --system jupyter
-        uv pip install --system ipykernel
+        uv pip install --system jupyter ipykernel
     - name: list available kernels
       run: |
         python -m jupyter kernelspec list

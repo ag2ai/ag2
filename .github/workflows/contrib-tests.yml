@@ -424,8 +424,7 @@ jobs:
       - name: Install packages and dependencies for LlamaIndexConverableAgent
         run: |
           uv pip install --system -e .
-          uv pip install --system llama-index
-          uv pip install --system llama-index-llms-openai
+          uv pip install --system llama-index llama-index-llms-openai
       - name: Coverage
         run: |
           pytest test/agentchat/contrib/test_llamaindex_conversable_agent.py --skip-openai
@@ -460,8 +459,7 @@ jobs:
 
       - name: Install packages and dependencies for Anthropic
         run: |
-          uv pip install --system -e .[test]
-          uv pip install --system -e .[anthropic]
+          uv pip install --system -e .[anthropic,test]
 
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
