@@ -258,8 +258,8 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @pytest.mark.skipif(skip, reason=reason)
-def test_completion_stream(credentials_gpt_35_turbo_instruct: Credentials) -> None:
-    client = OpenAIWrapper(config_list=credentials_gpt_35_turbo_instruct.config_list)
+def test_completion_stream(credentials_azure_gpt_35_turbo_instruct: Credentials) -> None:
+    client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=", stream=True)
     print(response)
     print(client.extract_text_or_completion_object(response))

@@ -113,6 +113,13 @@ def credentials_azure_gpt_35_turbo() -> Credentials:
 
 
 @pytest.fixture
+def credentials_azure_gpt_35_turbo_instruct() -> Credentials:
+    return get_openai_credentials(
+        filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
+    )
+
+
+@pytest.fixture
 def credentials_all() -> Credentials:
     return get_credentials()
 
@@ -130,11 +137,6 @@ def credentials_gpt_4o() -> Credentials:
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
     return get_openai_credentials(filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6)
-
-
-@pytest.fixture
-def credentials_gpt_35_turbo_instruct() -> Credentials:
-    return get_openai_credentials(filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"]})
 
 
 @pytest.fixture

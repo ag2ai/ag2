@@ -91,8 +91,8 @@ def test_chat_completion(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
-def test_completion(credentials_gpt_35_turbo_instruct: Credentials):
-    client = OpenAIWrapper(config_list=credentials_gpt_35_turbo_instruct.config_list)
+def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
+    client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=")
     print(response)
     print(client.extract_text_or_completion_object(response))
@@ -106,15 +106,15 @@ def test_completion(credentials_gpt_35_turbo_instruct: Credentials):
         42,
     ],
 )
-def test_cost(credentials_gpt_35_turbo_instruct: Credentials, cache_seed):
-    client = OpenAIWrapper(config_list=credentials_gpt_35_turbo_instruct.config_list, cache_seed=cache_seed)
+def test_cost(credentials_azure_gpt_35_turbo_instruct: Credentials, cache_seed):
+    client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list, cache_seed=cache_seed)
     response = client.create(prompt="1+3=")
     print(response.cost)
 
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
-def test_customized_cost(credentials_gpt_35_turbo_instruct: Credentials):
-    config_list = credentials_gpt_35_turbo_instruct.config_list
+def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
+    config_list = credentials_azure_gpt_35_turbo_instruct.config_list
     for config in config_list:
         config.update({"price": [1000, 1000]})
     client = OpenAIWrapper(config_list=config_list, cache_seed=None)
@@ -125,8 +125,8 @@ def test_customized_cost(credentials_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
-def test_usage_summary(credentials_gpt_35_turbo_instruct: Credentials):
-    client = OpenAIWrapper(config_list=credentials_gpt_35_turbo_instruct.config_list)
+def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
+    client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+3=", cache_seed=None)
 
     # usage should be recorded
