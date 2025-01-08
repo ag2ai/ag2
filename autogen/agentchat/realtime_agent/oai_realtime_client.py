@@ -323,7 +323,7 @@ class OpenAIRealtimeWebRTCClient:
             await self._initialize_session()
             yield
         finally:
-            self._websocket = None
+            pass
 
     async def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
         """Read messages from the OpenAI Realtime API.
