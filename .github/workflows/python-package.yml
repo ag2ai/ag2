@@ -23,6 +23,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       # - name: Cache conda
       #   uses: actions/cache@v4
       #   with:
@@ -39,15 +42,15 @@ jobs:
       - name: Install from source
         # This is required for the pre-commit tests
         shell: pwsh
-        run: pip install .
+        run: uv pip install --system .
       # - name: Conda list
       #   shell: pwsh
       #   run: conda list
       - name: Build pyautogen
         shell: pwsh
         run: |
-          pip install twine
-          python setup.py sdist bdist_wheel
+          uv pip install --system twine
+          uv build
       - name: Publish pyautogen to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}

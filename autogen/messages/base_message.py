@@ -59,7 +59,7 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
         content: message_cls  # type: ignore[valid-type]
 
         def __init__(self, *args: Any, **data: Any):
-            if set(data.keys()) <= {"type", "content"} and "content" in data:
+            if set(data.keys()) == {"type", "content"} and "content" in data:
                 super().__init__(*args, **data)
             else:
                 if "content" in data:
