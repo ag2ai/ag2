@@ -91,19 +91,19 @@ retrievechat = [
 ]
 
 retrievechat-pgvector = [
-    "autogen[retrievechat]",
+    "pyautogen[retrievechat]",
     "pgvector>=0.2.5",
     "psycopg[binary]>=3.1.18; platform_system=='Windows' or platform_system=='Darwin'",
     "psycopg>=3.1.18; platform_system=='Linux'",
 ]
 
 retrievechat-mongodb = [
-    "autogen[retrievechat]",
+    "pyautogen[retrievechat]",
     "pymongo>=4.0.0",
 ]
 
 retrievechat-qdrant = [
-    "autogen[retrievechat]",
+    "pyautogen[retrievechat]",
     "qdrant_client",
     "fastembed>=0.3.1",
 ]
@@ -134,12 +134,12 @@ interop-crewai = [
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.13"]
 interop =[
-    "autogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
+    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
 
 types = [
     "mypy==1.9.0",
-    "autogen[test, jupyter-executor, interop]",
+    "pyautogen[test, jupyter-executor, interop]",
 ]
 
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
@@ -147,7 +147,7 @@ autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-
 
 blendsearch = ["flaml[blendsearch]"]
 mathchat = ["sympy", "pydantic==1.10.9", "wolframalpha"]
-captainagent = ["autogen[autobuild]", "pandas"]
+captainagent = ["pyautogen[autobuild]", "pandas"]
 teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
