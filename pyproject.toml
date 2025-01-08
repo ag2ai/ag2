@@ -72,7 +72,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # public distributions
-jupyter_executor = [
+jupyter-executor = [
     "jupyter-kernel-gateway",
     "websocket-client",
     "requests",
@@ -80,7 +80,7 @@ jupyter_executor = [
     "ipykernel>=6.29.0",
 ]
 
-retrieve_chat = [
+retrievechat = [
     "protobuf==4.25.3",
     "chromadb==0.5.3",
     "sentence_transformers",
@@ -90,14 +90,25 @@ retrieve_chat = [
     "markdownify",
 ]
 
-retrieve-chat-pgvector = [
-    "autogen[retrieve_chat]",
+retrievechat-pgvector = [
+    "autogen[retrievechat]",
     "pgvector>=0.2.5",
     "psycopg[binary]>=3.1.18; platform_system=='Windows' or platform_system=='Darwin'",
     "psycopg>=3.1.18; platform_system=='Linux'",
 ]
 
-graph_rag_falkor_db = [
+retrievechat-mongodb = [
+    "autogen[retrievechat]",
+    "pymongo>=4.0.0",
+]
+
+retrievechat-qdrant = [
+    "autogen[retrievechat]",
+    "qdrant_client",
+    "fastembed>=0.3.1",
+]
+
+graph-rag-falkor-db = [
     "graphrag_sdk==0.3.3",
     "falkordb>=1.0.10"
 ]
@@ -116,19 +127,19 @@ twilio = [
     "twilio>=9.3.2"
 ]
 
-interop_crewai = [
+interop-crewai = [
     "crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'",
     "weaviate-client==4.10.2; python_version>='3.10' and python_version<'3.13'",
 ]
-interop_langchain = ["langchain-community>=0.3.12,<1"]
-interop_pydantic_ai = ["pydantic-ai==0.0.13"]
+interop-langchain = ["langchain-community>=0.3.12,<1"]
+interop-pydantic-ai = ["pydantic-ai==0.0.13"]
 interop =[
-    "autogen[interop_crewai, interop_langchain, interop_pydantic_ai]",
+    "autogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
 
 types = [
     "mypy==1.9.0",
-    "autogen[test, jupyter_executor, interop]",
+    "autogen[test, jupyter-executor, interop]",
 ]
 
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
