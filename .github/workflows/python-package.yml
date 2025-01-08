@@ -34,7 +34,7 @@ jobs:
       - name: Install from source
         # This is required for the pre-commit tests
         shell: pwsh
-        run: uv pip install --system -e .
+        run: uv pip install --system -e . wheel setuptools
       # - name: Conda list
       #   shell: pwsh
       #   run: conda list
