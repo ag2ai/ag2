@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 from ..formatting_utils import colored
 from ..io.base import IOStream
-from ..messages.agent_messages import PostCarryoverProcessing
+from ..messages.agent_messages import PostCarryoverProcessingMessage
 from .utils import consolidate_chat_info
 
 logger = logging.getLogger(__name__)
@@ -132,8 +132,7 @@ def __post_carryover_processing(chat_info: dict[str, Any]) -> None:
             UserWarning,
         )
 
-    post_carryover_processing = PostCarryoverProcessing(chat_info=chat_info)
-    post_carryover_processing.print(iostream.print)
+    iostream.send(PostCarryoverProcessingMessage(chat_info=chat_info))
 
 
 def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:

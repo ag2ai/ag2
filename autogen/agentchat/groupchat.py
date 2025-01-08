@@ -19,11 +19,15 @@ from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages.agent_messages import (
-    ClearAgentsHistory,
-    GroupChatResume,
-    GroupChatRunChat,
-    SelectSpeaker,
-    SpeakerAttempt,
+    ClearAgentsHistoryMessage,
+    GroupChatResumeMessage,
+    GroupChatRunChatMessage,
+    SelectSpeakerInvalidInputMessage,
+    SelectSpeakerMessage,
+    SelectSpeakerTryCountExceededMessage,
+    SpeakerAttemptFailedMultipleAgentsMessage,
+    SpeakerAttemptFailedNoAgentsMessage,
+    SpeakerAttemptSuccessfullMessage,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -396,15 +400,14 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        select_speaker = SelectSpeaker(agents=agents)
-        select_speaker.print_select_speaker(iostream.print)
+        iostream.send(SelectSpeakerMessage(agents=agents))
 
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                select_speaker.print_try_count_exceeded(try_count, iostream.print)
+                iostream.send(SelectSpeakerTryCountExceededMessage(try_count=try_count, agents=agents))
                 break
             try:
                 i = iostream.input(
@@ -418,7 +421,7 @@ class GroupChat:
                 else:
                     raise ValueError
             except ValueError:
-                select_speaker.print_invalid_input(iostream.print)
+                iostream.send(SelectSpeakerInvalidInputMessage(agents=agents))
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:
@@ -854,13 +857,35 @@ class GroupChat:
         # Output the query and requery results
         if self.select_speaker_auto_verbose:
             iostream = IOStream.get_default()
-            speaker_attempt = SpeakerAttempt(
-                mentions=mentions,
-                attempt=attempt,
-                attempts_left=attempts_left,
-                select_speaker_auto_verbose=self.select_speaker_auto_verbose,
-            )
-            speaker_attempt.print(iostream.print)
+            no_of_mentions = len(mentions)
+            if no_of_mentions == 1:
+                # Success on retry, we have just one name mentioned
+                iostream.send(
+                    SpeakerAttemptSuccessfullMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
+            elif no_of_mentions == 1:
+                iostream.send(
+                    SpeakerAttemptFailedMultipleAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
+            else:
+                iostream.send(
+                    SpeakerAttemptFailedNoAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
 
         if len(mentions) == 1:
             # Success on retry, we have just one name mentioned
@@ -1154,8 +1179,7 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    group_chat_run_chat = GroupChatRunChat(speaker=speaker, silent=silent)
-                    group_chat_run_chat.print(iostream.print)
+                    iostream.send(GroupChatRunChatMessage(speaker=speaker, silent=silent))
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
@@ -1360,8 +1384,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            group_chat_resume.print(iostream.print)
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1465,8 +1488,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            group_chat_resume.print(iostream.print)
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1622,10 +1644,9 @@ class GroupChatManager(ConversableAgent):
                 "The last tool call message will be saved to prevent errors caused by tool response without tool call."
             )
         # clear history
-        clear_agents_history = ClearAgentsHistory(
-            agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve
+        iostream.send(
+            ClearAgentsHistoryMessage(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve)
         )
-        clear_agents_history.print(iostream.print)
         if agent_to_memory_clear:
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
         else:
