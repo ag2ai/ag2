@@ -13,10 +13,9 @@ from .neo4j_native_graph_query_engine import Neo4jNativeGraphQueryEngine
 
 class Neo4jNativeGraphCapability(GraphRagCapability):
     """
-    The Neo4j native graph capability integrates Neo4j natice query engine into a graph rag agent.
+    The Neo4j native graph capability integrates Neo4j native query engine into a graph rag agent.
 
-
-    For usage, please refer to example notebook/agentchat_graph_rag_neo4j_native_sdk.ipynb
+    For usage, please refer to example notebook/agentchat_graph_rag_neo4j_native.ipynb
     """
 
     def __init__(self, query_engine: Neo4jNativeGraphQueryEngine):
