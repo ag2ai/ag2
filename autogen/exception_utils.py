@@ -7,12 +7,12 @@
 from typing import Any
 
 
-class AgentNameConflict(Exception):
+class AgentNameConflict(Exception):  # noqa: N818
     def __init__(self, msg: str = "Found multiple agents with the same name.", *args: Any, **kwargs: Any):
         super().__init__(msg, *args, **kwargs)
 
 
-class NoEligibleSpeaker(Exception):
+class NoEligibleSpeaker(Exception):  # noqa: N818
     """Exception raised for early termination of a GroupChat."""
 
     def __init__(self, message: str = "No eligible speakers."):
@@ -20,7 +20,7 @@ class NoEligibleSpeaker(Exception):
         super().__init__(self.message)
 
 
-class SenderRequired(Exception):
+class SenderRequired(Exception):  # noqa: N818
     """Exception raised when the sender is required but not provided."""
 
     def __init__(self, message: str = "Sender is required but not provided."):
@@ -28,7 +28,7 @@ class SenderRequired(Exception):
         super().__init__(self.message)
 
 
-class InvalidCarryOverType(Exception):
+class InvalidCarryOverType(Exception):  # noqa: N818
     """Exception raised when the carryover type is invalid."""
 
     def __init__(
@@ -38,7 +38,7 @@ class InvalidCarryOverType(Exception):
         super().__init__(self.message)
 
 
-class UndefinedNextAgent(Exception):
+class UndefinedNextAgent(Exception):  # noqa: N818
     """Exception raised when the provided next agents list does not overlap with agents in the group."""
 
     def __init__(self, message: str = "The provided agents list does not overlap with agents in the group."):

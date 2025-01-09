@@ -40,12 +40,12 @@ try:
         RateLimitError,
         Timeout,
     )
-    from openai import Completion as openai_Completion
+    from openai import Completion as OpenAICompletion
 
     ERROR = None
     assert openai.__version__ < "1"
 except (AssertionError, ImportError):
-    openai_Completion = object
+    OpenAICompletion = object
     # The autogen.Completion class requires openai<1
     ERROR = AssertionError("(Deprecated) The autogen.Completion class requires openai<1 and diskcache. ")
 
@@ -57,7 +57,7 @@ if not logger.handlers:
     logger.addHandler(_ch)
 
 
-class Completion(openai_Completion):
+class Completion(OpenAICompletion):
     """`(openai<1)` A class for OpenAI completion API.
 
     It also supports: ChatCompletion, Azure OpenAI API.
@@ -81,7 +81,7 @@ class Completion(openai_Completion):
     }
 
     # price per 1k tokens
-    price1K = {
+    price1K = {  # noqa: N815
         "text-ada-001": 0.0004,
         "text-babbage-001": 0.0005,
         "text-curie-001": 0.002,
@@ -1063,7 +1063,7 @@ class Completion(openai_Completion):
         usage = response["usage"]
         n_input_tokens = usage["prompt_tokens"]
         n_output_tokens = usage.get("completion_tokens", 0)
-        price1K = cls.price1K[model]
+        price1K = cls.price1K[model]  # noqa: N806
         if isinstance(price1K, tuple):
             return (price1K[0] * n_input_tokens + price1K[1] * n_output_tokens) / 1000
         return price1K * (n_input_tokens + n_output_tokens) / 1000

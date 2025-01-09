@@ -19,7 +19,7 @@ from autogen.messages.base_message import (
 
 
 @pytest.fixture()
-def TestMessage() -> Generator[type[BaseMessage], None, None]:
+def TestMessage() -> Generator[type[BaseMessage], None, None]:  # noqa: N802
     org_message_classes = _message_classes.copy()
     try:
 
@@ -36,7 +36,7 @@ def TestMessage() -> Generator[type[BaseMessage], None, None]:
 
 
 class TestBaseMessage:
-    def test_model_dump_validate(self, TestMessage: type[BaseModel], uuid: UUID) -> None:
+    def test_model_dump_validate(self, TestMessage: type[BaseModel], uuid: UUID) -> None:  # noqa: N803
         # print(f"{TestMessage=}")
 
         message = TestMessage(uuid=uuid, sender="sender", receiver="receiver", content="Hello, World!")

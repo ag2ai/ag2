@@ -38,7 +38,7 @@ class AfterWorkOption(Enum):
 
 
 @dataclass
-class AFTER_WORK:
+class AFTER_WORK:  # noqa: N801
     """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
 
     Args:
@@ -55,7 +55,7 @@ class AFTER_WORK:
 
 
 @dataclass
-class ON_CONDITION:
+class ON_CONDITION:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats
 
     Args:
@@ -86,7 +86,7 @@ class ON_CONDITION:
 
 
 @dataclass
-class UPDATE_SYSTEM_MESSAGE:
+class UPDATE_SYSTEM_MESSAGE:  # noqa: N801
     """Update the agent's system message before they reply
 
     Args:

@@ -42,7 +42,7 @@ class ChatContext(BaseContext):
     messages: list[str] = []
 
 
-def Depends(x: Any) -> Any:
+def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 
     Args:

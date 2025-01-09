@@ -71,11 +71,11 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
         def print(self, f: Optional[Callable[..., Any]] = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
 
-    Wrapper = create_model(message_cls.__name__, __base__=WrapperBase)
+    wrapper_cls = create_model(message_cls.__name__, __base__=WrapperBase)
 
-    _message_classes[type_name] = Wrapper
+    _message_classes[type_name] = wrapper_cls
 
-    return Wrapper
+    return wrapper_cls
 
 
 def get_annotated_type_for_message_classes() -> type[Any]:

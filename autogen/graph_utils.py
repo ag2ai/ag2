@@ -129,18 +129,18 @@ def visualize_speaker_transitions_dict(
         logging.fatal("Failed to import networkx or matplotlib. Try running 'pip install autogen[graphs]'")
         raise e
 
-    G = nx.DiGraph()
+    g = nx.DiGraph()
 
     # Add nodes
-    G.add_nodes_from([agent.name for agent in agents])
+    g.add_nodes_from([agent.name for agent in agents])
 
     # Add edges
     for key, value in speaker_transitions_dict.items():
         for agent in value:
-            G.add_edge(key.name, agent.name)
+            g.add_edge(key.name, agent.name)
 
     # Visualize
-    nx.draw(G, with_labels=True, font_weight="bold")
+    nx.draw(g, with_labels=True, font_weight="bold")
 
     if export_path is not None:
         plt.savefig(export_path)

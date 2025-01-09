@@ -335,8 +335,8 @@ class OpenAIRealtimeWebRTCClient:
         logger = self.logger
         while True:
             try:
-                messageJSON = await self._websocket.receive_text()
-                message = json.loads(messageJSON)
+                message_json = await self._websocket.receive_text()
+                message = json.loads(message_json)
                 if "function" in message["type"]:
                     logger.info("Received function message", message)
                 yield message

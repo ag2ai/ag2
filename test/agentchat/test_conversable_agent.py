@@ -575,7 +575,7 @@ def test_update_function_signature_and_register_functions(mock_credentials: Cred
 
 
 def test__wrap_function_sync():
-    CurrencySymbol = Literal["USD", "EUR"]
+    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
@@ -613,7 +613,7 @@ def test__wrap_function_sync():
 
 @pytest.mark.asyncio
 async def test__wrap_function_async():
-    CurrencySymbol = Literal["USD", "EUR"]
+    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
@@ -812,7 +812,7 @@ def test_register_for_llm_with_docstring(mock_credentials: Credentials):
     assert exec_python.description == "Execute a Python cell."
 
 
-def test_register_for_llm_without_LLM():
+def test_register_for_llm_without_LLM():  # noqa: N802
     agent = ConversableAgent(name="agent", llm_config=None)
     with pytest.raises(
         AssertionError,

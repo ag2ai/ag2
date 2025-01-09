@@ -253,7 +253,7 @@ select = [
     "E",     # pycodestyle errors     https://docs.astral.sh/ruff/rules/#error-e
     "W",     # pycodestyle warnings   https://docs.astral.sh/ruff/rules/#warning-w
     "C90",   # mccabe                 https://docs.astral.sh/ruff/rules/#mccabe-c90
-#    "N",     # pep8-naming            https://docs.astral.sh/ruff/rules/#pep8-naming-n
+    "N",     # pep8-naming            https://docs.astral.sh/ruff/rules/#pep8-naming-n
 #    "D",     # pydocstyle             https://docs.astral.sh/ruff/rules/#pydocstyle-d
     "I",     # isort                  https://docs.astral.sh/ruff/rules/#isort-i
     "F",     # pyflakes               https://docs.astral.sh/ruff/rules/#pyflakes-f
@@ -358,8 +358,3 @@ warn_unused_ignores = false
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
-
-[tool.codespell]
-#skip = "./venv*,./docs/site/*,./htmlcov,./examples/openapi/whatsapp_openapi_complete.json"
-skip = "paul_graham_essay.txt,attractions.json,website,notebook,dotnet"
-ignore-words = ".codespell-whitelist.txt"

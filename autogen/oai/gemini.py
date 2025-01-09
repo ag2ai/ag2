@@ -606,6 +606,7 @@ class GeminiClient:
 
         return param_schema
 
+    @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
 
