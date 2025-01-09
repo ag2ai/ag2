@@ -5,11 +5,7 @@
 // or by manually running the script `./scripts/devcontainer/generate_devcontainer.sh`.
 {
     "name": "python-3.13",
-    // "image": "mcr.microsoft.com/devcontainers/python:3.13",
-    "dockerComposeFile": [
-        "./docker-compose.yml"
-    ],
-    "service": "python-3.13-ag2",
+    "image": "mcr.microsoft.com/devcontainers/python:3.13",
     "secrets": {
         "OPENAI_API_KEY": {
             "description": "This key is optional and only needed if you are working on OpenAI-related code. Leave it blank if not required. You can always set it later as an environment variable in the codespace terminal."
@@ -30,9 +26,14 @@
             "description": "This key is required to specify the version of the Azure API you are using. Set this along with AZURE_OPENAI_API_KEY, AZURE_API_ENDPOINT for Azure OpenAI services. These variables can be configured later as environment variables in the codespace terminal."
         },
     },
-    "shutdownAction": "stopCompose",
+    "shutdownAction": "stopContainer",
     "workspaceFolder": "/workspaces/ag2",
-    // "runArgs": [],
+    "runArgs": [
+        "--name",
+        "python-3.9-ag2",
+        "--env-file",
+        "${localWorkspaceFolder}/.devcontainer/devcontainer.env"
+    ],
     "remoteEnv": {},
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
