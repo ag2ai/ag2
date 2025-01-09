@@ -13,13 +13,14 @@ from jinja2 import Template
 PYTHON_VERSIONS = ["3.9", "3.10", "3.11", "3.12", "3.13"]
 DEFAULT = "3.10"
 
+DOCKER_COMPOSE_TEMPLATE = Path("scripts/devcontainer/templates/docker-compose.yml.jinja")
+DEVCONTAINER_JSON_TEMPLATE = Path("scripts/devcontainer/templates/devcontainer.json.jinja")
+
 
 def generate_docker_compose_file(python_version: str):
     print(f"Generating docker-compose.yml for python {python_version}")
 
-    # Read file docker-compose.yml.jinja from ./devcontainer_templates/docker-compose.yml.jinja
-    docker_compose_template = Path("scripts/devcontainer_templates/docker-compose.yml.jinja")
-    with open(docker_compose_template, "r") as f:
+    with open(DOCKER_COMPOSE_TEMPLATE, "r") as f:
         content = f.read()
 
     # Replace python_version with the current version using jinja template
@@ -43,9 +44,7 @@ def generate_docker_compose_file(python_version: str):
 def generate_devcontainer_json_file(python_version: str):
     print(f"Generating devcontainer.json for python {python_version}")
 
-    # Read file devcontainer.json.jinja from ./devcontainer_templates/devcontainer.json.jinja
-    devcontainer_template = Path("scripts/devcontainer_templates/devcontainer.json.jinja")
-    with open(devcontainer_template, "r") as f:
+    with open(DEVCONTAINER_JSON_TEMPLATE, "r") as f:
         content = f.read()
 
     # Replace python_version with the current version using jinja template

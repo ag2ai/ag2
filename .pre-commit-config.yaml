@@ -93,9 +93,9 @@ repos:
     hooks:
       - id: generate-devcontainer-files
         name: Generate devcontainer files
-        entry: "scripts/generate-devcontainers.sh"
+        entry: "scripts/devcontainer/generate-devcontainers.sh"
         language: python
         require_serial: true
         verbose: true
         additional_dependencies: ['jinja2']
-        files: ^(scripts/devcontainer_templates/.*|scripts/generate-devcontainer\.sh|scripts/generate-devcontainer\.py)$
+        files: ^(scripts/devcontainer/.*)$
