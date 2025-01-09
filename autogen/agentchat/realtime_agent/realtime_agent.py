@@ -15,8 +15,9 @@ from ..agent import Agent
 from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ..conversable_agent import ConversableAgent
 from .function_observer import FunctionObserver
-from .oai_realtime_client import OpenAIRealtimeClient, OpenAIRealtimeWebRTCClient, Role
-from .realtime_client import RealtimeClientProtocol
+
+from .gemini_realtime_client import GeminiRealtimeClient
+from .oai_realtime_client import OpenAIRealtimeClient, Role
 from .realtime_observer import RealtimeObserver
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -79,13 +80,19 @@ class RealtimeAgent(ConversableAgent):
         self._logger = logger
         self._function_observer = FunctionObserver(logger=logger)
         self._audio_adapter = audio_adapter
-        self._realtime_client: RealtimeClientProtocol = OpenAIRealtimeClient(
-            llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
-        )
-        if websocket is not None:
-            self._realtime_client = OpenAIRealtimeWebRTCClient(
-                llm_config=llm_config, voice=voice, system_message=system_message, websocket=websocket, logger=logger
+
+
+        model = llm_config["model"]
+        if "gemini" in model:
+            self._realtime_client = GeminiRealtimeClient(
+                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
             )
+        elif "gpt-4o" in model:
+            self._realtime_client = OpenAIRealtimeClient(
+                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
+            )
+        else:
+            raise ValueError(f"Model {model} is not supported by the Realtime Agent.")
 
         self._voice = voice
 
@@ -118,7 +125,8 @@ class RealtimeAgent(ConversableAgent):
         return self._logger or global_logger
 
     @property
-    def realtime_client(self) -> RealtimeClientProtocol:
+
+    def realtime_client(self) -> Union[OpenAIRealtimeClient, GeminiRealtimeClient]:
         """Get the OpenAI Realtime Client."""
         return self._realtime_client
 
