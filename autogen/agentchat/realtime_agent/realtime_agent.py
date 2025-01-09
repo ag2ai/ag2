@@ -8,6 +8,8 @@ from typing import Any, Callable, Literal, Optional, TypeVar, Union
 import anyio
 from asyncer import create_task_group, syncify
 
+from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
+
 from ... import SwarmAgent
 from ...tools import Tool, get_function_schema
 from ..agent import Agent
@@ -77,13 +79,13 @@ class RealtimeAgent(ConversableAgent):
         self._function_observer = FunctionObserver(logger=logger)
         self._audio_adapter = audio_adapter
 
-        model = llm_config["model"]
+        model = llm_config["config_list"][0]["model"]
         if "gemini" in model:
-            self._realtime_client = GeminiRealtimeClient(
+            self._realtime_client: RealtimeClientProtocol = GeminiRealtimeClient(
                 llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
             )
         elif "gpt-4o" in model:
-            self._realtime_client = OpenAIRealtimeClient(
+            self._realtime_client: RealtimeClientProtocol = OpenAIRealtimeClient(
                 llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
             )
         else:
