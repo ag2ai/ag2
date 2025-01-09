@@ -17,7 +17,7 @@ repos:
     - id: check-json
       exclude: |
         (?x)^(
-          .devcontainer/devcontainer.json |
+          .devcontainer/.*devcontainer\.json |
           ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
         )$
     - id: check-byte-order-marker

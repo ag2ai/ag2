@@ -5,14 +5,14 @@
 version: '3'
 
 services:
-  python-3.10-ag2:  # nosemgrep
-    image: mcr.microsoft.com/devcontainers/python:3.10
-    container_name: ag2-${USER}-python-3.10
+  python-{{ python_version }}-ag2:  # nosemgrep
+    image: mcr.microsoft.com/devcontainers/python:{{ python_version }}
+    container_name: ag2-${USER}-python-{{ python_version }}
     volumes:
-      - ../:/workspaces/ag2:cached
+      - {{ mount_volume }}:/workspaces/ag2:cached
     command: sleep infinity
     env_file:
-      - ./devcontainer.env
+      - {{ env_file }}
     networks:
       - ag2-network
 
