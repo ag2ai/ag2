@@ -2616,14 +2616,14 @@ class ConversableAgent(LLMAgent):
         """Return the function map."""
         return self._function_map
 
-    def _wrap_function(self, func: F, chat_context_params_dict: dict[str, ChatContext]) -> F:
+    def _wrap_function(self, func: F, inject_params: dict[str, ChatContext] = {}) -> F:
         """Wrap the function inject chat context parameters and to dump the return value to json.
 
         Handles both sync and async functions.
 
         Args:
             func: the function to be wrapped.
-            chat_context_params_dict: the chat context parameters which will be passed to the function.
+            inject_params: the chat context parameters which will be passed to the function.
 
         Returns:
             The wrapped function.
@@ -2632,7 +2632,7 @@ class ConversableAgent(LLMAgent):
         @load_basemodels_if_needed
         @functools.wraps(func)
         def _wrapped_func(*args, **kwargs):
-            retval = func(*args, **kwargs, **chat_context_params_dict)
+            retval = func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
             return serialize_to_str(retval)
@@ -2640,7 +2640,7 @@ class ConversableAgent(LLMAgent):
         @load_basemodels_if_needed
         @functools.wraps(func)
         async def _a_wrapped_func(*args, **kwargs):
-            retval = await func(*args, **kwargs, **chat_context_params_dict)
+            retval = await func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
             return serialize_to_str(retval)
@@ -2775,9 +2775,10 @@ class ConversableAgent(LLMAgent):
 
             tool = Tool(func_or_tool=func_or_tool, name=name)
             chat_context = ChatContext(self)
-            chat_context_params_dict = {param: chat_context for param in tool._chat_context_params}
+            chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
+            inject_params = chat_context_params | tool._logger_params
 
-            self.register_function({tool.name: self._wrap_function(tool.func, chat_context_params_dict)})
+            self.register_function({tool.name: self._wrap_function(tool.func, inject_params)})
 
             return tool
 

@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import logging
 import sys
 from abc import ABC
 from functools import wraps
+from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, get_type_hints
 
 from fast_depends import Depends as FastDepends
@@ -22,7 +24,8 @@ __all__ = [
     "ChatContext",
     "Depends",
     "Field",
-    "get_chat_context_params",
+    "create_logger_params",
+    "get_context_params",
     "inject_params",
 ]
 
@@ -86,20 +89,26 @@ def Depends(x: Any) -> Any:
     return FastDepends(x)
 
 
-def get_chat_context_params(func: Callable[..., Any]) -> list[str]:
-    """Gets the names of the ChatContext parameters in a function signature.
+def get_context_params(
+    func: Callable[..., Any], subclass: type[BaseContext] | type[ChatContext] | type[Logger]
+) -> list[str]:
+    """Gets the names of the context parameters in a function signature.
 
     Args:
-        func: The function to inspect for ChatContext parameters.
+        func: The function to inspect for context parameters.
+        subclass: The subclass to search for.
 
     Returns:
-        A list of parameter names that are ChatContext instances.
+        A list of parameter names that are instances of the specified subclass.
     """
+
     sig = inspect.signature(func)
-    return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=ChatContext)]
+    return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
 
 
-def _is_context_param(param: inspect.Parameter, subclass: type[BaseContext] | type[ChatContext] = BaseContext) -> bool:
+def _is_context_param(
+    param: inspect.Parameter, subclass: type[BaseContext] | type[ChatContext] | type[Logger] = BaseContext
+) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
     return isinstance(param_annotation, type) and issubclass(param_annotation, subclass)
@@ -124,7 +133,11 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
         func = _fix_staticmethod(func)
 
     sig = inspect.signature(func)
-    params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
+    params_to_remove = [
+        p.name
+        for p in sig.parameters.values()
+        if _is_context_param(p) or _is_context_param(p, Logger) or _is_depends_param(p)
+    ]
     _remove_params(func, sig, params_to_remove)
     return func
 
@@ -173,6 +186,19 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
         f = wrapper
     return f
+
+
+def create_logger_params(params: list[str], function_name: str) -> dict[str, Logger]:
+    # If Logging is not configured. Configuring now
+    if not logging.getLogger().hasHandlers():
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",  # Exclude milliseconds
+        )
+
+    logger_params = {param: logging.getLogger(f"{function_name}.{param}") for param in params}
+    return logger_params
 
 
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:

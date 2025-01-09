@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from ..tools.function_utils import get_function_schema
-from .dependency_injection import get_chat_context_params, inject_params
+from .dependency_injection import ChatContext, create_logger_params, get_context_params, inject_params
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -45,12 +46,15 @@ class Tool:
             self._name: str = name or func_or_tool.name
             self._description: str = description or func_or_tool.description
             self._func: Callable[..., Any] = func_or_tool.func
-            self._chat_context_params: list[str] = func_or_tool._chat_context_params
+            self._chat_context_param_names: list[str] = func_or_tool._chat_context_param_names
+            self._logger_params: dict[str, Logger] = func_or_tool._logger_params
         elif inspect.isfunction(func_or_tool):
-            self._chat_context_params = get_chat_context_params(func_or_tool)
+            self._chat_context_param_names = get_context_params(func_or_tool, subclass=ChatContext)
             self._func = inject_params(func_or_tool)
             self._name = name or func_or_tool.__name__
             self._description = description or func_or_tool.__doc__ or ""
+            logger_param_names = get_context_params(func_or_tool, subclass=Logger)
+            self._logger_params = create_logger_params(logger_param_names, function_name=self._name)
         else:
             raise ValueError(
                 f"Parameter 'func_or_tool' must be a function or a Tool instance, it is '{type(func_or_tool)}' instead."
