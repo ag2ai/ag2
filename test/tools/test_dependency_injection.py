@@ -28,27 +28,35 @@ class TestRemoveInjectedParamsFromSignature:
     def f_with_annotated(  # type: ignore[misc]
         a: int,
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        chat_ctx: Annotated[ChatContext, "Chat context"],
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     async def f_with_annotated_async(  # type: ignore[misc]
         a: int,
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        chat_ctx: Annotated[ChatContext, "Chat context"],
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     @staticmethod
     def f_without_annotated(
         a: int,
+        chat_ctx: ChatContext,
         ctx: MyContext = Depends(MyContext(b=3)),
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     @staticmethod
     async def f_without_annotated_async(
         a: int,
+        chat_ctx: ChatContext,
         ctx: MyContext = Depends(MyContext(b=3)),
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     @staticmethod
