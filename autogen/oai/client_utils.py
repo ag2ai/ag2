@@ -15,7 +15,7 @@ def validate_parameter(
     params: dict[str, Any],
     param_name: str,
     allowed_types: tuple,
-    allow_None: bool,
+    allow_None: bool,  # noqa: N803
     default_value: Any,
     numerical_bound: tuple,
     allowed_values: list,

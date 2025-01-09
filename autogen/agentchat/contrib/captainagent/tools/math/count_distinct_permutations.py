@@ -12,7 +12,7 @@ def count_distinct_permutations(sequence):
         int: The number of distinct permutations.
 
     Example:
-        >>> count_distinct_permutations('aab')
+        >>> count_distinct_permutations("aab")
         3
         >>> count_distinct_permutations([1, 2, 2])
         3

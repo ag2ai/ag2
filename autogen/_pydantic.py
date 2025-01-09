@@ -77,11 +77,11 @@ else:  # pragma: no cover
             return {"anyOf": [type2schema(tt) for tt in get_args(t)]}
         # we need to support both syntaxes for Tuple
         elif get_origin(t) in [Tuple, tuple]:
-            prefixItems = [type2schema(tt) for tt in get_args(t)]
+            prefix_items = [type2schema(tt) for tt in get_args(t)]
             return {
-                "maxItems": len(prefixItems),
-                "minItems": len(prefixItems),
-                "prefixItems": prefixItems,
+                "maxItems": len(prefix_items),
+                "minItems": len(prefix_items),
+                "prefixItems": prefix_items,
                 "type": "array",
             }
         else:

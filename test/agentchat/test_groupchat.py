@@ -1543,9 +1543,9 @@ def test_speaker_selection_auto_process_result():
     assert groupchat._process_speaker_selection_result(chat_result, cmo, agent_list) == pm
 
     ### Agent not selected successfully
-    chat_result.chat_history[3][
-        "content"
-    ] = "[AGENT SELECTION FAILED]Select speaker attempt #3 of 3 failed as it did not include any agent names."
+    chat_result.chat_history[3]["content"] = (
+        "[AGENT SELECTION FAILED]Select speaker attempt #3 of 3 failed as it did not include any agent names."
+    )
 
     # The next speaker in the list will be selected, which will be the Product_Manager (as the last speaker is the Chief_Marketing_Officer)
     assert groupchat._process_speaker_selection_result(chat_result, cmo, agent_list) == pm

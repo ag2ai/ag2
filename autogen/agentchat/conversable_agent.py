@@ -47,8 +47,8 @@ from ..messages.agent_messages import (
     ConversableAgentUsageSummaryMessage,
     ConversableAgentUsageSummaryNoCostIncurredMessage,
     ExecuteCodeBlockMessage,
-    ExecutedFunctionMessage,
     ExecuteFunctionMessage,
+    ExecutedFunctionMessage,
     GenerateCodeExecutionReplyMessage,
     TerminationAndHumanReplyMessage,
     UsingAutoReplyMessage,
@@ -435,7 +435,7 @@ class ConversableAgent(LLMAgent):
                 message = last_msg
             if callable(message):
                 message = message(recipient, messages, sender, config)
-            # We only run chat that has a valid message. NOTE: This is prone to change dependin on applications.
+            # We only run chat that has a valid message. NOTE: This is prone to change depending on applications.
             if message:
                 current_c["message"] = message
                 chat_to_run.append(current_c)
@@ -783,9 +783,7 @@ class ConversableAgent(LLMAgent):
         ```python
         {
             "content": lambda context: context["use_tool_msg"],
-            "context": {
-                "use_tool_msg": "Use tool X if they are relevant."
-            }
+            "context": {"use_tool_msg": "Use tool X if they are relevant."},
         }
         ```
                     Next time, one agent can send a message B with a different "use_tool_msg".
@@ -833,9 +831,7 @@ class ConversableAgent(LLMAgent):
         ```python
         {
             "content": lambda context: context["use_tool_msg"],
-            "context": {
-                "use_tool_msg": "Use tool X if they are relevant."
-            }
+            "context": {"use_tool_msg": "Use tool X if they are relevant."},
         }
         ```
                     Next time, one agent can send a message B with a different "use_tool_msg".
@@ -2721,7 +2717,6 @@ class ConversableAgent(LLMAgent):
         return _decorator
 
     def _register_for_llm(self, tool: Tool, api_style: Literal["tool", "function"]) -> None:
-
         # register the function to the agent if there is LLM config, raise an exception otherwise
         if self.llm_config is None:
             raise RuntimeError("LLM config must be setup before registering a function for LLM.")

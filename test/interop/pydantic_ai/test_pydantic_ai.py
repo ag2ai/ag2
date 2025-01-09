@@ -72,7 +72,6 @@ class TestPydanticAIInteroperabilityWithotContext:
     sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
 )
 class TestPydanticAIInteroperabilityDependencyInjection:
-
     def test_dependency_injection(self) -> None:
         def f(
             ctx: RunContext[int],  # type: ignore[valid-type]

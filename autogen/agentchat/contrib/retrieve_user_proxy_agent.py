@@ -325,16 +325,16 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         if not self._vector_db:
             return
 
-        IS_TO_CHUNK = False  # whether to chunk the raw files
+        is_to_chunk = False  # whether to chunk the raw files
         if self._new_docs:
-            IS_TO_CHUNK = True
+            is_to_chunk = True
         if not self._docs_path:
             try:
                 self._vector_db.get_collection(self._collection_name)
                 logger.warning(f"`docs_path` is not provided. Use the existing collection `{self._collection_name}`.")
                 self._overwrite = False
                 self._get_or_create = True
-                IS_TO_CHUNK = False
+                is_to_chunk = False
             except ValueError:
                 raise ValueError(
                     "`docs_path` is not provided. "
@@ -346,16 +346,16 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 self._vector_db.get_collection(self._collection_name)
                 logger.info(f"Use the existing collection `{self._collection_name}`.", color="green")
             except ValueError:
-                IS_TO_CHUNK = True
+                is_to_chunk = True
         else:
-            IS_TO_CHUNK = True
+            is_to_chunk = True
 
         self._vector_db.active_collection = self._vector_db.create_collection(
             self._collection_name, overwrite=self._overwrite, get_or_create=self._get_or_create
         )
 
         docs = None
-        if IS_TO_CHUNK:
+        if is_to_chunk:
             if self.custom_text_split_function is not None:
                 chunks, sources = split_files_to_chunks(
                     get_files_from_dir(self._docs_path, self._custom_text_types, self._recursive),
