@@ -168,10 +168,8 @@ class RealtimeAgent(ConversableAgent):
         """Run the agent."""
         # everything is run in the same task group to enable easy cancellation using self._tg.cancel_scope.cancel()
         async with create_task_group() as self._tg:
-
             # connect with the client first (establishes a connection and initializes a session)
             async with self._realtime_client.connect():
-
                 # start the observers
                 for observer in self._observers:
                     self._tg.soonify(observer.run)(self)

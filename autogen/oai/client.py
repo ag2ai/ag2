@@ -489,7 +489,7 @@ class OpenAIWrapper:
                 They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method. E.g.,
 
         ```python
-        config_list=[
+        config_list = [
             {
                 "model": "gpt-4",
                 "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
@@ -506,7 +506,7 @@ class OpenAIWrapper:
             {
                 "model": "llama-7B",
                 "base_url": "http://127.0.0.1:8080",
-            }
+            },
         ]
         ```
 

@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator, Type
+from typing import Type
 from uuid import UUID, uuid4
 
 import pytest
@@ -18,7 +19,7 @@ from autogen.messages.base_message import (
 
 
 @pytest.fixture()
-def TestMessage() -> Generator[Type[BaseMessage], None, None]:
+def TestMessage() -> Generator[type[BaseMessage], None, None]:
     org_message_classes = _message_classes.copy()
     try:
 
@@ -35,7 +36,7 @@ def TestMessage() -> Generator[Type[BaseMessage], None, None]:
 
 
 class TestBaseMessage:
-    def test_model_dump_validate(self, TestMessage: Type[BaseModel], uuid: UUID) -> None:
+    def test_model_dump_validate(self, TestMessage: type[BaseModel], uuid: UUID) -> None:
         # print(f"{TestMessage=}")
 
         message = TestMessage(uuid=uuid, sender="sender", receiver="receiver", content="Hello, World!")

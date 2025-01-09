@@ -158,7 +158,6 @@ def test_save(builder: AgentBuilder):
     reason=reason,
 )
 def test_load(builder: AgentBuilder):
-
     config_save_path = f"{here}/example_test_agent_builder_config.json"
     json.load(open(config_save_path))
 

@@ -9,23 +9,25 @@
 
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "google",
-            "model": "gemini-pro",
-            "api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),
-            "safety_settings": [
+    llm_config = {
+        "config_list": [
+            {
+                "api_type": "google",
+                "model": "gemini-pro",
+                "api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),
+                "safety_settings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
                     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
-                    ],
-            "top_p":0.5,
-            "max_tokens": 2048,
-            "temperature": 1.0,
-            "top_k": 5
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+                ],
+                "top_p": 0.5,
+                "max_tokens": 2048,
+                "temperature": 1.0,
+                "top_k": 5,
             }
-    ]}
+        ]
+    }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
     ```
@@ -52,10 +54,11 @@ from collections.abc import Mapping
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import google.generativeai as genai
 import PIL
+import google.generativeai as genai
 import requests
 import vertexai
+from PIL import Image
 from google.ai.generativelanguage import Content, FunctionCall, FunctionDeclaration, FunctionResponse, Part, Tool
 from google.ai.generativelanguage_v1beta.types import Schema
 from google.auth.credentials import Credentials
@@ -63,7 +66,6 @@ from jsonschema import ValidationError
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from PIL import Image
 from pydantic import BaseModel
 from vertexai.generative_models import (
     Content as VertexAIContent,
@@ -179,7 +181,6 @@ class GeminiClient:
         }
 
     def create(self, params: dict) -> ChatCompletion:
-
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:
@@ -266,10 +267,8 @@ class GeminiClient:
         random_id = random.randint(0, 10000)
         prev_function_calls = []
         for part in response.parts:
-
             # Function calls
             if fn_call := part.function_call:
-
                 # If we have a repeated function call, ignore it
                 if fn_call not in prev_function_calls:
                     autogen_tool_calls.append(
@@ -355,7 +354,6 @@ class GeminiClient:
             return rst, "tool"
         elif "tool_calls" in message and len(message["tool_calls"]) != 0:
             for tool_call in message["tool_calls"]:
-
                 function_id = tool_call["id"]
                 function_name = tool_call["function"]["name"]
                 self.tool_call_function_map[function_id] = function_name
@@ -687,7 +685,6 @@ def get_image_data(image_file: str, use_b64=True) -> bytes:
 
 
 def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: int, model_name: str) -> float:
-
     def total_cost_mil(cost_per_mil_input: float, cost_per_mil_output: float):
         # Cost per million
         return cost_per_mil_input * input_tokens / 1e6 + cost_per_mil_output * output_tokens / 1e6

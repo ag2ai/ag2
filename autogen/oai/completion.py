@@ -769,7 +769,7 @@ class Completion(openai_Completion):
                     "model": "llama-7B",
                     "base_url": "http://127.0.0.1:8080",
                     "api_type": "openai",
-                }
+                },
             ],
             prompt="Hi",
         )
@@ -953,7 +953,7 @@ class Completion(openai_Completion):
                 An example agg_method in str:
 
         ```python
-        agg_method = 'median'
+        agg_method = "median"
         ```
                 An example agg_method in a Callable:
 
@@ -964,7 +964,7 @@ class Completion(openai_Completion):
                 An example agg_method in a dict of Callable:
 
         ```python
-        agg_method={'median_success': np.median, 'avg_success': np.mean}
+        agg_method = {"median_success": np.median, "avg_success": np.mean}
         ```
 
             return_responses_and_per_instance_result (bool): Whether to also return responses

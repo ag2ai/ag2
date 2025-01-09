@@ -661,7 +661,6 @@ class SwarmAgent(ConversableAgent):
 
         for func in functions:
             if isinstance(func, UPDATE_SYSTEM_MESSAGE):
-
                 # Wrapper function that allows this to be used in the update_agent_state hook
                 # Its primary purpose, however, is just to update the agent's system message
                 # Outer function to create a closure with the update function
@@ -732,7 +731,6 @@ class SwarmAgent(ConversableAgent):
                 ), "Invalid After Work value"
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
-
                 if isinstance(transit.target, SwarmAgent):
                     # Transition to agent
 
@@ -809,7 +807,6 @@ class SwarmAgent(ConversableAgent):
 
         message = messages[-1]
         if "tool_calls" in message:
-
             tool_call_count = len(message["tool_calls"])
 
             # Loop through tool calls individually (so context can be updated after each function call)
@@ -817,7 +814,6 @@ class SwarmAgent(ConversableAgent):
             tool_responses_inner = []
             contents = []
             for index in range(tool_call_count):
-
                 # Deep copy to ensure no changes to messages when we insert the context variables
                 message_copy = copy.deepcopy(message)
 
@@ -834,7 +830,6 @@ class SwarmAgent(ConversableAgent):
                         # Inject the context variables into the tool call if it has the parameter
                         sig = signature(func)
                         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
-
                             current_args = json.loads(tool_call["function"]["arguments"])
                             current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = self._context_variables
                             tool_call["function"]["arguments"] = json.dumps(current_args)

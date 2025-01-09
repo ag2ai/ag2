@@ -1045,7 +1045,6 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
-
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
@@ -1346,7 +1345,6 @@ def test_chat_history():
 
 
 def test_http_client():
-
     import httpx
 
     with pytest.raises(TypeError):
@@ -1367,7 +1365,6 @@ def test_http_client():
 
 
 def test_adding_duplicate_function_warning():
-
     config_base = [{"base_url": "http://0.0.0.0:8000", "api_key": "NULL"}]
 
     agent = autogen.ConversableAgent(

@@ -135,7 +135,7 @@ class LocalExecutorWithTools(CodeExecutor):
     ag2_tool = interop.convert_tool(tool=langchain_tool, type="langchain")
 
     # `ag2_tool.name` is wikipedia
-    local_executor = LocalExecutorWithTools(tools=[ag2_tool], work_dir='./')
+    local_executor = LocalExecutorWithTools(tools=[ag2_tool], work_dir="./")
 
     code = '''
     result = wikipedia(tool_input={"query":"Christmas"})
@@ -161,13 +161,13 @@ class LocalExecutorWithTools(CodeExecutor):
         """(Experimental) Export a code extractor that can be used by an agent."""
         return MarkdownCodeExtractor()
 
-    def __init__(self, tools: Optional[List[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
+    def __init__(self, tools: Optional[list[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
         self.tools = tools if tools is not None else []
         self.work_dir = work_dir
         if not os.path.exists(work_dir):
             os.makedirs(work_dir, exist_ok=True)
 
-    def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> CodeResult:
+    def execute_code_blocks(self, code_blocks: list[CodeBlock]) -> CodeResult:
         """Execute code blocks and return the result.
 
         Args:
