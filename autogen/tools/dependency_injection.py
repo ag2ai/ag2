@@ -22,6 +22,7 @@ __all__ = [
     "ChatContext",
     "Depends",
     "Field",
+    "get_chat_context_params",
     "inject_params",
 ]
 
@@ -85,10 +86,23 @@ def Depends(x: Any) -> Any:
     return FastDepends(x)
 
 
-def _is_base_context_param(param: inspect.Parameter) -> bool:
+def get_chat_context_params(func: Callable[..., Any]) -> list[str]:
+    """Gets the names of the ChatContext parameters in a function signature.
+
+    Args:
+        func: The function to inspect for ChatContext parameters.
+
+    Returns:
+        A list of parameter names that are ChatContext instances.
+    """
+    sig = inspect.signature(func)
+    return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=ChatContext)]
+
+
+def _is_context_param(param: inspect.Parameter, subclass: type[BaseContext] | type[ChatContext] = BaseContext) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
-    return isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext)
+    return isinstance(param_annotation, type) and issubclass(param_annotation, subclass)
 
 
 def _is_depends_param(param: inspect.Parameter) -> bool:
@@ -110,7 +124,7 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
         func = _fix_staticmethod(func)
 
     sig = inspect.signature(func)
-    params_to_remove = [p.name for p in sig.parameters.values() if _is_base_context_param(p) or _is_depends_param(p)]
+    params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
     _remove_params(func, sig, params_to_remove)
     return func
 
@@ -182,17 +196,3 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
     f = _remove_injected_params_from_signature(f)
 
     return f
-
-
-def update_chat_context(func: Callable[..., Any], agent: "ConversableAgent") -> Callable[..., Any]:
-    @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        for value in kwargs.values():
-            if isinstance(value, ChatContext):
-                print("Updating chat context")
-                # TODO: Update chat context
-                # value.messages = agent.chat_messages()
-
-        return func(*args, **kwargs)
-
-    return wrapper
