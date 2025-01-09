@@ -11,8 +11,7 @@ import pytest
 from autogen import ConversableAgent, config_list_from_json
 from autogen.formatting_utils import colored
 
-from ....conftest import skip_openai  # noqa: E402
-from ...test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ....conftest import Credentials, skip_openai  # noqa: E402
 
 try:
     from autogen.agentchat.contrib.capabilities.teachability import Teachability
@@ -29,17 +28,13 @@ else:
 filter_dict = {"tags": ["gpt-4o-mini"]}
 
 
-def create_teachable_agent(reset_db=False, verbosity=0):
+def create_teachable_agent(credentials: Credentials, reset_db=False, verbosity=0):
     """Instantiates a teachable agent using the settings from the top of this file."""
-    # Load LLM inference endpoints from an env variable or a file
-    # See https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints
-    # and OAI_CONFIG_LIST_sample
-    config_list = config_list_from_json(env_or_file=OAI_CONFIG_LIST, filter_dict=filter_dict, file_location=KEY_LOC)
 
     # Start by instantiating any agent that inherits from ConversableAgent.
     teachable_agent = ConversableAgent(
         name="teachable_agent",
-        llm_config={"config_list": config_list, "timeout": 120, "cache_seed": None},  # Disable caching.
+        llm_config={"config_list": credentials.config_list, "timeout": 120, "cache_seed": None},  # Disable caching.
     )
 
     # Instantiate the Teachability capability. Its parameters are all optional.
@@ -67,11 +62,12 @@ def check_agent_response(teachable_agent, user, correct_answer):
         return 0
 
 
-def use_question_answer_phrasing():
+def use_question_answer_phrasing(credentials: Credentials):
     """Tests whether the teachable agent can answer a question after being taught the answer in a previous chat."""
     print(colored("\nTEST QUESTION-ANSWER PHRASING", "light_cyan"))
     num_errors, num_tests = 0, 0
     teachable_agent, teachability = create_teachable_agent(
+        credentials,
         reset_db=True,
         verbosity=0,  # 0 for basic info, 1 to add memory operations, 2 for analyzer messages, 3 for memo lists.
     )  # For a clean test, clear the agent's memory.
@@ -101,11 +97,12 @@ def use_question_answer_phrasing():
     return num_errors, num_tests
 
 
-def use_task_advice_pair_phrasing():
+def use_task_advice_pair_phrasing(credentials: Credentials):
     """Tests whether the teachable agent can demonstrate a new skill after being taught a task-advice pair in a previous chat."""
     print(colored("\nTEST TASK-ADVICE PHRASING", "light_cyan"))
     num_errors, num_tests = 0, 0
     teachable_agent, teachability = create_teachable_agent(
+        credentials,
         reset_db=True,  # For a clean test, clear the teachable agent's memory.
         verbosity=3,  # 0 for basic info, 1 to add memory operations, 2 for analyzer messages, 3 for memo lists.
     )
@@ -136,17 +133,17 @@ def use_task_advice_pair_phrasing():
     skip,
     reason="do not run if dependency is not installed or requested to skip",
 )
-def test_teachability_code_paths():
+def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
     """Runs this file's unit tests."""
     total_num_errors, total_num_tests = 0, 0
 
     num_trials = 1  # Set to a higher number to get a more accurate error rate.
     for trial in range(num_trials):
-        num_errors, num_tests = use_question_answer_phrasing()
+        num_errors, num_tests = use_question_answer_phrasing(credentials_gpt_4o_mini)
         total_num_errors += num_errors
         total_num_tests += num_tests
 
-        num_errors, num_tests = use_task_advice_pair_phrasing()
+        num_errors, num_tests = use_task_advice_pair_phrasing(credentials_gpt_4o_mini)
         total_num_errors += num_errors
         total_num_tests += num_tests
 
@@ -167,14 +164,14 @@ def test_teachability_code_paths():
     skip,
     reason="do not run if dependency is not installed or requested to skip",
 )
-def test_teachability_accuracy():
+def test_teachability_accuracy(credentials_gpt_4o_mini: Credentials):
     """A very cheap and fast test of teachability accuracy."""
     print(colored("\nTEST TEACHABILITY ACCURACY", "light_cyan"))
 
     num_trials = 10  # The expected probability of failure is about 0.3 on each trial.
     for trial in range(num_trials):
         teachable_agent, teachability = create_teachable_agent(
-            reset_db=True, verbosity=0
+            credentials_gpt_4o_mini, reset_db=True, verbosity=0
         )  # For a clean test, clear the agent's memory.
         user = ConversableAgent("user", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
 

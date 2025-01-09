@@ -10,7 +10,7 @@ on:
       - "autogen/**"
       - "test/agentchat/contrib/**"
       - ".github/workflows/contrib-openai.yml"
-      - "setup.py"
+      - "pyproject.toml"
 permissions:
   {}
   # actions: read
@@ -166,6 +166,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -173,8 +176,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          python -m pip install --upgrade pip wheel
-          pip install -e .[teachable,test]
+          uv pip install --system -e .[teachable,test]
           python -c "import autogen"
       - name: Coverage
         env:
@@ -202,6 +204,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -209,13 +214,12 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          python -m pip install --upgrade pip wheel
-          pip install -e ".[test]"
+          uv pip install --system -e ".[test]"
           python -c "import autogen"
-          pip install pytest-cov>=5 pytest-asyncio
+          uv pip install --system pytest-cov>=5 pytest-asyncio
       - name: Install packages for test when needed
         run: |
-          pip install -e .[autobuild]
+          uv pip install --system -e .[autobuild]
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -281,6 +285,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -288,8 +295,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          python -m pip install --upgrade pip wheel
-          pip install -e .[lmm,test]
+          uv pip install --system -e .[lmm,test]
           python -c "import autogen"
       - name: Coverage
         env:

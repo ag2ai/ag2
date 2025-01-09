@@ -7,13 +7,16 @@ from typing import Any, Callable, Literal, Optional, TypeVar, Union
 
 import anyio
 from asyncer import create_task_group, syncify
+from fastapi import WebSocket
+
+from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
 
 from ... import SwarmAgent
 from ...tools import Tool, get_function_schema
 from ..agent import Agent
 from ..conversable_agent import ConversableAgent
 from .function_observer import FunctionObserver
-from .oai_realtime_client import OpenAIRealtimeClient, Role
+from .oai_realtime_client import OpenAIRealtimeClient, OpenAIRealtimeWebRTCClient, Role
 from .realtime_observer import RealtimeObserver
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -42,20 +45,22 @@ class RealtimeAgent(ConversableAgent):
         self,
         *,
         name: str,
-        audio_adapter: RealtimeObserver,
+        audio_adapter: Optional[RealtimeObserver] = None,
         system_message: str = "You are a helpful AI Assistant.",
         llm_config: dict[str, Any],
         voice: str = "alloy",
         logger: Optional[Logger] = None,
+        websocket: Optional[WebSocket] = None,
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
 
         Args:
             name (str): The name of the agent.
-            audio_adapter (RealtimeObserver): The audio adapter for the agent.
+            audio_adapter (Optional[RealtimeObserver] = None): The audio adapter for the agent.
             system_message (str): The system message for the agent.
             llm_config (dict[str, Any], bool): The config for the agent.
             voice (str): The voice for the agent.
+            websocket (Optional[WebSocket] = None): WebSocket from WebRTC javascript client
         """
         super().__init__(
             name=name,
@@ -75,12 +80,20 @@ class RealtimeAgent(ConversableAgent):
         self._logger = logger
         self._function_observer = FunctionObserver(logger=logger)
         self._audio_adapter = audio_adapter
-        self._realtime_client = OpenAIRealtimeClient(
+        self._realtime_client: RealtimeClientProtocol = OpenAIRealtimeClient(
             llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
         )
+        if websocket is not None:
+            self._realtime_client = OpenAIRealtimeWebRTCClient(
+                llm_config=llm_config, voice=voice, system_message=system_message, websocket=websocket, logger=logger
+            )
+
         self._voice = voice
 
-        self._observers: list[RealtimeObserver] = [self._function_observer, self._audio_adapter]
+        self._observers: list[RealtimeObserver] = [self._function_observer]
+        if self._audio_adapter:
+            # audio adapter is not needed for WebRTC
+            self._observers.append(self._audio_adapter)
 
         self._registred_realtime_tools: dict[str, Tool] = {}
 
@@ -102,7 +115,7 @@ class RealtimeAgent(ConversableAgent):
         return self._logger or global_logger
 
     @property
-    def realtime_client(self) -> OpenAIRealtimeClient:
+    def realtime_client(self) -> RealtimeClientProtocol:
         """Get the OpenAI Realtime Client."""
         return self._realtime_client
 
