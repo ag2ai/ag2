@@ -187,6 +187,19 @@ test = [
     "fastapi>=0.115.0,<1",
 ]
 
+docs = [
+    "pydoc-markdown",
+    "pyyaml",
+    "termcolor",
+    "nbclient",
+]
+
+dev = [
+    "pyautogen[test]",
+    "pyautogen[docs]",
+    "pyautogen[types]",
+]
+
 [project.urls]
 Homepage = "https://ag2.ai/"
 Documentation = "https://docs.ag2.ai/docs/Home"
