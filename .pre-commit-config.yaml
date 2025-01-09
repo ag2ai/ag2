@@ -15,7 +15,11 @@ repos:
     - id: check-yaml
     - id: check-toml
     - id: check-json
-      exclude: ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
+      exclude: |
+        (?x)^(
+          .devcontainer/devcontainer.json |
+          ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
+        )$
     - id: check-byte-order-marker
       exclude: .gitignore
     - id: check-merge-conflict
