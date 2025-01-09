@@ -6,11 +6,16 @@ import inspect
 import sys
 from abc import ABC
 from functools import wraps
-from typing import Any, Callable, Iterable, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
+
+from autogen.agentchat import Agent
+
+if TYPE_CHECKING:
+    from ..agentchat.conversable_agent import ConversableAgent
 
 __all__ = [
     "BaseContext",
@@ -38,7 +43,31 @@ class ChatContext(BaseContext):
     It inherits from `BaseContext` and adds the `messages` attribute.
     """
 
-    messages: list[str] = []
+    def __init__(self, agent: "ConversableAgent") -> None:
+        """Initializes the ChatContext with an agent.
+
+        Args:
+            agent: The agent to use for retrieving chat messages.
+        """
+        self._agent = agent
+
+    @property
+    def chat_messages(self) -> dict[Agent, list[dict[Any, Any]]]:
+        """The messages in the chat.
+
+        Returns:
+            A dictionary of agents and their messages.
+        """
+        return self._agent.chat_messages
+
+    @property
+    def last_message(self) -> Optional[dict[str, Any]]:
+        """The last message in the chat.
+
+        Returns:
+            The last message in the chat.
+        """
+        return self._agent.last_message()
 
 
 def Depends(x: Any) -> Any:
@@ -153,3 +182,17 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
     f = _remove_injected_params_from_signature(f)
 
     return f
+
+
+def update_chat_context(func: Callable[..., Any], agent: "ConversableAgent") -> Callable[..., Any]:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        for value in kwargs.values():
+            if isinstance(value, ChatContext):
+                print("Updating chat context")
+                # TODO: Update chat context
+                # value.messages = agent.chat_messages()
+
+        return func(*args, **kwargs)
+
+    return wrapper
