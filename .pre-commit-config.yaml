@@ -88,3 +88,13 @@ repos:
     rev: 1.8.5
     hooks:
       - id: nbqa-black
+
+  - repo: local
+    hooks:
+      - id: generate-devcontainer-files
+        name: Generate devcontainer files
+        entry: "scripts/generate-devcontainers.sh"
+        language: python
+        require_serial: true
+        verbose: true
+        files: ^(scripts/devcontainer_templates/.*|scripts/generate-devcontainer\.sh|scripts/generate-devcontainer\.py)$
