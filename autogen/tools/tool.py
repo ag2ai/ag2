@@ -3,11 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from ..tools.function_utils import get_function_schema
-from .dependency_injection import ChatContext, inject_params, update_chat_context
+from .dependency_injection import get_chat_context_params, inject_params
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -46,7 +45,9 @@ class Tool:
             self._name: str = name or func_or_tool.name
             self._description: str = description or func_or_tool.description
             self._func: Callable[..., Any] = func_or_tool.func
+            self._chat_context_params: list[str] = func_or_tool._chat_context_params
         elif inspect.isfunction(func_or_tool):
+            self._chat_context_params = get_chat_context_params(func_or_tool)
             self._func = inject_params(func_or_tool)
             self._name = name or func_or_tool.__name__
             self._description = description or func_or_tool.__doc__ or ""
@@ -89,7 +90,6 @@ class Tool:
         Args:
             agent (ConversableAgent): The agent to which the tool will be registered.
         """
-        # self._func = update_chat_context(func=self._func, agent=agent)
         agent.register_for_execution()(self)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
