@@ -102,7 +102,7 @@ class TestE2E:
 
         """
         i = 0
-        count = 3
+        count = 5
         while True:
             try:
                 await self._test_e2e(credentials_gpt_4o_realtime=credentials_gpt_4o_realtime)

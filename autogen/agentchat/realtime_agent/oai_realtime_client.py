@@ -4,9 +4,10 @@
 
 import asyncio
 import json
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
@@ -334,8 +335,8 @@ class OpenAIRealtimeWebRTCClient:
         logger = self.logger
         while True:
             try:
-                messageJSON = await self._websocket.receive_text()
-                message = json.loads(messageJSON)
+                message_json = await self._websocket.receive_text()
+                message = json.loads(message_json)
                 if "function" in message["type"]:
                     logger.info("Received function message", message)
                 yield message

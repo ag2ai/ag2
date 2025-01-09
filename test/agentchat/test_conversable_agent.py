@@ -575,7 +575,7 @@ def test_update_function_signature_and_register_functions(mock_credentials: Cred
 
 
 def test__wrap_function_sync():
-    CurrencySymbol = Literal["USD", "EUR"]
+    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
@@ -613,7 +613,7 @@ def test__wrap_function_sync():
 
 @pytest.mark.asyncio
 async def test__wrap_function_async():
-    CurrencySymbol = Literal["USD", "EUR"]
+    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
@@ -812,7 +812,7 @@ def test_register_for_llm_with_docstring(mock_credentials: Credentials):
     assert exec_python.description == "Execute a Python cell."
 
 
-def test_register_for_llm_without_LLM():
+def test_register_for_llm_without_LLM():  # noqa: N802
     agent = ConversableAgent(name="agent", llm_config=None)
     with pytest.raises(
         AssertionError,
@@ -1045,7 +1045,6 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
-
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
@@ -1346,7 +1345,6 @@ def test_chat_history():
 
 
 def test_http_client():
-
     import httpx
 
     with pytest.raises(TypeError):
@@ -1367,7 +1365,6 @@ def test_http_client():
 
 
 def test_adding_duplicate_function_warning():
-
     config_base = [{"base_url": "http://0.0.0.0:8000", "api_key": "NULL"}]
 
     agent = autogen.ConversableAgent(

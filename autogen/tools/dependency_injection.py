@@ -5,8 +5,9 @@
 import inspect
 import sys
 from abc import ABC
+from collections.abc import Iterable
 from functools import wraps
-from typing import Any, Callable, Iterable, get_type_hints
+from typing import Any, Callable, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
@@ -41,7 +42,7 @@ class ChatContext(BaseContext):
     messages: list[str] = []
 
 
-def Depends(x: Any) -> Any:
+def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 
     Args:

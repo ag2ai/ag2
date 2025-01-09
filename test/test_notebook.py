@@ -98,7 +98,7 @@ def test_agentchat_function_call_async(save=False):
     skip or not sys.version.startswith("3.12"),
     reason="do not run if openai is not installed or py!=3.12",
 )
-def _test_agentchat_MathChat(save=False):
+def _test_agentchat_MathChat(save=False):  # noqa: N802
     run_notebook("agentchat_MathChat.ipynb", save=save)
 
 

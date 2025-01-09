@@ -8,12 +8,7 @@
 
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "ollama",
-            "model": "mistral:7b-instruct-v0.3-q6_K"
-            }
-    ]}
+    llm_config = {"config_list": [{"api_type": "ollama", "model": "mistral:7b-instruct-v0.3-q6_K"}]}
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
     ```
@@ -262,7 +257,6 @@ class OllamaClient:
             total_tokens = prompt_tokens + completion_tokens
 
         if response is not None:
-
             # Defaults
             ollama_finish = "stop"
             tool_calls = None
@@ -277,9 +271,7 @@ class OllamaClient:
 
             # Process tools in the response
             if self._tools_in_conversation:
-
                 if self._native_tool_calls:
-
                     if not ollama_params["stream"]:
                         response_content = response["message"]["content"]
 
@@ -303,7 +295,6 @@ class OllamaClient:
                                 random_id += 1
 
                 elif not self._native_tool_calls:
-
                     # Try to convert the response to a tool call object
                     response_toolcalls = response_to_tool_call(ans)
 
@@ -481,7 +472,6 @@ def response_to_tool_call(response_string: str) -> Any:
         matches = re.findall(pattern, response_string.strip())
 
         for match in matches:
-
             # It has matched, extract it and load it
             json_str = match.strip()
             data_object = None

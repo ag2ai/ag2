@@ -148,7 +148,11 @@ def test_get_missing_annotations() -> None:
 
 
 def test_get_parameters() -> None:
-    def f(a: Annotated[str, AG2Field(description="Parameter a")], b=1, c: Annotated[float, AG2Field(description="Parameter c")] = 1.0):  # type: ignore[no-untyped-def]
+    def f(  # type: ignore[no-untyped-def]
+        a: Annotated[str, AG2Field(description="Parameter a")],
+        b=1,  # type: ignore[no-untyped-def]
+        c: Annotated[float, AG2Field(description="Parameter c")] = 1.0,
+    ):
         pass
 
     typed_signature = get_typed_signature(f)

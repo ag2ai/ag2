@@ -34,7 +34,6 @@ def mock_response():
 
 @pytest.fixture
 def ollama_client():
-
     # Set Ollama client with some default values
     client = OllamaClient()
 
@@ -50,7 +49,6 @@ skip_reason = "Ollama dependency is not installed"
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_initialization():
-
     # Creation works without an api_key
     OllamaClient()
 

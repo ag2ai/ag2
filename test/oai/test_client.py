@@ -157,7 +157,6 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
-
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
 
@@ -221,7 +220,6 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_cache(credentials_gpt_4o_mini: Credentials):
-
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of artificial intelligence."
 
