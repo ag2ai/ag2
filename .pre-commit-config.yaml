@@ -97,4 +97,5 @@ repos:
         language: python
         require_serial: true
         verbose: true
+        additional_dependencies: ['jinja2']
         files: ^(scripts/devcontainer_templates/.*|scripts/generate-devcontainer\.sh|scripts/generate-devcontainer\.py)$
