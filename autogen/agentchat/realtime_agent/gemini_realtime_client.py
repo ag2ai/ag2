@@ -8,15 +8,10 @@
     pip install google-genai
 """
 
-import asyncio
 import json
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
-
-from google import genai
-from google.genai import types
-from google.genai.live import AsyncSession
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional
 
 from .realtime_client import Role
 
@@ -53,23 +48,13 @@ class GeminiRealtimeClient:
         self._voice = voice
         self._system_message = system_message
         self._logger = logger
-        self._connection: Optional[AsyncSession] = None  # type: ignore[no-any-unimported]
-        self._model: str = llm_config[
-            "model"
-        ]  # As of 01/08/2025, only gemini-2.0-flash-exp support Multimodal Live API
-        self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
-
+        self._connection = None
         config = llm_config["config_list"][0]
+
+        self._model: str = config["model"]
+        self._temperature: float = config.get("temperature", 0.8)  # type: ignore[union-attr]
+
         self._response_modality = "AUDIO"
-        # self._client = genai.Client(
-        #     vertexai=config.get("vertexai", None),
-        #     api_key=config.get("api_key", None),
-        #     credentials=config.get("credentials", None),
-        #     project=config.get("project", None),
-        #     location=config.get("location", None),
-        #     debug_config=config.get("debug_config", None),
-        #     http_options={"api_version": API_VERSION},
-        # )
 
         self.api_key = config.get("api_key", None)
         self._final_config: Dict[str, Any] = {}
@@ -82,7 +67,7 @@ class GeminiRealtimeClient:
         return self._logger or global_logger
 
     @property
-    def connection(self) -> AsyncSession:  # type: ignore[no-any-unimported]
+    def connection(self):
         """Get the Gemini WebSocket connection."""
         if self._connection is None:
             raise RuntimeError("Gemini WebSocket is not initialized")
@@ -101,7 +86,8 @@ class GeminiRealtimeClient:
         msg = {
             "tool_response": {"function_responses": [{"id": call_id, "response": {"result": {"string_value": result}}}]}
         }
-        await self.connection.send(json.dumps(msg))
+        if self._is_reading_events:
+            await self.connection.send(json.dumps(msg))
 
     # https://github.com/google-gemini/cookbook/blob/18bb4f2bd03c66839dc388bb1e9ae7e7819b1cd0/gemini-2/websockets/live_api_starter.py#L106
     async def send_text(self, *, role: Role, text: str, turn_complete: bool = True) -> None:
@@ -117,7 +103,8 @@ class GeminiRealtimeClient:
                 "turns": [{"role": role, "parts": [{"text": text}]}],
             }
         }
-        await self.connection.send(json.dumps(msg))
+        if self._is_reading_events:
+            await self.connection.send(json.dumps(msg))
 
     # https://github.com/google-gemini/cookbook/blob/18bb4f2bd03c66839dc388bb1e9ae7e7819b1cd0/gemini-2/websockets/live_api_starter.py#L201
     async def send_audio(self, audio: str) -> None:
@@ -136,7 +123,8 @@ class GeminiRealtimeClient:
                 ]
             }
         }
-        await self.connection.send(json.dumps(msg))
+        if self._is_reading_events:
+            await self.connection.send(json.dumps(msg))
 
     async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
         self.logger.info("This is not natively supported by Gemini Realtime API.")
@@ -147,26 +135,21 @@ class GeminiRealtimeClient:
         # https://ai.google.dev/api/multimodal-live#bidigeneratecontentsetup
         session_config = {
             "setup": {
-                "model": self._model,
-                "tools": [],
-                "system_instruction": self._system_message,
+                "model": f"models/{self._model}",
+                # "tools": [],
+                # "system_instruction": {
+                #     "role": "system",
+                #     "parts": [{"text": self._system_message}]
+                # },
                 "generation_config": {
                     "response_modalities": [self._response_modality],
-                    "speech_config": self._voice,
-                    # "candidate_count": integer,
-                    # "max_output_tokens": integer,
+                    "speech_config": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": self._voice}}},
                     "temperature": self._temperature,
-                    # "top_p": number,
-                    # "top_k": integer,
-                    # "presence_penalty": number,
-                    # "frequency_penalty": number,
-                    # "response_modalities": string,
-                    # "speech_config":object
                 },
             }
         }
-        for update in self._pending_session_updates:
-            session_config.update(update)
+        # for update in self._pending_session_updates:
+        #     session_config.update(update)
         self.logger.info(f"Sending session update: {session_config}")
         await self.connection.send(json.dumps(session_config))
 
@@ -199,10 +182,11 @@ class GeminiRealtimeClient:
         async for raw_response in self.connection:
             try:
                 response = json.loads(raw_response.decode("ascii"))
-                b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"]["data"]
+                b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
                 event = {
                     "type": "response.audio.delta",
                     "delta": b64data,
+                    "item_id": None,
                 }
                 yield event
             except KeyError:
