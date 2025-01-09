@@ -11,7 +11,7 @@ from jinja2 import Template
 
 # List of python versions to generate devcontainer files for
 PYTHON_VERSIONS = ["3.9", "3.10", "3.11", "3.12", "3.13"]
-DEFAULT = "3.10"
+DEFAULT = "3.9"
 
 DOCKER_COMPOSE_TEMPLATE = Path("scripts/devcontainer/templates/docker-compose.yml.jinja")
 DEVCONTAINER_JSON_TEMPLATE = Path("scripts/devcontainer/templates/devcontainer.json.jinja")
@@ -65,6 +65,23 @@ def generate_devcontainer_json_file(python_version: str):
 
 def generate_devcontainer_files():
     for python_version in PYTHON_VERSIONS:
+        # Delete existing devcontainer files
+        files_to_delete = []
+        if python_version == DEFAULT:
+            files_to_delete = [Path("./.devcontainer/docker-compose.yml"), Path("./.devcontainer/devcontainer.json")]
+
+        files_to_delete = files_to_delete + [
+            Path(f"./.devcontainer/python-{python_version}/docker-compose.yml"),
+            Path(f"./.devcontainer/python-{python_version}/devcontainer.json"),
+            Path(f"./.devcontainer/python-{python_version}/"),
+        ]
+        for file in files_to_delete:
+            if file.exists():
+                if file.is_file():
+                    file.unlink()
+                elif file.is_dir():
+                    file.rmdir()
+
         generate_docker_compose_file(python_version)
         generate_devcontainer_json_file(python_version)
 

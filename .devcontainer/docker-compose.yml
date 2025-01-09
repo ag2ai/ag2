@@ -7,9 +7,9 @@
 version: '3'
 
 services:
-  python-3.10-ag2:  # nosemgrep
-    image: mcr.microsoft.com/devcontainers/python:3.10
-    container_name: ag2-${USER}-python-3.10
+  python-3.9-ag2:  # nosemgrep
+    image: mcr.microsoft.com/devcontainers/python:3.9
+    container_name: ag2-${USER}-python-3.9
     volumes:
       - ../:/workspaces/ag2:cached
     command: sleep infinity
