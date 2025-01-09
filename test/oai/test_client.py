@@ -19,7 +19,7 @@ from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, Open
 
 from ..conftest import reason, skip_openai  # noqa: E402
 
-reason += " openai>=1 not installed"
+reason += " or openai>=1 not installed"
 TOOL_ENABLED = False
 try:
     import openai
