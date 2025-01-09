@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, AsyncContextManager, AsyncGenerator, Literal, Protocol, runtime_checkable
+from collections.abc import AsyncGenerator
+from typing import Any, AsyncContextManager, Literal, Protocol, runtime_checkable
 
 __all__ = ["RealtimeClientProtocol", "Role"]
 

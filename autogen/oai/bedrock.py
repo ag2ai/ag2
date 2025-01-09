@@ -21,7 +21,7 @@ config_list = [
         "aws_region": "us-west-2",
         "aws_access_key": "",
         "aws_secret_key": "",
-        "price" : [0.003, 0.015]
+        "price": [0.003, 0.015],
     }
 ]
 
@@ -104,7 +104,6 @@ class BedrockClient:
             or self._aws_secret_key is None
             or self._aws_secret_key == ""
         ):
-
             # attempts to get client from attached role of managed service (lambda, ec2, ecs, etc.)
             self.bedrock_runtime = boto3.client(service_name="bedrock-runtime", config=bedrock_config)
         else:
@@ -505,7 +504,6 @@ def parse_image(image_url: str) -> tuple[bytes, str]:
     response = requests.get(image_url)
     # Check if the request was successful
     if response.status_code == 200:
-
         content_type = response.headers.get("Content-Type")
         if not content_type.startswith("image"):
             content_type = "image/jpeg"

@@ -232,9 +232,9 @@ def num_tokens_from_functions(functions, model="gpt-3.5-turbo-0613") -> int:
         if "parameters" in function:
             parameters = function["parameters"]
             if "properties" in parameters:
-                for propertiesKey in parameters["properties"]:
-                    function_tokens += len(encoding.encode(propertiesKey))
-                    v = parameters["properties"][propertiesKey]
+                for properties_key in parameters["properties"]:
+                    function_tokens += len(encoding.encode(properties_key))
+                    v = parameters["properties"][properties_key]
                     for field in v:
                         if field == "type":
                             function_tokens += 2

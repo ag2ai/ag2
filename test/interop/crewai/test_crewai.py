@@ -12,8 +12,7 @@ import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 
-from ...agentchat.test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
-from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
+from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials, reason, skip_openai
 
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
     from autogen.interop.crewai import CrewAIInteroperability
@@ -59,14 +58,7 @@ class TestCrewAIInteroperability:
             assert self.tool.func(args=args) == "Hello, World!"
 
     @pytest.mark.skipif(skip_openai, reason=reason)
-    def test_with_llm(self) -> None:
-        config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
-            filter_dict={
-                "tags": ["gpt-4o-mini"],
-            },
-            file_location=KEY_LOC,
-        )
+    def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
         user_proxy = UserProxyAgent(
             name="User",
             human_input_mode="NEVER",
@@ -74,7 +66,7 @@ class TestCrewAIInteroperability:
 
         chatbot = AssistantAgent(
             name="chatbot",
-            llm_config={"config_list": config_list},
+            llm_config=credentials_gpt_4o_mini.llm_config,
         )
 
         self.tool.register_for_execution(user_proxy)

@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from abc import ABC
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
+from pydantic import BaseModel
 from termcolor import colored
 
 from ..code_utils import content_str
-
-# ToDo: once you move the code below, we can just delete this import
 from ..oai.client import OpenAIWrapper
-from .base_message import BaseMessage
+from .base_message import BaseMessage, wrap_message
 
 if TYPE_CHECKING:
     from ..agentchat.agent import Agent
@@ -24,26 +24,28 @@ __all__ = [
     "ToolResponseMessage",
     "FunctionCallMessage",
     "ToolCallMessage",
-    "ContentMessage",
-    "PostCarryoverProcessing",
-    "ClearAgentsHistory",
-    "SpeakerAttempt",
-    "GroupChatResume",
-    "GroupChatRunChat",
-    "TerminationAndHumanReply",
-    "ExecuteCodeBlock",
-    "ExecuteFunction",
-    "SelectSpeaker",
-    "ClearConversableAgentHistory",
-    "GenerateCodeExecutionReply",
-    "ConversableAgentUsageSummary",
     "TextMessage",
+    "PostCarryoverProcessingMessage",
+    "ClearAgentsHistoryMessage",
+    "SpeakerAttemptSuccessfullMessage",
+    "SpeakerAttemptFailedMultipleAgentsMessage",
+    "SpeakerAttemptFailedNoAgentsMessage",
+    "GroupChatResumeMessage",
+    "GroupChatRunChatMessage",
+    "TerminationAndHumanReplyMessage",
+    "ExecuteCodeBlockMessage",
+    "ExecuteFunctionMessage",
+    "SelectSpeakerMessage",
+    "ClearConversableAgentHistoryMessage",
+    "GenerateCodeExecutionReplyMessage",
+    "ConversableAgentUsageSummaryMessage",
+    "ConversableAgentUsageSummaryNoCostIncurredMessage",
 ]
 
 MessageRole = Literal["assistant", "function", "tool"]
 
 
-class BasePrintReceivedMessage(BaseMessage):
+class BasePrintReceivedMessage(BaseMessage, ABC):
     content: Union[str, int, float, bool]
     sender_name: str
     recipient_name: str
@@ -53,6 +55,7 @@ class BasePrintReceivedMessage(BaseMessage):
         f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
 
+@wrap_message
 class FunctionResponseMessage(BasePrintReceivedMessage):
     name: Optional[str] = None
     role: MessageRole = "function"
@@ -71,7 +74,7 @@ class FunctionResponseMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ToolResponse(BaseMessage):
+class ToolResponse(BaseModel):
     tool_call_id: Optional[str] = None
     role: MessageRole = "tool"
     content: Union[str, int, float, bool]
@@ -85,6 +88,7 @@ class ToolResponse(BaseMessage):
         f(colored("*" * len(tool_print), "green"), flush=True)
 
 
+@wrap_message
 class ToolResponseMessage(BasePrintReceivedMessage):
     role: MessageRole = "tool"
     tool_responses: list[ToolResponse]
@@ -99,7 +103,7 @@ class ToolResponseMessage(BasePrintReceivedMessage):
             f("\n", "-" * 80, flush=True, sep="")
 
 
-class FunctionCall(BaseMessage):
+class FunctionCall(BaseModel):
     name: Optional[str] = None
     arguments: Optional[str] = None
 
@@ -120,6 +124,7 @@ class FunctionCall(BaseMessage):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
+@wrap_message
 class FunctionCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     function_call: FunctionCall
@@ -136,7 +141,7 @@ class FunctionCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ToolCall(BaseMessage):
+class ToolCall(BaseModel):
     id: Optional[str] = None
     function: FunctionCall
     type: str
@@ -160,6 +165,7 @@ class ToolCall(BaseMessage):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
+@wrap_message
 class ToolCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     refusal: Optional[str] = None
@@ -181,7 +187,8 @@ class ToolCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-class ContentMessage(BasePrintReceivedMessage):
+@wrap_message
+class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -196,7 +203,7 @@ class ContentMessage(BasePrintReceivedMessage):
 
 def create_received_message_model(
     *, uuid: Optional[UUID] = None, message: dict[str, Any], sender: "Agent", recipient: "Agent"
-) -> BasePrintReceivedMessage:
+) -> Union[FunctionResponseMessage, ToolResponseMessage, FunctionCallMessage, ToolCallMessage, TextMessage]:
     # print(f"{message=}")
     # print(f"{sender=}")
 
@@ -236,7 +243,7 @@ def create_received_message_model(
             allow_format_str_template,
         )
 
-    return ContentMessage(
+    return TextMessage(
         content=content,
         sender_name=sender.name,
         recipient_name=recipient.name,
@@ -244,7 +251,8 @@ def create_received_message_model(
     )
 
 
-class PostCarryoverProcessing(BaseMessage):
+@wrap_message
+class PostCarryoverProcessingMessage(BaseMessage):
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
     message: str
     verbose: bool = False
@@ -326,7 +334,8 @@ class PostCarryoverProcessing(BaseMessage):
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
 
 
-class ClearAgentsHistory(BaseMessage):
+@wrap_message
+class ClearAgentsHistoryMessage(BaseMessage):
     agent_name: Optional[str] = None
     nr_messages_to_preserve: Optional[int] = None
 
@@ -356,7 +365,9 @@ class ClearAgentsHistory(BaseMessage):
                 f("Clearing history for all agents.")
 
 
-class SpeakerAttempt(BaseMessage):
+# todo: break into multiple messages
+@wrap_message
+class SpeakerAttemptSuccessfullMessage(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
@@ -382,38 +393,90 @@ class SpeakerAttempt(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if not self.verbose:
-            return
-
-        if len(self.mentions) == 1:
-            # Success on retry, we have just one name mentioned
-            selected_agent_name = next(iter(self.mentions))
-            f(
-                colored(
-                    f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} successfully selected: {selected_agent_name}",
-                    "green",
-                ),
-                flush=True,
-            )
-        elif len(self.mentions) > 1:
-            f(
-                colored(
-                    f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} failed as it included multiple agent names.",
-                    "red",
-                ),
-                flush=True,
-            )
-        else:
-            f(
-                colored(
-                    f">>>>>>>> Select speaker attempt #{self.attempt} failed as it did not include any agent names.",
-                    "red",
-                ),
-                flush=True,
-            )
+        selected_agent_name = next(iter(self.mentions))
+        f(
+            colored(
+                f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} successfully selected: {selected_agent_name}",
+                "green",
+            ),
+            flush=True,
+        )
 
 
-class GroupChatResume(BaseMessage):
+@wrap_message
+class SpeakerAttemptFailedMultipleAgentsMessage(BaseMessage):
+    mentions: dict[str, int]
+    attempt: int
+    attempts_left: int
+    verbose: Optional[bool] = False
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        mentions: dict[str, int],
+        attempt: int,
+        attempts_left: int,
+        select_speaker_auto_verbose: Optional[bool] = False,
+    ):
+        super().__init__(
+            uuid=uuid,
+            mentions=deepcopy(mentions),
+            attempt=attempt,
+            attempts_left=attempts_left,
+            verbose=select_speaker_auto_verbose,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(
+            colored(
+                f">>>>>>>> Select speaker attempt {self.attempt} of {self.attempt + self.attempts_left} failed as it included multiple agent names.",
+                "red",
+            ),
+            flush=True,
+        )
+
+
+@wrap_message
+class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
+    mentions: dict[str, int]
+    attempt: int
+    attempts_left: int
+    verbose: Optional[bool] = False
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        mentions: dict[str, int],
+        attempt: int,
+        attempts_left: int,
+        select_speaker_auto_verbose: Optional[bool] = False,
+    ):
+        super().__init__(
+            uuid=uuid,
+            mentions=deepcopy(mentions),
+            attempt=attempt,
+            attempts_left=attempts_left,
+            verbose=select_speaker_auto_verbose,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(
+            colored(
+                f">>>>>>>> Select speaker attempt #{self.attempt} failed as it did not include any agent names.",
+                "red",
+            ),
+            flush=True,
+        )
+
+
+@wrap_message
+class GroupChatResumeMessage(BaseMessage):
     last_speaker_name: str
     messages: list[dict[str, Any]]
     verbose: Optional[bool] = False
@@ -431,15 +494,15 @@ class GroupChatResume(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.verbose:
-            f(
-                f"Prepared group chat with {len(self.messages)} messages, the last speaker is",
-                colored(self.last_speaker_name, "yellow"),
-                flush=True,
-            )
+        f(
+            f"Prepared group chat with {len(self.messages)} messages, the last speaker is",
+            colored(self.last_speaker_name, "yellow"),
+            flush=True,
+        )
 
 
-class GroupChatRunChat(BaseMessage):
+@wrap_message
+class GroupChatRunChatMessage(BaseMessage):
     speaker_name: str
     verbose: Optional[bool] = False
 
@@ -449,13 +512,12 @@ class GroupChatRunChat(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.verbose:
-            f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
+        f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
 
 
-class TerminationAndHumanReply(BaseMessage):
+@wrap_message
+class TerminationAndHumanReplyMessage(BaseMessage):
     no_human_input_msg: str
-    human_input_mode: str
     sender_name: str
     recipient_name: str
 
@@ -464,32 +526,51 @@ class TerminationAndHumanReply(BaseMessage):
         *,
         uuid: Optional[UUID] = None,
         no_human_input_msg: str,
-        human_input_mode: str,
         sender: Optional["Agent"] = None,
         recipient: "Agent",
     ):
         super().__init__(
             uuid=uuid,
             no_human_input_msg=no_human_input_msg,
+            sender_name=sender.name if sender else "No sender",
+            recipient_name=recipient.name,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
+
+
+@wrap_message
+class UsingAutoReplyMessage(BaseMessage):
+    human_input_mode: str
+    sender_name: str
+    recipient_name: str
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        human_input_mode: str,
+        sender: Optional["Agent"] = None,
+        recipient: "Agent",
+    ):
+        super().__init__(
+            uuid=uuid,
             human_input_mode=human_input_mode,
             sender_name=sender.name if sender else "No sender",
             recipient_name=recipient.name,
         )
 
-    def print_no_human_input_msg(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.no_human_input_msg:
-            f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
-
-    def print_human_input_mode(self, f: Optional[Callable[..., Any]] = None) -> None:
-        f = f or print
-
-        if self.human_input_mode != "NEVER":
-            f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+        f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
 
 
-class ExecuteCodeBlock(BaseMessage):
+@wrap_message
+class ExecuteCodeBlockMessage(BaseMessage):
     code: str
     language: str
     code_block_count: int
@@ -514,44 +595,86 @@ class ExecuteCodeBlock(BaseMessage):
         )
 
 
-class ExecuteFunction(BaseMessage):
+@wrap_message
+class ExecuteFunctionMessage(BaseMessage):
     func_name: str
+    call_id: Optional[str] = None
+    arguments: dict[str, Any]
     recipient_name: str
-    verbose: Optional[bool] = False
 
     def __init__(
-        self, *, uuid: Optional[UUID] = None, func_name: str, recipient: "Agent", verbose: Optional[bool] = False
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        func_name: str,
+        call_id: Optional[str] = None,
+        arguments: dict[str, Any],
+        recipient: "Agent",
     ):
-        super().__init__(uuid=uuid, func_name=func_name, recipient_name=recipient.name, verbose=verbose)
+        super().__init__(
+            uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient_name=recipient.name
+        )
 
-    def print_executing_func(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f(
-            colored(f"\n>>>>>>>> EXECUTING FUNCTION {self.func_name}...", "magenta"),
+            colored(
+                f"\n>>>>>>>> EXECUTING FUNCTION {self.func_name}...\nCall ID: {self.call_id}\nInput arguments: {self.arguments}",
+                "magenta",
+            ),
             flush=True,
         )
 
-    def print_arguments_and_content(
-        self, arguments: dict[str, Any], content: str, f: Optional[Callable[..., Any]] = None
-    ) -> None:
+
+@wrap_message
+class ExecutedFunctionMessage(BaseMessage):
+    func_name: str
+    call_id: Optional[str] = None
+    arguments: dict[str, Any]
+    content: str
+    recipient_name: str
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        func_name: str,
+        call_id: Optional[str] = None,
+        arguments: dict[str, Any],
+        content: str,
+        recipient: "Agent",
+    ):
+        super().__init__(
+            uuid=uuid,
+            func_name=func_name,
+            call_id=call_id,
+            arguments=arguments,
+            content=content,
+            recipient_name=recipient.name,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.verbose:
-            f(
-                colored(f"\nInput arguments: {arguments}\nOutput:\n{content}", "magenta"),
-                flush=True,
-            )
+        f(
+            colored(
+                f"\n>>>>>>>> EXECUTED FUNCTION {self.func_name}...\nCall ID: {self.call_id}\nInput arguments: {self.arguments}\nOutput:\n{self.content}",
+                "magenta",
+            ),
+            flush=True,
+        )
 
 
-class SelectSpeaker(BaseMessage):
+@wrap_message
+class SelectSpeakerMessage(BaseMessage):
     agent_names: Optional[list[str]] = None
 
     def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
         agent_names = [agent.name for agent in agents] if agents else None
         super().__init__(uuid=uuid, agent_names=agent_names)
 
-    def print_select_speaker(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f("Please select the next speaker from the following list:")
@@ -559,106 +682,148 @@ class SelectSpeaker(BaseMessage):
         for i, agent_name in enumerate(agent_names):
             f(f"{i+1}: {agent_name}")
 
-    def print_try_count_exceeded(self, try_count: int = 3, f: Optional[Callable[..., Any]] = None) -> None:
+
+@wrap_message
+class SelectSpeakerTryCountExceededMessage(BaseMessage):
+    try_count: int
+    agent_names: Optional[list[str]] = None
+
+    def __init__(self, *, uuid: Optional[UUID] = None, try_count: int, agents: Optional[list["Agent"]] = None):
+        agent_names = [agent.name for agent in agents] if agents else None
+        super().__init__(uuid=uuid, try_count=try_count, agent_names=agent_names)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(f"You have tried {try_count} times. The next speaker will be selected automatically.")
+        f(f"You have tried {self.try_count} times. The next speaker will be selected automatically.")
 
-    def print_invalid_input(self, f: Optional[Callable[..., Any]] = None) -> None:
+
+@wrap_message
+class SelectSpeakerInvalidInputMessage(BaseMessage):
+    agent_names: Optional[list[str]] = None
+
+    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
+        agent_names = [agent.name for agent in agents] if agents else None
+        super().__init__(uuid=uuid, agent_names=agent_names)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
 
 
-class ClearConversableAgentHistory(BaseMessage):
+@wrap_message
+class ClearConversableAgentHistoryMessage(BaseMessage):
     agent_name: str
-    nr_messages_to_preserve: Optional[int] = None
+    recipient_name: str
+    no_messages_preserved: int
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", nr_messages_to_preserve: Optional[int] = None):
+    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", no_messages_preserved: Optional[int] = None):
         super().__init__(
             uuid=uuid,
             agent_name=agent.name,
-            nr_messages_to_preserve=nr_messages_to_preserve,
+            recipient_name=agent.name,
+            no_messages_preserved=no_messages_preserved,
         )
 
-    def print_preserving_message(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.nr_messages_to_preserve:
+        for _ in range(self.no_messages_preserved):
             f(
                 f"Preserving one more message for {self.agent_name} to not divide history between tool call and "
                 f"tool response."
             )
 
-    def print_warning(self, f: Optional[Callable[..., Any]] = None) -> None:
-        f = f or print
 
-        if self.nr_messages_to_preserve:
-            f(
-                colored(
-                    "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
-                    "yellow",
-                ),
-                flush=True,
-            )
-
-
-class GenerateCodeExecutionReply(BaseMessage):
-    sender_name: Optional[str] = None
+@wrap_message
+class ClearConversableAgentHistoryWarningMessage(BaseMessage):
     recipient_name: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, sender: Optional["Agent"] = None, recipient: "Agent"):
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
         super().__init__(
             uuid=uuid,
-            sender_name=sender.name if sender else None,
             recipient_name=recipient.name,
         )
-
-    def print_executing_code_block(
-        self, code_blocks: list["CodeBlock"], f: Optional[Callable[..., Any]] = None
-    ) -> None:
-        f = f or print
-
-        num_code_blocks = len(code_blocks)
-        if num_code_blocks == 1:
-            f(
-                colored(
-                    f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {code_blocks[0].language})...",
-                    "red",
-                ),
-                flush=True,
-            )
-        else:
-            f(
-                colored(
-                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x.language for x in code_blocks])}])...",
-                    "red",
-                ),
-                flush=True,
-            )
-
-
-class ConversableAgentUsageSummary(BaseMessage):
-    recipient_name: str
-    is_client_empty: bool
-
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent", client: Optional[Any] = None):
-        super().__init__(uuid=uuid, recipient_name=recipient.name, is_client_empty=True if client is None else False)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.is_client_empty:
-            f(f"No cost incurred from agent '{self.recipient_name}'.")
-        else:
-            f(f"Agent '{self.recipient_name}':")
+        f(
+            colored(
+                "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
+                "yellow",
+            ),
+            flush=True,
+        )
 
 
-class TextMessage(BaseMessage):
-    def __init__(self, *, uuid: Optional[UUID] = None):
-        super().__init__(uuid=uuid)
+@wrap_message
+class GenerateCodeExecutionReplyMessage(BaseMessage):
+    code_block_languages: list[str]
+    sender_name: Optional[str] = None
+    recipient_name: str
 
-    def print(self, text: str, f: Optional[Callable[..., Any]] = None) -> None:
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        code_blocks: list["CodeBlock"],
+        sender: Optional["Agent"] = None,
+        recipient: "Agent",
+    ):
+        code_block_languages = [code_block.language for code_block in code_blocks]
+
+        super().__init__(
+            uuid=uuid,
+            code_block_languages=code_block_languages,
+            sender_name=sender.name if sender else None,
+            recipient_name=recipient.name,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(text)
+        num_code_blocks = len(self.code_block_languages)
+        if num_code_blocks == 1:
+            f(
+                colored(
+                    f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {self.code_block_languages[0]})...",
+                    "red",
+                ),
+                flush=True,
+            )
+        else:
+            f(
+                colored(
+                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x for x in self.code_block_languages])}])...",
+                    "red",
+                ),
+                flush=True,
+            )
+
+
+@wrap_message
+class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
+    recipient_name: str
+
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+        super().__init__(uuid=uuid, recipient_name=recipient.name)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(f"No cost incurred from agent '{self.recipient_name}'.")
+
+
+@wrap_message
+class ConversableAgentUsageSummaryMessage(BaseMessage):
+    recipient_name: str
+
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+        super().__init__(uuid=uuid, recipient_name=recipient.name)
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(f"Agent '{self.recipient_name}':")

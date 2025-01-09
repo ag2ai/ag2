@@ -18,15 +18,15 @@ except ImportError:
 else:
     skip = False
 
+TEST_COST = 20000000
+TEST_CUSTOM_RESPONSE = "This is a custom response."
+TEST_DEVICE = "cpu"
+TEST_LOCAL_MODEL_NAME = "local_model_name"
+TEST_OTHER_PARAMS_VAL = "other_params"
+TEST_MAX_LENGTH = 1000
+
 
 def test_custom_model_client():
-    TEST_COST = 20000000
-    TEST_CUSTOM_RESPONSE = "This is a custom response."
-    TEST_DEVICE = "cpu"
-    TEST_LOCAL_MODEL_NAME = "local_model_name"
-    TEST_OTHER_PARAMS_VAL = "other_params"
-    TEST_MAX_LENGTH = 1000
-
     class CustomModel:
         def __init__(self, config: dict, test_hook):
             self.test_hook = test_hook

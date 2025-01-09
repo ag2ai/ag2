@@ -7,11 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.agentchat.contrib.swarm_agent import (
-    __CONTEXT_VARIABLES_PARAM_NAME__,
-    __TOOL_EXECUTOR_NAME__,
     AFTER_WORK,
     ON_CONDITION,
     UPDATE_SYSTEM_MESSAGE,
+    __CONTEXT_VARIABLES_PARAM_NAME__,
+    __TOOL_EXECUTOR_NAME__,
     AfterWorkOption,
     SwarmAgent,
     SwarmResult,
@@ -154,10 +154,10 @@ def test_resume_speaker():
     ]
 
     # Patch initiate_chat on agents so we can monitor which started the conversation
-    with patch.object(test_initial_agent, "initiate_chat") as mock_initial_chat, patch.object(
-        test_second_agent, "initiate_chat"
-    ) as mock_second_chat:
-
+    with (
+        patch.object(test_initial_agent, "initiate_chat") as mock_initial_chat,
+        patch.object(test_second_agent, "initiate_chat") as mock_second_chat,
+    ):
         mock_chat_result = MagicMock()
         mock_chat_result.chat_history = multiple_messages
 

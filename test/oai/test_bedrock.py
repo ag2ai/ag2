@@ -34,7 +34,6 @@ def mock_response():
 
 @pytest.fixture
 def bedrock_client():
-
     # Set Bedrock client with some default values
     client = BedrockClient()
 
@@ -49,7 +48,6 @@ skip_reason = "Amazon Bedrock dependency is not installed"
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_initialization():
-
     # Creation works without an api_key as it's handled in the parameter parsing
     BedrockClient()
 
@@ -228,7 +226,6 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client):
 # Test message conversion from OpenAI to Bedrock format
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_oai_messages_to_bedrock_messages(bedrock_client):
-
     # Test that the "name" key is removed and system messages converted to user message
     test_messages = [
         {"role": "system", "content": "You are a helpful AI bot."},

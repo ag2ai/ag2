@@ -316,7 +316,6 @@ def get_error_info(nb: NotebookNode) -> NotebookError | None:
 def add_front_matter_to_metadata_mdx(
     front_matter: dict[str, str | list[str]], website_dir: Path, rendered_mdx: Path
 ) -> None:
-
     source = front_matter.get("source_notebook")
     if isinstance(source, str) and source.startswith("/website/docs/"):
         return
