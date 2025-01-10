@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-import autogen
 from autogen.code_utils import (
     UNKNOWN,
     check_can_use_docker_or_throw,
@@ -32,147 +31,14 @@ from autogen.code_utils import (
     is_docker_running,
 )
 
-from .conftest import skip_docker
+from .conftest import Credentials, skip_docker
 
-KEY_LOC = "notebook"
-OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 here = os.path.abspath(os.path.dirname(__file__))
 
 if skip_docker or not is_docker_running() or not decide_use_docker(use_docker=None):
     skip_docker_test = True
 else:
     skip_docker_test = False
-
-
-# def test_find_code():
-#     try:
-#         import openai
-#     except ImportError:
-#         return
-#     # need gpt-4 for this task
-#     config_list = autogen.config_list_from_json(
-#         OAI_CONFIG_LIST,
-#         file_location=KEY_LOC,
-#         filter_dict={
-#             "model": ["gpt-4o", "gpt4", "gpt-4-32k", "gpt-4-32k-0314"],
-#         },
-#     )
-#     # config_list = autogen.config_list_from_json(
-#     #     OAI_CONFIG_LIST,
-#     #     file_location=KEY_LOC,
-#     #     filter_dict={
-#     #         "model": {
-#     #             "gpt-3.5-turbo",
-#     #             "gpt-3.5-turbo-16k",
-#     #             "gpt-3.5-turbo-16k-0613",
-#     #             "gpt-3.5-turbo-0301",
-#     #             "chatgpt-35-turbo-0301",
-#     #             "gpt-35-turbo-v0301",
-#     #         },
-#     #     },
-#     # )
-#     seed = 42
-#     messages = [
-#         {
-#             "role": "user",
-#             "content": "Print hello world to a file called hello.txt",
-#         },
-#         {
-#             "role": "user",
-#             "content": """
-# # filename: write_hello.py
-# ```
-# with open('hello.txt', 'w') as f:
-#     f.write('Hello, World!')
-# print('Hello, World! printed to hello.txt')
-# ```
-# Please execute the above Python code to print "Hello, World!" to a file called hello.txt and print the success message.
-# """,
-#         },
-#     ]
-#     codeblocks, _ = find_code(messages, seed=seed, config_list=config_list)
-#     assert codeblocks[0][0] == "python", codeblocks
-#     messages += [
-#         {
-#             "role": "user",
-#             "content": """
-# exitcode: 0 (execution succeeded)
-# Code output:
-# Hello, World! printed to hello.txt
-# """,
-#         },
-#         {
-#             "role": "assistant",
-#             "content": "Great! Can I help you with anything else?",
-#         },
-#     ]
-#     codeblocks, content = find_code(messages, seed=seed, config_list=config_list)
-#     assert codeblocks[0][0] == "unknown", content
-#     messages += [
-#         {
-#             "role": "user",
-#             "content": "Save a pandas df with 3 rows and 3 columns to disk.",
-#         },
-#         {
-#             "role": "assistant",
-#             "content": """
-# ```
-# # filename: save_df.py
-# import pandas as pd
-
-# df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
-# df.to_csv('df.csv')
-# print('df saved to df.csv')
-# ```
-# Please execute the above Python code to save a pandas df with 3 rows and 3 columns to disk.
-# Before you run the code above, run
-# ```
-# pip install pandas
-# ```
-# first to install pandas.
-# """,
-#         },
-#     ]
-#     codeblocks, content = find_code(messages, seed=seed, config_list=config_list)
-#     assert (
-#         len(codeblocks) == 2
-#         and (codeblocks[0][0] == "sh"
-#         and codeblocks[1][0] == "python"
-#         or codeblocks[0][0] == "python"
-#         and codeblocks[1][0] == "sh")
-#     ), content
-
-#     messages += [
-#         {
-#             "role": "user",
-#             "content": "The code is unsafe to execute in my environment.",
-#         },
-#         {
-#             "role": "assistant",
-#             "content": "please run python write_hello.py",
-#         },
-#     ]
-#     # codeblocks, content = find_code(messages, config_list=config_list)
-#     # assert codeblocks[0][0] != "unknown", content
-#     # I'm sorry, but I cannot execute code from earlier messages. Please provide the code again if you would like me to execute it.
-
-#     messages[-1]["content"] = "please skip pip install pandas if you already have pandas installed"
-#     codeblocks, content = find_code(messages, seed=seed, config_list=config_list)
-#     assert codeblocks[0][0] != "sh", content
-
-#     messages += [
-#         {
-#             "role": "user",
-#             "content": "The code is still unsafe to execute in my environment.",
-#         },
-#         {
-#             "role": "assistant",
-#             "content": "Let me try something else. Do you have docker installed?",
-#         },
-#     ]
-#     codeblocks, content = find_code(messages, seed=seed, config_list=config_list)
-#     assert codeblocks[0][0] == "unknown", content
-#     print(content)
 
 
 def test_infer_lang():
@@ -295,9 +161,7 @@ def scrape(url):
    text = soup.find("div", {"id": "bodyContent"}).text
    return title, text
 ```
-""".replace(
-            "\n", "\r\n"
-        )
+""".replace("\n", "\r\n")
     )
     print(codeblocks)
     assert len(codeblocks) == 1 and codeblocks[0][0] == "python"
@@ -522,12 +386,12 @@ def test_create_virtual_env_with_extra_args():
         assert venv_context.env_name == os.path.split(temp_dir)[1]
 
 
-def _test_improve():
+def _test_improve(credentials_all: Credentials):
     try:
         import openai
     except ImportError:
         return
-    config_list = autogen.config_list_openai_aoai(KEY_LOC)
+    config_list = credentials_all.config_list
     improved, _ = improve_function(
         "autogen/math_utils.py",
         "solve_problem",

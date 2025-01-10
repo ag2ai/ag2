@@ -8,13 +8,15 @@
 
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "together",
-            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-            "api_key": os.environ.get("TOGETHER_API_KEY")
+    llm_config = {
+        "config_list": [
+            {
+                "api_type": "together",
+                "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                "api_key": os.environ.get("TOGETHER_API_KEY"),
             }
-    ]}
+        ]
+    }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
     ```
@@ -39,10 +41,10 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
+from PIL import Image
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from PIL import Image
 from pydantic import BaseModel
 from together import Together, error
 
@@ -66,9 +68,7 @@ class TogetherClient:
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Together.AI, it will be ignored.", UserWarning)
 
-        assert (
-            self.api_key
-        ), "Please include the api_key in your config list entry for Together.AI or set the TOGETHER_API_KEY env variable."
+        assert self.api_key, "Please include the api_key in your config list entry for Together.AI or set the TOGETHER_API_KEY env variable."
 
     def message_retrieval(self, response) -> list:
         """

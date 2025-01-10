@@ -25,6 +25,7 @@ Instructions:
 - Reply a single word 'TERMINATE' as an option if you believe the user's question is fully resolved.
 - Provide a brief description for each option.
 - Present your output in the specified format.
+- If the question is a multi-choice question, you should carefully eliminate obviously wrong choices, look for contextual clues in the question, and use logical reasoning to select the most plausible answer.
 
 ---
 
@@ -42,7 +43,6 @@ Option 4: Perform Y.
 
 
 class ThinkNode:
-
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
         """A node in a tree structure representing a step in the reasoning process.
 
@@ -484,6 +484,7 @@ Please provide your rating along with a brief explanation of your assessment.
         else:
             prompt = f"Rate:\n{node.trajectory}"
 
+        self._grader.clear_history()
         self.send(
             message=prompt,
             recipient=self._grader,
@@ -621,7 +622,8 @@ Please provide your rating along with a brief explanation of your assessment.
                 # More intensive analysis is needed in the future.
                 choices_weights = [
                     # exploitation term +
-                    (child.value / (child.visits + EPSILON)) +
+                    (child.value / (child.visits + EPSILON))
+                    +
                     # exploration term
                     self._exploration_constant
                     * math.sqrt(2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON))
@@ -633,6 +635,9 @@ Please provide your rating along with a brief explanation of your assessment.
             while not self._is_terminal(node):
                 if len(node.children) == 0:
                     self._expand(node)
+                if len(node.children) == 0:
+                    node.content += "\nTERMINATE"
+                    break
                 node = random.choice(node.children)
 
             # Add answer (leaf) node and evaluate answer

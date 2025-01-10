@@ -12,28 +12,18 @@ import autogen
 from autogen.agentchat.contrib.capabilities.transform_messages import TransformMessages
 from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimiter, MessageTokenLimiter
 
-from ....conftest import skip_openai  # noqa: E402
-from ...test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ....conftest import Credentials, skip_openai  # noqa: E402
 
 
 @pytest.mark.skipif(skip_openai, reason="Requested to skip openai test.")
-def test_transform_messages_capability():
+def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> None:
     """Test the TransformMessages capability to handle long contexts.
 
     This test is a replica of test_transform_chat_history_with_agents in test_context_handling.py
     """
     with tempfile.TemporaryDirectory() as temp_dir:
-        config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
-            KEY_LOC,
-            filter_dict={
-                "model": "gpt-4o-mini",
-            },
-        )
-
-        assistant = autogen.AssistantAgent(
-            "assistant", llm_config={"config_list": config_list}, max_consecutive_auto_reply=1
-        )
+        llm_config = credentials_gpt_4o_mini.llm_config
+        assistant = autogen.AssistantAgent("assistant", llm_config=llm_config, max_consecutive_auto_reply=1)
 
         context_handling = TransformMessages(
             transforms=[

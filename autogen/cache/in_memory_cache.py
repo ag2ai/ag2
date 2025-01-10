@@ -17,7 +17,6 @@ else:
 
 
 class InMemoryCache(AbstractCache):
-
     def __init__(self, seed: Union[str, int] = ""):
         self._seed = str(seed)
         self._cache: dict[str, Any] = {}
