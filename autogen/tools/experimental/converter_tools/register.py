@@ -1,19 +1,17 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
-# SPDX-License-Identifier: MIT
 
 from typing import Any, Callable, Dict, Optional
 
-from autogen import register_function
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.tools import Tool
-from autogen.tools.converter_tools.md_converter import (
+
+from .... import register_function
+from .md_converter import (
     DoclingConverter,
-    MarkdownConverter,
     MarkItDownConverter,
+    MarkdownConverter,
 )
 
 

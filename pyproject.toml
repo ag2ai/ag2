@@ -123,7 +123,7 @@ neo4j = [
 ]
 
 tool_convert_markitdown = [
-    "markitdown==0.0.1",
+    "markitdown==0.0.1a3",
 ]
 
 tool_convert_docling = [
@@ -146,11 +146,11 @@ interop-crewai = [
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.13"]
 interop = [
-    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai, tool_convert_markitdown, tool_convert_docling]",
+    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
 
 test-ci = [
-    "pyautogen[test,cosmosdb,interop,tool_convert_markitdown, tool_convert_docling]",
+    "pyautogen[test,cosmosdb,interop,tool_convert_markitdown]",
 ]
 
 

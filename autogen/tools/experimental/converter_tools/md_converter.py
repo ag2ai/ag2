@@ -1,9 +1,6 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
-# SPDX-License-Identifier: MIT
 
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -46,7 +43,6 @@ class MarkItDownConverter(MarkdownConverter):
         self.mlm_model = mlm_model
 
     def convert(self, source: str) -> str:
-
         md = MarkItDown(llm_client=self.mlm_client, llm_model=self.mlm_model)
         result = md.convert(source)
         return str(result.text_content)
