@@ -122,6 +122,11 @@ neo4j = [
     "llama-index-readers-web==0.3.3",
 ]
 
+tool_convert = [
+    "markitdown==0.0.1",
+    "docling==2.14.0",
+]
+
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
 twilio = [
     "fastapi>=0.115.0,<1",
@@ -138,7 +143,7 @@ interop-crewai = [
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.13"]
 interop =[
-    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
+    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai, tool_convert]",
 ]
 
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
