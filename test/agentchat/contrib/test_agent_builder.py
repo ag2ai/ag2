@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from autogen.agentchat.contrib.agent_builder import AgentBuilder
+from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST, reason, skip_openai  # noqa: E402
 
