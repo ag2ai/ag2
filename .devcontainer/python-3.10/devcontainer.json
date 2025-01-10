@@ -33,7 +33,7 @@
     "workspaceFolder": "/workspaces/ag2",
     "runArgs": [
         "--name",
-        "python-3.9-ag2",
+        "python-3.10-ag2",
         "--env-file",
         "${localWorkspaceFolder}/.devcontainer/devcontainer.env"
     ],
