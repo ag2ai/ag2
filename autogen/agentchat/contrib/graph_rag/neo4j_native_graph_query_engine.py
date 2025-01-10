@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from neo4j import GraphDatabase
 from neo4j_graphrag.embeddings import Embedder, OpenAIEmbeddings
@@ -22,6 +22,8 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+ALLOWED_DOCTYPES = [DocumentType.TEXT, DocumentType.PDF]
+
 
 class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
     """
@@ -36,10 +38,13 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         port: int = 7687,
         username: str = "neo4j",
         password: str = "password",
-        embeddings: Embedder | None = None,
-        embedding_dimension: int | None = None,
-        llm: LLMInterface | None = None,
-        query_llm: LLMInterface | None = None,
+        embeddings: Optional[Embedder] = OpenAIEmbeddings(model="text-embedding-3-large"),
+        embedding_dimension: Optional[int] = 3072,
+        llm: Optional[LLMInterface] = OpenAILLM(
+            model_name="gpt-4o",
+            model_params={"response_format": {"type": "json_object"}, "temperature": 0},
+        ),
+        query_llm: Optional[LLMInterface] = OpenAILLM(model_name="gpt-4o", model_params={"temperature": 0}),
         entities: Optional[List[str]] = None,
         relations: Optional[List[str]] = None,
         potential_schema: Optional[List[tuple[str, str, str]]] = None,
@@ -63,21 +68,14 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         """
         self.uri = f"{host}:{port}"
         self.driver = GraphDatabase.driver(self.uri, auth=(username, password))
-        self.embeddings = embeddings or OpenAIEmbeddings(model="text-embedding-3-large")
-        self.embedding_dimension = embedding_dimension or 3072
-        self.llm = llm or OpenAILLM(
-            model_name="gpt-4o",
-            model_params={"response_format": {"type": "json_object"}, "temperature": 0},
-        )
-        self.query_llm = query_llm or OpenAILLM(model_name="gpt-4o", model_params={"temperature": 0})
         self.entities = entities
         self.relations = relations
         self.potential_schema = potential_schema
 
-    def init_db(self, input_doc: list[Document] | None = None):
+    def init_db(self, input_doc: Union[list[Document], None] = None):
         """
         Initialize the Neo4j graph database using the provided input doc.
-        Currently this method only supports single document input.
+        Currently this method only supports single document input (only reads the first doc).
 
         This method supports both text and PDF documents. It performs the following steps:
         1. Clears the existing database.
@@ -90,13 +88,13 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         Raises:
             ValueError: If the input document is not provided or its type is unsupported.
         """
-        if input_doc is None:
+        if input_doc is None or len(input_doc) == 0:
             raise ValueError("Input document is required to initialize the database.")
-        elif input_doc[0].doctype == DocumentType.TEXT:
-            from_pdf = False
-        elif input_doc[0].doctype == DocumentType.PDF:
-            from_pdf = True
-        else:
+        elif len(input_doc) > 1:
+            raise ValueError("Only the first document will be used to initialize the database.")
+
+        doc_type = input_doc[0].doctype
+        if doc_type not in ALLOWED_DOCTYPES:
             raise ValueError("Only text or PDF documents are supported.")
 
         logger.info("Clearing the database...")
@@ -111,14 +109,16 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
             relations=self.relations,
             potential_schema=self.potential_schema,
             on_error="IGNORE",
-            from_pdf=from_pdf,
+            from_pdf=(doc_type == DocumentType.PDF),
         )
 
         logger.info("Building the knowledge graph...")
-        if from_pdf:
+        if doc_type == DocumentType.PDF:
             asyncio.run(self.kg_builder.run_async(file_path=input_doc[0].path_or_url))
-        else:
-            asyncio.run(self.kg_builder.run_async(text=str(input_doc[0].data)))
+        elif doc_type == DocumentType.TEXT:
+            with open(input_doc[0].path_or_url, "r") as file:
+                text = file.read()
+            asyncio.run(self.kg_builder.run_async(text=text))
 
         self.index_name = "vector-index-name"
         logger.info(f"Creating vector index '{self.index_name}'...")
@@ -135,8 +135,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
             bool: True if records were added successfully, False otherwise.
         """
         # Not yet implemented
-        logger.warning("The 'add_records' method is not implemented.")
-        return False
+        raise NotImplementedError("The 'add_records' method is not implemented.")
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
         """
