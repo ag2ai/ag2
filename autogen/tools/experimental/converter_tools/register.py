@@ -8,11 +8,9 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.tools import Tool
 
 from .... import register_function
-from .md_converter import (
-    DoclingConverter,
-    MarkItDownConverter,
-    MarkdownConverter,
-)
+
+# from .md_docling import DoclingConverter
+from .md_markitdown import MarkItDownConverter
 
 
 def create_converter(
@@ -22,9 +20,7 @@ def create_converter(
     Creates a markdown converter function based on the specified type.
 
     Args:
-        converter_type (str): Type of converter ("markitdown", "markitdown-llm", or "docling")
-        mlm_client (Optional[OpenAIWrapper]): Multimodal LLM client (only for markitdown-llm)
-        mlm_model (Optional[str]): Multimodal LLM model (only for markitdown-llm)
+        converter_type (str): Type of converter ("markitdown" or "docling")
 
     Returns:
         Callable[[str], str]: Converter function that takes a source and returns markdown
@@ -33,10 +29,12 @@ def create_converter(
     def converter_func(source: str) -> str:
         if converter_type == "markitdown":
             return MarkItDownConverter().convert(source)
-        elif converter_type == "docling":
-            return DoclingConverter().convert(source)
+        # elif converter_type == "docling":
+        #    return DoclingConverter().convert(source)
         else:
-            raise ValueError(f"Unsupported converter type: {converter_type}")
+            raise ValueError(
+                f"Unsupported converter type: {converter_type}. Supported types are 'markitdown' and 'docling'"
+            )
 
     return converter_func
 
