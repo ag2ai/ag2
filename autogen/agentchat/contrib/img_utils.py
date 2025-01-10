@@ -353,7 +353,7 @@ def num_tokens_from_gpt_image(
     Examples:
     --------
     >>> from PIL import Image
-    >>> img = Image.new('RGB', (2500, 2500), color = 'red')
+    >>> img = Image.new("RGB", (2500, 2500), color="red")
     >>> num_tokens_from_gpt_image(img, model="gpt-4-vision")
     765
     """

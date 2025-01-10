@@ -24,13 +24,13 @@ class TestRemoveInjectedParamsFromSignature:
         b: int
 
     def f_with_annotated(  # type: ignore[misc]
-        a: int,
+        a: int,  # noqa: N805
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     ) -> int:
         return a + ctx.b
 
     async def f_with_annotated_async(  # type: ignore[misc]
-        a: int,
+        a: int,  # noqa: N805
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     ) -> int:
         return a + ctx.b
@@ -64,14 +64,14 @@ class TestRemoveInjectedParamsFromSignature:
         return a + ctx.b
 
     @staticmethod
-    def f_without_MyContext(
+    def f_without_MyContext(  # noqa: N802
         a: int,
         ctx: Annotated[int, Depends(lambda a: a + 2)],
     ) -> int:
         return a + ctx
 
     @staticmethod
-    def f_without_MyContext_async(
+    def f_without_MyContext_async(  # noqa: N802
         a: int,
         ctx: Annotated[int, Depends(lambda a: a + 2)],
     ) -> int:

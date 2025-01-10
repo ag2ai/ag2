@@ -8,13 +8,11 @@
 
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "mistral",
-            "model": "open-mixtral-8x22b",
-            "api_key": os.environ.get("MISTRAL_API_KEY")
-            }
-    ]}
+    llm_config = {
+        "config_list": [
+            {"api_type": "mistral", "model": "open-mixtral-8x22b", "api_key": os.environ.get("MISTRAL_API_KEY")}
+        ]
+    }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
     ```

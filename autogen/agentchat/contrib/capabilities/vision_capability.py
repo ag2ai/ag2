@@ -155,7 +155,7 @@ class VisionCapability(AgentCapability):
             ```python
             content = [
                 {"type": "text", "text": "What's weather in this cool photo:"},
-                {"type": "image_url", "image_url": {"url": "http://example.com/photo.jpg"}}
+                {"type": "image_url", "image_url": {"url": "http://example.com/photo.jpg"}},
             ]
             ```
             Output: "What's weather in this cool photo: `<img http://example.com/photo.jpg>` in case you can not see, the caption of this image is:

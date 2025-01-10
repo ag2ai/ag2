@@ -14,22 +14,22 @@ from fastapi.testclient import TestClient
 
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
-from ...conftest import reason, skip_openai  # noqa: E402
-from .realtime_test_utils import Credentials, text_to_speech, trace
+from ...conftest import Credentials, reason, skip_openai  # noqa: E402
+from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
 class TestE2E:
-    async def _test_e2e(self, credentials: Credentials) -> None:
+    async def _test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
 
         """
-        llm_config = credentials.llm_config
-        openai_api_key = credentials.openai_api_key
+        llm_config = credentials_gpt_4o_realtime.llm_config
+        openai_api_key = credentials_gpt_4o_realtime.openai_api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
@@ -95,17 +95,17 @@ class TestE2E:
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
     @pytest.mark.asyncio()
-    async def test_e2e(self, credentials: Credentials) -> None:
+    async def test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 3 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
 
         """
         i = 0
-        count = 3
+        count = 5
         while True:
             try:
-                await self._test_e2e(credentials=credentials)
+                await self._test_e2e(credentials_gpt_4o_realtime=credentials_gpt_4o_realtime)
                 return  # Exit the function if the test passes
             except Exception as e:
                 logger.warning(

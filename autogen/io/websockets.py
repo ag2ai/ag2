@@ -11,8 +11,10 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial
 from time import sleep
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Protocol, Union
+from typing import Any, Callable, Optional, Protocol, Union
 
+from ..messages.base_message import BaseMessage
+from ..messages.print_message import PrintMessage
 from .base import IOStream
 
 # Check if the websockets module is available
@@ -192,8 +194,16 @@ class IOWebsockets(IOStream):
             end (str, optional): The end of the output. Defaults to "\n".
             flush (bool, optional): Whether to flush the output. Defaults to False.
         """
-        xs = sep.join(map(str, objects)) + end
-        self._websocket.send(xs)
+        print_message = PrintMessage(*objects, sep=sep, end=end)
+        self.send(print_message)
+
+    def send(self, message: BaseMessage) -> None:
+        """Send a message to the output stream.
+
+        Args:
+            message (Any): The message to send.
+        """
+        self._websocket.send(message.model_dump_json())
 
     def input(self, prompt: str = "", *, password: bool = False) -> str:
         """Read a line from the input stream.

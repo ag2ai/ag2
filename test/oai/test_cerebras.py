@@ -43,7 +43,6 @@ skip_reason = "Cerebras dependency is not installed"
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_initialization():
-
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
         CerebrasClient()  # Should raise an AssertionError due to missing api_key

@@ -9,6 +9,7 @@
 """
 Unit test for retrieve_utils.py
 """
+
 import pytest
 
 try:

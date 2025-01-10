@@ -225,7 +225,6 @@ class CohereClient:
                 cohere_finish = "tool_calls"
                 tool_calls = []
                 for tool_call in response.tool_calls:
-
                     # if parameters are null, clear them out (Cohere can return a string "null" if no parameter values)
 
                     tool_calls.append(
@@ -270,7 +269,6 @@ def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_t
 
     for tool_call in all_tool_calls:
         if tool_call["id"] == tool_call_id:
-
             call = {
                 "name": tool_call["function"]["name"],
                 "parameters": json.loads(
@@ -306,7 +304,6 @@ def oai_messages_to_cohere_messages(
     if "tools" in params:
         cohere_tools = []
         for tool in params["tools"]:
-
             # build list of properties
             parameters = {}
 
@@ -351,7 +348,6 @@ def oai_messages_to_cohere_messages(
     # tool_results go into tool_results parameter
     messages_length = len(messages)
     for index, message in enumerate(messages):
-
         if "role" in message and message["role"] == "system":
             # System message
             if preamble == "":
@@ -422,7 +418,6 @@ def oai_messages_to_cohere_messages(
         return cohere_messages, preamble, ""
 
     else:
-
         # We need to get the last message to assign to the message field for Cohere,
         # if the last message is a user message, use that, otherwise put in 'continue'.
         if cohere_messages[-1]["role"] == "USER":

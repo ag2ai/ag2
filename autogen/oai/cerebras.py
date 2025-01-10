@@ -8,12 +8,8 @@
 
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "cerebras",
-            "model": "llama3.1-8b",
-            "api_key": os.environ.get("CEREBRAS_API_KEY")
-        }]
+    llm_config = {
+        "config_list": [{"api_type": "cerebras", "model": "llama3.1-8b", "api_key": os.environ.get("CEREBRAS_API_KEY")}]
     }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)

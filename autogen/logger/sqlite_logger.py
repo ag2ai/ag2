@@ -383,7 +383,6 @@ class SqliteLogger(BaseLogger):
         self._run_query(query=query, args=args)
 
     def log_function_use(self, source: str | Agent, function: F, args: dict[str, Any], returns: Any) -> None:
-
         if self.con is None:
             return
 

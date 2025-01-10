@@ -51,7 +51,6 @@ def mistral_client():
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason="Mistral.AI dependency is not installed")
 def test_initialization():
-
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
         MistralAIClient()  # Should raise an AssertionError due to missing api_key

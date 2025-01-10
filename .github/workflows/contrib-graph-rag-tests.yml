@@ -10,7 +10,7 @@ on:
       - "autogen/agentchat/contrib/graph_rag/**"
       - "test/agentchat/contrib/graph_rag/**"
       - ".github/workflows/contrib-tests.yml"
-      - "setup.py"
+      - "pyproject.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
@@ -35,17 +35,19 @@ jobs:
           - 6379:6379
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for all tests
         run: |
-          python -m pip install --upgrade pip wheel
-          pip install pytest
+          uv pip install --system pytest
       - name: Install FalkorDB SDK when on linux
         run: |
-          pip install -e .[graph-rag-falkor-db]
+          uv pip install --system -e .[graph-rag-falkor-db]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -57,7 +59,7 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          pip install pytest-cov>=5
+          uv pip install --system pytest-cov>=5
           pytest test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py --skip-openai
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -81,17 +83,19 @@ jobs:
           NEO4J_AUTH: neo4j/password
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for all tests
         run: |
-          python -m pip install --upgrade pip wheel
-          pip install pytest
+          uv pip install --system pytest
       - name: Install Neo4j and Llama-index when on linux
         run: |
-          pip install -e .[neo4j_graph_rag]
+          uv pip install --system -e .[neo4j_graph_rag]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -103,7 +107,7 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          pip install pytest-cov>=5
+          uv pip install --system pytest-cov>=5
           pytest test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py --skip-openai
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

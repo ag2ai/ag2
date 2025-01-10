@@ -59,9 +59,7 @@ def scrape(url):
    text = soup.find("div", {"id": "bodyContent"}).text
    return title, text
 ```
-""".replace(
-    "\n", "\r\n"
-)
+""".replace("\n", "\r\n")
 
 _message_5 = """
 Test bash script:

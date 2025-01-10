@@ -12,19 +12,21 @@ import pytest
 
 import autogen
 
-from ..conftest import reason, skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_get_human_input():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
-
+def test_get_human_input(credentials_gpt_4o_mini: Credentials):
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
         max_consecutive_auto_reply=2,
-        llm_config={"timeout": 600, "cache_seed": 41, "config_list": config_list, "temperature": 0},
+        llm_config={
+            "timeout": 600,
+            "cache_seed": 41,
+            "config_list": credentials_gpt_4o_mini.config_list,
+            "temperature": 0,
+        },
     )
 
     user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)

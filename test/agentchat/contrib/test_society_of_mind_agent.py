@@ -6,8 +6,6 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
-import sys
 from typing import Annotated
 
 import pytest
@@ -15,11 +13,7 @@ import pytest
 import autogen
 from autogen.agentchat.contrib.society_of_mind_agent import SocietyOfMindAgent
 
-from ...conftest import skip_openai  # noqa: E402
-from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
-
-if not skip_openai:
-    config_list = autogen.config_list_from_json(env_or_file=OAI_CONFIG_LIST, file_location=KEY_LOC)
+from ...conftest import Credentials, skip_openai  # noqa: E402
 
 
 def test_society_of_mind_agent():
@@ -216,10 +210,10 @@ def test_custom_preparer():
     skip_openai,
     reason="do not run openai tests",
 )
-def test_function_calling():
-    llm_config = {"config_list": config_list}
+def test_function_calling(credentials_all: Credentials):
+    llm_config = {"config_list": credentials_all.config_list}
     inner_llm_config = {
-        "config_list": config_list,
+        "config_list": credentials_all.config_list,
         "functions": [
             {
                 "name": "reverse_print",
@@ -294,9 +288,9 @@ def test_function_calling():
     skip_openai,
     reason="do not run openai tests",
 )
-def test_tool_use():
-    llm_config = {"config_list": config_list}
-    inner_llm_config = {"config_list": config_list}
+def test_tool_use(credentials_all: Credentials):
+    llm_config = credentials_all.llm_config
+    inner_llm_config = credentials_all.llm_config
 
     external_agent = autogen.ConversableAgent(
         "external_agent",

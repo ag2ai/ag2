@@ -1,0 +1,2929 @@
+[
+    {
+        "type": "Header",
+        "element_id": "648e0d1e6ccdd719451c92f09838e91f",
+        "text": "1 2 0 2 n u J 1 2 ] V C . s",
+        "metadata": {
+            "detection_class_prob": 0.5646073818206787,
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        554.42724609375
+                    ],
+                    [
+                        45.388888888888886,
+                        1032.11083984375
+                    ],
+                    [
+                        100.94444444444446,
+                        1032.11083984375
+                    ],
+                    [
+                        100.94444444444446,
+                        554.42724609375
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "3715f7aea2ae3ac9960380526c6bbe52",
+        "text": "c",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1023.2222222222222
+                    ],
+                    [
+                        45.388888888888886,
+                        1047.888888888889
+                    ],
+                    [
+                        100.94444444444446,
+                        1047.888888888889
+                    ],
+                    [
+                        100.94444444444446,
+                        1023.2222222222222
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "57bc70ee96cc815e23bb02329355ef78",
+        "text": "[",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1047.8888888888887
+                    ],
+                    [
+                        45.388888888888886,
+                        1066.3888888888887
+                    ],
+                    [
+                        100.94444444444446,
+                        1066.3888888888887
+                    ],
+                    [
+                        100.94444444444446,
+                        1047.8888888888887
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "3715f7aea2ae3ac9960380526c6bbe52",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "37d64d871b5936a49f3dd43e7e367df4",
+        "text": "2",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1094.1666666666665
+                    ],
+                    [
+                        45.388888888888886,
+                        1121.9444444444443
+                    ],
+                    [
+                        100.94444444444446,
+                        1121.9444444444443
+                    ],
+                    [
+                        100.94444444444446,
+                        1094.1666666666665
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "3715f7aea2ae3ac9960380526c6bbe52",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "cd74ae779dce6283dbdeb92d19593d4b",
+        "text": "2103.15348v2 arXiv",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        50.0,
+                        1095.0
+                    ],
+                    [
+                        50.0,
+                        1553.0
+                    ],
+                    [
+                        88.0,
+                        1553.0
+                    ],
+                    [
+                        88.0,
+                        1095.0
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "3715f7aea2ae3ac9960380526c6bbe52",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "4608f9aa33a0cab158565817b0d15743",
+        "text": "v",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1121.9444444444443
+                    ],
+                    [
+                        45.388888888888886,
+                        1149.7222222222222
+                    ],
+                    [
+                        100.94444444444446,
+                        1149.7222222222222
+                    ],
+                    [
+                        100.94444444444446,
+                        1121.9444444444443
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "a9cb8b08d15b4b406f329eaf21c2143f",
+        "text": "8",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1149.7222222222222
+                    ],
+                    [
+                        45.388888888888886,
+                        1177.5
+                    ],
+                    [
+                        100.94444444444446,
+                        1177.5
+                    ],
+                    [
+                        100.94444444444446,
+                        1149.7222222222222
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "8d8ff6f1682858250eac31dc5f5d4661",
+        "text": "4",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1177.5
+                    ],
+                    [
+                        45.388888888888886,
+                        1205.2777777777776
+                    ],
+                    [
+                        100.94444444444446,
+                        1205.2777777777776
+                    ],
+                    [
+                        100.94444444444446,
+                        1177.5
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "5a9318d4fc07a243d43f0e690012638d",
+        "text": "3",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1205.2777777777776
+                    ],
+                    [
+                        45.388888888888886,
+                        1233.0555555555554
+                    ],
+                    [
+                        100.94444444444446,
+                        1233.0555555555554
+                    ],
+                    [
+                        100.94444444444446,
+                        1205.2777777777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "563b442a7209b5c2201d81c5189d6e42",
+        "text": "5",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1233.0555555555554
+                    ],
+                    [
+                        45.388888888888886,
+                        1260.8333333333333
+                    ],
+                    [
+                        100.94444444444446,
+                        1260.8333333333333
+                    ],
+                    [
+                        100.94444444444446,
+                        1233.0555555555554
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "d55154c4f81647f5d57b1d90b66548dd",
+        "text": "1",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1260.8333333333333
+                    ],
+                    [
+                        45.388888888888886,
+                        1288.611111111111
+                    ],
+                    [
+                        100.94444444444446,
+                        1288.611111111111
+                    ],
+                    [
+                        100.94444444444446,
+                        1260.8333333333333
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "db54c1f774e506bf99373a9e6931d8b0",
+        "text": ".",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1288.611111111111
+                    ],
+                    [
+                        45.388888888888886,
+                        1302.5
+                    ],
+                    [
+                        100.94444444444446,
+                        1302.5
+                    ],
+                    [
+                        100.94444444444446,
+                        1288.611111111111
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "aecd3ed263c6f06649464f6cfa7a0921",
+        "text": "3",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1302.5
+                    ],
+                    [
+                        45.388888888888886,
+                        1330.2777777777776
+                    ],
+                    [
+                        100.94444444444446,
+                        1330.2777777777776
+                    ],
+                    [
+                        100.94444444444446,
+                        1302.5
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "68f7907ae75d75f5dd96688b0c89e7f7",
+        "text": "0",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1330.2777777777776
+                    ],
+                    [
+                        45.388888888888886,
+                        1358.0555555555554
+                    ],
+                    [
+                        100.94444444444446,
+                        1358.0555555555554
+                    ],
+                    [
+                        100.94444444444446,
+                        1330.2777777777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "e211a6afc6ef6c4f74bf0912bf39a7d3",
+        "text": "1",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1358.0555555555554
+                    ],
+                    [
+                        45.388888888888886,
+                        1385.8333333333333
+                    ],
+                    [
+                        100.94444444444446,
+                        1385.8333333333333
+                    ],
+                    [
+                        100.94444444444446,
+                        1358.0555555555554
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "bcb0671091caf2510d33d1f92951bb06",
+        "text": "2",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1385.8333333333333
+                    ],
+                    [
+                        45.388888888888886,
+                        1413.611111111111
+                    ],
+                    [
+                        100.94444444444446,
+                        1413.611111111111
+                    ],
+                    [
+                        100.94444444444446,
+                        1385.8333333333333
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "628eb8d55d279ea5aa688feb1de6e921",
+        "text": ":",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1413.611111111111
+                    ],
+                    [
+                        45.388888888888886,
+                        1429.0555555555557
+                    ],
+                    [
+                        100.94444444444446,
+                        1429.0555555555557
+                    ],
+                    [
+                        100.94444444444446,
+                        1413.611111111111
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "4608f9aa33a0cab158565817b0d15743",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "9bc3fdc4c06db2e688395d8b400cdcad",
+        "text": "v",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1429.0555555555557
+                    ],
+                    [
+                        45.388888888888886,
+                        1456.8333333333335
+                    ],
+                    [
+                        100.94444444444446,
+                        1456.8333333333335
+                    ],
+                    [
+                        100.94444444444446,
+                        1429.0555555555557
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "3da19711b6f9f08f7cc44aec0f9b362c",
+        "text": "i",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1456.8333333333335
+                    ],
+                    [
+                        45.388888888888886,
+                        1472.2777777777776
+                    ],
+                    [
+                        100.94444444444446,
+                        1472.2777777777776
+                    ],
+                    [
+                        100.94444444444446,
+                        1456.8333333333335
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "bef3f19d6bf78d72cb5a6ac3eb3fdd5e",
+        "text": "X",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1472.2777777777776
+                    ],
+                    [
+                        45.388888888888886,
+                        1512.388888888889
+                    ],
+                    [
+                        100.94444444444446,
+                        1512.388888888889
+                    ],
+                    [
+                        100.94444444444446,
+                        1472.2777777777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "6b4b3587a131f6e2e78b35b98c8d1ea2",
+        "text": "r",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1512.388888888889
+                    ],
+                    [
+                        45.388888888888886,
+                        1530.888888888889
+                    ],
+                    [
+                        100.94444444444446,
+                        1530.888888888889
+                    ],
+                    [
+                        100.94444444444446,
+                        1512.388888888889
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "b6134437793dc14a90767cc1d5c2c4a7",
+        "text": "a",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        45.388888888888886,
+                        1530.888888888889
+                    ],
+                    [
+                        45.388888888888886,
+                        1555.5555555555554
+                    ],
+                    [
+                        100.94444444444446,
+                        1555.5555555555554
+                    ],
+                    [
+                        100.94444444444446,
+                        1530.888888888889
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "1a72120a089cbdac6f6721a7787528f5",
+        "text": "LayoutParser: A Unified Toolkit for Deep Learning Based Document Image Analysis",
+        "metadata": {
+            "detection_class_prob": 0.547378420829773,
+            "coordinates": {
+                "points": [
+                    [
+                        435.54412841796875,
+                        317.31934111111093
+                    ],
+                    [
+                        435.54412841796875,
+                        409.0020446777344
+                    ],
+                    [
+                        1274.9957275390625,
+                        409.0020446777344
+                    ],
+                    [
+                        1274.9957275390625,
+                        317.31934111111093
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "5d64e99b94c38812e770b5ff654575c2",
+        "text": "Zejiang Shen! (4), Ruochen Zhang\u201d, Melissa Dell?, Benjamin Charles Germain Lee*, Jacob Carlson\u2019, and Weining Li>",
+        "metadata": {
+            "detection_class_prob": 0.5956604480743408,
+            "coordinates": {
+                "points": [
+                    [
+                        367.9510498046875,
+                        468.4452761333334
+                    ],
+                    [
+                        367.9510498046875,
+                        534.2267456054688
+                    ],
+                    [
+                        1341.6656494140625,
+                        534.2267456054688
+                    ],
+                    [
+                        1341.6656494140625,
+                        468.4452761333334
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "1a72120a089cbdac6f6721a7787528f5",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "d7250e4c9ce6eae70ae328dc133310b0",
+        "text": "1 Allen Institute for AI shannons@allenai.org 2 Brown University ruochen zhang@brown.edu 3 Harvard University {melissadell,jacob carlson}@fas.harvard.edu 4 University of Washington bcgl@cs.washington.edu 5 University of Waterloo w422li@uwaterloo.ca",
+        "metadata": {
+            "detection_class_prob": 0.7523007392883301,
+            "coordinates": {
+                "points": [
+                    [
+                        575.6388888888889,
+                        562.7001511111109
+                    ],
+                    [
+                        575.6388888888889,
+                        866.22265625
+                    ],
+                    [
+                        1139.4837646484375,
+                        866.22265625
+                    ],
+                    [
+                        1139.4837646484375,
+                        562.7001511111109
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "1a72120a089cbdac6f6721a7787528f5",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "31945ea3752ba594b53afb35111b3ed0",
+        "text": "Abstract. Recent advances in document image analysis (DIA) have been primarily driven by the application of neural networks. Ideally, research outcomes could be easily deployed in production and extended for further investigation. However, various factors like loosely organized codebases and sophisticated model con\ufb01gurations complicate the easy reuse of im- portant innovations by a wide audience. Though there have been on-going efforts to improve reusability and simplify deep learning (DL) model development in disciplines like natural language processing and computer vision, none of them are optimized for challenges in the domain of DIA. This represents a major gap in the existing toolkit, as DIA is central to academic research across a wide range of disciplines in the social sciences and humanities. This paper introduces LayoutParser, an open-source library for streamlining the usage of DL in DIA research and applica- tions. The core LayoutParser library comes with a set of simple and intuitive interfaces for applying and customizing DL models for layout de- tection, character recognition, and many other document processing tasks. To promote extensibility, LayoutParser also incorporates a community platform for sharing both pre-trained models and full document digiti- zation pipelines. We demonstrate that LayoutParser is helpful for both lightweight and large-scale digitization pipelines in real-word use cases. The library is publicly available at https://layout-parser.github.io.",
+        "metadata": {
+            "detection_class_prob": 0.9400455951690674,
+            "coordinates": {
+                "points": [
+                    [
+                        452.16388888888883,
+                        939.7535400390625
+                    ],
+                    [
+                        452.16388888888883,
+                        1574.5709466666665
+                    ],
+                    [
+                        1261.2144504231107,
+                        1574.5709466666665
+                    ],
+                    [
+                        1261.2144504231107,
+                        939.7535400390625
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "https :// layout - parser . github . io",
+                    "url": "https://layout-parser.github.io",
+                    "start_index": 1472
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "1a72120a089cbdac6f6721a7787528f5",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "2f546260e28c9111e21cf27c76b8dae6",
+        "text": "Keywords: Document Image Analysis \u00b7 Deep Learning \u00b7 Layout Analysis \u00b7 Character Recognition \u00b7 Open Source library \u00b7 Toolkit.",
+        "metadata": {
+            "detection_class_prob": 0.9142756462097168,
+            "coordinates": {
+                "points": [
+                    [
+                        444.9521789550781,
+                        1603.7655555555555
+                    ],
+                    [
+                        444.9521789550781,
+                        1663.9457822222223
+                    ],
+                    [
+                        1263.9100341796875,
+                        1663.9457822222223
+                    ],
+                    [
+                        1263.9100341796875,
+                        1603.7655555555555
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "1a72120a089cbdac6f6721a7787528f5",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "cd69146bb4520156cc3751cddd4d0a27",
+        "text": "Introduction",
+        "metadata": {
+            "detection_class_prob": 0.8967729210853577,
+            "coordinates": {
+                "points": [
+                    [
+                        374.34722222222223,
+                        1720.066968888889
+                    ],
+                    [
+                        374.34722222222223,
+                        1753.2758577777777
+                    ],
+                    [
+                        636.512451171875,
+                        1753.2758577777777
+                    ],
+                    [
+                        636.512451171875,
+                        1720.066968888889
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "6dd23cb8d62753e3366fe33dca99d38e",
+        "text": "Deep Learning(DL)-based approaches are the state-of-the-art for a wide range of document image analysis (DIA) tasks including document image classi\ufb01cation [11,",
+        "metadata": {
+            "detection_class_prob": 0.9265204668045044,
+            "coordinates": {
+                "points": [
+                    [
+                        372.35504150390625,
+                        1785.9365122222223
+                    ],
+                    [
+                        372.35504150390625,
+                        1846.8187344444443
+                    ],
+                    [
+                        1338.8229390955555,
+                        1846.8187344444443
+                    ],
+                    [
+                        1338.8229390955555,
+                        1785.9365122222223
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "11",
+                    "url": "cite.harley2015evaluation",
+                    "start_index": 156
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 1,
+            "parent_id": "cd69146bb4520156cc3751cddd4d0a27",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "e7e0acf197e89d650d39fa3ce929509e",
+        "text": "2 Z. Shen et al.",
+        "metadata": {
+            "detection_class_prob": 0.666849672794342,
+            "coordinates": {
+                "points": [
+                    [
+                        369.71337890625,
+                        257.4113377777776
+                    ],
+                    [
+                        369.71337890625,
+                        282.52813720703125
+                    ],
+                    [
+                        616.9257022222222,
+                        282.52813720703125
+                    ],
+                    [
+                        616.9257022222222,
+                        257.4113377777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "648e0d1e6ccdd719451c92f09838e91f",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "4b097cc42d7d30e720512dbce0cb4905",
+        "text": "37], layout detection [38, 22], table detection [26], and scene text detection [4]. A generalized learning-based framework dramatically reduces the need for the manual speci\ufb01cation of complicated rules, which is the status quo with traditional methods. DL has the potential to transform DIA pipelines and bene\ufb01t a broad spectrum of large-scale document digitization projects.",
+        "metadata": {
+            "detection_class_prob": 0.940549910068512,
+            "coordinates": {
+                "points": [
+                    [
+                        371.3154602050781,
+                        327.13373444444437
+                    ],
+                    [
+                        371.3154602050781,
+                        487.73095703125
+                    ],
+                    [
+                        1341.770263671875,
+                        487.73095703125
+                    ],
+                    [
+                        1341.770263671875,
+                        327.13373444444437
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "37",
+                    "url": "cite.xu2019layoutlm",
+                    "start_index": 0
+                },
+                {
+                    "text": "38",
+                    "url": "cite.zhong2019publaynet",
+                    "start_index": 23
+                },
+                {
+                    "text": "22",
+                    "url": "cite.oliveira2018dhsegment",
+                    "start_index": 27
+                },
+                {
+                    "text": "26",
+                    "url": "cite.prasad2020cascadetabnet",
+                    "start_index": 49
+                },
+                {
+                    "text": "4",
+                    "url": "cite.baek2019character",
+                    "start_index": 80
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "45844a4901777afaf6de9a0994e017eb",
+        "text": "However, there are several practical di\ufb03culties for taking advantages of re- cent advances in DL-based methods: 1) DL models are notoriously convoluted for reuse and extension. Existing models are developed using distinct frame- works like TensorFlow [1] or PyTorch [24], and the high-level parameters can be obfuscated by implementation details [8]. It can be a time-consuming and frustrating experience to debug, reproduce, and adapt existing models for DIA, and many researchers who would bene\ufb01t the most from using these methods lack the technical background to implement them from scratch. 2) Document images contain diverse and disparate patterns across domains, and customized training is often required to achieve a desirable detection accuracy. Currently there is no full-\ufb02edged infrastructure for easily curating the target document image datasets and \ufb01ne-tuning or re-training the models. 3) DIA usually requires a sequence of models and other processing to obtain the \ufb01nal outputs. Often research teams use DL models and then perform further document analyses in separate processes, and these pipelines are not documented in any central location (and often not documented at all). This makes it di\ufb03cult for research teams to learn about how full pipelines are implemented and leads them to invest signi\ufb01cant resources in reinventing the DIA wheel.",
+        "metadata": {
+            "detection_class_prob": 0.9427937865257263,
+            "coordinates": {
+                "points": [
+                    [
+                        372.225,
+                        493.1781788888887
+                    ],
+                    [
+                        372.225,
+                        1085.4020677777778
+                    ],
+                    [
+                        1339.607430018889,
+                        1085.4020677777778
+                    ],
+                    [
+                        1339.607430018889,
+                        493.1781788888887
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "1",
+                    "url": "cite.tensorflow2015-whitepaper",
+                    "start_index": 252
+                },
+                {
+                    "text": "24",
+                    "url": "cite.paszke2019pytorch",
+                    "start_index": 267
+                },
+                {
+                    "text": "8",
+                    "url": "cite.gardner2018allennlp",
+                    "start_index": 347
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "6f3c8d55dd5a4f95d8a59d146ca9ffa7",
+        "text": "LayoutParser provides a uni\ufb01ed toolkit to support DL-based document image analysis and processing. To address the aforementioned challenges, LayoutParser is built with the following components:",
+        "metadata": {
+            "detection_class_prob": 0.9283877611160278,
+            "coordinates": {
+                "points": [
+                    [
+                        364.54571533203125,
+                        1090.936512222222
+                    ],
+                    [
+                        364.54571533203125,
+                        1185.0270677777776
+                    ],
+                    [
+                        1341.6546630859375,
+                        1185.0270677777776
+                    ],
+                    [
+                        1341.6546630859375,
+                        1090.936512222222
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "ListItem",
+        "element_id": "9ce12a49c1a9972b4cd2c3f66595b2b6",
+        "text": "1. An off-the-shelf toolkit for applying DL models for layout detection, character recognition, and other DIA tasks (Section 3)",
+        "metadata": {
+            "detection_class_prob": 0.910999596118927,
+            "coordinates": {
+                "points": [
+                    [
+                        366.287353515625,
+                        1207.097623333333
+                    ],
+                    [
+                        366.287353515625,
+                        1267.9798455555556
+                    ],
+                    [
+                        1346.5506591796875,
+                        1267.9798455555556
+                    ],
+                    [
+                        1346.5506591796875,
+                        1207.097623333333
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "ListItem",
+        "element_id": "40f42a96bdd1559e09d74090c0fe9df3",
+        "text": "2. A rich repository of pre-trained neural network models (Model Zoo) that underlies the off-the-shelf usage",
+        "metadata": {
+            "detection_class_prob": 0.9038432836532593,
+            "coordinates": {
+                "points": [
+                    [
+                        375.9794006347656,
+                        1272.3920677777778
+                    ],
+                    [
+                        375.9794006347656,
+                        1333.2742899999998
+                    ],
+                    [
+                        1345.9219970703125,
+                        1333.2742899999998
+                    ],
+                    [
+                        1345.9219970703125,
+                        1272.3920677777778
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "ListItem",
+        "element_id": "0ca448d3ae0c4ee73bf46e8edfcd417d",
+        "text": "3. Comprehensive tools for e\ufb03cient document image data annotation and model tuning to support different levels of customization",
+        "metadata": {
+            "detection_class_prob": 0.9031716585159302,
+            "coordinates": {
+                "points": [
+                    [
+                        374.0124206542969,
+                        1337.68929
+                    ],
+                    [
+                        374.0124206542969,
+                        1398.571512222222
+                    ],
+                    [
+                        1346.0130615234375,
+                        1398.571512222222
+                    ],
+                    [
+                        1346.0130615234375,
+                        1337.68929
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "ListItem",
+        "element_id": "7a9de9b00d51bd670feccc2eb84a147e",
+        "text": "4. A DL model hub and community platform for the easy sharing, distribu- tion, and discussion of DIA models and pipelines, to promote reusability, reproducibility, and extensibility (Section 4)",
+        "metadata": {
+            "detection_class_prob": 0.9220065474510193,
+            "coordinates": {
+                "points": [
+                    [
+                        372.4879455566406,
+                        1402.9865122222222
+                    ],
+                    [
+                        372.4879455566406,
+                        1497.0770677777775
+                    ],
+                    [
+                        1350.818359375,
+                        1497.0770677777775
+                    ],
+                    [
+                        1350.818359375,
+                        1402.9865122222222
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "8e216e91ff3471241858f1df445cdf0a",
+        "text": "The library implements simple and intuitive Python APIs without sacri\ufb01cing generalizability and versatility, and can be easily installed via pip. Its convenient functions for handling document image data can be seamlessly integrated with existing DIA pipelines. With detailed documentations and carefully curated tutorials, we hope this tool will bene\ufb01t a variety of end-users, and will lead to advances in applications in both industry and academic research.",
+        "metadata": {
+            "detection_class_prob": 0.9384046792984009,
+            "coordinates": {
+                "points": [
+                    [
+                        373.35,
+                        1520.2670677777778
+                    ],
+                    [
+                        373.35,
+                        1713.985401111111
+                    ],
+                    [
+                        1339.998291015625,
+                        1713.985401111111
+                    ],
+                    [
+                        1339.998291015625,
+                        1520.2670677777778
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "583775f22c8080098beebbef960e2fbf",
+        "text": "LayoutParser is well aligned with recent efforts for improving DL model reusability in other disciplines like natural language processing [8, 34] and com- puter vision [35], but with a focus on unique challenges in DIA. We show LayoutParser can be applied in sophisticated and large-scale digitization projects",
+        "metadata": {
+            "detection_class_prob": 0.932513952255249,
+            "coordinates": {
+                "points": [
+                    [
+                        366.27215576171875,
+                        1719.5198455555555
+                    ],
+                    [
+                        366.27215576171875,
+                        1847.5936033333332
+                    ],
+                    [
+                        1342.4088134765625,
+                        1847.5936033333332
+                    ],
+                    [
+                        1342.4088134765625,
+                        1719.5198455555555
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "8",
+                    "url": "cite.gardner2018allennlp",
+                    "start_index": 138
+                },
+                {
+                    "text": "34",
+                    "url": "cite.wolf2019huggingface",
+                    "start_index": 141
+                },
+                {
+                    "text": "35",
+                    "url": "cite.wu2019detectron2",
+                    "start_index": 168
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 2,
+            "parent_id": "e7e0acf197e89d650d39fa3ce929509e",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Header",
+        "element_id": "f5a6697190c20bf6030d8e4ae8f6861a",
+        "text": "LayoutParser: A Uni\ufb01ed Toolkit for DL-Based DIA",
+        "metadata": {
+            "detection_class_prob": 0.41432562470436096,
+            "coordinates": {
+                "points": [
+                    [
+                        655.767333984375,
+                        257.4113377777776
+                    ],
+                    [
+                        655.767333984375,
+                        283.01539111111094
+                    ],
+                    [
+                        1340.968505859375,
+                        283.01539111111094
+                    ],
+                    [
+                        1340.968505859375,
+                        257.4113377777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "50846086f4d9ece02052735686278699",
+        "text": "that require precision, e\ufb03ciency, and robustness, as well as simple and light- weight document processing tasks focusing on e\ufb03cacy and \ufb02exibility (Section 5). LayoutParser is being actively maintained, and support for more deep learning models and novel methods in text-based layout analysis methods [37, 34] is planned.",
+        "metadata": {
+            "detection_class_prob": 0.9347674250602722,
+            "coordinates": {
+                "points": [
+                    [
+                        373.35,
+                        327.13373444444437
+                    ],
+                    [
+                        373.35,
+                        487.64373444444465
+                    ],
+                    [
+                        1340.341159733667,
+                        487.64373444444465
+                    ],
+                    [
+                        1340.341159733667,
+                        327.13373444444437
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "5",
+                    "url": "section.1.5",
+                    "start_index": 155
+                },
+                {
+                    "text": "37",
+                    "url": "cite.xu2019layoutlm",
+                    "start_index": 301
+                },
+                {
+                    "text": "34",
+                    "url": "cite.wolf2019huggingface",
+                    "start_index": 305
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "parent_id": "f5a6697190c20bf6030d8e4ae8f6861a",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "0ce686208eb4aba70d0cd053d50c7bc2",
+        "text": "The rest of the paper is organized as follows. Section 2 provides an overview of related work. The core LayoutParser library, DL Model Zoo, and customized model training are described in Section 3, and the DL model hub and commu- nity platform are detailed in Section 4. Section 5 shows two examples of how LayoutParser can be used in practical DIA projects, and Section 6 concludes.",
+        "metadata": {
+            "detection_class_prob": 0.9314800500869751,
+            "coordinates": {
+                "points": [
+                    [
+                        373.0552978515625,
+                        493.49484555555546
+                    ],
+                    [
+                        373.0552978515625,
+                        654.7769366666668
+                    ],
+                    [
+                        1339.5969360802223,
+                        654.7769366666668
+                    ],
+                    [
+                        1339.5969360802223,
+                        493.49484555555546
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "2",
+                    "url": "section.1.2",
+                    "start_index": 55
+                },
+                {
+                    "text": "3",
+                    "url": "section.1.3",
+                    "start_index": 195
+                },
+                {
+                    "text": "4",
+                    "url": "section.1.4",
+                    "start_index": 268
+                },
+                {
+                    "text": "5",
+                    "url": "section.1.5",
+                    "start_index": 279
+                },
+                {
+                    "text": "6",
+                    "url": "section.1.6",
+                    "start_index": 371
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "parent_id": "f5a6697190c20bf6030d8e4ae8f6861a",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "1548efaaa18cf819f9498d76a0440316",
+        "text": "2 Related Work",
+        "metadata": {
+            "detection_class_prob": 0.8891674876213074,
+            "coordinates": {
+                "points": [
+                    [
+                        372.4958190917969,
+                        712.0030800000001
+                    ],
+                    [
+                        372.4958190917969,
+                        745.2119688888889
+                    ],
+                    [
+                        659.70849609375,
+                        745.2119688888889
+                    ],
+                    [
+                        659.70849609375,
+                        712.0030800000001
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "parent_id": "f5a6697190c20bf6030d8e4ae8f6861a",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "8153390c1bb8652313be64034531449e",
+        "text": "Recently, various DL models and datasets have been developed for layout analysis tasks. The dhSegment [22] utilizes fully convolutional networks [20] for segmen- tation tasks on historical documents. Object detection-based methods like Faster R-CNN [28] and Mask R-CNN [12] are used for identifying document elements [38] and detecting tables [30, 26]. Most recently, Graph Neural Networks [29] have also been used in table detection [27]. However, these models are usually implemented individually and there is no uni\ufb01ed framework to load and use such models.",
+        "metadata": {
+            "detection_class_prob": 0.9467868804931641,
+            "coordinates": {
+                "points": [
+                    [
+                        374.3472222222222,
+                        784.4587344444444
+                    ],
+                    [
+                        374.3472222222222,
+                        1011.385401111111
+                    ],
+                    [
+                        1339.5917217947222,
+                        1011.385401111111
+                    ],
+                    [
+                        1339.5917217947222,
+                        784.4587344444444
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "22",
+                    "url": "cite.oliveira2018dhsegment",
+                    "start_index": 103
+                },
+                {
+                    "text": "20",
+                    "url": "cite.long2015fully",
+                    "start_index": 146
+                },
+                {
+                    "text": "28",
+                    "url": "cite.ren2015faster",
+                    "start_index": 250
+                },
+                {
+                    "text": "12",
+                    "url": "cite.he2017mask",
+                    "start_index": 270
+                },
+                {
+                    "text": "38",
+                    "url": "cite.zhong2019publaynet",
+                    "start_index": 318
+                },
+                {
+                    "text": "30",
+                    "url": "cite.schreiber2017deepdesrt",
+                    "start_index": 344
+                },
+                {
+                    "text": "26",
+                    "url": "cite.prasad2020cascadetabnet",
+                    "start_index": 348
+                },
+                {
+                    "text": "29",
+                    "url": "cite.scarselli2008graph",
+                    "start_index": 391
+                },
+                {
+                    "text": "27",
+                    "url": "cite.qasim2019rethinking",
+                    "start_index": 435
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "parent_id": "1548efaaa18cf819f9498d76a0440316",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "45d6d494603e84706884918c1f785c9f",
+        "text": "There has been a surge of interest in creating open-source tools for document image processing: a search of document image analysis in Github leads to 5M relevant code pieces 6; yet most of them rely on traditional rule-based methods or provide limited functionalities. The closest prior research to our work is the OCR-D project7, which also tries to build a complete toolkit for DIA. However, similar to the platform developed by Neudecker et al. [21], it is designed for analyzing historical documents, and provides no supports for recent DL models. The DocumentLayoutAnalysis project8 focuses on processing born-digital PDF documents via analyzing the stored PDF data. Repositories like DeepLayout9 and Detectron2-PubLayNet10 are individual deep learning models trained on layout analysis datasets without support for the full DIA pipeline. The Document Analysis and Exploitation (DAE) platform [15] and the DeepDIVA project [2] aim to improve the reproducibility of DIA methods (or DL models), yet they are not actively maintained. OCR engines like Tesseract [14], easyOCR11 and paddleOCR12 usually do not come with comprehensive functionalities for other DIA tasks like layout analysis.",
+        "metadata": {
+            "detection_class_prob": 0.9450232982635498,
+            "coordinates": {
+                "points": [
+                    [
+                        373.2944444444444,
+                        1017.2365122222221
+                    ],
+                    [
+                        373.2944444444444,
+                        1543.0409566666665
+                    ],
+                    [
+                        1340.3434336982218,
+                        1543.0409566666665
+                    ],
+                    [
+                        1340.3434336982218,
+                        1017.2365122222221
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "6 ;",
+                    "url": "Hfootnote.1",
+                    "start_index": 175
+                },
+                {
+                    "text": ",",
+                    "url": "Hfootnote.2",
+                    "start_index": 330
+                },
+                {
+                    "text": "21",
+                    "url": "cite.neudecker2011experimental",
+                    "start_index": 450
+                },
+                {
+                    "text": "focuses",
+                    "url": "Hfootnote.3",
+                    "start_index": 589
+                },
+                {
+                    "text": "on",
+                    "url": "Hfootnote.4",
+                    "start_index": 774
+                },
+                {
+                    "text": "stored PDF data . Repositories like DeepLayout9 and Detectron2 - PubLayNet10",
+                    "url": "Hfootnote.5",
+                    "start_index": 656
+                },
+                {
+                    "text": "15",
+                    "url": "cite.lamiroy2011open",
+                    "start_index": 900
+                },
+                {
+                    "text": "2",
+                    "url": "cite.alberti2018deepdiva",
+                    "start_index": 930
+                },
+                {
+                    "text": "14",
+                    "url": "cite.tesseract",
+                    "start_index": 1065
+                },
+                {
+                    "text": "and",
+                    "url": "Hfootnote.6",
+                    "start_index": 1080
+                },
+                {
+                    "text": "usually",
+                    "url": "Hfootnote.7",
+                    "start_index": 1096
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "parent_id": "1548efaaa18cf819f9498d76a0440316",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "73feaff827cbc7089d3f95d1e5aac6aa",
+        "text": "Recent years have also seen numerous efforts to create libraries for promoting reproducibility and reusability in the \ufb01eld of DL. Libraries like Dectectron2 [35],",
+        "metadata": {
+            "detection_class_prob": 0.9161155223846436,
+            "coordinates": {
+                "points": [
+                    [
+                        360.3905944824219,
+                        1548.8920677777778
+                    ],
+                    [
+                        360.3905944824219,
+                        1609.77429
+                    ],
+                    [
+                        1353.79736328125,
+                        1609.77429
+                    ],
+                    [
+                        1353.79736328125,
+                        1548.8920677777778
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "35",
+                    "url": "cite.wu2019detectron2",
+                    "start_index": 157
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "parent_id": "1548efaaa18cf819f9498d76a0440316",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Footer",
+        "element_id": "b1fa4bbd1bdda08489faab5bf3adf5cc",
+        "text": "6 The number shown is obtained by specifying the search type as \u2018code\u2019.",
+        "metadata": {
+            "detection_class_prob": 0.49018043279647827,
+            "coordinates": {
+                "points": [
+                    [
+                        367.6236572265625,
+                        1634.8390399999998
+                    ],
+                    [
+                        367.6236572265625,
+                        1663.634671111111
+                    ],
+                    [
+                        1201.953857421875,
+                        1663.634671111111
+                    ],
+                    [
+                        1201.953857421875,
+                        1634.8390399999998
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "db639db124b6064248de0c0dc71510a4",
+        "text": "7 https://ocr-d.de/en/about",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        381.9555555555555,
+                        1665.2807066666667
+                    ],
+                    [
+                        381.9555555555555,
+                        1694.0763377777778
+                    ],
+                    [
+                        698.7475084444444,
+                        1694.0763377777778
+                    ],
+                    [
+                        698.7475084444444,
+                        1665.2807066666667
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "d881ce84f017d89f6e35e2bc4b133bfc",
+        "text": "8 https://github.com/BobLd/DocumentLayoutAnalysis",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        381.9555555555555,
+                        1695.7223733333333
+                    ],
+                    [
+                        381.9555555555555,
+                        1724.5180044444446
+                    ],
+                    [
+                        1004.7084737777776,
+                        1724.5180044444446
+                    ],
+                    [
+                        1004.7084737777776,
+                        1695.7223733333333
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "9b96c128deddda1a32c739a2df157496",
+        "text": "9 https://github.com/leonlulu/DeepLayout",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        381.9555555555555,
+                        1726.16404
+                    ],
+                    [
+                        381.9555555555555,
+                        1754.9596711111112
+                    ],
+                    [
+                        865.0817004444443,
+                        1754.9596711111112
+                    ],
+                    [
+                        865.0817004444443,
+                        1726.16404
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "5cf72e821375f4480a1529bef97608ef",
+        "text": "10 https://github.com/hpanwar08/detectron2",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        371.80833333333334,
+                        1756.6057066666665
+                    ],
+                    [
+                        371.80833333333334,
+                        1785.4013377777776
+                    ],
+                    [
+                        881.5474977777776,
+                        1785.4013377777776
+                    ],
+                    [
+                        881.5474977777776,
+                        1756.6057066666665
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "4ab94e79eedc3a7ac498aaf737ca8878",
+        "text": "11 https://github.com/JaidedAI/EasyOCR",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        371.80833333333334,
+                        1787.0445955555554
+                    ],
+                    [
+                        371.80833333333334,
+                        1815.8402266666667
+                    ],
+                    [
+                        854.8824204444443,
+                        1815.8402266666667
+                    ],
+                    [
+                        854.8824204444443,
+                        1787.0445955555554
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "460b163c13ad7cad4fce325820a76481",
+        "text": "12 https://github.com/PaddlePaddle/PaddleOCR",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        371.80833333333334,
+                        1817.4862622222222
+                    ],
+                    [
+                        371.80833333333334,
+                        1846.2818933333333
+                    ],
+                    [
+                        929.0918337777778,
+                        1846.2818933333333
+                    ],
+                    [
+                        929.0918337777778,
+                        1817.4862622222222
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 3,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "UncategorizedText",
+        "element_id": "fe238f610fe610b8ce1abaa08a0e3e63",
+        "text": "4",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        374.3472222222222,
+                        257.4113377777776
+                    ],
+                    [
+                        374.3472222222222,
+                        282.31800444444434
+                    ],
+                    [
+                        387.14675822222216,
+                        282.31800444444434
+                    ],
+                    [
+                        387.14675822222216,
+                        257.4113377777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "parent_id": "460b163c13ad7cad4fce325820a76481",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "92c4289ad4af7c0793e40d5662707e0a",
+        "text": "Z. Shen et al.",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        466.1507048888888,
+                        257.4113377777776
+                    ],
+                    [
+                        466.1507048888888,
+                        282.31800444444434
+                    ],
+                    [
+                        616.9257022222222,
+                        282.31800444444434
+                    ],
+                    [
+                        616.9257022222222,
+                        257.4113377777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "parent_id": "460b163c13ad7cad4fce325820a76481",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Image",
+        "element_id": "bcd1fefb8c92dc73368a3a5c6d909cad",
+        "text": "Efficient Data Annotation Model Customization Document Images Community Platform \u2018a >) \u00a5 DIA Model Hub fC ..) Customized Model Training] == | Layout Detection Models | \u2014\u2014= DIA Pipeline Sharing \u2014 OCR Module = { Layout Data stuctue ) = (storage Visualization VY",
+        "metadata": {
+            "detection_class_prob": 0.920713484287262,
+            "coordinates": {
+                "points": [
+                    [
+                        493.81060791015625,
+                        342.6924743652344
+                    ],
+                    [
+                        493.81060791015625,
+                        670.8675537109375
+                    ],
+                    [
+                        1215.2158203125,
+                        670.8675537109375
+                    ],
+                    [
+                        1215.2158203125,
+                        342.6924743652344
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "image_path": "/Users/yzhai/workspace/ag2ai/rag/pdfinfo/figure-4-1.jpg",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "2172d9b276cd7a485dea4978805815d8",
+        "text": "Fig. 1: The overall architecture of LayoutParser. For an input document image, the core LayoutParser library provides a set of off-the-shelf tools for layout detection, OCR, visualization, and storage, backed by a carefully designed layout data structure. LayoutParser also supports high level customization via e\ufb03cient layout annotation and model training functions. These improve model accuracy on the target samples. The community platform enables the easy sharing of DIA models and whole digitization pipelines to promote reusability and reproducibility. A collection of detailed documentation, tutorials and exemplar projects make LayoutParser easy to learn and use.",
+        "metadata": {
+            "detection_class_prob": 0.8352290987968445,
+            "coordinates": {
+                "points": [
+                    [
+                        373.2944444444444,
+                        728.6587344444443
+                    ],
+                    [
+                        373.2944444444444,
+                        1022.7797144444444
+                    ],
+                    [
+                        1340.3437215066672,
+                        1022.7797144444444
+                    ],
+                    [
+                        1340.3437215066672,
+                        728.6587344444443
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "b4948db85ca791e99aa92589fc41734f",
+        "text": "AllenNLP [8] and transformers [34] have provided the community with complete DL-based support for developing and deploying models for general computer vision and natural language processing problems. LayoutParser, on the other hand, specializes speci\ufb01cally in DIA tasks. LayoutParser is also equipped with a community platform inspired by established model hubs such as Torch Hub [23] and TensorFlow Hub [1]. It enables the sharing of pretrained models as well as full document processing pipelines that are unique to DIA tasks.",
+        "metadata": {
+            "detection_class_prob": 0.9487614631652832,
+            "coordinates": {
+                "points": [
+                    [
+                        373.2944444444444,
+                        1095.6754011111111
+                    ],
+                    [
+                        373.2944444444444,
+                        1322.6020677777776
+                    ],
+                    [
+                        1335.5370437455556,
+                        1322.6020677777776
+                    ],
+                    [
+                        1335.5370437455556,
+                        1095.6754011111111
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "8",
+                    "url": "cite.gardner2018allennlp",
+                    "start_index": 10
+                },
+                {
+                    "text": "34",
+                    "url": "cite.wolf2019huggingface",
+                    "start_index": 31
+                },
+                {
+                    "text": "23",
+                    "url": "cite.paszke2017automatic",
+                    "start_index": 381
+                },
+                {
+                    "text": "1",
+                    "url": "cite.tensorflow2015-whitepaper",
+                    "start_index": 405
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "7651db80014a85ab253367d3bd3e4f88",
+        "text": "There have been a variety of document data collections to facilitate the development of DL models. Some examples include PRImA [3](magazine layouts), PubLayNet [38](academic paper layouts), Table Bank [18](tables in academic papers), Newspaper Navigator Dataset [16, 17](newspaper \ufb01gure layouts) and HJDataset [31](historical Japanese document layouts). A spectrum of models trained on these datasets are currently available in the LayoutParser model zoo to support different use cases.",
+        "metadata": {
+            "detection_class_prob": 0.9432402849197388,
+            "coordinates": {
+                "points": [
+                    [
+                        374.3472222222222,
+                        1328.4976233333332
+                    ],
+                    [
+                        374.3472222222222,
+                        1555.42429
+                    ],
+                    [
+                        1338.8175197866667,
+                        1555.42429
+                    ],
+                    [
+                        1338.8175197866667,
+                        1328.4976233333332
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "3",
+                    "url": "cite.antonacopoulos2009realistic",
+                    "start_index": 128
+                },
+                {
+                    "text": "38",
+                    "url": "cite.zhong2019publaynet",
+                    "start_index": 161
+                },
+                {
+                    "text": "18",
+                    "url": "cite.li2019tablebank",
+                    "start_index": 202
+                },
+                {
+                    "text": "16",
+                    "url": "cite.newspaper_navigator_search_application",
+                    "start_index": 263
+                },
+                {
+                    "text": "17",
+                    "url": "cite.newspaper_navigator_dataset",
+                    "start_index": 267
+                },
+                {
+                    "text": "31",
+                    "url": "cite.shen2020large",
+                    "start_index": 311
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Title",
+        "element_id": "5a1838a8f40b4523094652cf14ab974c",
+        "text": "3 The Core LayoutParser Library",
+        "metadata": {
+            "coordinates": {
+                "points": [
+                    [
+                        374.3472222222222,
+                        1613.6391911111111
+                    ],
+                    [
+                        374.3472222222222,
+                        1647.777928888889
+                    ],
+                    [
+                        936.5401377777778,
+                        1647.777928888889
+                    ],
+                    [
+                        936.5401377777778,
+                        1613.6391911111111
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "47e45d28d96fc14ddc709835de35ece5",
+        "text": "At the core of LayoutParser is an off-the-shelf toolkit that streamlines DL- based document image analysis. Five components support a simple interface with comprehensive functionalities: 1) The layout detection models enable using pre-trained or self-trained DL models for layout detection with just four lines of code. 2) The detected layout information is stored in carefully engineered",
+        "metadata": {
+            "detection_class_prob": 0.933956503868103,
+            "coordinates": {
+                "points": [
+                    [
+                        372.63739013671875,
+                        1686.3115122222223
+                    ],
+                    [
+                        372.63739013671875,
+                        1846.8187344444443
+                    ],
+                    [
+                        1340.079345703125,
+                        1846.8187344444443
+                    ],
+                    [
+                        1340.079345703125,
+                        1686.3115122222223
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 4,
+            "parent_id": "5a1838a8f40b4523094652cf14ab974c",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "ListItem",
+        "element_id": "cd1112d2b15a0d27a29b1c83b2afd0dd",
+        "text": "LayoutParser: A Uni\ufb01ed Toolkit for DL-Based DIA",
+        "metadata": {
+            "detection_class_prob": 0.5793697237968445,
+            "coordinates": {
+                "points": [
+                    [
+                        656.9716186523438,
+                        257.4113377777776
+                    ],
+                    [
+                        656.9716186523438,
+                        283.01539111111094
+                    ],
+                    [
+                        1336.532470703125,
+                        283.01539111111094
+                    ],
+                    [
+                        1336.532470703125,
+                        257.4113377777776
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 5,
+            "parent_id": "5a1838a8f40b4523094652cf14ab974c",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "FigureCaption",
+        "element_id": "0b9956dc7ccd1d758263217beda63196",
+        "text": "Table 1: Current layout detection models in the LayoutParser model zoo",
+        "metadata": {
+            "detection_class_prob": 0.6542763113975525,
+            "coordinates": {
+                "points": [
+                    [
+                        404.6733703613281,
+                        350.3809566666667
+                    ],
+                    [
+                        404.6733703613281,
+                        378.8297144444445
+                    ],
+                    [
+                        1301.252154722222,
+                        378.8297144444445
+                    ],
+                    [
+                        1301.252154722222,
+                        350.3809566666667
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 5,
+            "parent_id": "5a1838a8f40b4523094652cf14ab974c",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "Table",
+        "element_id": "cb534ba64da736dc53d60b660f5e1153",
+        "text": "Dataset Base Model1 Large Model Notes PubLayNet [38] F / M M Layouts of modern scienti\ufb01c documents PRImA [3] M - Layouts of scanned modern magazines and scienti\ufb01c reports Newspaper [17] F - Layouts of scanned US newspapers from the 20th century TableBank [18] F F Table region on modern scienti\ufb01c and business document HJDataset [31] F / M - Layouts of history Japanese documents",
+        "metadata": {
+            "detection_class_prob": 0.9028143882751465,
+            "coordinates": {
+                "points": [
+                    [
+                        379.4667663574219,
+                        383.0013427734375
+                    ],
+                    [
+                        379.4667663574219,
+                        570.6318969726562
+                    ],
+                    [
+                        1321.44970703125,
+                        570.6318969726562
+                    ],
+                    [
+                        1321.44970703125,
+                        383.0013427734375
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "[ 38 ]",
+                    "url": "cite.zhong2019publaynet",
+                    "start_index": 10
+                },
+                {
+                    "text": "[ 3 ]",
+                    "url": "cite.antonacopoulos2009realistic",
+                    "start_index": 21
+                },
+                {
+                    "text": "[ 17 ]",
+                    "url": "cite.newspaper_navigator_dataset",
+                    "start_index": 35
+                },
+                {
+                    "text": "[ 18 ]",
+                    "url": "cite.li2019tablebank",
+                    "start_index": 50
+                },
+                {
+                    "text": "[ 31 ]",
+                    "url": "cite.shen2020large",
+                    "start_index": 65
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "text_as_html": "<table><thead><tr><th>Dataset</th><th>| Base Model'|</th><th>| Notes</th></tr></thead><tbody><tr><td>PubLayNet B8]|</td><td>F/M</td><td>Layouts of modern scientific documents</td></tr><tr><td>PRImA</td><td>M</td><td>Layouts of scanned modern magazines and scientific report</td></tr><tr><td>Newspaper</td><td>F</td><td>Layouts of scanned US newspapers from the 20th century</td></tr><tr><td>TableBank</td><td>F</td><td>Table region on modern scientific and business document</td></tr><tr><td>HJDataset</td><td>F/M</td><td>Layouts of history Japanese documents</td></tr></tbody></table>",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 5,
+            "image_path": "/Users/yzhai/workspace/ag2ai/rag/pdfinfo/table-5-1.jpg",
+            "parent_id": "5a1838a8f40b4523094652cf14ab974c",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "FigureCaption",
+        "element_id": "f978160527177fa39c13774ec8dfa9cb",
+        "text": "1 For each dataset, we train several models of different sizes for different needs (the trade-off between accuracy vs. computational cost). For \u201cbase model\u201d and \u201clarge model\u201d, we refer to using the ResNet 50 or ResNet 101 backbones [13], respectively. One can train models of different architectures, like Faster R-CNN [28] (F) and Mask R-CNN [12] (M). For example, an F in the Large Model column indicates it has a Faster R-CNN model trained using the ResNet 101 backbone. The platform is maintained and a number of additions will be made to the model zoo in coming months.",
+        "metadata": {
+            "detection_class_prob": 0.6042246222496033,
+            "coordinates": {
+                "points": [
+                    [
+                        369.92120361328125,
+                        574.6586429288442
+                    ],
+                    [
+                        369.92120361328125,
+                        710.1579412793777
+                    ],
+                    [
+                        1340.67724609375,
+                        710.1579412793777
+                    ],
+                    [
+                        1340.67724609375,
+                        574.6586429288442
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "links": [
+                {
+                    "text": "[ 13",
+                    "url": "cite.he2016deep",
+                    "start_index": 229
+                },
+                {
+                    "text": "[ 28 ]",
+                    "url": "cite.ren2015faster",
+                    "start_index": 315
+                },
+                {
+                    "text": "[ 12 ]",
+                    "url": "cite.he2017mask",
+                    "start_index": 339
+                }
+            ],
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 5,
+            "parent_id": "5a1838a8f40b4523094652cf14ab974c",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    },
+    {
+        "type": "NarrativeText",
+        "element_id": "55b33df7609960c3552a0b7bc1a5a9c6",
+        "text": "layout data structures, which are optimized for e\ufb03ciency and versatility. 3) When necessary, users can employ existing or customized OCR models via the uni\ufb01ed API provided in the OCR module. 4) LayoutParser comes with a set of utility functions for the visualization and storage of the layout data. 5) LayoutParser is also highly customizable, via its integration with functions for layout data annotation and model training. We now provide detailed descriptions for each component.",
+        "metadata": {
+            "detection_class_prob": 0.9432618618011475,
+            "coordinates": {
+                "points": [
+                    [
+                        372.225,
+                        775.0865122222223
+                    ],
+                    [
+                        372.225,
+                        1002.0131788888888
+                    ],
+                    [
+                        1339.264892578125,
+                        1002.0131788888888
+                    ],
+                    [
+                        1339.264892578125,
+                        775.0865122222223
+                    ]
+                ],
+                "system": "PixelSpace",
+                "layout_width": 1700,
+                "layout_height": 2200
+            },
+            "last_modified": "2024-12-18T16:01:12",
+            "filetype": "application/pdf",
+            "languages": [
+                "eng"
+            ],
+            "page_number": 5,
+            "parent_id": "5a1838a8f40b4523094652cf14ab974c",
+            "file_directory": "test_unstructured_ingest/example-docs",
+            "filename": "layout-parser-paper.pdf"
+        }
+    }
+]

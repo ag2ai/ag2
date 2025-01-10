@@ -12,11 +12,13 @@ from llama_index.core.indices.property_graph import (
 )
 from llama_index.core.indices.property_graph.transformations.schema_llm import Triple
 from llama_index.core.llms import LLM
+from llama_index.core.readers.json import JSONReader
+from llama_index.core.schema import Document as LlamaDocument
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.graph_stores.neo4j import Neo4jPropertyGraphStore
 from llama_index.llms.openai import OpenAI
 
-from .document import Document
+from .document import Document, DocumentType
 from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
 
 
@@ -197,18 +199,41 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         with self.graph_store._driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n;")
 
-    def _load_doc(self, input_doc: list[Document]) -> list[Document]:
+    def _load_doc(self, input_doc: list[Document]) -> list[LlamaDocument]:
         """
-        Load documents from the input files.
+        Load documents from the input files. Currently support the following file types:
+            .csv - comma-separated values
+            .docx - Microsoft Word
+            .epub - EPUB ebook format
+            .hwp - Hangul Word Processor
+            .ipynb - Jupyter Notebook
+            .jpeg, .jpg - JPEG image
+            .mbox - MBOX email archive
+            .md - Markdown
+            .mp3, .mp4 - audio and video
+            .pdf - Portable Document Format
+            .png - Portable Network Graphics
+            .ppt, .pptm, .pptx - Microsoft PowerPoint
+            .json JSON files
         """
-        input_files = []
         for doc in input_doc:
-            if os.path.exists(doc.path_or_url):
-                input_files.append(doc.path_or_url)
-            else:
+            if not os.path.exists(doc.path_or_url):
                 raise ValueError(f"Document file not found: {doc.path_or_url}")
 
-        return SimpleDirectoryReader(input_files=input_files).load_data()
+        common_type_input_files = []
+        json_type_input_files = []
+        for doc in input_doc:
+            if doc.doctype is DocumentType.JSON:
+                json_type_input_files.append(doc.path_or_url)
+            else:
+                common_type_input_files.append(doc.path_or_url)
+        loaded_documents = []
+        if common_type_input_files:
+            loaded_documents.extend(SimpleDirectoryReader(input_files=common_type_input_files).load_data())
+        for json_file in json_type_input_files:
+            loaded_documents.extend(JSONReader().load_data(input_file=json_file))
+
+        return loaded_documents
 
     def _create_kg_extractors(self):
         """

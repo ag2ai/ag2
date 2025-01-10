@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ag2 WebRTC Chat</title>
+    <script>
+        // Dynamically set the WebSocket URLs using the injected port
+        const port = {{ port }};
+        const socketUrl = `ws://localhost:${port}/session`;
+    </script>
+    <script src="/static/main.js" type="module" defer></script>
+</head>
+<body>
+    <h1>Ag2 WebRTC Chat</h1>
+    <p>Ensure microphone and speaker access is enabled.</p>
+
+    You may try asking about weather in some cities.
+</body>
+</html>

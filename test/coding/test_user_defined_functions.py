@@ -205,7 +205,6 @@ print(add_two_numbers(1, 2))"""
 
 @pytest.mark.parametrize("cls", classes_to_test)
 def test_cant_load_broken_str_function_with_reqs(cls) -> None:
-
     with pytest.raises(ValueError):
         _ = FunctionWithRequirements.from_str(
             '''

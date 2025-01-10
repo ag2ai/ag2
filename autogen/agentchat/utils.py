@@ -47,25 +47,24 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str,
 
     ```python
     {
-        "usage_including_cached_inference" : {
+        "usage_including_cached_inference": {
             "total_cost": 0.0006090000000000001,
             "gpt-35-turbo": {
-                    "cost": 0.0006090000000000001,
-                    "prompt_tokens": 242,
-                    "completion_tokens": 123,
-                    "total_tokens": 365
+                "cost": 0.0006090000000000001,
+                "prompt_tokens": 242,
+                "completion_tokens": 123,
+                "total_tokens": 365,
             },
         },
-
-        "usage_excluding_cached_inference" : {
+        "usage_excluding_cached_inference": {
             "total_cost": 0.0006090000000000001,
             "gpt-35-turbo": {
-                    "cost": 0.0006090000000000001,
-                    "prompt_tokens": 242,
-                    "completion_tokens": 123,
-                    "total_tokens": 365
+                "cost": 0.0006090000000000001,
+                "prompt_tokens": 242,
+                "completion_tokens": 123,
+                "total_tokens": 365,
             },
-        }
+        },
     }
     ```
 

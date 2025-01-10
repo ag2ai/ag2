@@ -1,0 +1,17 @@
+[
+    {
+        "element_id": "518e6f32a8c371f69e6ac8868519f570",
+        "text": "NVIDIA Corporation and Subsidiaries Consolidated Balance Sheets (In millions, except value)",
+        "type": "Title",
+        "page_number": 52,
+        "parent_id": "d972706e5fe99bae469dd5dc42202fa2"
+    },
+    {
+        "element_id": "7193a45c9b844e570053b3c0cc752c06",
+        "text": "NVIDIA Corporation and Subsidiaries Consolidated Balance Sheets (In millions, except value): Assets Current assets: Cash and cash equivalents Marketable securities Accounts receivable, net Inventories Prepaid expenses and other current assets Total current assets Property and equipment, net Operating lease assets Goodwill Intangible assets, net Deferred income tax assets Other assets Total assets Liabilities and Shareholders\u2019 Equity Current liabilities: Accounts payable Accrued and other current liabilities Short-term debt Total current liabilities Long-term debt Long-term operating lease liabilities Other long-term liabilities Total liabilities Commitments and contingencies - see Note 13 Jan 28, 2024 Jan 29, 2023 7,280 $ 3,389 18,704 9,907 9,999 3,827 5,282 5,159 3,080 791 44,345 23,073 3,014 3,807 1,346 1,038 4,430 4,372 1,112 1,676 6,081 3,396 4,500 3,820 65,728 $ 41,182 2,699 $ 1,193 6,682 4,120 1,250 1,250 10,631 6,563 8,459 9,703 1,119 902 2,541 1,913 22,750 19,081",
+        "type": "Table",
+        "page_number": 52,
+        "parent_id": "19874ad91c0234155cb1c5168500a767",
+        "image_path": "./parsed_pdf_info/table-52-17.jpg"
+    }
+]

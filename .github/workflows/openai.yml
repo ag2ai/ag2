@@ -40,6 +40,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -47,14 +50,13 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          python -m pip install --upgrade pip wheel
-          pip install -e ".[test]"
+          uv pip install --system -e ".[test]"
           python -c "import autogen"
       - name: Install packages for test when needed
         if: matrix.python-version == '3.9'
         run: |
-          pip install docker
-          pip install -e .[redis,interop]
+          uv pip install --system docker
+          uv pip install --system -e .[redis,interop]
       - name: Coverage
         if: matrix.python-version == '3.9'
         env:
@@ -73,7 +75,7 @@ jobs:
           WOLFRAM_ALPHA_APPID: ${{ secrets.WOLFRAM_ALPHA_APPID }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          pip install nbconvert nbformat ipykernel
+          uv pip install --system nbconvert nbformat ipykernel
           pytest test/test_notebook.py --durations=10 --durations-min=1.0
           cat "$(pwd)/test/executed_openai_notebook_output.txt"
       - name: Upload coverage to Codecov

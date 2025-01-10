@@ -8,13 +8,9 @@
 
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "groq",
-            "model": "mixtral-8x7b-32768",
-            "api_key": os.environ.get("GROQ_API_KEY")
-            }
-    ]}
+    llm_config = {
+        "config_list": [{"api_type": "groq", "model": "mixtral-8x7b-32768", "api_key": os.environ.get("GROQ_API_KEY")}]
+    }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
     ```
