@@ -714,7 +714,7 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
 
     # add blogs to navigation
     blogs_dir = website_dir / "blog"
-    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "blog")]}
+    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "generated_blog")]}
     mint_config["navigation"].append(blog_section)
 
     # Add examples to navigation
@@ -840,6 +840,14 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
     """
     blog_dir = website_dir / "blog"
     authors_yml = blog_dir / "authors.yml"
+    generated_blog_dir = website_dir / "generated_blog"
+
+    # Remove existing generated directory if it exists
+    if generated_blog_dir.exists():
+        shutil.rmtree(generated_blog_dir)
+
+    # Copy entire blog directory structure to generated_blog
+    shutil.copytree(blog_dir, generated_blog_dir)
 
     try:
         all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
@@ -847,7 +855,7 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
         print(f"Error reading authors file: {e}")
         sys.exit(1)
 
-    for file_path in blog_dir.glob("**/*.mdx"):
+    for file_path in generated_blog_dir.glob("**/*.mdx"):
         try:
             front_matter_string, content = separate_front_matter_and_content(file_path)
 
@@ -861,24 +869,18 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
             authors_list = [authors] if isinstance(authors, str) else authors
 
             # Social share image
-            social_img_html = (
-                """\n<div>
+            social_img_html = """\n<div>
 <img noZoom className="social-share-img"
   src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
   alt="social preview"
   style={{ position: 'absolute', left: '-9999px' }}
 />
 </div>"""
-                if '<img noZoom className="social-share-img"' not in content
-                else ""
-            )
 
-            # Generate and write content
-            authors_html = (
-                construct_authors_html(authors_list, all_authors_info)
-                if '<div class="blog-authors">' not in content
-                else ""
-            )
+            # Generate authors HTML
+            authors_html = construct_authors_html(authors_list, all_authors_info)
+
+            # Combine content
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
 
             file_path.write_text(f"{new_content}\n", encoding="utf-8")

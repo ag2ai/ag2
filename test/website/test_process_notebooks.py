@@ -6,13 +6,16 @@ import json
 import os
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 
 import pytest
+import yaml
 
 # Add the ../../website directory to sys.path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
 from process_notebooks import (
+    add_authors_and_social_img_to_blog_posts,
     ensure_mint_json_exists,
     extract_example_group,
     generate_nav_group,
@@ -231,3 +234,113 @@ class TestUpdateNavigation:
             }
 
             assert actual == expected, actual
+
+
+class TestAddAuthorsAndSocialImgToBlogPosts:
+    @pytest.fixture
+    def test_dir(self):
+        """Create temporary test directory with blog posts and authors file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            website_dir = Path(tmp_dir)
+            blog_dir = website_dir / "blog"
+            blog_dir.mkdir()
+
+            # Create first blog post
+            post1_dir = blog_dir / "2023-04-21-LLM-tuning-math"
+            post1_dir.mkdir()
+            post1_content = textwrap.dedent("""
+                ---
+                title: Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH
+                authors: sonichi
+                tags: [LLM, GPT, research]
+                ---
+
+                lorem ipsum""").lstrip()
+            (post1_dir / "index.mdx").write_text(post1_content)
+
+            # Create second blog post
+            post2_dir = blog_dir / "2023-06-28-MathChat"
+            post2_dir.mkdir()
+            post2_content = textwrap.dedent("""
+                ---
+                title: Introducing RealtimeAgent Capabilities in AG2
+                authors:
+                    - marklysze
+                    - sternakt
+                    - davorrunje
+                    - davorinrusevljan
+                tags: [Realtime API, Voice Agents, Swarm Teams, Twilio, AI Tools]
+                ---
+
+                lorem ipsum""").lstrip()
+            (post2_dir / "index.mdx").write_text(post2_content)
+
+            # Create authors.yml
+            authors_content = textwrap.dedent("""
+                sonichi:
+                    name: Chi Wang
+                    title: Founder of AutoGen (now AG2) & FLAML
+                    url: https://www.linkedin.com/in/chi-wang-autogen/
+                    image_url: https://github.com/sonichi.png
+
+                marklysze:
+                    name: Mark Sze
+                    title: Software Engineer at AG2.ai
+                    url: https://github.com/marklysze
+                    image_url: https://github.com/marklysze.png
+
+                sternakt:
+                    name: Tvrtko Sternak
+                    title: Machine Learning Engineer at Airt
+                    url: https://github.com/sternakt
+                    image_url: https://github.com/sternakt.png
+
+                davorrunje:
+                    name: Davor Runje
+                    title: CTO at Airt
+                    url: https://github.com/davorrunje
+                    image_url: https://github.com/davorrunje.png
+
+                davorinrusevljan:
+                    name: Davorin Ruševljan
+                    title: Developer
+                    url: https://github.com/davorinrusevljan
+                    image_url: https://github.com/davorinrusevljan.png
+                """).lstrip()
+            (blog_dir / "authors.yml").write_text(authors_content)
+
+            yield website_dir
+
+    def test_add_authors_and_social_img(self, test_dir):
+        # Run the function
+        add_authors_and_social_img_to_blog_posts(test_dir)
+
+        # Get directory paths
+        generated_blog_dir = test_dir / "generated_blog"
+        blog_dir = test_dir / "blog"
+
+        # Verify directory structure matches
+        blog_files = set(p.relative_to(blog_dir) for p in blog_dir.glob("**/*.mdx"))
+        generated_files = set(p.relative_to(generated_blog_dir) for p in generated_blog_dir.glob("**/*.mdx"))
+        assert blog_files == generated_files
+
+        # Verify number of files matches
+        assert len(list(blog_dir.glob("**/*.mdx"))) == len(list(generated_blog_dir.glob("**/*.mdx")))
+
+        # Verify content of first blog post
+        post1_path = generated_blog_dir / "2023-04-21-LLM-tuning-math" / "index.mdx"
+        actual = post1_path.read_text()
+        assert '<img noZoom className="social-share-img"' in actual
+        assert '<p class="name">Chi Wang</p>' in actual
+        assert '<p class="name">Davor Runje</p>' not in actual
+
+        # Verify content of second blog post
+        post2_path = generated_blog_dir / "2023-06-28-MathChat" / "index.mdx"
+        actual = post2_path.read_text()
+
+        assert '<img noZoom className="social-share-img"' in actual
+        assert '<p class="name">Mark Sze</p>' in actual
+        assert '<p class="name">Tvrtko Sternak</p>' in actual
+        assert '<p class="name">Davor Runje</p>' in actual
+        assert '<p class="name">Davorin Ruševljan</p>' in actual
+        assert '<p class="name">Chi Wang</p>' not in actual

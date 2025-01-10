@@ -44,7 +44,7 @@
     },
     {
       "name": "Blog",
-      "url": "blog"
+      "url": "generated_blog"
     },
     {
       "name": "Community Talks",
