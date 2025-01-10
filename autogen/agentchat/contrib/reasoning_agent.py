@@ -43,7 +43,6 @@ Option 4: Perform Y.
 
 
 class ThinkNode:
-
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
         """A node in a tree structure representing a step in the reasoning process.
 
@@ -623,7 +622,8 @@ Please provide your rating along with a brief explanation of your assessment.
                 # More intensive analysis is needed in the future.
                 choices_weights = [
                     # exploitation term +
-                    (child.value / (child.visits + EPSILON)) +
+                    (child.value / (child.visits + EPSILON))
+                    +
                     # exploration term
                     self._exploration_constant
                     * math.sqrt(2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON))

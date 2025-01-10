@@ -6,8 +6,9 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
+from collections.abc import Generator
 from tempfile import TemporaryDirectory
-from typing import Annotated, Generator, Literal, TypeVar
+from typing import Annotated, Literal, TypeVar
 
 import pytest
 

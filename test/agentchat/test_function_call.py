@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
+import asyncio
 import json
 import sys
 
@@ -167,7 +168,7 @@ async def test_a_execute_function():
     # Create an async function
     async def add_num(num_to_be_added):
         given_num = 10
-        time.sleep(1)
+        asyncio.sleep(1)
         return str(num_to_be_added + given_num)
 
     user = UserProxyAgent(name="test", function_map={"add_num": add_num})

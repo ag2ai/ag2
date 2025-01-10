@@ -505,6 +505,7 @@
         {
           "group": "Recent posts",
           "pages": [
+            "blog/2025-01-09-RealtimeAgent-over-WebRTC/index",
             "blog/2025-01-08-RealtimeAgent-over-websocket/index",
             "blog/2025-01-07-Tools-Dependency-Injection/index",
             "blog/2024-12-20-RealtimeAgent/index",

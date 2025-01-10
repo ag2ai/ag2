@@ -71,6 +71,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+
 # public distributions
 jupyter-executor = [
     "jupyter-kernel-gateway",
@@ -138,11 +139,6 @@ interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
 
-types = [
-    "mypy==1.9.0",
-    "pyautogen[test, jupyter-executor, interop]",
-]
-
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
@@ -174,7 +170,9 @@ cohere = ["cohere>=5.5.8"]
 ollama = ["ollama>=0.3.3", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 
-# dev dependencies
+## dev dependencies
+
+# test dependencies
 test = [
     "ipykernel",
     "nbconvert",
@@ -186,6 +184,25 @@ test = [
     "pandas",
     "fastapi>=0.115.0,<1",
 ]
+
+types = [
+    "mypy==1.9.0",
+    "pyautogen[test, jupyter-executor, interop]",
+]
+
+lint = [
+    "ruff==0.8.6",
+    "codespell==2.3.0",
+    "pyupgrade-directories==0.3.0",
+]
+
+dev = [
+    "pyautogen[lint,test,types]",
+    "pre-commit==4.0.1",
+    "detect-secrets==1.5.0",
+    "uv==0.5.16",
+]
+
 
 [project.urls]
 Homepage = "https://ag2.ai/"
@@ -224,21 +241,43 @@ exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
 
 
 [tool.ruff]
+fix = true
 line-length = 120
+target-version = 'py39'
+#include = ["autogen", "test", "docs"]
+#exclude = []
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
 select = [
-    "E",
-    "W", # see: https://pypi.org/project/pycodestyle
-    "F", # see: https://pypi.org/project/pyflakes
-    #    "D",  # see: https://pypi.org/project/pydocstyle
-    #    "N",  # see: https://pypi.org/project/pep8-naming
-    #    "S",  # see: https://pypi.org/project/flake8-bandit
-    "I", # see: https://pypi.org/project/isort/
+    "E",     # pycodestyle errors     https://docs.astral.sh/ruff/rules/#error-e
+    "W",     # pycodestyle warnings   https://docs.astral.sh/ruff/rules/#warning-w
+    "C90",   # mccabe                 https://docs.astral.sh/ruff/rules/#mccabe-c90
+    "N",     # pep8-naming            https://docs.astral.sh/ruff/rules/#pep8-naming-n
+#    "D",     # pydocstyle             https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "I",     # isort                  https://docs.astral.sh/ruff/rules/#isort-i
+    "F",     # pyflakes               https://docs.astral.sh/ruff/rules/#pyflakes-f
+    "ASYNC", # flake8-async           https://docs.astral.sh/ruff/rules/#flake8-async-async
+#    "C4",    # flake8-comprehensions  https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
+#    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
+    "Q",     # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
+#    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20
+#    "SIM",   # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
+#    "PT",    # flake8-pytest-style    https://docs.astral.sh/ruff/rules/#flake8-pytest-style-pt
+#    "PTH",   # flake8-use-pathlib     https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
+#    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
+#    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
+#    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
 ]
-ignore = ["E501", "F401", "F403", "C901"]
 
+ignore = ["E501", "F401", "F403", "C901",
+    "E402",
+    "E721",
+    "ASYNC109",
+    "E501",  # line too long, handled by formatter later
+    "D100", "D101", "D102", "D103", "D104",
+    "C901",  # too complex
+]
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".eggs",
@@ -260,6 +299,16 @@ unfixable = ["F401"]
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
 max-complexity = 10
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 
 [tool.mypy]
 files = [

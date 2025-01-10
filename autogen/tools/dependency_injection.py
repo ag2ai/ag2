@@ -6,6 +6,7 @@ import inspect
 import logging
 import sys
 from abc import ABC
+from collections.abc import Iterable
 from functools import wraps
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, get_type_hints
@@ -74,7 +75,7 @@ class ChatContext(BaseContext):
         return self._agent.last_message()
 
 
-def Depends(x: Any) -> Any:
+def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 
     Args:

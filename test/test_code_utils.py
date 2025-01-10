@@ -161,9 +161,7 @@ def scrape(url):
    text = soup.find("div", {"id": "bodyContent"}).text
    return title, text
 ```
-""".replace(
-            "\n", "\r\n"
-        )
+""".replace("\n", "\r\n")
     )
     print(codeblocks)
     assert len(codeblocks) == 1 and codeblocks[0][0] == "python"
