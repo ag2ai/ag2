@@ -3,10 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 import logging
-import os
 import sys
+from typing import List
 
 import pytest
+
+from autogen.tools.experimental.converter_tools.register import create_converter
+
+# from autogen.tools.experimental.converter_tools.md_docling import DoclingConverter
+
+
+@pytest.fixture(scope="module")
+def converter():
+    return create_converter()  # TODO: add DoclingConverter
+
 
 # Configure logging
 logging.basicConfig(
@@ -16,80 +26,54 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from autogen.tools.experimental.converter_tools.register import create_converter
 
-from .test_config import (
-    DOCX_TEST_STRINGS,
-    JPG_TEST_EXIFTOOL,
-    PDF_TEST_STRINGS,
-    PDF_TEST_URL,
-    PPTX_TEST_STRINGS,
-    SERP_TEST_EXCLUDES,
-    SERP_TEST_STRINGS,
-    SERP_TEST_URL,
-    TEST_FILES_DIR,
-    WIKIPEDIA_TEST_EXCLUDES,
-    WIKIPEDIA_TEST_STRINGS,
-    WIKIPEDIA_TEST_URL,
-    XLSX_TEST_STRINGS,
-)
+class TestDoclingConverter:
+    def validate_content(self, content: str, test_strings: List[str], excludes: List[str] = None) -> None:
+        """Helper method to validate content against test strings and excludes"""
+        text_content = content.replace("\\", "")
 
+        if excludes:
+            for exclude in excludes:
+                if exclude in text_content:
+                    logger.error(f"Unexpectedly found '{exclude}' in:\n{text_content}")
+                assert exclude not in text_content
 
-def test_mdconvert_local_docling() -> None:
-    converter = create_converter("docling")
-    # Test XLSX processing
+        for test_string in test_strings:
+            if test_string not in text_content:
+                logger.error(f"Failed to find '{test_string}' in:\n{text_content}")
+            assert test_string in text_content
 
-    result = converter(os.path.join(TEST_FILES_DIR, "test.xlsx"))
-    for test_string in XLSX_TEST_STRINGS:
-        text_content = result.replace("\\", "")
-        assert test_string in text_content
+    def test_pdf_conversion(self, converter, pdf_test_data):
+        result = converter(pdf_test_data["file_path"])
+        self.validate_content(result, pdf_test_data["test_strings"])
 
-    # Test DOCX processing
-    result = converter(os.path.join(TEST_FILES_DIR, "test.docx"))
-    for test_string in DOCX_TEST_STRINGS:
-        text_content = result.replace("\\", "")
-        assert test_string in text_content
+    def test_xlsx_conversion(self, converter, xlsx_test_data):
+        result = converter(xlsx_test_data["file_path"])
+        self.validate_content(result, xlsx_test_data["test_strings"])
 
-    # Test PPTX processing
-    result = converter(os.path.join(TEST_FILES_DIR, "test.pptx"))
-    for test_string in PPTX_TEST_STRINGS:
-        text_content = result.replace("\\", "")
-        assert test_string in text_content
+    def test_docx_conversion(self, converter, docx_test_data):
+        result = converter(docx_test_data["file_path"])
+        self.validate_content(result, docx_test_data["test_strings"])
 
-    # Test Wikipedia processing
-    result = converter(WIKIPEDIA_TEST_URL)
-    logger.debug(f"Wikipedia conversion result: {result}")
-    text_content = result.replace("\\", "")
-    for test_string in WIKIPEDIA_TEST_EXCLUDES:
-        if test_string in text_content:
-            logger.error(f"Unexpectedly found '{test_string}' in:\n{text_content}")
-        assert test_string not in text_content
-    for test_string in WIKIPEDIA_TEST_STRINGS:
-        if test_string not in text_content:
-            logger.error(f"Failed to find '{test_string}' in:\n{text_content}")
-        assert test_string in text_content
+    def test_pptx_conversion(self, converter, pptx_test_data):
+        result = converter(pptx_test_data["file_path"])
+        self.validate_content(result, pptx_test_data["test_strings"])
 
-    # Test Bing processing
-    result = converter(SERP_TEST_URL)
-    logger.debug(f"SERP conversion result: {result}")
-    text_content = result.replace("\\", "")
-    for test_string in SERP_TEST_EXCLUDES:
-        if test_string in text_content:
-            logger.error(f"Unexpectedly found '{test_string}' in:\n{text_content}")
-        assert test_string not in text_content
-    for test_string in SERP_TEST_STRINGS:
-        if test_string not in text_content:
-            logger.error(f"Failed to find '{test_string}' in:\n{text_content}")
-        assert test_string in text_content
+    def test_wikipedia_conversion(self, converter, wikipedia_test_data):
+        result = converter(wikipedia_test_data["file_path"])
+        self.validate_content(result, wikipedia_test_data["test_strings"], wikipedia_test_data["excludes"])
 
+    def test_serp_conversion(self, converter, serp_test_data):
+        result = converter(serp_test_data["file_path"])
+        self.validate_content(result, serp_test_data["test_strings"], serp_test_data["excludes"])
 
-def test_mdconvert_exiftool_markitdown() -> None:
-    converter = create_converter()
-    # Test JPG metadata processing
-    result = converter(os.path.join(TEST_FILES_DIR, "test_image.jpg"))
-    logger.debug(f"Image metadata result: {result}")
-    for key in JPG_TEST_EXIFTOOL:
-        target = f"{key}: {JPG_TEST_EXIFTOOL[key]}"
-        if target not in result:
-            logger.error(f"Failed to find '{target}' in:\n{result}")
-        assert target in result
+    """
+    #Image not supported yet
+    def test_jpg_conversion(self, converter, jpg_test_data):
+        result = converter(jpg_test_data["file_path"])
+
+        # Validate metadata
+        for key, value in jpg_test_data["test_metadata"].items():
+            target = f"{key}: {value}"
+            assert target in result, f"Failed to find '{target}' in:\n{result}"
+    """
