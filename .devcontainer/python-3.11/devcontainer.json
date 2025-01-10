@@ -7,6 +7,9 @@
     "name": "python-3.11",
     "image": "mcr.microsoft.com/devcontainers/python:3.11",
     "secrets": {
+        "OAI_CONFIG_LIST": {
+            "description": "This key is optional and only needed if you are working on OpenAI-related code. Leave it blank if not required. You can always set it later as an environment variable in the codespace terminal."
+        },
         "OPENAI_API_KEY": {
             "description": "This key is optional and only needed if you are working on OpenAI-related code. Leave it blank if not required. You can always set it later as an environment variable in the codespace terminal."
         },
