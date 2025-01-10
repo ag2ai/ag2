@@ -8,10 +8,10 @@ from markitdown import MarkItDown
 
 from autogen.oai.client import OpenAIWrapper
 
-from .md_converter_protocol import MarkdownConvertProtocol
+from .md_converter_protocol import MarkdownConverterProtocol
 
 
-class MarkItDownConverter(MarkdownConvertProtocol):
+class MarkItDownConverter(MarkdownConverterProtocol):
     """
     Markdown converter using the MarkItDown library.
     """

@@ -2,54 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional, Type
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.tools import Tool
 
 from .... import register_function
+from .md_converter_protocol import MarkdownConverterProtocol
 
 # from .md_docling import DoclingConverter
 from .md_markitdown import MarkItDownConverter
 
 
-def create_converter(
-    converter_type: str = "markitdown",
-) -> Callable[[str], str]:
-    """
-    Creates a markdown converter function based on the specified type.
-
-    Args:
-        converter_type (str): Type of converter ("markitdown" or "docling")
-
-    Returns:
-        Callable[[str], str]: Converter function that takes a source and returns markdown
-    """
-
-    def converter_func(source: str) -> str:
-        if converter_type == "markitdown":
-            return MarkItDownConverter().convert(source)
-        # elif converter_type == "docling":
-        #    return DoclingConverter().convert(source)
-        else:
-            raise ValueError(
-                f"Unsupported converter type: {converter_type}. Supported types are 'markitdown' and 'docling'"
-            )
-
-    return converter_func
-
-
-markdown_convert_tool = Tool(
-    name="markdown_convert",
-    description="Converts a local file or a URL to markdown.",
-    func_or_tool=create_converter("markitdown"),
-)
-
-
 def register_converter(
+    *,
     caller: ConversableAgent,
     executor: ConversableAgent,
-    converter: str = "markitdown",
+    converter: Type[MarkdownConverterProtocol] = MarkItDownConverter,
     name: str = "markdown_convert",
     description: str = "Converts a local file or a URL to markdown. Including images with text.",
     args: Optional[Dict[str, Any]] = None,
@@ -58,26 +27,25 @@ def register_converter(
     Registers a markdown converter tool with the specified caller and executor agents.
 
     Args:
-        caller (ConversableAgent): The agent that will propose the conversion.
-        executor (ConversableAgent): The agent that will execute the conversion.
-        converter (str): The converter to use ("markitdown" or "docling"). Defaults to "markitdown".
-        name (str): The name of the tool. Defaults to "markdown_convert".
-        description (str): The description of the tool. Defaults to "Converts a local file or a URL to markdown.".
-        args (Optional[Dict[str, Any]]): Optional arguments for the converter.
-    """
-    args = args or {}
+        caller: The agent that will propose the conversion.
+        executor: The agent that will execute the conversion.
+        converter: The converter class implementing MarkdownConverterProtocol to use.
+                   Defaults to MarkItDownConverter.
+        name: The name of the tool. Defaults to "markdown_convert".
+        description: The description of the tool.
+                     Defaults to "Converts a local file or a URL to markdown. Including images with text.".
+        args: Optional additional arguments for the converter (currently unused).
 
-    if converter == "markitdown":
-        convert_func = create_converter("markitdown")
-    elif converter == "docling":
-        convert_func = create_converter("docling")
-    else:
-        raise ValueError(
-            f"Unsupported converter: {converter}. Supported converters are 'markitdown','markitdown-llm' and 'docling'"
-        )
+    Note:
+        The converter must implement the MarkdownConverterProtocol interface with a convert() method.
+        The registered function will take a source string (file path or URL) and return the converted markdown.
+    """
+
+    def converter_func(source: str) -> str:
+        return converter().convert(source)
 
     register_function(
-        convert_func,
+        converter_func,
         caller=caller,
         executor=executor,
         name=name,

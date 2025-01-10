@@ -5,7 +5,7 @@
 from typing import Protocol
 
 
-class MarkdownConvertProtocol(Protocol):
+class MarkdownConverterProtocol(Protocol):
     """
     Protocol for markdown converters.
     """

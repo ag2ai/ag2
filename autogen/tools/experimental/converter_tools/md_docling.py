@@ -4,10 +4,10 @@
 
 from docling.document_converter import DocumentConverter
 
-from .md_converter_protocol import MarkdownConvertProtocol
+from .md_converter_protocol import MarkdownConverterProtocol
 
 
-class DoclingConverter(MarkdownConvertProtocol):
+class DoclingConverter(MarkdownConverterProtocol):
     """
     Markdown converter using the Docling library.
     """

@@ -2,10 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
-import io
 import logging
 import os
-import shutil
 import sys
 
 import pytest
