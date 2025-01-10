@@ -83,10 +83,6 @@ repos:
           notebook/.* |
           website/.*
         )$
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.8.5
-    hooks:
-      - id: nbqa-black
 
   - repo: local
     hooks:
