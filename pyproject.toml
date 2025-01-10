@@ -145,9 +145,14 @@ interop-crewai = [
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.13"]
-interop =[
+interop = [
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai, tool_convert_markitdown, tool_convert_docling]",
 ]
+
+test-ci = [
+    "pyautogen[test,cosmosdb,interop,tool_convert_markitdown, tool_convert_docling]",
+]
+
 
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
