@@ -22,6 +22,7 @@ import threading
 import time
 import typing
 from dataclasses import dataclass
+from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
@@ -611,6 +612,75 @@ def copy_examples_mdx_files(website_dir: str) -> None:
         shutil.copy(src_mdx_file_path, dest_mdx_file_path)
 
 
+def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
+    """Get sorted list of files with prefix prepended."""
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Directory not found: {input_dir}")
+
+    # Sort files by parent directory date (if exists) and name
+    def sort_key(file_path):
+        dirname = file_path.parent.name
+        try:
+            # Extract date from directory name (first 3 parts)
+            date_str = "-".join(dirname.split("-")[:3])
+            date = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            date = datetime.min
+        return (date, dirname)
+
+    files = sorted(input_dir.glob("**/index.mdx"), key=sort_key)
+    reversed_files = files[::-1]
+
+    return [f"{prefix}/{f.parent.relative_to(input_dir)}/index".replace("\\", "/") for f in reversed_files]
+
+
+def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[str, Union[str, List[str]]]:
+    """Generate navigation group for a directory.
+
+    Args:
+        input_dir (Path): Directory to process
+        group_header (str): Group header
+    """
+
+    sorted_dir_files = get_sorted_files(input_dir, prefix)
+
+    return {"group": group_header, "pages": sorted_dir_files}
+
+
+def extract_example_group(metadata_path):
+    # Read NotebooksMetadata.mdx and extract metadata links
+    with open(metadata_path, encoding="utf-8") as f:
+        content = f.read()
+        # Extract the array between the brackets
+        start = content.find("export const notebooksMetadata = [")
+        end = content.rfind("]")
+        if start == -1 or end == -1:
+            print("Could not find notebooksMetadata in the file")
+            return
+        metadata_str = content[start + 32 : end + 1]
+        notebooks_metadata = json.loads(metadata_str)
+
+    # Create notebooks entry
+    notebooks_entry = {
+        "group": "Examples by Notebook",
+        "pages": ["notebooks/Notebooks"]
+        + [
+            Path(item["source"])
+            .resolve()
+            .with_suffix("")
+            .as_posix()
+            .replace("/website/", "/")
+            .replace("/notebook/", "notebooks/")
+            for item in notebooks_metadata
+            if not item["source"].startswith("/website/docs/")
+        ],
+    }
+
+    example_group = {"group": "Examples", "pages": ["notebooks/Examples", notebooks_entry, "notebooks/Gallery"]}
+
+    return example_group
+
+
 def update_navigation_with_notebooks(website_dir: Path) -> None:
     """
     Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
@@ -633,47 +703,23 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     with open(mint_json_path, encoding="utf-8") as f:
         mint_config = json.load(f)
 
-    # Read NotebooksMetadata.mdx and extract metadata links
-    with open(metadata_path, encoding="utf-8") as f:
-        content = f.read()
-        # Extract the array between the brackets
-        start = content.find("export const notebooksMetadata = [")
-        end = content.rfind("]")
-        if start == -1 or end == -1:
-            print("Could not find notebooksMetadata in the file")
-            return
-        metadata_str = content[start + 32 : end + 1]
-        notebooks_metadata = json.loads(metadata_str)
+    # add talks to navigation
+    talks_dir = website_dir / "talks"
+    talks_section = generate_nav_group(talks_dir, "Talks", "talks")
 
-    # Find the Examples group in navigation
-    examples_group = None
-    for group in mint_config["navigation"]:
-        if group.get("group") == "Examples":
-            examples_group = group
-            break
+    # Add "talks/future_talks/index" item at the beginning of the list
+    future_talks_index = talks_section["pages"].pop()
+    talks_section["pages"].insert(0, future_talks_index)
+    mint_config["navigation"].append(talks_section)
 
-    if examples_group is None:
-        print("Examples group not found in navigation")
-        return
+    # add blogs to navigation
+    blogs_dir = website_dir / "blog"
+    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "blog")]}
+    mint_config["navigation"].append(blog_section)
 
-    # Create notebooks entry
-    notebooks_entry = {
-        "group": "Examples by Notebook",
-        "pages": ["notebooks/Notebooks"]
-        + [
-            Path(item["source"])
-            .resolve()
-            .with_suffix("")
-            .as_posix()
-            .replace("/website/", "/")
-            .replace("/notebook/", "notebooks/")
-            for item in notebooks_metadata
-            if not item["source"].startswith("/website/docs/")
-        ],
-    }
-
-    # Replace the pages list in Examples group with our standard pages plus notebooks
-    examples_group["pages"] = ["notebooks/Examples", notebooks_entry, "notebooks/Gallery"]
+    # Add examples to navigation
+    example_group = extract_example_group(metadata_path)
+    mint_config["navigation"].append(example_group)
 
     # Write back to mint.json
     with open(mint_json_path, "w", encoding="utf-8") as f:
@@ -843,6 +889,16 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
             continue
 
 
+def ensure_mint_json_exists(website_dir: Path) -> None:
+    mint_json_path = website_dir / "mint.json"
+    if not mint_json_path.exists():
+        print(f"mint.json not found at {mint_json_path}")
+        print(
+            "You can either run the 'process_api_reference.py' script before running this script or simply run the scripts/docs_build.sh script which will execute both 'process_api_reference.py' and 'process_notebooks.py' scripts in correct order."
+        )
+        sys.exit(1)
+
+
 def main() -> None:
     script_dir = Path(__file__).parent.absolute()
     parser = argparse.ArgumentParser()
@@ -854,9 +910,7 @@ def main() -> None:
         help="Directory containing notebooks to process",
         default=script_dir / "../notebook",
     )
-    parser.add_argument(
-        "--website-directory", type=path, help="Root directory of docusarus website", default=script_dir
-    )
+    parser.add_argument("--website-directory", type=path, help="Root directory of mintlify website", default=script_dir)
 
     render_parser = subparsers.add_parser("render")
     render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
@@ -873,6 +927,8 @@ def main() -> None:
     if args.subcommand is None:
         print("No subcommand specified")
         sys.exit(1)
+
+    ensure_mint_json_exists(args.website_directory)
 
     if args.notebooks:
         collected_notebooks = args.notebooks
