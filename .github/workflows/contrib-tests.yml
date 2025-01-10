@@ -861,3 +861,39 @@ jobs:
           with:
             file: ./coverage.xml
             flags: unittests
+
+  WebsiteTest:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies for all tests
+        run: |
+          uv pip install --system pytest-cov>=5
+      - name: Install packages and dependencies for Documentation
+        run: |
+          uv pip install --system -e "."
+          uv pip install --system pydoc-markdown pyyaml termcolor nbclient
+          # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
+          uv pip install --system databind.core==4.4.2 databind.json==4.4.2
+      - name: Coverage
+        run: |
+          pytest test/website/test_process_api_reference.py test/website/test_process_notebooks.py --skip-openai
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
