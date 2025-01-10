@@ -6,7 +6,6 @@ import inspect
 import logging
 import sys
 from abc import ABC
-from collections.abc import Iterable
 from functools import wraps
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, get_type_hints
