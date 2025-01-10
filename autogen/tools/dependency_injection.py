@@ -8,7 +8,7 @@ import sys
 from abc import ABC
 from functools import wraps
 from logging import Logger
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
@@ -90,7 +90,7 @@ def Depends(x: Any) -> Any:  # noqa: N802
 
 
 def get_context_params(
-    func: Callable[..., Any], subclass: type[BaseContext] | type[ChatContext] | type[Logger]
+    func: Callable[..., Any], subclass: Union[type[BaseContext], type[ChatContext], type[Logger]]
 ) -> list[str]:
     """Gets the names of the context parameters in a function signature.
 
@@ -107,7 +107,7 @@ def get_context_params(
 
 
 def _is_context_param(
-    param: inspect.Parameter, subclass: type[BaseContext] | type[ChatContext] | type[Logger] = BaseContext
+    param: inspect.Parameter, subclass: Union[type[BaseContext], type[ChatContext], type[Logger]] = BaseContext
 ) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
