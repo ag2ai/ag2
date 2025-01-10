@@ -30,7 +30,7 @@ jobs:
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[dev]
+          uv pip install -e .[dev]
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
