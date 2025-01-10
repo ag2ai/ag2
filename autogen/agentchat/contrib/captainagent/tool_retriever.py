@@ -19,10 +19,10 @@ from typing import List, Optional, Union
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
 
-from autogen import AssistantAgent, UserProxyAgent
-from autogen.coding import CodeExecutor, CodeExtractor, LocalCommandLineCodeExecutor, MarkdownCodeExtractor
-from autogen.coding.base import CodeBlock, CodeResult
-from autogen.tools import Tool, get_function_schema, load_basemodels_if_needed
+from .... import AssistantAgent, UserProxyAgent
+from ....coding import CodeExecutor, CodeExtractor, LocalCommandLineCodeExecutor, MarkdownCodeExtractor
+from ....coding.base import CodeBlock, CodeResult
+from ....tools import Tool, get_function_schema, load_basemodels_if_needed
 
 
 class ToolBuilder:
