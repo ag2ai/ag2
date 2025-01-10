@@ -53,11 +53,14 @@ class CacheFactory:
 
         Creating a Cosmos DB cache:
         ```python
-        cosmos_cache = cache_factory("myseed", cosmosdb_config={
+        cosmos_cache = cache_factory(
+            "myseed",
+            cosmosdb_config={
                 "connection_string": "your_connection_string",
                 "database_id": "your_database_id",
-                "container_id": "your_container_id"}
-            )
+                "container_id": "your_container_id",
+            },
+        )
         ```
 
         """

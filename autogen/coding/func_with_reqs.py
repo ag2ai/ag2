@@ -162,7 +162,7 @@ def with_requirements(
 
 
 def _build_python_functions_file(
-    funcs: list[FunctionWithRequirements[Any, P] | Callable[..., Any] | FunctionWithRequirementsStr]
+    funcs: list[FunctionWithRequirements[Any, P] | Callable[..., Any] | FunctionWithRequirementsStr],
 ) -> str:
     # First collect all global imports
     global_imports: set[str] = set()

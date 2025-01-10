@@ -30,7 +30,7 @@ except ImportError as e:
     pass
 
 
-openaiKey = MOCK_OPEN_AI_API_KEY
+openai_key = MOCK_OPEN_AI_API_KEY
 
 
 @pytest.mark.skipif(skip_for_dependencies, reason=skip_reason)
@@ -44,7 +44,7 @@ def test_group_chat_with_llama_index_conversable_agent(chat_mock: MagicMock) -> 
     llm = OpenAI(
         model="gpt-4o",
         temperature=0.0,
-        api_key=openaiKey,
+        api_key=openai_key,
     )
 
     chat_mock.return_value = AgentChatResponse(

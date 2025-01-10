@@ -7,8 +7,8 @@
 import re
 from typing import Any, Dict, List, Literal, Optional, Protocol, Tuple, Union
 
-from openai import OpenAI
 from PIL.Image import Image
+from openai import OpenAI
 
 from autogen import Agent, ConversableAgent, code_utils
 from autogen.agentchat.contrib import img_utils

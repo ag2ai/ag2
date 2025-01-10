@@ -17,6 +17,7 @@ class DocumentType(Enum):
     TEXT = auto()
     HTML = auto()
     PDF = auto()
+    JSON = auto()
 
 
 @dataclass
