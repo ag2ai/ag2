@@ -816,12 +816,14 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
 
             # Social share image
             social_img_html = (
-                """\n<img className="social-share-img"
+                """\n<div>
+<img noZoom className="social-share-img"
   src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
   alt="social preview"
   style={{ position: 'absolute', left: '-9999px' }}
-/>"""
-                if '<img className="social-share-img"' not in content
+/>
+</div>"""
+                if '<img noZoom className="social-share-img"' not in content
                 else ""
             )
 
