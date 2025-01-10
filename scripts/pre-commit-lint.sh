@@ -17,7 +17,7 @@ cd "$(dirname "$0")"/..
 # likely cause of failure is lack of VPN connection.
 pip uninstall pyautogen --yes --quiet
 
-pip install --editable ".[dev]" \
+pip install --editable ".[lint]" \
  --retries 1 \
  --no-input \
  --quiet
