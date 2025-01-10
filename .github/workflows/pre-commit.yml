@@ -28,11 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
       - name: Set $PY environment variable
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
-      # - name: Install packages and dependencies
-      #   run: |
-      #     uv pip install -e .[dev]
-      # - uses: actions/cache@v4
-      #   with:
-      #     path: ~/.cache/pre-commit
-      #     key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Install packages and dependencies
+        run: |
+          pip install -e .[dev]
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
       - uses: pre-commit/action@v3.0.1
