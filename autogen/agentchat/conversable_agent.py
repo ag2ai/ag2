@@ -2612,7 +2612,7 @@ class ConversableAgent(LLMAgent):
         """Return the function map."""
         return self._function_map
 
-    def _wrap_function(self, func: F, inject_params: dict[str, ChatContext] = {}) -> F:
+    def _wrap_function(self, func: F, inject_params: dict[str, Any] = {}) -> F:
         """Wrap the function inject chat context parameters and to dump the return value to json.
 
         Handles both sync and async functions.
