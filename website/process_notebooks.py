@@ -24,6 +24,7 @@ import typing
 from dataclasses import dataclass
 from multiprocessing import current_process
 from pathlib import Path
+from textwrap import dedent, indent
 from typing import Dict, List, Optional, Tuple, Union
 
 from termcolor import colored
@@ -729,6 +730,119 @@ def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
             sys.exit(1)
 
 
+def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict[str, str]]) -> str:
+    """Constructs HTML for displaying author cards in a blog.
+    Args:
+        authors_list: List of author identifiers
+        authors_dict: Dictionary containing author information keyed by author identifier
+    Returns:
+        str: Formatted HTML string containing author cards
+    """
+
+    if not authors_list:
+        return ""
+
+    card_template = """
+        <Card href="{url}">
+            <div class="col card">
+              <div class="img-placeholder">
+                <img noZoom src="{image_url}" />
+              </div>
+              <div>
+                <p class="name">{name}</p>
+                <p>{title}</p>
+              </div>
+            </div>
+        </Card>"""
+
+    authors_html = [card_template.format(**authors_dict[author]) for author in authors_list]
+
+    author_label = "Author:" if len(authors_list) == 1 else "Authors:"
+    authors_html_str = indent("".join(authors_html), "        ")
+    retval = dedent(
+        f"""
+            <div class="blog-authors">
+              <p class="authors">{author_label}</p>
+              <CardGroup cols={{2}}>{authors_html_str}
+              </CardGroup>
+            </div>
+        """
+    )
+    return retval
+
+
+def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
+    """Separate front matter and content from a markdown file.
+    Args:
+        file_path (Path): Path to the mdx file
+    """
+    content = file_path.read_text(encoding="utf-8")
+
+    if content.startswith("---"):
+        front_matter_end = content.find("---", 3)
+        front_matter = content[0 : front_matter_end + 3]
+        content = content[front_matter_end + 3 :].strip()
+        return front_matter, content
+
+    return "", content
+
+
+def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
+    """Add authors info to blog posts.
+    Args:
+        website_dir (Path): Root directory of the website
+    """
+    blog_dir = website_dir / "blog"
+    authors_yml = blog_dir / "authors.yml"
+
+    try:
+        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError) as e:
+        print(f"Error reading authors file: {e}")
+        sys.exit(1)
+
+    for file_path in blog_dir.glob("**/*.mdx"):
+        try:
+            front_matter_string, content = separate_front_matter_and_content(file_path)
+
+            # Skip if authors section already exists
+            # if '<div class="blog-authors">' in content:
+            #     continue
+
+            # Convert single author to list and handle authors
+            front_matter = yaml.safe_load(front_matter_string[4:-3])
+            authors = front_matter.get("authors", [])
+            authors_list = [authors] if isinstance(authors, str) else authors
+
+            # Social share image
+            social_img_html = (
+                """\n<div>
+<img noZoom className="social-share-img"
+  src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+  alt="social preview"
+  style={{ position: 'absolute', left: '-9999px' }}
+/>
+</div>"""
+                if '<img noZoom className="social-share-img"' not in content
+                else ""
+            )
+
+            # Generate and write content
+            authors_html = (
+                construct_authors_html(authors_list, all_authors_info)
+                if '<div class="blog-authors">' not in content
+                else ""
+            )
+            new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
+
+            file_path.write_text(f"{new_content}\n", encoding="utf-8")
+            print(f"Authors info and social share image checked in {file_path}")
+
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            continue
+
+
 def main() -> None:
     script_dir = Path(__file__).parent.absolute()
     parser = argparse.ArgumentParser()
@@ -824,6 +938,7 @@ def main() -> None:
             copy_examples_mdx_files(args.website_directory)
             update_navigation_with_notebooks(args.website_directory)
             fix_internal_references_in_mdx_files(args.website_directory)
+            add_authors_and_social_img_to_blog_posts(args.website_directory)
 
     else:
         print("Unknown subcommand")
