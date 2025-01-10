@@ -22,15 +22,9 @@ jobs:
       SKIP: "mypy"
     steps:
       - uses: actions/checkout@v4
-      # - uses: astral-sh/setup-uv@v5
-      #   with:
-      #     version: "latest"
       - uses: actions/setup-python@v5
       - name: Set $PY environment variable
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
-      - name: Install packages and dependencies
-        run: |
-          pip install -e .[dev]
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
