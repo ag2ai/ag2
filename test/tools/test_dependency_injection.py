@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from logging import Logger
 from typing import Annotated, Callable, get_type_hints
 
 import pytest
@@ -18,7 +17,6 @@ from autogen.tools.dependency_injection import (
     _is_depends_param,
     _remove_injected_params_from_signature,
     _string_metadata_to_description_field,
-    create_logger_params,
     get_context_params,
 )
 
@@ -128,18 +126,11 @@ class TestRemoveInjectedParamsFromSignature:
         ctx2: Annotated[int, Depends(lambda a: a + 2)],
         ctx6: ChatContext,
         ctx7: Annotated[ChatContext, "ctx7 description"],
-        ctx8: Annotated[Logger, "ctx8 description"],
         ctx3: MyContext = Depends(MyContext(b=3)),
         ctx4: MyContext = MyContext(b=4),
         ctx5: int = Depends(lambda a: a + 2),
     ) -> int:
         return a
-
-    def test_create_logger_params(self) -> None:
-        logger_params = create_logger_params(["ctx8", "ctx9"], function_name="f_all_params")
-        assert len(logger_params) == 2
-        assert isinstance(logger_params["ctx8"], Logger)
-        assert isinstance(logger_params["ctx9"], Logger)
 
     def test_is_base_context_param(self) -> None:
         sig = inspect.signature(self.f_all_params)
@@ -152,7 +143,6 @@ class TestRemoveInjectedParamsFromSignature:
         assert _is_context_param(sig.parameters["ctx5"]) is False
         assert _is_context_param(sig.parameters["ctx6"]) is True
         assert _is_context_param(sig.parameters["ctx7"]) is True
-        assert _is_context_param(sig.parameters["ctx8"]) is False
 
     def test_is_chat_context_param(self) -> None:
         sig = inspect.signature(self.f_all_params)
@@ -161,24 +151,10 @@ class TestRemoveInjectedParamsFromSignature:
         assert _is_context_param(sig.parameters["ctx4"], subclass=ChatContext) is False
         assert _is_context_param(sig.parameters["ctx6"], subclass=ChatContext) is True
         assert _is_context_param(sig.parameters["ctx7"], subclass=ChatContext) is True
-        assert _is_context_param(sig.parameters["ctx8"], subclass=ChatContext) is False
-
-    def test_is_logger_param(self) -> None:
-        sig = inspect.signature(self.f_all_params)
-        assert _is_context_param(sig.parameters["ctx1"], subclass=Logger) is False
-        assert _is_context_param(sig.parameters["ctx3"], subclass=Logger) is False
-        assert _is_context_param(sig.parameters["ctx4"], subclass=Logger) is False
-        assert _is_context_param(sig.parameters["ctx6"], subclass=Logger) is False
-        assert _is_context_param(sig.parameters["ctx7"], subclass=Logger) is False
-        assert _is_context_param(sig.parameters["ctx8"], subclass=Logger) is True
 
     def test_get_chat_context_params(self) -> None:
         chat_context_params = get_context_params(self.f_all_params, subclass=ChatContext)
         assert chat_context_params == ["ctx6", "ctx7"]
-
-    def test_get_logger_params(self) -> None:
-        logger_params = get_context_params(self.f_all_params, subclass=Logger)
-        assert logger_params == ["ctx8"]
 
     def test_is_depends_param(self) -> None:
         sig = inspect.signature(self.f_all_params)

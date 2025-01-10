@@ -2771,9 +2771,8 @@ class ConversableAgent(LLMAgent):
             tool = Tool(func_or_tool=func_or_tool, name=name)
             chat_context = ChatContext(self)
             chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
-            inject_params = chat_context_params | tool._logger_params
 
-            self.register_function({tool.name: self._wrap_function(tool.func, inject_params)})
+            self.register_function({tool.name: self._wrap_function(tool.func, chat_context_params)})
 
             return tool
 

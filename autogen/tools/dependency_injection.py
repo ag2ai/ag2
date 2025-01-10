@@ -3,11 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-import logging
 import sys
 from abc import ABC
 from functools import wraps
-from logging import Logger
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
@@ -24,7 +22,6 @@ __all__ = [
     "ChatContext",
     "Depends",
     "Field",
-    "create_logger_params",
     "get_context_params",
     "inject_params",
 ]
@@ -89,9 +86,7 @@ def Depends(x: Any) -> Any:  # noqa: N802
     return FastDepends(x)
 
 
-def get_context_params(
-    func: Callable[..., Any], subclass: Union[type[BaseContext], type[ChatContext], type[Logger]]
-) -> list[str]:
+def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContext], type[ChatContext]]) -> list[str]:
     """Gets the names of the context parameters in a function signature.
 
     Args:
@@ -107,7 +102,7 @@ def get_context_params(
 
 
 def _is_context_param(
-    param: inspect.Parameter, subclass: Union[type[BaseContext], type[ChatContext], type[Logger]] = BaseContext
+    param: inspect.Parameter, subclass: Union[type[BaseContext], type[ChatContext]] = BaseContext
 ) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
@@ -133,11 +128,7 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
         func = _fix_staticmethod(func)
 
     sig = inspect.signature(func)
-    params_to_remove = [
-        p.name
-        for p in sig.parameters.values()
-        if _is_context_param(p) or _is_context_param(p, Logger) or _is_depends_param(p)
-    ]
+    params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
     _remove_params(func, sig, params_to_remove)
     return func
 
@@ -186,19 +177,6 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
         f = wrapper
     return f
-
-
-def create_logger_params(params: list[str], function_name: str) -> dict[str, Logger]:
-    # If Logging is not configured. Configuring now
-    if not logging.getLogger().hasHandlers():
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",  # Exclude milliseconds
-        )
-
-    logger_params = {param: logging.getLogger(f"{function_name}.{param}") for param in params}
-    return logger_params
 
 
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
