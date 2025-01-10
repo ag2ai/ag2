@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -74,9 +74,10 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         self.relations = relations
         self.potential_schema = potential_schema
 
-    def init_db(self, input_doc: Document | None = None):
+    def init_db(self, input_doc: list[Document] | None = None):
         """
-        Initialize the Neo4j graph database using the provided input document.
+        Initialize the Neo4j graph database using the provided input doc.
+        Currently this method only supports single document input.
 
         This method supports both text and PDF documents. It performs the following steps:
         1. Clears the existing database.
@@ -84,16 +85,16 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         3. Creates a vector index for efficient retrieval.
 
         Args:
-            input_doc (Document): Input document for building the graph.
+            input_doc (list[Document]): Input documents for building the graph.
 
         Raises:
             ValueError: If the input document is not provided or its type is unsupported.
         """
         if input_doc is None:
             raise ValueError("Input document is required to initialize the database.")
-        elif input_doc.doctype == DocumentType.TEXT:
+        elif input_doc[0].doctype == DocumentType.TEXT:
             from_pdf = False
-        elif input_doc.doctype == DocumentType.PDF:
+        elif input_doc[0].doctype == DocumentType.PDF:
             from_pdf = True
         else:
             raise ValueError("Only text or PDF documents are supported.")
@@ -115,9 +116,9 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
 
         logger.info("Building the knowledge graph...")
         if from_pdf:
-            asyncio.run(self.kg_builder.run_async(file_path=input_doc.path_or_url))
+            asyncio.run(self.kg_builder.run_async(file_path=input_doc[0].path_or_url))
         else:
-            asyncio.run(self.kg_builder.run_async(text=str(input_doc.data)))
+            asyncio.run(self.kg_builder.run_async(text=str(input_doc[0].data)))
 
         self.index_name = "vector-index-name"
         logger.info(f"Creating vector index '{self.index_name}'...")
@@ -137,7 +138,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         logger.warning("The 'add_records' method is not implemented.")
         return False
 
-    def query(self, question: str, **kwargs) -> GraphStoreQueryResult:
+    def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
         """
         Query the Neo4j database using a natural language question.
 
