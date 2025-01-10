@@ -6,7 +6,7 @@ import os
 import pytest
 
 from autogen import UserProxyAgent
-from autogen.agentchat.contrib.captainagent import CaptainAgent
+from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials, reason, skip_openai  # noqa: E402
 
