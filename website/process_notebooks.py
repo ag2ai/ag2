@@ -35,7 +35,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import nbclient
+    import nbclient  # noqa: F401
     from nbclient.client import (
         CellExecutionError,
         CellTimeoutError,

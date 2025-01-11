@@ -20,7 +20,7 @@ from ...conftest import reason, skip_openai  # noqa: E402
 
 skip_reasons = [reason]
 try:
-    from graphviz import Digraph
+    from graphviz import Digraph  # noqa: F401
 
     skip_for_dependencies = False
     skip_reason = ""

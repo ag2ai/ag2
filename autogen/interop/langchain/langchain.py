@@ -67,7 +67,7 @@ class LangChainInteroperability:
             return "This submodule is only supported for Python versions 3.9 and above"
 
         try:
-            import langchain_core.tools
+            import langchain_core.tools  # noqa: F401
         except ImportError:
             return (
                 "Please install `interop-langchain` extra to use this module:\n\n\tpip install ag2[interop-langchain]"

@@ -16,7 +16,7 @@ from autogen import OpenAIWrapper
 from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:

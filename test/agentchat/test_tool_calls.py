@@ -19,7 +19,7 @@ from autogen.oai.client import TOOL_ENABLED
 from ..conftest import Credentials
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip_openai = True
 else:

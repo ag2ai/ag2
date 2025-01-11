@@ -13,7 +13,7 @@ Unit test for retrieve_utils.py
 import pytest
 
 try:
-    import chromadb
+    import chromadb  # noqa: F401
 
     from autogen.retrieve_utils import (
         create_vector_db_from_dir,
@@ -33,7 +33,7 @@ else:
 import os
 
 try:
-    from unstructured.partition.auto import partition
+    from unstructured.partition.auto import partition  # noqa: F401
 
     HAS_UNSTRUCTURED = True
 except ImportError:

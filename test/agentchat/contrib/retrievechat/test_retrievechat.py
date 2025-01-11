@@ -14,7 +14,7 @@ from ....conftest import Credentials, reason, skip_openai  # noqa: E402
 
 try:
     import chromadb
-    import openai
+    import openai  # noqa: F401
     from chromadb.utils import embedding_functions as ef
 
     from autogen import AssistantAgent

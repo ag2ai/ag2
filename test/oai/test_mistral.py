@@ -10,14 +10,14 @@ import pytest
 
 try:
     from mistralai import (
-        AssistantMessage,
-        Function,
-        FunctionCall,
-        Mistral,
-        SystemMessage,
-        ToolCall,
-        ToolMessage,
-        UserMessage,
+        AssistantMessage,  # noqa: F401
+        Function,  # noqa: F401
+        FunctionCall,  # noqa: F401
+        Mistral,  # noqa: F401
+        SystemMessage,  # noqa: F401
+        ToolCall,  # noqa: F401
+        ToolMessage,  # noqa: F401
+        UserMessage,  # noqa: F401
     )
 
     from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost

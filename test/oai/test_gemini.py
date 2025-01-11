@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    import google.auth
+    import google.auth  # noqa: F401
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config

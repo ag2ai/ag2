@@ -155,7 +155,7 @@ class PydanticAIInteroperability:
             return "This submodule is only supported for Python versions 3.9 and above"
 
         try:
-            import pydantic_ai.tools
+            import pydantic_ai.tools  # noqa: F401
         except ImportError:
             return "Please install `interop-pydantic-ai` extra to use this module:\n\n\tpip install ag2[interop-pydantic-ai]"
 

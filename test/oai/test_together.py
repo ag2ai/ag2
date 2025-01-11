@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
+    from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # noqa: F401
 
     from autogen.oai.together import TogetherClient, calculate_together_cost
 

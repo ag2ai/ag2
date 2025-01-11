@@ -14,8 +14,8 @@ import pytest
 from autogen.agentchat.contrib.vectordb.base import Document
 
 try:
-    import pymongo
-    import sentence_transformers
+    import pymongo  # noqa: F401
+    import sentence_transformers  # noqa: F401
 
     from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
 except ImportError:

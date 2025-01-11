@@ -17,14 +17,14 @@ from autogen.cache import Cache
 from ..conftest import Credentials, skip_openai, skip_redis  # noqa: E402
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip_openai_tests = True
 else:
     skip_openai_tests = False or skip_openai
 
 try:
-    import redis
+    import redis  # noqa: F401
 except ImportError:
     skip_redis_tests = True
 else:

@@ -21,11 +21,11 @@ from ..conftest import Credentials, skip_openai  # noqa: E402
 TOOL_ENABLED = False
 try:
     import openai
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
-    from openai.types.chat.chat_completion import ChatCompletionMessage
+    from openai.types.chat.chat_completion import ChatCompletionMessage  # noqa: F401
 except ImportError:
     skip = True
 else:

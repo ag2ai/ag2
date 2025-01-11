@@ -76,7 +76,7 @@ class CrewAIInteroperability:
             return "This submodule is only supported for Python versions 3.10, 3.11, and 3.12"
 
         try:
-            import crewai.tools
+            import crewai.tools  # noqa: F401
         except ImportError:
             return "Please install `interop-crewai` extra to use this module:\n\n\tpip install ag2[interop-crewai]"
 

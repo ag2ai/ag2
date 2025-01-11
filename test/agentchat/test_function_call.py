@@ -18,7 +18,7 @@ from autogen.math_utils import eval_math_responses
 from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:

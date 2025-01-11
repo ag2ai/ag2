@@ -11,8 +11,8 @@ from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials, reason, skip_openai  # noqa: E402
 
 try:
-    import chromadb
-    import huggingface_hub
+    import chromadb  # noqa: F401
+    import huggingface_hub  # noqa: F401
 except ImportError:
     skip = True
 else:

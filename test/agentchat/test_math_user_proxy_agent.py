@@ -19,7 +19,7 @@ from autogen.agentchat.contrib.math_user_proxy_agent import (
 from ..conftest import Credentials, skip_openai  # noqa: E402
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:

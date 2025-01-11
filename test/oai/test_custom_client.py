@@ -10,7 +10,7 @@ import pytest
 from autogen import OpenAIWrapper
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
