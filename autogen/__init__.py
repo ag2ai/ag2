@@ -7,18 +7,11 @@
 import logging
 
 from .agentchat import *
-from .code_utils import DEFAULT_MODEL, FAST_MODEL
+from .code_utils import DEFAULT_MODEL, FAST_MODEL  # noqa: F401
 from .exception_utils import *
 from .oai import *
-from .version import __version__
+from .version import __version__  # noqa: F401
 
 # Set the root logger.
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-# ToDo: Instead of importing *, import individual items from the package and update __all__.
-__all__ = [
-    "DEFAULT_MODEL",
-    "FAST_MODEL",
-    "__version__",
-]
