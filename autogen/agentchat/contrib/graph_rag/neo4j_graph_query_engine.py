@@ -137,7 +137,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             show_progress=True,
         )
 
-    def add_records(self, new_records: list) -> bool:
+    def add_records(self, new_records: list[Document]) -> bool:
         """
         Add new records to the knowledge graph. Must be local files.
 

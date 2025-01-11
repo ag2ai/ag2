@@ -106,7 +106,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         logger.info(f"Creating vector index '{self.index_name}'...")
         self._create_index(self.index_name)
 
-    def add_records(self, new_records: list) -> bool:
+    def add_records(self, new_records: list[Document]) -> bool:
         """
         Add new records to the Neo4j database.
 
