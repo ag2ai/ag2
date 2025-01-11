@@ -111,7 +111,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         Add new records to the Neo4j database.
 
         Args:
-            new_records (list): List of new Documents to be added
+            new_records (list[Document]): List of new Documents to be added
 
         Returns:
             bool: True if records were added successfully, False otherwise.
