@@ -18,7 +18,7 @@ from autogen.retrieve_utils import TEXT_FORMATS, get_files_from_dir, split_files
 logger = get_logger(__name__)
 
 try:
-    import fastembed
+    import fastembed  # noqa: F401
     from qdrant_client import QdrantClient, models
     from qdrant_client.fastembed_common import QueryResponse
 except ImportError as e:

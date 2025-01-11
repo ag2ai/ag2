@@ -16,7 +16,7 @@ from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
 try:
-    import pgvector
+    import pgvector  # noqa: F401
     from pgvector.psycopg import register_vector
 except ImportError:
     raise ImportError("Please install pgvector: `pip install pgvector`")

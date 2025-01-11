@@ -15,3 +15,10 @@ from .version import __version__
 # Set the root logger.
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# ToDo: Instead of importing *, import individual items from the package and update __all__.
+__all__ = [
+    "DEFAULT_MODEL",
+    "FAST_MODEL",
+    "__version__",
+]
