@@ -254,7 +254,10 @@
                           ]
                         }
                       ]
-                    }
+                    },
+                    "docs/reference/agentchat/contrib/captainagent/agent_builder",
+                    "docs/reference/agentchat/contrib/captainagent/captainagent",
+                    "docs/reference/agentchat/contrib/captainagent/tool_retriever"
                   ]
                 },
                 {
@@ -440,8 +443,6 @@
         "docs/reference/browser_utils",
         "docs/reference/code_utils",
         "docs/reference/exception_utils",
-        "docs/reference/formatting_utils",
-        "docs/reference/function_utils",
         "docs/reference/graph_utils",
         "docs/reference/math_utils",
         "docs/reference/retrieve_utils",
@@ -493,6 +494,7 @@
       "group": "Talks",
       "pages": [
         "talks/future_talks/index",
+        "talks/2024-12-19-special_talk/index",
         "talks/2024-12-19/index",
         "talks/2024-12-12/index",
         "talks/2024-11-28/index",

@@ -11,6 +11,7 @@ __all__ = ["is_jupyter_kernel_gateway_installed"]
 
 
 def is_jupyter_kernel_gateway_installed() -> bool:
+    """Check if jupyter-kernel-gateway is installed."""
     try:
         subprocess.run(
             ["jupyter", "kernelgateway", "--version"],
