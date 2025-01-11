@@ -22,8 +22,6 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-ALLOWED_DOCTYPES = [DocumentType.TEXT, DocumentType.PDF]
-
 
 class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
     """
@@ -68,6 +66,10 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         """
         self.uri = f"{host}:{port}"
         self.driver = GraphDatabase.driver(self.uri, auth=(username, password))
+        self.embeddings = embeddings
+        self.embedding_dimension = embedding_dimension
+        self.llm = llm
+        self.query_llm = query_llm
         self.entities = entities
         self.relations = relations
         self.potential_schema = potential_schema
@@ -93,32 +95,12 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         elif len(input_doc) > 1:
             raise ValueError("Only the first document will be used to initialize the database.")
 
-        doc_type = input_doc[0].doctype
-        if doc_type not in ALLOWED_DOCTYPES:
-            raise ValueError("Only text or PDF documents are supported.")
-
         logger.info("Clearing the database...")
         self._clear_db()
 
-        logger.info("Initializing the knowledge graph builder...")
-        self.kg_builder = SimpleKGPipeline(
-            driver=self.driver,
-            embedder=self.embeddings,
-            llm=self.llm,
-            entities=self.entities,
-            relations=self.relations,
-            potential_schema=self.potential_schema,
-            on_error="IGNORE",
-            from_pdf=(doc_type == DocumentType.PDF),
-        )
+        self._initialize_kg_builders()
 
-        logger.info("Building the knowledge graph...")
-        if doc_type == DocumentType.PDF:
-            asyncio.run(self.kg_builder.run_async(file_path=input_doc[0].path_or_url))
-        elif doc_type == DocumentType.TEXT:
-            with open(input_doc[0].path_or_url, "r") as file:
-                text = file.read()
-            asyncio.run(self.kg_builder.run_async(text=text))
+        self._build_graph(input_doc)
 
         self.index_name = "vector-index-name"
         logger.info(f"Creating vector index '{self.index_name}'...")
@@ -129,13 +111,18 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         Add new records to the Neo4j database.
 
         Args:
-            new_records (list): List of records to be added.
+            new_records (list): List of new Documents to be added
 
         Returns:
             bool: True if records were added successfully, False otherwise.
         """
-        # Not yet implemented
-        raise NotImplementedError("The 'add_records' method is not implemented.")
+        for record in new_records:
+            if not isinstance(record, Document):
+                raise ValueError("Invalid record type. Expected Document.")
+
+        self._build_graph(new_records)
+
+        return True
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
         """
@@ -182,3 +169,50 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         logger.info("Clearing all nodes and relationships in the database...")
         self.driver.execute_query("MATCH (n) DETACH DELETE n;")
         logger.info("Database cleared successfully.")
+
+    def _initialize_kg_builders(self):
+        """
+        Initialize the knowledge graph builders
+        """
+        logger.info("Initializing the knowledge graph builders...")
+        self.text_kg_builder = SimpleKGPipeline(
+            driver=self.driver,
+            embedder=self.embeddings,
+            llm=self.llm,
+            entities=self.entities,
+            relations=self.relations,
+            potential_schema=self.potential_schema,
+            on_error="IGNORE",
+            from_pdf=False,
+        )
+
+        self.pdf_kg_builder = SimpleKGPipeline(
+            driver=self.driver,
+            embedder=self.embeddings,
+            llm=self.llm,
+            entities=self.entities,
+            relations=self.relations,
+            potential_schema=self.potential_schema,
+            on_error="IGNORE",
+            from_pdf=True,
+        )
+
+    def _build_graph(self, input_doc: List[Document]) -> None:
+        """
+        Build the knowledge graph using the provided input documents.
+
+        Args:
+            input_doc (List[Document]): List of input documents for building the graph.
+        """
+        logger.info("Building the knowledge graph...")
+        for doc in input_doc:
+            if doc.doctype == DocumentType.TEXT:
+                with open(doc.path_or_url, "r") as file:
+                    text = file.read()
+                asyncio.run(self.text_kg_builder.run_async(text=text))
+            elif doc.doctype == DocumentType.PDF:
+                asyncio.run(self.pdf_kg_builder.run_async(file_path=doc.path_or_url))
+            else:
+                raise ValueError(f"Unsupported document type: {doc.doctype}")
+
+        logger.info("Knowledge graph built successfully.")

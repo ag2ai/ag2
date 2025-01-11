@@ -52,7 +52,11 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:
         """
-        Query neo4j native query engine and return the message.
+        Query Neo4j and return the message. Internally, it uses the Neo4jNativeGraphQueryEngine to query the graph.
+
+        The agent's system message will be incorporated into the query, if it's not blank.
+
+        If no results are found, a default message is returned: "I'm sorry, I don't have an answer for that."
 
         Args:
             recipient: The agent instance that will receive the message.
@@ -63,17 +67,37 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         Returns:
             A tuple containing a boolean indicating success and the assistant's reply.
         """
-        question = self._get_last_question(messages[-1])
-
+        question = self._messages_summary(messages, recipient.system_message)
         result: GraphStoreQueryResult = self.query_engine.query(question)
 
-        return True, result.answer
+        return True, result.answer if result.answer else "I'm sorry, I don't have an answer for that."
 
-    def _get_last_question(self, message: Union[dict, str]):
-        """Retrieves the last message from the conversation history."""
-        if isinstance(message, str):
-            return message
-        if isinstance(message, dict):
-            if "content" in message:
-                return message["content"]
-        return None
+    def _messages_summary(self, messages: Union[dict, str], system_message: str) -> str:
+        """Summarize the messages in the conversation history. Excluding any message with 'tool_calls' and 'tool_responses'
+        Includes the 'name' (if it exists) and the 'content', with a new line between each one, like:
+        customer:
+        <content>
+
+        agent:
+        <content>
+        """
+
+        if isinstance(messages, str):
+            if system_message:
+                summary = f"IMPORTANT: {system_message}\nContext:\n\n{messages}"
+            else:
+                return messages
+
+        elif isinstance(messages, list):
+            summary = ""
+            for message in messages:
+                if "content" in message and "tool_calls" not in message and "tool_responses" not in message:
+                    summary += f"{message.get('name', '')}: {message.get('content','')}\n\n"
+
+            if system_message:
+                summary = f"IMPORTANT: {system_message}\nContext:\n\n{summary}"
+
+            return summary
+
+        else:
+            raise ValueError("Invalid messages format. Must be a list of messages or a string.")

@@ -32,8 +32,8 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
 # Test fixture for creating and initializing a query engine
 @pytest.fixture(scope="module")
 def neo4j_native_query_engine():
-    input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.pdf"
-    input_document = Document(doctype=DocumentType.PDF, path_or_url=input_path)
+    input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.txt"
+    input_document = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
 
     # best practice to use upper-case
     entities = ["EMPLOYEE", "EMPLOYER", "POLICY", "BENEFIT", "POSITION", "DEPARTMENT", "CONTRACT", "RESPONSIBILITY"]
@@ -95,11 +95,9 @@ def neo4j_native_query_engine():
 # Test fixture for auto generated knowledge graph
 @pytest.fixture(scope="module")
 def neo4j_native_query_engine_auto():
-    input_path = "./test/agentchat/contrib/graph_rag/paul_graham_essay.txt"
-    with open(input_path, "r") as file:
-        text = file.read()
+    input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.txt"
 
-    input_document = Document(doctype=DocumentType.TEXT, data=text)
+    input_document = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
 
     query_engine = Neo4jNativeGraphQueryEngine(
         host="bolt://172.17.0.3",  # Change
@@ -136,8 +134,27 @@ def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):
     """
     Test querying with auto-generated property graph
     """
-    question = "What companies did Paul Graham work at?"
+    question = "Which company is the employer?"
     query_result: GraphStoreQueryResult = neo4j_native_query_engine_auto.query(question=question)
 
     logger.info(query_result.answer)
-    assert query_result.answer.find("Viaweb") >= 0
+    assert query_result.answer.find("BUZZ") >= 0
+
+
+def test_neo4j_add_records(neo4j_native_query_engine):
+    """
+    Test the add_records functionality of the Neo4j Query Engine.
+    """
+    input_path = "./test/agentchat/contrib/graph_rag/the_matrix.txt"
+    input_documents = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
+
+    # Add records to the existing graph
+    _ = neo4j_native_query_engine.add_records(input_documents)
+
+    # Verify the new data is in the graph
+    question = "Who acted in 'The Matrix'?"
+    query_result: GraphStoreQueryResult = neo4j_native_query_engine.query(question=question)
+
+    logger.info(query_result.answer)
+
+    assert query_result.answer.find("Keanu Reeves") >= 0
