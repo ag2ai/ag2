@@ -43,7 +43,7 @@ class GraphQueryEngine(Protocol):
         """
         pass
 
-    def add_records(self, new_records: list) -> bool:
+    def add_records(self, new_records: list[Document]) -> bool:
         """
         Add new records to the underlying database and add to the graph if required.
         """
