@@ -68,7 +68,9 @@ class TogetherClient:
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Together.AI, it will be ignored.", UserWarning)
 
-        assert self.api_key, "Please include the api_key in your config list entry for Together.AI or set the TOGETHER_API_KEY env variable."
+        assert self.api_key, (
+            "Please include the api_key in your config list entry for Together.AI or set the TOGETHER_API_KEY env variable."
+        )
 
     def message_retrieval(self, response) -> list:
         """
@@ -100,9 +102,9 @@ class TogetherClient:
 
         # Check that we have what we need to use Together.AI's API
         together_params["model"] = params.get("model", None)
-        assert together_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Together.AI model to use."
+        assert together_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Together.AI model to use."
+        )
 
         # Validate allowed Together.AI parameters
         # https://github.com/togethercomputer/together-python/blob/94ffb30daf0ac3e078be986af7228f85f79bde99/src/together/resources/completions.py#L44

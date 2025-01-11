@@ -1059,8 +1059,7 @@ class OpenAIWrapper:
         # future proofing for when tool calls other than function calls are supported
         if tool_calls_chunk.type and tool_calls_chunk.type != "function":
             raise NotImplementedError(
-                f"Tool call type {tool_calls_chunk.type} is currently not supported. "
-                "Only function calls are supported."
+                f"Tool call type {tool_calls_chunk.type} is currently not supported. Only function calls are supported."
             )
 
         # Handle tool call

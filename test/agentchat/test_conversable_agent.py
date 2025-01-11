@@ -387,9 +387,9 @@ def test_conversable_agent():
     pre_len = len(dummy_agent_1.chat_messages[dummy_agent_2])
     with pytest.raises(ValueError):
         dummy_agent_1.receive({"message": "hello"}, dummy_agent_2)
-    assert pre_len == len(
-        dummy_agent_1.chat_messages[dummy_agent_2]
-    ), "When the message is not an valid openai message, it should not be appended to the oai conversation."
+    assert pre_len == len(dummy_agent_1.chat_messages[dummy_agent_2]), (
+        "When the message is not an valid openai message, it should not be appended to the oai conversation."
+    )
 
     # monkeypatch.setattr(sys, "stdin", StringIO("exit"))
     dummy_agent_1.send("TERMINATE", dummy_agent_2)  # send a str
@@ -406,9 +406,9 @@ def test_conversable_agent():
     with pytest.raises(ValueError):
         dummy_agent_1.send({"message": "hello"}, dummy_agent_2)
 
-    assert pre_len == len(
-        dummy_agent_1.chat_messages[dummy_agent_2]
-    ), "When the message is not a valid openai message, it should not be appended to the oai conversation."
+    assert pre_len == len(dummy_agent_1.chat_messages[dummy_agent_2]), (
+        "When the message is not a valid openai message, it should not be appended to the oai conversation."
+    )
 
     # update system message
     dummy_agent_1.update_system_message("new system message")
@@ -451,16 +451,16 @@ def test_generate_reply():
     messages = [{"function_call": {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}, "role": "assistant"}]
 
     # when sender is None, messages is provided
-    assert (
-        dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == 15
-    ), "generate_reply not working when sender is None"
+    assert dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == 15, (
+        "generate_reply not working when sender is None"
+    )
 
     # when sender is provided, messages is None
     dummy_agent_1 = ConversableAgent(name="dummy_agent_1", llm_config=False, human_input_mode="ALWAYS")
     dummy_agent_2._oai_messages[dummy_agent_1] = messages
-    assert (
-        dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == 15
-    ), "generate_reply not working when messages is None"
+    assert dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == 15, (
+        "generate_reply not working when messages is None"
+    )
 
     dummy_agent_2.register_reply(["str", None], ConversableAgent.generate_oai_reply)
     with pytest.raises(SenderRequired):

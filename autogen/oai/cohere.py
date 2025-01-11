@@ -78,9 +78,9 @@ class CohereClient:
         if not self.api_key:
             self.api_key = os.getenv("COHERE_API_KEY")
 
-        assert (
-            self.api_key
-        ), "Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable."
+        assert self.api_key, (
+            "Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable."
+        )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Cohere, it will be ignored.", UserWarning)
@@ -116,9 +116,9 @@ class CohereClient:
         # Check that we have what we need to use Cohere's API
         # We won't enforce the available models as they are likely to change
         cohere_params["model"] = params.get("model", None)
-        assert cohere_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Cohere model to use."
+        assert cohere_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Cohere model to use."
+        )
 
         # Validate allowed Cohere parameters
         # https://docs.cohere.com/reference/chat

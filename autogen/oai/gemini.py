@@ -112,9 +112,9 @@ class GeminiClient:
         if "location" in params:
             vertexai_init_args["location"] = params["location"]
         if "credentials" in params:
-            assert isinstance(
-                params["credentials"], Credentials
-            ), "Object type google.auth.credentials.Credentials is expected!"
+            assert isinstance(params["credentials"], Credentials), (
+                "Object type google.auth.credentials.Credentials is expected!"
+            )
             vertexai_init_args["credentials"] = params["credentials"]
         if vertexai_init_args:
             vertexai.init(**vertexai_init_args)
@@ -149,9 +149,9 @@ class GeminiClient:
         else:
             self.use_vertexai = False
         if not self.use_vertexai:
-            assert ("project_id" not in kwargs) and (
-                "location" not in kwargs
-            ), "Google Cloud project and compute location cannot be set when using an API Key!"
+            assert ("project_id" not in kwargs) and ("location" not in kwargs), (
+                "Google Cloud project and compute location cannot be set when using an API Key!"
+            )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
@@ -184,9 +184,9 @@ class GeminiClient:
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:
-            assert ("project_id" not in params) and (
-                "location" not in params
-            ), "Google Cloud project and compute location cannot be set when using an API Key!"
+            assert ("project_id" not in params) and ("location" not in params), (
+                "Google Cloud project and compute location cannot be set when using an API Key!"
+            )
         model_name = params.get("model", "gemini-pro")
 
         if model_name == "gemini-pro-vision":

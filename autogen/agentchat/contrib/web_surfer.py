@@ -133,7 +133,7 @@ class WebSurferAgent(ConversableAgent):
             current_page = self.browser.viewport_current_page
             total_pages = len(self.browser.viewport_pages)
 
-            header += f"Viewport position: Showing page {current_page+1} of {total_pages}.\n"
+            header += f"Viewport position: Showing page {current_page + 1} of {total_pages}.\n"
             return (header, self.browser.viewport)
 
         @self._user_proxy.register_for_execution()

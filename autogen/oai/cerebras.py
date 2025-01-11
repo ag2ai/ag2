@@ -58,9 +58,9 @@ class CerebrasClient:
         if not self.api_key:
             self.api_key = os.getenv("CEREBRAS_API_KEY")
 
-        assert (
-            self.api_key
-        ), "Please include the api_key in your config list entry for Cerebras or set the CEREBRAS_API_KEY env variable."
+        assert self.api_key, (
+            "Please include the api_key in your config list entry for Cerebras or set the CEREBRAS_API_KEY env variable."
+        )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Crebras, it will be ignored.", UserWarning)
@@ -97,9 +97,9 @@ class CerebrasClient:
         # Check that we have what we need to use Cerebras's API
         # We won't enforce the available models as they are likely to change
         cerebras_params["model"] = params.get("model", None)
-        assert cerebras_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Cerebras model to use."
+        assert cerebras_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Cerebras model to use."
+        )
 
         # Validate allowed Cerebras parameters
         # https://inference-docs.cerebras.ai/api-reference/chat-completions

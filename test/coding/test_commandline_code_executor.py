@@ -285,9 +285,9 @@ def test_policy_override():
         if lang not in custom_policy:
             assert executor.execution_policies[lang] == should_execute, f"Policy for {lang} should not be changed"
 
-    assert set(executor.execution_policies.keys()) == set(
-        default_policy.keys()
-    ), "Execution policies should only contain known languages"
+    assert set(executor.execution_policies.keys()) == set(default_policy.keys()), (
+        "Execution policies should only contain known languages"
+    )
 
 
 def _test_restart(executor: CodeExecutor) -> None:
@@ -342,9 +342,9 @@ def _test_conversable_agent_code_execution(executor: CodeExecutor) -> None:
 def test_dangerous_commands(lang, code, expected_message):
     with pytest.raises(ValueError) as exc_info:
         LocalCommandLineCodeExecutor.sanitize_command(lang, code)
-    assert expected_message in str(
-        exc_info.value
-    ), f"Expected message '{expected_message}' not found in '{str(exc_info.value)}'"
+    assert expected_message in str(exc_info.value), (
+        f"Expected message '{expected_message}' not found in '{str(exc_info.value)}'"
+    )
 
 
 @pytest.mark.parametrize("cls", classes_to_test)

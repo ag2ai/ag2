@@ -288,7 +288,9 @@ def _generate_file_name_from_url(url: str, max_length=255) -> str:
     hash = hashlib.blake2b(url_bytes).hexdigest()
     parsed_url = urlparse(url)
     file_name = os.path.basename(url)
-    file_name = f"{parsed_url.netloc}_{file_name}_{hash[:min(8, max_length-len(parsed_url.netloc)-len(file_name)-1)]}"
+    file_name = (
+        f"{parsed_url.netloc}_{file_name}_{hash[: min(8, max_length - len(parsed_url.netloc) - len(file_name) - 1)]}"
+    )
     return file_name
 
 
@@ -423,7 +425,7 @@ def create_vector_db_from_dir(
             end_idx = i + min(40000, len(chunks) - i)
             collection.upsert(
                 documents=chunks[i:end_idx],
-                ids=[f"doc_{j+length}" for j in range(i, end_idx)],  # unique for each doc
+                ids=[f"doc_{j + length}" for j in range(i, end_idx)],  # unique for each doc
                 metadatas=sources[i:end_idx],
             )
     except ValueError as e:

@@ -94,7 +94,7 @@ class FalkorGraphRagCapability(GraphRagCapability):
             summary = ""
             for message in messages:
                 if "content" in message and "tool_calls" not in message and "tool_responses" not in message:
-                    summary += f"{message.get('name', '')}: {message.get('content','')}\n\n"
+                    summary += f"{message.get('name', '')}: {message.get('content', '')}\n\n"
 
             if system_message:
                 summary = f"IMPORTANT: {system_message}\nContext:\n\n{summary}"

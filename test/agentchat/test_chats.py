@@ -625,9 +625,9 @@ def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials, tasks_work_d
 
 def test_post_process_carryover_item():
     gemini_carryover_item = {"content": "How can I help you?", "role": "model"}
-    assert (
-        _post_process_carryover_item(gemini_carryover_item) == gemini_carryover_item["content"]
-    ), "Incorrect carryover postprocessing"
+    assert _post_process_carryover_item(gemini_carryover_item) == gemini_carryover_item["content"], (
+        "Incorrect carryover postprocessing"
+    )
     carryover_item = "How can I help you?"
     assert _post_process_carryover_item(carryover_item) == carryover_item, "Incorrect carryover postprocessing"
 

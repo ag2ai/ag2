@@ -92,9 +92,9 @@ class VisionCapability(AgentCapability):
             self._lmm_client = None
 
         self._custom_caption_func = custom_caption_func
-        assert (
-            self._lmm_config or custom_caption_func
-        ), "Vision Capability requires a valid lmm_config or custom_caption_func."
+        assert self._lmm_config or custom_caption_func, (
+            "Vision Capability requires a valid lmm_config or custom_caption_func."
+        )
 
     def add_to_agent(self, agent: ConversableAgent) -> None:
         self._parent_agent = agent

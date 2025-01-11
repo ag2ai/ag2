@@ -27,9 +27,9 @@ def consolidate_chat_info(chat_info, uniform_sender=None) -> None:
             or summary_method in ("last_msg", "reflection_with_llm")
         ), "summary_method must be a string chosen from 'reflection_with_llm' or 'last_msg' or a callable, or None."
         if summary_method == "reflection_with_llm":
-            assert (
-                sender.client is not None or c["recipient"].client is not None
-            ), "llm client must be set in either the recipient or sender when summary_method is reflection_with_llm."
+            assert sender.client is not None or c["recipient"].client is not None, (
+                "llm client must be set in either the recipient or sender when summary_method is reflection_with_llm."
+            )
 
 
 def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str, dict]]:

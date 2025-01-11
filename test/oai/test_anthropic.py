@@ -92,31 +92,31 @@ def test_intialization(anthropic_client):
 
 @pytest.mark.skipif(skip, reason=reason)
 def test_intialization_with_aws_credentials(anthropic_client_with_aws_credentials):
-    assert (
-        anthropic_client_with_aws_credentials.aws_access_key == "dummy_access_key"
-    ), "`aws_access_key` should be correctly set in the config"
-    assert (
-        anthropic_client_with_aws_credentials.aws_secret_key == "dummy_secret_key"
-    ), "`aws_secret_key` should be correctly set in the config"
-    assert (
-        anthropic_client_with_aws_credentials.aws_session_token == "dummy_session_token"
-    ), "`aws_session_token` should be correctly set in the config"
-    assert (
-        anthropic_client_with_aws_credentials.aws_region == "us-west-2"
-    ), "`aws_region` should be correctly set in the config"
+    assert anthropic_client_with_aws_credentials.aws_access_key == "dummy_access_key", (
+        "`aws_access_key` should be correctly set in the config"
+    )
+    assert anthropic_client_with_aws_credentials.aws_secret_key == "dummy_secret_key", (
+        "`aws_secret_key` should be correctly set in the config"
+    )
+    assert anthropic_client_with_aws_credentials.aws_session_token == "dummy_session_token", (
+        "`aws_session_token` should be correctly set in the config"
+    )
+    assert anthropic_client_with_aws_credentials.aws_region == "us-west-2", (
+        "`aws_region` should be correctly set in the config"
+    )
 
 
 @pytest.mark.skipif(skip, reason=reason)
 def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai_credentials):
-    assert (
-        anthropic_client_with_vertexai_credentials.gcp_project_id == "dummy_project_id"
-    ), "`gcp_project_id` should be correctly set in the config"
-    assert (
-        anthropic_client_with_vertexai_credentials.gcp_region == "us-west-2"
-    ), "`gcp_region` should be correctly set in the config"
-    assert (
-        anthropic_client_with_vertexai_credentials.gcp_auth_token == "dummy_auth_token"
-    ), "`gcp_auth_token` should be correctly set in the config"
+    assert anthropic_client_with_vertexai_credentials.gcp_project_id == "dummy_project_id", (
+        "`gcp_project_id` should be correctly set in the config"
+    )
+    assert anthropic_client_with_vertexai_credentials.gcp_region == "us-west-2", (
+        "`gcp_region` should be correctly set in the config"
+    )
+    assert anthropic_client_with_vertexai_credentials.gcp_auth_token == "dummy_auth_token", (
+        "`gcp_auth_token` should be correctly set in the config"
+    )
 
 
 # Test cost calculation

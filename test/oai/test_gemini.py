@@ -1,9 +1,10 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/autogenhub
+# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import os
 from unittest.mock import MagicMock, patch
 
@@ -93,9 +94,9 @@ def test_valid_initialization(gemini_client):
 @pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
 def test_google_application_credentials_initialization():
     GeminiClient(google_application_credentials="credentials.json", project_id="fake-project-id")
-    assert (
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "credentials.json"
-    ), "Incorrect Google Application Credentials initialization"
+    assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "credentials.json", (
+        "Incorrect Google Application Credentials initialization"
+    )
 
 
 @pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
@@ -187,9 +188,9 @@ def test_vertexai_safety_setting_conversion(gemini_client):
             converted_setting = converted_safety_settings[i]
             yield expected_setting.to_dict() == converted_setting.to_dict()
 
-    assert len(converted_safety_settings) == len(
-        expected_safety_settings
-    ), "The length of the safety settings is incorrect"
+    assert len(converted_safety_settings) == len(expected_safety_settings), (
+        "The length of the safety settings is incorrect"
+    )
     settings_comparison = compare_safety_settings(converted_safety_settings, expected_safety_settings)
     assert all(settings_comparison), "Converted safety settings are incorrect"
 
@@ -214,9 +215,9 @@ def test_vertexai_default_safety_settings_dict(gemini_client):
             converted_setting = converted_safety_settings[expected_setting_key]
             yield expected_setting == converted_setting
 
-    assert len(converted_safety_settings) == len(
-        expected_safety_settings
-    ), "The length of the safety settings is incorrect"
+    assert len(converted_safety_settings) == len(expected_safety_settings), (
+        "The length of the safety settings is incorrect"
+    )
     settings_comparison = compare_safety_settings(converted_safety_settings, expected_safety_settings)
     assert all(settings_comparison), "Converted safety settings are incorrect"
 
@@ -244,9 +245,9 @@ def test_vertexai_safety_setting_list(gemini_client):
             converted_setting = converted_safety_settings[i]
             yield expected_setting.to_dict() == converted_setting.to_dict()
 
-    assert len(converted_safety_settings) == len(
-        expected_safety_settings
-    ), "The length of the safety settings is incorrect"
+    assert len(converted_safety_settings) == len(expected_safety_settings), (
+        "The length of the safety settings is incorrect"
+    )
     settings_comparison = compare_safety_settings(converted_safety_settings, expected_safety_settings)
     assert all(settings_comparison), "Converted safety settings are incorrect"
 

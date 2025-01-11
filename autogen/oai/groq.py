@@ -60,9 +60,9 @@ class GroqClient:
         if not self.api_key:
             self.api_key = os.getenv("GROQ_API_KEY")
 
-        assert (
-            self.api_key
-        ), "Please include the api_key in your config list entry for Groq or set the GROQ_API_KEY env variable."
+        assert self.api_key, (
+            "Please include the api_key in your config list entry for Groq or set the GROQ_API_KEY env variable."
+        )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Groq API, it will be ignored.", UserWarning)
@@ -99,9 +99,9 @@ class GroqClient:
         # Check that we have what we need to use Groq's API
         # We won't enforce the available models as they are likely to change
         groq_params["model"] = params.get("model", None)
-        assert groq_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Groq model to use."
+        assert groq_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Groq model to use."
+        )
 
         # Validate allowed Groq parameters
         # https://console.groq.com/docs/api-reference#chat

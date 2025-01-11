@@ -680,7 +680,7 @@ class SelectSpeakerMessage(BaseMessage):
         f("Please select the next speaker from the following list:")
         agent_names = self.agent_names or []
         for i, agent_name in enumerate(agent_names):
-            f(f"{i+1}: {agent_name}")
+            f(f"{i + 1}: {agent_name}")
 
 
 @wrap_message

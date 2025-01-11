@@ -591,7 +591,7 @@ Please provide your rating along with a brief explanation of your assessment.
             )
         elif self._answer_approach == "pool":
             all_thoughts = "\n\n".join(
-                [f"--- Possibility {i+1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)]
+                [f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)]
             )
             self.send(
                 message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",

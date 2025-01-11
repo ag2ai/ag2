@@ -363,9 +363,9 @@ class MongoDBAtlasVectorDB(VectorDB):
             return []
         # Embed and create the documents
         embeddings = self.embedding_function(texts).tolist()
-        assert (
-            len(embeddings) == n_texts
-        ), f"The number of embeddings produced by self.embedding_function ({len(embeddings)} does not match the number of texts provided to it ({n_texts})."
+        assert len(embeddings) == n_texts, (
+            f"The number of embeddings produced by self.embedding_function ({len(embeddings)} does not match the number of texts provided to it ({n_texts})."
+        )
         to_insert = [
             {"_id": i, "content": t, "metadata": m, "embedding": e}
             for i, t, m, e in zip(ids, texts, metadatas, embeddings)

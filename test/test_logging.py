@@ -171,9 +171,9 @@ def test_log_new_agent(db_connection):
     """
 
     for row in cur.execute(query):
-        assert (
-            row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"]
-        ), "session id is not valid uuid"
+        assert row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"], (
+            "session id is not valid uuid"
+        )
         assert row["name"] == agent_name
         assert row["class"] == "AssistantAgent"
         assert row["init_args"] == json.dumps(init_args)
@@ -195,9 +195,9 @@ def test_log_oai_wrapper(db_connection):
     """
 
     for row in cur.execute(query):
-        assert (
-            row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"]
-        ), "session id is not valid uuid"
+        assert row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"], (
+            "session id is not valid uuid"
+        )
         saved_init_args = json.loads(row["init_args"])
         assert "config_list" in saved_init_args
         assert "api_key" not in saved_init_args["config_list"][0]
@@ -223,9 +223,9 @@ def test_log_oai_client(db_connection):
     """
 
     for row in cur.execute(query):
-        assert (
-            row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"]
-        ), "session id is not valid uuid"
+        assert row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"], (
+            "session id is not valid uuid"
+        )
         assert row["class"] == "AzureOpenAI"
         saved_init_args = json.loads(row["init_args"])
         assert "api_version" in saved_init_args

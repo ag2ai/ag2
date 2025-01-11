@@ -30,9 +30,9 @@ def _config_check(config: dict):
 
     for agent_config in config["agent_configs"]:
         assert agent_config.get("name", None) is not None, 'Missing agent "name" in your agent_configs.'
-        assert (
-            agent_config.get("system_message", None) is not None
-        ), 'Missing agent "system_message" in your agent_configs.'
+        assert agent_config.get("system_message", None) is not None, (
+            'Missing agent "system_message" in your agent_configs.'
+        )
         assert agent_config.get("description", None) is not None, 'Missing agent "description" in your agent_configs.'
 
 
@@ -718,7 +718,7 @@ Match roles in the role set to each expert in expert set.
             filepath: path save.
         """
         if filepath is None:
-            filepath = f'./save_config_{hashlib.md5(self.building_task.encode("utf-8")).hexdigest()}.json'
+            filepath = f"./save_config_{hashlib.md5(self.building_task.encode('utf-8')).hexdigest()}.json"
         with open(filepath, "w") as save_file:
             json.dump(self.cached_configs, save_file, indent=4)
         print(colored(f"Building config saved to {filepath}", "green"), flush=True)

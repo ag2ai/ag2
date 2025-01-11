@@ -74,9 +74,9 @@ class ON_CONDITION:  # noqa: N801
     def __post_init__(self):
         # Ensure valid types
         if self.target is not None:
-            assert isinstance(self.target, SwarmAgent) or isinstance(
-                self.target, dict
-            ), "'target' must be a SwarmAgent or a Dict"
+            assert isinstance(self.target, SwarmAgent) or isinstance(self.target, dict), (
+                "'target' must be a SwarmAgent or a Dict"
+            )
 
         # Ensure they have a condition
         assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
@@ -726,9 +726,9 @@ class SwarmAgent(ConversableAgent):
 
         for transit in hand_to:
             if isinstance(transit, AFTER_WORK):
-                assert isinstance(
-                    transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)
-                ), "Invalid After Work value"
+                assert isinstance(transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)), (
+                    "Invalid After Work value"
+                )
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
                 if isinstance(transit.target, SwarmAgent):

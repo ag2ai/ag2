@@ -107,26 +107,22 @@ class Collection:
             for doc_id, embedding, metadata, document in zip(ids, embeddings, metadatas, documents):
                 metadata = re.sub("'", '"', str(metadata))
                 sql_values.append((doc_id, embedding, metadata, document))
-            sql_string = (
-                f"INSERT INTO {self.name} (id, embedding, metadatas, documents)\n" f"VALUES (%s, %s, %s, %s);\n"
-            )
+            sql_string = f"INSERT INTO {self.name} (id, embedding, metadatas, documents)\nVALUES (%s, %s, %s, %s);\n"
         elif embeddings is not None:
             for doc_id, embedding, document in zip(ids, embeddings, documents):
                 sql_values.append((doc_id, embedding, document))
-            sql_string = f"INSERT INTO {self.name} (id, embedding, documents) " f"VALUES (%s, %s, %s);\n"
+            sql_string = f"INSERT INTO {self.name} (id, embedding, documents) VALUES (%s, %s, %s);\n"
         elif metadatas is not None:
             for doc_id, metadata, document in zip(ids, metadatas, documents):
                 metadata = re.sub("'", '"', str(metadata))
                 embedding = self.embedding_function(document)
                 sql_values.append((doc_id, metadata, embedding, document))
-            sql_string = (
-                f"INSERT INTO {self.name} (id, metadatas, embedding, documents)\n" f"VALUES (%s, %s, %s, %s);\n"
-            )
+            sql_string = f"INSERT INTO {self.name} (id, metadatas, embedding, documents)\nVALUES (%s, %s, %s, %s);\n"
         else:
             for doc_id, document in zip(ids, documents):
                 embedding = self.embedding_function(document)
                 sql_values.append((doc_id, document, embedding))
-            sql_string = f"INSERT INTO {self.name} (id, documents, embedding)\n" f"VALUES (%s, %s, %s);\n"
+            sql_string = f"INSERT INTO {self.name} (id, documents, embedding)\nVALUES (%s, %s, %s);\n"
         logger.debug(f"Add SQL String:\n{sql_string}\n{sql_values}")
         cursor.executemany(sql_string, sql_values)
         cursor.close()
@@ -489,9 +485,7 @@ class Collection:
         if collection_name:
             self.name = collection_name
         cursor = self.client.cursor()
-        cursor.execute(
-            "UPDATE collections" "SET metadata = '%s'" "WHERE collection_name = '%s';", (metadata, self.name)
-        )
+        cursor.execute("UPDATE collectionsSET metadata = '%s'WHERE collection_name = '%s';", (metadata, self.name))
         cursor.close()
 
     def delete(self, ids: list[ItemID], collection_name: Optional[str] = None) -> None:
@@ -554,14 +548,14 @@ class Collection:
             f"CREATE TABLE {self.name} ("
             f"documents text, id CHAR(8) PRIMARY KEY, metadatas JSONB, embedding vector({self.dimension}));"
             f"CREATE INDEX "
-            f'ON {self.name} USING hnsw (embedding vector_l2_ops) WITH (m = {self.metadata["hnsw:M"]}, '
-            f'ef_construction = {self.metadata["hnsw:construction_ef"]});'
+            f"ON {self.name} USING hnsw (embedding vector_l2_ops) WITH (m = {self.metadata['hnsw:M']}, "
+            f"ef_construction = {self.metadata['hnsw:construction_ef']});"
             f"CREATE INDEX "
-            f'ON {self.name} USING hnsw (embedding vector_cosine_ops) WITH (m = {self.metadata["hnsw:M"]}, '
-            f'ef_construction = {self.metadata["hnsw:construction_ef"]});'
+            f"ON {self.name} USING hnsw (embedding vector_cosine_ops) WITH (m = {self.metadata['hnsw:M']}, "
+            f"ef_construction = {self.metadata['hnsw:construction_ef']});"
             f"CREATE INDEX "
-            f'ON {self.name} USING hnsw (embedding vector_ip_ops) WITH (m = {self.metadata["hnsw:M"]}, '
-            f'ef_construction = {self.metadata["hnsw:construction_ef"]});'
+            f"ON {self.name} USING hnsw (embedding vector_ip_ops) WITH (m = {self.metadata['hnsw:M']}, "
+            f"ef_construction = {self.metadata['hnsw:construction_ef']});"
         )
         cursor.close()
 

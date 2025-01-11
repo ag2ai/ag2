@@ -110,9 +110,9 @@ def test_create_response(mock_chat, mistral_client):
     response = mistral_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Mistral response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Mistral response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_mistral_response_id", "Response ID should match the mocked response ID"
     assert response.model == "mistral-small-latest", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"

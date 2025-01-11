@@ -67,9 +67,9 @@ class MistralAIClient:
         if not self.api_key:
             self.api_key = os.getenv("MISTRAL_API_KEY", None)
 
-        assert (
-            self.api_key
-        ), "Please specify the 'api_key' in your config list entry for Mistral or set the MISTRAL_API_KEY env variable."
+        assert self.api_key, (
+            "Please specify the 'api_key' in your config list entry for Mistral or set the MISTRAL_API_KEY env variable."
+        )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Mistral.AI, it will be ignored.", UserWarning)
@@ -90,9 +90,9 @@ class MistralAIClient:
 
         # 1. Validate models
         mistral_params["model"] = params.get("model", None)
-        assert mistral_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Mistral.ai model to use."
+        assert mistral_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Mistral.ai model to use."
+        )
 
         # 2. Validate allowed Mistral.AI parameters
         mistral_params["temperature"] = validate_parameter(params, "temperature", (int, float), True, 0.7, None, None)
