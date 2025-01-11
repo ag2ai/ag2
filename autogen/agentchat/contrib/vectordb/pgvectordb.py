@@ -7,7 +7,7 @@
 import os
 import re
 import urllib.parse
-from typing import Callable, List, Optional, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 from sentence_transformers import SentenceTransformer

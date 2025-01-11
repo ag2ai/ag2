@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from logging import getLogger
-from typing import Annotated, Any
+from typing import Annotated
 from unittest.mock import MagicMock
 
 import pytest

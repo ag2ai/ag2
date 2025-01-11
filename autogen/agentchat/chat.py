@@ -8,12 +8,11 @@ import asyncio
 import datetime
 import logging
 import warnings
-from collections import abc, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any
 
-from ..formatting_utils import colored
 from ..io.base import IOStream
 from ..messages.agent_messages import PostCarryoverProcessingMessage
 from .utils import consolidate_chat_info

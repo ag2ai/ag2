@@ -71,29 +71,25 @@ assistant = autogen.AssistantAgent("assistant", llm_config={"config_list": confi
 
 from __future__ import annotations
 
-import copy
 import inspect
 import json
 import os
 import time
 import warnings
-from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
 from anthropic import __version__ as anthropic_version
-from anthropic.types import Completion, Message, TextBlock, ToolUseBlock
+from anthropic.types import TextBlock, ToolUseBlock
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 
 from autogen.oai.client_utils import validate_parameter
 
 TOOL_ENABLED = anthropic_version >= "0.23.1"
 if TOOL_ENABLED:
-    from anthropic.types.tool_use_block_param import (
-        ToolUseBlockParam,
-    )
+    pass
 
 
 ANTHROPIC_PRICING_1k = {

@@ -9,7 +9,7 @@
 import pickle
 from typing import Any, Optional, TypedDict, Union
 
-from azure.cosmos import CosmosClient, PartitionKey, exceptions
+from azure.cosmos import CosmosClient, PartitionKey
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 
 from autogen.cache.abstract_cache_base import AbstractCache

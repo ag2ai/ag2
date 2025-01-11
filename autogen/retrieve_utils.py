@@ -8,7 +8,7 @@ import glob
 import hashlib
 import os
 import re
-from typing import Callable, List, Tuple, Union
+from typing import Callable, Union
 from urllib.parse import urlparse
 
 import chromadb

@@ -7,7 +7,7 @@
 import json
 from pprint import pprint
 from tempfile import TemporaryDirectory
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 from unittest.mock import MagicMock
 from uuid import UUID
 

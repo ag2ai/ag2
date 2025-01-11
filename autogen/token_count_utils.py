@@ -7,7 +7,7 @@
 import json
 import logging
 import re
-from typing import Dict, List, Union
+from typing import Union
 
 import tiktoken
 

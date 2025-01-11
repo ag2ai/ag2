@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Dict, Optional, Tuple, Type, Union, get_args
+from typing import Any, Tuple, Union, get_args
 
 from pydantic import BaseModel
 from pydantic.version import VERSION as PYDANTIC_VERSION

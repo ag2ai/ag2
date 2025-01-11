@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import json
 import sys
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
 import pytest
 

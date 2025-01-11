@@ -6,12 +6,10 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
 import sys
 
 import pytest
 
-import autogen
 from autogen.agentchat.contrib.math_user_proxy_agent import (
     MathUserProxyAgent,
     _add_print_to_last_line,

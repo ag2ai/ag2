@@ -8,7 +8,6 @@ import logging
 import os
 import random
 from time import monotonic, sleep
-from typing import List
 
 import pytest
 

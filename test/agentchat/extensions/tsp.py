@@ -9,11 +9,8 @@
 Triangular inequality is not required in this problem.
 """
 
-import math
-import pdb
 import random
-import sys
-from itertools import combinations, permutations
+from itertools import permutations
 
 
 def solve_tsp(dists: dict) -> float:

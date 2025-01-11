@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, Generic, List, Type, TypeVar
+from typing import Callable, TypeVar
 
 from .interoperable import Interoperable
 

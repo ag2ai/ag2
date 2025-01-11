@@ -161,8 +161,6 @@ def test_execute_function():
 
 @pytest.mark.asyncio
 async def test_a_execute_function():
-    import time
-
     from autogen.agentchat import UserProxyAgent
 
     # Create an async function

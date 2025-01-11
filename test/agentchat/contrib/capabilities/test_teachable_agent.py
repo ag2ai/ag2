@@ -8,7 +8,7 @@
 
 import pytest
 
-from autogen import ConversableAgent, config_list_from_json
+from autogen import ConversableAgent
 from autogen.formatting_utils import colored
 
 from ....conftest import Credentials, skip_openai  # noqa: E402

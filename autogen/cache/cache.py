@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import sys
 from types import TracebackType
-from typing import Any, Dict, Optional, Type, TypedDict, Union
+from typing import Any
 
 from .abstract_cache_base import AbstractCache
 from .cache_factory import CacheFactory
 
 if sys.version_info >= (3, 11):
-    from typing import Self
+    pass
 else:
-    from typing_extensions import Self
+    pass
 
 
 class Cache(AbstractCache):

@@ -11,9 +11,9 @@ import os
 import pytest
 from sentence_transformers import SentenceTransformer
 
-from autogen import AssistantAgent, config_list_from_json
+from autogen import AssistantAgent
 
-from ....conftest import Credentials, reason, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai  # noqa: E402
 
 try:
     import pgvector

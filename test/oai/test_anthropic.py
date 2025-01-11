@@ -7,7 +7,6 @@
 #!/usr/bin/env python3 -m pytest
 
 import os
-from unittest.mock import MagicMock, patch
 
 import pytest
 

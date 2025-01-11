@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 import itertools
 import os
-import sys
 import tempfile
 from typing import Any
 

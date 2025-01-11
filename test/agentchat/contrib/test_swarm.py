@@ -1,7 +1,7 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, Dict, List, Union
+from typing import Any, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,7 +10,6 @@ from autogen.agentchat.contrib.swarm_agent import (
     AFTER_WORK,
     ON_CONDITION,
     UPDATE_SYSTEM_MESSAGE,
-    __CONTEXT_VARIABLES_PARAM_NAME__,
     __TOOL_EXECUTOR_NAME__,
     AfterWorkOption,
     SwarmAgent,

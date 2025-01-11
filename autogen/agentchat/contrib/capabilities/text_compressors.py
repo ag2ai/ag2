@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Optional, Protocol
 
 IMPORT_ERROR: Optional[Exception] = None
 try:

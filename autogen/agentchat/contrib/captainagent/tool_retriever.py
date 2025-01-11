@@ -14,7 +14,7 @@ import traceback
 from hashlib import md5
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util

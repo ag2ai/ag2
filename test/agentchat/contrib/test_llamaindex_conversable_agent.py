@@ -14,7 +14,7 @@ from autogen import GroupChat, GroupChatManager
 from autogen.agentchat.contrib.llamaindex_conversable_agent import LLamaIndexConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
+from ...conftest import MOCK_OPEN_AI_API_KEY, reason
 
 skip_reasons = [reason]
 try:

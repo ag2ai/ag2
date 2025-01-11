@@ -10,7 +10,7 @@ import os
 import re
 from io import BytesIO
 from math import ceil
-from typing import Dict, List, Tuple, Union
+from typing import Union
 
 import requests
 from PIL import Image

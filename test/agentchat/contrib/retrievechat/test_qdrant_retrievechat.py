@@ -8,13 +8,12 @@
 
 import os
 import sys
-from collections.abc import Generator
 
 import pytest
 
-from autogen import AssistantAgent, config_list_from_json
+from autogen import AssistantAgent
 
-from ....conftest import Credentials, reason, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai  # noqa: E402
 
 try:
     import fastembed

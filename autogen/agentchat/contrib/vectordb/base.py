@@ -8,10 +8,8 @@ from collections.abc import Mapping, Sequence
 from typing import (
     Any,
     Callable,
-    List,
     Optional,
     Protocol,
-    Tuple,
     TypedDict,
     Union,
     runtime_checkable,

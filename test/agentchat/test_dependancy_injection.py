@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel
 
-import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, Depends
 

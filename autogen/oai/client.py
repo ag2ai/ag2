@@ -10,7 +10,7 @@ import inspect
 import logging
 import sys
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Union, runtime_checkable
 
 from pydantic import BaseModel, schema_json_of
 
@@ -36,7 +36,6 @@ else:
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
     from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
-    from openai.resources import Completions
     from openai.types.chat import ChatCompletion
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
     from openai.types.chat.chat_completion_chunk import (
@@ -44,7 +43,6 @@ else:
         ChoiceDeltaToolCall,
         ChoiceDeltaToolCallFunction,
     )
-    from openai.types.chat.parsed_chat_completion import ParsedChatCompletion, ParsedChatCompletionMessage
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
 

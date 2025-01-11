@@ -279,7 +279,7 @@ select = [
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
 ]
 
-ignore = ["E501", "F401", "F403", "C901",
+ignore = ["E501", "F403", "C901",
     "E402",
     "E721",
     "ASYNC109",
@@ -303,7 +303,6 @@ exclude = [
     "math_utils\\.py$",
     "**/cap/py/autogencap/proto/*",
 ]
-unfixable = ["F401"]
 
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.

@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 from autogen import OpenAIWrapper
 from autogen.agentchat import Agent, ConversableAgent

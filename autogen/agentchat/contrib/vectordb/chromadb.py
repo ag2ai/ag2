@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import os
-from typing import Callable, List
+from typing import Callable
 
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import chroma_results_to_query_results, filter_results_by_distance, get_logger

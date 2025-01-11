@@ -11,8 +11,7 @@ import re
 
 import pytest
 
-from autogen import UserProxyAgent, config_list_from_json
-from autogen.oai.openai_utils import filter_config
+from autogen import UserProxyAgent
 
 from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials, reason, skip_openai  # noqa: E402
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Type, cast
+from typing import Any, cast
 
 if sys.version_info >= (3, 11):
     from typing import Self

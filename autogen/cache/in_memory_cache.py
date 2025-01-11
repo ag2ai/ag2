@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import sys
 from types import TracebackType
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Optional, Union
 
 from .abstract_cache_base import AbstractCache
 

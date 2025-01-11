@@ -35,14 +35,13 @@ import random
 import sys
 import time
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from cohere import Client as Cohere
 from cohere.types import ToolParameterDefinitionsValue, ToolResult
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 
 from autogen.oai.client_utils import logging_formatter, validate_parameter
 

@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 
 def run_pydoc_markdown(config_file: Path) -> None:

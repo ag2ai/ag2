@@ -10,7 +10,7 @@ import sys
 import time
 from collections import defaultdict
 from time import sleep
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 

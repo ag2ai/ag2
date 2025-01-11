@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.code_utils import WIN32, decide_use_docker, is_docker_running
+from autogen.code_utils import decide_use_docker, is_docker_running
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.docker_commandline_code_executor import DockerCommandLineCodeExecutor
 from autogen.coding.factory import CodeExecutorFactory

@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import sys
-from typing import Any, Dict, List, Optional, Protocol, Tuple, Union
+from typing import Any, Optional, Protocol, Union
 
 import tiktoken
 from termcolor import colored

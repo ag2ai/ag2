@@ -14,7 +14,7 @@ from hashlib import md5
 from pathlib import Path
 from time import sleep
 from types import TracebackType
-from typing import Any, ClassVar, Dict, List, Optional, Type, Union
+from typing import Any, ClassVar
 
 import docker
 from docker.errors import ImageNotFound

@@ -6,9 +6,8 @@
 # SPDX-License-Identifier: MIT
 import abc
 import logging
-import os
 from collections.abc import Sequence
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger

@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import sys
 from types import TracebackType
-from typing import Any, Optional, Protocol, Type
+from typing import Any, Optional, Protocol
 
 if sys.version_info >= (3, 11):
     from typing import Self

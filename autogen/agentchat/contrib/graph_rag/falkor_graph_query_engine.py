@@ -4,7 +4,6 @@
 
 import os
 import warnings
-from typing import List
 
 from falkordb import FalkorDB, Graph
 from graphrag_sdk import KnowledgeGraph, Source

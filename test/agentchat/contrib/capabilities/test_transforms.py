@@ -5,8 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 

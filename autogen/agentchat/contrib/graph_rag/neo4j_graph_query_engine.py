@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import os
-from typing import Dict, List, Optional, TypeAlias, Union
+from typing import Optional, TypeAlias, Union
 
 from llama_index.core import PropertyGraphIndex, SimpleDirectoryReader
 from llama_index.core.base.embeddings.base import BaseEmbedding

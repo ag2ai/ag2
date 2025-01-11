@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Dict, List, Literal, Optional, Union
+from typing import Literal, Optional, Union
 
 import autogen
 from autogen.agentchat.contrib.agent_eval.criterion import Criterion

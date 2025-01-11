@@ -5,7 +5,7 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from dataclasses import dataclass, field
-from typing import List, Optional, Protocol
+from typing import Optional, Protocol
 
 from .document import Document
 

@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Callable, Dict, List, Literal, Optional, Union
+from typing import Callable, Literal, Optional, Union
 
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent

@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import logging
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 from .abstract_cache_base import AbstractCache
 from .disk_cache import DiskCache

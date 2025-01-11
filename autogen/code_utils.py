@@ -16,7 +16,7 @@ import venv
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from hashlib import md5
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Optional, Union
 
 import docker
 

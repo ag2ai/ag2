@@ -8,7 +8,6 @@
 
 import pytest
 
-import autogen
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
 

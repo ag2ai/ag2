@@ -4,7 +4,7 @@
 
 
 from abc import ABC
-from typing import Annotated, Any, Callable, Literal, Optional, Type, TypeVar, Union
+from typing import Annotated, Any, Callable, Literal, Optional, TypeVar, Union
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model

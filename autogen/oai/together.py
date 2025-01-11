@@ -29,24 +29,16 @@ Resources:
 
 from __future__ import annotations
 
-import base64
 import copy
 import os
-import random
-import re
 import time
 import warnings
-from collections.abc import Mapping
-from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-import requests
-from PIL import Image
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
-from together import Together, error
+from together import Together
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 

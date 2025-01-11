@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Any, Dict, List, Literal, Optional, Protocol, Tuple, Union
+from typing import Any, Literal, Optional, Protocol, Union
 
 from PIL.Image import Image
 from openai import OpenAI

@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import tempfile
-from typing import Dict, List
 from unittest import mock
 from unittest.mock import patch
 

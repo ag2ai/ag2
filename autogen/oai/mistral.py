@@ -25,12 +25,11 @@ Resources:
 NOTE: Requires mistralai package version >= 1.0.1
 """
 
-import inspect
 import json
 import os
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Union
 
 # Mistral libraries
 # pip install mistralai
@@ -47,7 +46,6 @@ from mistralai import (
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 

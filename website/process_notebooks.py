@@ -20,12 +20,11 @@ import sys
 import tempfile
 import threading
 import time
-import typing
 from dataclasses import dataclass
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple
 
 from termcolor import colored
 

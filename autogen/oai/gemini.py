@@ -50,11 +50,9 @@ import random
 import re
 import time
 import warnings
-from collections.abc import Mapping
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-import PIL
 import google.generativeai as genai
 import requests
 import vertexai
@@ -66,7 +64,6 @@ from jsonschema import ValidationError
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 from vertexai.generative_models import (
     Content as VertexAIContent,
 )
@@ -74,7 +71,6 @@ from vertexai.generative_models import FunctionDeclaration as vaiFunctionDeclara
 from vertexai.generative_models import GenerativeModel
 from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
 from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
-from vertexai.generative_models import Image as VertexAIImage
 from vertexai.generative_models import Part as VertexAIPart
 from vertexai.generative_models import SafetySetting as VertexAISafetySetting
 from vertexai.generative_models import (

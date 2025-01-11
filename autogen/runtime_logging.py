@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypeVar
 
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion

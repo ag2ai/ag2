@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import json
 import logging
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import replicate
 import requests

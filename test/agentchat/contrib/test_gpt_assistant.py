@@ -7,14 +7,12 @@
 #!/usr/bin/env python3 -m pytest
 
 import os
-import sys
 import uuid
 from unittest.mock import MagicMock
 
 import openai
 import pytest
 
-import autogen
 from autogen import OpenAIWrapper, UserProxyAgent
 from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
 from autogen.oai.openai_utils import detect_gpt_assistant_api_version, retrieve_assistants_by_name

@@ -6,16 +6,13 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import json
 import os
 import random
 import sys
-from typing import Dict, List
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-import autogen
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))

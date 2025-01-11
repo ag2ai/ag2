@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import os
 import pickle
-from typing import Dict, Optional, Union
+from typing import Optional, Union
 
 import chromadb
 from chromadb.config import Settings

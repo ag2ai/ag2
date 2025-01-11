@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import OpenAIWrapper, config_list_from_json
+from autogen import OpenAIWrapper
 
 from ..conftest import Credentials, reason, skip_openai  # noqa: E402
 

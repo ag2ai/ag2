@@ -8,9 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from asyncer import create_task_group
-from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
-from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver
+from autogen.agentchat.realtime_agent import RealtimeObserver
 
 
 class MyObserver(RealtimeObserver):

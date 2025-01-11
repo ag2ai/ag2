@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from logging import Logger, getLogger
-from typing import Any, Callable, Literal, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 import anyio
 from asyncer import create_task_group, syncify
@@ -12,7 +12,7 @@ from fastapi import WebSocket
 from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
 
 from ... import SwarmAgent
-from ...tools import Tool, get_function_schema
+from ...tools import Tool
 from ..agent import Agent
 from ..conversable_agent import ConversableAgent
 from .function_observer import FunctionObserver
