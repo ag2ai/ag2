@@ -10,10 +10,10 @@ from .pydantic_ai import PydanticAIInteroperability
 from .registry import register_interoperable_class
 
 __all__ = [
+    "CrewAIInteroperability",
     "Interoperability",
     "Interoperable",
-    "register_interoperable_class",
-    "CrewAIInteroperability",
     "LangChainInteroperability",
     "PydanticAIInteroperability",
+    "register_interoperable_class",
 ]

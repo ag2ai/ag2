@@ -6,7 +6,7 @@ from typing import Callable, TypeVar
 
 from .interoperable import Interoperable
 
-__all__ = ["register_interoperable_class", "InteroperableRegistry"]
+__all__ = ["InteroperableRegistry", "register_interoperable_class"]
 
 InteroperableClass = TypeVar("InteroperableClass", bound=type[Interoperable])
 

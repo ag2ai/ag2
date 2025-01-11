@@ -277,6 +277,7 @@ select = [
 #    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
 #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
+     "RUF022", # Sort __all__          https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
 ]
 
 ignore = ["E501", "F403", "C901",
