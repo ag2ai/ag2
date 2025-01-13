@@ -3,14 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-import os
 import sys
 import tempfile
 import textwrap
 from pathlib import Path
 
 import pytest
-import yaml
 
 # Add the ../../website directory to sys.path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))

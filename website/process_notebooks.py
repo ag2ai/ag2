@@ -25,7 +25,7 @@ from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 from termcolor import colored
 
