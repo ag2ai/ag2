@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.agentchat import ConversableAgent, UserProxyAgent
-from autogen.tools import BaseContext, Depends
+from autogen.tools import BaseContext, ChatContext, Depends
 
 from ..conftest import Credentials, reason, skip_openai
 
@@ -21,21 +21,26 @@ class MyContext(BaseContext, BaseModel):
 def f_with_annotated(
     a: int,
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    chat_ctx: Annotated[ChatContext, "Chat context"],
     c: Annotated[int, "c description"] = 3,
 ) -> int:
+    assert isinstance(chat_ctx, ChatContext)
     return a + ctx.b + c
 
 
 async def f_with_annotated_async(
     a: int,
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    chat_ctx: ChatContext,
     c: Annotated[int, "c description"] = 3,
 ) -> int:
+    assert isinstance(chat_ctx, ChatContext)
     return a + ctx.b + c
 
 
 def f_without_annotated(
     a: int,
+    chat_ctx: ChatContext,
     ctx: MyContext = Depends(MyContext(b=3)),
     c: Annotated[int, "c description"] = 3,
 ) -> int:
@@ -208,7 +213,13 @@ class TestDependencyInjection:
 
             @user_proxy.register_for_execution()
             @agent.register_for_llm(description="Login function")
-            async def login(user: Annotated[UserContext, Depends(user)]) -> str:
+            async def login(
+                user: Annotated[UserContext, Depends(user)],
+                chat_ctx: ChatContext,
+            ) -> str:
+                expected = {"arguments": "{}", "name": "login"}
+                assert chat_ctx.last_message["tool_calls"][0]["function"] == expected
+
                 return _login(user)
 
             await user_proxy.a_initiate_chat(agent, message="Please login", max_turns=2)
