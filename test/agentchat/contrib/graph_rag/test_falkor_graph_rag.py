@@ -9,8 +9,6 @@ import sys
 import pytest
 from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
 
-from ....conftest import reason
-
 try:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
     from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import (
@@ -22,7 +20,7 @@ except ImportError:
 else:
     skip = False
 
-reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
+reason = "do not run on MacOS or windows OR dependency is not installed"
 
 
 @pytest.mark.openai
