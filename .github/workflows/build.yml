@@ -91,7 +91,7 @@ jobs:
         # Remove the line below once https://github.com/docker/docker-py/issues/3256 is merged
         run: |
           uv pip install --system "requests<2.32.0"
-          pytest test -m "not openai" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
+          bash scripts/test_skip_openai.sh
       - name: Test with pytest skipping openai and docker tests
         if: matrix.python-version != '3.10' && matrix.os != 'ubuntu-latest'
         run: |
@@ -100,7 +100,7 @@ jobs:
         if: matrix.python-version == '3.10'
         run: |
           uv pip install --system -e .[redis,websockets]
-          pytest test -m "not openai" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
+          bash scripts/test_skip_openai.sh
       - name: Test with Cosmos DB
         run: |
           pytest test/cache/test_cosmos_db_cache.py -m "not openai" --durations=10 --durations-min=1.0
