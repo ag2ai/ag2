@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 

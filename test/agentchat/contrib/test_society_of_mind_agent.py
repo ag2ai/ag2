@@ -13,7 +13,7 @@ import pytest
 import autogen
 from autogen.agentchat.contrib.society_of_mind_agent import SocietyOfMindAgent
 
-from ...conftest import Credentials, skip_openai  # noqa: E402
+from ...conftest import Credentials, skip_openai
 
 
 def test_society_of_mind_agent():

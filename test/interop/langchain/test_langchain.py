@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 import sys
 from unittest.mock import MagicMock
 
@@ -10,7 +9,6 @@ import pytest
 from langchain.tools import tool as langchain_tool
 from pydantic import BaseModel, Field
 
-import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 from autogen.interop.langchain import LangChainInteroperability

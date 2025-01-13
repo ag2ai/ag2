@@ -8,7 +8,7 @@ import glob
 import hashlib
 import os
 import re
-from typing import Callable, List, Tuple, Union
+from typing import Callable, Union
 from urllib.parse import urlparse
 
 import chromadb
@@ -166,7 +166,6 @@ def split_files_to_chunks(
     custom_text_split_function: Callable = None,
 ) -> tuple[list[str], list[dict]]:
     """Split a list of files into chunks of max_tokens."""
-
     chunks = []
     sources = []
 
@@ -288,7 +287,9 @@ def _generate_file_name_from_url(url: str, max_length=255) -> str:
     hash = hashlib.blake2b(url_bytes).hexdigest()
     parsed_url = urlparse(url)
     file_name = os.path.basename(url)
-    file_name = f"{parsed_url.netloc}_{file_name}_{hash[:min(8, max_length-len(parsed_url.netloc)-len(file_name)-1)]}"
+    file_name = (
+        f"{parsed_url.netloc}_{file_name}_{hash[: min(8, max_length - len(parsed_url.netloc) - len(file_name) - 1)]}"
+    )
     return file_name
 
 
@@ -380,7 +381,6 @@ def create_vector_db_from_dir(
         extra_docs (Optional, bool): whether to add more documents in the collection. Default is False
 
     Returns:
-
     The chromadb client.
     """
     if client is None:
@@ -423,7 +423,7 @@ def create_vector_db_from_dir(
             end_idx = i + min(40000, len(chunks) - i)
             collection.upsert(
                 documents=chunks[i:end_idx],
-                ids=[f"doc_{j+length}" for j in range(i, end_idx)],  # unique for each doc
+                ids=[f"doc_{j + length}" for j in range(i, end_idx)],  # unique for each doc
                 metadatas=sources[i:end_idx],
             )
     except ValueError as e:
@@ -458,7 +458,6 @@ def query_vector_db(
             functions, you can pass it here, follow the examples in `https://docs.trychroma.com/embeddings`.
 
     Returns:
-
         The query result. The format is:
 
     ```python

@@ -14,7 +14,7 @@ import traceback
 from hashlib import md5
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
@@ -72,8 +72,7 @@ You have access to the following functions. You can write python code to call th
         return
 
     def bind_user_proxy(self, agent: UserProxyAgent, tool_root: Union[str, list]):
-        """
-        Updates user proxy agent with a executor so that code executor can successfully execute function-related code.
+        """Updates user proxy agent with a executor so that code executor can successfully execute function-related code.
         Returns an updated user proxy.
         """
         if isinstance(tool_root, str):
@@ -120,8 +119,7 @@ You have access to the following functions. You can write python code to call th
 
 
 class LocalExecutorWithTools(CodeExecutor):
-    """
-    An executor that executes code blocks with injected tools. In this executor, the func within the tools can be called directly without declaring in the code block.
+    """An executor that executes code blocks with injected tools. In this executor, the func within the tools can be called directly without declaring in the code block.
 
     For example, for a tool converted from langchain, the relevant functions can be called directly.
     ```python
@@ -161,7 +159,7 @@ class LocalExecutorWithTools(CodeExecutor):
         """(Experimental) Export a code extractor that can be used by an agent."""
         return MarkdownCodeExtractor()
 
-    def __init__(self, tools: Optional[list[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
+    def __init__(self, tools: Optional[list[Tool]] = None, work_dir: Union[Path, str] = Path()):
         self.tools = tools if tools is not None else []
         self.work_dir = work_dir
         if not os.path.exists(work_dir):
@@ -272,9 +270,7 @@ def _wrap_function(func):
 
 
 def get_full_tool_description(py_file):
-    """
-    Retrieves the function signature for a given Python file.
-    """
+    """Retrieves the function signature for a given Python file."""
     with open(py_file) as f:
         code = f.read()
         exec(code)
@@ -315,9 +311,7 @@ def _wrap_function(func):
 
 
 def find_callables(directory):
-    """
-    Find all callable objects defined in Python files within the specified directory.
-    """
+    """Find all callable objects defined in Python files within the specified directory."""
     callables = []
     for root, dirs, files in os.walk(directory):
         for file in files:

@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 """Create a OpenAI-compatible client for Gemini features.
 
-
 Example:
     ```python
     llm_config = {
@@ -50,11 +49,9 @@ import random
 import re
 import time
 import warnings
-from collections.abc import Mapping
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-import PIL
 import google.generativeai as genai
 import requests
 import vertexai
@@ -66,7 +63,6 @@ from jsonschema import ValidationError
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 from vertexai.generative_models import (
     Content as VertexAIContent,
 )
@@ -74,7 +70,6 @@ from vertexai.generative_models import FunctionDeclaration as vaiFunctionDeclara
 from vertexai.generative_models import GenerativeModel
 from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
 from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
-from vertexai.generative_models import Image as VertexAIImage
 from vertexai.generative_models import Part as VertexAIPart
 from vertexai.generative_models import SafetySetting as VertexAISafetySetting
 from vertexai.generative_models import (
@@ -112,9 +107,9 @@ class GeminiClient:
         if "location" in params:
             vertexai_init_args["location"] = params["location"]
         if "credentials" in params:
-            assert isinstance(
-                params["credentials"], Credentials
-            ), "Object type google.auth.credentials.Credentials is expected!"
+            assert isinstance(params["credentials"], Credentials), (
+                "Object type google.auth.credentials.Credentials is expected!"
+            )
             vertexai_init_args["credentials"] = params["credentials"]
         if vertexai_init_args:
             vertexai.init(**vertexai_init_args)
@@ -138,7 +133,7 @@ class GeminiClient:
             location (str): Compute region to be used, like 'us-west1'.
                 This parameter is only valid in case no API key is specified.
         """
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
             if self.api_key is None:
@@ -149,16 +144,15 @@ class GeminiClient:
         else:
             self.use_vertexai = False
         if not self.use_vertexai:
-            assert ("project_id" not in kwargs) and (
-                "location" not in kwargs
-            ), "Google Cloud project and compute location cannot be set when using an API Key!"
+            assert ("project_id" not in kwargs) and ("location" not in kwargs), (
+                "Google Cloud project and compute location cannot be set when using an API Key!"
+            )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -184,9 +178,9 @@ class GeminiClient:
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:
-            assert ("project_id" not in params) and (
-                "location" not in params
-            ), "Google Cloud project and compute location cannot be set when using an API Key!"
+            assert ("project_id" not in params) and ("location" not in params), (
+                "Google Cloud project and compute location cannot be set when using an API Key!"
+            )
         model_name = params.get("model", "gemini-pro")
 
         if model_name == "gemini-pro-vision":
@@ -204,7 +198,7 @@ class GeminiClient:
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
-        system_instruction = params.get("system_instruction", None)
+        system_instruction = params.get("system_instruction")
         response_validation = params.get("response_validation", True)
         if "tools" in params:
             tools = self._tools_to_gemini_tools(params["tools"])
@@ -466,13 +460,7 @@ class GeminiClient:
                     if self.use_vertexai
                     else rst.append(Content(parts=parts, role=role))
                 )
-            elif part_type == "tool":
-                rst.append(
-                    VertexAIContent(parts=parts, role="function")
-                    if self.use_vertexai
-                    else rst.append(Content(parts=parts, role="function"))
-                )
-            elif part_type == "tool_call":
+            elif part_type == "tool" or part_type == "tool_call":
                 rst.append(
                     VertexAIContent(parts=parts, role="function")
                     if self.use_vertexai
@@ -525,7 +513,6 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
-
         functions = []
         for tool in tools:
             if self.use_vertexai:
@@ -609,7 +596,6 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
-
         function_parameter["type_"] = function_parameter["type"].upper()
 
         # Parameter properties and items

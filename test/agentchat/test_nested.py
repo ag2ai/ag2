@@ -11,7 +11,7 @@ import pytest
 import autogen
 from autogen.agentchat.contrib.capabilities.agent_capability import AgentCapability
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 
 class MockAgentReplies(AgentCapability):
@@ -157,9 +157,9 @@ def test_nested(
 
 def test_sync_nested_chat():
     def is_termination(msg):
-        if isinstance(msg, str) and msg == "FINAL_RESULT":
-            return True
-        elif isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT":
+        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+            isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
+        ):
             return True
         return False
 
@@ -196,9 +196,9 @@ def test_sync_nested_chat():
 @pytest.mark.asyncio
 async def test_async_nested_chat():
     def is_termination(msg):
-        if isinstance(msg, str) and msg == "FINAL_RESULT":
-            return True
-        elif isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT":
+        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+            isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
+        ):
             return True
         return False
 
@@ -237,9 +237,9 @@ async def test_async_nested_chat():
 @pytest.mark.asyncio
 async def test_async_nested_chat_chat_id_validation():
     def is_termination(msg):
-        if isinstance(msg, str) and msg == "FINAL_RESULT":
-            return True
-        elif isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT":
+        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+            isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
+        ):
             return True
         return False
 
@@ -274,9 +274,9 @@ async def test_async_nested_chat_chat_id_validation():
 
 def test_sync_nested_chat_in_group():
     def is_termination(msg):
-        if isinstance(msg, str) and msg == "FINAL_RESULT":
-            return True
-        elif isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT":
+        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+            isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
+        ):
             return True
         return False
 
@@ -321,9 +321,9 @@ def test_sync_nested_chat_in_group():
 @pytest.mark.asyncio
 async def test_async_nested_chat_in_group():
     def is_termination(msg):
-        if isinstance(msg, str) and msg == "FINAL_RESULT":
-            return True
-        elif isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT":
+        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+            isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
+        ):
             return True
         return False
 

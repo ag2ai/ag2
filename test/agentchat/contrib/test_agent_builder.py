@@ -13,11 +13,11 @@ import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST, reason, skip_openai  # noqa: E402
+from ...conftest import KEY_LOC, OAI_CONFIG_LIST, reason, skip_openai
 
 try:
-    import chromadb
-    import huggingface_hub
+    import chromadb  # noqa: F401
+    import huggingface_hub  # noqa: F401
 except ImportError:
     skip = True
 else:

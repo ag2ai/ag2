@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, Dict, Generic, List, Type, TypeVar
+from typing import Callable, TypeVar
 
 from .interoperable import Interoperable
 
-__all__ = ["register_interoperable_class", "InteroperableRegistry"]
+__all__ = ["InteroperableRegistry", "register_interoperable_class"]
 
 InteroperableClass = TypeVar("InteroperableClass", bound=type[Interoperable])
 

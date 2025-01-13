@@ -5,8 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 
@@ -297,7 +296,6 @@ def test_message_token_limiter_get_logs(message_token_limiter, messages, expecte
 @pytest.mark.parametrize("text_compressor", get_text_compressors())
 def test_text_compression(text_compressor):
     """Test the TextMessageCompressor transform."""
-
     compressor = TextMessageCompressor(text_compressor=text_compressor)
 
     text = "Run this test with a long string. "

@@ -388,7 +388,7 @@ def test_create_virtual_env_with_extra_args():
 
 def _test_improve(credentials_all: Credentials):
     try:
-        import openai
+        import openai  # noqa: F401
     except ImportError:
         return
     config_list = credentials_all.config_list

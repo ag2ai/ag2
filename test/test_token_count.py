@@ -9,7 +9,7 @@
 import pytest
 
 try:
-    from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image
+    from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image  # noqa: F401
 
     img_util_imported = True
 except ImportError:

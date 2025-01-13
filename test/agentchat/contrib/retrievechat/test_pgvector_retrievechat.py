@@ -11,12 +11,12 @@ import os
 import pytest
 from sentence_transformers import SentenceTransformer
 
-from autogen import AssistantAgent, config_list_from_json
+from autogen import AssistantAgent
 
-from ....conftest import Credentials, reason, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai
 
 try:
-    import pgvector
+    import pgvector  # noqa: F401
 
     from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
         RetrieveUserProxyAgent,

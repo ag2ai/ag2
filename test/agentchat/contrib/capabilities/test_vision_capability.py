@@ -12,7 +12,7 @@ import pytest
 from autogen.agentchat.conversable_agent import ConversableAgent
 
 try:
-    from PIL import Image
+    from PIL import Image  # noqa: F401
 
     from autogen.agentchat.contrib.capabilities.vision_capability import VisionCapability
 except ImportError:

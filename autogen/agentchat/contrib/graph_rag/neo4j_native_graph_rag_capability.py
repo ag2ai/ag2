@@ -12,24 +12,19 @@ from .neo4j_native_graph_query_engine import Neo4jNativeGraphQueryEngine
 
 
 class Neo4jNativeGraphCapability(GraphRagCapability):
-    """
-    The Neo4j native graph capability integrates Neo4j native query engine into a graph rag agent.
+    """The Neo4j native graph capability integrates Neo4j native query engine into a graph rag agent.
 
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j_native.ipynb
     """
 
     def __init__(self, query_engine: Neo4jNativeGraphQueryEngine):
-        """
-        initialize GraphRAG capability with a neo4j native graph query engine
-        """
+        """Initialize GraphRAG capability with a neo4j native graph query engine"""
         self.query_engine = query_engine
 
     def add_to_agent(self, agent: ConversableAgent):
-        """
-        Add native Neo4j GraphRAG capability to a ConversableAgent.
+        """Add native Neo4j GraphRAG capability to a ConversableAgent.
         llm_config of the agent must be None/False (default) to make sure the returned message only contains information retrieved from the graph DB instead of any LLMs.
         """
-
         self.graph_rag_agent = agent
 
         # Validate the agent config
@@ -51,8 +46,7 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:
-        """
-        Query Neo4j and return the message. Internally, it uses the Neo4jNativeGraphQueryEngine to query the graph.
+        """Query Neo4j and return the message. Internally, it uses the Neo4jNativeGraphQueryEngine to query the graph.
 
         The agent's system message will be incorporated into the query, if it's not blank.
 
@@ -81,7 +75,6 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         agent:
         <content>
         """
-
         if isinstance(messages, str):
             if system_message:
                 summary = f"IMPORTANT: {system_message}\nContext:\n\n{messages}"
@@ -92,7 +85,7 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
             summary = ""
             for message in messages:
                 if "content" in message and "tool_calls" not in message and "tool_responses" not in message:
-                    summary += f"{message.get('name', '')}: {message.get('content','')}\n\n"
+                    summary += f"{message.get('name', '')}: {message.get('content', '')}\n\n"
 
             if system_message:
                 summary = f"IMPORTANT: {system_message}\nContext:\n\n{summary}"

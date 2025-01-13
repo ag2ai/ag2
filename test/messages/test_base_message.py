@@ -3,9 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Generator
-from contextlib import contextmanager
-from typing import Type
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from pydantic import BaseModel
@@ -13,12 +11,11 @@ from pydantic import BaseModel
 from autogen.messages.base_message import (
     BaseMessage,
     _message_classes,
-    get_annotated_type_for_message_classes,
     wrap_message,
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def TestMessage() -> Generator[type[BaseMessage], None, None]:  # noqa: N802
     org_message_classes = _message_classes.copy()
     try:

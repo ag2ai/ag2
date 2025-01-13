@@ -25,12 +25,11 @@ Resources:
 NOTE: Requires mistralai package version >= 1.0.1
 """
 
-import inspect
 import json
 import os
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Union
 
 # Mistral libraries
 # pip install mistralai
@@ -47,7 +46,6 @@ from mistralai import (
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
@@ -61,15 +59,14 @@ class MistralAIClient:
         Args:
             api_key (str): The API key for using Mistral.AI (or environment variable MISTRAL_API_KEY needs to be set)
         """
-
         # Ensure we have the api_key upon instantiation
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("MISTRAL_API_KEY", None)
 
-        assert (
-            self.api_key
-        ), "Please specify the 'api_key' in your config list entry for Mistral or set the MISTRAL_API_KEY env variable."
+        assert self.api_key, (
+            "Please specify the 'api_key' in your config list entry for Mistral or set the MISTRAL_API_KEY env variable."
+        )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Mistral.AI, it will be ignored.", UserWarning)
@@ -78,7 +75,6 @@ class MistralAIClient:
 
     def message_retrieval(self, response: ChatCompletion) -> Union[list[str], list[ChatCompletionMessage]]:
         """Retrieve the messages from the response."""
-
         return [choice.message for choice in response.choices]
 
     def cost(self, response) -> float:
@@ -89,10 +85,10 @@ class MistralAIClient:
         mistral_params = {}
 
         # 1. Validate models
-        mistral_params["model"] = params.get("model", None)
-        assert mistral_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Mistral.ai model to use."
+        mistral_params["model"] = params.get("model")
+        assert mistral_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Mistral.ai model to use."
+        )
 
         # 2. Validate allowed Mistral.AI parameters
         mistral_params["temperature"] = validate_parameter(params, "temperature", (int, float), True, 0.7, None, None)
@@ -238,7 +234,6 @@ class MistralAIClient:
 
 def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Converts AutoGen tool definition to a mistral tool format"""
-
     mistral_tools = []
 
     for autogen_tool in tool_definitions:
@@ -258,7 +253,6 @@ def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str
 
 def calculate_mistral_cost(input_tokens: int, output_tokens: int, model_name: str) -> float:
     """Calculate the cost of the mistral response."""
-
     # Prices per 1 thousand tokens
     # https://mistral.ai/technology/
     model_cost_map = {
