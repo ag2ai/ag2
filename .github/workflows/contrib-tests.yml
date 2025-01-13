@@ -885,6 +885,7 @@ jobs:
           uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Documentation
         run: |
+          uv pip install --system "typing_extensions==4.12.2"
           uv pip install --system -e "."
           uv pip install --system pydoc-markdown pyyaml termcolor nbclient
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
