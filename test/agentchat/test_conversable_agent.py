@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -912,10 +912,7 @@ def test_register_functions(mock_credentials: Credentials):
     assert agent.llm_config["tools"] == expected
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -977,10 +974,7 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 @pytest.mark.asyncio
 async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
     coder = autogen.AssistantAgent(
@@ -1043,7 +1037,7 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -1063,7 +1057,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(res.chat_history) <= 6
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_message_func(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1114,7 +1108,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
     print(chat_res_play.summary)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_summary(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1473,7 +1467,7 @@ def test_handle_carryover():
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_context_variables():
     # Test initialization with context_variables
     initial_context = {"test_key": "test_value", "number": 42, "nested": {"inner": "value"}}

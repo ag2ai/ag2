@@ -8,7 +8,7 @@ import pytest
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
 
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials, reason, skip_openai
+from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials, reason
 
 try:
     import chromadb  # noqa: F401
@@ -19,10 +19,7 @@ else:
     skip = False
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_captain_agent_from_scratch(credentials_all: Credentials):
     config_list = credentials_all.config_list
     llm_config = {
@@ -61,8 +58,9 @@ def test_captain_agent_from_scratch(credentials_all: Credentials):
     print(result)
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip_openai or skip,
+    skip,
     reason=reason,
 )
 def test_captain_agent_with_library(credentials_all: Credentials):

@@ -11,15 +11,12 @@ import pytest
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.agent_optimizer import AgentOptimizer
 
-from ...conftest import Credentials, reason, skip_openai
+from ...conftest import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_record_conversation(credentials_all: Credentials):
     problem = "Simplify $\\sqrt[3]{1+8} \\cdot \\sqrt[3]{1+\\sqrt[3]{8}}"
 
@@ -55,10 +52,7 @@ def test_record_conversation(credentials_all: Credentials):
     assert len(optimizer._trial_conversations_performance) == 0
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_step(credentials_all: Credentials):
     problem = "Simplify $\\sqrt[3]{1+8} \\cdot \\sqrt[3]{1+\\sqrt[3]{8}}"
 

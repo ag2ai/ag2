@@ -16,7 +16,7 @@ from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED
 
-from ..conftest import Credentials, skip_openai
+from ..conftest import Credentials
 
 TOOL_ENABLED = False
 try:
@@ -29,9 +29,10 @@ try:
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     config_list = credentials_azure_gpt_35_turbo.config_list
@@ -50,6 +51,7 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
 def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
@@ -82,6 +84,7 @@ def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
@@ -90,6 +93,7 @@ def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
@@ -98,6 +102,7 @@ def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 @pytest.mark.parametrize(
     "cache_seed",
@@ -112,6 +117,7 @@ def test_cost(credentials_azure_gpt_35_turbo_instruct: Credentials, cache_seed):
     print(response.cost)
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     config_list = credentials_azure_gpt_35_turbo_instruct.config_list
@@ -124,6 +130,7 @@ def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     )
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
@@ -155,6 +162,7 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     )
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
@@ -218,6 +226,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(21)))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.

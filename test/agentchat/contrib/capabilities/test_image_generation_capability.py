@@ -27,7 +27,7 @@ except ImportError:
 else:
     skip_requirement = False
 
-from ....conftest import MOCK_OPEN_AI_API_KEY, skip_openai
+from ....conftest import MOCK_OPEN_AI_API_KEY
 
 filter_dict = {"model": ["gpt-4o-mini"]}
 
@@ -59,7 +59,7 @@ def dalle_image_generator(dalle_config: dict[str, Any], resolution: str, quality
 
 
 def api_key():
-    return MOCK_OPEN_AI_API_KEY if skip_openai else os.environ.get("OPENAI_API_KEY")
+    return os.environ.get("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
 
 
 @pytest.fixture
@@ -91,7 +91,7 @@ def image_gen_capability():
     return generate_images.ImageGeneration(image_generator)
 
 
-@pytest.mark.skipif(skip_openai, reason="Requested to skip.")
+@pytest.mark.openai
 @pytest.mark.skipif(skip_requirement, reason="Dependencies are not installed.")
 def test_dalle_image_generator(dalle_config: dict[str, Any]):
     """Tests DalleImageGenerator capability to generate images by calling the OpenAI API."""

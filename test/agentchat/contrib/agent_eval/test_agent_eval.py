@@ -14,7 +14,7 @@ from autogen.agentchat.contrib.agent_eval.agent_eval import generate_criteria, q
 from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 from autogen.agentchat.contrib.agent_eval.task import Task
 
-from ....conftest import Credentials, reason, skip_openai
+from ....conftest import Credentials
 
 
 def remove_ground_truth(test_case: str):
@@ -43,10 +43,7 @@ def task() -> Task:
     return task
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_generate_criteria(credentials_azure: Credentials, task: Task):
     criteria = generate_criteria(task=task, llm_config={"config_list": credentials_azure.config_list})
     assert criteria
@@ -56,10 +53,7 @@ def test_generate_criteria(credentials_azure: Credentials, task: Task):
     assert criteria[0].accepted_values
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_quantify_criteria(credentials_azure: Credentials, task: Task):
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"
     criteria = open(criteria_file).read()

@@ -16,7 +16,7 @@ import pytest
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from ...conftest import reason, skip_openai
+from ...conftest import reason
 
 skip_reasons = [reason]
 try:
@@ -103,7 +103,7 @@ def test_think_node_from_dict():
     assert node.children == []
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_reasoning_agent_init(reasoning_agent):
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"

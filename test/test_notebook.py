@@ -11,14 +11,12 @@ import sys
 
 import pytest
 
-from .conftest import skip_openai
-
 try:
     import openai  # noqa: F401
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
 
 here = os.path.abspath(os.path.dirname(__file__))

@@ -11,14 +11,14 @@ import pytest
 from autogen import ConversableAgent
 from autogen.formatting_utils import colored
 
-from ....conftest import Credentials, skip_openai
+from ....conftest import Credentials
 
 try:
     from autogen.agentchat.contrib.capabilities.teachability import Teachability
 except ImportError:
     skip = True
 else:
-    skip = skip_openai
+    skip = False
 
 
 # Specify the model to use by uncommenting one of the following lines.
@@ -128,6 +128,7 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
     return num_errors, num_tests
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
     skip,
     reason="do not run if dependency is not installed or requested to skip",
@@ -159,6 +160,7 @@ def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
         )
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
     skip,
     reason="do not run if dependency is not installed or requested to skip",

@@ -13,10 +13,10 @@ from pydantic import BaseModel, ValidationError
 
 import autogen
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_structured_output(credentials_gpt_4o: Credentials):
     class ResponseModel(BaseModel):
         question: str

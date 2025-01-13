@@ -17,13 +17,10 @@ from autogen import OpenAIWrapper, UserProxyAgent
 from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
 from autogen.oai.openai_utils import detect_gpt_assistant_api_version, retrieve_assistants_by_name
 
-from ...conftest import Credentials, reason, skip_openai
+from ...conftest import Credentials
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 def test_gpt_assistant_chat_openai(
     provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
@@ -100,10 +97,7 @@ def _test_gpt_assistant_chat(credentials: Credentials) -> None:
     assert threads_count == 0
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 def test_get_assistant_instructions(
     provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
@@ -135,10 +129,7 @@ def _test_get_assistant_instructions(credentials: Credentials) -> None:
     assert instruction_match is True
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 @pytest.mark.parametrize("provider", ["openai", "azure"])
 def test_gpt_assistant_instructions_overwrite(
     provider: str, credentials_gpt_4o_mini: Credentials, credentials_azure: Credentials
@@ -194,10 +185,7 @@ def _test_gpt_assistant_instructions_overwrite(credentials: Credentials) -> None
     assert instruction_match is True
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_gpt_assistant_existing_no_instructions(credentials_gpt_4o_mini: Credentials) -> None:
     """Test function to check if the GPTAssistantAgent can retrieve instructions for an existing assistant
     even if the assistant was created with no instructions initially.
@@ -233,10 +221,7 @@ def test_gpt_assistant_existing_no_instructions(credentials_gpt_4o_mini: Credent
     assert instruction_match is True
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_get_assistant_files(credentials_gpt_4o_mini: Credentials) -> None:
     """Test function to create a new GPTAssistantAgent, set its instructions, retrieve the instructions,
     and assert that the retrieved instructions match the set instructions.
@@ -277,10 +262,7 @@ def test_get_assistant_files(credentials_gpt_4o_mini: Credentials) -> None:
     assert expected_file_id in retrieved_file_ids
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_assistant_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
     """Test function to check if the GPTAssistantAgent can retrieve the same assistant"""
     name = f"For test_assistant_retrieval {uuid.uuid4()}"
@@ -351,10 +333,7 @@ def test_assistant_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(candidates) == 0
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_assistant_mismatch_retrieval(credentials_gpt_4o_mini: Credentials) -> None:
     """Test function to check if the GPTAssistantAgent can filter out the mismatch assistant"""
     name = f"For test_assistant_retrieval {uuid.uuid4()}"
@@ -450,10 +429,7 @@ def test_assistant_mismatch_retrieval(credentials_gpt_4o_mini: Credentials) -> N
     assert len(candidates) == 0
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_gpt_assistant_tools_overwrite(credentials_gpt_4o_mini: Credentials) -> None:
     """Test that the tools of a GPTAssistantAgent can be overwritten or not depending on the value of the
     `overwrite_tools` parameter when creating a new assistant with the same ID.
@@ -570,10 +546,7 @@ def test_gpt_assistant_tools_overwrite(credentials_gpt_4o_mini: Credentials) -> 
     assert retrieved_tools_name == [tool["function"]["name"] for tool in new_tools]
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_gpt_reflection_with_llm(credentials_gpt_4o_mini: Credentials) -> None:
     gpt_assistant = GPTAssistantAgent(
         name="assistant", llm_config={"config_list": credentials_gpt_4o_mini.config_list, "assistant_id": None}
@@ -601,10 +574,7 @@ def test_gpt_reflection_with_llm(credentials_gpt_4o_mini: Credentials) -> None:
     assert result is not None
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_assistant_tool_and_function_role_messages(credentials_gpt_4o_mini: Credentials) -> None:
     """Tests that internally generated roles ('tool', 'function') are correctly mapped to
     OpenAI Assistant API-compatible role ('assistant') before sending to the OpenAI API

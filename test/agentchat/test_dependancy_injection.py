@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, Depends
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 
 class MyContext(BaseContext, BaseModel):
@@ -178,7 +178,7 @@ class TestDependencyInjection:
 
         assert actual == expected
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     @pytest.mark.parametrize("is_async", [False, True])
     @pytest.mark.asyncio
     async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:

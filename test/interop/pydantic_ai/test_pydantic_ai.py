@@ -16,7 +16,7 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
-from ...conftest import Credentials, reason, skip_openai
+from ...conftest import Credentials
 
 
 # skip if python version is not >= 3.9
@@ -44,7 +44,7 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert self.tool.description == "Roll a six-sided dice and return the result."
         assert self.tool.func() in ["1", "2", "3", "4", "5", "6"]
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(
             name="User",
@@ -185,7 +185,7 @@ class TestPydanticAIInteroperabilityWithContext:
 
         assert chatbot.llm_config["tools"] == expected_tools  # type: ignore[index]
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(
             name="User",

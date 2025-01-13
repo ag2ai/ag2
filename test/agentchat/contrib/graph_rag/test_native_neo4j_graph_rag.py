@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from ....conftest import reason, skip_openai
+from ....conftest import reason
 
 try:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
@@ -110,8 +110,9 @@ def neo4j_native_query_engine_auto():
     return query_engine
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_native_query_engine(neo4j_native_query_engine):
@@ -123,8 +124,9 @@ def test_neo4j_native_query_engine(neo4j_native_query_engine):
     assert query_result.answer.find("BUZZ") >= 0
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):

@@ -13,7 +13,7 @@ import pytest
 
 from autogen import UserProxyAgent
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials, reason, skip_openai
+from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
 
 BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
@@ -93,9 +93,10 @@ def test_web_surfer() -> None:
             response = function_map["summarize_page"]()
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip_all or skip_openai,
-    reason="dependency is not installed OR" + reason,
+    skip_all,
+    reason="dependency is not installed",
 )
 def test_web_surfer_oai(credentials_gpt_4o_mini: Credentials, credentials_gpt_4o: Credentials) -> None:
     llm_config = {"config_list": credentials_gpt_4o.config_list, "timeout": 180, "cache_seed": 42}
