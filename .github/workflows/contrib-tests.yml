@@ -236,7 +236,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/capabilities/test_teachable_agent.py -m "not openai"
+          pytest test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
