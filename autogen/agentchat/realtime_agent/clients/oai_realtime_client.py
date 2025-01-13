@@ -7,13 +7,13 @@ import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 
-from .realtime_client import Role
+from .realtime_client import Role, register_realtime_client
 
 if TYPE_CHECKING:
     from fastapi.websockets import WebSocket
@@ -25,6 +25,7 @@ __all__ = ["OpenAIRealtimeClient", "Role"]
 global_logger = getLogger(__name__)
 
 
+@register_realtime_client()
 class OpenAIRealtimeClient:
     """(Experimental) Client for OpenAI Realtime API."""
 
@@ -171,6 +172,27 @@ class OpenAIRealtimeClient:
 
         finally:
             self._connection = None
+
+    @classmethod
+    def get_factory(
+        cls, llm_config: dict[str, Any], voice: str, system_message: str, logger: Logger, **kwargs: Any
+    ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
+        """Create a Realtime API client.
+
+        Args:
+            model (str): The model to create the client for.
+            voice (str): The voice to use.
+            system_message (str): The system message to use.
+            kwargs (Any): Additional arguments.
+
+        Returns:
+            RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
+        """
+        if llm_config["config_list"][0]["model"].match("^gpt-.+-realtime.*") and list(kwargs.keys()) == []:
+            return lambda: OpenAIRealtimeClient(
+                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
+            )
+        return None
 
 
 class OpenAIRealtimeWebRTCClient:
@@ -342,6 +364,28 @@ class OpenAIRealtimeWebRTCClient:
                 yield message
             except Exception:
                 break
+
+    @classmethod
+    def get_factory(
+        cls, llm_config: dict[str, Any], voice: str, system_message: str, logger: Logger, **kwargs: Any
+    ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
+        """Create a Realtime API client.
+
+        Args:
+            model (str): The model to create the client for.
+            voice (str): The voice to use.
+            system_message (str): The system message to use.
+            kwargs (Any): Additional arguments.
+
+        Returns:
+            RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
+        """
+        if llm_config["config_list"][0]["model"].match("^gpt-.+-realtime.*") and list(kwargs.keys()) == ["websocket"]:
+            return lambda: OpenAIRealtimeWebRTCClient(
+                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
+            )
+
+        return None
 
 
 # needed for mypy to check if OpenAIRealtimeWebRTCClient implements RealtimeClientProtocol

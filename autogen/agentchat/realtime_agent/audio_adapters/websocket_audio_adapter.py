@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from fastapi.websockets import WebSocket
 
 
-from .realtime_observer import RealtimeObserver
+from ..realtime_observer import RealtimeObserver
 
 LOG_EVENT_TYPES = [
     "error",

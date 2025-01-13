@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from anyio import Event
 
-from .realtime_client import RealtimeClientProtocol
+from .clients.realtime_client import RealtimeClientProtocol
 
 if TYPE_CHECKING:
     from .realtime_agent import RealtimeAgent

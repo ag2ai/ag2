@@ -9,17 +9,21 @@ import anyio
 from asyncer import asyncify, create_task_group, syncify
 from fastapi import WebSocket
 
+
 from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
 
 from ... import SwarmAgent
-from ...tools import Tool, get_function_schema
+from ...toosls import Tool, get_function_schema
 from ..agent import Agent
 from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ..conversable_agent import ConversableAgent
+from .clients import Role
+from .clients.realtime_client import RealtimeClientProtocol, get_client
 from .function_observer import FunctionObserver
 
 from .gemini_realtime_client import GeminiRealtimeClient
 from .oai_realtime_client import OpenAIRealtimeClient, Role
+
 from .realtime_observer import RealtimeObserver
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -52,7 +56,7 @@ class RealtimeAgent(ConversableAgent):
         llm_config: dict[str, Any],
         voice: str = "alloy",
         logger: Optional[Logger] = None,
-        websocket: Optional[WebSocket] = None,
+        **client_kwargs: Any,
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
 
@@ -62,7 +66,8 @@ class RealtimeAgent(ConversableAgent):
             system_message (str): The system message for the agent.
             llm_config (dict[str, Any], bool): The config for the agent.
             voice (str): The voice for the agent.
-            websocket (Optional[WebSocket] = None): WebSocket from WebRTC javascript client
+            logger (Optional[Logger]): The logger for the agent.
+            **client_kwargs (Any): The keyword arguments for the client.
         """
         super().__init__(
             name=name,
@@ -83,19 +88,10 @@ class RealtimeAgent(ConversableAgent):
         self._function_observer = FunctionObserver(logger=logger)
         self._audio_adapter = audio_adapter
 
-        model = llm_config["config_list"][0]["model"]
-        if "gemini" in model:
-            self._realtime_client: RealtimeClientProtocol = GeminiRealtimeClient(
-                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
-            )
-        elif "gpt-4o" in model:
-            self._realtime_client: RealtimeClientProtocol = OpenAIRealtimeClient(
-                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
-            )
-        else:
-            raise ValueError(f"Model {model} is not supported by the Realtime Agent.")
 
-        self._voice = voice
+        self._realtime_client: RealtimeClientProtocol = get_client(
+            llm_config=llm_config, voice=voice, system_message=system_message, logger=self.logger, **client_kwargs
+        )
 
         self._observers: list[RealtimeObserver] = [self._function_observer]
         if self._audio_adapter:
