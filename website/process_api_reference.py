@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -172,6 +173,18 @@ def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path) -> None:
     update_nav(mint_json_path, nav_structure)
 
 
+def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_path: Path) -> None:
+    # if mint.json already exists, delete it
+    if mint_json_path.exists():
+        os.remove(mint_json_path)
+
+    # Copy the template file to mint.json
+    mint_json_template_content = read_file_content(mint_json_template_path)
+
+    # Write content to mint.json
+    write_file_content(mint_json_path, mint_json_template_content)
+
+
 def main() -> None:
     script_dir = Path(__file__).parent.absolute()
 
@@ -193,6 +206,13 @@ def main() -> None:
     # Convert MD to MDX
     print("Converting MD files to MDX...")
     convert_md_to_mdx(args.api_dir)
+
+    # Create mint.json from the template file
+    mint_json_template_path = script_dir / "mint-json-template.json"
+    mint_json_path = script_dir / "mint.json"
+
+    print("Generating mint.json from template...")
+    generate_mint_json_from_template(mint_json_template_path, mint_json_path)
 
     # Update mint.json
     update_mint_json_with_api_nav(script_dir, args.api_dir)
