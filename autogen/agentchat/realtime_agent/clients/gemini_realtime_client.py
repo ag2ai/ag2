@@ -12,7 +12,7 @@ import json
 import re
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, Optional
 
 from .realtime_client import Role, register_realtime_client
 
@@ -63,7 +63,7 @@ class GeminiRealtimeClient:
 
         self.api_key = config.get("api_key", None)
         self._final_config: Dict[str, Any] = {}
-        self._pending_session_updates: List[dict[str, Any]] = []
+        self._pending_session_updates: dict[str, Any] = {}
         self._is_reading_events = False
 
     @property
@@ -138,14 +138,28 @@ class GeminiRealtimeClient:
     async def _initialize_session(self) -> None:
         # https://ai.google.dev/api/multimodal-live
         # https://ai.google.dev/api/multimodal-live#bidigeneratecontentsetup
+
         session_config = {
             "setup": {
-                "model": f"models/{self._model}",
-                # "tools": [],
                 # "system_instruction": {
                 #     "role": "system",
                 #     "parts": [{"text": self._system_message}]
                 # },
+                "model": f"models/{self._model}",
+                "tools": [
+                    {
+                        "function_declarations": [
+                            {
+                                "name": tool_schema["name"],
+                                "description": tool_schema["description"],
+                                "parameters": tool_schema[
+                                    "parameters"
+                                ],  # GeminiClient._create_gemini_function_parameters(tool_schema["parameters"]),
+                            }
+                            for tool_schema in self._pending_session_updates.get("tools", [])
+                        ]
+                    },
+                ],
                 "generation_config": {
                     "response_modalities": [self._response_modality],
                     "speech_config": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": self._voice}}},
@@ -153,8 +167,7 @@ class GeminiRealtimeClient:
                 },
             }
         }
-        # for update in self._pending_session_updates:
-        #     session_config.update(update)
+
         self.logger.info(f"Sending session update: {session_config}")
         await self.connection.send(json.dumps(session_config))
 
@@ -164,7 +177,7 @@ class GeminiRealtimeClient:
             self.logger.warning("Is reading events. Session update would be ignored.")
         # Record session updates
         else:
-            self._pending_session_updates.append(session_options)
+            self._pending_session_updates.update(session_options)
 
     @asynccontextmanager
     async def connect(self) -> AsyncGenerator[None, None]:
@@ -184,18 +197,46 @@ class GeminiRealtimeClient:
         await self._initialize_session()
 
         self._is_reading_events = True
+
         async for raw_response in self.connection:
+            response = json.loads(raw_response.decode("ascii")) if isinstance(raw_response, bytes) else raw_response
             try:
-                response = json.loads(raw_response.decode("ascii")) if isinstance(raw_response, bytes) else raw_response
-                b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
-                event = {
-                    "type": "response.audio.delta",
-                    "delta": b64data,
-                    "item_id": None,
-                }
-                yield event
-            except KeyError:
-                self.logger.error("Failed to parse audio event: %s", response)
+                events = self.dispatch(response)
+                for event in events:
+                    yield event
+            except (KeyError, ValueError):
+                self.logger.error(f"Failed to parse message: {response}")
+
+    def dispatch(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        # Determine the type of message and dispatch it to the appropriate handler
+        if "serverContent" in response and "modelTurn" in response["serverContent"]:
+            return self.parse_audio_response(response)
+        elif "toolCall" in response:
+            return self.parse_tool_call(response)
+        else:
+            raise ValueError("Unknown message type")
+
+    def parse_audio_response(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        # Handle audio response
+        b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
+        return [
+            {
+                "type": "response.audio.delta",
+                "delta": b64data,
+                "item_id": None,
+            }
+        ]
+
+    def parse_tool_call(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "response.function_call_arguments.done",
+                "name": call["name"],
+                "arguments": json.dumps(call["args"]),
+                "call_id": call["id"],
+            }
+            for call in response["toolCall"]["functionCalls"]
+        ]
 
     @classmethod
     def get_factory(
