@@ -24,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
-    """
-    A graph query engine implemented using the Neo4j GraphRAG SDK.
+    """A graph query engine implemented using the Neo4j GraphRAG SDK.
     Provides functionality to initialize a knowledge graph,
     create a vector index, and query the graph using Neo4j and LLM.
     """
@@ -47,8 +46,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         relations: Optional[List[str]] = None,
         potential_schema: Optional[List[tuple[str, str, str]]] = None,
     ):
-        """
-        Initialize a Neo4j graph query engine.
+        """Initialize a Neo4j graph query engine.
 
         Args:
             host (str): Neo4j host URL.
@@ -75,8 +73,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         self.potential_schema = potential_schema
 
     def init_db(self, input_doc: Union[list[Document], None] = None):
-        """
-        Initialize the Neo4j graph database using the provided input doc.
+        """Initialize the Neo4j graph database using the provided input doc.
         Currently this method only supports single document input (only reads the first doc).
 
         This method supports both text and PDF documents. It performs the following steps:
@@ -107,8 +104,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         self._create_index(self.index_name)
 
     def add_records(self, new_records: list[Document]) -> bool:
-        """
-        Add new records to the Neo4j database.
+        """Add new records to the Neo4j database.
 
         Args:
             new_records (list[Document]): List of new Documents to be added
@@ -125,8 +121,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         return True
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
-        """
-        Query the Neo4j database using a natural language question.
+        """Query the Neo4j database using a natural language question.
 
         Args:
             question (str): The question to be answered by querying the graph.
@@ -145,8 +140,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         return GraphStoreQueryResult(answer=result.answer)
 
     def _create_index(self, name: str):
-        """
-        Create a vector index for the Neo4j knowledge graph.
+        """Create a vector index for the Neo4j knowledge graph.
 
         Args:
             name (str): Name of the vector index to create.
@@ -163,17 +157,13 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         logger.info(f"Vector index '{name}' created successfully.")
 
     def _clear_db(self):
-        """
-        Clear all nodes and relationships from the Neo4j database.
-        """
+        """Clear all nodes and relationships from the Neo4j database."""
         logger.info("Clearing all nodes and relationships in the database...")
         self.driver.execute_query("MATCH (n) DETACH DELETE n;")
         logger.info("Database cleared successfully.")
 
     def _initialize_kg_builders(self):
-        """
-        Initialize the knowledge graph builders
-        """
+        """Initialize the knowledge graph builders"""
         logger.info("Initializing the knowledge graph builders...")
         self.text_kg_builder = SimpleKGPipeline(
             driver=self.driver,
@@ -198,8 +188,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         )
 
     def _build_graph(self, input_doc: List[Document]) -> None:
-        """
-        Build the knowledge graph using the provided input documents.
+        """Build the knowledge graph using the provided input documents.
 
         Args:
             input_doc (List[Document]): List of input documents for building the graph.
