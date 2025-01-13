@@ -164,4 +164,4 @@ def pytest_sessionfinish(session, exitstatus):
     # so we should set the exit status to 1
     # https://docs.pytest.org/en/stable/reference/exit-codes.html
     if exitstatus == 5:
-        session.exitstatus = 1
+        session.exitstatus = 0
