@@ -11,9 +11,9 @@
 import json
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, List, Optional
 
-from .realtime_client import Role
+from .realtime_client import Role, register_realtime_client
 
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
@@ -31,6 +31,7 @@ HOST = "generativelanguage.googleapis.com"
 API_VERSION = "v1alpha"
 
 
+@register_realtime_client()
 class GeminiRealtimeClient:
     """(Experimental) Client for Gemini Realtime API."""
 
@@ -194,6 +195,27 @@ class GeminiRealtimeClient:
                 yield event
             except KeyError:
                 self.logger.error("Failed to parse audio event: %s", response)
+
+    @classmethod
+    def get_factory(
+        cls, llm_config: dict[str, Any], voice: str, system_message: str, logger: Logger, **kwargs: Any
+    ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
+        """Create a Realtime API client.
+
+        Args:
+            model (str): The model to create the client for.
+            voice (str): The voice to use.
+            system_message (str): The system message to use.
+            kwargs (Any): Additional arguments.
+
+        Returns:
+            RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
+        """
+        if llm_config["config_list"][0]["model"].match("^gemini-.+") and list(kwargs.keys()) == []:
+            return lambda: GeminiRealtimeClient(
+                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
+            )
+        return None
 
 
 # needed for mypy to check if GeminiRealtimeClient implements RealtimeClientProtocol

@@ -7,10 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from anyio import move_on_after
 
-from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
-from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
+from autogen.agentchat.realtime_agent.clients import OpenAIRealtimeClient, RealtimeClientProtocol
 
-from ...conftest import Credentials, reason, skip_openai
+from ....conftest import Credentials, reason, skip_openai
 
 
 class TestOAIRealtimeClient:

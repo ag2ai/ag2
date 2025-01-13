@@ -7,7 +7,7 @@ import json
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Optional
 
-from .realtime_observer import RealtimeObserver
+from ..realtime_observer import RealtimeObserver
 
 if TYPE_CHECKING:
     from fastapi.websockets import WebSocket
