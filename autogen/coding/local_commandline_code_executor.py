@@ -350,7 +350,7 @@ class _DeprecatedClassMeta(type):
         if alias is not None:
 
             def new(cls, *args, **kwargs):  # type: ignore[no-untyped-def]
-                alias = getattr(cls, "_DeprecatedClassMeta__alias")
+                alias = cls._DeprecatedClassMeta__alias
 
                 if alias is not None:
                     warnings.warn(
@@ -396,7 +396,7 @@ class _DeprecatedClassMeta(type):
         if subclass is cls:
             return True
         else:
-            return issubclass(subclass, getattr(cls, "_DeprecatedClassMeta__alias"))
+            return issubclass(subclass, cls._DeprecatedClassMeta__alias)  # type: ignore[attr-defined]
 
 
 class LocalCommandlineCodeExecutor(metaclass=_DeprecatedClassMeta):
