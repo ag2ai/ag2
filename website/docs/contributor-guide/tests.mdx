@@ -22,7 +22,7 @@ pip install -e."[test]"
 Then you can run the tests from the `test` folder using the following command:
 
 ```bash
-pytest test
+bash scripts/test.sh test
 ```
 
 Tests for the `autogen.agentchat.contrib` module may be skipped automatically if the
@@ -41,7 +41,7 @@ For example, the following command will skip tests that require access to
 OpenAI and docker services:
 
 ```bash
-pytest test -m "not openai" --skip-docker
+bash scripts/test.sh test -m "not openai" --skip-docker
 ```
 
 ## Coverage
@@ -51,7 +51,7 @@ Any code you commit should not decrease coverage. To ensure your code maintains 
 ```bash
 pip install -e ."[test]"
 
-pytest test --cov-report=html
+bash scripts/test.sh test --cov-report=html
 ```
 
 Pytest generated a code coverage report and created a htmlcov directory containing an index.html file and other related files. Open index.html in any web browser to visualize and navigate through the coverage data interactively. This interactive visualization allows you to identify uncovered lines and review coverage statistics for individual files.
