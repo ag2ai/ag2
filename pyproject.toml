@@ -241,7 +241,17 @@ exclude = ["test", "notebook"]
 
 [tool.pytest.ini_options]
 addopts = '--cov=. --cov-append --cov-branch --cov-report=xml -m "not conda"'
-markers = ["conda: test related to conda forge distribution"]
+testpaths = [
+    "test",
+]
+markers = [
+    "conda: test related to conda forge distribution",
+    "all",
+    "openai",
+    "gemini",
+    "redis",
+    "docker",
+]
 
 [tool.black]
 # https://github.com/psf/black

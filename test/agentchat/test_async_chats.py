@@ -12,10 +12,10 @@ import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
 
-from ..conftest import Credentials, skip_openai
+from ..conftest import Credentials
 
 
-@pytest.mark.skipif(skip_openai, reason="requested to skip openai tests")
+@pytest.mark.openai
 @pytest.mark.asyncio
 async def test_async_chats(credentials_gpt_4o_mini: Credentials):
     config_list_4omini = credentials_gpt_4o_mini.config_list

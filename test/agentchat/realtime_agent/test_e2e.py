@@ -14,13 +14,13 @@ from fastapi.testclient import TestClient
 
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
-from ...conftest import Credentials, reason, skip_openai
+from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 class TestE2E:
     async def _test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.

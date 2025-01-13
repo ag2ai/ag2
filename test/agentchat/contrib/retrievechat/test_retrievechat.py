@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from ....conftest import Credentials, reason, skip_openai
+from ....conftest import Credentials, reason
 
 try:
     import chromadb
@@ -29,8 +29,9 @@ else:
 reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):

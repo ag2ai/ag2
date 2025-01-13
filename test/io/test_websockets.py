@@ -19,7 +19,7 @@ from autogen.cache.cache import Cache
 from autogen.io import IOWebsockets
 from autogen.messages.base_message import BaseMessage, wrap_message
 
-from ..conftest import Credentials, skip_openai
+from ..conftest import Credentials
 
 # Check if the websockets module is available
 try:
@@ -108,7 +108,7 @@ class TestConsoleIOWithWebsockets:
 
         print("Test passed.", flush=True)
 
-    @pytest.mark.skipif(skip_openai, reason="requested to skip")
+    @pytest.mark.openai
     def test_chat(self, credentials_gpt_4o_mini: Credentials) -> None:
         print("Testing setup", flush=True)
 

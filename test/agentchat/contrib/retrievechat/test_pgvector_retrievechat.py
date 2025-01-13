@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 
 from autogen import AssistantAgent
 
-from ....conftest import Credentials, skip_openai
+from ....conftest import Credentials
 
 try:
     import pgvector  # noqa: F401
@@ -30,8 +30,9 @@ else:
 test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip or skip_openai,
+    skip,
     reason="dependency is not installed OR requested to skip",
 )
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):

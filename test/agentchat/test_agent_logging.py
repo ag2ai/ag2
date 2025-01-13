@@ -14,7 +14,7 @@ import pytest
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import Credentials, skip_openai
+from ..conftest import Credentials
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
@@ -51,8 +51,9 @@ def db_connection():
     autogen.runtime_logging.stop()
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip_openai,
+    sys.platform in ["darwin", "win32"],
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
 def test_two_agents_logging(credentials: Credentials, db_connection):
@@ -174,8 +175,9 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
         assert row["timestamp"], "timestamp is empty"
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip_openai,
+    sys.platform in ["darwin", "win32"],
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
 def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):

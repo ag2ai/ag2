@@ -13,10 +13,10 @@ import pytest
 
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials):
     assistant1 = AssistantAgent(
         "assistant",
@@ -68,7 +68,7 @@ def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Cre
     print("Total usage summary:", total_usage_summary)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_agent_usage(credentials: Credentials):
     config_list = credentials.config_list
     assistant = AssistantAgent(
