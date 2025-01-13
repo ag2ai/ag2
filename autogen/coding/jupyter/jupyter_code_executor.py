@@ -33,7 +33,7 @@ class JupyterCodeExecutor(CodeExecutor):
         jupyter_server: Union[JupyterConnectable, JupyterConnectionInfo],
         kernel_name: str = "python3",
         timeout: int = 60,
-        output_dir: Union[Path, str] = Path("."),
+        output_dir: Union[Path, str] = Path(),
     ):
         """(Experimental) A code executor class that executes code statefully using
         a Jupyter server supplied to this class.

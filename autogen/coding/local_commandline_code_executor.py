@@ -73,7 +73,7 @@ $functions"""
         self,
         timeout: int = 60,
         virtual_env_context: Optional[SimpleNamespace] = None,
-        work_dir: Union[Path, str] = Path("."),
+        work_dir: Union[Path, str] = Path(),
         functions: list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]] = [],
         functions_module: str = "functions",
         execution_policies: Optional[dict[str, bool]] = None,

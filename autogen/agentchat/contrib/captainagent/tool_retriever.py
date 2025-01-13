@@ -159,7 +159,7 @@ class LocalExecutorWithTools(CodeExecutor):
         """(Experimental) Export a code extractor that can be used by an agent."""
         return MarkdownCodeExtractor()
 
-    def __init__(self, tools: Optional[list[Tool]] = None, work_dir: Union[Path, str] = Path(".")):
+    def __init__(self, tools: Optional[list[Tool]] = None, work_dir: Union[Path, str] = Path()):
         self.tools = tools if tools is not None else []
         self.work_dir = work_dir
         if not os.path.exists(work_dir):

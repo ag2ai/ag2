@@ -236,7 +236,7 @@ def test_to_dict():
     from autogen import Agent
     from autogen.coding import LocalCommandLineCodeExecutor
 
-    agent_executor = LocalCommandLineCodeExecutor(work_dir=Path("."))
+    agent_executor = LocalCommandLineCodeExecutor(work_dir=Path())
 
     agent1 = autogen.ConversableAgent(
         "alice",

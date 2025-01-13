@@ -64,7 +64,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         image: str = "python:3-slim",
         container_name: str | None = None,
         timeout: int = 60,
-        work_dir: Path | str = Path("."),
+        work_dir: Path | str = Path(),
         bind_dir: Path | str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
