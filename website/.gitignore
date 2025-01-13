@@ -9,7 +9,7 @@
 .cache-loader
 docs/reference
 /notebooks
-/generated_blog
+/blog
 mint.json
 
 docs/tutorial/*.mdx
