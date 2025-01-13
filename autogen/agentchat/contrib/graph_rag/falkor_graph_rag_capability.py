@@ -68,7 +68,6 @@ class FalkorGraphRagCapability(GraphRagCapability):
         Returns:
             A tuple containing a boolean indicating success and the assistant's reply.
         """
-        # question = self._get_last_question(messages[-1])
         question = self._messages_summary(messages, recipient.system_message)
         result: GraphStoreQueryResult = self.query_engine.query(question)
 

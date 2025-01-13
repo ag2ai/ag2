@@ -15,7 +15,11 @@ repos:
     - id: check-yaml
     - id: check-toml
     - id: check-json
-      exclude: ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
+      exclude: |
+        (?x)^(
+          .devcontainer/.*devcontainer\.json |
+          ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
+        )$
     - id: check-byte-order-marker
       exclude: .gitignore
     - id: check-merge-conflict
@@ -79,3 +83,14 @@ repos:
           notebook/.* |
           website/.*
         )$
+
+  - repo: local
+    hooks:
+      - id: generate-devcontainer-files
+        name: Generate devcontainer files
+        entry: "scripts/devcontainer/generate-devcontainers.sh"
+        language: python
+        require_serial: true
+        verbose: true
+        additional_dependencies: ['jinja2']
+        files: ^(scripts/devcontainer/.*)$

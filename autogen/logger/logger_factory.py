@@ -14,10 +14,21 @@ __all__ = ("LoggerFactory",)
 
 
 class LoggerFactory:
+    """Factory class to create logger objects."""
+
     @staticmethod
     def get_logger(
         logger_type: Literal["sqlite", "file"] = "sqlite", config: Optional[dict[str, Any]] = None
     ) -> BaseLogger:
+        """Factory method to create logger objects.
+
+        Args:
+            logger_type (Literal["sqlite", "file"], optional): Type of logger. Defaults to "sqlite".
+            config (Optional[dict[str, Any]], optional): Configuration for logger. Defaults to None.
+
+        Returns:
+            BaseLogger: Logger object
+        """
         if config is None:
             config = {}
 
