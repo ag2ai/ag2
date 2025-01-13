@@ -59,6 +59,7 @@ from PIL import Image
 from google.ai.generativelanguage import Content, FunctionCall, FunctionDeclaration, FunctionResponse, Part, Tool
 from google.ai.generativelanguage_v1beta.types import Schema
 from google.auth.credentials import Credentials
+from google.generativeai.types import GenerateContentResponse
 from jsonschema import ValidationError
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
@@ -67,6 +68,9 @@ from vertexai.generative_models import (
     Content as VertexAIContent,
 )
 from vertexai.generative_models import FunctionDeclaration as vaiFunctionDeclaration
+from vertexai.generative_models import (
+    GenerationResponse as VertexAIGenerationResponse,
+)
 from vertexai.generative_models import GenerativeModel
 from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
 from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -260,7 +264,20 @@ class GeminiClient:
         ans = ""
         random_id = random.randint(0, 10000)
         prev_function_calls = []
-        for part in response.parts:
+
+        if isinstance(response, GenerateContentResponse):
+            parts = response.parts
+        elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
+            # google.generativeai also raises an error len(candidates) != 1:
+            if len(response.candidates) != 1:
+                raise ValueError(
+                    f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
+                )
+            parts = response.candidates[0].content.parts
+        else:
+            raise ValueError(f"Unexpected response type: {type(response)}")
+
+        for part in parts:
             # Function calls
             if fn_call := part.function_call:
                 # If we have a repeated function call, ignore it
@@ -325,7 +342,7 @@ class GeminiClient:
         """Convert AutoGen content to Gemini parts, catering for text and tool calls"""
         rst = []
 
-        if message["role"] == "tool":
+        if "role" in message and message["role"] == "tool":
             # Tool call recommendation
 
             function_name = self.tool_call_function_map[message["tool_call_id"]]
