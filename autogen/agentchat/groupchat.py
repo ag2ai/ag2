@@ -11,11 +11,10 @@ import random
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Union
 
 from ..code_utils import content_str
 from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNextAgent
-from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages.agent_messages import (
@@ -369,8 +368,8 @@ class GroupChat:
     def select_speaker_prompt(self, agents: Optional[list[Agent]] = None) -> str:
         """Return the floating system prompt selecting the next speaker.
         This is always the *last* message in the context.
-        Will return None if the select_speaker_prompt_template is None."""
-
+        Will return None if the select_speaker_prompt_template is None.
+        """
         if self.select_speaker_prompt_template is None:
             return None
 
@@ -559,7 +558,6 @@ class GroupChat:
 
     def select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
         """Select the next speaker (with requery)."""
-
         # Prepare the list of available agents and select an agent if selection method allows (non-auto)
         selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
         if selected_agent:
@@ -573,7 +571,6 @@ class GroupChat:
 
     async def a_select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
         """Select the next speaker (with requery), asynchronously."""
-
         selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
         if selected_agent:
             return selected_agent
@@ -701,7 +698,6 @@ class GroupChat:
         Returns:
             Dict: a counter for mentioned agents.
         """
-
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
             agents = self.agents
@@ -785,7 +781,6 @@ class GroupChat:
         Returns:
             Dict: a counter for mentioned agents.
         """
-
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
             agents = self.agents
@@ -942,7 +937,8 @@ class GroupChat:
         """Checks the result of the auto_select_speaker function, returning the
         agent to speak.
 
-        Used by auto_select_speaker and a_auto_select_speaker."""
+        Used by auto_select_speaker and a_auto_select_speaker.
+        """
         if len(result.chat_history) > 0:
             # Use the final message, which will have the selected agent or reason for failure
             final_message = result.chat_history[-1]["content"]
@@ -1300,7 +1296,6 @@ class GroupChatManager(ConversableAgent):
         Returns:
             - Tuple[ConversableAgent, Dict]: A tuple containing the last agent who spoke and their message
         """
-
         # Convert messages from string to messages list, if needed
         if isinstance(messages, str):
             messages = self.messages_from_string(messages)
@@ -1404,7 +1399,6 @@ class GroupChatManager(ConversableAgent):
         Returns:
             - Tuple[ConversableAgent, Dict]: A tuple containing the last agent who spoke and their message
         """
-
         # Convert messages from string to messages list, if needed
         if isinstance(messages, str):
             messages = self.messages_from_string(messages)
@@ -1492,10 +1486,10 @@ class GroupChatManager(ConversableAgent):
     def _valid_resume_messages(self, messages: list[dict]):
         """Validates the messages used for resuming
 
-        args:
+        Args:
             messages (List[Dict]): list of messages to resume with
 
-        returns:
+        Returns:
             - bool: Whether they are valid for resuming
         """
         # Must have messages to start with, otherwise they should run run_chat
@@ -1519,15 +1513,14 @@ class GroupChatManager(ConversableAgent):
     ):
         """Removes termination string, if required, and checks if termination may occur.
 
-        args:
+        Args:
             remove_termination_string (str or function): Remove the termination string from the last message to prevent immediate termination
                 If a string is provided, this string will be removed from last message.
                 If a function is provided, the last message will be passed to this function, and the function returns the string after processing.
 
-        returns:
+        Returns:
             None
         """
-
         last_message = messages[-1]
 
         # Replace any given termination string in the last message
@@ -1551,10 +1544,10 @@ class GroupChatManager(ConversableAgent):
     def messages_from_string(self, message_string: str) -> list[dict]:
         """Reads the saved state of messages in Json format for resume and returns as a messages list
 
-        args:
+        Args:
             - message_string: Json string, the saved state
 
-        returns:
+        Returns:
             - List[Dict]: List of messages
         """
         try:
@@ -1568,13 +1561,12 @@ class GroupChatManager(ConversableAgent):
         """Converts the provided messages into a Json string that can be used for resuming the chat.
         The state is made up of a list of messages
 
-        args:
+        Args:
             - messages (List[Dict]): set of messages to convert to a string
 
-        returns:
+        Returns:
             - str: Json representation of the messages which can be persisted for resuming later
         """
-
         return json.dumps(messages)
 
     def _raise_exception_on_async_reply_functions(self) -> None:
@@ -1625,10 +1617,7 @@ class GroupChatManager(ConversableAgent):
                 nr_messages_to_preserve_provided = True
             else:
                 for agent in groupchat.agents:
-                    if agent.name == word:
-                        agent_to_memory_clear = agent
-                        break
-                    elif agent.name == word[:-1]:  # for the case when agent name is followed by dot or other sign
+                    if agent.name == word or agent.name == word[:-1]:
                         agent_to_memory_clear = agent
                         break
         # preserve last tool call message if clear history called inside of tool response

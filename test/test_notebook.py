@@ -14,7 +14,7 @@ import pytest
 from .conftest import skip_openai
 
 try:
-    import openai
+    import openai  # noqa: F401
 except ImportError:
     skip = True
 else:

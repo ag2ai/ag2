@@ -6,8 +6,7 @@ from autogen.coding.func_with_reqs import with_requirements
 
 @with_requirements(["sympy"])
 def compute_currency_conversion(amount, exchange_rate):
-    """
-    Compute the currency conversion of the given amount using the provided exchange rate.
+    """Compute the currency conversion of the given amount using the provided exchange rate.
 
     Args:
     amount (float): The amount to be converted.

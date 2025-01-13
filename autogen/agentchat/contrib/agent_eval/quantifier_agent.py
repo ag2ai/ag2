@@ -10,9 +10,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 
 
 class QuantifierAgent(ConversableAgent):
-    """
-    An agent for quantifying the performance of a system using the provided criteria.
-    """
+    """An agent for quantifying the performance of a system using the provided criteria."""
 
     DEFAULT_SYSTEM_MESSAGE = """"You are a helpful assistant. You quantify the output of different tasks based on the given criteria.
     The criterion is given in a json list format where each element is a distinct criteria.
@@ -30,13 +28,12 @@ class QuantifierAgent(ConversableAgent):
         description: Optional[str] = DEFAULT_DESCRIPTION,
         **kwargs,
     ):
-        """
-        Args:
-            name (str): agent name.
-            system_message (str): system message for the ChatCompletion inference.
-                Please override this attribute if you want to reprogram the agent.
-            description (str): The description of the agent.
-            **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](../../conversable_agent#init).
+        """Args:
+        name (str): agent name.
+        system_message (str): system message for the ChatCompletion inference.
+            Please override this attribute if you want to reprogram the agent.
+        description (str): The description of the agent.
+        **kwargs (dict): Please refer to other kwargs in
+            [ConversableAgent](../../conversable_agent#init).
         """
         super().__init__(name=name, system_message=system_message, description=description, **kwargs)

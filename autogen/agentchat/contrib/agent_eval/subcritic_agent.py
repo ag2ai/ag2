@@ -10,9 +10,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 
 
 class SubCriticAgent(ConversableAgent):
-    """
-    An agent for creating subcriteria from a given list of criteria for evaluating the utility of a given task.
-    """
+    """An agent for creating subcriteria from a given list of criteria for evaluating the utility of a given task."""
 
     DEFAULT_SYSTEM_MESSAGE = """You are a helpful assistant to the critic agent. You suggest sub criteria for evaluating different tasks based on the criteria provided by the critic agent (if you feel it is needed).
         They should be distinguishable, quantifiable, and related to the overall theme of the critic's provided criteria.
@@ -31,14 +29,13 @@ class SubCriticAgent(ConversableAgent):
         description: Optional[str] = DEFAULT_DESCRIPTION,
         **kwargs,
     ):
-        """
-        Args:
-            name (str): agent name.
-            system_message (str): system message for the ChatCompletion inference.
-                Please override this attribute if you want to reprogram the agent.
-            description (str): The description of the agent.
-            **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](../../conversable_agent#init).
+        """Args:
+        name (str): agent name.
+        system_message (str): system message for the ChatCompletion inference.
+            Please override this attribute if you want to reprogram the agent.
+        description (str): The description of the agent.
+        **kwargs (dict): Please refer to other kwargs in
+            [ConversableAgent](../../conversable_agent#init).
         """
         super().__init__(
             name=name,

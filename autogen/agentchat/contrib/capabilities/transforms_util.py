@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from collections.abc import Hashable
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from autogen import token_count_utils
 from autogen.cache.abstract_cache_base import AbstractCache

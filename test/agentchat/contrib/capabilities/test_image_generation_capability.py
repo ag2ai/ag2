@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 import itertools
 import os
-import sys
 import tempfile
 from typing import Any
 
@@ -28,7 +27,7 @@ except ImportError:
 else:
     skip_requirement = False
 
-from ....conftest import MOCK_OPEN_AI_API_KEY, skip_openai  # noqa: E402
+from ....conftest import MOCK_OPEN_AI_API_KEY, skip_openai
 
 filter_dict = {"model": ["gpt-4o-mini"]}
 
@@ -116,7 +115,6 @@ def test_dalle_image_generator_cache_key(
         gen_config_1: A tuple containing the resolution, quality, and prompt for the first image generator.
         gen_config_2: A tuple containing the resolution, quality, and prompt for the second image generator.
     """
-
     dalle_generator_1 = dalle_image_generator(dalle_config, resolution=gen_config_1[0], quality=gen_config_1[1])
     dalle_generator_2 = dalle_image_generator(dalle_config, resolution=gen_config_2[0], quality=gen_config_2[1])
 

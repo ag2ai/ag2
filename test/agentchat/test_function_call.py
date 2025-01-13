@@ -15,10 +15,10 @@ import pytest
 import autogen
 from autogen.math_utils import eval_math_responses
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
@@ -161,8 +161,6 @@ def test_execute_function():
 
 @pytest.mark.asyncio
 async def test_a_execute_function():
-    import time
-
     from autogen.agentchat import UserProxyAgent
 
     # Create an async function

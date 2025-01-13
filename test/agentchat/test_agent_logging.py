@@ -5,7 +5,6 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import json
-import os
 import sqlite3
 import sys
 import uuid
@@ -15,7 +14,7 @@ import pytest
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import Credentials, skip_openai  # noqa: E402
+from ..conftest import Credentials, skip_openai
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
@@ -88,9 +87,9 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
     session_id = rows[0]["session_id"]
 
     for idx, row in enumerate(rows):
-        assert (
-            row["invocation_id"] and str(uuid.UUID(row["invocation_id"], version=4)) == row["invocation_id"]
-        ), "invocation id is not valid uuid"
+        assert row["invocation_id"] and str(uuid.UUID(row["invocation_id"], version=4)) == row["invocation_id"], (
+            "invocation id is not valid uuid"
+        )
         assert row["client_id"], "client id is empty"
         assert row["wrapper_id"], "wrapper id is empty"
         assert row["session_id"] and row["session_id"] == session_id

@@ -5,12 +5,11 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import io
-import json
 import mimetypes
 import os
 import re
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
 import markdownify

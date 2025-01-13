@@ -4,14 +4,14 @@
 
 
 from abc import ABC
-from typing import Annotated, Any, Callable, Literal, Optional, Type, TypeVar, Union
+from typing import Annotated, Any, Callable, Literal, Optional, TypeVar, Union
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
 
 PetType = TypeVar("PetType", bound=Literal["cat", "dog"])
 
-__all__ = ["BaseMessage", "wrap_message", "get_annotated_type_for_message_classes"]
+__all__ = ["BaseMessage", "get_annotated_type_for_message_classes", "wrap_message"]
 
 
 class BaseMessage(BaseModel, ABC):

@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def find_continuity_point(f_leq, f_gt, x_value):
-    """
-    Find the value 'a' that ensures the continuity of a piecewise function at a given point.
+    """Find the value 'a' that ensures the continuity of a piecewise function at a given point.
 
     Args:
         f_leq (str): The function expression for f(x) when x is less than or equal to the continuity point, in the form of a string.

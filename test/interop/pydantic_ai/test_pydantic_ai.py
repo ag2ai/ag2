@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 import random
 import sys
 from inspect import signature
@@ -13,7 +12,6 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool as PydanticAITool
 
-import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability

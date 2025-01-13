@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def calculate_reflected_point(point):
-    """
-    Calculates the reflection point of a given point about the line y=x.
+    """Calculates the reflection point of a given point about the line y=x.
 
     Args:
         point (dict): A dictionary representing the coordinates of the point.

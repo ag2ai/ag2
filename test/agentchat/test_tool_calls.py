@@ -8,7 +8,6 @@
 
 import inspect
 import json
-import os
 import sys
 
 import pytest
@@ -20,7 +19,7 @@ from autogen.oai.client import TOOL_ENABLED
 from ..conftest import Credentials
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip_openai = True
 else:
@@ -170,9 +169,9 @@ def test_update_tool(credentials_gpt_4o: Credentials):
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
     print("Message:", messages1)
     print("Summary:", res.summary)
-    assert (
-        messages1.replace("TERMINATE", "") == res.summary
-    ), "Message (removing TERMINATE) and summary should be the same"
+    assert messages1.replace("TERMINATE", "") == res.summary, (
+        "Message (removing TERMINATE) and summary should be the same"
+    )
 
     assistant.update_tool_signature("greet_user", is_remove=True)
     res = user_proxy.initiate_chat(

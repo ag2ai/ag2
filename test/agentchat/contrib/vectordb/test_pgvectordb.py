@@ -13,9 +13,9 @@ import pytest
 from ....conftest import reason
 
 try:
-    import pgvector
+    import pgvector  # noqa: F401
     import psycopg
-    import sentence_transformers
+    import sentence_transformers  # noqa: F401
 
     from autogen.agentchat.contrib.vectordb.pgvectordb import PGVectorDB
 except ImportError:

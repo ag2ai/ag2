@@ -4,15 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Dict
 
 import pytest
 
 from autogen import OpenAIWrapper
-from autogen.oai import ModelClient
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:

@@ -8,11 +8,10 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel
 
-import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, Depends
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 
 class MyContext(BaseContext, BaseModel):
@@ -118,7 +117,7 @@ async def f_with_default_depends_async(
 
 
 class TestDependencyInjection:
-    @pytest.fixture()
+    @pytest.fixture
     def expected_tools(self) -> list[dict[str, Any]]:
         return [
             {
@@ -155,7 +154,7 @@ class TestDependencyInjection:
             (f_with_default_depends_async, "f_with_default_depends_async", True, "7"),
         ],
     )
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_register_tools(
         self,
         mock_credentials: Credentials,
@@ -181,7 +180,7 @@ class TestDependencyInjection:
 
     @pytest.mark.skipif(skip_openai, reason=reason)
     @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
         class UserContext(BaseContext, BaseModel):
             username: str

@@ -12,7 +12,7 @@ import autogen
 from autogen.agentchat.contrib.capabilities.transform_messages import TransformMessages
 from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimiter, MessageTokenLimiter
 
-from ....conftest import Credentials, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai
 
 
 @pytest.mark.skipif(skip_openai, reason="Requested to skip openai test.")
@@ -56,7 +56,7 @@ def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> 
                 clear_history=False,
             )
         except Exception as e:
-            assert False, f"Chat initiation failed with error {str(e)}"
+            assert False, f"Chat initiation failed with error {e!s}"
 
 
 if __name__ == "__main__":

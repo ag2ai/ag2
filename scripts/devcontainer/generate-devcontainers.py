@@ -4,7 +4,6 @@
 
 # A script to generate devcontainer files for different python versions
 
-import os
 from pathlib import Path
 
 from jinja2 import Template

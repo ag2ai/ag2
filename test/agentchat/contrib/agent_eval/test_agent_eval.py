@@ -14,7 +14,7 @@ from autogen.agentchat.contrib.agent_eval.agent_eval import generate_criteria, q
 from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 from autogen.agentchat.contrib.agent_eval.task import Task
 
-from ....conftest import Credentials, reason, skip_openai  # noqa: E402
+from ....conftest import Credentials, reason, skip_openai
 
 
 def remove_ground_truth(test_case: str):

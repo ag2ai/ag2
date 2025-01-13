@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Optional, Protocol, Union, runtime_checkable
 
 
 @runtime_checkable
@@ -23,7 +23,8 @@ class Agent(Protocol):
     @property
     def description(self) -> str:
         """The description of the agent. Used for the agent's introduction in
-        a group chat setting."""
+        a group chat setting.
+        """
         ...
 
     def send(
