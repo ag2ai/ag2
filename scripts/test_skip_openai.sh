@@ -4,4 +4,4 @@
 
 #!/usr/bin/env bash
 
-bash scripts/test.sh -m "not openai" --ignore=test/agentchat/contrib
+bash scripts/test.sh -m "not openai" --ignore=test/agentchat/contrib "$@"
