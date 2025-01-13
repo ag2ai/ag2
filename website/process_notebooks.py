@@ -666,7 +666,6 @@ def extract_example_group(metadata_path):
         "pages": ["notebooks/Notebooks"]
         + [
             Path(item["source"])
-            .resolve()
             .with_suffix("")
             .as_posix()
             .replace("/website/", "/")
