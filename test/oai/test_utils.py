@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-import autogen  # noqa: E402
+import autogen
 from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, filter_config, is_valid_api_key
 
 from ..conftest import MOCK_OPEN_AI_API_KEY

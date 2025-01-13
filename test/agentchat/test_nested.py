@@ -11,7 +11,7 @@ import pytest
 import autogen
 from autogen.agentchat.contrib.capabilities.agent_capability import AgentCapability
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 
 class MockAgentReplies(AgentCapability):

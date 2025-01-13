@@ -225,7 +225,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
             files.append(code_path)
 
             if not execute_code:
-                outputs.append(f"Code saved to {str(code_path)}\n")
+                outputs.append(f"Code saved to {code_path!s}\n")
                 continue
 
             command = ["timeout", str(self._timeout), _cmd(lang), filename]

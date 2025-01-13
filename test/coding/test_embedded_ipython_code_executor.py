@@ -17,7 +17,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
 
-from ..conftest import MOCK_OPEN_AI_API_KEY, skip_docker  # noqa: E402
+from ..conftest import MOCK_OPEN_AI_API_KEY, skip_docker
 
 try:
     from autogen.coding.jupyter import (

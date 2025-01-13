@@ -14,7 +14,7 @@ import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 
-from ..conftest import Credentials, skip_openai, skip_redis  # noqa: E402
+from ..conftest import Credentials, skip_openai, skip_redis
 
 try:
     from openai import OpenAI  # noqa: F401

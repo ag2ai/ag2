@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from ....conftest import Credentials, reason, skip_openai  # noqa: E402
+from ....conftest import Credentials, reason, skip_openai
 
 try:
     import chromadb

@@ -215,7 +215,7 @@ def create_received_message_model(
 
     # Role is neither function nor tool
 
-    if "function_call" in message and message["function_call"]:
+    if message.get("function_call"):
         return FunctionCallMessage(
             **message,
             sender_name=sender.name,
@@ -223,7 +223,7 @@ def create_received_message_model(
             uuid=uuid,
         )
 
-    if "tool_calls" in message and message["tool_calls"]:
+    if message.get("tool_calls"):
         return ToolCallMessage(
             **message,
             sender_name=sender.name,

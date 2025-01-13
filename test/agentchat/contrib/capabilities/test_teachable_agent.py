@@ -11,7 +11,7 @@ import pytest
 from autogen import ConversableAgent
 from autogen.formatting_utils import colored
 
-from ....conftest import Credentials, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai
 
 try:
     from autogen.agentchat.contrib.capabilities.teachability import Teachability

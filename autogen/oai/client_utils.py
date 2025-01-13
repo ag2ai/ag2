@@ -81,11 +81,11 @@ def validate_parameter(
         ):
             warning = "has numerical bounds"
             if lower_bound is not None:
-                warning += f", >= {str(lower_bound)}"
+                warning += f", >= {lower_bound!s}"
             if upper_bound is not None:
                 if lower_bound is not None:
                     warning += " and"
-                warning += f" <= {str(upper_bound)}"
+                warning += f" <= {upper_bound!s}"
             if allow_None:
                 warning += ", or can be None"
 

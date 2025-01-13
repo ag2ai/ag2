@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -968,7 +968,7 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     # 'await' is used to pause and resume code execution for async IO operations.
     # Without 'await', an async function returns a coroutine object but doesn't execute the function.
     # With 'await', the async function is executed and the current function is paused until the awaited function returns a result.
-    user_proxy.initiate_chat(  # noqa: F704
+    user_proxy.initiate_chat(
         coder,
         message="Create a timer for 1 second and then a stopwatch for 2 seconds.",
     )
@@ -1034,7 +1034,7 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
     # 'await' is used to pause and resume code execution for async IO operations.
     # Without 'await', an async function returns a coroutine object but doesn't execute the function.
     # With 'await', the async function is executed and the current function is paused until the awaited function returns a result.
-    await user_proxy.a_initiate_chat(  # noqa: F704
+    await user_proxy.a_initiate_chat(
         coder,
         message="Create a timer for 1 second and then a stopwatch for 2 seconds.",
     )

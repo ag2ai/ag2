@@ -13,7 +13,7 @@ import pytest
 
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)

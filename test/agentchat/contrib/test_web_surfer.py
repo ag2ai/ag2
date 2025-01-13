@@ -13,7 +13,7 @@ import pytest
 
 from autogen import UserProxyAgent
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials, reason, skip_openai  # noqa: E402
+from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials, reason, skip_openai
 
 BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"

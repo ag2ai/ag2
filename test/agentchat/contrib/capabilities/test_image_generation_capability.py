@@ -27,7 +27,7 @@ except ImportError:
 else:
     skip_requirement = False
 
-from ....conftest import MOCK_OPEN_AI_API_KEY, skip_openai  # noqa: E402
+from ....conftest import MOCK_OPEN_AI_API_KEY, skip_openai
 
 filter_dict = {"model": ["gpt-4o-mini"]}
 

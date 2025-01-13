@@ -15,7 +15,7 @@ import pytest
 import autogen
 from autogen.math_utils import eval_math_responses
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 try:
     from openai import OpenAI  # noqa: F401

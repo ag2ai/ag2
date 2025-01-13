@@ -14,7 +14,7 @@ import pytest
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import Credentials, skip_openai  # noqa: E402
+from ..conftest import Credentials, skip_openai
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.

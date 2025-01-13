@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
-from ...conftest import Credentials, reason, skip_openai  # noqa: E402
+from ...conftest import Credentials, reason, skip_openai
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)

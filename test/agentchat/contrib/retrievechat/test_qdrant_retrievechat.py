@@ -13,7 +13,7 @@ import pytest
 
 from autogen import AssistantAgent
 
-from ....conftest import Credentials, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai
 
 try:
     import fastembed  # noqa: F401

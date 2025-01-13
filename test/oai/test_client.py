@@ -16,7 +16,7 @@ from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED
 
-from ..conftest import Credentials, skip_openai  # noqa: E402
+from ..conftest import Credentials, skip_openai
 
 TOOL_ENABLED = False
 try:

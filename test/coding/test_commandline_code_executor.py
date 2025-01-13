@@ -22,7 +22,7 @@ from autogen.coding.factory import CodeExecutorFactory
 from autogen.coding.local_commandline_code_executor import LocalCommandLineCodeExecutor
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import MOCK_OPEN_AI_API_KEY, skip_docker  # noqa: E402
+from conftest import MOCK_OPEN_AI_API_KEY, skip_docker
 
 if skip_docker or not is_docker_running() or not decide_use_docker(use_docker=None):
     skip_docker_test = True
@@ -343,7 +343,7 @@ def test_dangerous_commands(lang, code, expected_message):
     with pytest.raises(ValueError) as exc_info:
         LocalCommandLineCodeExecutor.sanitize_command(lang, code)
     assert expected_message in str(exc_info.value), (
-        f"Expected message '{expected_message}' not found in '{str(exc_info.value)}'"
+        f"Expected message '{expected_message}' not found in '{exc_info.value!s}'"
     )
 
 

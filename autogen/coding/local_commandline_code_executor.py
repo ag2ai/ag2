@@ -296,7 +296,7 @@ $functions"""
 
             if not execute_code:
                 # Just return a message that the file is saved.
-                logs_all += f"Code saved to {str(written_file)}\n"
+                logs_all += f"Code saved to {written_file!s}\n"
                 exitcode = 0
                 continue
 

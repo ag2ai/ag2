@@ -109,7 +109,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     # <!-- and --> must exists on lines on their own
     if first_cell["cell_type"] == "markdown" and first_cell["source"][0].strip() == "<!--":
         raise ValueError(
-            f"Error in {str(notebook.resolve())} - Front matter should be defined in the notebook metadata now."
+            f"Error in {notebook.resolve()!s} - Front matter should be defined in the notebook metadata now."
         )
 
     metadata = load_metadata(notebook)

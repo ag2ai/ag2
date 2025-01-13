@@ -13,7 +13,7 @@ import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST, reason, skip_openai  # noqa: E402
+from ...conftest import KEY_LOC, OAI_CONFIG_LIST, reason, skip_openai
 
 try:
     import chromadb  # noqa: F401

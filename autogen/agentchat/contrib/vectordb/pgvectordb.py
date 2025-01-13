@@ -429,7 +429,7 @@ class Collection:
             query = (
                 f"SELECT id, documents, embedding, metadatas "
                 f"FROM {self.name} "
-                f"{clause} embedding {index_function} '{str(vector)}' {distance_threshold} "
+                f"{clause} embedding {index_function} '{vector!s}' {distance_threshold} "
                 f"LIMIT {n_results}"
             )
             cursor.execute(query)

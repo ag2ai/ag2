@@ -174,7 +174,7 @@ class CohereClient:
         total_tokens = 0
 
         # Stream if in parameters
-        streaming = True if "stream" in params and params["stream"] else False
+        streaming = True if params.get("stream") else False
         cohere_finish = "stop"
         tool_calls = None
         ans = None

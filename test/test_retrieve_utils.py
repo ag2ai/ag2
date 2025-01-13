@@ -13,7 +13,7 @@ Unit test for retrieve_utils.py
 import pytest
 
 try:
-    import chromadb  # noqa: F401
+    import chromadb
 
     from autogen.retrieve_utils import (
         create_vector_db_from_dir,

@@ -95,7 +95,7 @@ def quantify_criteria(
         code_execution_config={"use_docker": False},
     )
 
-    quantifier_user.initiate_chat(  # noqa: F841
+    quantifier_user.initiate_chat(
         quantifier,
         message=task.get_sys_message()
         + "Evaluation dictionary: "

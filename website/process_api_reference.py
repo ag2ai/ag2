@@ -86,7 +86,7 @@ def convert_md_to_mdx(input_dir: Path) -> None:
 
 def get_mdx_files(directory: Path) -> list[str]:
     """Get all MDX files in directory and subdirectories."""
-    return [f"{str(p.relative_to(directory).with_suffix(''))}".replace("\\", "/") for p in directory.rglob("*.mdx")]
+    return [f"{p.relative_to(directory).with_suffix('')!s}".replace("\\", "/") for p in directory.rglob("*.mdx")]
 
 
 def add_prefix(path: str, parent_groups: list[str] = None) -> str:

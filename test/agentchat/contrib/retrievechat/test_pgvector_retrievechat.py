@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 
 from autogen import AssistantAgent
 
-from ....conftest import Credentials, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai
 
 try:
     import pgvector  # noqa: F401

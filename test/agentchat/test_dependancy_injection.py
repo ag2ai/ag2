@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, Depends
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 
 class MyContext(BaseContext, BaseModel):

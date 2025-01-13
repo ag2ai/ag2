@@ -13,7 +13,7 @@ import pytest
 
 from autogen import OpenAIWrapper
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 try:
     from openai import OpenAI  # noqa: F401

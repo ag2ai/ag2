@@ -256,12 +256,8 @@ class Completion(OpenAICompletion):
                 sleep(retry_wait_time)
             except (RateLimitError, Timeout) as err:
                 time_left = max_retry_period - (time.time() - start_time + retry_wait_time)
-                if (
-                    time_left > 0
-                    and isinstance(err, RateLimitError)
-                    or time_left > request_timeout
-                    and isinstance(err, Timeout)
-                    and "request_timeout" not in config
+                if (time_left > 0 and isinstance(err, RateLimitError)) or (
+                    time_left > request_timeout and isinstance(err, Timeout) and "request_timeout" not in config
                 ):
                     if isinstance(err, Timeout):
                         request_timeout <<= 1
@@ -471,7 +467,7 @@ class Completion(OpenAICompletion):
                     prune
                     and target_output_tokens
                     and avg_n_tokens <= target_output_tokens * (1 - ratio)
-                    and (num_completions < config_n or num_completions == config_n and data_limit == data_length)
+                    and (num_completions < config_n or (num_completions == config_n and data_limit == data_length))
                 ):
                     # update valid n
                     cls._max_valid_n_per_max_tokens[region_key] = valid_n = cls._max_valid_n_per_max_tokens.get(
