@@ -49,11 +49,11 @@ jobs:
       # See: https://community.openai.com/t/error-while-importing-openai-from-open-import-openai/578166/29
       - name: Force install specific versions of typing-extensions and openai
         run: |
+          uv pip install --system -e "."
           uv pip install --system --force-reinstall "typing-extensions==4.5.0"
           uv pip install --system --force-reinstall "openai==1.8.0"
       - name: Install packages and dependencies for Documentation
         run: |
-          uv pip install --system -e "."
           uv pip install --system pydoc-markdown pyyaml termcolor nbclient
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           uv pip install --system databind.core==4.4.2 databind.json==4.4.2
