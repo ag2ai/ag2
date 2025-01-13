@@ -116,7 +116,7 @@ class FalkorGraphQueryEngine:
         else:
             raise ValueError("No input documents could be loaded.")
 
-    def add_records(self, new_records: list) -> bool:
+    def add_records(self, new_records: list[Document]) -> bool:
         raise NotImplementedError("This method is not supported by FalkorDB SDK yet.")
 
     def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:

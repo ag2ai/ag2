@@ -114,7 +114,7 @@ def neo4j_query_engine_auto():
         port=7687,
         database="neo4j",
     )
-    query_engine.connect_db()  # Connect to the existing graph
+    query_engine.init_db()
     return query_engine
 
 
