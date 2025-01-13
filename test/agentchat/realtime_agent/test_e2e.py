@@ -94,7 +94,7 @@ class TestE2E:
             assert "Seattle" in last_response_transcript, "Weather response did not include the location"
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 

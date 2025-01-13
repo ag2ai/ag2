@@ -981,7 +981,7 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     skip_openai,
     reason=reason,
 )
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",

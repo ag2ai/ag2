@@ -22,7 +22,7 @@ except ImportError:
 reason = "Cohere dependency not installed!"
 
 
-@pytest.fixture()
+@pytest.fixture
 def cohere_client():
     return CohereClient(api_key="dummy_api_key")
 

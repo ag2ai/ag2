@@ -15,7 +15,7 @@ from autogen.messages.base_message import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def TestMessage() -> Generator[type[BaseMessage], None, None]:  # noqa: N802
     org_message_classes = _message_classes.copy()
     try:

@@ -23,7 +23,7 @@ from typing_extensions import Literal
 reason = "Anthropic dependency not installed!"
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_completion():
     class MockCompletion:
         def __init__(
@@ -47,7 +47,7 @@ def mock_completion():
     return MockCompletion
 
 
-@pytest.fixture()
+@pytest.fixture
 def anthropic_client():
     return AnthropicClient(api_key="dummy_api_key")
 
@@ -65,7 +65,7 @@ def test_initialization_missing_api_key():
     AnthropicClient(api_key="dummy_api_key")
 
 
-@pytest.fixture()
+@pytest.fixture
 def anthropic_client_with_aws_credentials():
     return AnthropicClient(
         aws_access_key="dummy_access_key",
@@ -75,7 +75,7 @@ def anthropic_client_with_aws_credentials():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def anthropic_client_with_vertexai_credentials():
     return AnthropicClient(
         gcp_project_id="dummy_project_id",

@@ -37,7 +37,7 @@ class MyObserver(RealtimeObserver):
 
 
 class TestRealtimeObserver:
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_shutdown(self) -> None:
         mock = MagicMock()
         observer = MyObserver(mock)
