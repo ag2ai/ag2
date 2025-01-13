@@ -4,6 +4,7 @@
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
@@ -188,7 +189,7 @@ class OpenAIRealtimeClient:
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
-        if llm_config["config_list"][0]["model"].match("^gpt-.+-realtime.*") and list(kwargs.keys()) == []:
+        if re.match("^gpt-.+-realtime.*", llm_config["config_list"][0]["model"]) and list(kwargs.keys()) == []:
             return lambda: OpenAIRealtimeClient(
                 llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
             )
@@ -380,7 +381,9 @@ class OpenAIRealtimeWebRTCClient:
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
-        if llm_config["config_list"][0]["model"].match("^gpt-.+-realtime.*") and list(kwargs.keys()) == ["websocket"]:
+        if re.match("^gpt-.+-realtime.*", llm_config["config_list"][0]["model"]) and list(kwargs.keys()) == [
+            "websocket"
+        ]:
             return lambda: OpenAIRealtimeWebRTCClient(
                 llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
             )
