@@ -9,7 +9,6 @@
 """
 
 import json
-import re
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, Optional
@@ -251,7 +250,7 @@ class GeminiRealtimeClient:
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
-        if re.match("^gemini-.+", llm_config["config_list"][0]["model"]) and list(kwargs.keys()) == []:
+        if llm_config["config_list"][0].get("api_type") == "google" and list(kwargs.keys()) == []:
             return lambda: GeminiRealtimeClient(
                 llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
             )
