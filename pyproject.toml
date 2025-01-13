@@ -187,6 +187,13 @@ test = [
     "fastapi>=0.115.0,<1",
 ]
 
+docs = [
+    "pydoc-markdown",
+    "pyyaml",
+    "termcolor",
+    "nbclient",
+]
+
 types = [
     "mypy==1.9.0",
     "pyautogen[test, jupyter-executor, interop]",
@@ -199,7 +206,7 @@ lint = [
 ]
 
 dev = [
-    "pyautogen[lint,test,types]",
+    "pyautogen[lint,test,types,docs]",
     "pre-commit==4.0.1",
     "detect-secrets==1.5.0",
     "uv==0.5.16",

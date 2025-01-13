@@ -12,7 +12,7 @@ import os
 import sqlite3
 import threading
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
@@ -43,6 +43,15 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def safe_serialize(obj: Any) -> str:
+    """Safely serialize an object to JSON.
+
+    Args:
+        obj (Any): Object to serialize.
+
+    Returns:
+        str: Serialized object.
+    """
+
     def default(o: Any) -> str:
         if hasattr(o, "to_json"):
             return str(o.to_json())
@@ -53,9 +62,16 @@ def safe_serialize(obj: Any) -> str:
 
 
 class SqliteLogger(BaseLogger):
+    """Sqlite logger class."""
+
     schema_version = 1
 
     def __init__(self, config: dict[str, Any]):
+        """Initialize the SqliteLogger.
+
+        Args:
+            config (dict[str, Any]): Configuration for the logger.
+        """
         self.config = config
 
         try:
@@ -238,6 +254,19 @@ class SqliteLogger(BaseLogger):
         cost: float,
         start_time: str,
     ) -> None:
+        """Log chat completion.
+
+        Args:
+            invocation_id (uuid.UUID): Invocation ID.
+            client_id (int): Client ID.
+            wrapper_id (int): Wrapper ID.
+            source (str | Agent): Source of the chat completion.
+            request (dict[str, float | str | list[dict[str, str]]]): Request for the chat completion.
+            response (str | ChatCompletion): Response for the chat completion.
+            is_cached (int): Whether the response is cached.
+            cost (float): Cost of the chat completion.
+            start_time (str): Start time of the chat completion.
+        """
         if self.con is None:
             return
 
@@ -276,6 +305,12 @@ class SqliteLogger(BaseLogger):
         self._run_query(query=query, args=args)
 
     def log_new_agent(self, agent: ConversableAgent, init_args: dict[str, Any]) -> None:
+        """Log new agent.
+
+        Args:
+            agent (ConversableAgent): Agent to log.
+            init_args (dict[str, Any]): Initialization arguments of the agent
+        """
         from autogen import Agent
 
         if self.con is None:
@@ -318,6 +353,13 @@ class SqliteLogger(BaseLogger):
         self._run_query(query=query, args=args)
 
     def log_event(self, source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
+        """Log event.
+
+        Args:
+            source (str | Agent): Source of the event.
+            name (str): Name of the event.
+            **kwargs (dict[str, Any]): Additional arguments for the event.
+        """
         from autogen import Agent
 
         if self.con is None:
@@ -353,6 +395,12 @@ class SqliteLogger(BaseLogger):
             self._run_query(query=query, args=args_str_based)
 
     def log_new_wrapper(self, wrapper: OpenAIWrapper, init_args: dict[str, LLMConfig | list[LLMConfig]]) -> None:
+        """Log new wrapper.
+
+        Args:
+            wrapper (OpenAIWrapper): Wrapper to log.
+            init_args (dict[str, LLMConfig | list[LLMConfig]]): Initialization arguments of the wrapper
+        """
         if self.con is None:
             return
 
@@ -383,6 +431,14 @@ class SqliteLogger(BaseLogger):
         self._run_query(query=query, args=args)
 
     def log_function_use(self, source: str | Agent, function: F, args: dict[str, Any], returns: Any) -> None:
+        """Log function use.
+
+        Args:
+            source (str | Agent): Source of the function use.
+            function (F): Function to log.
+            args (dict[str, Any]): Arguments of the function.
+            returns (Any): Returns of the function.
+        """
         if self.con is None:
             return
 
@@ -417,6 +473,13 @@ class SqliteLogger(BaseLogger):
         wrapper: OpenAIWrapper,
         init_args: dict[str, Any],
     ) -> None:
+        """Log new client.
+
+        Args:
+            client (AzureOpenAI | OpenAI | CerebrasClient | GeminiClient | AnthropicClient | MistralAIClient | TogetherClient | GroqClient | CohereClient | OllamaClient | BedrockClient): Client to log.
+            wrapper (OpenAIWrapper): Wrapper of the client.
+            init_args (dict[str, Any]): Initialization arguments of the client.
+        """
         if self.con is None:
             return
 
@@ -449,10 +512,12 @@ class SqliteLogger(BaseLogger):
         self._run_query(query=query, args=args)
 
     def stop(self) -> None:
+        """Stop the logger"""
         if self.con:
             self.con.close()
 
     def get_connection(self) -> None | sqlite3.Connection:
+        """Get connection."""
         if self.con:
             return self.con
         return None

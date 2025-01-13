@@ -31,24 +31,16 @@ pip install pydoc-markdown pyyaml termcolor nbclient
 The last command starts a local development server and opens up a browser window.
 Most changes are reflected live without having to restart the server.
 
-## Build with Docker
+## Build with devcontainer
 
-To build and test documentation within a docker container, run the following commands from your project root directory:
+To build and test documentation using devcontainer, open the project using [VSCode](https://code.visualstudio.com/), press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
 
-```bash
-docker build -f .devcontainer/dev/Dockerfile -t ag2ai_dev_img https://github.com/ag2ai/ag2.git#main
-```
+This will open the project in a devcontainer with all the required dependencies installed.
 
-Then start the container like so, this will log you in and ensure that Docker port 3000 is mapped to port 8081 on your local machine:
-
-```bash
-docker run -it -p 8081:3000 -v $(pwd):/home/autogen/ag2 ag2ai_dev_img bash
-```
-
-Once at the CLI in Docker run the following commands:
+Open a terminal and run the following command to build and serve the documentation:
 
 ```console
 ./scripts/docs_serve.sh
 ```
 
-Once done you should be able to access the documentation at `http://127.0.0.1:8081`
+Once done you should be able to access the documentation at `http://localhost:3000/`.

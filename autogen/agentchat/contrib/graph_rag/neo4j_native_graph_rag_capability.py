@@ -1,35 +1,35 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
-from autogen import Agent, ConversableAgent, UserProxyAgent
+from autogen import Agent, ConversableAgent
 
-from .falkor_graph_query_engine import FalkorGraphQueryEngine
 from .graph_query_engine import GraphStoreQueryResult
 from .graph_rag_capability import GraphRagCapability
+from .neo4j_native_graph_query_engine import Neo4jNativeGraphQueryEngine
 
 
-class FalkorGraphRagCapability(GraphRagCapability):
+class Neo4jNativeGraphCapability(GraphRagCapability):
     """
-    The FalkorDB GraphRAG capability integrate FalkorDB with graphrag_sdk version: 0.1.3b0.
-    Ref: https://github.com/FalkorDB/GraphRAG-SDK/tree/2-move-away-from-sql-to-json-ontology-detection
+    The Neo4j native graph capability integrates Neo4j native query engine into a graph rag agent.
 
-    For usage, please refer to example notebook/agentchat_graph_rag_falkordb.ipynb
+    For usage, please refer to example notebook/agentchat_graph_rag_neo4j_native.ipynb
     """
 
-    def __init__(self, query_engine: FalkorGraphQueryEngine):
+    def __init__(self, query_engine: Neo4jNativeGraphQueryEngine):
         """
-        initialize GraphRAG capability with a graph query engine
+        initialize GraphRAG capability with a neo4j native graph query engine
         """
         self.query_engine = query_engine
 
-    def add_to_agent(self, agent: UserProxyAgent):
+    def add_to_agent(self, agent: ConversableAgent):
         """
-        Add FalkorDB GraphRAG capability to a UserProxyAgent.
-        The restriction to a UserProxyAgent to make sure the returned message does not contain information retrieved from the graph DB instead of any LLMs.
+        Add native Neo4j GraphRAG capability to a ConversableAgent.
+        llm_config of the agent must be None/False (default) to make sure the returned message only contains information retrieved from the graph DB instead of any LLMs.
         """
+
         self.graph_rag_agent = agent
 
         # Validate the agent config
@@ -38,13 +38,13 @@ class FalkorGraphRagCapability(GraphRagCapability):
                 "Agents with GraphRAG capabilities do not use an LLM configuration. Please set your llm_config to None or False."
             )
 
-        # Register method to generate the reply using a FalkorDB query
+        # Register method to generate the reply using a Neo4j query
         # All other reply methods will be removed
         agent.register_reply(
-            [ConversableAgent, None], self._reply_using_falkordb_query, position=0, remove_other_reply_funcs=True
+            [ConversableAgent, None], self._reply_using_native_neo4j_query, position=0, remove_other_reply_funcs=True
         )
 
-    def _reply_using_falkordb_query(
+    def _reply_using_native_neo4j_query(
         self,
         recipient: ConversableAgent,
         messages: Optional[list[dict]] = None,
@@ -52,8 +52,7 @@ class FalkorGraphRagCapability(GraphRagCapability):
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:
         """
-        Query FalkorDB and return the message. Internally, it utilises OpenAI to generate a reply based on the given messages.
-        The history with FalkorDB is also logged and updated.
+        Query Neo4j and return the message. Internally, it uses the Neo4jNativeGraphQueryEngine to query the graph.
 
         The agent's system message will be incorporated into the query, if it's not blank.
 
