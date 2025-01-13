@@ -15,6 +15,8 @@ try:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
+    from google.generativeai.types import GenerateContentResponse
+    from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
     from vertexai.generative_models import SafetySetting as VertexAISafetySetting
@@ -299,11 +301,12 @@ def test_create_response_with_text(mock_calculate_cost, mock_generative_model, g
     mock_text_part.text = "Example response"
     mock_text_part.function_call = None
 
-    mock_candidate = MagicMock()
-    mock_candidate.content.parts = [mock_text_part]
+    mock_response = MagicMock(spec=GenerateContentResponse)
+    mock_response._done = True
+    mock_response._iterator = None
+    mock_response._result = None
+    mock_response.parts = [mock_text_part]
 
-    mock_response = MagicMock()
-    mock_response.candidates = [mock_candidate]
     mock_response.usage_metadata = mock_usage_metadata
     mock_chat.send_message.return_value = mock_response
 
@@ -354,7 +357,7 @@ def test_vertexai_create_response(
     mock_candidate = MagicMock()
     mock_candidate.content.parts = [mock_text_part]
 
-    mock_response = MagicMock()
+    mock_response = MagicMock(spec=VertexAIGenerationResponse)
     mock_response.candidates = [mock_candidate]
     mock_response.usage_metadata = mock_usage_metadata
     mock_chat.send_message.return_value = mock_response
