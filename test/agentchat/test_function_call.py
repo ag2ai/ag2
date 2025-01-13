@@ -15,16 +15,17 @@ import pytest
 import autogen
 from autogen.math_utils import eval_math_responses
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials, reason
 
 try:
     from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     functions = [
@@ -218,6 +219,7 @@ async def test_a_execute_function():
     assert (await user.a_execute_function(func_call))[1]["content"] == "42"
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
     skip or not sys.version.startswith("3.10"),
     reason=reason,

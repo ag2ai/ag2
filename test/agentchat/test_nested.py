@@ -11,7 +11,7 @@ import pytest
 import autogen
 from autogen.agentchat.contrib.capabilities.agent_capability import AgentCapability
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 
 class MockAgentReplies(AgentCapability):
@@ -31,7 +31,7 @@ class MockAgentReplies(AgentCapability):
         agent.register_reply([autogen.Agent, None], mock_reply, position=2)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_nested(
     credentials_gpt_4o_mini: Credentials,
     credentials_gpt_4o: Credentials,

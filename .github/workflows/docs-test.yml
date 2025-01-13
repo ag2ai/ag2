@@ -52,7 +52,7 @@ jobs:
           uv pip install --system --force-reinstall "pydantic<2.0"
       - name: Run documentation tests
         run: |
-          pytest test/website/test_process_api_reference.py test/website/test_process_notebooks.py --skip-openai
+          bash scripts/test.sh test/website/test_process_api_reference.py test/website/test_process_notebooks.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

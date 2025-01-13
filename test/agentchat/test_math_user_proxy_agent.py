@@ -16,16 +16,17 @@ from autogen.agentchat.contrib.math_user_proxy_agent import (
     _remove_print,
 )
 
-from ..conftest import Credentials, skip_openai
+from ..conftest import Credentials
 
 try:
     from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
     skip or sys.platform in ["darwin", "win32"],
     reason="do not run on MacOS or windows",

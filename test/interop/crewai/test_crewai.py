@@ -11,7 +11,7 @@ import pytest
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.interop import Interoperable
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials, reason, skip_openai
+from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
 
 if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
     from autogen.interop.crewai import CrewAIInteroperability
@@ -56,7 +56,7 @@ class TestCrewAIInteroperability:
 
             assert self.tool.func(args=args) == "Hello, World!"
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
         user_proxy = UserProxyAgent(
             name="User",

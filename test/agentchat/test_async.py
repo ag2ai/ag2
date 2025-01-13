@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 
 def get_market_news(ind, ind_upper):
@@ -56,7 +56,7 @@ def get_market_news(ind, ind_upper):
     return feeds_summary
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 @pytest.mark.asyncio
 async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
@@ -90,7 +90,7 @@ async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 @pytest.mark.asyncio
 async def test_stream(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list

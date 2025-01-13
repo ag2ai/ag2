@@ -9,7 +9,7 @@ from anyio import move_on_after
 
 from autogen.agentchat.realtime_agent.clients import OpenAIRealtimeClient, RealtimeClientProtocol
 
-from ....conftest import Credentials, reason, skip_openai
+from ....conftest import Credentials
 
 
 class TestOAIRealtimeClient:
@@ -32,7 +32,7 @@ class TestOAIRealtimeClient:
         )
         assert isinstance(client, RealtimeClientProtocol)
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_not_connected(self, client: OpenAIRealtimeClient) -> None:
         with pytest.raises(RuntimeError, match=r"Client is not connected, call connect\(\) first."):
@@ -42,7 +42,7 @@ class TestOAIRealtimeClient:
 
         assert not scope.cancelled_caught
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_start_read_events(self, client: OpenAIRealtimeClient) -> None:
         mock = MagicMock()
@@ -64,7 +64,7 @@ class TestOAIRealtimeClient:
         assert calls_kwargs[0]["type"] == "session.created"
         assert calls_kwargs[1]["type"] == "session.updated"
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_send_text(self, client: OpenAIRealtimeClient) -> None:
         mock = MagicMock()
