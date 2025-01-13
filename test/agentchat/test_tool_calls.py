@@ -8,7 +8,6 @@
 
 import inspect
 import json
-import os
 import sys
 
 import pytest
@@ -17,10 +16,10 @@ import autogen
 from autogen.math_utils import eval_math_responses
 from autogen.oai.client import TOOL_ENABLED
 
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip_openai = True
 else:
@@ -28,12 +27,8 @@ else:
 
 
 @pytest.mark.skipif(skip_openai or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
-def test_eval_math_responses():
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        KEY_LOC,
-        filter_dict={"tags": ["tool"]},
-    )
+def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
     tools = [
         {
             "type": "function",
@@ -85,17 +80,8 @@ def test_eval_math_responses():
 
 
 @pytest.mark.skipif(skip_openai or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
-def test_eval_math_responses_api_style_function():
-    # config_list = autogen.config_list_from_models(
-    #     KEY_LOC,
-    #     model_list=["gpt-4-0613", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-16k"],
-    # )
-
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        KEY_LOC,
-        filter_dict={"tags": ["tool"]},
-    )
+def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
     functions = [
         {
             "name": "eval_math_responses",
@@ -146,16 +132,9 @@ def test_eval_math_responses_api_style_function():
     skip_openai or not TOOL_ENABLED or not sys.version.startswith("3.10"),
     reason="do not run if openai is <1.1.0 or py!=3.10 or requested to skip",
 )
-def test_update_tool():
-    config_list_gpt4 = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        filter_dict={
-            "tags": ["gpt-4o"],
-        },
-        file_location=KEY_LOC,
-    )
+def test_update_tool(credentials_gpt_4o: Credentials):
     llm_config = {
-        "config_list": config_list_gpt4,
+        "config_list": credentials_gpt_4o.config_list,
         "seed": 42,
         "tools": [],
     }
@@ -190,9 +169,9 @@ def test_update_tool():
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
     print("Message:", messages1)
     print("Summary:", res.summary)
-    assert (
-        messages1.replace("TERMINATE", "") == res.summary
-    ), "Message (removing TERMINATE) and summary should be the same"
+    assert messages1.replace("TERMINATE", "") == res.summary, (
+        "Message (removing TERMINATE) and summary should be the same"
+    )
 
     assistant.update_tool_signature("greet_user", is_remove=True)
     res = user_proxy.initiate_chat(

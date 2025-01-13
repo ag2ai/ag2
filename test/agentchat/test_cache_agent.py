@@ -14,18 +14,17 @@ import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 
-from ..conftest import skip_openai, skip_redis  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials, skip_openai, skip_redis
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip_openai_tests = True
 else:
     skip_openai_tests = False or skip_openai
 
 try:
-    import redis
+    import redis  # noqa: F401
 except ImportError:
     skip_redis_tests = True
 else:
@@ -33,10 +32,11 @@ else:
 
 
 @pytest.mark.skipif(skip_openai_tests, reason="openai not installed OR requested to skip")
-def test_legacy_disk_cache():
+def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
     cold_cache_messages = run_conversation(
+        credentials_gpt_4o_mini,
         cache_seed=random_cache_seed,
     )
     end_time = time.time()
@@ -44,6 +44,7 @@ def test_legacy_disk_cache():
 
     start_time = time.time()
     warm_cache_messages = run_conversation(
+        credentials_gpt_4o_mini,
         cache_seed=random_cache_seed,
     )
     end_time = time.time()
@@ -53,17 +54,17 @@ def test_legacy_disk_cache():
 
 
 @pytest.mark.skipif(skip_openai_tests or skip_redis_tests, reason="redis not installed OR requested to skip")
-def test_redis_cache():
+def test_redis_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     start_time = time.time()
     with Cache.redis(random_cache_seed, redis_url) as cache_client:
-        cold_cache_messages = run_conversation(cache_seed=None, cache=cache_client)
+        cold_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_conversation(cache_seed=None, cache=cache_client)
+        warm_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
@@ -71,12 +72,12 @@ def test_redis_cache():
 
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     with Cache.redis(random_cache_seed, redis_url) as cache_client:
-        cold_cache_messages = run_groupchat_conversation(cache=cache_client)
+        cold_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_groupchat_conversation(cache=cache_client)
+        warm_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
@@ -84,16 +85,16 @@ def test_redis_cache():
 
 
 @pytest.mark.skipif(skip_openai_tests, reason="openai not installed OR requested to skip")
-def test_disk_cache():
+def test_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
     with Cache.disk(random_cache_seed) as cache_client:
-        cold_cache_messages = run_conversation(cache_seed=None, cache=cache_client)
+        cold_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_conversation(cache_seed=None, cache=cache_client)
+        warm_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
@@ -101,26 +102,22 @@ def test_disk_cache():
 
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     with Cache.disk(random_cache_seed) as cache_client:
-        cold_cache_messages = run_groupchat_conversation(cache=cache_client)
+        cold_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_groupchat_conversation(cache=cache_client)
+        warm_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
         assert duration_with_warm_cache < duration_with_cold_cache
 
 
-def run_conversation(cache_seed, human_input_mode="NEVER", max_consecutive_auto_reply=5, cache=None):
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={
-            "tags": ["gpt-4o-mini"],
-        },
-    )
+def run_conversation(
+    credentials: Credentials, cache_seed, human_input_mode="NEVER", max_consecutive_auto_reply=5, cache=None
+):
+    config_list = credentials.config_list
     llm_config = {
         "cache_seed": cache_seed,
         "config_list": config_list,
@@ -158,16 +155,8 @@ def run_conversation(cache_seed, human_input_mode="NEVER", max_consecutive_auto_
         return user.chat_messages[assistant]
 
 
-def run_groupchat_conversation(cache, human_input_mode="NEVER", max_consecutive_auto_reply=5):
-    KEY_LOC = "notebook"
-    OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={
-            "tags": ["gpt-4o-mini"],
-        },
-    )
+def run_groupchat_conversation(credentials: Credentials, cache, human_input_mode="NEVER", max_consecutive_auto_reply=5):
+    config_list = credentials.config_list
     llm_config = {
         "cache_seed": None,
         "config_list": config_list,

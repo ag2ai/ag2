@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
-from typing import Dict, List, Literal, Optional, Union
+from typing import Optional
 
 import autogen
 from autogen.code_utils import execute_code
@@ -144,9 +144,7 @@ Even adding a general function that can substitute the assistant’s repeated su
 
 
 def execute_func(name, packages, code, **args):
-    """
-    The wrapper for generated functions.
-    """
+    """The wrapper for generated functions."""
     pip_install = (
         f"""print("Installing package: {packages}")\nsubprocess.run(["pip", "-qq", "install", "{packages}"])"""
         if packages
@@ -170,8 +168,7 @@ if result is not None: print(result)
 
 
 class AgentOptimizer:
-    """
-    Base class for optimizing AutoGen agents. Specifically, it is used to optimize the functions used in the agent.
+    """Base class for optimizing AutoGen agents. Specifically, it is used to optimize the functions used in the agent.
     More information could be found in the following paper: https://arxiv.org/abs/2402.11359.
     """
 
@@ -181,8 +178,8 @@ class AgentOptimizer:
         llm_config: dict,
         optimizer_model: Optional[str] = "gpt-4-1106-preview",
     ):
-        """
-        (These APIs are experimental and may change in the future.)
+        """(These APIs are experimental and may change in the future.)
+
         Args:
             max_actions_per_step (int): the maximum number of actions that the optimizer can take in one step.
             llm_config (dict): llm inference configuration.
@@ -218,8 +215,8 @@ class AgentOptimizer:
         self._client = autogen.OpenAIWrapper(**self.llm_config)
 
     def record_one_conversation(self, conversation_history: list[dict], is_satisfied: bool = None):
-        """
-        record one conversation history.
+        """Record one conversation history.
+
         Args:
             conversation_history (List[Dict]): the chat messages of the conversation.
             is_satisfied (bool): whether the user is satisfied with the solution. If it is none, the user will be asked to input the satisfaction.
@@ -241,8 +238,7 @@ class AgentOptimizer:
         )
 
     def step(self):
-        """
-        One step of training. It will return register_for_llm and register_for_executor at each iteration,
+        """One step of training. It will return register_for_llm and register_for_executor at each iteration,
         which are subsequently utilized to update the assistant and executor agents, respectively.
         See example: https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_agentoptimizer.ipynb
         """
@@ -322,10 +318,7 @@ class AgentOptimizer:
         return register_for_llm, register_for_exector
 
     def reset_optimizer(self):
-        """
-        reset the optimizer.
-        """
-
+        """Reset the optimizer."""
         self._trial_conversations_history = []
         self._trial_conversations_performance = []
         self._trial_functions = []
@@ -338,10 +331,7 @@ class AgentOptimizer:
         self._failure_functions_performance = []
 
     def _update_function_call(self, incumbent_functions, actions):
-        """
-        update function call.
-        """
-
+        """Update function call."""
         formated_actions = []
         for action in actions:
             func = json.loads(action.function.arguments.strip('"'))
@@ -390,9 +380,7 @@ class AgentOptimizer:
         return incumbent_functions
 
     def _construct_intermediate_prompt(self):
-        """
-        construct intermediate prompts.
-        """
+        """Construct intermediate prompts."""
         if len(self._failure_functions_performance) != 0:
             failure_experience_prompt = "We also provide more examples for different functions and their corresponding performance (0-100).\n The following function signatures are arranged in are arranged in ascending order based on their performance, where higher performance indicate better quality."
             failure_experience_prompt += "\n"
@@ -413,9 +401,7 @@ class AgentOptimizer:
         return failure_experience_prompt, statistic_prompt
 
     def _validate_actions(self, actions, incumbent_functions):
-        """
-        validate whether the proposed actions are feasible.
-        """
+        """Validate whether the proposed actions are feasible."""
         if actions is None:
             return True
         else:

@@ -1,6 +1,242 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [metadata]
 license_file = "LICENSE"
 description-file = "README.md"
+
+[project]
+name = "pyautogen"
+description = "A programming framework for agentic AI"
+readme = "README.md"
+authors = [
+    {name = "Chi Wang", email = "support@ag2.ai"},
+    {name = "Qingyun Wu", email = "support@ag2.ai"},
+]
+
+keywords = [
+    "ai",
+    "agent",
+    "autogen",
+    "ag2",
+    "pyautogen",
+    "ag2.ai",
+    "ag2ai",
+    "agentic"
+]
+
+requires-python = ">=3.9,<3.14"
+
+dynamic = ["version"]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+]
+
+dependencies = [
+    "openai>=1.58",
+    "diskcache",
+    "termcolor",
+    "flaml",
+    # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
+    "numpy>=2.1; python_version>='3.13'",  # numpy 2.1+ required for Python 3.13
+    "numpy>=1.24.0,<2.0.0; python_version<'3.13'",  # numpy 1.24+ for older Python versions
+    "python-dotenv",
+    "tiktoken",
+    # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
+    "pydantic>=1.10,<3,!=2.6.0",  # could be both V1 and V2
+    "docker",
+    "packaging",
+    "websockets>=14,<15",
+    "asyncer==0.0.8",
+    "fast_depends>=2.4.12,<3",
+]
+
+[project.optional-dependencies]
+
+# public distributions
+jupyter-executor = [
+    "jupyter-kernel-gateway",
+    "websocket-client",
+    "requests",
+    "jupyter-client>=8.6.0",
+    "ipykernel>=6.29.0",
+]
+
+retrievechat = [
+    "protobuf==4.25.3",
+    "chromadb==0.5.3",
+    "sentence_transformers",
+    "pypdf",
+    "ipython",
+    "beautifulsoup4",
+    "markdownify",
+]
+
+retrievechat-pgvector = [
+    "pyautogen[retrievechat]",
+    "pgvector>=0.2.5",
+    "psycopg[binary]>=3.1.18; platform_system=='Windows' or platform_system=='Darwin'",
+    "psycopg>=3.1.18; platform_system=='Linux'",
+]
+
+retrievechat-mongodb = [
+    "pyautogen[retrievechat]",
+    "pymongo>=4.0.0",
+]
+
+retrievechat-qdrant = [
+    "pyautogen[retrievechat]",
+    "qdrant_client",
+    "fastembed>=0.3.1",
+]
+
+graph-rag-falkor-db = [
+    "graphrag_sdk==0.3.3",
+    "falkordb>=1.0.10"
+]
+
+neo4j = [
+    "docx2txt==0.8",
+    "llama-index==0.12.5",
+    "llama-index-graph-stores-neo4j==0.4.2",
+    "llama-index-core==0.12.5",
+    "llama-index-readers-web==0.3.3",
+]
+
+# used for agentchat_realtime_swarm notebook and realtime agent twilio demo
+twilio = [
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.6,<1",
+    "twilio>=9.3.2"
+]
+
+interop-crewai = [
+    "crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'",
+    "weaviate-client==4.10.2; python_version>='3.10' and python_version<'3.13'",
+    # crewai uses litellm, litellm introduced uvloop as deps with version 1.57.5 which does not support win32
+    "litellm<1.57.5; sys_platform=='win32'",
+]
+interop-langchain = ["langchain-community>=0.3.12,<1"]
+interop-pydantic-ai = ["pydantic-ai==0.0.13"]
+interop =[
+    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
+]
+
+# pysqlite3-binary used so it doesn't need to compile pysqlite3
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
+
+blendsearch = ["flaml[blendsearch]"]
+mathchat = ["sympy", "pydantic==1.10.9", "wolframalpha"]
+captainagent = ["pyautogen[autobuild]", "pandas"]
+teachable = ["chromadb"]
+lmm = ["replicate", "pillow"]
+graph = ["networkx", "matplotlib"]
+gemini = [
+    "google-generativeai>=0.5,<1",
+    "google-cloud-aiplatform",
+    "google-auth",
+    "pillow",
+    "pydantic",
+    "jsonschema",
+]
+together = ["together>=1.2"]
+websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
+redis = ["redis"]
+cosmosdb = ["azure-cosmos>=4.2.0"]
+websockets = ["websockets>=14.0,<15"]
+long-context = ["llmlingua<0.3"]
+anthropic = ["anthropic[vertex]>=0.23.1"]
+cerebras = ["cerebras_cloud_sdk>=1.0.0"]
+mistral = ["mistralai>=1.0.1"]
+groq = ["groq>=0.9.0"]
+cohere = ["cohere>=5.5.8"]
+ollama = ["ollama>=0.3.3", "fix_busted_json>=0.0.18"]
+bedrock = ["boto3>=1.34.149"]
+
+## dev dependencies
+
+# test dependencies
+test = [
+    "ipykernel",
+    "nbconvert",
+    "nbformat",
+    "pre-commit",
+    "pytest-cov>=5",
+    "pytest-asyncio",
+    "pytest>=8,<9",
+    "pandas",
+    "fastapi>=0.115.0,<1",
+]
+
+docs = [
+    "pydoc-markdown",
+    "pyyaml",
+    "termcolor",
+    "nbclient",
+]
+
+types = [
+    "mypy==1.9.0",
+    "pyautogen[test, jupyter-executor, interop]",
+]
+
+lint = [
+    "ruff==0.9.1",
+    "codespell==2.3.0",
+    "pyupgrade-directories==0.3.0",
+]
+
+dev = [
+    "pyautogen[lint,test,types,docs]",
+    "pre-commit==4.0.1",
+    "detect-secrets==1.5.0",
+    "uv==0.5.16",
+]
+
+
+[project.urls]
+Homepage = "https://ag2.ai/"
+Documentation = "https://docs.ag2.ai/docs/Home"
+Tracker = "https://github.com/ag2ai/ag2/issues"
+Source = "https://github.com/ag2ai/ag2"
+Discord = "https://discord.gg/pAbnFJrkgZ"
+
+[tool.hatch.version]
+path = "autogen/version.py"
+
+[tool.hatch.build]
+skip-excluded-dirs = true
+exclude = ["/test", "/notebook"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["autogen"]
+only-include = ["autogen", "autogen/agentchat/contrib/captainagent/tools"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["test", "notebook"]
+
+[tool.hatch.build.targets.wheel.sources]
+"autogen" = "autogen"
+"autogen/agentchat/contrib/captainagent/tools" = "autogen/agentchat/contrib/captainagent/tools"
 
 
 [tool.pytest.ini_options]
@@ -14,21 +250,44 @@ exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
 
 
 [tool.ruff]
+fix = true
 line-length = 120
+target-version = 'py39'
+#include = ["autogen", "test", "docs"]
+#exclude = []
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
 select = [
-    "E",
-    "W", # see: https://pypi.org/project/pycodestyle
-    "F", # see: https://pypi.org/project/pyflakes
-    #    "D",  # see: https://pypi.org/project/pydocstyle
-    #    "N",  # see: https://pypi.org/project/pep8-naming
-    #    "S",  # see: https://pypi.org/project/flake8-bandit
-    "I", # see: https://pypi.org/project/isort/
+    "E",     # pycodestyle errors     https://docs.astral.sh/ruff/rules/#error-e
+    "W",     # pycodestyle warnings   https://docs.astral.sh/ruff/rules/#warning-w
+    "C90",   # mccabe                 https://docs.astral.sh/ruff/rules/#mccabe-c90
+    "N",     # pep8-naming            https://docs.astral.sh/ruff/rules/#pep8-naming-n
+#    "D",     # pydocstyle             https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "I",     # isort                  https://docs.astral.sh/ruff/rules/#isort-i
+    "F",     # pyflakes               https://docs.astral.sh/ruff/rules/#pyflakes-f
+    "ASYNC", # flake8-async           https://docs.astral.sh/ruff/rules/#flake8-async-async
+#    "C4",    # flake8-comprehensions  https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
+#    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
+    "Q",     # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
+#    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20
+#    "SIM",   # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
+#    "PT",    # flake8-pytest-style    https://docs.astral.sh/ruff/rules/#flake8-pytest-style-pt
+#    "PTH",   # flake8-use-pathlib     https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
+#    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
+#    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
+#    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
+     "RUF022", # Sort __all__          https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
 ]
-ignore = ["E501", "F401", "F403", "C901"]
 
+ignore = ["E501", "F403", "C901",
+    "E402",
+    "E721",
+    "ASYNC109",
+    "E501",  # line too long, handled by formatter later
+    "D100", "D101", "D102", "D103", "D104",
+    "C901",  # too complex
+]
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".eggs",
@@ -45,11 +304,20 @@ exclude = [
     "math_utils\\.py$",
     "**/cap/py/autogencap/proto/*",
 ]
-unfixable = ["F401"]
 
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
 max-complexity = 10
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 
 [tool.mypy]
 files = [
@@ -62,20 +330,13 @@ files = [
     "autogen/tools",
     "autogen/interop",
     "autogen/agentchat/realtime_agent",
-    "autogen/messages/__init__.py",
-    "autogen/messages/agent_messages.py",
-    "autogen/messages/base_message.py",
-    "autogen/messages/client_messages.py",
+    "autogen/messages",
     "test/test_pydantic.py",
     "test/io",
     "test/tools",
     "test/interop",
     "test/agentchat/realtime_agent",
-    "test/messages/__init__.py",
-    "test/messages/conftest.py",
-    "test/messages/test_agent_messages.py",
-    "test/messages/test_base_message.py",
-    "test/messages/test_client_messages.py",
+    "test/messages",
 ]
 exclude = [
     "autogen/math_utils\\.py",

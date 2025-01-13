@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def calculate_day_of_the_week(total_days: int, starting_day: str):
-    """
-    Calculates the day of the week after a given number of days starting from a specified day.
+    """Calculates the day of the week after a given number of days starting from a specified day.
 
     Args:
         total_days: The number of days to calculate.

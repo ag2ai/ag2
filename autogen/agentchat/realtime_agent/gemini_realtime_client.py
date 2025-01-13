@@ -16,7 +16,10 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional
 from .realtime_client import Role
 
 if TYPE_CHECKING:
+    from websockets.asyncio.client import ClientConnection
+
     from .realtime_client import RealtimeClientProtocol
+
 from websockets.asyncio.client import connect
 
 __all__ = ["GeminiRealtimeClient", "Role"]
@@ -48,7 +51,7 @@ class GeminiRealtimeClient:
         self._voice = voice
         self._system_message = system_message
         self._logger = logger
-        self._connection = None
+        self._connection: Optional["ClientConnection"] = None
         config = llm_config["config_list"][0]
 
         self._model: str = config["model"]
@@ -67,7 +70,7 @@ class GeminiRealtimeClient:
         return self._logger or global_logger
 
     @property
-    def connection(self):
+    def connection(self) -> "ClientConnection":
         """Get the Gemini WebSocket connection."""
         if self._connection is None:
             raise RuntimeError("Gemini WebSocket is not initialized")
@@ -181,7 +184,7 @@ class GeminiRealtimeClient:
         self._is_reading_events = True
         async for raw_response in self.connection:
             try:
-                response = json.loads(raw_response.decode("ascii"))
+                response = json.loads(raw_response.decode("ascii")) if isinstance(raw_response, bytes) else raw_response
                 b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
                 event = {
                     "type": "response.audio.delta",

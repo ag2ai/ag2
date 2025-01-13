@@ -2,14 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import copy
-import inspect
 import json
 import re
 import warnings
 from dataclasses import dataclass
 from enum import Enum
 from inspect import signature
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel
 
@@ -38,7 +37,7 @@ class AfterWorkOption(Enum):
 
 
 @dataclass
-class AFTER_WORK:
+class AFTER_WORK:  # noqa: N801
     """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
 
     Args:
@@ -55,7 +54,7 @@ class AFTER_WORK:
 
 
 @dataclass
-class ON_CONDITION:
+class ON_CONDITION:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats
 
     Args:
@@ -74,9 +73,9 @@ class ON_CONDITION:
     def __post_init__(self):
         # Ensure valid types
         if self.target is not None:
-            assert isinstance(self.target, SwarmAgent) or isinstance(
-                self.target, dict
-            ), "'target' must be a SwarmAgent or a Dict"
+            assert isinstance(self.target, SwarmAgent) or isinstance(self.target, dict), (
+                "'target' must be a SwarmAgent or a Dict"
+            )
 
         # Ensure they have a condition
         assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
@@ -86,7 +85,7 @@ class ON_CONDITION:
 
 
 @dataclass
-class UPDATE_SYSTEM_MESSAGE:
+class UPDATE_SYSTEM_MESSAGE:  # noqa: N801
     """Update the agent's system message before they reply
 
     Args:
@@ -179,7 +178,7 @@ def _create_nested_chats(agent: "SwarmAgent", nested_chat_agents: list["SwarmAge
             nested_chats["chat_queue"],
             reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
             or "summary_from_nested_chats",
-            config=nested_chats.get("config", None),
+            config=nested_chats.get("config"),
             trigger=lambda sender: True,
             position=0,
             use_async=nested_chats.get("use_async", False),
@@ -352,6 +351,8 @@ def _determine_next_agent(
             return None if user_agent is None else user_agent
         elif after_work_condition == AfterWorkOption.STAY:
             return last_speaker
+        elif after_work_condition == AfterWorkOption.SWARM_MANAGER:
+            return "auto"
     else:
         raise ValueError("Invalid After Work condition or return value from callable")
 
@@ -555,8 +556,7 @@ async def a_initiate_swarm_chat(
 
 
 class SwarmResult(BaseModel):
-    """
-    Encapsulates the possible return values for a swarm agent function.
+    """Encapsulates the possible return values for a swarm agent function.
 
     Args:
         values (str): The result values as a string.
@@ -641,8 +641,7 @@ class SwarmAgent(ConversableAgent):
             self.register_hook("update_agent_state", self._update_conditional_functions)
 
     def register_update_agent_state_before_reply(self, functions: Optional[Union[list[Callable], Callable]]):
-        """
-        Register functions that will be called when the agent is selected and before it speaks.
+        """Register functions that will be called when the agent is selected and before it speaks.
         You can add your own validation or precondition functions here.
 
         Args:
@@ -659,7 +658,6 @@ class SwarmAgent(ConversableAgent):
 
         for func in functions:
             if isinstance(func, UPDATE_SYSTEM_MESSAGE):
-
                 # Wrapper function that allows this to be used in the update_agent_state hook
                 # Its primary purpose, however, is just to update the agent's system message
                 # Outer function to create a closure with the update function
@@ -725,12 +723,11 @@ class SwarmAgent(ConversableAgent):
 
         for transit in hand_to:
             if isinstance(transit, AFTER_WORK):
-                assert isinstance(
-                    transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)
-                ), "Invalid After Work value"
+                assert isinstance(transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)), (
+                    "Invalid After Work value"
+                )
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
-
                 if isinstance(transit.target, SwarmAgent):
                     # Transition to agent
 
@@ -798,8 +795,8 @@ class SwarmAgent(ConversableAgent):
         This function:
         1. Adds context_variables back to the tool call for the function, if necessary.
         2. Generates the tool calls reply.
-        3. Updates context_variables and next_agent based on the tool call response."""
-
+        3. Updates context_variables and next_agent based on the tool call response.
+        """
         if config is None:
             config = self
         if messages is None:
@@ -807,7 +804,6 @@ class SwarmAgent(ConversableAgent):
 
         message = messages[-1]
         if "tool_calls" in message:
-
             tool_call_count = len(message["tool_calls"])
 
             # Loop through tool calls individually (so context can be updated after each function call)
@@ -815,7 +811,6 @@ class SwarmAgent(ConversableAgent):
             tool_responses_inner = []
             contents = []
             for index in range(tool_call_count):
-
                 # Deep copy to ensure no changes to messages when we insert the context variables
                 message_copy = copy.deepcopy(message)
 
@@ -832,7 +827,6 @@ class SwarmAgent(ConversableAgent):
                         # Inject the context variables into the tool call if it has the parameter
                         sig = signature(func)
                         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
-
                             current_args = json.loads(tool_call["function"]["arguments"])
                             current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = self._context_variables
                             tool_call["function"]["arguments"] = json.dumps(current_args)

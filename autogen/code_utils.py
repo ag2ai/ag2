@@ -16,7 +16,7 @@ import venv
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from hashlib import md5
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Optional, Union
 
 import docker
 
@@ -42,7 +42,7 @@ UNKNOWN = "unknown"
 TIMEOUT_MSG = "Timeout"
 DEFAULT_TIMEOUT = 600
 WIN32 = sys.platform == "win32"
-PATH_SEPARATOR = WIN32 and "\\" or "/"
+PATH_SEPARATOR = (WIN32 and "\\") or "/"
 PYTHON_VARIANTS = ["python", "Python", "py"]
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ def content_str(content: Union[str, list[Union[UserMessageTextContentPart, UserM
 
 
 def infer_lang(code: str) -> str:
-    """infer the language for the code.
+    """Infer the language for the code.
     TODO: make it robust.
     """
     if code.startswith("python ") or code.startswith("pip") or code.startswith("python3 "):
@@ -473,7 +473,9 @@ def execute_code(
     image_list = (
         ["python:3-slim", "python:3", "python:3-windowsservercore"]
         if use_docker is True
-        else [use_docker] if isinstance(use_docker, str) else use_docker
+        else [use_docker]
+        if isinstance(use_docker, str)
+        else use_docker
     )
     for image in image_list:
         # check if the image exists
@@ -737,7 +739,8 @@ def create_virtual_env(dir_path: str, **env_args) -> SimpleNamespace:
         **env_args: Any extra args to pass to the `EnvBuilder`
 
     Returns:
-        SimpleNamespace: the virtual env context object."""
+        SimpleNamespace: the virtual env context object.
+    """
     if not env_args:
         env_args = {"with_pip": True}
     env_builder = venv.EnvBuilder(**env_args)

@@ -11,8 +11,7 @@ __all__ = ["Interoperable"]
 
 @runtime_checkable
 class Interoperable(Protocol):
-    """
-    A Protocol defining the interoperability interface for tool conversion.
+    """A Protocol defining the interoperability interface for tool conversion.
 
     This protocol ensures that any class implementing it provides the method
     `convert_tool` to convert a given tool into a desired format or type.
@@ -20,8 +19,7 @@ class Interoperable(Protocol):
 
     @classmethod
     def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
-        """
-        Converts a given tool to a desired format or type.
+        """Converts a given tool to a desired format or type.
 
         This method should be implemented by any class adhering to the `Interoperable` protocol.
 

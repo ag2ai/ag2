@@ -22,7 +22,7 @@ except ImportError:
 reason = "Cohere dependency not installed!"
 
 
-@pytest.fixture()
+@pytest.fixture
 def cohere_client():
     return CohereClient(api_key="dummy_api_key")
 
@@ -46,9 +46,9 @@ def test_intialization(cohere_client):
 
 @pytest.mark.skipif(skip, reason=reason)
 def test_calculate_cohere_cost():
-    assert (
-        calculate_cohere_cost(0, 0, model="command-r") == 0.0
-    ), "Cost should be 0 for 0 input_tokens and 0 output_tokens"
+    assert calculate_cohere_cost(0, 0, model="command-r") == 0.0, (
+        "Cost should be 0 for 0 input_tokens and 0 output_tokens"
+    )
     assert calculate_cohere_cost(100, 200, model="command-r-plus") == 0.0033
 
 

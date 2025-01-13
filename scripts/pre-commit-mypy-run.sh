@@ -10,6 +10,8 @@ set -o errexit
 # Change directory to the project root directory.
 cd "$(dirname "$0")"/..
 
+pip uninstall pyautogen --yes --quiet
+
 pip install -q -e .[types]
 
 mypy

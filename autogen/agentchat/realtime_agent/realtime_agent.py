@@ -3,20 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from logging import Logger, getLogger
-from typing import Any, Callable, Literal, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 import anyio
 from asyncer import create_task_group, syncify
-
-from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
+from fastapi import WebSocket
 
 from ... import SwarmAgent
-from ...tools import Tool, get_function_schema
+from ...tools import Tool
 from ..agent import Agent
 from ..conversable_agent import ConversableAgent
 from .function_observer import FunctionObserver
 from .gemini_realtime_client import GeminiRealtimeClient
-from .oai_realtime_client import OpenAIRealtimeClient, Role
+from .oai_realtime_client import OpenAIRealtimeClient, OpenAIRealtimeWebRTCClient, Role
+from .realtime_client import RealtimeClientProtocol
 from .realtime_observer import RealtimeObserver
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -45,20 +45,22 @@ class RealtimeAgent(ConversableAgent):
         self,
         *,
         name: str,
-        audio_adapter: RealtimeObserver,
+        audio_adapter: Optional[RealtimeObserver] = None,
         system_message: str = "You are a helpful AI Assistant.",
         llm_config: dict[str, Any],
         voice: str = "alloy",
         logger: Optional[Logger] = None,
+        websocket: Optional[WebSocket] = None,
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
 
         Args:
             name (str): The name of the agent.
-            audio_adapter (RealtimeObserver): The audio adapter for the agent.
+            audio_adapter (Optional[RealtimeObserver] = None): The audio adapter for the agent.
             system_message (str): The system message for the agent.
             llm_config (dict[str, Any], bool): The config for the agent.
             voice (str): The voice for the agent.
+            websocket (Optional[WebSocket] = None): WebSocket from WebRTC javascript client
         """
         super().__init__(
             name=name,
@@ -80,20 +82,29 @@ class RealtimeAgent(ConversableAgent):
         self._audio_adapter = audio_adapter
 
         model = llm_config["config_list"][0]["model"]
+        self._realtime_client: RealtimeClientProtocol
         if "gemini" in model:
-            self._realtime_client: RealtimeClientProtocol = GeminiRealtimeClient(
+            self._realtime_client = GeminiRealtimeClient(
                 llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
             )
         elif "gpt-4o" in model:
-            self._realtime_client: RealtimeClientProtocol = OpenAIRealtimeClient(
+            self._realtime_client = OpenAIRealtimeClient(
                 llm_config=llm_config, voice=voice, system_message=system_message, logger=logger
             )
         else:
             raise ValueError(f"Model {model} is not supported by the Realtime Agent.")
 
+        if websocket is not None:
+            self._realtime_client = OpenAIRealtimeWebRTCClient(
+                llm_config=llm_config, voice=voice, system_message=system_message, websocket=websocket, logger=logger
+            )
+
         self._voice = voice
 
-        self._observers: list[RealtimeObserver] = [self._function_observer, self._audio_adapter]
+        self._observers: list[RealtimeObserver] = [self._function_observer]
+        if self._audio_adapter:
+            # audio adapter is not needed for WebRTC
+            self._observers.append(self._audio_adapter)
 
         self._registred_realtime_tools: dict[str, Tool] = {}
 
@@ -115,7 +126,7 @@ class RealtimeAgent(ConversableAgent):
         return self._logger or global_logger
 
     @property
-    def realtime_client(self) -> Union[OpenAIRealtimeClient, GeminiRealtimeClient]:
+    def realtime_client(self) -> RealtimeClientProtocol:
         """Get the OpenAI Realtime Client."""
         return self._realtime_client
 
@@ -168,10 +179,8 @@ class RealtimeAgent(ConversableAgent):
         """Run the agent."""
         # everything is run in the same task group to enable easy cancellation using self._tg.cancel_scope.cancel()
         async with create_task_group() as self._tg:
-
             # connect with the client first (establishes a connection and initializes a session)
             async with self._realtime_client.connect():
-
                 # start the observers
                 for observer in self._observers:
                     self._tg.soonify(observer.run)(self)
@@ -234,15 +243,13 @@ class RealtimeAgent(ConversableAgent):
         return self._answer
 
     async def ask_question(self, question: str, question_timeout: int) -> None:
-        """
-        Send a question for the user to the agent and wait for the answer.
+        """Send a question for the user to the agent and wait for the answer.
         If the answer is not received within the timeout, the question is repeated.
 
         Args:
             question: The question to ask the user.
             question_timeout: The time in seconds to wait for the answer.
         """
-
         self.reset_answer()
         await self._realtime_client.send_text(role=QUESTION_ROLE, text=question)
 
@@ -274,7 +281,6 @@ class RealtimeAgent(ConversableAgent):
             config: any
                 the config for the agent
         """
-
         if not messages:
             return False, None
 

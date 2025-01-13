@@ -14,7 +14,7 @@ from hashlib import md5
 from pathlib import Path
 from string import Template
 from types import SimpleNamespace
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Union
+from typing import Any, Callable, ClassVar, Optional, Union
 
 from typing_extensions import ParamSpec
 
@@ -73,7 +73,7 @@ $functions"""
         self,
         timeout: int = 60,
         virtual_env_context: Optional[SimpleNamespace] = None,
-        work_dir: Union[Path, str] = Path("."),
+        work_dir: Union[Path, str] = Path(),
         functions: list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]] = [],
         functions_module: str = "functions",
         execution_policies: Optional[dict[str, bool]] = None,
@@ -112,7 +112,6 @@ $functions"""
             functions_module (str): The module name under which functions are accessible.
             execution_policies (Optional[Dict[str, bool]]): A dictionary mapping languages to execution policies (True for execution, False for saving only). Defaults to class-wide DEFAULT_EXECUTION_POLICY.
         """
-
         if timeout < 1:
             raise ValueError("Timeout must be greater than or equal to 1.")
 
@@ -189,8 +188,7 @@ $functions"""
 
     @staticmethod
     def sanitize_command(lang: str, code: str) -> None:
-        """
-        Sanitize the code block to prevent dangerous commands.
+        """Sanitize the code block to prevent dangerous commands.
         This approach acknowledges that while Docker or similar
         containerization/sandboxing technologies provide a robust layer of security,
         not all users may have Docker installed or may choose not to use it.
@@ -251,7 +249,8 @@ $functions"""
             code_blocks (List[CodeBlock]): The code blocks to execute.
 
         Returns:
-            CommandLineCodeResult: The result of the code execution."""
+            CommandLineCodeResult: The result of the code execution.
+        """
         if not self._setup_functions_complete:
             self._setup_functions()
         return self._execute_code_dont_check_setup(code_blocks)
@@ -296,7 +295,7 @@ $functions"""
 
             if not execute_code:
                 # Just return a message that the file is saved.
-                logs_all += f"Code saved to {str(written_file)}\n"
+                logs_all += f"Code saved to {written_file!s}\n"
                 exitcode = 0
                 continue
 
@@ -351,12 +350,13 @@ class _DeprecatedClassMeta(type):
         if alias is not None:
 
             def new(cls, *args, **kwargs):  # type: ignore[no-untyped-def]
-                alias = getattr(cls, "_DeprecatedClassMeta__alias")
+                alias = cls._DeprecatedClassMeta__alias
 
                 if alias is not None:
                     warnings.warn(
-                        "{} has been renamed to {}, the alias will be "
-                        "removed in the future".format(cls.__name__, alias.__name__),
+                        "{} has been renamed to {}, the alias will be removed in the future".format(
+                            cls.__name__, alias.__name__
+                        ),
                         DeprecationWarning,
                         stacklevel=2,
                     )
@@ -373,8 +373,9 @@ class _DeprecatedClassMeta(type):
 
             if alias is not None:
                 warnings.warn(
-                    "{} has been renamed to {}, the alias will be "
-                    "removed in the future".format(b.__name__, alias.__name__),
+                    "{} has been renamed to {}, the alias will be removed in the future".format(
+                        b.__name__, alias.__name__
+                    ),
                     DeprecationWarning,
                     stacklevel=2,
                 )
@@ -395,7 +396,7 @@ class _DeprecatedClassMeta(type):
         if subclass is cls:
             return True
         else:
-            return issubclass(subclass, getattr(cls, "_DeprecatedClassMeta__alias"))
+            return issubclass(subclass, cls._DeprecatedClassMeta__alias)  # type: ignore[attr-defined]
 
 
 class LocalCommandlineCodeExecutor(metaclass=_DeprecatedClassMeta):

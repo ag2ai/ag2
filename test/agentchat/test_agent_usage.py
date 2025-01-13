@@ -11,42 +11,27 @@ from contextlib import redirect_stdout
 
 import pytest
 
-import autogen
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 
-from ..conftest import reason, skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials, reason, skip_openai
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_gathering():
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-    )
+def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials):
     assistant1 = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config={
-            "config_list": config_list,
-            "model": "gpt-4o-mini",
-        },
+        llm_config=credentials_gpt_4o_mini.llm_config,
     )
     assistant2 = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config={
-            "config_list": config_list,
-            "model": "gpt-4o-mini",
-        },
+        llm_config=credentials_gpt_4o_mini.llm_config,
     )
     assistant3 = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config={
-            "config_list": config_list,
-            "model": "gpt-4o",
-        },
+        llm_config=credentials_gpt_4o.llm_config,
     )
 
     assistant1.client.total_usage_summary = {
@@ -84,12 +69,8 @@ def test_gathering():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_agent_usage():
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
+def test_agent_usage(credentials: Credentials):
+    config_list = credentials.config_list
     assistant = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",

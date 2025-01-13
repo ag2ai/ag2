@@ -6,10 +6,6 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
-import sys
-
-import pytest
 
 from autogen.agentchat.contrib.vectordb.utils import chroma_results_to_query_results, filter_results_by_distance
 

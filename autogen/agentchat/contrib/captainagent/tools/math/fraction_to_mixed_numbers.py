@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def fraction_to_mixed_numbers(numerator, denominator):
-    """
-    Simplifies a fraction to its lowest terms and returns it as a mixed number.
+    """Simplifies a fraction to its lowest terms and returns it as a mixed number.
 
     Args:
         numerator (int): The numerator of the fraction.

@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 import itertools
 import tempfile
-from typing import Dict, Tuple
 
 import pytest
 

@@ -5,9 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from threading import Thread
-from typing import Any, List
+from typing import Any
 
-from autogen.io import IOConsole, IOStream, IOWebsockets
+from autogen.io import IOConsole, IOStream
+from autogen.messages.base_message import BaseMessage
 
 
 class TestIOStream:
@@ -17,6 +18,9 @@ class TestIOStream:
     def test_set_default_io_stream(self) -> None:
         class MyIOStream(IOStream):
             def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
+                pass
+
+            def send(self, message: BaseMessage) -> None:
                 pass
 
             def input(self, prompt: str = "", *, password: bool = False) -> str:

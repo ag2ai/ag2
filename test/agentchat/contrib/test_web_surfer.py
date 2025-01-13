@@ -11,11 +11,9 @@ import re
 
 import pytest
 
-from autogen import UserProxyAgent, config_list_from_json
-from autogen.oai.openai_utils import filter_config
+from autogen import UserProxyAgent
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai  # noqa: E402
-from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials, reason, skip_openai
 
 BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
@@ -34,9 +32,6 @@ except KeyError:
     skip_bing = True
 else:
     skip_bing = False
-
-if not skip_openai:
-    config_list = config_list_from_json(env_or_file=OAI_CONFIG_LIST, file_location=KEY_LOC)
 
 
 @pytest.mark.skipif(
@@ -102,20 +97,13 @@ def test_web_surfer() -> None:
     skip_all or skip_openai,
     reason="dependency is not installed OR" + reason,
 )
-def test_web_surfer_oai() -> None:
-    llm_config = {"config_list": config_list, "timeout": 180, "cache_seed": 42}
-
-    # adding Azure name variations to the model list
-    model = ["gpt-4o", "gpt-4o-mini"]
-    model += [m.replace(".", "") for m in model]
+def test_web_surfer_oai(credentials_gpt_4o_mini: Credentials, credentials_gpt_4o: Credentials) -> None:
+    llm_config = {"config_list": credentials_gpt_4o.config_list, "timeout": 180, "cache_seed": 42}
 
     summarizer_llm_config = {
-        "config_list": filter_config(config_list, dict(model=model)),  # type: ignore[no-untyped-call]
+        "config_list": credentials_gpt_4o_mini.config_list,
         "timeout": 180,
     }
-
-    assert len(llm_config["config_list"]) > 0  # type: ignore[arg-type]
-    assert len(summarizer_llm_config["config_list"]) > 0
 
     page_size = 4096
     web_surfer = WebSurferAgent(

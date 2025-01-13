@@ -20,11 +20,11 @@ import sys
 import tempfile
 import threading
 import time
-import typing
 from dataclasses import dataclass
 from multiprocessing import current_process
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from textwrap import dedent, indent
+from typing import Dict, List, Tuple
 
 from termcolor import colored
 
@@ -35,7 +35,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import nbclient
+    import nbclient  # noqa: F401
     from nbclient.client import (
         CellExecutionError,
         CellTimeoutError,
@@ -88,7 +88,6 @@ def load_metadata(notebook: Path) -> dict:
 
 def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     """Return a reason to skip the notebook, or None if it should not be skipped."""
-
     if notebook.suffix != ".ipynb":
         return "not a notebook"
 
@@ -109,7 +108,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     # <!-- and --> must exists on lines on their own
     if first_cell["cell_type"] == "markdown" and first_cell["source"][0].strip() == "<!--":
         raise ValueError(
-            f"Error in {str(notebook.resolve())} - Front matter should be defined in the notebook metadata now."
+            f"Error in {notebook.resolve()!s} - Front matter should be defined in the notebook metadata now."
         )
 
     metadata = load_metadata(notebook)
@@ -162,7 +161,6 @@ def extract_title(notebook: Path) -> str | None:
 
 def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, quarto_bin: str, dry_run: bool) -> str:
     """Process a single notebook."""
-
     in_notebook_dir = "notebook" in src_notebook.parts
 
     metadata = load_metadata(src_notebook)
@@ -316,7 +314,6 @@ def get_error_info(nb: NotebookNode) -> NotebookError | None:
 def add_front_matter_to_metadata_mdx(
     front_matter: dict[str, str | list[str]], website_dir: Path, rendered_mdx: Path
 ) -> None:
-
     source = front_matter.get("source_notebook")
     if isinstance(source, str) and source.startswith("/website/docs/"):
         return
@@ -360,13 +357,11 @@ def add_front_matter_to_metadata_mdx(
 
 
 def convert_callout_blocks(content: str) -> str:
-    """
-    Converts callout blocks in the following formats:
+    """Converts callout blocks in the following formats:
     1) Plain callout blocks using ::: syntax.
     2) Blocks using 3-4 backticks + (mdx-code-block or {=mdx}) + ::: syntax.
     Transforms them into custom HTML/component syntax.
     """
-
     callout_types = {
         "tip": "Tip",
         "note": "Note",
@@ -446,8 +441,7 @@ def convert_callout_blocks(content: str) -> str:
 
 
 def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
-    """
-    Converts MDX code block image syntax to regular markdown image syntax.
+    """Converts MDX code block image syntax to regular markdown image syntax.
 
     Args:
         content (str): The markdown content containing mdx-code-block image syntax
@@ -612,8 +606,7 @@ def copy_examples_mdx_files(website_dir: str) -> None:
 
 
 def update_navigation_with_notebooks(website_dir: Path) -> None:
-    """
-    Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
+    """Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
 
     Args:
         website_dir (Path): Root directory of the website
@@ -684,8 +677,7 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
 
 
 def fix_internal_references(content: str, root_path: Path, current_file_path: Path) -> str:
-    """
-    Resolves internal markdown references relative to root_dir and returns fixed content.
+    """Resolves internal markdown references relative to root_dir and returns fixed content.
 
     Args:
         content: Markdown content to fix
@@ -728,6 +720,121 @@ def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
         except Exception:
             print(f"Error: {file_path}")
             sys.exit(1)
+
+
+def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict[str, str]]) -> str:
+    """Constructs HTML for displaying author cards in a blog.
+
+    Args:
+        authors_list: List of author identifiers
+        authors_dict: Dictionary containing author information keyed by author identifier
+    Returns:
+        str: Formatted HTML string containing author cards
+    """
+    if not authors_list:
+        return ""
+
+    card_template = """
+        <Card href="{url}">
+            <div class="col card">
+              <div class="img-placeholder">
+                <img noZoom src="{image_url}" />
+              </div>
+              <div>
+                <p class="name">{name}</p>
+                <p>{title}</p>
+              </div>
+            </div>
+        </Card>"""
+
+    authors_html = [card_template.format(**authors_dict[author]) for author in authors_list]
+
+    author_label = "Author:" if len(authors_list) == 1 else "Authors:"
+    authors_html_str = indent("".join(authors_html), "        ")
+    retval = dedent(
+        f"""
+            <div class="blog-authors">
+              <p class="authors">{author_label}</p>
+              <CardGroup cols={{2}}>{authors_html_str}
+              </CardGroup>
+            </div>
+        """
+    )
+    return retval
+
+
+def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
+    """Separate front matter and content from a markdown file.
+
+    Args:
+        file_path (Path): Path to the mdx file
+    """
+    content = file_path.read_text(encoding="utf-8")
+
+    if content.startswith("---"):
+        front_matter_end = content.find("---", 3)
+        front_matter = content[0 : front_matter_end + 3]
+        content = content[front_matter_end + 3 :].strip()
+        return front_matter, content
+
+    return "", content
+
+
+def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
+    """Add authors info to blog posts.
+
+    Args:
+        website_dir (Path): Root directory of the website
+    """
+    blog_dir = website_dir / "blog"
+    authors_yml = blog_dir / "authors.yml"
+
+    try:
+        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError) as e:
+        print(f"Error reading authors file: {e}")
+        sys.exit(1)
+
+    for file_path in blog_dir.glob("**/*.mdx"):
+        try:
+            front_matter_string, content = separate_front_matter_and_content(file_path)
+
+            # Skip if authors section already exists
+            # if '<div class="blog-authors">' in content:
+            #     continue
+
+            # Convert single author to list and handle authors
+            front_matter = yaml.safe_load(front_matter_string[4:-3])
+            authors = front_matter.get("authors", [])
+            authors_list = [authors] if isinstance(authors, str) else authors
+
+            # Social share image
+            social_img_html = (
+                """\n<div>
+<img noZoom className="social-share-img"
+  src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+  alt="social preview"
+  style={{ position: 'absolute', left: '-9999px' }}
+/>
+</div>"""
+                if '<img noZoom className="social-share-img"' not in content
+                else ""
+            )
+
+            # Generate and write content
+            authors_html = (
+                construct_authors_html(authors_list, all_authors_info)
+                if '<div class="blog-authors">' not in content
+                else ""
+            )
+            new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
+
+            file_path.write_text(f"{new_content}\n", encoding="utf-8")
+            print(f"Authors info and social share image checked in {file_path}")
+
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            continue
 
 
 def main() -> None:
@@ -825,6 +932,7 @@ def main() -> None:
             copy_examples_mdx_files(args.website_directory)
             update_navigation_with_notebooks(args.website_directory)
             fix_internal_references_in_mdx_files(args.website_directory)
+            add_authors_and_social_img_to_blog_posts(args.website_directory)
 
     else:
         print("Unknown subcommand")

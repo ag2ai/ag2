@@ -12,7 +12,7 @@ https://thesequence.substack.com/p/my-five-favorite-ai-papers-of-2023
 https://www.llama.com/docs/how-to-guides/prompting/
 https://azure.microsoft.com/en-us/get-started/azure-portal
 https://azure.microsoft.com/en-us/products/ai-services/openai-service
-https://azure.microsoft.com/en-us/pricing/purchase-options/azure-account?icid=azurefreeaccount
+https://azure.microsoft.com/en-us/pricing/purchase-options/azure-account
 https://github.com/pgvector/pgvector
 https://github.com/ag2ai/ag2/blob/b1adac515931bf236ac59224269eeec683a162ba/test/oai/test_client.py
 https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md

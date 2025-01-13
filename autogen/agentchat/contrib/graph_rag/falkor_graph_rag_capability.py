@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 from autogen import Agent, ConversableAgent, UserProxyAgent
 
@@ -12,22 +12,18 @@ from .graph_rag_capability import GraphRagCapability
 
 
 class FalkorGraphRagCapability(GraphRagCapability):
-    """
-    The FalkorDB GraphRAG capability integrate FalkorDB with graphrag_sdk version: 0.1.3b0.
+    """The FalkorDB GraphRAG capability integrate FalkorDB with graphrag_sdk version: 0.1.3b0.
     Ref: https://github.com/FalkorDB/GraphRAG-SDK/tree/2-move-away-from-sql-to-json-ontology-detection
 
     For usage, please refer to example notebook/agentchat_graph_rag_falkordb.ipynb
     """
 
     def __init__(self, query_engine: FalkorGraphQueryEngine):
-        """
-        initialize GraphRAG capability with a graph query engine
-        """
+        """Initialize GraphRAG capability with a graph query engine"""
         self.query_engine = query_engine
 
     def add_to_agent(self, agent: UserProxyAgent):
-        """
-        Add FalkorDB GraphRAG capability to a UserProxyAgent.
+        """Add FalkorDB GraphRAG capability to a UserProxyAgent.
         The restriction to a UserProxyAgent to make sure the returned message does not contain information retrieved from the graph DB instead of any LLMs.
         """
         self.graph_rag_agent = agent
@@ -51,8 +47,7 @@ class FalkorGraphRagCapability(GraphRagCapability):
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:
-        """
-        Query FalkorDB and return the message. Internally, it utilises OpenAI to generate a reply based on the given messages.
+        """Query FalkorDB and return the message. Internally, it utilises OpenAI to generate a reply based on the given messages.
         The history with FalkorDB is also logged and updated.
 
         The agent's system message will be incorporated into the query, if it's not blank.
@@ -68,7 +63,6 @@ class FalkorGraphRagCapability(GraphRagCapability):
         Returns:
             A tuple containing a boolean indicating success and the assistant's reply.
         """
-        # question = self._get_last_question(messages[-1])
         question = self._messages_summary(messages, recipient.system_message)
         result: GraphStoreQueryResult = self.query_engine.query(question)
 
@@ -83,7 +77,6 @@ class FalkorGraphRagCapability(GraphRagCapability):
         agent:
         <content>
         """
-
         if isinstance(messages, str):
             if system_message:
                 summary = f"IMPORTANT: {system_message}\nContext:\n\n{messages}"
@@ -94,7 +87,7 @@ class FalkorGraphRagCapability(GraphRagCapability):
             summary = ""
             for message in messages:
                 if "content" in message and "tool_calls" not in message and "tool_responses" not in message:
-                    summary += f"{message.get('name', '')}: {message.get('content','')}\n\n"
+                    summary += f"{message.get('name', '')}: {message.get('content', '')}\n\n"
 
             if system_message:
                 summary = f"IMPORTANT: {system_message}\nContext:\n\n{summary}"

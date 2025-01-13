@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 
 def run_pydoc_markdown(config_file: Path) -> None:
@@ -87,7 +86,7 @@ def convert_md_to_mdx(input_dir: Path) -> None:
 
 def get_mdx_files(directory: Path) -> list[str]:
     """Get all MDX files in directory and subdirectories."""
-    return [f"{str(p.relative_to(directory).with_suffix(''))}".replace("\\", "/") for p in directory.rglob("*.mdx")]
+    return [f"{p.relative_to(directory).with_suffix('')!s}".replace("\\", "/") for p in directory.rglob("*.mdx")]
 
 
 def add_prefix(path: str, parent_groups: list[str] = None) -> str:
@@ -128,8 +127,7 @@ def create_nav_structure(paths: list[str], parent_groups: list[str] = None) -> l
 
 
 def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
-    """
-    Update the 'API Reference' section in mint.json navigation with new pages.
+    """Update the 'API Reference' section in mint.json navigation with new pages.
 
     Args:
         mint_json_path: Path to mint.json file

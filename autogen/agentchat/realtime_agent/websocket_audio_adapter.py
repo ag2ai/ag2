@@ -4,15 +4,12 @@
 
 import base64
 import json
-from logging import Logger, getLogger
+from logging import Logger
 from typing import TYPE_CHECKING, Any, Optional
-
-from openai.types.beta.realtime.realtime_server_event import RealtimeServerEvent
 
 if TYPE_CHECKING:
     from fastapi.websockets import WebSocket
 
-    from .realtime_agent import RealtimeAgent
 
 from .realtime_observer import RealtimeObserver
 

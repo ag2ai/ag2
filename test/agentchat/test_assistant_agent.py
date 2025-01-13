@@ -11,13 +11,10 @@ import sys
 
 import pytest
 
-import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
-from ..conftest import reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
-KEY_LOC = "notebook"
-OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 here = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -25,15 +22,12 @@ here = os.path.abspath(os.path.dirname(__file__))
     sys.platform in ["darwin", "win32"] or skip_openai,
     reason="do not run on MacOS or windows OR " + reason,
 )
-def test_ai_user_proxy_agent():
+def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials):
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
 
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
+    config_list = credentials_gpt_4o_mini.config_list
+
     assistant = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
@@ -67,12 +61,8 @@ def test_ai_user_proxy_agent():
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_gpt35(human_input_mode="NEVER", max_consecutive_auto_reply=5):
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
+def test_gpt4omini(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=5):
+    config_list = credentials_gpt_4o_mini.config_list
     llm_config = {
         "cache_seed": 42,
         "config_list": config_list,
@@ -111,12 +101,10 @@ If "Thank you" or "You\'re welcome" are said in the conversation, then say TERMI
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_create_execute_script(human_input_mode="NEVER", max_consecutive_auto_reply=3):
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
+def test_create_execute_script(
+    credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=3
+):
+    config_list = credentials_gpt_4o_mini.config_list
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
     llm_config = {
@@ -164,14 +152,8 @@ print('Hello world!')
 
 
 @pytest.mark.skipif(skip_openai, reason=reason)
-def test_tsp(human_input_mode="NEVER", max_consecutive_auto_reply=2):
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={
-            "tags": ["gpt-4o"],
-        },
-    )
+def test_tsp(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=2):
+    config_list = credentials_gpt_4o_mini.config_list
     hard_questions = [
         "What if we must go from node 1 to node 2?",
         "Can we double all distances?",

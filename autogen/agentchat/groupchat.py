@@ -11,19 +11,22 @@ import random
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Union
 
 from ..code_utils import content_str
 from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNextAgent
-from ..formatting_utils import colored
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages.agent_messages import (
-    ClearAgentsHistory,
-    GroupChatResume,
-    GroupChatRunChat,
-    SelectSpeaker,
-    SpeakerAttempt,
+    ClearAgentsHistoryMessage,
+    GroupChatResumeMessage,
+    GroupChatRunChatMessage,
+    SelectSpeakerInvalidInputMessage,
+    SelectSpeakerMessage,
+    SelectSpeakerTryCountExceededMessage,
+    SpeakerAttemptFailedMultipleAgentsMessage,
+    SpeakerAttemptFailedNoAgentsMessage,
+    SpeakerAttemptSuccessfullMessage,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -365,8 +368,8 @@ class GroupChat:
     def select_speaker_prompt(self, agents: Optional[list[Agent]] = None) -> str:
         """Return the floating system prompt selecting the next speaker.
         This is always the *last* message in the context.
-        Will return None if the select_speaker_prompt_template is None."""
-
+        Will return None if the select_speaker_prompt_template is None.
+        """
         if self.select_speaker_prompt_template is None:
             return None
 
@@ -396,15 +399,14 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        select_speaker = SelectSpeaker(agents=agents)
-        select_speaker.print_select_speaker(iostream.print)
+        iostream.send(SelectSpeakerMessage(agents=agents))
 
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                select_speaker.print_try_count_exceeded(try_count, iostream.print)
+                iostream.send(SelectSpeakerTryCountExceededMessage(try_count=try_count, agents=agents))
                 break
             try:
                 i = iostream.input(
@@ -418,7 +420,7 @@ class GroupChat:
                 else:
                     raise ValueError
             except ValueError:
-                select_speaker.print_invalid_input(iostream.print)
+                iostream.send(SelectSpeakerInvalidInputMessage(agents=agents))
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:
@@ -556,7 +558,6 @@ class GroupChat:
 
     def select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
         """Select the next speaker (with requery)."""
-
         # Prepare the list of available agents and select an agent if selection method allows (non-auto)
         selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
         if selected_agent:
@@ -570,7 +571,6 @@ class GroupChat:
 
     async def a_select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
         """Select the next speaker (with requery), asynchronously."""
-
         selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
         if selected_agent:
             return selected_agent
@@ -698,7 +698,6 @@ class GroupChat:
         Returns:
             Dict: a counter for mentioned agents.
         """
-
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
             agents = self.agents
@@ -782,7 +781,6 @@ class GroupChat:
         Returns:
             Dict: a counter for mentioned agents.
         """
-
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
             agents = self.agents
@@ -854,13 +852,35 @@ class GroupChat:
         # Output the query and requery results
         if self.select_speaker_auto_verbose:
             iostream = IOStream.get_default()
-            speaker_attempt = SpeakerAttempt(
-                mentions=mentions,
-                attempt=attempt,
-                attempts_left=attempts_left,
-                select_speaker_auto_verbose=self.select_speaker_auto_verbose,
-            )
-            speaker_attempt.print(iostream.print)
+            no_of_mentions = len(mentions)
+            if no_of_mentions == 1:
+                # Success on retry, we have just one name mentioned
+                iostream.send(
+                    SpeakerAttemptSuccessfullMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
+            elif no_of_mentions == 1:
+                iostream.send(
+                    SpeakerAttemptFailedMultipleAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
+            else:
+                iostream.send(
+                    SpeakerAttemptFailedNoAgentsMessage(
+                        mentions=mentions,
+                        attempt=attempt,
+                        attempts_left=attempts_left,
+                        select_speaker_auto_verbose=self.select_speaker_auto_verbose,
+                    )
+                )
 
         if len(mentions) == 1:
             # Success on retry, we have just one name mentioned
@@ -917,7 +937,8 @@ class GroupChat:
         """Checks the result of the auto_select_speaker function, returning the
         agent to speak.
 
-        Used by auto_select_speaker and a_auto_select_speaker."""
+        Used by auto_select_speaker and a_auto_select_speaker.
+        """
         if len(result.chat_history) > 0:
             # Use the final message, which will have the selected agent or reason for failure
             final_message = result.chat_history[-1]["content"]
@@ -1082,9 +1103,7 @@ class GroupChatManager(ConversableAgent):
 
         def print_messages(recipient, messages, sender, config):
             # Print the message immediately
-            print(
-                f"Sender: {sender.name} | Recipient: {recipient.name} | Message: {messages[-1].get('content')}"
-            )
+            print(f"Sender: {sender.name} | Recipient: {recipient.name} | Message: {messages[-1].get('content')}")
             print(f"Real Sender: {sender.last_speaker.name}")
             assert sender.last_speaker.name in messages[-1].get("content")
             return False, None  # Required to ensure the agent communication flow continues
@@ -1094,9 +1113,7 @@ class GroupChatManager(ConversableAgent):
         agent_b = ConversableAgent("agent B", default_auto_reply="I'm agent B.")
         agent_c = ConversableAgent("agent C", default_auto_reply="I'm agent C.")
         for agent in [agent_a, agent_b, agent_c]:
-            agent.register_reply(
-                [ConversableAgent, None], reply_func=print_messages, config=None
-            )
+            agent.register_reply([ConversableAgent, None], reply_func=print_messages, config=None)
         group_chat = GroupChat(
             [agent_a, agent_b, agent_c],
             messages=[],
@@ -1105,9 +1122,7 @@ class GroupChatManager(ConversableAgent):
             allow_repeat_speaker=True,
         )
         chat_manager = GroupChatManager(group_chat)
-        groupchat_result = agent_a.initiate_chat(
-            chat_manager, message="Hi, there, I'm agent A."
-        )
+        groupchat_result = agent_a.initiate_chat(chat_manager, message="Hi, there, I'm agent A.")
         ```
         """
         return self._last_speaker
@@ -1154,8 +1169,7 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    group_chat_run_chat = GroupChatRunChat(speaker=speaker, silent=silent)
-                    group_chat_run_chat.print(iostream.print)
+                    iostream.send(GroupChatRunChatMessage(speaker=speaker, silent=silent))
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
@@ -1282,7 +1296,6 @@ class GroupChatManager(ConversableAgent):
         Returns:
             - Tuple[ConversableAgent, Dict]: A tuple containing the last agent who spoke and their message
         """
-
         # Convert messages from string to messages list, if needed
         if isinstance(messages, str):
             messages = self.messages_from_string(messages)
@@ -1360,8 +1373,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            group_chat_resume.print(iostream.print)
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1387,7 +1399,6 @@ class GroupChatManager(ConversableAgent):
         Returns:
             - Tuple[ConversableAgent, Dict]: A tuple containing the last agent who spoke and their message
         """
-
         # Convert messages from string to messages list, if needed
         if isinstance(messages, str):
             messages = self.messages_from_string(messages)
@@ -1465,8 +1476,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            group_chat_resume = GroupChatResume(last_speaker_name=last_speaker_name, messages=messages, silent=silent)
-            group_chat_resume.print(iostream.print)
+            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1476,10 +1486,10 @@ class GroupChatManager(ConversableAgent):
     def _valid_resume_messages(self, messages: list[dict]):
         """Validates the messages used for resuming
 
-        args:
+        Args:
             messages (List[Dict]): list of messages to resume with
 
-        returns:
+        Returns:
             - bool: Whether they are valid for resuming
         """
         # Must have messages to start with, otherwise they should run run_chat
@@ -1503,15 +1513,14 @@ class GroupChatManager(ConversableAgent):
     ):
         """Removes termination string, if required, and checks if termination may occur.
 
-        args:
+        Args:
             remove_termination_string (str or function): Remove the termination string from the last message to prevent immediate termination
                 If a string is provided, this string will be removed from last message.
                 If a function is provided, the last message will be passed to this function, and the function returns the string after processing.
 
-        returns:
+        Returns:
             None
         """
-
         last_message = messages[-1]
 
         # Replace any given termination string in the last message
@@ -1535,10 +1544,10 @@ class GroupChatManager(ConversableAgent):
     def messages_from_string(self, message_string: str) -> list[dict]:
         """Reads the saved state of messages in Json format for resume and returns as a messages list
 
-        args:
+        Args:
             - message_string: Json string, the saved state
 
-        returns:
+        Returns:
             - List[Dict]: List of messages
         """
         try:
@@ -1552,13 +1561,12 @@ class GroupChatManager(ConversableAgent):
         """Converts the provided messages into a Json string that can be used for resuming the chat.
         The state is made up of a list of messages
 
-        args:
+        Args:
             - messages (List[Dict]): set of messages to convert to a string
 
-        returns:
+        Returns:
             - str: Json representation of the messages which can be persisted for resuming later
         """
-
         return json.dumps(messages)
 
     def _raise_exception_on_async_reply_functions(self) -> None:
@@ -1609,10 +1617,7 @@ class GroupChatManager(ConversableAgent):
                 nr_messages_to_preserve_provided = True
             else:
                 for agent in groupchat.agents:
-                    if agent.name == word:
-                        agent_to_memory_clear = agent
-                        break
-                    elif agent.name == word[:-1]:  # for the case when agent name is followed by dot or other sign
+                    if agent.name == word or agent.name == word[:-1]:
                         agent_to_memory_clear = agent
                         break
         # preserve last tool call message if clear history called inside of tool response
@@ -1622,10 +1627,9 @@ class GroupChatManager(ConversableAgent):
                 "The last tool call message will be saved to prevent errors caused by tool response without tool call."
             )
         # clear history
-        clear_agents_history = ClearAgentsHistory(
-            agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve
+        iostream.send(
+            ClearAgentsHistoryMessage(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve)
         )
-        clear_agents_history.print(iostream.print)
         if agent_to_memory_clear:
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
         else:

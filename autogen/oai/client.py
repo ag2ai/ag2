@@ -10,7 +10,7 @@ import inspect
 import logging
 import sys
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Union, runtime_checkable
 
 from pydantic import BaseModel, schema_json_of
 
@@ -22,7 +22,7 @@ from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
 
-from ..messages.client_messages import StreamMessage, UsageSummary
+from ..messages.client_messages import StreamMessage, UsageSummaryMessage
 
 TOOL_ENABLED = False
 try:
@@ -34,9 +34,8 @@ except ImportError:
 else:
     # raises exception if openai>=1 is installed and something is wrong with imports
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
-    from openai import __version__ as OPENAIVERSION
+    from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
-    from openai.resources import Completions
     from openai.types.chat import ChatCompletion
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
     from openai.types.chat.chat_completion_chunk import (
@@ -44,7 +43,6 @@ else:
         ChoiceDeltaToolCall,
         ChoiceDeltaToolCallFunction,
     )
-    from openai.types.chat.parsed_chat_completion import ParsedChatCompletion, ParsedChatCompletionMessage
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
 
@@ -63,7 +61,7 @@ try:
 
     cerebras_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    cerebras_AuthenticationError = cerebras_InternalServerError = cerebras_RateLimitError = Exception
+    cerebras_AuthenticationError = cerebras_InternalServerError = cerebras_RateLimitError = Exception  # noqa: N816
     cerebras_import_exception = e
 
 try:
@@ -76,7 +74,7 @@ try:
 
     gemini_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    gemini_InternalServerError = gemini_ResourceExhausted = Exception
+    gemini_InternalServerError = gemini_ResourceExhausted = Exception  # noqa: N816
     gemini_import_exception = e
 
 try:
@@ -89,7 +87,7 @@ try:
 
     anthropic_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    anthorpic_InternalServerError = anthorpic_RateLimitError = Exception
+    anthorpic_InternalServerError = anthorpic_RateLimitError = Exception  # noqa: N816
     anthropic_import_exception = e
 
 try:
@@ -102,7 +100,7 @@ try:
 
     mistral_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    mistral_SDKError = mistral_HTTPValidationError = Exception
+    mistral_SDKError = mistral_HTTPValidationError = Exception  # noqa: N816
     mistral_import_exception = e
 
 try:
@@ -112,7 +110,7 @@ try:
 
     together_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    together_TogetherException = Exception
+    together_TogetherException = Exception  # noqa: N816
     together_import_exception = e
 
 try:
@@ -126,7 +124,7 @@ try:
 
     groq_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    groq_InternalServerError = groq_RateLimitError = groq_APIConnectionError = Exception
+    groq_InternalServerError = groq_RateLimitError = groq_APIConnectionError = Exception  # noqa: N816
     groq_import_exception = e
 
 try:
@@ -140,7 +138,7 @@ try:
 
     cohere_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    cohere_InternalServerError = cohere_TooManyRequestsError = cohere_ServiceUnavailableError = Exception
+    cohere_InternalServerError = cohere_TooManyRequestsError = cohere_ServiceUnavailableError = Exception  # noqa: N816
     cohere_import_exception = e
 
 try:
@@ -153,7 +151,7 @@ try:
 
     ollama_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    ollama_RequestError = ollama_ResponseError = Exception
+    ollama_RequestError = ollama_ResponseError = Exception  # noqa: N816
     ollama_import_exception = e
 
 try:
@@ -166,7 +164,7 @@ try:
 
     bedrock_import_exception: Optional[ImportError] = None
 except ImportError as e:
-    bedrock_BotoCoreError = bedrock_ClientError = Exception
+    bedrock_BotoCoreError = bedrock_ClientError = Exception  # noqa: N816
     bedrock_import_exception = e
 
 logger = logging.getLogger(__name__)
@@ -182,8 +180,7 @@ OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
 class ModelClient(Protocol):
-    """
-    A client class must implement the following methods:
+    """A client class must implement the following methods:
     - create must return a response object that implements the ModelClientResponseProtocol
     - cost must return the cost of the response
     - get_usage must return a dict with the following keys:
@@ -215,8 +212,7 @@ class ModelClient(Protocol):
     def message_retrieval(
         self, response: ModelClientResponseProtocol
     ) -> Union[list[str], list[ModelClient.ModelClientResponseProtocol.Choice.Message]]:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -316,8 +312,6 @@ class OpenAIClient:
             full_function_call: Optional[dict[str, Any]] = None
             full_tool_calls: Optional[list[Optional[dict[str, Any]]]] = None
 
-            stream_message = StreamMessage()
-
             # Send the chat completion request to OpenAI's API and process the response in chunks
             for chunk in create_or_parse(**params):
                 if chunk.choices:
@@ -364,7 +358,7 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            stream_message.print_chunk_content(content, iostream.print)
+                            iostream.send(StreamMessage(content=content))
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
@@ -386,7 +380,7 @@ class OpenAIClient:
                 ),
             )
             for i in range(len(response_contents)):
-                if OPENAIVERSION >= "1.5":  # pragma: no cover
+                if openai_version >= "1.5":  # pragma: no cover
                     # OpenAI versions 1.5.0 and above
                     choice = Choice(
                         index=i,
@@ -435,7 +429,7 @@ class OpenAIClient:
         n_output_tokens = response.usage.completion_tokens if response.usage is not None else 0  # type: ignore [union-attr]
         if n_output_tokens is None:
             n_output_tokens = 0
-        tmp_price1K = OAI_PRICE1K[model]
+        tmp_price1K = OAI_PRICE1K[model]  # noqa: N806
         # First value is input token rate, second value is output token rate
         if isinstance(tmp_price1K, tuple):
             return (tmp_price1K[0] * n_input_tokens + tmp_price1K[1] * n_output_tokens) / 1000  # type: ignore [no-any-return]
@@ -485,13 +479,12 @@ class OpenAIWrapper:
         config_list: Optional[list[dict[str, Any]]] = None,
         **base_config: Any,
     ):
-        """
-        Args:
+        """Args:
             config_list: a list of config dicts to override the base_config.
                 They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method. E.g.,
 
         ```python
-        config_list=[
+        config_list = [
             {
                 "model": "gpt-4",
                 "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
@@ -508,7 +501,7 @@ class OpenAIWrapper:
             {
                 "model": "llama-7B",
                 "base_url": "http://127.0.0.1:8080",
-            }
+            },
         ]
         ```
 
@@ -516,7 +509,6 @@ class OpenAIWrapper:
                 and additional kwargs.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `base_config` or in each config of `config_list`.
         """
-
         if logging_enabled():
             log_new_wrapper(self, locals())
         openai_config, extra_kwargs = self._separate_openai_config(base_config)
@@ -772,6 +764,7 @@ class OpenAIWrapper:
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
             - api_version (str | None): The api version. Default to None. E.g., "2024-02-01".
+
         Raises:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
@@ -1061,8 +1054,7 @@ class OpenAIWrapper:
         # future proofing for when tool calls other than function calls are supported
         if tool_calls_chunk.type and tool_calls_chunk.type != "function":
             raise NotImplementedError(
-                f"Tool call type {tool_calls_chunk.type} is currently not supported. "
-                "Only function calls are supported."
+                f"Tool call type {tool_calls_chunk.type} is currently not supported. Only function calls are supported."
             )
 
         # Handle tool call
@@ -1133,10 +1125,11 @@ class OpenAIWrapper:
             elif "total" in mode:
                 mode = "total"
 
-        usage_summary = UsageSummary(
-            actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+        iostream.send(
+            UsageSummaryMessage(
+                actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
+            )
         )
-        usage_summary.print(iostream.print)
 
     def clear_usage_summary(self) -> None:
         """Clear the usage summary."""

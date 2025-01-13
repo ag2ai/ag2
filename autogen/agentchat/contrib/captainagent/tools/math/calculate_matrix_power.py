@@ -6,8 +6,7 @@ from autogen.coding.func_with_reqs import with_requirements
 
 @with_requirements(["sympy"])
 def calculate_matrix_power(matrix, power):
-    """
-    Calculate the power of a given matrix.
+    """Calculate the power of a given matrix.
 
     Args:
         matrix (list): An array of numbers that represents the matrix.

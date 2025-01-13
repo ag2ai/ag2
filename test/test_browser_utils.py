@@ -10,11 +10,10 @@ import hashlib
 import math
 import os
 import re
+from tempfile import TemporaryDirectory
 
 import pytest
 import requests
-
-from .agentchat.test_assistant_agent import KEY_LOC  # noqa: E402
 
 BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
@@ -49,26 +48,26 @@ else:
     skip_bing = False
 
 
-def _rm_folder(path):
-    """Remove all the regular files in a folder, then deletes the folder. Assumes a flat file structure, with no subdirectories."""
-    for fname in os.listdir(path):
-        fpath = os.path.join(path, fname)
-        if os.path.isfile(fpath):
-            os.unlink(fpath)
-    os.rmdir(path)
+# def _rm_folder(path):
+#     """Remove all the regular files in a folder, then deletes the folder. Assumes a flat file structure, with no subdirectories."""
+#     for fname in os.listdir(path):
+#         fpath = os.path.join(path, fname)
+#         if os.path.isfile(fpath):
+#             os.unlink(fpath)
+#     os.rmdir(path)
+
+
+@pytest.fixture
+def downloads_folder():
+    with TemporaryDirectory() as downloads_folder:
+        yield downloads_folder
 
 
 @pytest.mark.skipif(
     skip_all,
     reason="do not run if dependency is not installed",
 )
-def test_simple_text_browser():
-    # Create a downloads folder (removing any leftover ones from prior tests)
-    downloads_folder = os.path.join(KEY_LOC, "downloads")
-    if os.path.isdir(downloads_folder):
-        _rm_folder(downloads_folder)
-    os.mkdir(downloads_folder)
-
+def test_simple_text_browser(downloads_folder: str):
     # Instantiate the browser
     user_agent = "python-requests/" + requests.__version__
     viewport_size = 1024
@@ -151,9 +150,6 @@ def test_simple_text_browser():
     viewport = browser.visit_page(PDF_URL)
     assert PDF_STRING in viewport
 
-    # Clean up
-    _rm_folder(downloads_folder)
-
 
 @pytest.mark.skipif(
     skip_all or skip_bing,
@@ -171,7 +167,7 @@ def test_bing_search():
     )
 
     assert BING_STRING in browser.visit_page("bing: " + BING_QUERY)
-    assert BING_TITLE == browser.page_title
+    assert browser.page_title == BING_TITLE
     assert len(browser.viewport_pages) == 1
     assert browser.viewport_pages[0] == (0, len(browser.page_content))
 

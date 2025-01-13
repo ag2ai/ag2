@@ -43,7 +43,6 @@ skip_reason = "Cerebras dependency is not installed"
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_initialization():
-
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
         CerebrasClient()  # Should raise an AssertionError due to missing api_key
@@ -181,9 +180,9 @@ def test_create_response(mock_chat, cerebras_client):
     response = cerebras_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Cerebras response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Cerebras response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_cerebras_response_id", "Response ID should match the mocked response ID"
     assert response.model == "llama-3.3-70b", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
