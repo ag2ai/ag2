@@ -4,4 +4,4 @@
 
 #!/usr/bin/env bash
 
-pytest test --ignore=test/agentchat/contrib --skip-openai --durations=10 --durations-min=1.0
+pytest test -m "not openai" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
