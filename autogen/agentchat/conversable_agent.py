@@ -55,7 +55,7 @@ from ..messages.agent_messages import (
 )
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import Tool, load_basemodels_if_needed, serialize_to_str
+from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -2602,13 +2602,14 @@ class ConversableAgent(LLMAgent):
         """Return the function map."""
         return self._function_map
 
-    def _wrap_function(self, func: F) -> F:
-        """Wrap the function to dump the return value to json.
+    def _wrap_function(self, func: F, inject_params: dict[str, Any] = {}) -> F:
+        """Wrap the function inject chat context parameters and to dump the return value to json.
 
         Handles both sync and async functions.
 
         Args:
             func: the function to be wrapped.
+            inject_params: the chat context parameters which will be passed to the function.
 
         Returns:
             The wrapped function.
@@ -2617,7 +2618,7 @@ class ConversableAgent(LLMAgent):
         @load_basemodels_if_needed
         @functools.wraps(func)
         def _wrapped_func(*args, **kwargs):
-            retval = func(*args, **kwargs)
+            retval = func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
             return serialize_to_str(retval)
@@ -2625,7 +2626,7 @@ class ConversableAgent(LLMAgent):
         @load_basemodels_if_needed
         @functools.wraps(func)
         async def _a_wrapped_func(*args, **kwargs):
-            retval = await func(*args, **kwargs)
+            retval = await func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
             return serialize_to_str(retval)
@@ -2758,8 +2759,10 @@ class ConversableAgent(LLMAgent):
             nonlocal name
 
             tool = Tool(func_or_tool=func_or_tool, name=name)
+            chat_context = ChatContext(self)
+            chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
 
-            self.register_function({tool.name: self._wrap_function(tool.func)})
+            self.register_function({tool.name: self._wrap_function(tool.func, chat_context_params)})
 
             return tool
 
