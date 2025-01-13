@@ -137,7 +137,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             show_progress=True,
         )
 
-    def add_records(self, new_records: list) -> bool:
+    def add_records(self, new_records: list[Document]) -> bool:
         """
         Add new records to the knowledge graph. Must be local files.
 
@@ -152,9 +152,8 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
         try:
             """
-            SimpleDirectoryReader will select the best file reader based on the file extensions, including:
-            [DocxReader, EpubReader, HWPReader, ImageReader, IPYNBReader, MarkdownReader, MboxReader,
-            PandasCSVReader, PandasExcelReader,PDFReader,PptxReader, VideoAudioReader]
+            SimpleDirectoryReader will select the best file reader based on the file extensions,
+            see  _load_doc for supported file types.
             """
             new_documents = SimpleDirectoryReader(input_files=[doc.path_or_url for doc in new_records]).load_data()
 

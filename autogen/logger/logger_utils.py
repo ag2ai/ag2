@@ -13,6 +13,11 @@ __all__ = ("get_current_ts", "to_dict")
 
 
 def get_current_ts() -> str:
+    """Get current timestamp in UTC timezone.
+
+    Returns:
+        str: Current timestamp in UTC timezone
+    """
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
@@ -21,6 +26,13 @@ def to_dict(
     exclude: tuple[str, ...] = (),
     no_recursive: tuple[Any, ...] = (),
 ) -> Any:
+    """Convert object to dictionary.
+
+    Args:
+        obj (Union[int, float, str, bool, dict[Any, Any], list[Any], tuple[Any, ...], Any]): Object to convert
+        exclude (tuple[str, ...], optional): Keys to exclude. Defaults to ().
+        no_recursive (tuple[Any, ...], optional): Types to exclude from recursive conversion. Defaults to ().
+    """
     if isinstance(obj, (int, float, str, bool)):
         return obj
     elif isinstance(obj, (Path, PurePath)):
