@@ -104,8 +104,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         retrieve_config: Optional[dict] = None,  # config for the retrieve agent
         **kwargs,
     ):
-        r"""
-        Args:
+        r"""Args:
             name (str): name of the agent.
 
             human_input_mode (str): whether to ask for human inputs every time a message is received.
@@ -223,7 +222,6 @@ class RetrieveUserProxyAgent(UserProxyAgent):
             `**kwargs` (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
 
         Example:
-
         Example of overriding retrieve_docs - If you have set up a customized vector db, and it's
         not compatible with chromadb, you can easily plug in it with below code.
         *[Deprecated]* use `vector_db` instead. You can extend VectorDB and pass it to the agent.
@@ -655,8 +653,8 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
     @staticmethod
     def message_generator(sender, recipient, context):
-        """
-        Generate an initial message with the given context for the RetrieveUserProxyAgent.
+        """Generate an initial message with the given context for the RetrieveUserProxyAgent.
+
         Args:
             sender (Agent): the sender agent. It should be the instance of RetrieveUserProxyAgent.
             recipient (Agent): the recipient agent. Usually it's the assistant agent.
@@ -664,6 +662,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 - `problem` (str) - the problem to be solved.
                 - `n_results` (int) - the number of results to be retrieved. Default is 20.
                 - `search_string` (str) - only docs that contain an exact match of this string will be retrieved. Default is "".
+
         Returns:
             str: the generated message ready to be sent to the recipient agent.
         """

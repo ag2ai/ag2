@@ -4,8 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-"""
-Create an OpenAI-compatible client for the Anthropic API.
+"""Create an OpenAI-compatible client for the Anthropic API.
 
 Example usage:
 Install the `anthropic` package by running `pip install --upgrade anthropic`.
@@ -107,8 +106,8 @@ ANTHROPIC_PRICING_1k = {
 
 class AnthropicClient:
     def __init__(self, **kwargs: Any):
-        """
-        Initialize the Anthropic API client.
+        """Initialize the Anthropic API client.
+
         Args:
             api_key (str): The API key for the Anthropic API or set the `ANTHROPIC_API_KEY` environment variable.
         """
@@ -316,8 +315,7 @@ class AnthropicClient:
         return response_oai
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -355,7 +353,6 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
     """Convert messages from OAI format to Anthropic format.
     We correct for any specific role orders and types, etc.
     """
-
     # Track whether we have tools passed in. If not,  tool use / result messages should be converted to text messages.
     # Anthropic requires a tools parameter with the tools listed, if there are other messages with tool use or tool results.
     # This can occur when we don't need tool calling, such as for group chat speaker selection.

@@ -142,8 +142,7 @@ def collection_name():
 
 
 def test_create_collection(db, collection_name):
-    """
-    def create_collection(collection_name: str,
+    """Def create_collection(collection_name: str,
                         overwrite: bool = False) -> Collection
     Create a collection in the vector database.
     - Case 1. if the collection does not exist, create the collection.

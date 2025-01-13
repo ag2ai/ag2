@@ -127,8 +127,7 @@ def create_nav_structure(paths: list[str], parent_groups: list[str] = None) -> l
 
 
 def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
-    """
-    Update the 'API Reference' section in mint.json navigation with new pages.
+    """Update the 'API Reference' section in mint.json navigation with new pages.
 
     Args:
         mint_json_path: Path to mint.json file

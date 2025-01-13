@@ -46,7 +46,6 @@ def create_teachable_agent(reset_db=False):
 
 def interact_freely_with_user():
     """Starts a free-form chat between the user and a teachable agent."""
-
     # Create the agents.
     print(colored("\nLoading previous memory (if any) from disk.", "light_cyan"))
     teachable_agent = create_teachable_agent(reset_db=False)

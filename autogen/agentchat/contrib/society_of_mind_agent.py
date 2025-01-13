@@ -91,7 +91,6 @@ class SocietyOfMindAgent(ConversableAgent):
             prompt (str): The prompt used to extract the final response from the transcript.
             messages (list): The messages generated as part of the inner monologue group chat.
         """
-
         _messages = [
             {
                 "role": "system",

@@ -208,6 +208,7 @@ def get_missing_annotations(typed_signature: inspect.Signature, required: list[s
     """Get the missing annotations of a function
 
     Ignores the parameters with default values as they are not required to be annotated, but logs a warning.
+
     Args:
         typed_signature: The signature of the function with type annotations
         required: The required parameters of the function
@@ -236,7 +237,6 @@ def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, de
         TypeError: If the function is not annotated
 
     Examples:
-
     ```python
     def f(a: Annotated[str, "Parameter a"], b: int = 2, c: Annotated[float, "Parameter c"] = 0.1) -> None:
         pass

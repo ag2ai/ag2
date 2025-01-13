@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 """Create a OpenAI-compatible client for Gemini features.
 
-
 Example:
     ```python
     llm_config = {
@@ -153,8 +152,7 @@ class GeminiClient:
             warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -521,7 +519,6 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
-
         functions = []
         for tool in tools:
             if self.use_vertexai:
@@ -605,7 +602,6 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
-
         function_parameter["type_"] = function_parameter["type"].upper()
 
         # Parameter properties and items

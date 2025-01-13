@@ -38,8 +38,7 @@ class InMemoryCache(AbstractCache):
         pass
 
     def __enter__(self) -> Self:
-        """
-        Enter the runtime context related to the object.
+        """Enter the runtime context related to the object.
 
         Returns:
             self: The instance itself.
@@ -49,8 +48,7 @@ class InMemoryCache(AbstractCache):
     def __exit__(
         self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
-        """
-        Exit the runtime context related to the object.
+        """Exit the runtime context related to the object.
 
         Args:
             exc_type: The exception type if an exception was raised in the context.

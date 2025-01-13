@@ -90,7 +90,7 @@ def content_str(content: Union[str, list[Union[UserMessageTextContentPart, UserM
 
 
 def infer_lang(code: str) -> str:
-    """infer the language for the code.
+    """Infer the language for the code.
     TODO: make it robust.
     """
     if code.startswith("python ") or code.startswith("pip") or code.startswith("python3 "):
@@ -739,7 +739,8 @@ def create_virtual_env(dir_path: str, **env_args) -> SimpleNamespace:
         **env_args: Any extra args to pass to the `EnvBuilder`
 
     Returns:
-        SimpleNamespace: the virtual env context object."""
+        SimpleNamespace: the virtual env context object.
+    """
     if not env_args:
         env_args = {"with_pip": True}
     env_builder = venv.EnvBuilder(**env_args)

@@ -44,7 +44,6 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str,
           - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference".
 
     Example:
-
     ```python
     {
         "usage_including_cached_inference": {
@@ -69,7 +68,6 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str,
     ```
 
     Note:
-
     If none of the agents incurred any cost (not having a client), then the usage_including_cached_inference and usage_excluding_cached_inference will be `{'total_cost': 0}`.
     """
 

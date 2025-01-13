@@ -13,8 +13,7 @@ __all__ = ["LangChainInteroperability"]
 
 @register_interoperable_class("langchain")
 class LangChainInteroperability:
-    """
-    A class implementing the `Interoperable` protocol for converting Langchain tools
+    """A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.
 
     This class takes a `LangchainTool` and converts it into a standard `Tool` object,
@@ -24,8 +23,7 @@ class LangChainInteroperability:
 
     @classmethod
     def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
-        """
-        Converts a given Langchain tool into a general `Tool` format.
+        """Converts a given Langchain tool into a general `Tool` format.
 
         This method verifies that the provided tool is a valid `LangchainTool`,
         processes the tool's input and description, and returns a standardized

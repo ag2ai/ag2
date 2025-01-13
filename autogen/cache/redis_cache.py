@@ -20,8 +20,7 @@ else:
 
 
 class RedisCache(AbstractCache):
-    """
-    Implementation of AbstractCache using the Redis database.
+    """Implementation of AbstractCache using the Redis database.
 
     This class provides a concrete implementation of the AbstractCache
     interface using the Redis database for caching data.
@@ -41,8 +40,7 @@ class RedisCache(AbstractCache):
     """
 
     def __init__(self, seed: Union[str, int], redis_url: str):
-        """
-        Initialize the RedisCache instance.
+        """Initialize the RedisCache instance.
 
         Args:
             seed (Union[str, int]): A seed or namespace for the cache. This is used as a prefix for all cache keys.
@@ -53,8 +51,7 @@ class RedisCache(AbstractCache):
         self.cache = redis.Redis.from_url(redis_url)
 
     def _prefixed_key(self, key: str) -> str:
-        """
-        Get a namespaced key for the cache.
+        """Get a namespaced key for the cache.
 
         Args:
             key (str): The original key.
@@ -65,8 +62,7 @@ class RedisCache(AbstractCache):
         return f"autogen:{self.seed}:{key}"
 
     def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
-        """
-        Retrieve an item from the Redis cache.
+        """Retrieve an item from the Redis cache.
 
         Args:
             key (str): The key identifying the item in the cache.
@@ -82,8 +78,7 @@ class RedisCache(AbstractCache):
         return pickle.loads(result)
 
     def set(self, key: str, value: Any) -> None:
-        """
-        Set an item in the Redis cache.
+        """Set an item in the Redis cache.
 
         Args:
             key (str): The key under which the item is to be stored.
@@ -96,16 +91,14 @@ class RedisCache(AbstractCache):
         self.cache.set(self._prefixed_key(key), serialized_value)
 
     def close(self) -> None:
-        """
-        Close the Redis client.
+        """Close the Redis client.
 
         Perform any necessary cleanup, such as closing network connections.
         """
         self.cache.close()
 
     def __enter__(self) -> Self:
-        """
-        Enter the runtime context related to the object.
+        """Enter the runtime context related to the object.
 
         Returns:
             self: The instance itself.
@@ -115,8 +108,7 @@ class RedisCache(AbstractCache):
     def __exit__(
         self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
-        """
-        Exit the runtime context related to the object.
+        """Exit the runtime context related to the object.
 
         Perform cleanup actions such as closing the Redis client.
 

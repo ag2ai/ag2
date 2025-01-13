@@ -26,16 +26,15 @@ class TextAnalyzerAgent(ConversableAgent):
         llm_config: Optional[Union[dict, bool]] = None,
         **kwargs,
     ):
-        """
-        Args:
-            name (str): name of the agent.
-            system_message (str): system message for the ChatCompletion inference.
-            human_input_mode (str): This agent should NEVER prompt the human for input.
-            llm_config (dict or False): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
-                for available options.
-                To disable llm-based auto reply, set to False.
-            **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).
+        """Args:
+        name (str): name of the agent.
+        system_message (str): system message for the ChatCompletion inference.
+        human_input_mode (str): This agent should NEVER prompt the human for input.
+        llm_config (dict or False): llm inference configuration.
+            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            for available options.
+            To disable llm-based auto reply, set to False.
+        **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).
         """
         super().__init__(
             name=name,
@@ -54,7 +53,8 @@ class TextAnalyzerAgent(ConversableAgent):
     ) -> tuple[bool, Union[str, dict, None]]:
         """Analyzes the given text as instructed, and returns the analysis as a message.
         Assumes exactly two messages containing the text to analyze and the analysis instructions.
-        See Teachability.analyze for an example of how to use this method."""
+        See Teachability.analyze for an example of how to use this method.
+        """
         if self.llm_config is False:
             raise ValueError("TextAnalyzerAgent requires self.llm_config to be set in its base class.")
         if messages is None:

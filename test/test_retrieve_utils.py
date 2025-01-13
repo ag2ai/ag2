@@ -6,9 +6,7 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-"""
-Unit test for retrieve_utils.py
-"""
+"""Unit test for retrieve_utils.py"""
 
 import pytest
 

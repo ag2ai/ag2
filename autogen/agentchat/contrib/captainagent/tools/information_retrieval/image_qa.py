@@ -10,8 +10,7 @@ from autogen.coding.func_with_reqs import with_requirements
 
 @with_requirements(["transformers", "torch"], ["transformers", "torch", "PIL", "os"])
 def image_qa(image, question, ckpt="Salesforce/blip-vqa-base"):
-    """
-    Perform question answering on an image using a pre-trained VQA model.
+    """Perform question answering on an image using a pre-trained VQA model.
 
     Args:
         image (Union[str, Image.Image]): The image to perform question answering on. It can be either file path to the image or a PIL Image object.

@@ -190,8 +190,8 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
             code_blocks (List[CodeBlock]): The code blocks to execute.
 
         Returns:
-            CommandlineCodeResult: The result of the code execution."""
-
+            CommandlineCodeResult: The result of the code execution.
+        """
         if len(code_blocks) == 0:
             raise ValueError("No code blocks to execute.")
 

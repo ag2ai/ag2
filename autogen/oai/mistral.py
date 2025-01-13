@@ -59,7 +59,6 @@ class MistralAIClient:
         Args:
             api_key (str): The API key for using Mistral.AI (or environment variable MISTRAL_API_KEY needs to be set)
         """
-
         # Ensure we have the api_key upon instantiation
         self.api_key = kwargs.get("api_key", None)
         if not self.api_key:
@@ -76,7 +75,6 @@ class MistralAIClient:
 
     def message_retrieval(self, response: ChatCompletion) -> Union[list[str], list[ChatCompletionMessage]]:
         """Retrieve the messages from the response."""
-
         return [choice.message for choice in response.choices]
 
     def cost(self, response) -> float:
@@ -236,7 +234,6 @@ class MistralAIClient:
 
 def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Converts AutoGen tool definition to a mistral tool format"""
-
     mistral_tools = []
 
     for autogen_tool in tool_definitions:
@@ -256,7 +253,6 @@ def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str
 
 def calculate_mistral_cost(input_tokens: int, output_tokens: int, model_name: str) -> float:
     """Calculate the cost of the mistral response."""
-
     # Prices per 1 thousand tokens
     # https://mistral.ai/technology/
     model_cost_map = {

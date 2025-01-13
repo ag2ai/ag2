@@ -71,7 +71,6 @@ class JupyterClient:
         Returns:
             str: ID of the started kernel
         """
-
         response = self._session.post(
             f"{self._get_api_base_url()}/api/kernels",
             headers=self._get_headers(),

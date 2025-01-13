@@ -19,8 +19,7 @@ else:
 
 
 class DiskCache(AbstractCache):
-    """
-    Implementation of AbstractCache using the DiskCache library.
+    """Implementation of AbstractCache using the DiskCache library.
 
     This class provides a concrete implementation of the AbstractCache
     interface using the diskcache library for caching data on disk.
@@ -38,8 +37,7 @@ class DiskCache(AbstractCache):
     """
 
     def __init__(self, seed: Union[str, int]):
-        """
-        Initialize the DiskCache instance.
+        """Initialize the DiskCache instance.
 
         Args:
             seed (Union[str, int]): A seed or namespace for the cache. This is used to create
@@ -49,8 +47,7 @@ class DiskCache(AbstractCache):
         self.cache = diskcache.Cache(seed)
 
     def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
-        """
-        Retrieve an item from the cache.
+        """Retrieve an item from the cache.
 
         Args:
             key (str): The key identifying the item in the cache.
@@ -63,8 +60,7 @@ class DiskCache(AbstractCache):
         return self.cache.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
-        """
-        Set an item in the cache.
+        """Set an item in the cache.
 
         Args:
             key (str): The key under which the item is to be stored.
@@ -73,8 +69,7 @@ class DiskCache(AbstractCache):
         self.cache.set(key, value)
 
     def close(self) -> None:
-        """
-        Close the cache.
+        """Close the cache.
 
         Perform any necessary cleanup, such as closing file handles or
         releasing resources.
@@ -82,8 +77,7 @@ class DiskCache(AbstractCache):
         self.cache.close()
 
     def __enter__(self) -> Self:
-        """
-        Enter the runtime context related to the object.
+        """Enter the runtime context related to the object.
 
         Returns:
             self: The instance itself.
@@ -96,8 +90,7 @@ class DiskCache(AbstractCache):
         exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> None:
-        """
-        Exit the runtime context related to the object.
+        """Exit the runtime context related to the object.
 
         Perform cleanup actions such as closing the cache.
 

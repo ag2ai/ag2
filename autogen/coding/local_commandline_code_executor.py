@@ -112,7 +112,6 @@ $functions"""
             functions_module (str): The module name under which functions are accessible.
             execution_policies (Optional[Dict[str, bool]]): A dictionary mapping languages to execution policies (True for execution, False for saving only). Defaults to class-wide DEFAULT_EXECUTION_POLICY.
         """
-
         if timeout < 1:
             raise ValueError("Timeout must be greater than or equal to 1.")
 
@@ -189,8 +188,7 @@ $functions"""
 
     @staticmethod
     def sanitize_command(lang: str, code: str) -> None:
-        """
-        Sanitize the code block to prevent dangerous commands.
+        """Sanitize the code block to prevent dangerous commands.
         This approach acknowledges that while Docker or similar
         containerization/sandboxing technologies provide a robust layer of security,
         not all users may have Docker installed or may choose not to use it.
@@ -251,7 +249,8 @@ $functions"""
             code_blocks (List[CodeBlock]): The code blocks to execute.
 
         Returns:
-            CommandLineCodeResult: The result of the code execution."""
+            CommandLineCodeResult: The result of the code execution.
+        """
         if not self._setup_functions_complete:
             self._setup_functions()
         return self._execute_code_dont_check_setup(code_blocks)

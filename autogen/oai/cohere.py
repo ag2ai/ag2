@@ -85,8 +85,7 @@ class CohereClient:
             warnings.warn("response_format is not supported for Cohere, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -295,7 +294,6 @@ def oai_messages_to_cohere_messages(
         str:                    Preamble (system message)
         str:                    Message (the final user message)
     """
-
     cohere_messages = []
     preamble = ""
 

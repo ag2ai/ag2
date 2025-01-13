@@ -30,8 +30,7 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
     reason=reason,
 )
 def test_falkor_db_query_engine():
-    """
-    Test FalkorDB Query Engine.
+    """Test FalkorDB Query Engine.
     1. create a test FalkorDB Query Engine with a schema.
     2. Initialize it with an input txt file.
     3. Query it with a question and verify the result contains the critical information.

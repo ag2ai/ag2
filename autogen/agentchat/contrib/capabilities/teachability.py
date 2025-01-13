@@ -19,8 +19,7 @@ from ....formatting_utils import colored
 
 
 class Teachability(AgentCapability):
-    """
-    Teachability uses a vector database to give an agent the ability to remember user teachings,
+    """Teachability uses a vector database to give an agent the ability to remember user teachings,
     where the user is any caller (human or not) sending messages to the teachable agent.
     Teachability is designed to be composable with other agent capabilities.
     To make any conversable agent teachable, instantiate both the agent and the Teachability class,
@@ -44,15 +43,14 @@ class Teachability(AgentCapability):
         max_num_retrievals: Optional[int] = 10,
         llm_config: Optional[Union[dict, bool]] = None,
     ):
-        """
-        Args:
-            verbosity (Optional, int): # 0 (default) for basic info, 1 to add memory operations, 2 for analyzer messages, 3 for memo lists.
-            reset_db (Optional, bool): True to clear the DB before starting. Default False.
-            path_to_db_dir (Optional, str): path to the directory where this particular agent's DB is stored. Default "./tmp/teachable_agent_db"
-            recall_threshold (Optional, float): The maximum distance for retrieved memos, where 0.0 is exact match. Default 1.5. Larger values allow more (but less relevant) memos to be recalled.
-            max_num_retrievals (Optional, int): The maximum number of memos to retrieve from the DB. Default 10.
-            llm_config (dict or False): llm inference configuration passed to TextAnalyzerAgent.
-                If None, TextAnalyzerAgent uses llm_config from the teachable agent.
+        """Args:
+        verbosity (Optional, int): # 0 (default) for basic info, 1 to add memory operations, 2 for analyzer messages, 3 for memo lists.
+        reset_db (Optional, bool): True to clear the DB before starting. Default False.
+        path_to_db_dir (Optional, str): path to the directory where this particular agent's DB is stored. Default "./tmp/teachable_agent_db"
+        recall_threshold (Optional, float): The maximum distance for retrieved memos, where 0.0 is exact match. Default 1.5. Larger values allow more (but less relevant) memos to be recalled.
+        max_num_retrievals (Optional, int): The maximum number of memos to retrieve from the DB. Default 10.
+        llm_config (dict or False): llm inference configuration passed to TextAnalyzerAgent.
+            If None, TextAnalyzerAgent uses llm_config from the teachable agent.
         """
         self.verbosity = verbosity
         self.path_to_db_dir = path_to_db_dir
@@ -93,11 +91,9 @@ class Teachability(AgentCapability):
         self.memo_store.prepopulate()
 
     def process_last_received_message(self, text: Union[dict, str]):
-        """
-        Appends any relevant memos to the message text, and stores any apparent teachings in new memos.
+        """Appends any relevant memos to the message text, and stores any apparent teachings in new memos.
         Uses TextAnalyzerAgent to make decisions about memo storage and retrieval.
         """
-
         # Try to retrieve relevant memos from the DB.
         expanded_text = text
         if self.memo_store.last_memo_id > 0:
@@ -169,7 +165,6 @@ class Teachability(AgentCapability):
 
     def _consider_memo_retrieval(self, comment: Union[dict, str]):
         """Decides whether to retrieve memos from the DB, and add them to the chat context."""
-
         # First, use the comment directly as the lookup key.
         if self.verbosity >= 1:
             print(colored("\nLOOK FOR RELEVANT MEMOS, AS QUESTION-ANSWER PAIRS", "light_yellow"))
@@ -244,8 +239,7 @@ class Teachability(AgentCapability):
 
 
 class MemoStore:
-    """
-    Provides memory storage and retrieval for a teachable agent, using a vector database.
+    """Provides memory storage and retrieval for a teachable agent, using a vector database.
     Each DB entry (called a memo) is a pair of strings: an input text and an output text.
     The input text might be a question, or a task to perform.
     The output text might be an answer to the question, or advice on how to perform the task.
@@ -258,11 +252,10 @@ class MemoStore:
         reset: Optional[bool] = False,
         path_to_db_dir: Optional[str] = "./tmp/teachable_agent_db",
     ):
-        """
-        Args:
-            - verbosity (Optional, int): 1 to print memory operations, 0 to omit them. 3+ to print memo lists.
-            - reset (Optional, bool): True to clear the DB before starting. Default False.
-            - path_to_db_dir (Optional, str): path to the directory where the DB is stored.
+        """Args:
+        - verbosity (Optional, int): 1 to print memory operations, 0 to omit them. 3+ to print memo lists.
+        - reset (Optional, bool): True to clear the DB before starting. Default False.
+        - path_to_db_dir (Optional, str): path to the directory where the DB is stored.
         """
         self.verbosity = verbosity
         self.path_to_db_dir = path_to_db_dir

@@ -8,8 +8,7 @@ from autogen.coding.func_with_reqs import with_requirements
 
 @with_requirements(["arxiv"], ["arxiv"])
 def arxiv_search(query, max_results=10, sortby="relevance"):
-    """
-    Search for articles on arXiv based on the given query.
+    """Search for articles on arXiv based on the given query.
 
     Args:
         query (str): The search query.

@@ -65,8 +65,7 @@ class TogetherClient:
         )
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -219,7 +218,6 @@ def oai_messages_to_together_messages(messages: list[dict[str, Any]]) -> list[di
     """Convert messages from OAI format to Together.AI format.
     We correct for any specific role orders and types.
     """
-
     together_messages = copy.deepcopy(messages)
 
     # If we have a message with role='tool', which occurs when a function is executed, change it to 'user'
@@ -306,7 +304,6 @@ mixture_costs = {56: 0.6, 176: 1.2, 480: 2.4}
 
 def calculate_together_cost(input_tokens: int, output_tokens: int, model_name: str) -> float:
     """Cost calculation for inference"""
-
     if model_name in chat_lang_code_model_sizes or model_name in mixture_model_sizes:
         cost_per_mil = 0
 

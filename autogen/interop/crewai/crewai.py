@@ -18,8 +18,7 @@ def _sanitize_name(s: str) -> str:
 
 @register_interoperable_class("crewai")
 class CrewAIInteroperability:
-    """
-    A class implementing the `Interoperable` protocol for converting CrewAI tools
+    """A class implementing the `Interoperable` protocol for converting CrewAI tools
     to a general `Tool` format.
 
     This class takes a `CrewAITool` and converts it into a standard `Tool` object.
@@ -27,8 +26,7 @@ class CrewAIInteroperability:
 
     @classmethod
     def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
-        """
-        Converts a given CrewAI tool into a general `Tool` format.
+        """Converts a given CrewAI tool into a general `Tool` format.
 
         This method ensures that the provided tool is a valid `CrewAITool`, sanitizes
         the tool's name, processes its description, and prepares a function to interact

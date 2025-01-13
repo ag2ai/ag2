@@ -556,8 +556,7 @@ async def a_initiate_swarm_chat(
 
 
 class SwarmResult(BaseModel):
-    """
-    Encapsulates the possible return values for a swarm agent function.
+    """Encapsulates the possible return values for a swarm agent function.
 
     Args:
         values (str): The result values as a string.
@@ -642,8 +641,7 @@ class SwarmAgent(ConversableAgent):
             self.register_hook("update_agent_state", self._update_conditional_functions)
 
     def register_update_agent_state_before_reply(self, functions: Optional[Union[list[Callable], Callable]]):
-        """
-        Register functions that will be called when the agent is selected and before it speaks.
+        """Register functions that will be called when the agent is selected and before it speaks.
         You can add your own validation or precondition functions here.
 
         Args:
@@ -797,8 +795,8 @@ class SwarmAgent(ConversableAgent):
         This function:
         1. Adds context_variables back to the tool call for the function, if necessary.
         2. Generates the tool calls reply.
-        3. Updates context_variables and next_agent based on the tool call response."""
-
+        3. Updates context_variables and next_agent based on the tool call response.
+        """
         if config is None:
             config = self
         if messages is None:

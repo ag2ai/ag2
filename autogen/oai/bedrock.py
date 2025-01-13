@@ -4,8 +4,7 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-"""
-Create a compatible client for the Amazon Bedrock Converse API.
+"""Create a compatible client for the Amazon Bedrock Converse API.
 
 Example usage:
 Install the `boto3` package by running `pip install --upgrade boto3`.
@@ -55,9 +54,7 @@ class BedrockClient:
     _retries = 5
 
     def __init__(self, **kwargs: Any):
-        """
-        Initialises BedrockClient for Amazon's Bedrock Converse API
-        """
+        """Initialises BedrockClient for Amazon's Bedrock Converse API"""
         self._aws_access_key = kwargs.get("aws_access_key", None)
         self._aws_secret_key = kwargs.get("aws_secret_key", None)
         self._aws_session_token = kwargs.get("aws_session_token", None)
@@ -119,20 +116,15 @@ class BedrockClient:
         return [choice.message for choice in response.choices]
 
     def parse_custom_params(self, params: dict[str, Any]):
-        """
-        Parses custom parameters for logic in this client class
-        """
-
+        """Parses custom parameters for logic in this client class"""
         # Should we separate system messages into its own request parameter, default is True
         # This is required because not all models support a system prompt (e.g. Mistral Instruct).
         self._supports_system_prompts = params.get("supports_system_prompts", True)
 
     def parse_params(self, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-        """
-        Loads the valid parameters required to invoke Bedrock Converse
+        """Loads the valid parameters required to invoke Bedrock Converse
         Returns a tuple of (base_params, additional_params)
         """
-
         base_params = {}
         additional_params = {}
 
@@ -291,7 +283,6 @@ def extract_system_messages(messages: list[dict]) -> list:
     Returns:
         List[SystemMessage]: List of System messages.
     """
-
     """
     system_messages = [message.get("content")[0]["text"] for message in messages if message.get("role") == "system"]
     return system_messages # ''.join(system_messages)
@@ -309,14 +300,12 @@ def extract_system_messages(messages: list[dict]) -> list:
 def oai_messages_to_bedrock_messages(
     messages: list[dict[str, Any]], has_tools: bool, supports_system_prompts: bool
 ) -> list[dict]:
-    """
-    Convert messages from OAI format to Bedrock format.
+    """Convert messages from OAI format to Bedrock format.
     We correct for any specific role orders and types, etc.
     AWS Bedrock requires messages to alternate between user and assistant roles. This function ensures that the messages
     are in the correct order and format for Bedrock by inserting "Please continue" messages as needed.
     This is the same method as the one in the Autogen Anthropic client
     """
-
     # Track whether we have tools passed in. If not,  tool use / result messages should be converted to text messages.
     # Bedrock requires a tools parameter with the tools listed, if there are other messages with tool use or tool results.
     # This can occur when we don't need tool calling, such as for group chat speaker selection
@@ -572,8 +561,7 @@ def format_tool_calls(content):
 def convert_stop_reason_to_finish_reason(
     stop_reason: str,
 ) -> Literal["stop", "length", "tool_calls", "content_filter"]:
-    """
-    Converts Bedrock finish reasons to our finish reasons, according to OpenAI:
+    """Converts Bedrock finish reasons to our finish reasons, according to OpenAI:
 
     - stop: if the model hit a natural stop point or a provided stop sequence,
     - length: if the maximum number of tokens specified in the request was reached,
@@ -610,7 +598,6 @@ PRICES_PER_K_TOKENS = {
 
 def calculate_cost(input_tokens: int, output_tokens: int, model_id: str) -> float:
     """Calculate the cost of the completion using the Bedrock pricing."""
-
     if model_id in PRICES_PER_K_TOKENS:
         input_cost_per_k, output_cost_per_k = PRICES_PER_K_TOKENS[model_id]
         input_cost = (input_tokens / 1000) * input_cost_per_k

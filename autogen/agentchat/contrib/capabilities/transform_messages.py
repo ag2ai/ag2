@@ -47,10 +47,9 @@ class TransformMessages:
     """
 
     def __init__(self, *, transforms: list[MessageTransform] = [], verbose: bool = True):
-        """
-        Args:
-            transforms: A list of message transformations to apply.
-            verbose: Whether to print logs of each transformation or not.
+        """Args:
+        transforms: A list of message transformations to apply.
+        verbose: Whether to print logs of each transformation or not.
         """
         self._transforms = transforms
         self._verbose = verbose

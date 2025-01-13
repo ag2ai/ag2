@@ -11,9 +11,7 @@ from autogen.agentchat import Agent
 
 
 def has_self_loops(allowed_speaker_transitions: dict) -> bool:
-    """
-    Returns True if there are self loops in the allowed_speaker_transitions_Dict.
-    """
+    """Returns True if there are self loops in the allowed_speaker_transitions_Dict."""
     return any([key in value for key, value in allowed_speaker_transitions.items()])
 
 
@@ -21,8 +19,7 @@ def check_graph_validity(
     allowed_speaker_transitions_dict: dict,
     agents: list[Agent],
 ):
-    """
-    allowed_speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
+    """allowed_speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
     agents: A list of Agents
 
     Checks for the following:
@@ -31,12 +28,11 @@ def check_graph_validity(
         2. Every key exists in agents.
         3. Every value is a list of Agents (not string).
 
-        Warnings
+    Warnings:
         1. Warning if there are isolated agent nodes
         2. Warning if the set of agents in allowed_speaker_transitions do not match agents
         3. Warning if there are duplicated agents in any values of `allowed_speaker_transitions_dict`
     """
-
     ### Errors
 
     # Check 1. The dictionary must have a structure of keys and list as values
@@ -101,9 +97,7 @@ def check_graph_validity(
 
 
 def invert_disallowed_to_allowed(disallowed_speaker_transitions_dict: dict, agents: list[Agent]) -> dict:
-    """
-    Start with a fully connected allowed_speaker_transitions_dict of all agents. Remove edges from the fully connected allowed_speaker_transitions_dict according to the disallowed_speaker_transitions_dict to form the allowed_speaker_transitions_dict.
-    """
+    """Start with a fully connected allowed_speaker_transitions_dict of all agents. Remove edges from the fully connected allowed_speaker_transitions_dict according to the disallowed_speaker_transitions_dict to form the allowed_speaker_transitions_dict."""
     # Create a fully connected allowed_speaker_transitions_dict of all agents
     allowed_speaker_transitions_dict = {agent: [other_agent for other_agent in agents] for agent in agents}
 
@@ -119,9 +113,7 @@ def invert_disallowed_to_allowed(disallowed_speaker_transitions_dict: dict, agen
 def visualize_speaker_transitions_dict(
     speaker_transitions_dict: dict, agents: list[Agent], export_path: Optional[str] = None
 ):
-    """
-    Visualize the speaker_transitions_dict using networkx.
-    """
+    """Visualize the speaker_transitions_dict using networkx."""
     try:
         import matplotlib.pyplot as plt
         import networkx as nx

@@ -32,9 +32,7 @@ def with_id_rename(docs: Iterable) -> list[dict[str, Any]]:
 
 
 class MongoDBAtlasVectorDB(VectorDB):
-    """
-    A Collection object for MongoDB.
-    """
+    """A Collection object for MongoDB."""
 
     def __init__(
         self,
@@ -47,8 +45,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         wait_until_index_ready: float = None,
         wait_until_document_ready: float = None,
     ):
-        """
-        Initialize the vector database.
+        """Initialize the vector database.
 
         Args:
             connection_string: str | The MongoDB connection string to connect to. Default is ''.
@@ -137,8 +134,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         return len(self.embedding_function(_SAMPLE_SENTENCE)[0])
 
     def list_collections(self):
-        """
-        List the collections in the vector database.
+        """List the collections in the vector database.
 
         Returns:
             List[str] | The list of collections.
@@ -151,8 +147,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         overwrite: bool = False,
         get_or_create: bool = True,
     ) -> Collection:
-        """
-        Create a collection in the vector database and create a vector search index in the collection.
+        """Create a collection in the vector database and create a vector search index in the collection.
 
         Args:
             collection_name: str | The name of the collection.
@@ -178,8 +173,7 @@ class MongoDBAtlasVectorDB(VectorDB):
             raise ValueError(f"Collection {collection_name} already exists.")
 
     def create_index_if_not_exists(self, index_name: str = "vector_index", collection: Collection = None) -> None:
-        """
-        Creates a vector search index on the specified collection in MongoDB.
+        """Creates a vector search index on the specified collection in MongoDB.
 
         Args:
             MONGODB_INDEX (str, optional): The name of the vector search index to create. Defaults to "vector_search_index".
@@ -189,8 +183,7 @@ class MongoDBAtlasVectorDB(VectorDB):
             self.create_vector_search_index(collection, index_name)
 
     def get_collection(self, collection_name: str = None) -> Collection:
-        """
-        Get the collection from the vector database.
+        """Get the collection from the vector database.
 
         Args:
             collection_name: str | The name of the collection. Default is None. If None, return the
@@ -212,8 +205,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         return self.active_collection
 
     def delete_collection(self, collection_name: str) -> None:
-        """
-        Delete the collection from the vector database.
+        """Delete the collection from the vector database.
 
         Args:
             collection_name: str | The name of the collection.
@@ -386,7 +378,6 @@ class MongoDBAtlasVectorDB(VectorDB):
             collection_name: str | The name of the collection. Default is None.
             kwargs: Any | Use upsert=True` to insert documents whose ids are not present in collection.
         """
-
         n_docs = len(docs)
         logger.info(f"Preparing to embed and update {n_docs=}")
         # Compute the embeddings
@@ -415,8 +406,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         )
 
     def delete_docs(self, ids: list[ItemID], collection_name: str = None, **kwargs):
-        """
-        Delete documents from the collection of the vector database.
+        """Delete documents from the collection of the vector database.
 
         Args:
             ids: List[ItemID] | A list of document ids. Each id is a typed `ItemID`.
@@ -428,8 +418,7 @@ class MongoDBAtlasVectorDB(VectorDB):
     def get_docs_by_ids(
         self, ids: list[ItemID] = None, collection_name: str = None, include: list[str] = None, **kwargs
     ) -> list[Document]:
-        """
-        Retrieve documents from the collection of the vector database based on the ids.
+        """Retrieve documents from the collection of the vector database based on the ids.
 
         Args:
             ids: List[ItemID] | A list of document ids. If None, will return all the documents. Default is None.
@@ -464,8 +453,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         distance_threshold: float = -1,
         **kwargs,
     ) -> QueryResults:
-        """
-        Retrieve documents from the collection of the vector database based on the queries.
+        """Retrieve documents from the collection of the vector database based on the queries.
 
         Args:
             queries: List[str] | A list of queries. Each query is a string.
@@ -535,7 +523,6 @@ def _vector_search(
         List of tuples of length n_results from Collection.
         Each tuple contains a document dict and a score.
     """
-
     pipeline = [
         {
             "$vectorSearch": {

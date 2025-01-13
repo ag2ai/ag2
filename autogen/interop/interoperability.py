@@ -11,8 +11,7 @@ __all__ = ["Interoperable"]
 
 
 class Interoperability:
-    """
-    A class to handle interoperability between different tool types.
+    """A class to handle interoperability between different tool types.
 
     This class allows the conversion of tools to various interoperability classes and provides functionality
     for retrieving and registering interoperability classes.
@@ -22,8 +21,7 @@ class Interoperability:
 
     @classmethod
     def convert_tool(cls, *, tool: Any, type: str, **kwargs: Any) -> Tool:
-        """
-        Converts a given tool to an instance of a specified interoperability type.
+        """Converts a given tool to an instance of a specified interoperability type.
 
         Args:
             tool (Any): The tool object to be converted.
@@ -41,8 +39,7 @@ class Interoperability:
 
     @classmethod
     def get_interoperability_class(cls, type: str) -> type[Interoperable]:
-        """
-        Retrieves the interoperability class corresponding to the specified type.
+        """Retrieves the interoperability class corresponding to the specified type.
 
         Args:
             type (str): The type of the interoperability class to retrieve.
@@ -64,8 +61,7 @@ class Interoperability:
 
     @classmethod
     def get_supported_types(cls) -> list[str]:
-        """
-        Returns a sorted list of all supported interoperability types.
+        """Returns a sorted list of all supported interoperability types.
 
         Returns:
             List[str]: A sorted list of strings representing the supported interoperability types.

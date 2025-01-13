@@ -68,8 +68,7 @@ class GroqClient:
         self.base_url = kwargs.get("base_url", None)
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -256,7 +255,6 @@ def oai_messages_to_groq_messages(messages: list[dict[str, Any]]) -> list[dict[s
     """Convert messages from OAI format to Groq's format.
     We correct for any specific role orders and types.
     """
-
     groq_messages = copy.deepcopy(messages)
 
     # Remove the name field

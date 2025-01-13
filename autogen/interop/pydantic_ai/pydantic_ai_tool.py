@@ -11,8 +11,7 @@ __all__ = ["PydanticAITool"]
 
 
 class PydanticAITool(Tool):
-    """
-    A class representing a Pydantic AI Tool that extends the general Tool functionality
+    """A class representing a Pydantic AI Tool that extends the general Tool functionality
     with additional functionality specific to Pydantic AI tools.
 
     This class inherits from the Tool class and adds functionality for registering
@@ -27,8 +26,7 @@ class PydanticAITool(Tool):
     def __init__(
         self, name: str, description: str, func: Callable[..., Any], parameters_json_schema: dict[str, Any]
     ) -> None:
-        """
-        Initializes a PydanticAITool object with the provided name, description,
+        """Initializes a PydanticAITool object with the provided name, description,
         function, and parameter schema.
 
         Args:
@@ -49,8 +47,7 @@ class PydanticAITool(Tool):
         }
 
     def register_for_llm(self, agent: ConversableAgent) -> None:
-        """
-        Registers the tool with the ConversableAgent for use with a language model (LLM).
+        """Registers the tool with the ConversableAgent for use with a language model (LLM).
 
         This method updates the agent's tool signature to include the function schema,
         allowing the agent to invoke the tool correctly during interactions with the LLM.

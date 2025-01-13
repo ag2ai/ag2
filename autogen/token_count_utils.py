@@ -82,6 +82,7 @@ def token_left(input: Union[str, list, dict], model="gpt-3.5-turbo-0613") -> int
 
 def count_token(input: Union[str, list, dict], model: str = "gpt-3.5-turbo-0613") -> int:
     """Count number of tokens used by an OpenAI model.
+
     Args:
         input: (str, list, dict): Input to the model.
         model: (str): Model name.

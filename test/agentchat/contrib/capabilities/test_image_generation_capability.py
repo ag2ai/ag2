@@ -115,7 +115,6 @@ def test_dalle_image_generator_cache_key(
         gen_config_1: A tuple containing the resolution, quality, and prompt for the first image generator.
         gen_config_2: A tuple containing the resolution, quality, and prompt for the second image generator.
     """
-
     dalle_generator_1 = dalle_image_generator(dalle_config, resolution=gen_config_1[0], quality=gen_config_1[1])
     dalle_generator_2 = dalle_image_generator(dalle_config, resolution=gen_config_2[0], quality=gen_config_2[1])
 

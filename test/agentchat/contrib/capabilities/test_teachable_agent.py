@@ -30,7 +30,6 @@ filter_dict = {"tags": ["gpt-4o-mini"]}
 
 def create_teachable_agent(credentials: Credentials, reset_db=False, verbosity=0):
     """Instantiates a teachable agent using the settings from the top of this file."""
-
     # Start by instantiating any agent that inherits from ConversableAgent.
     teachable_agent = ConversableAgent(
         name="teachable_agent",

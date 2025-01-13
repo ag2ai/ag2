@@ -24,8 +24,7 @@ class CosmosDBConfig(TypedDict, total=False):
 
 
 class CosmosDBCache(AbstractCache):
-    """
-    Synchronous implementation of AbstractCache using Azure Cosmos DB NoSQL API.
+    """Synchronous implementation of AbstractCache using Azure Cosmos DB NoSQL API.
 
     This class provides a concrete implementation of the AbstractCache
     interface using Azure Cosmos DB for caching data, with synchronous operations.
@@ -37,8 +36,7 @@ class CosmosDBCache(AbstractCache):
     """
 
     def __init__(self, seed: Union[str, int], cosmosdb_config: CosmosDBConfig):
-        """
-        Initialize the CosmosDBCache instance.
+        """Initialize the CosmosDBCache instance.
 
         Args:
             seed (Union[str, int]): A seed or namespace for the cache, used as a partition key.
@@ -59,8 +57,7 @@ class CosmosDBCache(AbstractCache):
 
     @classmethod
     def create_cache(cls, seed: Union[str, int], cosmosdb_config: CosmosDBConfig):
-        """
-        Factory method to create a CosmosDBCache instance based on the provided configuration.
+        """Factory method to create a CosmosDBCache instance based on the provided configuration.
         This method decides whether to use an existing CosmosClient or create a new one.
         """
         if "client" in cosmosdb_config and isinstance(cosmosdb_config["client"], CosmosClient):
@@ -83,8 +80,7 @@ class CosmosDBCache(AbstractCache):
         return cls(str(seed), config)
 
     def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
-        """
-        Retrieve an item from the Cosmos DB cache.
+        """Retrieve an item from the Cosmos DB cache.
 
         Args:
             key (str): The key identifying the item in the cache.
@@ -104,8 +100,7 @@ class CosmosDBCache(AbstractCache):
             raise e
 
     def set(self, key: str, value: Any) -> None:
-        """
-        Set an item in the Cosmos DB cache.
+        """Set an item in the Cosmos DB cache.
 
         Args:
             key (str): The key under which the item is to be stored.
@@ -123,8 +118,7 @@ class CosmosDBCache(AbstractCache):
             raise e
 
     def close(self) -> None:
-        """
-        Close the Cosmos DB client.
+        """Close the Cosmos DB client.
 
         Perform any necessary cleanup, such as closing network connections.
         """
@@ -133,8 +127,7 @@ class CosmosDBCache(AbstractCache):
         pass
 
     def __enter__(self):
-        """
-        Context management entry.
+        """Context management entry.
 
         Returns:
             self: The instance itself.
@@ -142,8 +135,7 @@ class CosmosDBCache(AbstractCache):
         return self
 
     def __exit__(self, exc_type: Optional[type], exc_value: Optional[Exception], traceback: Optional[Any]) -> None:
-        """
-        Context management exit.
+        """Context management exit.
 
         Perform cleanup actions such as closing the Cosmos DB client.
         """

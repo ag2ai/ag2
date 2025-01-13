@@ -124,7 +124,7 @@ def _add_print_to_last_line(code):
 
 
 def _remove_print(code):
-    """remove all print statements from a string."""
+    """Remove all print statements from a string."""
     lines = code.splitlines()
     lines = [line for line in lines if not line.startswith("print(")]
     return "\n".join(lines)
@@ -147,23 +147,22 @@ class MathUserProxyAgent(UserProxyAgent):
         max_invalid_q_per_step=3,  # a parameter needed in MathChat
         **kwargs,
     ):
-        """
-        Args:
-            name (str): name of the agent
-            is_termination_msg (function): a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message.
-                The dict can contain the following keys: "content", "role", "name", "function_call".
-            human_input_mode (str): whether to ask for human inputs every time a message is received.
-                Possible values are "ALWAYS", "TERMINATE", "NEVER".
-                (1) When "ALWAYS", the agent prompts for human input every time a message is received.
-                    Under this mode, the conversation stops when the human input is "exit",
-                    or when is_termination_msg is True and there is no human input.
-                (2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or
-                    the number of auto reply reaches the max_consecutive_auto_reply.
-                (3) (Default) When "NEVER", the agent will never prompt for human input. Under this mode, the conversation stops
-                    when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
-            default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
-            max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
-            **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
+        """Args:
+        name (str): name of the agent
+        is_termination_msg (function): a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message.
+            The dict can contain the following keys: "content", "role", "name", "function_call".
+        human_input_mode (str): whether to ask for human inputs every time a message is received.
+            Possible values are "ALWAYS", "TERMINATE", "NEVER".
+            (1) When "ALWAYS", the agent prompts for human input every time a message is received.
+                Under this mode, the conversation stops when the human input is "exit",
+                or when is_termination_msg is True and there is no human input.
+            (2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or
+                the number of auto reply reaches the max_consecutive_auto_reply.
+            (3) (Default) When "NEVER", the agent will never prompt for human input. Under this mode, the conversation stops
+                when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
+        default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
+        max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
+        **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
         """
         super().__init__(
             name=name,

@@ -47,8 +47,7 @@ def _retrieve_json(text):
 
 
 class AgentBuilder:
-    """
-    AgentBuilder can help user build an automatic task solving process powered by multi-agent system.
+    """AgentBuilder can help user build an automatic task solving process powered by multi-agent system.
     Specifically, our building pipeline includes initialize and build.
     """
 
@@ -189,8 +188,8 @@ Match roles in the role set to each expert in expert set.
         agent_model_tags: Optional[list] = [],
         max_agents: Optional[int] = 5,
     ):
-        """
-        (These APIs are experimental and may change in the future.)
+        """(These APIs are experimental and may change in the future.)
+
         Args:
             config_file_or_env: path or environment of the OpenAI api configs.
             builder_model: specify a model as the backbone of build manager.
@@ -241,8 +240,7 @@ Match roles in the role set to each expert in expert set.
         llm_config: dict,
         use_oai_assistant: Optional[bool] = False,
     ) -> autogen.AssistantAgent:
-        """
-        Create a group chat participant agent.
+        """Create a group chat participant agent.
 
         If the agent rely on an open-source model, this function will automatically set up an endpoint for that agent.
         The API address of that endpoint will be "localhost:{free port}".
@@ -334,8 +332,7 @@ Match roles in the role set to each expert in expert set.
         return agent
 
     def clear_agent(self, agent_name: str, recycle_endpoint: Optional[bool] = True):
-        """
-        Clear a specific agent by name.
+        """Clear a specific agent by name.
 
         Args:
             agent_name: the name of agent.
@@ -356,9 +353,7 @@ Match roles in the role set to each expert in expert set.
         print(colored(f"Agent {agent_name} has been cleared.", "yellow"), flush=True)
 
     def clear_all_agents(self, recycle_endpoint: Optional[bool] = True):
-        """
-        Clear all cached agents.
-        """
+        """Clear all cached agents."""
         for agent_name in [agent_name for agent_name in self.agent_procs_assign.keys()]:
             self.clear_agent(agent_name, recycle_endpoint)
         print(colored("All agents have been cleared.", "yellow"), flush=True)
@@ -374,8 +369,7 @@ Match roles in the role set to each expert in expert set.
         max_agents: Optional[int] = None,
         **kwargs,
     ) -> tuple[list[autogen.ConversableAgent], dict]:
-        """
-        Auto build agents based on the building task.
+        """Auto build agents based on the building task.
 
         Args:
             building_task: instruction that helps build manager (gpt-4) to decide what agent should be built.
@@ -505,8 +499,7 @@ Match roles in the role set to each expert in expert set.
         user_proxy: Optional[autogen.ConversableAgent] = None,
         **kwargs,
     ) -> tuple[list[autogen.ConversableAgent], dict]:
-        """
-        Build agents from a library.
+        """Build agents from a library.
         The library is a list of agent configs, which contains the name and system_message for each agent.
         We use a build manager to decide what agent in that library should be involved to the task.
 
@@ -664,8 +657,7 @@ Match roles in the role set to each expert in expert set.
     def _build_agents(
         self, use_oai_assistant: Optional[bool] = False, user_proxy: Optional[autogen.ConversableAgent] = None, **kwargs
     ) -> tuple[list[autogen.ConversableAgent], dict]:
-        """
-        Build agents with generated configs.
+        """Build agents with generated configs.
 
         Args:
             use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
@@ -707,8 +699,7 @@ Match roles in the role set to each expert in expert set.
         return agent_list, self.cached_configs.copy()
 
     def save(self, filepath: Optional[str] = None) -> str:
-        """
-        Save building configs. If the filepath is not specific, this function will create a filename by encrypt the
+        """Save building configs. If the filepath is not specific, this function will create a filename by encrypt the
         building_task string by md5 with "save_config_" prefix, and save config to the local path.
 
         Args:
@@ -732,8 +723,7 @@ Match roles in the role set to each expert in expert set.
         use_oai_assistant: Optional[bool] = False,
         **kwargs,
     ) -> tuple[list[autogen.ConversableAgent], dict]:
-        """
-        Load building configs and call the build function to complete building without calling online LLMs' api.
+        """Load building configs and call the build function to complete building without calling online LLMs' api.
 
         Args:
             filepath: filepath or JSON string for the save config.

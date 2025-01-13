@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def count_distinct_permutations(sequence):
-    """
-    Counts the number of distinct permutations of a sequence where items may be indistinguishable.
+    """Counts the number of distinct permutations of a sequence where items may be indistinguishable.
 
     Args:
         sequence (iterable): The sequence for which to count the distinct permutations.

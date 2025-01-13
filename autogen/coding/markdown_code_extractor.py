@@ -29,7 +29,6 @@ class MarkdownCodeExtractor(CodeExtractor):
         Returns:
             List[CodeBlock]: The extracted code blocks or an empty list.
         """
-
         text = content_str(message)
         match = re.findall(CODE_BLOCK_PATTERN, text, flags=re.DOTALL)
         if not match:

@@ -166,7 +166,6 @@ def split_files_to_chunks(
     custom_text_split_function: Callable = None,
 ) -> tuple[list[str], list[dict]]:
     """Split a list of files into chunks of max_tokens."""
-
     chunks = []
     sources = []
 
@@ -382,7 +381,6 @@ def create_vector_db_from_dir(
         extra_docs (Optional, bool): whether to add more documents in the collection. Default is False
 
     Returns:
-
     The chromadb client.
     """
     if client is None:
@@ -460,7 +458,6 @@ def query_vector_db(
             functions, you can pass it here, follow the examples in `https://docs.trychroma.com/embeddings`.
 
     Returns:
-
         The query result. The format is:
 
     ```python

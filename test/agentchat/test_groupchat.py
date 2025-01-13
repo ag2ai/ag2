@@ -1051,14 +1051,12 @@ def test_custom_speaker_selection():
 
 
 def test_custom_speaker_selection_with_transition_graph():
-    """
-    In this test, although speaker_selection_method is defined, the speaker transitions are also defined.
+    """In this test, although speaker_selection_method is defined, the speaker transitions are also defined.
     There are 26 agents here, a to z.
     The speaker transitions are defined such that the agents can transition to the next alphabet.
     In addition, because we want the transition order to be a,u,t,o,g,e,n, we also define the speaker transitions for these agents.
     The speaker_selection_method is defined to return the next agent in the expected sequence.
     """
-
     # For loop that creates UserProxyAgent with names from a to z
     agents = [
         autogen.UserProxyAgent(
@@ -1092,9 +1090,7 @@ def test_custom_speaker_selection_with_transition_graph():
         previous_agent = current_agent
 
     def custom_speaker_selection_func(last_speaker: Agent, groupchat: GroupChat) -> Optional[Agent]:
-        """
-        Define a customized speaker selection function.
-        """
+        """Define a customized speaker selection function."""
         expected_sequence = ["a", "u", "t", "o", "g", "e", "n"]
 
         last_speaker_char = last_speaker.name
@@ -1128,11 +1124,9 @@ def test_custom_speaker_selection_with_transition_graph():
 
 
 def test_custom_speaker_selection_overrides_transition_graph():
-    """
-    In this test, team A engineer can transition to team A executor and team B engineer, but team B engineer cannot transition to team A executor.
+    """In this test, team A engineer can transition to team A executor and team B engineer, but team B engineer cannot transition to team A executor.
     The expected behaviour is that the custom speaker selection function will override the constraints of the graph.
     """
-
     # For loop that creates UserProxyAgent with names from a to z
     agents = [
         autogen.UserProxyAgent(
@@ -1269,11 +1263,9 @@ def test_role_for_select_speaker_messages():
 
 
 def test_select_speaker_message_and_prompt_templates():
-    """
-    In this test, two agents are part of a group chat which has customized select speaker message and select speaker prompt templates. Both valid and empty string values will be used.
+    """In this test, two agents are part of a group chat which has customized select speaker message and select speaker prompt templates. Both valid and empty string values will be used.
     The expected behaviour is that the customized speaker selection message and prompts will override the default values or throw exceptions if empty.
     """
-
     agent1 = autogen.ConversableAgent(
         "Alice",
         description="A wonderful employee named Alice.",
@@ -1364,11 +1356,9 @@ def test_select_speaker_message_and_prompt_templates():
 
 
 def test_speaker_selection_agent_name_match():
-    """
-    In this test a group chat, with auto speaker selection, the speaker name match
+    """In this test a group chat, with auto speaker selection, the speaker name match
     function is tested against the extended name match regex.
     """
-
     user_proxy = autogen.UserProxyAgent(
         name="User_proxy",
         system_message="A human admin.",
@@ -1498,8 +1488,7 @@ def test_role_for_reflection_summary():
 
 
 def test_speaker_selection_auto_process_result():
-    """
-    Tests the return result of the 2-agent chat used for speaker selection for the auto method.
+    """Tests the return result of the 2-agent chat used for speaker selection for the auto method.
     The last message of the messages passed in will contain a pass or fail.
     If passed, the message will contain the name of the correct agent and that agent will be returned.
     If failed, the message will contain the reason for failure for the last attempt and the next
@@ -1558,8 +1547,7 @@ def test_speaker_selection_auto_process_result():
 
 
 def test_speaker_selection_validate_speaker_name():
-    """
-    Tests the speaker name validation function used to evaluate the return result of the LLM
+    """Tests the speaker name validation function used to evaluate the return result of the LLM
     during speaker selection in 'auto' mode.
 
     Function: _validate_speaker_name
@@ -1572,7 +1560,6 @@ def test_speaker_selection_validate_speaker_name():
 
     When returning a message, it will include the 'override_role' key and value to support the GroupChat role_for_select_speaker_messages attribute
     """
-
     # Group Chat setup
     cmo = autogen.ConversableAgent(
         name="Chief_Marketing_Officer",
@@ -1727,11 +1714,9 @@ def test_speaker_selection_validate_speaker_name():
 
 
 def test_select_speaker_auto_messages():
-    """
-    In this test, two agents are part of a group chat which has customized select speaker "auto" multiple and no-name prompt messages. Both valid and empty string values will be used.
+    """In this test, two agents are part of a group chat which has customized select speaker "auto" multiple and no-name prompt messages. Both valid and empty string values will be used.
     The expected behaviour is that the customized speaker selection "auto" messages will override the default values or throw exceptions if empty.
     """
-
     agent1 = autogen.ConversableAgent(
         "Alice",
         description="A wonderful employee named Alice.",
@@ -1863,7 +1848,6 @@ def test_manager_messages_from_string():
 
 def test_manager_resume_functions():
     """Tests functions within the resume chat functionality"""
-
     # Setup
     coder = AssistantAgent(name="Coder", llm_config=None)
     groupchat = GroupChat(messages=[], agents=[coder])
@@ -2012,7 +1996,6 @@ def test_manager_resume_functions():
 
 def test_manager_resume_returns():
     """Tests the return resume chat functionality"""
-
     # Test the return agent and message is correct
     coder = AssistantAgent(name="Coder", llm_config=None)
     groupchat = GroupChat(messages=[], agents=[coder])
@@ -2045,7 +2028,6 @@ def test_manager_resume_returns():
 
 def test_manager_resume_messages():
     """Tests that the messages passed into resume are the correct format"""
-
     coder = AssistantAgent(name="Coder", llm_config=None)
     groupchat = GroupChat(messages=[], agents=[coder])
     manager = GroupChatManager(groupchat)
@@ -2122,7 +2104,6 @@ def test_custom_model_client():
 
 def test_select_speaker_transform_messages():
     """Tests adding transform messages to a GroupChat for speaker selection when in 'auto' mode"""
-
     # Test adding a TransformMessages to a group chat
     test_add_transforms = transform_messages.TransformMessages(
         transforms=[
@@ -2162,7 +2143,6 @@ def test_select_speaker_transform_messages():
 
 def test_manager_resume_message_assignment():
     """Tests that the messages passed in are assigned to agents correctly"""
-
     # Setup
     agent_a = AssistantAgent(name="Agent_A", llm_config=None)
     agent_b = AssistantAgent(name="Agent_B", llm_config=None)

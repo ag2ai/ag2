@@ -48,17 +48,15 @@ class LLamaIndexConversableAgent(ConversableAgent):
         description: Optional[str] = None,
         **kwargs,
     ):
+        """Args:
+        name (str): agent name.
+        llama_index_agent (AgentRunner): llama index agent.
+            Please override this attribute if you want to reprogram the agent.
+        description (str): a short description of the agent. This description is used by other agents
+            (e.g. the GroupChatManager) to decide when to call upon this agent.
+        **kwargs (dict): Please refer to other kwargs in
+            [ConversableAgent](../conversable_agent#init).
         """
-        Args:
-            name (str): agent name.
-            llama_index_agent (AgentRunner): llama index agent.
-                Please override this attribute if you want to reprogram the agent.
-            description (str): a short description of the agent. This description is used by other agents
-                (e.g. the GroupChatManager) to decide when to call upon this agent.
-            **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](../conversable_agent#init).
-        """
-
         if llama_index_agent is None:
             raise ValueError("llama_index_agent must be provided")
 

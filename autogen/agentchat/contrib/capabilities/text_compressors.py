@@ -43,8 +43,7 @@ class LLMLingua:
         ),
         structured_compression: bool = False,
     ) -> None:
-        """
-        Args:
+        """Args:
             prompt_compressor_kwargs (dict): A dictionary of keyword arguments for the PromptCompressor. Defaults to a
                 dictionary with model_name set to "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
                 use_llmlingua2 set to True, and device_map set to "cpu".

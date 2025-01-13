@@ -23,7 +23,8 @@ class Agent(Protocol):
     @property
     def description(self) -> str:
         """The description of the agent. Used for the agent's introduction in
-        a group chat setting."""
+        a group chat setting.
+        """
         ...
 
     def send(

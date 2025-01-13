@@ -60,11 +60,10 @@ class MessageHistoryLimiter:
     """
 
     def __init__(self, max_messages: Optional[int] = None, keep_first_message: bool = False):
-        """
-        Args:
-            max_messages Optional[int]: Maximum number of messages to keep in the context. Must be greater than 0 if not None.
-            keep_first_message bool: Whether to keep the original first message in the conversation history.
-                Defaults to False.
+        """Args:
+        max_messages Optional[int]: Maximum number of messages to keep in the context. Must be greater than 0 if not None.
+        keep_first_message bool: Whether to keep the original first message in the conversation history.
+            Defaults to False.
         """
         self._validate_max_messages(max_messages)
         self._max_messages = max_messages
@@ -83,7 +82,6 @@ class MessageHistoryLimiter:
         Returns:
             List[Dict]: A new list containing the most recent messages up to the specified maximum.
         """
-
         if self._max_messages is None or len(messages) <= self._max_messages:
             return messages
 
@@ -164,19 +162,18 @@ class MessageTokenLimiter:
         filter_dict: Optional[dict] = None,
         exclude_filter: bool = True,
     ):
-        """
-        Args:
-            max_tokens_per_message (None or int): Maximum number of tokens to keep in each message.
-                Must be greater than or equal to 0 if not None.
-            max_tokens (Optional[int]): Maximum number of tokens to keep in the chat history.
-                Must be greater than or equal to 0 if not None.
-            min_tokens (Optional[int]): Minimum number of tokens in messages to apply the transformation.
-                Must be greater than or equal to 0 if not None.
-            model (str): The target OpenAI model for tokenization alignment.
-            filter_dict (None or dict): A dictionary to filter out messages that you want/don't want to compress.
-                If None, no filters will be applied.
-            exclude_filter (bool): If exclude filter is True (the default value), messages that match the filter will be
-                excluded from token truncation. If False, messages that match the filter will be truncated.
+        """Args:
+        max_tokens_per_message (None or int): Maximum number of tokens to keep in each message.
+            Must be greater than or equal to 0 if not None.
+        max_tokens (Optional[int]): Maximum number of tokens to keep in the chat history.
+            Must be greater than or equal to 0 if not None.
+        min_tokens (Optional[int]): Minimum number of tokens in messages to apply the transformation.
+            Must be greater than or equal to 0 if not None.
+        model (str): The target OpenAI model for tokenization alignment.
+        filter_dict (None or dict): A dictionary to filter out messages that you want/don't want to compress.
+            If None, no filters will be applied.
+        exclude_filter (bool): If exclude filter is True (the default value), messages that match the filter will be
+            excluded from token truncation. If False, messages that match the filter will be truncated.
         """
         self._model = model
         self._max_tokens_per_message = self._validate_max_tokens(max_tokens_per_message)
@@ -329,22 +326,20 @@ class TextMessageCompressor:
         filter_dict: Optional[dict] = None,
         exclude_filter: bool = True,
     ):
+        """Args:
+        text_compressor (TextCompressor or None): An instance of a class that implements the TextCompressor
+            protocol. If None, it defaults to LLMLingua.
+        min_tokens (int or None): Minimum number of tokens in messages to apply the transformation. Must be greater
+            than or equal to 0 if not None. If None, no threshold-based compression is applied.
+        compression_args (dict): A dictionary of arguments for the compression method. Defaults to an empty
+            dictionary.
+        cache (None or AbstractCache): The cache client to use to store and retrieve previously compressed messages.
+            If None, no caching will be used.
+        filter_dict (None or dict): A dictionary to filter out messages that you want/don't want to compress.
+            If None, no filters will be applied.
+        exclude_filter (bool): If exclude filter is True (the default value), messages that match the filter will be
+            excluded from compression. If False, messages that match the filter will be compressed.
         """
-        Args:
-            text_compressor (TextCompressor or None): An instance of a class that implements the TextCompressor
-                protocol. If None, it defaults to LLMLingua.
-            min_tokens (int or None): Minimum number of tokens in messages to apply the transformation. Must be greater
-                than or equal to 0 if not None. If None, no threshold-based compression is applied.
-            compression_args (dict): A dictionary of arguments for the compression method. Defaults to an empty
-                dictionary.
-            cache (None or AbstractCache): The cache client to use to store and retrieve previously compressed messages.
-                If None, no caching will be used.
-            filter_dict (None or dict): A dictionary to filter out messages that you want/don't want to compress.
-                If None, no filters will be applied.
-            exclude_filter (bool): If exclude filter is True (the default value), messages that match the filter will be
-                excluded from compression. If False, messages that match the filter will be compressed.
-        """
-
         if text_compressor is None:
             text_compressor = LLMLingua()
 
@@ -486,17 +481,15 @@ class TextMessageContentName:
         filter_dict: Optional[dict] = None,
         exclude_filter: bool = True,
     ):
+        """Args:
+        position (str): The position to add the name to the content. The possible options are 'start' or 'end'. Defaults to 'start'.
+        format_string (str): The f-string to format the message name with. Use '{name}' as a placeholder for the agent's name. Defaults to '{name}:\n' and must contain '{name}'.
+        deduplicate (bool): Whether to deduplicate the formatted string so it doesn't appear twice (sometimes the LLM will add it to new messages itself). Defaults to True.
+        filter_dict (None or dict): A dictionary to filter out messages that you want/don't want to compress.
+            If None, no filters will be applied.
+        exclude_filter (bool): If exclude filter is True (the default value), messages that match the filter will be
+            excluded from compression. If False, messages that match the filter will be compressed.
         """
-        Args:
-            position (str): The position to add the name to the content. The possible options are 'start' or 'end'. Defaults to 'start'.
-            format_string (str): The f-string to format the message name with. Use '{name}' as a placeholder for the agent's name. Defaults to '{name}:\n' and must contain '{name}'.
-            deduplicate (bool): Whether to deduplicate the formatted string so it doesn't appear twice (sometimes the LLM will add it to new messages itself). Defaults to True.
-            filter_dict (None or dict): A dictionary to filter out messages that you want/don't want to compress.
-                If None, no filters will be applied.
-            exclude_filter (bool): If exclude filter is True (the default value), messages that match the filter will be
-                excluded from compression. If False, messages that match the filter will be compressed.
-        """
-
         assert isinstance(position, str) and position in ["start", "end"]
         assert isinstance(format_string, str) and "{name}" in format_string
         assert isinstance(deduplicate, bool) and deduplicate is not None

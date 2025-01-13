@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def youtube_download(url: str):
-    """
-    Downloads a YouTube video and returns the download link.
+    """Downloads a YouTube video and returns the download link.
 
     Args:
         url: The URL of the YouTube video.

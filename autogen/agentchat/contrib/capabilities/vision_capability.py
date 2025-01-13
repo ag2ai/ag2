@@ -50,8 +50,7 @@ class VisionCapability(AgentCapability):
         description_prompt: Optional[str] = DEFAULT_DESCRIPTION_PROMPT,
         custom_caption_func: Callable = None,
     ) -> None:
-        """
-        Initializes a new instance, setting up the configuration for interacting with
+        """Initializes a new instance, setting up the configuration for interacting with
         a Language Multimodal (LMM) client and specifying optional parameters for image
         description and captioning.
 
@@ -103,8 +102,7 @@ class VisionCapability(AgentCapability):
         agent.register_hook(hookable_method="process_last_received_message", hook=self.process_last_received_message)
 
     def process_last_received_message(self, content: Union[str, list[dict]]) -> str:
-        """
-        Processes the last received message content by normalizing and augmenting it
+        """Processes the last received message content by normalizing and augmenting it
         with descriptions of any included images. The function supports input content
         as either a string or a list of dictionaries, where each dictionary represents
         a content item (e.g., text, image). If the content contains image URLs, it
@@ -189,9 +187,9 @@ class VisionCapability(AgentCapability):
         return aug_content
 
     def _get_image_caption(self, img_data: str) -> str:
-        """
-        Args:
+        """Args:
             img_data (str): base64 encoded image data.
+
         Returns:
             str: caption for the given image.
         """

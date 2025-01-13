@@ -232,15 +232,13 @@ class RealtimeAgent(ConversableAgent):
         return self._answer
 
     async def ask_question(self, question: str, question_timeout: int) -> None:
-        """
-        Send a question for the user to the agent and wait for the answer.
+        """Send a question for the user to the agent and wait for the answer.
         If the answer is not received within the timeout, the question is repeated.
 
         Args:
             question: The question to ask the user.
             question_timeout: The time in seconds to wait for the answer.
         """
-
         self.reset_answer()
         await self._realtime_client.send_text(role=QUESTION_ROLE, text=question)
 
@@ -272,7 +270,6 @@ class RealtimeAgent(ConversableAgent):
             config: any
                 the config for the agent
         """
-
         if not messages:
             return False, None
 
