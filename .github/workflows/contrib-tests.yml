@@ -53,9 +53,6 @@ jobs:
       - name: Force install specific versions of typing-extensions and openai
         run: |
           uv pip uninstall --system -y typing_extensions typing-extensions || true
-          uv pip install --system --force-reinstall "typing-extensions==4.5.0"
-          uv pip install --system --force-reinstall "openai==1.8.0"
-          uv pip install --system --force-reinstall "pydantic<2.0"
       - name: Install packages and dependencies for Documentation
         run: |
           uv pip install --system pydoc-markdown pyyaml termcolor nbclient
