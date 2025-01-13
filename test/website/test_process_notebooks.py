@@ -302,7 +302,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                     image_url: https://github.com/davorrunje.png
 
                 davorinrusevljan:
-                    name: Davorin Ruševljan
+                    name: Davorin
                     title: Developer
                     url: https://github.com/davorinrusevljan
                     image_url: https://github.com/davorinrusevljan.png
@@ -342,5 +342,5 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         assert '<p class="name">Mark Sze</p>' in actual
         assert '<p class="name">Tvrtko Sternak</p>' in actual
         assert '<p class="name">Davor Runje</p>' in actual
-        assert '<p class="name">Davorin Ruševljan</p>' in actual
+        assert '<p class="name">Davorin</p>' in actual
         assert '<p class="name">Chi Wang</p>' not in actual
