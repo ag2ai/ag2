@@ -94,7 +94,7 @@ class CerebrasClient:
 
         # Check that we have what we need to use Cerebras's API
         # We won't enforce the available models as they are likely to change
-        cerebras_params["model"] = params.get("model", None)
+        cerebras_params["model"] = params.get("model")
         assert cerebras_params["model"], (
             "Please specify the 'model' in your config list entry to nominate the Cerebras model to use."
         )

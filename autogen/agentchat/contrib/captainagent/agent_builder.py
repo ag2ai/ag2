@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 def _config_check(config: dict):
     # check config loading
-    assert config.get("coding", None) is not None, 'Missing "coding" in your config.'
-    assert config.get("default_llm_config", None) is not None, 'Missing "default_llm_config" in your config.'
-    assert config.get("code_execution_config", None) is not None, 'Missing "code_execution_config" in your config.'
+    assert config.get("coding") is not None, 'Missing "coding" in your config.'
+    assert config.get("default_llm_config") is not None, 'Missing "default_llm_config" in your config.'
+    assert config.get("code_execution_config") is not None, 'Missing "code_execution_config" in your config.'
 
     for agent_config in config["agent_configs"]:
         assert agent_config.get("name", None) is not None, 'Missing agent "name" in your agent_configs.'
@@ -268,7 +268,7 @@ Match roles in the role set to each expert in expert set.
         description = agent_config["description"]
 
         # Path to the customize **ConversableAgent** class.
-        agent_path = agent_config.get("agent_path", None)
+        agent_path = agent_config.get("agent_path")
         filter_dict = {}
         if len(model_name_or_hf_repo) > 0:
             filter_dict.update({"model": model_name_or_hf_repo})
@@ -751,7 +751,7 @@ Match roles in the role set to each expert in expert set.
         default_llm_config = cached_configs["default_llm_config"]
         coding = cached_configs["coding"]
 
-        if kwargs.get("code_execution_config", None) is not None:
+        if kwargs.get("code_execution_config") is not None:
             # for test
             self.cached_configs.update(
                 {

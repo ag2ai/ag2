@@ -60,7 +60,7 @@ class MistralAIClient:
             api_key (str): The API key for using Mistral.AI (or environment variable MISTRAL_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("MISTRAL_API_KEY", None)
 
@@ -85,7 +85,7 @@ class MistralAIClient:
         mistral_params = {}
 
         # 1. Validate models
-        mistral_params["model"] = params.get("model", None)
+        mistral_params["model"] = params.get("model")
         assert mistral_params["model"], (
             "Please specify the 'model' in your config list entry to nominate the Mistral.ai model to use."
         )

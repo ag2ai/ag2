@@ -73,7 +73,7 @@ class CohereClient:
             api_key (str): The API key for using Cohere (or environment variable COHERE_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("COHERE_API_KEY")
 
@@ -113,7 +113,7 @@ class CohereClient:
 
         # Check that we have what we need to use Cohere's API
         # We won't enforce the available models as they are likely to change
-        cohere_params["model"] = params.get("model", None)
+        cohere_params["model"] = params.get("model")
         assert cohere_params["model"], (
             "Please specify the 'model' in your config list entry to nominate the Cohere model to use."
         )
@@ -270,7 +270,7 @@ def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_t
             call = {
                 "name": tool_call["function"]["name"],
                 "parameters": json.loads(
-                    tool_call["function"]["arguments"] if not tool_call["function"]["arguments"] == "" else "{}"
+                    tool_call["function"]["arguments"] if tool_call["function"]["arguments"] != "" else "{}"
                 ),
             }
             output = [{"value": content_output}]

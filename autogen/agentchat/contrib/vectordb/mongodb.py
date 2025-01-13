@@ -107,9 +107,12 @@ class MongoDBAtlasVectorDB(VectorDB):
         assert action in ["create", "delete"], f"{action=} must be create or delete."
         start = monotonic()
         while monotonic() - start < self._wait_until_index_ready:
-            if action == "create" and self._is_index_ready(collection, index_name):
-                return
-            elif action == "delete" and len(list(collection.list_search_indexes())) == 0:
+            if (
+                action == "create"
+                and self._is_index_ready(collection, index_name)
+                or action == "delete"
+                and len(list(collection.list_search_indexes())) == 0
+            ):
                 return
             sleep(_DELAY)
 

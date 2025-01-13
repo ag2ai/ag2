@@ -378,7 +378,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
             chunk_ids = (
                 [hashlib.blake2b(chunk.encode("utf-8")).hexdigest()[:HASH_LENGTH] for chunk in chunks]
-                if not self._vector_db.type == "qdrant"
+                if self._vector_db.type != "qdrant"
                 else [str(uuid.UUID(hex=hashlib.md5(chunk.encode("utf-8")).hexdigest())) for chunk in chunks]
             )
             chunk_ids_set = set(chunk_ids)
@@ -418,7 +418,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         else:
             msg_text = message
 
-        if "UPDATE CONTEXT" == msg_text.strip().upper():
+        if msg_text.strip().upper() == "UPDATE CONTEXT":
             doc_contents = self._get_context(self._results)
 
             # Always use self.problem as the query text to retrieve docs, but each time we replace the context with the
@@ -680,7 +680,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         return message
 
     def run_code(self, code, **kwargs):
-        lang = kwargs.get("lang", None)
+        lang = kwargs.get("lang")
         if code.startswith("!") or code.startswith("pip") or lang in ["bash", "shell", "sh"]:
             return (
                 0,

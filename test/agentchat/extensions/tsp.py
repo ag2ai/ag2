@@ -25,7 +25,7 @@ def solve_tsp(dists: dict) -> float:
     """
     # Get the unique nodes from the distance matrix
     nodes = set()
-    for pair in dists.keys():
+    for pair in dists:
         nodes.add(pair[0])
         nodes.add(pair[1])
 

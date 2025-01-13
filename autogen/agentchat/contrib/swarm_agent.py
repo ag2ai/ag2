@@ -178,7 +178,7 @@ def _create_nested_chats(agent: "SwarmAgent", nested_chat_agents: list["SwarmAge
             nested_chats["chat_queue"],
             reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
             or "summary_from_nested_chats",
-            config=nested_chats.get("config", None),
+            config=nested_chats.get("config"),
             trigger=lambda sender: True,
             position=0,
             use_async=nested_chats.get("use_async", False),

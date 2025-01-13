@@ -111,14 +111,14 @@ class AnthropicClient:
         Args:
             api_key (str): The API key for the Anthropic API or set the `ANTHROPIC_API_KEY` environment variable.
         """
-        self._api_key = kwargs.get("api_key", None)
-        self._aws_access_key = kwargs.get("aws_access_key", None)
-        self._aws_secret_key = kwargs.get("aws_secret_key", None)
-        self._aws_session_token = kwargs.get("aws_session_token", None)
-        self._aws_region = kwargs.get("aws_region", None)
-        self._gcp_project_id = kwargs.get("gcp_project_id", None)
-        self._gcp_region = kwargs.get("gcp_region", None)
-        self._gcp_auth_token = kwargs.get("gcp_auth_token", None)
+        self._api_key = kwargs.get("api_key")
+        self._aws_access_key = kwargs.get("aws_access_key")
+        self._aws_secret_key = kwargs.get("aws_secret_key")
+        self._aws_session_token = kwargs.get("aws_session_token")
+        self._aws_region = kwargs.get("aws_region")
+        self._gcp_project_id = kwargs.get("gcp_project_id")
+        self._gcp_region = kwargs.get("gcp_region")
+        self._gcp_auth_token = kwargs.get("gcp_auth_token")
 
         if not self._api_key:
             self._api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -170,7 +170,7 @@ class AnthropicClient:
         """Load the configuration for the Anthropic API client."""
         anthropic_params = {}
 
-        anthropic_params["model"] = params.get("model", None)
+        anthropic_params["model"] = params.get("model")
         assert anthropic_params["model"], "Please provide a `model` in the config_list to use the Anthropic API."
 
         anthropic_params["temperature"] = validate_parameter(

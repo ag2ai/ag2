@@ -168,5 +168,5 @@ def llava_call(prompt: str, llm_config: dict) -> str:
         config_list=llm_config["config_list"],
         max_new_tokens=llm_config.get("max_new_tokens", 2000),
         temperature=llm_config.get("temperature", 0.5),
-        seed=llm_config.get("seed", None),
+        seed=llm_config.get("seed"),
     )

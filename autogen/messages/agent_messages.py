@@ -270,8 +270,8 @@ class PostCarryoverProcessingMessage(BaseMessage):
 
         sender_name = chat_info["sender"].name
         recipient_name = chat_info["recipient"].name
-        summary_args = chat_info.get("summary_args", None)
-        max_turns = chat_info.get("max_turns", None)
+        summary_args = chat_info.get("summary_args")
+        max_turns = chat_info.get("max_turns")
 
         # Fix Callable in chat_info
         summary_method = chat_info.get("summary_method", "")

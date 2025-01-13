@@ -55,11 +55,11 @@ class BedrockClient:
 
     def __init__(self, **kwargs: Any):
         """Initialises BedrockClient for Amazon's Bedrock Converse API"""
-        self._aws_access_key = kwargs.get("aws_access_key", None)
-        self._aws_secret_key = kwargs.get("aws_secret_key", None)
-        self._aws_session_token = kwargs.get("aws_session_token", None)
-        self._aws_region = kwargs.get("aws_region", None)
-        self._aws_profile_name = kwargs.get("aws_profile_name", None)
+        self._aws_access_key = kwargs.get("aws_access_key")
+        self._aws_secret_key = kwargs.get("aws_secret_key")
+        self._aws_session_token = kwargs.get("aws_session_token")
+        self._aws_region = kwargs.get("aws_region")
+        self._aws_profile_name = kwargs.get("aws_profile_name")
 
         if not self._aws_access_key:
             self._aws_access_key = os.getenv("AWS_ACCESS_KEY")
@@ -130,7 +130,7 @@ class BedrockClient:
 
         # Amazon Bedrock  base model IDs are here:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
-        self._model_id = params.get("model", None)
+        self._model_id = params.get("model")
         assert self._model_id, "Please provide the 'model` in the config_list to use Amazon Bedrock"
 
         # Parameters vary based on the model used.
@@ -314,7 +314,7 @@ def oai_messages_to_bedrock_messages(
 
     # Take out system messages if the model supports it, otherwise leave them in.
     if supports_system_prompts:
-        messages = [x for x in messages if not x["role"] == "system"]
+        messages = [x for x in messages if x["role"] != "system"]
     else:
         # Replace role="system" with role="user"
         for msg in messages:

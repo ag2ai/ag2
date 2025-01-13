@@ -44,7 +44,7 @@ def check_graph_validity(
         raise ValueError("allowed_speaker_transitions_dict must be a dictionary with lists as values.")
 
     # Check 2. Every key exists in agents
-    if not all([key in agents for key in allowed_speaker_transitions_dict.keys()]):
+    if not all([key in agents for key in allowed_speaker_transitions_dict]):
         raise ValueError("allowed_speaker_transitions_dict has keys not in agents.")
 
     # Check 3. Every value is a list of Agents or empty list (not string).

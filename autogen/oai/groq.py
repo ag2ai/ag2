@@ -55,7 +55,7 @@ class GroqClient:
             api_key (str): The API key for using Groq (or environment variable GROQ_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("GROQ_API_KEY")
 
@@ -65,7 +65,7 @@ class GroqClient:
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Groq API, it will be ignored.", UserWarning)
-        self.base_url = kwargs.get("base_url", None)
+        self.base_url = kwargs.get("base_url")
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -96,7 +96,7 @@ class GroqClient:
 
         # Check that we have what we need to use Groq's API
         # We won't enforce the available models as they are likely to change
-        groq_params["model"] = params.get("model", None)
+        groq_params["model"] = params.get("model")
         assert groq_params["model"], (
             "Please specify the 'model' in your config list entry to nominate the Groq model to use."
         )

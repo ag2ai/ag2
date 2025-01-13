@@ -1617,10 +1617,7 @@ class GroupChatManager(ConversableAgent):
                 nr_messages_to_preserve_provided = True
             else:
                 for agent in groupchat.agents:
-                    if agent.name == word:
-                        agent_to_memory_clear = agent
-                        break
-                    elif agent.name == word[:-1]:  # for the case when agent name is followed by dot or other sign
+                    if agent.name == word or agent.name == word[:-1]:
                         agent_to_memory_clear = agent
                         break
         # preserve last tool call message if clear history called inside of tool response

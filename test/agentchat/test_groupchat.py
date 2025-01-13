@@ -143,11 +143,7 @@ def _test_selection_method(method: str):
             "This is bob speaking.",
             "This is charlie speaking.",
         ] * 2
-    elif method == "auto":
-        agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
-        assert len(agent1.chat_messages[group_chat_manager]) == 6
-        assert len(groupchat.messages) == 6
-    elif method == "random":
+    elif method == "auto" or method == "random":
         agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
         assert len(agent1.chat_messages[group_chat_manager]) == 6
         assert len(groupchat.messages) == 6
@@ -527,7 +523,7 @@ def test_send_intros():
         assert "The first agent." in messages[0]["content"]
         assert "The second agent." in messages[0]["content"]
         assert "The third agent." in messages[0]["content"]
-        assert "The initiating message." == messages[1]["content"]
+        assert messages[1]["content"] == "The initiating message."
         assert messages[2]["content"] == agent1._default_auto_reply
 
     # Reset and start again
@@ -551,7 +547,7 @@ def test_send_intros():
     for a in [agent1, agent2, agent3]:
         messages = agent1.chat_messages[group_chat_manager2]
         assert len(messages) == 2
-        assert "The initiating message." == messages[0]["content"]
+        assert messages[0]["content"] == "The initiating message."
         assert messages[1]["content"] == agent1._default_auto_reply
 
 

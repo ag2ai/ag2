@@ -133,7 +133,7 @@ class GeminiClient:
             location (str): Compute region to be used, like 'us-west1'.
                 This parameter is only valid in case no API key is specified.
         """
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
             if self.api_key is None:
@@ -198,7 +198,7 @@ class GeminiClient:
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
-        system_instruction = params.get("system_instruction", None)
+        system_instruction = params.get("system_instruction")
         response_validation = params.get("response_validation", True)
         if "tools" in params:
             tools = self._tools_to_gemini_tools(params["tools"])
@@ -460,13 +460,7 @@ class GeminiClient:
                     if self.use_vertexai
                     else rst.append(Content(parts=parts, role=role))
                 )
-            elif part_type == "tool":
-                rst.append(
-                    VertexAIContent(parts=parts, role="function")
-                    if self.use_vertexai
-                    else rst.append(Content(parts=parts, role="function"))
-                )
-            elif part_type == "tool_call":
+            elif part_type == "tool" or part_type == "tool_call":
                 rst.append(
                     VertexAIContent(parts=parts, role="function")
                     if self.use_vertexai

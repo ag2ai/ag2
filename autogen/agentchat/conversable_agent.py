@@ -1519,9 +1519,7 @@ class ConversableAgent(LLMAgent):
             # Find when the agent last spoke
             num_messages_to_scan = 0
             for message in reversed(messages):
-                if "role" not in message:
-                    break
-                elif message["role"] != "user":
+                if "role" not in message or message["role"] != "user":
                     break
                 else:
                     num_messages_to_scan += 1
@@ -1570,9 +1568,7 @@ class ConversableAgent(LLMAgent):
             messages_to_scan = 0
             for i in range(len(messages)):
                 message = messages[-(i + 1)]
-                if "role" not in message:
-                    break
-                elif message["role"] != "user":
+                if "role" not in message or message["role"] != "user":
                     break
                 else:
                     messages_to_scan += 1

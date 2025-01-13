@@ -53,7 +53,7 @@ class TogetherClient:
             api_key (str): The API key for using Together.AI (or environment variable TOGETHER_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("TOGETHER_API_KEY")
 
@@ -92,7 +92,7 @@ class TogetherClient:
         together_params = {}
 
         # Check that we have what we need to use Together.AI's API
-        together_params["model"] = params.get("model", None)
+        together_params["model"] = params.get("model")
         assert together_params["model"], (
             "Please specify the 'model' in your config list entry to nominate the Together.AI model to use."
         )
@@ -311,7 +311,7 @@ def calculate_together_cost(input_tokens: int, output_tokens: int, model_name: s
         if model_name in chat_lang_code_model_sizes:
             size_in_b = chat_lang_code_model_sizes[model_name]
 
-            for top_size in chat_lang_code_model_costs.keys():
+            for top_size in chat_lang_code_model_costs:
                 if size_in_b <= top_size:
                     cost_per_mil = chat_lang_code_model_costs[top_size]
                     break
@@ -320,7 +320,7 @@ def calculate_together_cost(input_tokens: int, output_tokens: int, model_name: s
             # Mixture-of-experts
             size_in_b = mixture_model_sizes[model_name]
 
-            for top_size in mixture_costs.keys():
+            for top_size in mixture_costs:
                 if size_in_b <= top_size:
                     cost_per_mil = mixture_costs[top_size]
                     break

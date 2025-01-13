@@ -119,7 +119,7 @@ class OllamaClient:
         # There are other, advanced, parameters such as format, system (to override system message), template, raw, etc. - not used
 
         # We won't enforce the available models
-        ollama_params["model"] = params.get("model", None)
+        ollama_params["model"] = params.get("model")
         assert ollama_params["model"], (
             "Please specify the 'model' in your config list entry to nominate the Ollama model to use."
         )
