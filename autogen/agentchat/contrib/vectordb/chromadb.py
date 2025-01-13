@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import os
-from typing import Callable, List
+from typing import Callable
 
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import chroma_results_to_query_results, filter_results_by_distance, get_logger
@@ -26,15 +26,12 @@ logger = get_logger(__name__)
 
 
 class ChromaVectorDB(VectorDB):
-    """
-    A vector database that uses ChromaDB as the backend.
-    """
+    """A vector database that uses ChromaDB as the backend."""
 
     def __init__(
         self, *, client=None, path: str = "tmp/db", embedding_function: Callable = None, metadata: dict = None, **kwargs
     ) -> None:
-        """
-        Initialize the vector database.
+        """Initialize the vector database.
 
         Args:
             client: chromadb.Client | The client object of the vector database. Default is None.
@@ -71,8 +68,7 @@ class ChromaVectorDB(VectorDB):
     def create_collection(
         self, collection_name: str, overwrite: bool = False, get_or_create: bool = True
     ) -> Collection:
-        """
-        Create a collection in the vector database.
+        """Create a collection in the vector database.
         Case 1. if the collection does not exist, create the collection.
         Case 2. the collection exists, if overwrite is True, it will overwrite the collection.
         Case 3. the collection exists and overwrite is False, if get_or_create is True, it will get the collection,
@@ -114,8 +110,7 @@ class ChromaVectorDB(VectorDB):
             raise ValueError(f"Collection {collection_name} already exists.")
 
     def get_collection(self, collection_name: str = None) -> Collection:
-        """
-        Get the collection from the vector database.
+        """Get the collection from the vector database.
 
         Args:
             collection_name: str | The name of the collection. Default is None. If None, return the
@@ -139,8 +134,7 @@ class ChromaVectorDB(VectorDB):
         return self.active_collection
 
     def delete_collection(self, collection_name: str) -> None:
-        """
-        Delete the collection from the vector database.
+        """Delete the collection from the vector database.
 
         Args:
             collection_name: str | The name of the collection.
@@ -170,8 +164,7 @@ class ChromaVectorDB(VectorDB):
                 collection.add(**collection_kwargs)
 
     def insert_docs(self, docs: list[Document], collection_name: str = None, upsert: bool = False) -> None:
-        """
-        Insert documents into the collection of the vector database.
+        """Insert documents into the collection of the vector database.
 
         Args:
             docs: List[Document] | A list of documents. Each document is a TypedDict `Document`.
@@ -205,8 +198,7 @@ class ChromaVectorDB(VectorDB):
         self._batch_insert(collection, embeddings, ids, metadatas, documents, upsert)
 
     def update_docs(self, docs: list[Document], collection_name: str = None) -> None:
-        """
-        Update documents in the collection of the vector database.
+        """Update documents in the collection of the vector database.
 
         Args:
             docs: List[Document] | A list of documents.
@@ -218,8 +210,7 @@ class ChromaVectorDB(VectorDB):
         self.insert_docs(docs, collection_name, upsert=True)
 
     def delete_docs(self, ids: list[ItemID], collection_name: str = None, **kwargs) -> None:
-        """
-        Delete documents from the collection of the vector database.
+        """Delete documents from the collection of the vector database.
 
         Args:
             ids: List[ItemID] | A list of document ids. Each id is a typed `ItemID`.
@@ -240,8 +231,7 @@ class ChromaVectorDB(VectorDB):
         distance_threshold: float = -1,
         **kwargs,
     ) -> QueryResults:
-        """
-        Retrieve documents from the collection of the vector database based on the queries.
+        """Retrieve documents from the collection of the vector database based on the queries.
 
         Args:
             queries: List[str] | A list of queries. Each query is a string.
@@ -294,7 +284,6 @@ class ChromaVectorDB(VectorDB):
             ]
             ```
         """
-
         results = []
         keys = [key for key in data_dict if data_dict[key] is not None]
 
@@ -309,8 +298,7 @@ class ChromaVectorDB(VectorDB):
     def get_docs_by_ids(
         self, ids: list[ItemID] = None, collection_name: str = None, include=None, **kwargs
     ) -> list[Document]:
-        """
-        Retrieve documents from the collection of the vector database based on the ids.
+        """Retrieve documents from the collection of the vector database based on the ids.
 
         Args:
             ids: List[ItemID] | A list of document ids. If None, will return all the documents. Default is None.

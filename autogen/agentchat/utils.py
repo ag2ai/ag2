@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Union
 
 from .agent import Agent
 
@@ -27,9 +27,9 @@ def consolidate_chat_info(chat_info, uniform_sender=None) -> None:
             or summary_method in ("last_msg", "reflection_with_llm")
         ), "summary_method must be a string chosen from 'reflection_with_llm' or 'last_msg' or a callable, or None."
         if summary_method == "reflection_with_llm":
-            assert (
-                sender.client is not None or c["recipient"].client is not None
-            ), "llm client must be set in either the recipient or sender when summary_method is reflection_with_llm."
+            assert sender.client is not None or c["recipient"].client is not None, (
+                "llm client must be set in either the recipient or sender when summary_method is reflection_with_llm."
+            )
 
 
 def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str, dict]]:
@@ -44,7 +44,6 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str,
           - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference".
 
     Example:
-
     ```python
     {
         "usage_including_cached_inference": {
@@ -69,7 +68,6 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str,
     ```
 
     Note:
-
     If none of the agents incurred any cost (not having a client), then the usage_including_cached_inference and usage_excluding_cached_inference will be `{'total_cost': 0}`.
     """
 

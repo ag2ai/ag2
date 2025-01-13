@@ -14,7 +14,7 @@ from hashlib import md5
 from pathlib import Path
 from time import sleep
 from types import TracebackType
-from typing import Any, ClassVar, Dict, List, Optional, Type, Union
+from typing import Any, ClassVar
 
 import docker
 from docker.errors import ImageNotFound
@@ -64,7 +64,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         image: str = "python:3-slim",
         container_name: str | None = None,
         timeout: int = 60,
-        work_dir: Path | str = Path("."),
+        work_dir: Path | str = Path(),
         bind_dir: Path | str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
@@ -190,8 +190,8 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
             code_blocks (List[CodeBlock]): The code blocks to execute.
 
         Returns:
-            CommandlineCodeResult: The result of the code execution."""
-
+            CommandlineCodeResult: The result of the code execution.
+        """
         if len(code_blocks) == 0:
             raise ValueError("No code blocks to execute.")
 
@@ -225,7 +225,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
             files.append(code_path)
 
             if not execute_code:
-                outputs.append(f"Code saved to {str(code_path)}\n")
+                outputs.append(f"Code saved to {code_path!s}\n")
                 continue
 
             command = ["timeout", str(self._timeout), _cmd(lang), filename]

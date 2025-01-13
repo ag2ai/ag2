@@ -8,16 +8,15 @@
 
 import os
 import sys
-from collections.abc import Generator
 
 import pytest
 
-from autogen import AssistantAgent, config_list_from_json
+from autogen import AssistantAgent
 
-from ....conftest import Credentials, reason, skip_openai  # noqa: E402
+from ....conftest import Credentials, skip_openai
 
 try:
-    import fastembed
+    import fastembed  # noqa: F401
     from qdrant_client import QdrantClient
 
     from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
@@ -31,7 +30,7 @@ except ImportError:
     QDRANT_INSTALLED = False
 
 try:
-    import openai
+    import openai  # noqa: F401
 except ImportError:
     skip = True
 else:

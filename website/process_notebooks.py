@@ -20,13 +20,12 @@ import sys
 import tempfile
 import threading
 import time
-import typing
 from dataclasses import dataclass
 from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple
 
 from termcolor import colored
 
@@ -37,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import nbclient
+    import nbclient  # noqa: F401
     from nbclient.client import (
         CellExecutionError,
         CellTimeoutError,
@@ -90,7 +89,6 @@ def load_metadata(notebook: Path) -> dict:
 
 def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     """Return a reason to skip the notebook, or None if it should not be skipped."""
-
     if notebook.suffix != ".ipynb":
         return "not a notebook"
 
@@ -111,7 +109,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     # <!-- and --> must exists on lines on their own
     if first_cell["cell_type"] == "markdown" and first_cell["source"][0].strip() == "<!--":
         raise ValueError(
-            f"Error in {str(notebook.resolve())} - Front matter should be defined in the notebook metadata now."
+            f"Error in {notebook.resolve()!s} - Front matter should be defined in the notebook metadata now."
         )
 
     metadata = load_metadata(notebook)
@@ -164,7 +162,6 @@ def extract_title(notebook: Path) -> str | None:
 
 def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, quarto_bin: str, dry_run: bool) -> str:
     """Process a single notebook."""
-
     in_notebook_dir = "notebook" in src_notebook.parts
 
     metadata = load_metadata(src_notebook)
@@ -361,13 +358,11 @@ def add_front_matter_to_metadata_mdx(
 
 
 def convert_callout_blocks(content: str) -> str:
-    """
-    Converts callout blocks in the following formats:
+    """Converts callout blocks in the following formats:
     1) Plain callout blocks using ::: syntax.
     2) Blocks using 3-4 backticks + (mdx-code-block or {=mdx}) + ::: syntax.
     Transforms them into custom HTML/component syntax.
     """
-
     callout_types = {
         "tip": "Tip",
         "note": "Note",
@@ -447,8 +442,7 @@ def convert_callout_blocks(content: str) -> str:
 
 
 def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
-    """
-    Converts MDX code block image syntax to regular markdown image syntax.
+    """Converts MDX code block image syntax to regular markdown image syntax.
 
     Args:
         content (str): The markdown content containing mdx-code-block image syntax
@@ -681,8 +675,7 @@ def extract_example_group(metadata_path):
 
 
 def update_navigation_with_notebooks(website_dir: Path) -> None:
-    """
-    Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
+    """Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
 
     Args:
         website_dir (Path): Root directory of the website
@@ -729,8 +722,7 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
 
 
 def fix_internal_references(content: str, root_path: Path, current_file_path: Path) -> str:
-    """
-    Resolves internal markdown references relative to root_dir and returns fixed content.
+    """Resolves internal markdown references relative to root_dir and returns fixed content.
 
     Args:
         content: Markdown content to fix
@@ -777,13 +769,13 @@ def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
 
 def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict[str, str]]) -> str:
     """Constructs HTML for displaying author cards in a blog.
+
     Args:
         authors_list: List of author identifiers
         authors_dict: Dictionary containing author information keyed by author identifier
     Returns:
         str: Formatted HTML string containing author cards
     """
-
     if not authors_list:
         return ""
 
@@ -818,6 +810,7 @@ def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict
 
 def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
     """Separate front matter and content from a markdown file.
+
     Args:
         file_path (Path): Path to the mdx file
     """
@@ -834,6 +827,7 @@ def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
 
 def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
     """Add authors info to blog posts.
+
     Args:
         website_dir (Path): Root directory of the website
     """

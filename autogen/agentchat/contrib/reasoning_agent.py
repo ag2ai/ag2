@@ -5,7 +5,7 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Optional
 
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
@@ -160,9 +160,7 @@ class ThinkNode:
 
 
 def visualize_tree(root: ThinkNode) -> None:
-    """
-    Visualize the tree of thoughts using graphviz.
-    """
+    """Visualize the tree of thoughts using graphviz."""
     try:
         from graphviz import Digraph
     except ImportError:
@@ -197,8 +195,7 @@ def visualize_tree(root: ThinkNode) -> None:
 
 
 def extract_sft_dataset(root):
-    """
-    Extract the best trajectory or multiple equally good trajectories
+    """Extract the best trajectory or multiple equally good trajectories
     for SFT training.
 
     Args:
@@ -235,8 +232,7 @@ def extract_sft_dataset(root):
 
 
 def extract_rlhf_preference_dataset(root, contrastive_threshold=0.2):
-    """
-    Extract and generate preference pairs for RLHF training by comparing sibling nodes.
+    """Extract and generate preference pairs for RLHF training by comparing sibling nodes.
 
     Args:
         root: The root node of the tree.
@@ -384,8 +380,7 @@ class ReasoningAgent(AssistantAgent):
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
 
     def generate_forest_response(self, messages, sender, config=None):
-        """
-        Generate a response using tree-of-thought reasoning.
+        """Generate a response using tree-of-thought reasoning.
 
         Args:
             messages: Input messages to respond to
@@ -502,8 +497,7 @@ Please provide your rating along with a brief explanation of your assessment.
         return reward
 
     def _process_prompt(self, messages, sender):
-        """
-        Process the incoming messages to extract the prompt and ground truth.
+        """Process the incoming messages to extract the prompt and ground truth.
 
         This method checks if the provided messages are None and retrieves the last message's content.
         It also looks for a specific keyword "GROUND_TRUTH" in the prompt to separate the main prompt
@@ -591,7 +585,7 @@ Please provide your rating along with a brief explanation of your assessment.
             )
         elif self._answer_approach == "pool":
             all_thoughts = "\n\n".join(
-                [f"--- Possibility {i+1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)]
+                [f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)]
             )
             self.send(
                 message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",
@@ -663,8 +657,7 @@ Please provide your rating along with a brief explanation of your assessment.
         return best_ans_node.content
 
     def _expand(self, node: ThinkNode) -> list:
-        """
-        Expand the node by generating possible next steps based on the current trajectory.
+        """Expand the node by generating possible next steps based on the current trajectory.
 
         This method sends a message to the thinker agent, asking for possible next steps
         that can be taken from the current node's trajectory. It processes the response to

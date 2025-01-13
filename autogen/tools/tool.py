@@ -15,8 +15,7 @@ __all__ = ["Tool"]
 
 
 class Tool:
-    """
-    A class representing a Tool that can be used by an agent for various tasks.
+    """A class representing a Tool that can be used by an agent for various tasks.
 
     This class encapsulates a tool with a name, description, and an executable function.
     The tool can be registered with a ConversableAgent for use either with an LLM or for direct execution.
@@ -67,8 +66,7 @@ class Tool:
         return self._func
 
     def register_for_llm(self, agent: "ConversableAgent") -> None:
-        """
-        Registers the tool for use with a ConversableAgent's language model (LLM).
+        """Registers the tool for use with a ConversableAgent's language model (LLM).
 
         This method registers the tool so that it can be invoked by the agent during
         interactions with the language model.
@@ -79,8 +77,7 @@ class Tool:
         agent.register_for_llm()(self)
 
     def register_for_execution(self, agent: "ConversableAgent") -> None:
-        """
-        Registers the tool for direct execution by a ConversableAgent.
+        """Registers the tool for direct execution by a ConversableAgent.
 
         This method registers the tool so that it can be executed by the agent,
         typically outside of the context of an LLM interaction.
@@ -91,8 +88,7 @@ class Tool:
         agent.register_for_execution()(self)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """
-        Execute the tool by calling its underlying function with the provided arguments.
+        """Execute the tool by calling its underlying function with the provided arguments.
 
         Args:
             *args: Positional arguments to pass to the tool

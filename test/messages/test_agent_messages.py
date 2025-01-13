@@ -20,7 +20,6 @@ from autogen.messages.agent_messages import (
     ExecuteCodeBlockMessage,
     ExecuteFunctionMessage,
     ExecutedFunctionMessage,
-    FunctionCall,
     FunctionCallMessage,
     FunctionResponseMessage,
     GenerateCodeExecutionReplyMessage,
@@ -36,14 +35,11 @@ from autogen.messages.agent_messages import (
     SpeakerAttemptSuccessfullMessage,
     TerminationAndHumanReplyMessage,
     TextMessage,
-    ToolCall,
     ToolCallMessage,
-    ToolResponse,
     ToolResponseMessage,
     UsingAutoReplyMessage,
     create_received_message_model,
 )
-from autogen.oai.client import OpenAIWrapper
 
 
 @pytest.fixture(autouse=True)

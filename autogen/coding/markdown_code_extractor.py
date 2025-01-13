@@ -5,7 +5,7 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Union
 
 from ..code_utils import CODE_BLOCK_PATTERN, UNKNOWN, content_str, infer_lang
 from ..types import UserMessageImageContentPart, UserMessageTextContentPart
@@ -29,7 +29,6 @@ class MarkdownCodeExtractor(CodeExtractor):
         Returns:
             List[CodeBlock]: The extracted code blocks or an empty list.
         """
-
         text = content_str(message)
         match = re.findall(CODE_BLOCK_PATTERN, text, flags=re.DOTALL)
         if not match:

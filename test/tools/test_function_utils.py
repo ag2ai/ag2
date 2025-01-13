@@ -133,7 +133,7 @@ def test_get_missing_annotations() -> None:
     assert unannotated_with_default == {"b"}
 
     def _f2(a: str, b) -> str:  # type: ignore[empty-body,no-untyped-def]
-        "ok"
+        """Ok"""
 
     missing, unannotated_with_default = get_missing_annotations(get_typed_signature(_f2), ["a", "b"])
     assert missing == {"b"}

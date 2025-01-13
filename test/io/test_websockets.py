@@ -7,7 +7,7 @@
 import json
 from pprint import pprint
 from tempfile import TemporaryDirectory
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 from unittest.mock import MagicMock
 from uuid import UUID
 
@@ -150,7 +150,7 @@ class TestConsoleIOWithWebsockets:
                         flush=True,
                     )
                     try:
-                        user_proxy.initiate_chat(  # noqa: F704
+                        user_proxy.initiate_chat(
                             agent,
                             message=initial_msg,
                             cache=cache,

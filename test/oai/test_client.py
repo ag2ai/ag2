@@ -16,16 +16,16 @@ from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED
 
-from ..conftest import Credentials, skip_openai  # noqa: E402
+from ..conftest import Credentials, skip_openai
 
 TOOL_ENABLED = False
 try:
     import openai
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
-    from openai.types.chat.chat_completion import ChatCompletionMessage
+    from openai.types.chat.chat_completion import ChatCompletionMessage  # noqa: F401
 except ImportError:
     skip = True
 else:
@@ -119,9 +119,9 @@ def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
         config.update({"price": [1000, 1000]})
     client = OpenAIWrapper(config_list=config_list, cache_seed=None)
     response = client.create(prompt="1+3=")
-    assert (
-        response.cost >= 4
-    ), f"Due to customized pricing, cost should be > 4. Message: {response.choices[0].message.content}"
+    assert response.cost >= 4, (
+        f"Due to customized pricing, cost should be > 4. Message: {response.choices[0].message.content}"
+    )
 
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
@@ -150,9 +150,9 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
     # check update
     response = client.create(prompt="1+3=", cache_seed=42)
-    assert (
-        client.total_usage_summary["total_cost"] == response.cost * 2
-    ), "total_cost should be equal to response.cost * 2"
+    assert client.total_usage_summary["total_cost"] == response.cost * 2, (
+        "total_cost should be equal to response.cost * 2"
+    )
 
 
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")

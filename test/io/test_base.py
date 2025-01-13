@@ -5,9 +5,9 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from threading import Thread
-from typing import Any, List
+from typing import Any
 
-from autogen.io import IOConsole, IOStream, IOWebsockets
+from autogen.io import IOConsole, IOStream
 from autogen.messages.base_message import BaseMessage
 
 

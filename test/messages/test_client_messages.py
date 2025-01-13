@@ -9,10 +9,7 @@ from uuid import UUID
 import pytest
 
 from autogen.messages.client_messages import (
-    ActualUsageSummary,
-    ModelUsageSummary,
     StreamMessage,
-    TotalUsageSummary,
     UsageSummaryMessage,
     _change_usage_summary_format,
 )

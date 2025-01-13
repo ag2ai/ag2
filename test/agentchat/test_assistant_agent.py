@@ -13,7 +13,7 @@ import pytest
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 here = os.path.abspath(os.path.dirname(__file__))
 

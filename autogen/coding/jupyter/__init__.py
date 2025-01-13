@@ -20,11 +20,11 @@ from .jupyter_code_executor import JupyterCodeExecutor
 from .local_jupyter_server import LocalJupyterServer
 
 __all__ = [
-    "JupyterConnectable",
-    "JupyterConnectionInfo",
-    "JupyterClient",
-    "LocalJupyterServer",
     "DockerJupyterServer",
     "EmbeddedIPythonCodeExecutor",
+    "JupyterClient",
     "JupyterCodeExecutor",
+    "JupyterConnectable",
+    "JupyterConnectionInfo",
+    "LocalJupyterServer",
 ]

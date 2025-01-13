@@ -10,7 +10,7 @@ import inspect
 import logging
 import sys
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Union, runtime_checkable
 
 from pydantic import BaseModel, schema_json_of
 
@@ -36,7 +36,6 @@ else:
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
     from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
-    from openai.resources import Completions
     from openai.types.chat import ChatCompletion
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
     from openai.types.chat.chat_completion_chunk import (
@@ -44,7 +43,6 @@ else:
         ChoiceDeltaToolCall,
         ChoiceDeltaToolCallFunction,
     )
-    from openai.types.chat.parsed_chat_completion import ParsedChatCompletion, ParsedChatCompletionMessage
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
 
@@ -182,8 +180,7 @@ OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
 class ModelClient(Protocol):
-    """
-    A client class must implement the following methods:
+    """A client class must implement the following methods:
     - create must return a response object that implements the ModelClientResponseProtocol
     - cost must return the cost of the response
     - get_usage must return a dict with the following keys:
@@ -215,8 +212,7 @@ class ModelClient(Protocol):
     def message_retrieval(
         self, response: ModelClientResponseProtocol
     ) -> Union[list[str], list[ModelClient.ModelClientResponseProtocol.Choice.Message]]:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -483,8 +479,7 @@ class OpenAIWrapper:
         config_list: Optional[list[dict[str, Any]]] = None,
         **base_config: Any,
     ):
-        """
-        Args:
+        """Args:
             config_list: a list of config dicts to override the base_config.
                 They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method. E.g.,
 
@@ -514,7 +509,6 @@ class OpenAIWrapper:
                 and additional kwargs.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `base_config` or in each config of `config_list`.
         """
-
         if logging_enabled():
             log_new_wrapper(self, locals())
         openai_config, extra_kwargs = self._separate_openai_config(base_config)
@@ -770,6 +764,7 @@ class OpenAIWrapper:
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
             - api_version (str | None): The api version. Default to None. E.g., "2024-02-01".
+
         Raises:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
@@ -1059,8 +1054,7 @@ class OpenAIWrapper:
         # future proofing for when tool calls other than function calls are supported
         if tool_calls_chunk.type and tool_calls_chunk.type != "function":
             raise NotImplementedError(
-                f"Tool call type {tool_calls_chunk.type} is currently not supported. "
-                "Only function calls are supported."
+                f"Tool call type {tool_calls_chunk.type} is currently not supported. Only function calls are supported."
             )
 
         # Handle tool call

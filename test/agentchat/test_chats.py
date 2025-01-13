@@ -13,10 +13,10 @@ from typing import Annotated, Literal, TypeVar
 import pytest
 
 import autogen
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, filter_config, initiate_chats
+from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason, skip_openai
 
 
 @pytest.fixture
@@ -625,9 +625,9 @@ def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials, tasks_work_d
 
 def test_post_process_carryover_item():
     gemini_carryover_item = {"content": "How can I help you?", "role": "model"}
-    assert (
-        _post_process_carryover_item(gemini_carryover_item) == gemini_carryover_item["content"]
-    ), "Incorrect carryover postprocessing"
+    assert _post_process_carryover_item(gemini_carryover_item) == gemini_carryover_item["content"], (
+        "Incorrect carryover postprocessing"
+    )
     carryover_item = "How can I help you?"
     assert _post_process_carryover_item(carryover_item) == carryover_item, "Incorrect carryover postprocessing"
 

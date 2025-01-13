@@ -9,7 +9,7 @@ import sys
 import pytest
 from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
 
-from ....conftest import reason, skip_openai  # noqa: E402
+from ....conftest import reason, skip_openai
 
 try:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
@@ -30,8 +30,7 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
     reason=reason,
 )
 def test_falkor_db_query_engine():
-    """
-    Test FalkorDB Query Engine.
+    """Test FalkorDB Query Engine.
     1. create a test FalkorDB Query Engine with a schema.
     2. Initialize it with an input txt file.
     3. Query it with a question and verify the result contains the critical information.

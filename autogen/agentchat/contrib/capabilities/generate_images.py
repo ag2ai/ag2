@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Any, Dict, List, Literal, Optional, Protocol, Tuple, Union
+from typing import Any, Literal, Optional, Protocol, Union
 
 from PIL.Image import Image
 from openai import OpenAI
@@ -78,12 +78,11 @@ class DalleImageGenerator:
         quality: Literal["standard", "hd"] = "standard",
         num_images: int = 1,
     ):
-        """
-        Args:
-            llm_config (dict): llm config, must contain a valid dalle model and OpenAI API key in config_list.
-            resolution (str): The resolution of the image you want to generate. Must be one of "256x256", "512x512", "1024x1024", "1792x1024", "1024x1792".
-            quality (str): The quality of the image you want to generate. Must be one of "standard", "hd".
-            num_images (int): The number of images to generate.
+        """Args:
+        llm_config (dict): llm config, must contain a valid dalle model and OpenAI API key in config_list.
+        resolution (str): The resolution of the image you want to generate. Must be one of "256x256", "512x512", "1024x1024", "1792x1024", "1024x1792".
+        quality (str): The quality of the image you want to generate. Must be one of "standard", "hd".
+        num_images (int): The number of images to generate.
         """
         config_list = llm_config["config_list"]
         _validate_dalle_model(config_list[0]["model"])
@@ -154,23 +153,22 @@ class ImageGeneration(AgentCapability):
         verbosity: int = 0,
         register_reply_position: int = 2,
     ):
-        """
-        Args:
-            image_generator (ImageGenerator): The image generator you would like to use to generate images.
-            cache (None or AbstractCache): The cache client to use to store and retrieve generated images. If None,
-                no caching will be used.
-            text_analyzer_llm_config (Dict or None): The LLM config for the text analyzer. If None, the LLM config will
-                be retrieved from the agent you're adding the ability to.
-            text_analyzer_instructions (str): Instructions provided to the TextAnalyzerAgent used to analyze
-                incoming messages and extract the prompt for image generation. The default instructions focus on
-                summarizing the prompt. You can customize the instructions to achieve more granular control over prompt
-                extraction.
-                Example: 'Extract specific details from the message, like desired objects, styles, or backgrounds.'
-            verbosity (int): The verbosity level. Defaults to 0 and must be greater than or equal to 0. The text
-                analyzer llm calls will be silent if verbosity is less than 2.
-            register_reply_position (int): The position of the reply function in the agent's list of reply functions.
-                This capability registers a new reply function to handle messages with image generation requests.
-                Defaults to 2 to place it after the check termination and human reply for a ConversableAgent.
+        """Args:
+        image_generator (ImageGenerator): The image generator you would like to use to generate images.
+        cache (None or AbstractCache): The cache client to use to store and retrieve generated images. If None,
+            no caching will be used.
+        text_analyzer_llm_config (Dict or None): The LLM config for the text analyzer. If None, the LLM config will
+            be retrieved from the agent you're adding the ability to.
+        text_analyzer_instructions (str): Instructions provided to the TextAnalyzerAgent used to analyze
+            incoming messages and extract the prompt for image generation. The default instructions focus on
+            summarizing the prompt. You can customize the instructions to achieve more granular control over prompt
+            extraction.
+            Example: 'Extract specific details from the message, like desired objects, styles, or backgrounds.'
+        verbosity (int): The verbosity level. Defaults to 0 and must be greater than or equal to 0. The text
+            analyzer llm calls will be silent if verbosity is less than 2.
+        register_reply_position (int): The position of the reply function in the agent's list of reply functions.
+            This capability registers a new reply function to handle messages with image generation requests.
+            Defaults to 2 to place it after the check termination and human reply for a ConversableAgent.
         """
         self._image_generator = image_generator
         self._cache = cache

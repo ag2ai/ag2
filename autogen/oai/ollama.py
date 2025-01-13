@@ -28,7 +28,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import ollama
 from fix_busted_json import repair_json
@@ -36,7 +36,6 @@ from ollama import Client
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
@@ -86,8 +85,7 @@ class OllamaClient:
             warnings.warn("response_format is not supported for Ollama, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -121,10 +119,10 @@ class OllamaClient:
         # There are other, advanced, parameters such as format, system (to override system message), template, raw, etc. - not used
 
         # We won't enforce the available models
-        ollama_params["model"] = params.get("model", None)
-        assert ollama_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Ollama model to use."
+        ollama_params["model"] = params.get("model")
+        assert ollama_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Ollama model to use."
+        )
 
         ollama_params["stream"] = validate_parameter(params, "stream", bool, True, False, None, None)
 
@@ -357,7 +355,6 @@ class OllamaClient:
         """Convert messages from OAI format to Ollama's format.
         We correct for any specific role orders and types, and convert tools to messages (as Ollama can't use tool messages)
         """
-
         ollama_messages = copy.deepcopy(messages)
 
         # Remove the name field
@@ -461,7 +458,6 @@ class OllamaClient:
 
 def response_to_tool_call(response_string: str) -> Any:
     """Attempts to convert the response to an object, aimed to align with function format `[{},{}]`"""
-
     # We try and detect the list[dict] format:
     # Pattern 1 is [{},{}]
     # Pattern 2 is {} (without the [], so could be a single function call)
@@ -520,7 +516,6 @@ def response_to_tool_call(response_string: str) -> Any:
 
 def _object_to_tool_call(data_object: Any) -> list[dict]:
     """Attempts to convert an object to a valid tool call object List[Dict] and returns it, if it can, otherwise None"""
-
     # If it's a dictionary and not a list then wrap in a list
     if isinstance(data_object, dict):
         data_object = [data_object]

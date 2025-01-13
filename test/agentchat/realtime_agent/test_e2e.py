@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from logging import getLogger
-from typing import Annotated, Any
+from typing import Annotated
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
-from ...conftest import Credentials, reason, skip_openai  # noqa: E402
+from ...conftest import Credentials, reason, skip_openai
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)
@@ -94,7 +94,7 @@ class TestE2E:
             assert "Seattle" in last_response_transcript, "Weather response did not include the location"
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 

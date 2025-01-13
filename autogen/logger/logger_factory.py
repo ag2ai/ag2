@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal, Optional
 
 from autogen.logger.base_logger import BaseLogger
 from autogen.logger.file_logger import FileLogger
