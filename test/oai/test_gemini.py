@@ -295,13 +295,15 @@ def test_create_response_with_text(mock_calculate_cost, mock_generative_model, g
     mock_usage_metadata.prompt_token_count = 100
     mock_usage_metadata.candidates_token_count = 50
 
-    # Setup the mock to return a response with only text content
     mock_text_part = MagicMock()
     mock_text_part.text = "Example response"
     mock_text_part.function_call = None
 
+    mock_candidate = MagicMock()
+    mock_candidate.content.parts = [mock_text_part]
+
     mock_response = MagicMock()
-    mock_response.parts = [mock_text_part]
+    mock_response.candidates = [mock_candidate]
     mock_response.usage_metadata = mock_usage_metadata
     mock_chat.send_message.return_value = mock_response
 
@@ -345,13 +347,15 @@ def test_vertexai_create_response(
     mock_usage_metadata.prompt_token_count = 100
     mock_usage_metadata.candidates_token_count = 50
 
-    # Setup the mock to return a response with only text content
     mock_text_part = MagicMock()
     mock_text_part.text = "Example response"
     mock_text_part.function_call = None
 
+    mock_candidate = MagicMock()
+    mock_candidate.content.parts = [mock_text_part]
+
     mock_response = MagicMock()
-    mock_response.parts = [mock_text_part]
+    mock_response.candidates = [mock_candidate]
     mock_response.usage_metadata = mock_usage_metadata
     mock_chat.send_message.return_value = mock_response
 

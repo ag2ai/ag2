@@ -260,7 +260,13 @@ class GeminiClient:
         ans = ""
         random_id = random.randint(0, 10000)
         prev_function_calls = []
-        for part in response.parts:
+        # google.generativeai also raises an error len(candidates) != 1:
+        if len(response.candidates) != 1:
+            raise ValueError(
+                f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
+            )
+
+        for part in response.candidates[0].content.parts:
             # Function calls
             if fn_call := part.function_call:
                 # If we have a repeated function call, ignore it
@@ -325,7 +331,7 @@ class GeminiClient:
         """Convert AutoGen content to Gemini parts, catering for text and tool calls"""
         rst = []
 
-        if message["role"] == "tool":
+        if "role" in message and message["role"] == "tool":
             # Tool call recommendation
 
             function_name = self.tool_call_function_map[message["tool_call_id"]]
