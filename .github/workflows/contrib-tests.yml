@@ -61,7 +61,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb --skip-openai
+          pytest test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -131,7 +131,7 @@ jobs:
       - name: Coverage
         run: |
           uv pip install --system pytest-cov>=5
-          pytest test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb --skip-openai
+          pytest test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -162,7 +162,7 @@ jobs:
           uv pip install --system -e .
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/agent_eval/ --skip-openai
+          pytest test/agentchat/contrib/agent_eval/ -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -199,7 +199,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/test_gpt_assistant.py --skip-openai
+          pytest test/agentchat/contrib/test_gpt_assistant.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -236,7 +236,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/capabilities/test_teachable_agent.py --skip-openai
+          pytest test/agentchat/contrib/capabilities/test_teachable_agent.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -273,7 +273,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py --skip-openai
+          pytest test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -312,11 +312,11 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/test_img_utils.py test/agentchat/contrib/test_lmm.py test/agentchat/contrib/test_llava.py test/agentchat/contrib/capabilities/test_vision_capability.py --skip-openai
+          pytest test/agentchat/contrib/test_img_utils.py test/agentchat/contrib/test_lmm.py test/agentchat/contrib/test_llava.py test/agentchat/contrib/capabilities/test_vision_capability.py -m "not openai"
       - name: Image Gen Coverage
         if: ${{ matrix.os != 'windows-latest' && matrix.python-version != '3.13' }}
         run: |
-          pytest test/agentchat/contrib/capabilities/test_image_generation_capability.py --skip-openai
+          pytest test/agentchat/contrib/capabilities/test_image_generation_capability.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -358,7 +358,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_gemini.py --skip-openai
+          pytest test/oai/test_gemini.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -395,7 +395,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/capabilities/test_transform_messages.py --skip-openai
+          pytest test/agentchat/contrib/capabilities/test_transform_messages.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -427,7 +427,7 @@ jobs:
           uv pip install --system llama-index llama-index-llms-openai
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/test_llamaindex_conversable_agent.py --skip-openai
+          pytest test/agentchat/contrib/test_llamaindex_conversable_agent.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -470,7 +470,7 @@ jobs:
 
       - name: Coverage
         run: |
-          pytest test/oai/test_anthropic.py --skip-openai
+          pytest test/oai/test_anthropic.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -512,7 +512,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_cerebras.py --skip-openai
+          pytest test/oai/test_cerebras.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -554,7 +554,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_mistral.py --skip-openai
+          pytest test/oai/test_mistral.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -596,7 +596,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_together.py --skip-openai
+          pytest test/oai/test_together.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -638,7 +638,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_groq.py --skip-openai
+          pytest test/oai/test_groq.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -676,7 +676,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_cohere.py --skip-openai
+          pytest test/oai/test_cohere.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -718,7 +718,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_ollama.py --skip-openai
+          pytest test/oai/test_ollama.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -760,7 +760,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/oai/test_bedrock.py --skip-openai
+          pytest test/oai/test_bedrock.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -802,7 +802,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          pytest test/agentchat/contrib/test_swarm.py --skip-openai
+          pytest test/agentchat/contrib/test_swarm.py -m "not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -855,7 +855,7 @@ jobs:
             fi
         - name: Coverage
           run: |
-            pytest test/agentchat/contrib/test_reasoning_agent.py --skip-openai
+            pytest test/agentchat/contrib/test_reasoning_agent.py -m "not openai"
         - name: Upload coverage to Codecov
           uses: codecov/codecov-action@v3
           with:
