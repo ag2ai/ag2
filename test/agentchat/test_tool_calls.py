@@ -22,6 +22,8 @@ try:
     from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
+else:
+    skip = False
 
 
 @pytest.mark.openai
