@@ -705,8 +705,8 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     mint_config["navigation"].append(talks_section)
 
     # add blogs to navigation
-    blogs_dir = website_dir / "blog"
-    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "generated_blog")]}
+    blogs_dir = website_dir / "_blogs"
+    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "blog")]}
     mint_config["navigation"].append(blog_section)
 
     # Add examples to navigation
@@ -831,9 +831,9 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
     Args:
         website_dir (Path): Root directory of the website
     """
-    blog_dir = website_dir / "blog"
+    blog_dir = website_dir / "_blogs"
     authors_yml = blog_dir / "authors.yml"
-    generated_blog_dir = website_dir / "generated_blog"
+    generated_blog_dir = website_dir / "blog"
 
     # Remove existing generated directory if it exists
     if generated_blog_dir.exists():
