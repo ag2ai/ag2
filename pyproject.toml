@@ -189,7 +189,7 @@ test = [
 
 docs = [
     "pydoc-markdown",
-    "pyyaml",
+    "pyyaml==6.0.2",
     "termcolor",
     "nbclient",
 ]

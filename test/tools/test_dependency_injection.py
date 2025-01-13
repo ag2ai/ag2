@@ -10,12 +10,14 @@ from pydantic import BaseModel
 
 from autogen.tools.dependency_injection import (
     BaseContext,
+    ChatContext,
     Depends,
     Field,
-    _is_base_context_param,
+    _is_context_param,
     _is_depends_param,
     _remove_injected_params_from_signature,
     _string_metadata_to_description_field,
+    get_context_params,
 )
 
 
@@ -26,27 +28,35 @@ class TestRemoveInjectedParamsFromSignature:
     def f_with_annotated(  # type: ignore[misc]
         a: int,  # noqa: N805
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        chat_ctx: Annotated[ChatContext, "Chat context"],
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     async def f_with_annotated_async(  # type: ignore[misc]
         a: int,  # noqa: N805
         ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+        chat_ctx: Annotated[ChatContext, "Chat context"],
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     @staticmethod
     def f_without_annotated(
         a: int,
+        chat_ctx: ChatContext,
         ctx: MyContext = Depends(MyContext(b=3)),
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     @staticmethod
     async def f_without_annotated_async(
         a: int,
+        chat_ctx: ChatContext,
         ctx: MyContext = Depends(MyContext(b=3)),
     ) -> int:
+        assert isinstance(chat_ctx, ChatContext)
         return a + ctx.b
 
     @staticmethod
@@ -114,6 +124,8 @@ class TestRemoveInjectedParamsFromSignature:
         b: Annotated[int, "b description"],
         ctx1: Annotated[MyContext, Depends(MyContext(b=2))],
         ctx2: Annotated[int, Depends(lambda a: a + 2)],
+        ctx6: ChatContext,
+        ctx7: Annotated[ChatContext, "ctx7 description"],
         ctx3: MyContext = Depends(MyContext(b=3)),
         ctx4: MyContext = MyContext(b=4),
         ctx5: int = Depends(lambda a: a + 2),
@@ -122,13 +134,27 @@ class TestRemoveInjectedParamsFromSignature:
 
     def test_is_base_context_param(self) -> None:
         sig = inspect.signature(self.f_all_params)
-        assert _is_base_context_param(sig.parameters["a"]) is False
-        assert _is_base_context_param(sig.parameters["b"]) is False
-        assert _is_base_context_param(sig.parameters["ctx1"]) is True
-        assert _is_base_context_param(sig.parameters["ctx2"]) is False
-        assert _is_base_context_param(sig.parameters["ctx3"]) is True
-        assert _is_base_context_param(sig.parameters["ctx4"]) is True
-        assert _is_base_context_param(sig.parameters["ctx5"]) is False
+        assert _is_context_param(sig.parameters["a"]) is False
+        assert _is_context_param(sig.parameters["b"]) is False
+        assert _is_context_param(sig.parameters["ctx1"]) is True
+        assert _is_context_param(sig.parameters["ctx2"]) is False
+        assert _is_context_param(sig.parameters["ctx3"]) is True
+        assert _is_context_param(sig.parameters["ctx4"]) is True
+        assert _is_context_param(sig.parameters["ctx5"]) is False
+        assert _is_context_param(sig.parameters["ctx6"]) is True
+        assert _is_context_param(sig.parameters["ctx7"]) is True
+
+    def test_is_chat_context_param(self) -> None:
+        sig = inspect.signature(self.f_all_params)
+        assert _is_context_param(sig.parameters["ctx1"], subclass=ChatContext) is False
+        assert _is_context_param(sig.parameters["ctx3"], subclass=ChatContext) is False
+        assert _is_context_param(sig.parameters["ctx4"], subclass=ChatContext) is False
+        assert _is_context_param(sig.parameters["ctx6"], subclass=ChatContext) is True
+        assert _is_context_param(sig.parameters["ctx7"], subclass=ChatContext) is True
+
+    def test_get_chat_context_params(self) -> None:
+        chat_context_params = get_context_params(self.f_all_params, subclass=ChatContext)
+        assert chat_context_params == ["ctx6", "ctx7"]
 
     def test_is_depends_param(self) -> None:
         sig = inspect.signature(self.f_all_params)
