@@ -109,6 +109,10 @@ class RealtimeAgent(ConversableAgent):
         self._initial_agent: Optional[SwarmAgent] = None
         self._agents: Optional[list[SwarmAgent]] = None
 
+    def _validate_name(self, name: str) -> None:
+        # RealtimeAgent does not need to validate the name
+        pass
+
     @property
     def logger(self) -> Logger:
         """Get the logger for the agent."""
