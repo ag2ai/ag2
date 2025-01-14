@@ -56,7 +56,7 @@ jobs:
         if: matrix.python-version == '3.9'
         run: |
           uv pip install --system docker
-          uv pip install --system -e .[redis,interop]
+          uv pip install --system -e .[redis,interop,gemini]
       - name: Coverage
         if: matrix.python-version == '3.9'
         env:
