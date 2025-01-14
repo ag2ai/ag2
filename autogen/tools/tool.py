@@ -45,7 +45,7 @@ class Tool:
             self._description: str = description or func_or_tool.description
             self._func: Callable[..., Any] = func_or_tool.func
             self._chat_context_param_names: list[str] = func_or_tool._chat_context_param_names
-        elif inspect.isfunction(func_or_tool):
+        elif inspect.isfunction(func_or_tool) or inspect.ismethod(func_or_tool):
             self._chat_context_param_names = get_context_params(func_or_tool, subclass=ChatContext)
             self._func = inject_params(func_or_tool)
             self._name = name or func_or_tool.__name__
