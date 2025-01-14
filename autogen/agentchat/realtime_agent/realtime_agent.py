@@ -9,15 +9,14 @@ import anyio
 from asyncer import asyncify, create_task_group, syncify
 from fastapi import WebSocket
 
-from autogen.agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
-from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
-
-from ... import SwarmAgent
 from ...tools import Tool
+from .. import SwarmAgent
 from ..agent import Agent
+from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ..conversable_agent import ConversableAgent
 from .function_observer import FunctionObserver
 from .oai_realtime_client import OpenAIRealtimeClient, OpenAIRealtimeWebRTCClient, Role
+from .realtime_client import RealtimeClientProtocol
 from .realtime_observer import RealtimeObserver
 
 F = TypeVar("F", bound=Callable[..., Any])
