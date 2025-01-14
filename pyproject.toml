@@ -189,7 +189,7 @@ test = [
 
 docs = [
     "pydoc-markdown",
-    "pyyaml",
+    "pyyaml==6.0.2",
     "termcolor",
     "nbclient",
 ]
@@ -200,7 +200,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.8.6",
+    "ruff==0.9.1",
     "codespell==2.3.0",
     "pyupgrade-directories==0.3.0",
 ]
@@ -241,7 +241,17 @@ exclude = ["test", "notebook"]
 
 [tool.pytest.ini_options]
 addopts = '--cov=. --cov-append --cov-branch --cov-report=xml -m "not conda"'
-markers = ["conda: test related to conda forge distribution"]
+testpaths = [
+    "test",
+]
+markers = [
+    "conda: test related to conda forge distribution",
+    "all",
+    "openai",
+    "gemini",
+    "redis",
+    "docker",
+]
 
 [tool.black]
 # https://github.com/psf/black
@@ -277,9 +287,10 @@ select = [
 #    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
 #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
+     "RUF022", # Sort __all__          https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
 ]
 
-ignore = ["E501", "F401", "F403", "C901",
+ignore = ["E501", "F403", "C901",
     "E402",
     "E721",
     "ASYNC109",
@@ -303,7 +314,6 @@ exclude = [
     "math_utils\\.py$",
     "**/cap/py/autogencap/proto/*",
 ]
-unfixable = ["F401"]
 
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.

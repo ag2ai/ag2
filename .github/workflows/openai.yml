@@ -65,7 +65,7 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          pytest test --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
+          bash scripts/test.sh test --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
       - name: Coverage and check notebook outputs
         if: matrix.python-version != '3.9'
         env:
@@ -76,7 +76,7 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           uv pip install --system nbconvert nbformat ipykernel
-          pytest test/test_notebook.py --durations=10 --durations-min=1.0
+          bash scripts/test.sh test/test_notebook.py --durations=10 --durations-min=1.0
           cat "$(pwd)/test/executed_openai_notebook_output.txt"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

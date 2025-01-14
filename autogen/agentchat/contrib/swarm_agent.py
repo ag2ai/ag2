@@ -2,14 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import copy
-import inspect
 import json
 import re
 import warnings
 from dataclasses import dataclass
 from enum import Enum
 from inspect import signature
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel
 
@@ -74,9 +73,9 @@ class ON_CONDITION:  # noqa: N801
     def __post_init__(self):
         # Ensure valid types
         if self.target is not None:
-            assert isinstance(self.target, SwarmAgent) or isinstance(
-                self.target, dict
-            ), "'target' must be a SwarmAgent or a Dict"
+            assert isinstance(self.target, SwarmAgent) or isinstance(self.target, dict), (
+                "'target' must be a SwarmAgent or a Dict"
+            )
 
         # Ensure they have a condition
         assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
@@ -179,7 +178,7 @@ def _create_nested_chats(agent: "SwarmAgent", nested_chat_agents: list["SwarmAge
             nested_chats["chat_queue"],
             reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
             or "summary_from_nested_chats",
-            config=nested_chats.get("config", None),
+            config=nested_chats.get("config"),
             trigger=lambda sender: True,
             position=0,
             use_async=nested_chats.get("use_async", False),
@@ -557,8 +556,7 @@ async def a_initiate_swarm_chat(
 
 
 class SwarmResult(BaseModel):
-    """
-    Encapsulates the possible return values for a swarm agent function.
+    """Encapsulates the possible return values for a swarm agent function.
 
     Args:
         values (str): The result values as a string.
@@ -643,8 +641,7 @@ class SwarmAgent(ConversableAgent):
             self.register_hook("update_agent_state", self._update_conditional_functions)
 
     def register_update_agent_state_before_reply(self, functions: Optional[Union[list[Callable], Callable]]):
-        """
-        Register functions that will be called when the agent is selected and before it speaks.
+        """Register functions that will be called when the agent is selected and before it speaks.
         You can add your own validation or precondition functions here.
 
         Args:
@@ -726,9 +723,9 @@ class SwarmAgent(ConversableAgent):
 
         for transit in hand_to:
             if isinstance(transit, AFTER_WORK):
-                assert isinstance(
-                    transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)
-                ), "Invalid After Work value"
+                assert isinstance(transit.agent, (AfterWorkOption, SwarmAgent, str, Callable)), (
+                    "Invalid After Work value"
+                )
                 self.after_work = transit
             elif isinstance(transit, ON_CONDITION):
                 if isinstance(transit.target, SwarmAgent):
@@ -798,8 +795,8 @@ class SwarmAgent(ConversableAgent):
         This function:
         1. Adds context_variables back to the tool call for the function, if necessary.
         2. Generates the tool calls reply.
-        3. Updates context_variables and next_agent based on the tool call response."""
-
+        3. Updates context_variables and next_agent based on the tool call response.
+        """
         if config is None:
             config = self
         if messages is None:

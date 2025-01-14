@@ -8,8 +8,7 @@ from typing import Any
 
 
 def get_youtube_caption(video_id: str) -> Any:
-    """
-    Retrieves the captions for a YouTube video.
+    """Retrieves the captions for a YouTube video.
 
     Args:
         videoId (str): The ID of the YouTube video.

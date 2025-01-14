@@ -4,11 +4,10 @@
 
 import logging
 import sys
-from typing import Literal
 
 import pytest
 
-from ....conftest import reason, skip_openai  # noqa: E402
+from ....conftest import reason
 
 try:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
@@ -111,14 +110,13 @@ def neo4j_native_query_engine_auto():
     return query_engine
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_native_query_engine(neo4j_native_query_engine):
-    """
-    Test querying with initialized knowledge graph
-    """
+    """Test querying with initialized knowledge graph"""
     question = "Which company is the employer?"
     query_result: GraphStoreQueryResult = neo4j_native_query_engine.query(question=question)
 
@@ -126,14 +124,13 @@ def test_neo4j_native_query_engine(neo4j_native_query_engine):
     assert query_result.answer.find("BUZZ") >= 0
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):
-    """
-    Test querying with auto-generated property graph
-    """
+    """Test querying with auto-generated property graph"""
     question = "Which company is the employer?"
     query_result: GraphStoreQueryResult = neo4j_native_query_engine_auto.query(question=question)
 
@@ -142,9 +139,7 @@ def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):
 
 
 def test_neo4j_add_records(neo4j_native_query_engine):
-    """
-    Test the add_records functionality of the Neo4j Query Engine.
-    """
+    """Test the add_records functionality of the Neo4j Query Engine."""
     input_path = "./test/agentchat/contrib/graph_rag/the_matrix.txt"
     input_documents = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
 

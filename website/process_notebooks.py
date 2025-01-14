@@ -20,12 +20,12 @@ import sys
 import tempfile
 import threading
 import time
-import typing
 from dataclasses import dataclass
+from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 from termcolor import colored
 
@@ -36,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import nbclient
+    import nbclient  # noqa: F401
     from nbclient.client import (
         CellExecutionError,
         CellTimeoutError,
@@ -89,7 +89,6 @@ def load_metadata(notebook: Path) -> dict:
 
 def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     """Return a reason to skip the notebook, or None if it should not be skipped."""
-
     if notebook.suffix != ".ipynb":
         return "not a notebook"
 
@@ -110,7 +109,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
     # <!-- and --> must exists on lines on their own
     if first_cell["cell_type"] == "markdown" and first_cell["source"][0].strip() == "<!--":
         raise ValueError(
-            f"Error in {str(notebook.resolve())} - Front matter should be defined in the notebook metadata now."
+            f"Error in {notebook.resolve()!s} - Front matter should be defined in the notebook metadata now."
         )
 
     metadata = load_metadata(notebook)
@@ -163,7 +162,6 @@ def extract_title(notebook: Path) -> str | None:
 
 def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, quarto_bin: str, dry_run: bool) -> str:
     """Process a single notebook."""
-
     in_notebook_dir = "notebook" in src_notebook.parts
 
     metadata = load_metadata(src_notebook)
@@ -360,13 +358,11 @@ def add_front_matter_to_metadata_mdx(
 
 
 def convert_callout_blocks(content: str) -> str:
-    """
-    Converts callout blocks in the following formats:
+    """Converts callout blocks in the following formats:
     1) Plain callout blocks using ::: syntax.
     2) Blocks using 3-4 backticks + (mdx-code-block or {=mdx}) + ::: syntax.
     Transforms them into custom HTML/component syntax.
     """
-
     callout_types = {
         "tip": "Tip",
         "note": "Note",
@@ -446,8 +442,7 @@ def convert_callout_blocks(content: str) -> str:
 
 
 def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
-    """
-    Converts MDX code block image syntax to regular markdown image syntax.
+    """Converts MDX code block image syntax to regular markdown image syntax.
 
     Args:
         content (str): The markdown content containing mdx-code-block image syntax
@@ -611,9 +606,76 @@ def copy_examples_mdx_files(website_dir: str) -> None:
         shutil.copy(src_mdx_file_path, dest_mdx_file_path)
 
 
-def update_navigation_with_notebooks(website_dir: Path) -> None:
+def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
+    """Get sorted list of files with prefix prepended."""
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Directory not found: {input_dir}")
+
+    # Sort files by parent directory date (if exists) and name
+    def sort_key(file_path):
+        dirname = file_path.parent.name
+        try:
+            # Extract date from directory name (first 3 parts)
+            date_str = "-".join(dirname.split("-")[:3])
+            date = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            date = datetime.min
+        return (date, dirname)
+
+    files = sorted(input_dir.glob("**/index.mdx"), key=sort_key)
+    reversed_files = files[::-1]
+
+    return [f"{prefix}/{f.parent.relative_to(input_dir)}/index".replace("\\", "/") for f in reversed_files]
+
+
+def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[str, Union[str, List[str]]]:
+    """Generate navigation group for a directory.
+
+    Args:
+        input_dir (Path): Directory to process
+        group_header (str): Group header
     """
-    Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
+
+    sorted_dir_files = get_sorted_files(input_dir, prefix)
+
+    return {"group": group_header, "pages": sorted_dir_files}
+
+
+def extract_example_group(metadata_path):
+    # Read NotebooksMetadata.mdx and extract metadata links
+    with open(metadata_path, encoding="utf-8") as f:
+        content = f.read()
+        # Extract the array between the brackets
+        start = content.find("export const notebooksMetadata = [")
+        end = content.rfind("]")
+        if start == -1 or end == -1:
+            print("Could not find notebooksMetadata in the file")
+            return
+        metadata_str = content[start + 32 : end + 1]
+        notebooks_metadata = json.loads(metadata_str)
+
+    # Create notebooks entry
+    notebooks_entry = {
+        "group": "Examples by Notebook",
+        "pages": ["notebooks/Notebooks"]
+        + [
+            Path(item["source"])
+            .with_suffix("")
+            .as_posix()
+            .replace("/website/", "/")
+            .replace("/notebook/", "notebooks/")
+            for item in notebooks_metadata
+            if not item["source"].startswith("/website/docs/")
+        ],
+    }
+
+    example_group = {"group": "Examples", "pages": ["notebooks/Examples", notebooks_entry, "notebooks/Gallery"]}
+
+    return example_group
+
+
+def update_navigation_with_notebooks(website_dir: Path) -> None:
+    """Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
 
     Args:
         website_dir (Path): Root directory of the website
@@ -633,47 +695,23 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     with open(mint_json_path, encoding="utf-8") as f:
         mint_config = json.load(f)
 
-    # Read NotebooksMetadata.mdx and extract metadata links
-    with open(metadata_path, encoding="utf-8") as f:
-        content = f.read()
-        # Extract the array between the brackets
-        start = content.find("export const notebooksMetadata = [")
-        end = content.rfind("]")
-        if start == -1 or end == -1:
-            print("Could not find notebooksMetadata in the file")
-            return
-        metadata_str = content[start + 32 : end + 1]
-        notebooks_metadata = json.loads(metadata_str)
+    # add talks to navigation
+    talks_dir = website_dir / "talks"
+    talks_section = generate_nav_group(talks_dir, "Talks", "talks")
 
-    # Find the Examples group in navigation
-    examples_group = None
-    for group in mint_config["navigation"]:
-        if group.get("group") == "Examples":
-            examples_group = group
-            break
+    # Add "talks/future_talks/index" item at the beginning of the list
+    future_talks_index = talks_section["pages"].pop()
+    talks_section["pages"].insert(0, future_talks_index)
+    mint_config["navigation"].append(talks_section)
 
-    if examples_group is None:
-        print("Examples group not found in navigation")
-        return
+    # add blogs to navigation
+    blogs_dir = website_dir / "_blogs"
+    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "blog")]}
+    mint_config["navigation"].append(blog_section)
 
-    # Create notebooks entry
-    notebooks_entry = {
-        "group": "Examples by Notebook",
-        "pages": ["notebooks/Notebooks"]
-        + [
-            Path(item["source"])
-            .resolve()
-            .with_suffix("")
-            .as_posix()
-            .replace("/website/", "/")
-            .replace("/notebook/", "notebooks/")
-            for item in notebooks_metadata
-            if not item["source"].startswith("/website/docs/")
-        ],
-    }
-
-    # Replace the pages list in Examples group with our standard pages plus notebooks
-    examples_group["pages"] = ["notebooks/Examples", notebooks_entry, "notebooks/Gallery"]
+    # Add examples to navigation
+    example_group = extract_example_group(metadata_path)
+    mint_config["navigation"].append(example_group)
 
     # Write back to mint.json
     with open(mint_json_path, "w", encoding="utf-8") as f:
@@ -684,8 +722,7 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
 
 
 def fix_internal_references(content: str, root_path: Path, current_file_path: Path) -> str:
-    """
-    Resolves internal markdown references relative to root_dir and returns fixed content.
+    """Resolves internal markdown references relative to root_dir and returns fixed content.
 
     Args:
         content: Markdown content to fix
@@ -732,13 +769,13 @@ def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
 
 def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict[str, str]]) -> str:
     """Constructs HTML for displaying author cards in a blog.
+
     Args:
         authors_list: List of author identifiers
         authors_dict: Dictionary containing author information keyed by author identifier
     Returns:
         str: Formatted HTML string containing author cards
     """
-
     if not authors_list:
         return ""
 
@@ -773,6 +810,7 @@ def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict
 
 def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
     """Separate front matter and content from a markdown file.
+
     Args:
         file_path (Path): Path to the mdx file
     """
@@ -789,11 +827,20 @@ def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
 
 def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
     """Add authors info to blog posts.
+
     Args:
         website_dir (Path): Root directory of the website
     """
-    blog_dir = website_dir / "blog"
+    blog_dir = website_dir / "_blogs"
     authors_yml = blog_dir / "authors.yml"
+    generated_blog_dir = website_dir / "blog"
+
+    # Remove existing generated directory if it exists
+    if generated_blog_dir.exists():
+        shutil.rmtree(generated_blog_dir)
+
+    # Copy entire blog directory structure to generated_blog
+    shutil.copytree(blog_dir, generated_blog_dir)
 
     try:
         all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
@@ -801,7 +848,7 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
         print(f"Error reading authors file: {e}")
         sys.exit(1)
 
-    for file_path in blog_dir.glob("**/*.mdx"):
+    for file_path in generated_blog_dir.glob("**/*.mdx"):
         try:
             front_matter_string, content = separate_front_matter_and_content(file_path)
 
@@ -815,24 +862,18 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
             authors_list = [authors] if isinstance(authors, str) else authors
 
             # Social share image
-            social_img_html = (
-                """\n<div>
+            social_img_html = """\n<div>
 <img noZoom className="social-share-img"
   src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
   alt="social preview"
   style={{ position: 'absolute', left: '-9999px' }}
 />
 </div>"""
-                if '<img noZoom className="social-share-img"' not in content
-                else ""
-            )
 
-            # Generate and write content
-            authors_html = (
-                construct_authors_html(authors_list, all_authors_info)
-                if '<div class="blog-authors">' not in content
-                else ""
-            )
+            # Generate authors HTML
+            authors_html = construct_authors_html(authors_list, all_authors_info)
+
+            # Combine content
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
 
             file_path.write_text(f"{new_content}\n", encoding="utf-8")
@@ -841,6 +882,16 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
+
+
+def ensure_mint_json_exists(website_dir: Path) -> None:
+    mint_json_path = website_dir / "mint.json"
+    if not mint_json_path.exists():
+        print(f"mint.json not found at {mint_json_path}")
+        print(
+            "You can either run the 'process_api_reference.py' script before running this script or simply run the scripts/docs_build.sh script which will execute both 'process_api_reference.py' and 'process_notebooks.py' scripts in correct order."
+        )
+        sys.exit(1)
 
 
 def main() -> None:
@@ -854,9 +905,7 @@ def main() -> None:
         help="Directory containing notebooks to process",
         default=script_dir / "../notebook",
     )
-    parser.add_argument(
-        "--website-directory", type=path, help="Root directory of docusarus website", default=script_dir
-    )
+    parser.add_argument("--website-directory", type=path, help="Root directory of mintlify website", default=script_dir)
 
     render_parser = subparsers.add_parser("render")
     render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
@@ -873,6 +922,8 @@ def main() -> None:
     if args.subcommand is None:
         print("No subcommand specified")
         sys.exit(1)
+
+    ensure_mint_json_exists(args.website_directory)
 
     if args.notebooks:
         collected_notebooks = args.notebooks

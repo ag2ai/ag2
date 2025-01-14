@@ -9,4 +9,11 @@ from .langchain import LangChainInteroperability
 from .pydantic_ai import PydanticAIInteroperability
 from .registry import register_interoperable_class
 
-__all__ = ["Interoperability", "Interoperable", "register_interoperable_class"]
+__all__ = [
+    "CrewAIInteroperability",
+    "Interoperability",
+    "Interoperable",
+    "LangChainInteroperability",
+    "PydanticAIInteroperability",
+    "register_interoperable_class",
+]

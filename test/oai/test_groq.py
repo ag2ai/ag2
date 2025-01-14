@@ -183,9 +183,9 @@ def test_create_response(mock_chat, groq_client):
     response = groq_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Groq response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Groq response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_groq_response_id", "Response ID should match the mocked response ID"
     assert response.model == "llama3-70b-8192", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"

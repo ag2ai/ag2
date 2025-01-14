@@ -10,11 +10,9 @@ import atexit
 import json
 import secrets
 import signal
-import socket
 import subprocess
 import sys
 from types import TracebackType
-from typing import Optional, Type, Union, cast
 
 if sys.version_info >= (3, 11):
     from typing import Self

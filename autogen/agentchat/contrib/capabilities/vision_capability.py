@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Optional, Union
 
 from autogen.agentchat.assistant_agent import ConversableAgent
 from autogen.agentchat.contrib.capabilities.agent_capability import AgentCapability
@@ -14,10 +14,7 @@ from autogen.agentchat.contrib.img_utils import (
     get_image_data,
     get_pil_image,
     gpt4v_formatter,
-    message_formatter_pil_to_b64,
 )
-from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
-from autogen.agentchat.conversable_agent import colored
 from autogen.code_utils import content_str
 from autogen.oai.client import OpenAIWrapper
 
@@ -53,8 +50,7 @@ class VisionCapability(AgentCapability):
         description_prompt: Optional[str] = DEFAULT_DESCRIPTION_PROMPT,
         custom_caption_func: Callable = None,
     ) -> None:
-        """
-        Initializes a new instance, setting up the configuration for interacting with
+        """Initializes a new instance, setting up the configuration for interacting with
         a Language Multimodal (LMM) client and specifying optional parameters for image
         description and captioning.
 
@@ -92,9 +88,9 @@ class VisionCapability(AgentCapability):
             self._lmm_client = None
 
         self._custom_caption_func = custom_caption_func
-        assert (
-            self._lmm_config or custom_caption_func
-        ), "Vision Capability requires a valid lmm_config or custom_caption_func."
+        assert self._lmm_config or custom_caption_func, (
+            "Vision Capability requires a valid lmm_config or custom_caption_func."
+        )
 
     def add_to_agent(self, agent: ConversableAgent) -> None:
         self._parent_agent = agent
@@ -106,8 +102,7 @@ class VisionCapability(AgentCapability):
         agent.register_hook(hookable_method="process_last_received_message", hook=self.process_last_received_message)
 
     def process_last_received_message(self, content: Union[str, list[dict]]) -> str:
-        """
-        Processes the last received message content by normalizing and augmenting it
+        """Processes the last received message content by normalizing and augmenting it
         with descriptions of any included images. The function supports input content
         as either a string or a list of dictionaries, where each dictionary represents
         a content item (e.g., text, image). If the content contains image URLs, it
@@ -192,9 +187,9 @@ class VisionCapability(AgentCapability):
         return aug_content
 
     def _get_image_caption(self, img_data: str) -> str:
-        """
-        Args:
+        """Args:
             img_data (str): base64 encoded image data.
+
         Returns:
             str: caption for the given image.
         """

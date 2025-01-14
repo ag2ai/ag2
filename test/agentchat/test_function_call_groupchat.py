@@ -7,13 +7,12 @@
 #!/usr/bin/env python3 -m pytest
 
 import asyncio
-from copy import deepcopy
 
 import pytest
 
 import autogen
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 func_def = {
     "name": "get_random_number",
@@ -25,10 +24,7 @@ func_def = {
 }
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 @pytest.mark.parametrize(
     "key, value, sync",
     [

@@ -7,7 +7,7 @@ example.com
 rapidapi.com
 https://platform.openai.com
 https://openai.com
-https://code.visualstudio.com/docs/devcontainers/containers
+https://code.visualstudio.com
 https://thesequence.substack.com/p/my-five-favorite-ai-papers-of-2023
 https://www.llama.com/docs/how-to-guides/prompting/
 https://azure.microsoft.com/en-us/get-started/azure-portal
@@ -41,3 +41,4 @@ https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/agentchat_RetrieveChat_mongodb#
 https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/agentchat_RetrieveChat_pgvector#
 https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/Gallery#
 https://docs.ag2.ai/_sites/docs.ag2.ai/docs/topics/non-openai-models/cloud-gemini_vertexai#
+https://investor.nvidia.com

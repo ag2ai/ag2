@@ -8,17 +8,17 @@
 
 import pytest
 
-from autogen import ConversableAgent, config_list_from_json
+from autogen import ConversableAgent
 from autogen.formatting_utils import colored
 
-from ....conftest import Credentials, skip_openai  # noqa: E402
+from ....conftest import Credentials
 
 try:
     from autogen.agentchat.contrib.capabilities.teachability import Teachability
 except ImportError:
     skip = True
 else:
-    skip = skip_openai
+    skip = False
 
 
 # Specify the model to use by uncommenting one of the following lines.
@@ -30,7 +30,6 @@ filter_dict = {"tags": ["gpt-4o-mini"]}
 
 def create_teachable_agent(credentials: Credentials, reset_db=False, verbosity=0):
     """Instantiates a teachable agent using the settings from the top of this file."""
-
     # Start by instantiating any agent that inherits from ConversableAgent.
     teachable_agent = ConversableAgent(
         name="teachable_agent",
@@ -129,6 +128,7 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
     return num_errors, num_tests
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
     skip,
     reason="do not run if dependency is not installed or requested to skip",
@@ -160,6 +160,7 @@ def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
         )
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
     skip,
     reason="do not run if dependency is not installed or requested to skip",

@@ -11,8 +11,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import autogen
-
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
 try:

@@ -10,7 +10,7 @@ from typing import Literal
 
 import pytest
 
-from ....conftest import reason, skip_openai  # noqa: E402
+from ....conftest import reason
 
 try:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
@@ -106,9 +106,7 @@ def neo4j_query_engine():
 # Test fixture to test auto-generation without given schema
 @pytest.fixture(scope="module")
 def neo4j_query_engine_auto():
-    """
-    Test the engine with auto-generated property graph
-    """
+    """Test the engine with auto-generated property graph"""
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",
         password="password",
@@ -120,14 +118,13 @@ def neo4j_query_engine_auto():
     return query_engine
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_query_engine(neo4j_query_engine):
-    """
-    Test querying functionality of the Neo4j Query Engine.
-    """
+    """Test querying functionality of the Neo4j Query Engine."""
     question = "Which company is the employer?"
 
     # Query the database
@@ -138,14 +135,13 @@ def test_neo4j_query_engine(neo4j_query_engine):
     assert query_result.answer.find("BUZZ") >= 0
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_add_records(neo4j_query_engine):
-    """
-    Test the add_records functionality of the Neo4j Query Engine.
-    """
+    """Test the add_records functionality of the Neo4j Query Engine."""
     input_path = "./test/agentchat/contrib/graph_rag/the_matrix.txt"
     input_documents = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
 
@@ -161,14 +157,13 @@ def test_neo4j_add_records(neo4j_query_engine):
     assert query_result.answer.find("Keanu Reeves") >= 0
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_auto(neo4j_query_engine_auto):
-    """
-    Test querying with auto-generated property graph
-    """
+    """Test querying with auto-generated property graph"""
     question = "Which company is the employer?"
     query_result: GraphStoreQueryResult = neo4j_query_engine_auto.query(question=question)
 
@@ -176,14 +171,13 @@ def test_neo4j_auto(neo4j_query_engine_auto):
     assert query_result.answer.find("BUZZ") >= 0
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip or skip_openai,
+    sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
 def test_neo4j_json_auto(neo4j_query_engine_with_json):
-    """
-    Test querying with auto-generated property graph from a JSON file.
-    """
+    """Test querying with auto-generated property graph from a JSON file."""
     question = "What are current layout detection models in the LayoutParser model zoo?"
     query_result: GraphStoreQueryResult = neo4j_query_engine_with_json.query(question=question)
 

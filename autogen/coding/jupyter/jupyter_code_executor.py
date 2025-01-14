@@ -7,12 +7,11 @@
 import base64
 import json
 import os
-import re
 import sys
 import uuid
 from pathlib import Path
 from types import TracebackType
-from typing import Any, ClassVar, List, Optional, Type, Union
+from typing import Optional, Union
 
 from autogen.coding.utils import silence_pip
 
@@ -22,7 +21,6 @@ else:
     from typing_extensions import Self
 
 
-from ...agentchat.agent import LLMAgent
 from ..base import CodeBlock, CodeExecutor, CodeExtractor, IPythonCodeResult
 from ..markdown_code_extractor import MarkdownCodeExtractor
 from .base import JupyterConnectable, JupyterConnectionInfo
@@ -35,7 +33,7 @@ class JupyterCodeExecutor(CodeExecutor):
         jupyter_server: Union[JupyterConnectable, JupyterConnectionInfo],
         kernel_name: str = "python3",
         timeout: int = 60,
-        output_dir: Union[Path, str] = Path("."),
+        output_dir: Union[Path, str] = Path(),
     ):
         """(Experimental) A code executor class that executes code statefully using
         a Jupyter server supplied to this class.

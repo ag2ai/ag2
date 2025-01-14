@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def scrape_wikipedia_tables(url: str, header_keyword: str):
-    """
-    Scrapes Wikipedia tables based on a given URL and header keyword.
+    """Scrapes Wikipedia tables based on a given URL and header keyword.
 
     Args:
         url: The URL of the Wikipedia page to scrape.

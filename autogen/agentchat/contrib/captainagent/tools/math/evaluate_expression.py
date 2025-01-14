@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def evaluate_expression(expression):
-    """
-    Evaluates a mathematical expression with support for floor function notation and power notation.
+    """Evaluates a mathematical expression with support for floor function notation and power notation.
 
     Args:
         expression (str): The mathematical expression to evaluate. It can only contain one symbol 'x'.

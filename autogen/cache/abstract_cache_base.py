@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import sys
 from types import TracebackType
-from typing import Any, Optional, Protocol, Type
+from typing import Any, Optional, Protocol
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -15,15 +15,13 @@ else:
 
 
 class AbstractCache(Protocol):
-    """
-    This protocol defines the basic interface for cache operations.
+    """This protocol defines the basic interface for cache operations.
     Implementing classes should provide concrete implementations for
     these methods to handle caching mechanisms.
     """
 
     def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
-        """
-        Retrieve an item from the cache.
+        """Retrieve an item from the cache.
 
         Args:
             key (str): The key identifying the item in the cache.
@@ -36,8 +34,7 @@ class AbstractCache(Protocol):
         ...
 
     def set(self, key: str, value: Any) -> None:
-        """
-        Set an item in the cache.
+        """Set an item in the cache.
 
         Args:
             key (str): The key under which the item is to be stored.
@@ -46,15 +43,13 @@ class AbstractCache(Protocol):
         ...
 
     def close(self) -> None:
-        """
-        Close the cache. Perform any necessary cleanup, such as closing network connections or
+        """Close the cache. Perform any necessary cleanup, such as closing network connections or
         releasing resources.
         """
         ...
 
     def __enter__(self) -> Self:
-        """
-        Enter the runtime context related to this object.
+        """Enter the runtime context related to this object.
 
         The with statement will bind this method's return value to the target(s)
         specified in the as clause of the statement, if any.
@@ -67,8 +62,7 @@ class AbstractCache(Protocol):
         exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> None:
-        """
-        Exit the runtime context and close the cache.
+        """Exit the runtime context and close the cache.
 
         Args:
             exc_type: The exception type if an exception was raised in the context.

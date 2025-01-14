@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import logging
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 from .abstract_cache_base import AbstractCache
 from .disk_cache import DiskCache
@@ -20,8 +20,7 @@ class CacheFactory:
         cache_path_root: str = ".cache",
         cosmosdb_config: Optional[dict[str, Any]] = None,
     ) -> AbstractCache:
-        """
-        Factory function for creating cache instances.
+        """Factory function for creating cache instances.
 
         This function decides whether to create a RedisCache, DiskCache, or CosmosDBCache instance
         based on the provided parameters. If RedisCache is available and a redis_url is provided,
@@ -39,7 +38,6 @@ class CacheFactory:
             An instance of RedisCache, DiskCache, or CosmosDBCache.
 
         Examples:
-
         Creating a Redis cache
 
         ```python

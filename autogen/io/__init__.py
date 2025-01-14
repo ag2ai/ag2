@@ -12,4 +12,4 @@ from .websockets import IOWebsockets
 IOStream.set_global_default(IOConsole())
 IOStream.set_default(IOConsole())
 
-__all__ = ("IOConsole", "IOStream", "InputStream", "OutputStream", "IOWebsockets")
+__all__ = ("IOConsole", "IOStream", "IOWebsockets", "InputStream", "OutputStream")
