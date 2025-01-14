@@ -76,7 +76,6 @@ class RealtimeAgent(ConversableAgent):
             chat_messages=None,
             silent=None,
             context_variables=None,
-            validate_name=False,
         )
         self._logger = logger
         self._function_observer = FunctionObserver(logger=logger)
@@ -109,6 +108,10 @@ class RealtimeAgent(ConversableAgent):
         self._start_swarm_chat = False
         self._initial_agent: Optional[SwarmAgent] = None
         self._agents: Optional[list[SwarmAgent]] = None
+
+    def _validate_name(self, name: str) -> None:
+        # RealtimeAgent does not need to validate the name
+        pass
 
     @property
     def logger(self) -> Logger:
