@@ -31,6 +31,7 @@ else:
     skip_redis_tests = False or skip_redis
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip_tests, reason="openai not installed")
 def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
@@ -54,6 +55,7 @@ def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     assert duration_with_warm_cache < duration_with_cold_cache
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
 def test_redis_cache(credentials_gpt_4o_mini: Credentials):
@@ -86,6 +88,7 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
         assert duration_with_warm_cache < duration_with_cold_cache
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip_tests, reason="openai not installed")
 def test_disk_cache(credentials_gpt_4o_mini: Credentials):

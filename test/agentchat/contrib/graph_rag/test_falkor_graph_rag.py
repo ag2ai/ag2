@@ -23,6 +23,7 @@ else:
 reason = "do not run on MacOS or windows OR dependency is not installed"
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,

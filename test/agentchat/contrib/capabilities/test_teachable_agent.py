@@ -128,6 +128,7 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
     return num_errors, num_tests
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip,
@@ -160,6 +161,7 @@ def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
         )
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip,

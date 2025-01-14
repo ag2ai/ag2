@@ -26,6 +26,7 @@ else:
     skip = False
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
@@ -80,6 +81,7 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     print(eval_math_responses(**arguments))
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
 def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credentials):
@@ -130,6 +132,7 @@ def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credent
     print(eval_math_responses(**arguments))
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip or not TOOL_ENABLED or not sys.version.startswith("3.10"),

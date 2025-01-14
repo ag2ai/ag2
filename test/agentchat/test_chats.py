@@ -58,6 +58,7 @@ def test_chat_messages_for_summary():
     assert len(messages) == 2
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_chats_group(
     credentials_gpt_4o_mini: Credentials, work_dir: str, groupchat_work_dir: str, tasks_work_dir: str
@@ -169,6 +170,7 @@ def test_chats_group(
     print(all_res[1].summary)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_chats(credentials_gpt_4o_mini: Credentials):
     import random
@@ -299,6 +301,7 @@ def test_chats(credentials_gpt_4o_mini: Credentials):
     # print(blogpost.summary, insights_and_blogpost)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_chats_general(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
     financial_tasks = [
@@ -403,6 +406,7 @@ def test_chats_general(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str
     # print(blogpost.summary, insights_and_blogpost)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_chats_exceptions(credentials_gpt_4o: Credentials, tasks_work_dir: str):
     financial_tasks = [
@@ -487,6 +491,7 @@ def test_chats_exceptions(credentials_gpt_4o: Credentials, tasks_work_dir: str):
         )
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
     llm_config = {
@@ -543,6 +548,7 @@ def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str)
     print(res.summary, res.cost, res.chat_history)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str) -> None:
     llm_config_40mini = credentials_gpt_4o_mini.llm_config

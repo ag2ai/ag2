@@ -43,6 +43,7 @@ def task() -> Task:
     return task
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_generate_criteria(credentials_azure: Credentials, task: Task):
     criteria = generate_criteria(task=task, llm_config={"config_list": credentials_azure.config_list})
@@ -53,6 +54,7 @@ def test_generate_criteria(credentials_azure: Credentials, task: Task):
     assert criteria[0].accepted_values
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_quantify_criteria(credentials_azure: Credentials, task: Task):
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"

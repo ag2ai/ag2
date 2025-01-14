@@ -15,6 +15,7 @@ import autogen
 from ..conftest import Credentials
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_get_human_input(credentials_gpt_4o_mini: Credentials):
     # create an AssistantAgent instance named "assistant"

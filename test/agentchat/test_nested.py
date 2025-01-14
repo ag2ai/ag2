@@ -31,6 +31,7 @@ class MockAgentReplies(AgentCapability):
         agent.register_reply([autogen.Agent, None], mock_reply, position=2)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_nested(
     credentials_gpt_4o_mini: Credentials,

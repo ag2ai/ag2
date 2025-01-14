@@ -56,11 +56,13 @@ def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     print("Result summary:", res.summary)
 
 
+@pytest.mark.llm
 @pytest.mark.gemini
 def test_ai_user_proxy_agent_gemini(credentials_gemini_pro: Credentials) -> None:
     _test_ai_user_proxy_agent(credentials_gemini_pro)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
@@ -70,6 +72,7 @@ def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials) -> None:
     _test_ai_user_proxy_agent(credentials_gpt_4o_mini)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_gpt4omini(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=5):
     config_list = credentials_gpt_4o_mini.config_list
@@ -110,6 +113,7 @@ If "Thank you" or "You\'re welcome" are said in the conversation, then say TERMI
     assert not isinstance(user.use_docker, bool)  # None or str
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_create_execute_script(
     credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=3
@@ -161,6 +165,7 @@ print('Hello world!')
     # autogen.ChatCompletion.stop_logging()
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_tsp(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=2):
     config_list = credentials_gpt_4o_mini.config_list

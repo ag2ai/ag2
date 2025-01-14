@@ -108,6 +108,7 @@ class TestConsoleIOWithWebsockets:
 
         print("Test passed.", flush=True)
 
+    @pytest.mark.llm
     @pytest.mark.openai
     def test_chat(self, credentials_gpt_4o_mini: Credentials) -> None:
         print("Testing setup", flush=True)

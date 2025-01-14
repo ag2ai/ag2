@@ -19,6 +19,7 @@ else:
     skip = False
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_captain_agent_from_scratch(credentials_all: Credentials):
     config_list = credentials_all.config_list
@@ -58,6 +59,7 @@ def test_captain_agent_from_scratch(credentials_all: Credentials):
     print(result)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip,

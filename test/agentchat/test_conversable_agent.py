@@ -912,6 +912,7 @@ def test_register_functions(mock_credentials: Credentials):
     assert agent.llm_config["tools"] == expected
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
     coder = autogen.AssistantAgent(
@@ -974,6 +975,7 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.asyncio
 async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
@@ -1037,6 +1039,7 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
@@ -1057,6 +1060,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(res.chat_history) <= 6
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_message_func(credentials_gpt_4o_mini: Credentials):
     import random
@@ -1108,6 +1112,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
     print(chat_res_play.summary)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_summary(credentials_gpt_4o_mini: Credentials):
     import random
@@ -1467,6 +1472,7 @@ def test_handle_carryover():
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_context_variables():
     # Test initialization with context_variables

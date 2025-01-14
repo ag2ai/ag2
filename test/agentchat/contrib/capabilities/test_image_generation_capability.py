@@ -91,6 +91,7 @@ def image_gen_capability():
     return generate_images.ImageGeneration(image_generator)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip_requirement, reason="Dependencies are not installed.")
 def test_dalle_image_generator(dalle_config: dict[str, Any]):

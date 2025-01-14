@@ -51,6 +51,7 @@ def db_connection():
     autogen.runtime_logging.stop()
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
@@ -175,6 +176,7 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
         assert row["timestamp"], "timestamp is empty"
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],

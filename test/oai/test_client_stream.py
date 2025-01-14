@@ -32,6 +32,7 @@ else:
     )
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
@@ -41,6 +42,7 @@ def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> No
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
@@ -84,6 +86,7 @@ def test__update_dict_from_chunk() -> None:
     assert d["s"] == "beginning and end"
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test__update_function_call_from_chunk() -> None:
@@ -117,6 +120,7 @@ def test__update_function_call_from_chunk() -> None:
     ChatCompletionMessage(role="assistant", function_call=full_function_call, content=None)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test__update_tool_calls_from_chunk() -> None:
@@ -191,6 +195,7 @@ def test__update_tool_calls_from_chunk() -> None:
 
 
 # todo: remove when OpenAI removes functions from the API
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
@@ -221,6 +226,7 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 # test for tool support instead of the deprecated function calls
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
@@ -263,6 +269,7 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(tool_calls) > 0
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_completion_stream(credentials_azure_gpt_35_turbo_instruct: Credentials) -> None:

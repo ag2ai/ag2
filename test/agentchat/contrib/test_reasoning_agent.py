@@ -103,6 +103,7 @@ def test_think_node_from_dict():
     assert node.children == []
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 def test_reasoning_agent_init(reasoning_agent):
     """Test ReasoningAgent initialization"""

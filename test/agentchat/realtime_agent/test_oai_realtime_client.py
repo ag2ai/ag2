@@ -33,6 +33,7 @@ class TestOAIRealtimeClient:
         )
         assert isinstance(client, RealtimeClientProtocol)
 
+    @pytest.mark.llm
     @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_not_connected(self, client: OpenAIRealtimeClient) -> None:
@@ -43,6 +44,7 @@ class TestOAIRealtimeClient:
 
         assert not scope.cancelled_caught
 
+    @pytest.mark.llm
     @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_start_read_events(self, client: OpenAIRealtimeClient) -> None:
@@ -65,6 +67,7 @@ class TestOAIRealtimeClient:
         assert calls_kwargs[0]["type"] == "session.created"
         assert calls_kwargs[1]["type"] == "session.updated"
 
+    @pytest.mark.llm
     @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_send_text(self, client: OpenAIRealtimeClient) -> None:

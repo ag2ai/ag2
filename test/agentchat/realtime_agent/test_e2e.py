@@ -20,6 +20,7 @@ from .realtime_test_utils import text_to_speech, trace
 logger = getLogger(__name__)
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 class TestE2E:
     async def _test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:

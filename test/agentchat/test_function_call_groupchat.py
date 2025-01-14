@@ -24,6 +24,7 @@ func_def = {
 }
 
 
+@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.parametrize(
     "key, value, sync",
