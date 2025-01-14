@@ -18,16 +18,11 @@ from ..conftest import Credentials
 here = os.path.abspath(os.path.dirname(__file__))
 
 
-@pytest.mark.openai
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows",
-)
-def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials):
+def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
 
-    config_list = credentials_gpt_4o_mini.config_list
+    config_list = credentials.config_list
 
     assistant = AssistantAgent(
         "assistant",
@@ -59,6 +54,20 @@ def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials):
     )
     print(conversations)
     print("Result summary:", res.summary)
+
+
+@pytest.mark.gemini
+def test_ai_user_proxy_agent_gemini(credentials_gemini_pro: Credentials) -> None:
+    _test_ai_user_proxy_agent(credentials_gemini_pro)
+
+
+@pytest.mark.openai
+@pytest.mark.skipif(
+    sys.platform in ["darwin", "win32"],
+    reason="do not run on MacOS or windows",
+)
+def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials) -> None:
+    _test_ai_user_proxy_agent(credentials_gpt_4o_mini)
 
 
 @pytest.mark.openai

@@ -140,6 +140,11 @@ def credentials() -> Credentials:
     return get_credentials(filter_dict={"tags": ["gpt-4o"]})
 
 
+@pytest.fixture
+def credentials_gemini_pro() -> Credentials:
+    return get_credentials(filter_dict={"tags": ["gemini-pro"]})
+
+
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
     llm_config = {
         "config_list": [
