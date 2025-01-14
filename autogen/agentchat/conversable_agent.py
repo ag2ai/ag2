@@ -163,6 +163,9 @@ class ConversableAgent(LLMAgent):
             code_execution_config.copy() if hasattr(code_execution_config, "copy") else code_execution_config
         )
 
+        # Validation for name using regex to detect any whitespace
+        if re.search(r"\s", name):
+            raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")
         self._name = name
         # a dictionary of conversations, default value is list
         if chat_messages is None:
