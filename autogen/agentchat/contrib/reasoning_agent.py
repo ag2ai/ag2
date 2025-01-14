@@ -106,7 +106,7 @@ class ThinkNode:
 
     def backpropagate(self, reward: float) -> None:
         """Update the score of this node and its parents using moving average.
-        
+
         Args:
             reward (float): The reward to backpropagate up the tree.
         """
@@ -165,7 +165,7 @@ class ThinkNode:
 
 def visualize_tree(root: ThinkNode) -> None:
     """Visualize the tree of thoughts using graphviz.
-    
+
     Args:
         root (ThinkNode): The root node of the tree.
     """
@@ -387,11 +387,8 @@ class ReasoningAgent(AssistantAgent):
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
 
     def generate_forest_response(
-            self,
-            messages: list[dict],
-            sender: Agent,
-            config: Optional[dict] = None
-            ) -> tuple[bool, str]:
+        self, messages: list[dict], sender: Agent, config: Optional[dict] = None
+    ) -> tuple[bool, str]:
         """Generate a response using tree-of-thought reasoning.
 
         Args:
@@ -428,7 +425,7 @@ class ReasoningAgent(AssistantAgent):
                 request_reply=True,
                 silent=not self._verbose,
             )
-            return True, self.last_message(self)['content'].strip()
+            return True, self.last_message(self)["content"].strip()
 
     def rate_node(self, node: ThinkNode, ground_truth: str = None, is_outcome: bool = False) -> float:
         """Rate the quality of a reasoning path using the grader agent.
@@ -616,7 +613,7 @@ Please provide your rating along with a brief explanation of your assessment.
         Args:
             prompt (str): The question or prompt to generate a response for.
             ground_truth (str): The ground truth or correct answer for evaluation.
-        
+
         Returns:
             str: The generated response based on the reasoning process.
         """
@@ -722,7 +719,7 @@ Please provide your rating along with a brief explanation of your assessment.
 
         Args:
             node (ThinkNode): The node to check for terminal state.
-        
+
         Returns:
             bool: True if the node is terminal, False otherwise.
         """
