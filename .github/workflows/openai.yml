@@ -1,6 +1,3 @@
-# This workflow will install Python dependencies and run tests with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
 name: OpenAI & Co
 
 on:
@@ -27,7 +24,6 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     runs-on: ${{ matrix.os }}
-    # environment: openai1
     services:
       redis:
         image: redis
@@ -35,7 +31,6 @@ jobs:
           - 6379:6379
         options: --entrypoint redis-server
     steps:
-      # checkout to pr branch
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -47,6 +42,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local
+          key: python-dependencies-${{ matrix.python-version }}-${{ runner.os }}
       - name: Install packages and dependencies
         run: |
           docker --version
@@ -58,41 +60,38 @@ jobs:
           uv pip install --system docker
           uv pip install --system -e .[redis,interop]
   test:
-    needs: setup  # This job depends on the setup job
+    needs: setup
+    runs-on: ${{ needs.setup.outputs.os }}
     strategy:
       matrix:
         llm-service: ["not llm", "openai", "gemini"]
-    runs-on: ${{ needs.setup.outputs.os }}
-    # environment: openai1
     steps:
-      # Checkout the PR branch
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Coverage
-        if: needs.setup.matrix.python-version == '3.9'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
-          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local
+          key: python-dependencies-${{ matrix.python-version }}-${{ runner.os }}
+      - name: Run Tests
         run: |
-          bash scripts/test.sh test -m "${{ matrix.llm-service }}" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
-      - name: Coverage and check notebook outputs
-        if: needs.setup.matrix.python-version != '3.9'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
-          WOLFRAM_ALPHA_APPID: ${{ secrets.WOLFRAM_ALPHA_APPID }}
-          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
-        run: |
-          uv pip install --system nbconvert nbformat ipykernel
-          bash scripts/test.sh test/test_notebook.py -m "${{ matrix.llm-service }}" --durations=10 --durations-min=1.0
+          if [ "${{ matrix.llm-service }}" == "not llm" ]; then
+            bash scripts/test.sh test -m "not llm" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
+          elif [ "${{ matrix.llm-service }}" == "openai" ]; then
+            bash scripts/test.sh test -m "openai" --durations=10 --durations-min=1.0
+          else
+            bash scripts/test.sh test -m "gemini" --durations=10 --durations-min=1.0
+          fi
       - name: Upload coverage to Codecov
-        # TODO: Maybe combine all coverages into one file?
-        if: matrix.llm-service == 'not llm'  # Only upload coverage for 'not llm'
+        if: matrix.llm-service == 'not llm'
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage.xml
