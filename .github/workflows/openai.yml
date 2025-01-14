@@ -63,7 +63,7 @@ jobs:
       matrix:
         llm-service: ["not llm", "openai", "gemini"]
     runs-on: ${{ needs.setup.outputs.os }}
-    environment: openai1
+    # environment: openai1
     steps:
       # Checkout the PR branch
       - name: Checkout
