@@ -27,6 +27,7 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     runs-on: ${{ matrix.os }}
+    environment: openai1
     env:  # Set env at the job level
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -72,6 +73,8 @@ jobs:
         run: bash scripts/test.sh test -m "gemini" --durations=10 --durations-min=1.0
       - name: Coverage and check notebook outputs
         if: matrix.python-version != '3.9'
+        env:
+          WOLFRAM_ALPHA_APPID: ${{ secrets.WOLFRAM_ALPHA_APPID }}
         run: |
           uv pip install --system nbconvert nbformat ipykernel
           bash scripts/test.sh test/test_notebook.py --durations=10 --durations-min=1.0
