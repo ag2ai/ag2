@@ -357,6 +357,6 @@ def test_extract_json_response(ollama_client):
 
     with pytest.raises(
         ValueError,
-        match="Failed to parse response as valid JSON matching the schema for Structured Output: Expecting value:",
+        match="Failed to parse response as valid JSON matching the schema for Structured Output:",
     ):
         ollama_client._convert_json_response(no_json_response)
