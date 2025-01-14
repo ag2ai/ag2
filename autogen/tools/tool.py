@@ -52,7 +52,7 @@ class Tool:
             self._description = description or func_or_tool.__doc__ or ""
         else:
             raise ValueError(
-                f"Parameter 'func_or_tool' must be a function or a Tool instance, it is '{type(func_or_tool)}' instead."
+                f"Parameter 'func_or_tool' must be a function, method or a Tool instance, it is '{type(func_or_tool)}' instead."
             )
 
     @property
