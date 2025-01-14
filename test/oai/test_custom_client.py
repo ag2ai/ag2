@@ -4,29 +4,27 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Dict
 
 import pytest
 
 from autogen import OpenAIWrapper
-from autogen.oai import ModelClient
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
     skip = False
 
+TEST_COST = 20000000
+TEST_CUSTOM_RESPONSE = "This is a custom response."
+TEST_DEVICE = "cpu"
+TEST_LOCAL_MODEL_NAME = "local_model_name"
+TEST_OTHER_PARAMS_VAL = "other_params"
+TEST_MAX_LENGTH = 1000
+
 
 def test_custom_model_client():
-    TEST_COST = 20000000
-    TEST_CUSTOM_RESPONSE = "This is a custom response."
-    TEST_DEVICE = "cpu"
-    TEST_LOCAL_MODEL_NAME = "local_model_name"
-    TEST_OTHER_PARAMS_VAL = "other_params"
-    TEST_MAX_LENGTH = 1000
-
     class CustomModel:
         def __init__(self, config: dict, test_hook):
             self.test_hook = test_hook

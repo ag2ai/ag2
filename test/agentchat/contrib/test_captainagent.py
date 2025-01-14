@@ -5,27 +5,23 @@ import os
 
 import pytest
 
-from autogen import UserProxyAgent, config_list_from_json
-from autogen.agentchat.contrib.captainagent import CaptainAgent
+from autogen import UserProxyAgent
+from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
 
-from ...conftest import reason, skip_openai  # noqa: E402
-from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials, reason
 
 try:
-    import chromadb
-    import huggingface_hub
+    import chromadb  # noqa: F401
+    import huggingface_hub  # noqa: F401
 except ImportError:
     skip = True
 else:
     skip = False
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
-def test_captain_agent_from_scratch():
-    config_list = config_list_from_json(OAI_CONFIG_LIST, file_location=KEY_LOC)
+@pytest.mark.openai
+def test_captain_agent_from_scratch(credentials_all: Credentials):
+    config_list = credentials_all.config_list
     llm_config = {
         "temperature": 0,
         "config_list": config_list,
@@ -62,13 +58,13 @@ def test_captain_agent_from_scratch():
     print(result)
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip_openai or skip,
+    skip,
     reason=reason,
 )
-def test_captain_agent_with_library():
-
-    config_list = config_list_from_json(OAI_CONFIG_LIST, file_location=KEY_LOC)
+def test_captain_agent_with_library(credentials_all: Credentials):
+    config_list = credentials_all.config_list
     llm_config = {
         "temperature": 0,
         "config_list": config_list,

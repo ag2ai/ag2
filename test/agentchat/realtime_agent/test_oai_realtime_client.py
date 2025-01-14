@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,14 +10,13 @@ from anyio import move_on_after
 from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
 from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
 
-from ...conftest import reason, skip_openai  # noqa: E402
-from .realtime_test_utils import Credentials
+from ...conftest import Credentials
 
 
 class TestOAIRealtimeClient:
     @pytest.fixture
-    def client(self, credentials: Credentials) -> RealtimeClientProtocol:
-        llm_config = credentials.llm_config
+    def client(self, credentials_gpt_4o_realtime: Credentials) -> RealtimeClientProtocol:
+        llm_config = credentials_gpt_4o_realtime.llm_config
         return OpenAIRealtimeClient(
             llm_config=llm_config,
             voice="alloy",
@@ -35,8 +33,8 @@ class TestOAIRealtimeClient:
         )
         assert isinstance(client, RealtimeClientProtocol)
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
-    @pytest.mark.asyncio()
+    @pytest.mark.openai
+    @pytest.mark.asyncio
     async def test_not_connected(self, client: OpenAIRealtimeClient) -> None:
         with pytest.raises(RuntimeError, match=r"Client is not connected, call connect\(\) first."):
             with move_on_after(1) as scope:
@@ -45,8 +43,8 @@ class TestOAIRealtimeClient:
 
         assert not scope.cancelled_caught
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
-    @pytest.mark.asyncio()
+    @pytest.mark.openai
+    @pytest.mark.asyncio
     async def test_start_read_events(self, client: OpenAIRealtimeClient) -> None:
         mock = MagicMock()
 
@@ -67,8 +65,8 @@ class TestOAIRealtimeClient:
         assert calls_kwargs[0]["type"] == "session.created"
         assert calls_kwargs[1]["type"] == "session.updated"
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
-    @pytest.mark.asyncio()
+    @pytest.mark.openai
+    @pytest.mark.asyncio
     async def test_send_text(self, client: OpenAIRealtimeClient) -> None:
         mock = MagicMock()
 

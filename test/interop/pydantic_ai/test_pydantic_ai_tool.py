@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
-import unittest
 
 import pytest
 from pydantic_ai.tools import Tool as PydanticAITool

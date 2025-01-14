@@ -11,14 +11,13 @@ import os
 
 import pytest
 
-from autogen.agentchat.contrib.agent_builder import AgentBuilder
+from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 
-from ...conftest import reason, skip_openai  # noqa: E402
-from ..test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST  # noqa: E402
+from ...conftest import KEY_LOC, OAI_CONFIG_LIST
 
 try:
-    import chromadb
-    import huggingface_hub
+    import chromadb  # noqa: F401
+    import huggingface_hub  # noqa: F401
 except ImportError:
     skip = True
 else:
@@ -40,23 +39,24 @@ def _config_check(config):
         assert agent_config.get("system_message", None) is not None
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
-def test_build():
-    builder = AgentBuilder(
+@pytest.fixture
+def builder() -> AgentBuilder:
+    return AgentBuilder(
         config_file_or_env=OAI_CONFIG_LIST,
         config_file_location=KEY_LOC,
         builder_model_tags=["gpt-4o"],
         agent_model_tags=["gpt-4o"],
     )
+
+
+@pytest.mark.openai
+def test_build(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
         "For example, find a recent paper about gpt-4 on arxiv "
         "and find its potential applications in software."
     )
-    agent_list, agent_config = builder.build(
+    _, agent_config = builder.build(
         building_task=building_task,
         default_llm_config={"temperature": 0},
         code_execution_config={
@@ -72,23 +72,18 @@ def test_build():
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip_openai or skip,
-    reason=reason + "OR dependency not installed",
+    skip,
+    reason="dependency not installed",
 )
-def test_build_from_library():
-    builder = AgentBuilder(
-        config_file_or_env=OAI_CONFIG_LIST,
-        config_file_location=KEY_LOC,
-        builder_model_tags=["gpt-4o"],
-        agent_model_tags=["gpt-4o"],
-    )
+def test_build_from_library(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
         "For example, find a recent paper about gpt-4 on arxiv "
         "and find its potential applications in software."
     )
-    agent_list, agent_config = builder.build_from_library(
+    _, agent_config = builder.build_from_library(
         building_task=building_task,
         library_path_or_json=f"{here}/example_agent_builder_library.json",
         default_llm_config={"temperature": 0},
@@ -107,7 +102,7 @@ def test_build_from_library():
     builder.clear_all_agents()
 
     # test embedding similarity selection
-    agent_list, agent_config = builder.build_from_library(
+    _, agent_config = builder.build_from_library(
         building_task=building_task,
         library_path_or_json=f"{here}/example_agent_builder_library.json",
         default_llm_config={"temperature": 0},
@@ -125,17 +120,8 @@ def test_build_from_library():
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
-def test_save():
-    builder = AgentBuilder(
-        config_file_or_env=OAI_CONFIG_LIST,
-        config_file_location=KEY_LOC,
-        builder_model_tags=["gpt-4o"],
-        agent_model_tags=["gpt-4o"],
-    )
+@pytest.mark.openai
+def test_save(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
         "For example, find a recent paper about gpt-4 on arxiv "
@@ -162,24 +148,12 @@ def test_save():
     _config_check(saved_configs)
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
-def test_load():
-    builder = AgentBuilder(
-        config_file_or_env=OAI_CONFIG_LIST,
-        config_file_location=KEY_LOC,
-        # builder_model=["gpt-4", "gpt-4-1106-preview"],
-        # agent_model=["gpt-4", "gpt-4-1106-preview"],
-        builder_model_tags=["gpt-4o"],
-        agent_model_tags=["gpt-4o"],
-    )
-
+@pytest.mark.openai
+def test_load(builder: AgentBuilder):
     config_save_path = f"{here}/example_test_agent_builder_config.json"
     json.load(open(config_save_path))
 
-    agent_list, loaded_agent_configs = builder.load(
+    _, loaded_agent_configs = builder.load(
         config_save_path,
         code_execution_config={
             "last_n_messages": 2,
@@ -193,18 +167,8 @@ def test_load():
     _config_check(loaded_agent_configs)
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
-def test_clear_agent():
-    builder = AgentBuilder(
-        config_file_or_env=OAI_CONFIG_LIST,
-        config_file_location=KEY_LOC,
-        builder_model_tags=["gpt-4o"],
-        agent_model_tags=["gpt-4o"],
-    )
-
+@pytest.mark.openai
+def test_clear_agent(builder: AgentBuilder):
     config_save_path = f"{here}/example_test_agent_builder_config.json"
     builder.load(
         config_save_path,

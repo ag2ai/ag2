@@ -7,6 +7,9 @@
 import getpass
 from typing import Any
 
+from autogen.messages.base_message import BaseMessage
+from autogen.messages.print_message import PrintMessage
+
 from .base import IOStream
 
 __all__ = ("IOConsole",)
@@ -24,7 +27,17 @@ class IOConsole(IOStream):
             end (str, optional): The end of the output. Defaults to "\n".
             flush (bool, optional): Whether to flush the output. Defaults to False.
         """
-        print(*objects, sep=sep, end=end, flush=flush)
+        print_message = PrintMessage(*objects, sep=sep, end=end)
+        self.send(print_message)
+        # print(*objects, sep=sep, end=end, flush=flush)
+
+    def send(self, message: BaseMessage) -> None:
+        """Send a message to the output stream.
+
+        Args:
+            message (Any): The message to send.
+        """
+        message.print()
 
     def input(self, prompt: str = "", *, password: bool = False) -> str:
         """Read a line from the input stream.
@@ -37,7 +50,6 @@ class IOConsole(IOStream):
             str: The line read from the input stream.
 
         """
-
         if password:
             return getpass.getpass(prompt if prompt != "" else "Password: ")
         return input(prompt)

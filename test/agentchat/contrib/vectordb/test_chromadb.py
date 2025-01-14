@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 try:
     import chromadb
     import chromadb.errors
-    import sentence_transformers
+    import sentence_transformers  # noqa: F401
 
     from autogen.agentchat.contrib.vectordb.chromadb import ChromaVectorDB
 except ImportError:

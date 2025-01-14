@@ -34,7 +34,6 @@ def mock_response():
 
 @pytest.fixture
 def bedrock_client():
-
     # Set Bedrock client with some default values
     client = BedrockClient()
 
@@ -49,7 +48,6 @@ skip_reason = "Amazon Bedrock dependency is not installed"
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_initialization():
-
     # Creation works without an api_key as it's handled in the parameter parsing
     BedrockClient()
 
@@ -150,13 +148,13 @@ def test_create_response(mock_chat, bedrock_client):
     response = bedrock_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Bedrock response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Bedrock response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_bedrock_response_id", "Response ID should match the mocked response ID"
-    assert (
-        response.model == "anthropic.claude-3-sonnet-20240229-v1:0"
-    ), "Response model should match the mocked response model"
+    assert response.model == "anthropic.claude-3-sonnet-20240229-v1:0", (
+        "Response model should match the mocked response model"
+    )
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
     assert response.usage.completion_tokens == 20, "Response completion tokens should match the mocked response usage"
 
@@ -228,7 +226,6 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client):
 # Test message conversion from OpenAI to Bedrock format
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_oai_messages_to_bedrock_messages(bedrock_client):
-
     # Test that the "name" key is removed and system messages converted to user message
     test_messages = [
         {"role": "system", "content": "You are a helpful AI bot."},
@@ -274,9 +271,9 @@ def test_oai_messages_to_bedrock_messages(bedrock_client):
         {"role": "user", "content": [{"text": "Summarise the conversation."}]},
     ]
 
-    assert (
-        messages == expected_messages
-    ), "Final 'system' message was not changed to 'user' or continue messages not included"
+    assert messages == expected_messages, (
+        "Final 'system' message was not changed to 'user' or continue messages not included"
+    )
 
     # Test that the last message is a user or system message and if not, add a continue message
     test_messages = [

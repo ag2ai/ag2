@@ -6,24 +6,21 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import json
 import os
 import random
 import sys
-from typing import Dict, List
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-import autogen
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from ...conftest import reason, skip_openai  # noqa: E402
+from ...conftest import reason
 
 skip_reasons = [reason]
 try:
-    from graphviz import Digraph
+    from graphviz import Digraph  # noqa: F401
 
     skip_for_dependencies = False
     skip_reason = ""
@@ -106,7 +103,7 @@ def test_think_node_from_dict():
     assert node.children == []
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_reasoning_agent_init(reasoning_agent):
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"

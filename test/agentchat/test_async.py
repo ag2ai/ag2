@@ -12,8 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import reason, skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials
 
 
 def get_market_news(ind, ind_upper):
@@ -57,10 +56,10 @@ def get_market_news(ind, ind_upper):
     return feeds_summary
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 @pytest.mark.asyncio
-async def test_async_groupchat():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
+async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -91,10 +90,10 @@ async def test_async_groupchat():
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 @pytest.mark.asyncio
-async def test_stream():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
+async def test_stream(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
     data = asyncio.Future()
 
     async def add_stock_price_data():

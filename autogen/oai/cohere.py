@@ -35,14 +35,13 @@ import random
 import sys
 import time
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from cohere import Client as Cohere
 from cohere.types import ToolParameterDefinitionsValue, ToolResult
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 
 from autogen.oai.client_utils import logging_formatter, validate_parameter
 
@@ -74,20 +73,19 @@ class CohereClient:
             api_key (str): The API key for using Cohere (or environment variable COHERE_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("COHERE_API_KEY")
 
-        assert (
-            self.api_key
-        ), "Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable."
+        assert self.api_key, (
+            "Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable."
+        )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Cohere, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -115,10 +113,10 @@ class CohereClient:
 
         # Check that we have what we need to use Cohere's API
         # We won't enforce the available models as they are likely to change
-        cohere_params["model"] = params.get("model", None)
-        assert cohere_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Cohere model to use."
+        cohere_params["model"] = params.get("model")
+        assert cohere_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Cohere model to use."
+        )
 
         # Validate allowed Cohere parameters
         # https://docs.cohere.com/reference/chat
@@ -175,7 +173,7 @@ class CohereClient:
         total_tokens = 0
 
         # Stream if in parameters
-        streaming = True if "stream" in params and params["stream"] else False
+        streaming = True if params.get("stream") else False
         cohere_finish = "stop"
         tool_calls = None
         ans = None
@@ -225,7 +223,6 @@ class CohereClient:
                 cohere_finish = "tool_calls"
                 tool_calls = []
                 for tool_call in response.tool_calls:
-
                     # if parameters are null, clear them out (Cohere can return a string "null" if no parameter values)
 
                     tool_calls.append(
@@ -270,11 +267,10 @@ def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_t
 
     for tool_call in all_tool_calls:
         if tool_call["id"] == tool_call_id:
-
             call = {
                 "name": tool_call["function"]["name"],
                 "parameters": json.loads(
-                    tool_call["function"]["arguments"] if not tool_call["function"]["arguments"] == "" else "{}"
+                    tool_call["function"]["arguments"] if tool_call["function"]["arguments"] != "" else "{}"
                 ),
             }
             output = [{"value": content_output}]
@@ -298,7 +294,6 @@ def oai_messages_to_cohere_messages(
         str:                    Preamble (system message)
         str:                    Message (the final user message)
     """
-
     cohere_messages = []
     preamble = ""
 
@@ -306,7 +301,6 @@ def oai_messages_to_cohere_messages(
     if "tools" in params:
         cohere_tools = []
         for tool in params["tools"]:
-
             # build list of properties
             parameters = {}
 
@@ -351,7 +345,6 @@ def oai_messages_to_cohere_messages(
     # tool_results go into tool_results parameter
     messages_length = len(messages)
     for index, message in enumerate(messages):
-
         if "role" in message and message["role"] == "system":
             # System message
             if preamble == "":
@@ -422,7 +415,6 @@ def oai_messages_to_cohere_messages(
         return cohere_messages, preamble, ""
 
     else:
-
         # We need to get the last message to assign to the message field for Cohere,
         # if the last message is a user message, use that, otherwise put in 'continue'.
         if cohere_messages[-1]["role"] == "USER":

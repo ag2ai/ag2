@@ -8,15 +8,14 @@ import logging
 import os
 import random
 from time import monotonic, sleep
-from typing import List
 
 import pytest
 
 from autogen.agentchat.contrib.vectordb.base import Document
 
 try:
-    import pymongo
-    import sentence_transformers
+    import pymongo  # noqa: F401
+    import sentence_transformers  # noqa: F401
 
     from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
 except ImportError:
@@ -143,8 +142,7 @@ def collection_name():
 
 
 def test_create_collection(db, collection_name):
-    """
-    def create_collection(collection_name: str,
+    """Def create_collection(collection_name: str,
                         overwrite: bool = False) -> Collection
     Create a collection in the vector database.
     - Case 1. if the collection does not exist, create the collection.

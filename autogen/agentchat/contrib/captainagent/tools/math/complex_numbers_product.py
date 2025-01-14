@@ -6,8 +6,7 @@ from autogen.coding.func_with_reqs import with_requirements
 
 @with_requirements(["sympy"])
 def complex_numbers_product(complex_numbers):
-    """
-    Calculates the product of a list of complex numbers.
+    """Calculates the product of a list of complex numbers.
 
     Args:
         complex_numbers (list): A list of dictionaries representing complex numbers.

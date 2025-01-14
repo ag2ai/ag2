@@ -8,7 +8,6 @@
 
 import pytest
 
-import autogen
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
 
@@ -56,7 +55,7 @@ def test_validate_parameter():
     }
 
     # Should return default
-    assert 512 == validate_parameter(params, "max_tokens", int, False, 512, (0, None), None)
+    assert validate_parameter(params, "max_tokens", int, False, 512, (0, None), None) == 512
 
     # Test invalid parameters
     params = {
@@ -91,7 +90,7 @@ def test_validate_parameter():
     }
 
     # Should all be set to defaults
-    assert 512 == validate_parameter(params, "max_tokens", int, True, 512, (0, None), None)
+    assert validate_parameter(params, "max_tokens", int, True, 512, (0, None), None) == 512
     assert validate_parameter(params, "presence_penalty", (int, float), True, None, (-2, 2), None) is None
     assert validate_parameter(params, "frequency_penalty", (int, float), True, None, (-2, 2), None) is None
     assert validate_parameter(params, "min_p", (int, float), True, None, (0, 1), None) is None
@@ -102,8 +101,11 @@ def test_validate_parameter():
     }
 
     # Should all be set to defaults
-    assert "Meta-Llama/Llama-Guard-7b" == validate_parameter(
-        params, "safety_model", str, True, None, None, ["Meta-Llama/Llama-Guard-7b", "Meta-Llama/Llama-Guard-13b"]
+    assert (
+        validate_parameter(
+            params, "safety_model", str, True, None, None, ["Meta-Llama/Llama-Guard-7b", "Meta-Llama/Llama-Guard-13b"]
+        )
+        == "Meta-Llama/Llama-Guard-7b"
     )
 
     # Test invalid list options

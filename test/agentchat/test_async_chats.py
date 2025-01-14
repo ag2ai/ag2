@@ -10,21 +10,15 @@ import asyncio
 
 import pytest
 
-import autogen
 from autogen import AssistantAgent, UserProxyAgent
 
-from ..conftest import skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials
 
 
-@pytest.mark.skipif(skip_openai, reason="requested to skip openai tests")
+@pytest.mark.openai
 @pytest.mark.asyncio
-async def test_async_chats():
-    config_list_4omini = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
+async def test_async_chats(credentials_gpt_4o_mini: Credentials):
+    config_list_4omini = credentials_gpt_4o_mini.config_list
 
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",

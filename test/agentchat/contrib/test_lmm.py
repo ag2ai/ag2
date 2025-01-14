@@ -98,12 +98,10 @@ class TestMultimodalConversableAgent(unittest.TestCase):
 
 @pytest.mark.skipif(skip, reason="Dependency not installed")
 def test_group_chat_with_lmm():
-    """
-    Tests the group chat functionality with two MultimodalConversable Agents.
+    """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.
     Each agent is set to describe an image in a unique style, but the chat should not exceed the specified max_rounds.
     """
-
     # Configuration parameters
     max_round = 5
     max_consecutive_auto_reply = 10

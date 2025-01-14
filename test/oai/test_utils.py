@@ -10,13 +10,12 @@ import json
 import logging
 import os
 import tempfile
-from typing import Dict, List
 from unittest import mock
 from unittest.mock import patch
 
 import pytest
 
-import autogen  # noqa: E402
+import autogen
 from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, filter_config, is_valid_api_key
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
@@ -338,12 +337,12 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
         # Call the function with the mixed validity map
         config_list = autogen.config_list_from_dotenv(model_api_key_map=invalid_model_api_key_map)
         assert config_list, "Expected configurations to be loaded"
-        assert any(
-            config["model"] == "gpt-3.5-turbo" for config in config_list
-        ), "gpt-3.5-turbo configuration not found"
-        assert all(
-            config["model"] != "gpt-4" for config in config_list
-        ), "gpt-4 configuration found, but was not expected"
+        assert any(config["model"] == "gpt-3.5-turbo" for config in config_list), (
+            "gpt-3.5-turbo configuration not found"
+        )
+        assert all(config["model"] != "gpt-4" for config in config_list), (
+            "gpt-4 configuration found, but was not expected"
+        )
         assert "API key not found or empty for model gpt-4" in caplog.text
 
 
@@ -361,9 +360,9 @@ def test_get_config_list():
     assert config_list, "The config_list should not be empty."
 
     # Check that the config_list has the correct length
-    assert len(config_list) == len(
-        api_keys
-    ), "The config_list should have the same number of items as the api_keys list."
+    assert len(config_list) == len(api_keys), (
+        "The config_list should have the same number of items as the api_keys list."
+    )
 
     # Check that each config in the config_list has the correct structure and data
     for i, config in enumerate(config_list):
@@ -384,9 +383,9 @@ def test_get_config_list():
 
     # Test with None base_urls
     config_list_without_base = autogen.get_config_list(api_keys, None, api_type, api_version)
-    assert all(
-        "base_url" not in config for config in config_list_without_base
-    ), "The configs should not have base_url when None is provided."
+    assert all("base_url" not in config for config in config_list_without_base), (
+        "The configs should not have base_url when None is provided."
+    )
 
     # Test with empty string in api_keys
     api_keys_with_empty = ["key1", "", "key3"]

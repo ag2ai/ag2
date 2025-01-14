@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def calculate_skewness_and_kurtosis(csv_file: str, column_name: str) -> tuple:
-    """
-    Calculate the skewness and kurtosis of a specified column in a CSV file. The kurtosis is calculated using the Fisher definition.
+    """Calculate the skewness and kurtosis of a specified column in a CSV file. The kurtosis is calculated using the Fisher definition.
     The two metrics are computed using scipy.stats functions.
 
     Args:

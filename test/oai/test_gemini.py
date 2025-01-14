@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
+# Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import os
 from typing import List
 from unittest.mock import MagicMock, patch
@@ -11,10 +12,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    import google.auth
+    import google.auth  # noqa: F401
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
+    from google.generativeai.types import GenerateContentResponse
+    from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
     from vertexai.generative_models import SafetySetting as VertexAISafetySetting
@@ -96,9 +99,9 @@ def test_valid_initialization(gemini_client):
 @pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
 def test_google_application_credentials_initialization():
     GeminiClient(google_application_credentials="credentials.json", project_id="fake-project-id")
-    assert (
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "credentials.json"
-    ), "Incorrect Google Application Credentials initialization"
+    assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "credentials.json", (
+        "Incorrect Google Application Credentials initialization"
+    )
 
 
 @pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
@@ -190,9 +193,9 @@ def test_vertexai_safety_setting_conversion(gemini_client):
             converted_setting = converted_safety_settings[i]
             yield expected_setting.to_dict() == converted_setting.to_dict()
 
-    assert len(converted_safety_settings) == len(
-        expected_safety_settings
-    ), "The length of the safety settings is incorrect"
+    assert len(converted_safety_settings) == len(expected_safety_settings), (
+        "The length of the safety settings is incorrect"
+    )
     settings_comparison = compare_safety_settings(converted_safety_settings, expected_safety_settings)
     assert all(settings_comparison), "Converted safety settings are incorrect"
 
@@ -207,9 +210,7 @@ def test_vertexai_default_safety_settings_dict(gemini_client):
     }
     converted_safety_settings = GeminiClient._to_vertexai_safety_settings(safety_settings)
 
-    expected_safety_settings = {
-        category: VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH for category in safety_settings.keys()
-    }
+    expected_safety_settings = {category: VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH for category in safety_settings}
 
     def compare_safety_settings(converted_safety_settings, expected_safety_settings):
         for expected_setting_key in expected_safety_settings.keys():
@@ -217,9 +218,9 @@ def test_vertexai_default_safety_settings_dict(gemini_client):
             converted_setting = converted_safety_settings[expected_setting_key]
             yield expected_setting == converted_setting
 
-    assert len(converted_safety_settings) == len(
-        expected_safety_settings
-    ), "The length of the safety settings is incorrect"
+    assert len(converted_safety_settings) == len(expected_safety_settings), (
+        "The length of the safety settings is incorrect"
+    )
     settings_comparison = compare_safety_settings(converted_safety_settings, expected_safety_settings)
     assert all(settings_comparison), "Converted safety settings are incorrect"
 
@@ -247,9 +248,9 @@ def test_vertexai_safety_setting_list(gemini_client):
             converted_setting = converted_safety_settings[i]
             yield expected_setting.to_dict() == converted_setting.to_dict()
 
-    assert len(converted_safety_settings) == len(
-        expected_safety_settings
-    ), "The length of the safety settings is incorrect"
+    assert len(converted_safety_settings) == len(expected_safety_settings), (
+        "The length of the safety settings is incorrect"
+    )
     settings_comparison = compare_safety_settings(converted_safety_settings, expected_safety_settings)
     assert all(settings_comparison), "Converted safety settings are incorrect"
 
@@ -299,13 +300,16 @@ def test_create_response_with_text(mock_calculate_cost, mock_generative_model, g
     mock_usage_metadata.prompt_token_count = 100
     mock_usage_metadata.candidates_token_count = 50
 
-    # Setup the mock to return a response with only text content
     mock_text_part = MagicMock()
     mock_text_part.text = "Example response"
     mock_text_part.function_call = None
 
-    mock_response = MagicMock()
+    mock_response = MagicMock(spec=GenerateContentResponse)
+    mock_response._done = True
+    mock_response._iterator = None
+    mock_response._result = None
     mock_response.parts = [mock_text_part]
+
     mock_response.usage_metadata = mock_usage_metadata
     mock_chat.send_message.return_value = mock_response
 
@@ -349,13 +353,15 @@ def test_vertexai_create_response(
     mock_usage_metadata.prompt_token_count = 100
     mock_usage_metadata.candidates_token_count = 50
 
-    # Setup the mock to return a response with only text content
     mock_text_part = MagicMock()
     mock_text_part.text = "Example response"
     mock_text_part.function_call = None
 
-    mock_response = MagicMock()
-    mock_response.parts = [mock_text_part]
+    mock_candidate = MagicMock()
+    mock_candidate.content.parts = [mock_text_part]
+
+    mock_response = MagicMock(spec=VertexAIGenerationResponse)
+    mock_response.candidates = [mock_candidate]
     mock_response.usage_metadata = mock_usage_metadata
     mock_chat.send_message.return_value = mock_response
 

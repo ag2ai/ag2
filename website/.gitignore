@@ -9,6 +9,8 @@
 .cache-loader
 docs/reference
 /notebooks
+/blog
+mint.json
 
 docs/tutorial/*.mdx
 docs/tutorial/**/*.png

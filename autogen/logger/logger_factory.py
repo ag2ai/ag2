@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal, Optional
 
 from autogen.logger.base_logger import BaseLogger
 from autogen.logger.file_logger import FileLogger
@@ -14,10 +14,21 @@ __all__ = ("LoggerFactory",)
 
 
 class LoggerFactory:
+    """Factory class to create logger objects."""
+
     @staticmethod
     def get_logger(
         logger_type: Literal["sqlite", "file"] = "sqlite", config: Optional[dict[str, Any]] = None
     ) -> BaseLogger:
+        """Factory method to create logger objects.
+
+        Args:
+            logger_type (Literal["sqlite", "file"], optional): Type of logger. Defaults to "sqlite".
+            config (Optional[dict[str, Any]], optional): Configuration for logger. Defaults to None.
+
+        Returns:
+            BaseLogger: Logger object
+        """
         if config is None:
             config = {}
 
