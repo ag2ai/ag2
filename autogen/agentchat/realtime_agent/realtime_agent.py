@@ -76,6 +76,7 @@ class RealtimeAgent(ConversableAgent):
             chat_messages=None,
             silent=None,
             context_variables=None,
+            validate_name=False,
         )
         self._logger = logger
         self._function_observer = FunctionObserver(logger=logger)

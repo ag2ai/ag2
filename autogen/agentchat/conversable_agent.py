@@ -103,6 +103,7 @@ class ConversableAgent(LLMAgent):
         chat_messages: Optional[dict[Agent, list[dict]]] = None,
         silent: Optional[bool] = None,
         context_variables: Optional[dict[str, Any]] = None,
+        validate_name: bool = True,
     ):
         """Args:
         name (str): name of the agent.
@@ -164,7 +165,7 @@ class ConversableAgent(LLMAgent):
         )
 
         # Validation for name using regex to detect any whitespace
-        if re.search(r"\s", name):
+        if validate_name and re.search(r"\s", name):
             raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")
         self._name = name
         # a dictionary of conversations, default value is list
