@@ -42,13 +42,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.local
-          key: python-dependencies-${{ matrix.python-version }}-${{ runner.os }}
       - name: Install packages and dependencies
         run: |
           docker --version
@@ -59,39 +52,13 @@ jobs:
         run: |
           uv pip install --system docker
           uv pip install --system -e .[redis,interop]
-  test:
-    needs: setup
-    runs-on: ${{ needs.setup.outputs.os }}
-    strategy:
-      matrix:
-        llm-service: ["not llm", "openai", "gemini"]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.local
-          key: python-dependencies-${{ matrix.python-version }}-${{ runner.os }}
-      - name: Run Tests
-        run: |
-          if [ "${{ matrix.llm-service }}" == "not llm" ]; then
-            bash scripts/test.sh test -m "not llm" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
-          elif [ "${{ matrix.llm-service }}" == "openai" ]; then
-            bash scripts/test.sh test -m "openai" --durations=10 --durations-min=1.0
-          else
-            bash scripts/test.sh test -m "gemini" --durations=10 --durations-min=1.0
-          fi
+      - name: Not LLM Tests
+        run: bash scripts/test.sh test -m "not llm" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
+      - name: OpenAI Tests
+        run: bash scripts/test.sh test -m "openai" --durations=10 --durations-min=1.0
+      - name: Gemini Tests
+        run: bash scripts/test.sh test -m "gemini" --durations=10 --durations-min=1.0
       - name: Upload coverage to Codecov
-        if: matrix.llm-service == 'not llm'
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage.xml
