@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies and run tests with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: OpenAI
+name: OpenAI & Co
 
 on:
   pull_request:
@@ -21,7 +21,7 @@ permissions:
   # deployments: read
 
 jobs:
-  test:
+  setup:
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -50,24 +50,37 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e ".[test]"
+          uv pip install --system -e ".[test,gemini]"
           python -c "import autogen"
       - name: Install packages for test when needed
         if: matrix.python-version == '3.9'
         run: |
           uv pip install --system docker
-          uv pip install --system -e .[redis,interop,gemini]
+          uv pip install --system -e .[redis,interop]
+  test:
+    needs: setup  # This job depends on the setup job
+    strategy:
+      matrix:
+        llm-service: ["not llm", "openai", "gemini"]
+    runs-on: ${{ needs.setup.outputs.os }}
+    environment: openai1
+    steps:
+      # Checkout the PR branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Coverage
-        if: matrix.python-version == '3.9'
+        if: needs.setup.matrix.python-version == '3.9'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          bash scripts/test.sh test --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
+          bash scripts/test.sh test -m "${{ matrix.llm-service }}" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
       - name: Coverage and check notebook outputs
-        if: matrix.python-version != '3.9'
+        if: needs.setup.matrix.python-version != '3.9'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -76,9 +89,10 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           uv pip install --system nbconvert nbformat ipykernel
-          bash scripts/test.sh test/test_notebook.py --durations=10 --durations-min=1.0
-          cat "$(pwd)/test/executed_openai_notebook_output.txt"
+          bash scripts/test.sh test/test_notebook.py -m "${{ matrix.llm-service }}" --durations=10 --durations-min=1.0
       - name: Upload coverage to Codecov
+        # TODO: Maybe combine all coverages into one file?
+        if: matrix.llm-service == 'not llm'  # Only upload coverage for 'not llm'
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage.xml
