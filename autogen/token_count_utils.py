@@ -157,6 +157,9 @@ def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0
     elif "mistral-" in model or "mixtral-" in model:
         logger.info("Mistral.AI models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "deepseek" in model:
+        logger.info("Deepseek models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
     else:
         raise NotImplementedError(
             f"""_num_token_from_messages() is not implemented for model {model}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens."""
