@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,7 +8,14 @@
 
 import logging
 import warnings
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
+
+
+@runtime_checkable
+class FormatterProtocol(Protocol):
+    """Structured Output classes with a format method"""
+
+    def format(self) -> str: ...
 
 
 def validate_parameter(
