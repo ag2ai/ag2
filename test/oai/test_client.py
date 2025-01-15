@@ -409,7 +409,7 @@ class TestO1:
             [{"role": "user", "content": "2+2="}],
         ],
     )
-    @pytest.mark.skipif(skip, reason="openai>=1 not installed")
+    @pytest.mark.openai
     def test_completition_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completition(o1_mini_client, messages)
 
@@ -420,7 +420,7 @@ class TestO1:
             [{"role": "user", "content": "2+2="}],
         ],
     )
-    @pytest.mark.skipif(skip, reason="openai>=1 not installed")
+    @pytest.mark.openai
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completition_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completition(o1_client, messages)
