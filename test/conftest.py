@@ -76,7 +76,7 @@ def get_credentials(
             filter_dict=filter_dict,
             file_location=KEY_LOC,
         )
-    except:
+    except Exception:
         config_list = []
 
     if fail_if_empty:
