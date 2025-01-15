@@ -7,7 +7,6 @@
 #!/usr/bin/env python3 -m pytest
 
 import os
-import sys
 
 import pytest
 

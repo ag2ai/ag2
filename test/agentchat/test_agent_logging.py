@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 import json
 import sqlite3
-import sys
 import uuid
 
 import pytest
@@ -51,8 +50,7 @@ def db_connection():
     autogen.runtime_logging.stop()
 
 
-@pytest.mark.openai
-def test_two_agents_logging(credentials: Credentials, db_connection):
+def _test_two_agents_logging(credentials: Credentials, db_connection, row_classes=["AzureOpenAI", "OpenAI"]) -> None:
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
@@ -150,7 +148,7 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
         assert row["client_id"], "client id is empty"
         assert row["wrapper_id"], "wrapper id is empty"
         assert row["session_id"] and row["session_id"] == session_id
-        assert row["class"] in ["AzureOpenAI", "OpenAI"]
+        assert row["class"] in row_classes
         init_args = json.loads(row["init_args"])
         if row["class"] == "AzureOpenAI":
             assert "api_version" in init_args
@@ -171,8 +169,17 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
         assert row["timestamp"], "timestamp is empty"
 
 
+@pytest.mark.gemini
+def test_two_agents_logging_gemini(credentials_gemini_pro: Credentials, db_connection) -> None:
+    _test_two_agents_logging(credentials_gemini_pro, db_connection, row_classes=["GeminiClient"])
+
+
 @pytest.mark.openai
-def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
+def test_two_agents_logging(credentials: Credentials, db_connection):
+    _test_two_agents_logging(credentials, db_connection)
+
+
+def _test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
@@ -243,3 +250,13 @@ def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_m
     rows = cur.fetchall()
     assert len(rows) == 1
     assert rows[0]["id"] == 1 and rows[0]["version_number"] == 1
+
+
+@pytest.mark.gemini
+def test_groupchat_logging_gemini(credentials_gemini_pro: Credentials, db_connection):
+    _test_groupchat_logging(credentials_gemini_pro, credentials_gemini_pro, db_connection)
+
+
+@pytest.mark.openai
+def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
+    _test_groupchat_logging(credentials_gpt_4o, credentials_gpt_4o_mini, db_connection)
