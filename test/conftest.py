@@ -82,13 +82,15 @@ def get_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: f
     )
 
 
-def get_openai_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
+def get_llm_credentials(
+    api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+) -> Credentials:
     config_list = [
         conf
         for conf in get_credentials(filter_dict, temperature).config_list
-        if "api_type" not in conf or conf["api_type"] == "openai"
+        if "api_type" not in conf or conf["api_type"] == api_type
     ]
-    assert config_list, "No OpenAI config list found"
+    assert config_list, f"No {api_type} config list found"
 
     return Credentials(
         llm_config={
@@ -96,6 +98,14 @@ def get_openai_credentials(filter_dict: Optional[dict[str, Any]] = None, tempera
             "temperature": temperature,
         }
     )
+
+
+def get_openai_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
+    return get_llm_credentials("openai", filter_dict, temperature)
+
+
+def get_google_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
+    return get_llm_credentials("google", filter_dict, temperature)
 
 
 @pytest.fixture
@@ -133,6 +143,11 @@ def credentials_gpt_4o() -> Credentials:
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
     return get_openai_credentials(filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6)
+
+
+@pytest.fixture
+def credentials_gemini_realtime() -> Credentials:
+    return get_google_credentials(filter_dict={"tags": ["gemini-realtime", "realtime"]}, temperature=0.6)
 
 
 @pytest.fixture
