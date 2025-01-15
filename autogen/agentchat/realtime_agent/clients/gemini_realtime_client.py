@@ -137,10 +137,10 @@ class GeminiRealtimeClient:
 
         session_config = {
             "setup": {
-                # "system_instruction": {
-                #     "role": "system",
-                #     "parts": [{"text": self._system_message}]
-                # },
+                "system_instruction": {
+                    "role": "system",
+                    "parts": [{"text": self._system_message}]
+                },
                 "model": f"models/{self._model}",
                 "tools": [
                     {
@@ -182,6 +182,7 @@ class GeminiRealtimeClient:
         uri = f"wss://{HOST}/ws/google.ai.generativelanguage.{API_VERSION}.GenerativeService.BidiGenerateContent?key={self.api_key}"
         try:
             async with connect(uri, additional_headers={"Content-Type": "application/json"}) as self._connection:
+                print("Connected to Gemini Realtime API")
                 yield
         finally:
             self._connection = None
