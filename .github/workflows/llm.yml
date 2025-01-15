@@ -26,10 +26,9 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         python-version: ["3.9"]
-        # llm: ["openai", "gemini"]
-        llm: ["gemini"]
+        llm: ["openai", "gemini"]
     runs-on: ${{ matrix.os }}
-    # environment: openai1
+    environment: openai1
     services:
       redis:
         image: redis
