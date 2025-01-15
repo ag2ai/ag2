@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,6 +33,8 @@ except ImportError:
     vertexai_global_config = object
     InternalServerError = object
     skip = True
+
+from pydantic import BaseModel
 
 
 # Fixtures for mock data
@@ -381,3 +384,55 @@ def test_vertexai_create_response(
 
     # Verify that calculate_gemini_cost was called with the correct arguments
     mock_calculate_cost.assert_called_once_with(True, 100, 50, "gemini-pro")
+
+
+@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+def test_extract_json_response(gemini_client):
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: List[Step]
+        final_answer: str
+
+    # Set up the response format
+    gemini_client._response_format = MathReasoning
+
+    # Test case 1: JSON within tags - CORRECT
+    tagged_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }"""
+
+    result = gemini_client._convert_json_response(tagged_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
+
+    # Test case 2: Invalid JSON - RAISE ERROR
+    invalid_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Missing closing brace"
+                ],
+                "final_answer": "x = -3.75"
+            """
+
+    with pytest.raises(
+        ValueError, match="Failed to parse response as valid JSON matching the schema for Structured Output: "
+    ):
+        gemini_client._convert_json_response(invalid_response)
+
+    # Test case 3: No JSON content - RAISE ERROR
+    no_json_response = "This response contains no JSON at all."
+
+    with pytest.raises(
+        ValueError,
+        match="Failed to parse response as valid JSON matching the schema for Structured Output: Expecting value:",
+    ):
+        gemini_client._convert_json_response(no_json_response)

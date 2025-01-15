@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,14 +10,14 @@ import inspect
 import logging
 import sys
 import uuid
-from typing import Any, Callable, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Union
 
 from pydantic import BaseModel, schema_json_of
 
 from autogen.cache import Cache
 from autogen.io.base import IOStream
 from autogen.logger.logger_utils import get_current_ts
-from autogen.oai.client_utils import logging_formatter
+from autogen.oai.client_utils import FormatterProtocol, logging_formatter
 from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from autogen.token_count_utils import count_token
@@ -444,11 +444,6 @@ class OpenAIClient:
             "cost": response.cost if hasattr(response, "cost") else 0,
             "model": response.model,
         }
-
-
-@runtime_checkable
-class FormatterProtocol(Protocol):
-    def format(self) -> str: ...
 
 
 class OpenAIWrapper:
