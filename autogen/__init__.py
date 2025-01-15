@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,6 +10,7 @@ from .agentchat import (
     AFTER_WORK,
     ON_CONDITION,
     UPDATE_SYSTEM_MESSAGE,
+    AfterWork,
     AfterWorkOption,
     Agent,
     AssistantAgent,
@@ -17,16 +18,19 @@ from .agentchat import (
     ConversableAgent,
     GroupChat,
     GroupChatManager,
+    OnCondition,
     ReasoningAgent,
     SwarmAgent,
     SwarmResult,
     ThinkNode,
+    UpdateSystemMessage,
     UserProxyAgent,
     a_initiate_swarm_chat,
     gather_usage_summary,
     initiate_chats,
     initiate_swarm_chat,
     register_function,
+    register_hand_off,
     visualize_tree,
 )
 from .code_utils import DEFAULT_MODEL, FAST_MODEL
@@ -64,6 +68,7 @@ __all__ = [
     "FAST_MODEL",
     "ON_CONDITION",
     "UPDATE_SYSTEM_MESSAGE",
+    "AfterWork",
     "AfterWorkOption",
     "Agent",
     "AgentNameConflict",
@@ -78,6 +83,7 @@ __all__ = [
     "InvalidCarryOverType",
     "ModelClient",
     "NoEligibleSpeaker",
+    "OnCondition",
     "OpenAIWrapper",
     "ReasoningAgent",
     "SenderRequired",
@@ -85,6 +91,7 @@ __all__ = [
     "SwarmResult",
     "ThinkNode",
     "UndefinedNextAgent",
+    "UpdateSystemMessage",
     "UserProxyAgent",
     "__version__",
     "a_initiate_swarm_chat",
@@ -99,5 +106,6 @@ __all__ = [
     "initiate_chats",
     "initiate_swarm_chat",
     "register_function",
+    "register_hand_off",
     "visualize_tree",
 ]
