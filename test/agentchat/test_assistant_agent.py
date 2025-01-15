@@ -62,10 +62,6 @@ def test_ai_user_proxy_agent_gemini(credentials_gemini_pro: Credentials) -> None
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows",
-)
 def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials) -> None:
     _test_ai_user_proxy_agent(credentials_gpt_4o_mini)
 

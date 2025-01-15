@@ -52,10 +52,6 @@ def db_connection():
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
-)
 def test_two_agents_logging(credentials: Credentials, db_connection):
     cur = db_connection.cursor()
 
@@ -176,10 +172,6 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
-)
 def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
     cur = db_connection.cursor()
 

@@ -27,10 +27,6 @@ else:
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip or sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows",
-)
 def test_math_user_proxy_agent(
     credentials_gpt_4o_mini: Credentials,
 ):
