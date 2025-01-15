@@ -19,7 +19,6 @@ class TestOAIRealtimeClient:
         return OpenAIRealtimeClient(
             llm_config=llm_config,
             voice="alloy",
-            system_message="You are a helpful AI assistant with voice capabilities.",
         )
 
     def test_init(self, mock_credentials: Credentials) -> None:
@@ -28,7 +27,6 @@ class TestOAIRealtimeClient:
         client = OpenAIRealtimeClient(
             llm_config=llm_config,
             voice="alloy",
-            system_message="You are a helpful AI assistant with voice capabilities.",
         )
         assert isinstance(client, RealtimeClientProtocol)
 

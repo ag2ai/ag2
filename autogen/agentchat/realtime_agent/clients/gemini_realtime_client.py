@@ -40,7 +40,6 @@ class GeminiRealtimeClient:
         *,
         llm_config: dict[str, Any],
         voice: str,
-        system_message: str,
         logger: Optional[Logger] = None,
     ) -> None:
         """(Experimental) Client for Gemini Realtime API.
@@ -50,7 +49,6 @@ class GeminiRealtimeClient:
         """
         self._llm_config = llm_config
         self._voice = voice
-        self._system_message = system_message
         self._logger = logger
         self._connection: Optional["ClientConnection"] = None
         config = llm_config["config_list"][0]
@@ -77,9 +75,6 @@ class GeminiRealtimeClient:
             raise RuntimeError("Gemini WebSocket is not initialized")
         return self._connection
 
-    # TODO: The following is to support the function_declarations. How about code_execution tool and google_search tool?
-    # https://github.com/google-gemini/cookbook/blob/main/gemini-2/live_api_tool_use.ipynb
-    # gemini-2/websockets/live_api_tool_use.ipynb
     async def send_function_result(self, call_id: str, result: str) -> None:  # Looks like Gemini doesn't results.
         """Send the result of a function call to the Gemini Realtime API.
 
@@ -93,7 +88,6 @@ class GeminiRealtimeClient:
         if self._is_reading_events:
             await self.connection.send(json.dumps(msg))
 
-    # https://github.com/google-gemini/cookbook/blob/18bb4f2bd03c66839dc388bb1e9ae7e7819b1cd0/gemini-2/websockets/live_api_starter.py#L106
     async def send_text(self, *, role: Role, text: str, turn_complete: bool = True) -> None:
         """Send a text message to the Gemini Realtime API.
 
@@ -110,7 +104,6 @@ class GeminiRealtimeClient:
         if self._is_reading_events:
             await self.connection.send(json.dumps(msg))
 
-    # https://github.com/google-gemini/cookbook/blob/18bb4f2bd03c66839dc388bb1e9ae7e7819b1cd0/gemini-2/websockets/live_api_starter.py#L201
     async def send_audio(self, audio: str) -> None:
         """Send audio to the Gemini Realtime API.
 
@@ -135,12 +128,12 @@ class GeminiRealtimeClient:
         pass
 
     async def _initialize_session(self) -> None:
-        # https://ai.google.dev/api/multimodal-live
-        # https://ai.google.dev/api/multimodal-live#bidigeneratecontentsetup
-
         session_config = {
             "setup": {
-                "system_instruction": {"role": "system", "parts": [{"text": self._system_message}]},
+                "system_instruction": {
+                    "role": "system",
+                    "parts": [{"text": self._pending_session_updates["instructions"]}],
+                },
                 "model": f"models/{self._model}",
                 "tools": [
                     {
@@ -236,7 +229,7 @@ class GeminiRealtimeClient:
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], voice: str, system_message: str, logger: Logger, **kwargs: Any
+        cls, llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
@@ -250,14 +243,10 @@ class GeminiRealtimeClient:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
         if llm_config["config_list"][0].get("api_type") == "google" and list(kwargs.keys()) == []:
-            return lambda: GeminiRealtimeClient(
-                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
-            )
+            return lambda: GeminiRealtimeClient(llm_config=llm_config, voice=voice, logger=logger, **kwargs)
         return None
 
 
 # needed for mypy to check if GeminiRealtimeClient implements RealtimeClientProtocol
 if TYPE_CHECKING:
-    _client: RealtimeClientProtocol = GeminiRealtimeClient(
-        llm_config={}, voice="Charon", system_message="You are a helpful AI voice assistant."
-    )
+    _client: RealtimeClientProtocol = GeminiRealtimeClient(llm_config={}, voice="Charon")

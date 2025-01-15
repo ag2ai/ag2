@@ -9,6 +9,7 @@ from asyncer import asyncify, create_task_group, syncify
 
 from ..agent import Agent
 from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
+from ..conversable_agent import ConversableAgent
 
 if TYPE_CHECKING:
     from .clients import Role
@@ -23,10 +24,10 @@ SWARM_SYSTEM_MESSAGE = (
     "You can and will communicate using audio output only."
 )
 
-QUESTION_ROLE: Role = "user"
+QUESTION_ROLE: "Role" = "user"
 QUESTION_MESSAGE = (
     "I have a question/information for myself. DO NOT ANSWER YOURSELF, GET THE ANSWER FROM ME. "
-    "repeat the question to me **WITH AUDIO OUTPUT** and AFTER YOU GET THE ANSWER FROM ME call 'answer_task_question'\n\n"
+    "repeat the question to me **WITH AUDIO OUTPUT** and AFTER YOU GET THE ANSWER FROM ME call 'answer_task_question' with the answer in first person\n\n"
     "The question is: '{}'\n\n"
 )
 QUESTION_TIMEOUT_SECONDS = 20
@@ -41,11 +42,8 @@ class SwarmableProtocol(Protocol):
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[str]]: ...
 
-    # todo: whatever is needed
-    def start_chat(self) -> None: ...
 
-
-class SwarmableRealtimeAgent(SwarmableProtocol):
+class SwarmableRealtimeAgent(ConversableAgent):
     def __init__(
         self,
         realtime_agent: "RealtimeAgent",
@@ -58,6 +56,26 @@ class SwarmableRealtimeAgent(SwarmableProtocol):
 
         self._answer_event: anyio.Event = anyio.Event()
         self._answer: str = ""
+
+        super().__init__(
+            name=realtime_agent._name,
+            is_termination_msg=None,
+            max_consecutive_auto_reply=None,
+            human_input_mode="ALWAYS",
+            function_map=None,
+            code_execution_config=False,
+            # no LLM config is passed down to the ConversableAgent
+            llm_config=False,
+            default_auto_reply="",
+            description=None,
+            chat_messages=None,
+            silent=None,
+            context_variables=None,
+        )
+
+        self.register_reply(
+            [Agent, None], SwarmableRealtimeAgent.check_termination_and_human_reply, remove_other_reply_funcs=True
+        )
 
     def reset_answer(self) -> None:
         """Reset the answer event."""
@@ -139,13 +157,13 @@ class SwarmableRealtimeAgent(SwarmableProtocol):
                 )
             system_message = SWARM_SYSTEM_MESSAGE
 
-        realtime_agent._oai_system_message = [{"content": system_message, "role": "system"}]
+        realtime_agent._system_message = system_message
 
         realtime_agent.register_realtime_function(
             name="answer_task_question", description="Answer question from the task"
         )(self.set_answer)
 
-        def on_observers_ready() -> None:
+        async def on_observers_ready() -> None:
             self._realtime_agent._tg.soonify(asyncify(initiate_swarm_chat))(
                 initial_agent=self._initial_agent,
                 agents=self._agents,
@@ -159,7 +177,7 @@ class SwarmableRealtimeAgent(SwarmableProtocol):
 
 def register_swarm(
     *,
-    realtime_agent: RealtimeAgent,  # type: ignore
+    realtime_agent: "RealtimeAgent",  # type: ignore
     initial_agent: SwarmAgent,
     agents: list[SwarmAgent],
     system_message: Optional[str] = None,

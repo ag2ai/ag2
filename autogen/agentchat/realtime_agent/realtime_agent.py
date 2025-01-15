@@ -6,11 +6,10 @@ from dataclasses import dataclass
 from logging import Logger, getLogger
 from typing import Any, Callable, Optional, TypeVar, Union
 
+from anyio import lowlevel
 from asyncer import create_task_group
 
 from ...tools import Tool
-from ..agent import Agent
-from ..conversable_agent import ConversableAgent
 from .clients.realtime_client import RealtimeClientProtocol, get_client
 from .function_observer import FunctionObserver
 from .realtime_observer import RealtimeObserver
@@ -24,10 +23,11 @@ global_logger = getLogger(__name__)
 class RealtimeAgentCallbacks:
     """Callbacks for the Realtime Agent."""
 
-    on_observers_ready: Callable[[], Any] = lambda: None
+    # async empty placeholder function
+    on_observers_ready: Callable[[], Any] = lambda: lowlevel.checkpoint()
 
 
-class RealtimeAgent(ConversableAgent):
+class RealtimeAgent:
     """(Experimental) Agent for interacting with the Realtime Clients."""
 
     def __init__(
@@ -52,46 +52,26 @@ class RealtimeAgent(ConversableAgent):
             logger (Optional[Logger]): The logger for the agent.
             **client_kwargs (Any): The keyword arguments for the client.
         """
-        super().__init__(
-            name=name,
-            is_termination_msg=None,
-            max_consecutive_auto_reply=None,
-            human_input_mode="ALWAYS",
-            function_map=None,
-            code_execution_config=False,
-            # no LLM config is passed down to the ConversableAgent
-            llm_config=False,
-            default_auto_reply="",
-            description=None,
-            chat_messages=None,
-            silent=None,
-            context_variables=None,
-        )
         self._logger = logger
-        self._function_observer = FunctionObserver(logger=logger)
-        self._audio_adapter = audio_adapter
+        self._name = name
+        self._system_message = system_message
 
         self._realtime_client: RealtimeClientProtocol = get_client(
-            llm_config=llm_config, voice=voice, system_message=system_message, logger=self.logger, **client_kwargs
+            llm_config=llm_config, voice=voice, logger=self.logger, **client_kwargs
         )
-
-        self._observers: list[RealtimeObserver] = [self._function_observer]
-        if self._audio_adapter:
-            # audio adapter is not needed for WebRTC
-            self._observers.append(self._audio_adapter)
 
         self._registred_realtime_tools: dict[str, Tool] = {}
+        self._observers: list[RealtimeObserver] = [FunctionObserver(logger=logger)]
 
-        # is this all Swarm related?
-        self._oai_system_message = [{"content": system_message, "role": "system"}]  # todo still needed? see below
-        self.register_reply(
-            [Agent, None], RealtimeAgent.check_termination_and_human_reply, remove_other_reply_funcs=True
-        )
+        if audio_adapter:
+            self._observers.append(audio_adapter)
+
         self.callbacks = RealtimeAgentCallbacks()
 
-    def _validate_name(self, name: str) -> None:
-        # RealtimeAgent does not need to validate the name
-        pass
+    @property
+    def system_message(self) -> str:
+        """Get the system message for the agent."""
+        return self._system_message
 
     @property
     def logger(self) -> Logger:
@@ -133,6 +113,7 @@ class RealtimeAgent(ConversableAgent):
             # connect with the client first (establishes a connection and initializes a session)
             async with self._realtime_client.connect():
                 # start the observers and wait for them to be ready
+                await self.realtime_client.session_update(session_options={"instructions": self.system_message})
                 await self.start_observers()
 
                 # iterate over the events
