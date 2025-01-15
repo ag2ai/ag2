@@ -202,8 +202,17 @@ class GeminiRealtimeClient:
             return self.parse_audio_response(response)
         elif "toolCall" in response:
             return self.parse_tool_call(response)
+        elif "setupComplete" in response:
+            return self.parse_setup_complete(response)
         else:
             raise ValueError("Unknown message type")
+
+    def parse_setup_complete(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "session.created",
+            }
+        ]
 
     def parse_audio_response(self, response: dict[str, Any]) -> list[dict[str, Any]]:
         # Handle audio response
