@@ -40,7 +40,7 @@ def vision_capability(lmm_config):
 
 @pytest.fixture
 def conversable_agent():
-    return ConversableAgent(name="conversable agent", llm_config=False)
+    return ConversableAgent(name="conversable_agent", llm_config=False)
 
 
 @pytest.mark.skipif(

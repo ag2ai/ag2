@@ -6,14 +6,14 @@ from logging import Logger, getLogger
 from typing import Any, Callable, Optional, TypeVar, Union
 
 import anyio
-from asyncer import create_task_group, syncify
+from asyncer import asyncify, create_task_group, syncify
 
-from ... import SwarmAgent
 from ...tools import Tool
+from .. import SwarmAgent
 from ..agent import Agent
+from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ..conversable_agent import ConversableAgent
-from .clients import Role
-from .clients.realtime_client import RealtimeClientProtocol, get_client
+from .clients.realtime_client import RealtimeClientProtocol, Role, get_client
 from .function_observer import FunctionObserver
 from .realtime_observer import RealtimeObserver
 
@@ -23,14 +23,13 @@ global_logger = getLogger(__name__)
 
 SWARM_SYSTEM_MESSAGE = (
     "You are a helpful voice assistant. Your task is to listen to user and to coordinate the tasks based on his/her inputs."
-    "Only call the 'answer_task_question' function when you have the answer from the user."
-    "You can communicate and will communicate using audio output only."
+    "You can and will communicate using audio output only."
 )
 
 QUESTION_ROLE: Role = "user"
 QUESTION_MESSAGE = (
     "I have a question/information for myself. DO NOT ANSWER YOURSELF, GET THE ANSWER FROM ME. "
-    "repeat the question to me **WITH AUDIO OUTPUT** and then call 'answer_task_question' AFTER YOU GET THE ANSWER FROM ME\n\n"
+    "repeat the question to me **WITH AUDIO OUTPUT** and AFTER YOU GET THE ANSWER FROM ME call 'answer_task_question'\n\n"
     "The question is: '{}'\n\n"
 )
 QUESTION_TIMEOUT_SECONDS = 20
@@ -103,6 +102,10 @@ class RealtimeAgent(ConversableAgent):
         self._initial_agent: Optional[SwarmAgent] = None
         self._agents: Optional[list[SwarmAgent]] = None
 
+    def _validate_name(self, name: str) -> None:
+        # RealtimeAgent does not need to validate the name
+        pass
+
     @property
     def logger(self) -> Logger:
         """Get the logger for the agent."""
@@ -171,6 +174,15 @@ class RealtimeAgent(ConversableAgent):
                 # wait for the observers to be ready
                 for observer in self._observers:
                     await observer.wait_for_ready()
+
+                if self._start_swarm_chat and self._initial_agent and self._agents:
+                    self._tg.soonify(asyncify(initiate_swarm_chat))(
+                        initial_agent=self._initial_agent,
+                        agents=self._agents,
+                        user_agent=self,  # type: ignore[arg-type]
+                        messages="Find out what the user wants.",
+                        after_work=AfterWorkOption.REVERT_TO_USER,
+                    )
 
                 # iterate over the events
                 async for event in self.realtime_client.read_events():
