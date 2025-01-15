@@ -132,7 +132,7 @@ class GeminiRealtimeClient:
             "setup": {
                 "system_instruction": {
                     "role": "system",
-                    "parts": [{"text": self._pending_session_updates["instructions"]}],
+                    "parts": [{"text": self._pending_session_updates.get("instructions", "")}],
                 },
                 "model": f"models/{self._model}",
                 "tools": [
