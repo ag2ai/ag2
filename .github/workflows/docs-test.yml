@@ -40,7 +40,7 @@ jobs:
       #     uv pip install --system pytest-cov>=5
       - name: Install packages
         run: |
-          uv pip install --system -e ".[docs]"
+          uv pip install --system -e ".[test,docs]"
           uv pip list
       # - name: Install packages and dependencies for Documentation
       #   run: |
