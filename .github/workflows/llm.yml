@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies and run tests with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: OpenAI & Co
+name: LLM Tests
 
 on:
   pull_request:
@@ -25,7 +25,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9"]
+        llm: ["openai", "gemini"]
     runs-on: ${{ matrix.os }}
     environment: openai1
     env:  # Set env at the job level
@@ -55,30 +56,13 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e ".[test,gemini]"
+          uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for test when needed
-        if: matrix.python-version == '3.9'
-        run: |
-          uv pip install --system docker
-          uv pip install --system -e .[redis,interop]
-      - name: Not LLM Tests
-        if: matrix.python-version == '3.9'
-        run: bash scripts/test.sh test -m "not llm" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
-      - name: OpenAI Tests
-        if: matrix.python-version == '3.9'
-        run: bash scripts/test.sh test -m "openai" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
-      - name: Gemini Tests
-        if: matrix.python-version == '3.9'
-        run: bash scripts/test.sh test -m "gemini" --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
-      - name: Coverage and check notebook outputs
-        if: matrix.python-version != '3.9'
-        env:
-          WOLFRAM_ALPHA_APPID: ${{ secrets.WOLFRAM_ALPHA_APPID }}
-        run: |
-          uv pip install --system nbconvert nbformat ipykernel
-          bash scripts/test.sh test/test_notebook.py --durations=10 --durations-min=1.0
-          cat "$(pwd)/test/executed_openai_notebook_output.txt"
+        if: matrix.llm == 'gemini'
+        run: uv pip install --system -e ".[gemini]"
+      - name: Tests - ${{ matrix.llm }}
+        run: bash scripts/test_llm.sh -m "${{ matrix.llm }}"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

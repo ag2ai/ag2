@@ -7,11 +7,21 @@
 # Default mark if none is provided
 DEFAULT_MARK="openai or gemini"
 
-# Use the provided mark or fallback to the default
-MARK=${1:-"$DEFAULT_MARK"}
+# Initialize MARK as the default value
+MARK="$DEFAULT_MARK"
 
-# Shift positional parameters so additional arguments can be passed
-shift
+# Parse arguments for the -m flag
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -m)
+      MARK="$2"  # Set MARK to the provided value
+      shift 2     # Remove -m and its value from arguments
+      ;;
+    *)
+      break  # If no more flags, stop processing options
+      ;;
+  esac
+done
 
-# Call the test script with the mark
-bash scripts/test.sh -m "$MARK" --ignore=test/agentchat/contrib "$@"
+# Call the test script with the correct mark and any remaining arguments
+bash scripts/test.sh "$@" -m "$MARK" --ignore=test/agentchat/contrib
