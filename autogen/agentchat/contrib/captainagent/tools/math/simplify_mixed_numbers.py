@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def simplify_mixed_numbers(numerator1, denominator1, numerator2, denominator2, whole_number1, whole_number2):
-    """
-    Simplifies the sum of two mixed numbers and returns the result as a string in the format 'a b/c'.
+    """Simplifies the sum of two mixed numbers and returns the result as a string in the format 'a b/c'.
 
     Args:
         numerator1 (int): The numerator of the first fraction.

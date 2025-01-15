@@ -44,7 +44,6 @@ class FunctionObserver(RealtimeObserver):
             name (str): The name of the function to call.
             kwargs (Any[str, Any]): The arguments to pass to the function.
         """
-
         if name in self.agent.registred_realtime_tools:
             func = self.agent.registred_realtime_tools[name].func
             func = func if asyncio.iscoroutinefunction(func) else asyncify(func)

@@ -11,13 +11,13 @@ import os
 
 import pytest
 
-from autogen.agentchat.contrib.agent_builder import AgentBuilder
+from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST, reason, skip_openai  # noqa: E402
+from ...conftest import KEY_LOC, OAI_CONFIG_LIST
 
 try:
-    import chromadb
-    import huggingface_hub
+    import chromadb  # noqa: F401
+    import huggingface_hub  # noqa: F401
 except ImportError:
     skip = True
 else:
@@ -49,10 +49,7 @@ def builder() -> AgentBuilder:
     )
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_build(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -75,9 +72,10 @@ def test_build(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip_openai or skip,
-    reason=reason + "OR dependency not installed",
+    skip,
+    reason="dependency not installed",
 )
 def test_build_from_library(builder: AgentBuilder):
     building_task = (
@@ -122,10 +120,7 @@ def test_build_from_library(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_save(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -153,10 +148,7 @@ def test_save(builder: AgentBuilder):
     _config_check(saved_configs)
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_load(builder: AgentBuilder):
     config_save_path = f"{here}/example_test_agent_builder_config.json"
     json.load(open(config_save_path))
@@ -175,10 +167,7 @@ def test_load(builder: AgentBuilder):
     _config_check(loaded_agent_configs)
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_clear_agent(builder: AgentBuilder):
     config_save_path = f"{here}/example_test_agent_builder_config.json"
     builder.load(

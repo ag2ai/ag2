@@ -6,9 +6,7 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-"""
-Unit test for retrieve_utils.py
-"""
+"""Unit test for retrieve_utils.py"""
 
 import pytest
 
@@ -33,7 +31,7 @@ else:
 import os
 
 try:
-    from unstructured.partition.auto import partition
+    from unstructured.partition.auto import partition  # noqa: F401
 
     HAS_UNSTRUCTURED = True
 except ImportError:

@@ -4,13 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Dict, Optional, Tuple, Type, Union, get_args
+from typing import Any, Tuple, Union, get_args
 
 from pydantic import BaseModel
 from pydantic.version import VERSION as PYDANTIC_VERSION
 from typing_extensions import get_origin
 
-__all__ = ("JsonSchemaValue", "model_dump", "model_dump_json", "type2schema", "evaluate_forwardref")
+__all__ = ("JsonSchemaValue", "evaluate_forwardref", "model_dump", "model_dump_json", "type2schema")
 
 PYDANTIC_V1 = PYDANTIC_VERSION.startswith("1.")
 
@@ -70,7 +70,6 @@ else:  # pragma: no cover
         Returns:
             JsonSchemaValue: The JSON schema
         """
-
         if t is None:
             return {"type": "null"}
         elif get_origin(t) is Union:

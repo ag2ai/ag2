@@ -50,7 +50,6 @@ class IOConsole(IOStream):
             str: The line read from the input stream.
 
         """
-
         if password:
             return getpass.getpass(prompt if prompt != "" else "Password: ")
         return input(prompt)

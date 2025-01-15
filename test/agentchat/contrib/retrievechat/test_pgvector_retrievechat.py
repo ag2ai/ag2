@@ -11,12 +11,12 @@ import os
 import pytest
 from sentence_transformers import SentenceTransformer
 
-from autogen import AssistantAgent, config_list_from_json
+from autogen import AssistantAgent
 
-from ....conftest import Credentials, reason, skip_openai  # noqa: E402
+from ....conftest import Credentials
 
 try:
-    import pgvector
+    import pgvector  # noqa: F401
 
     from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
         RetrieveUserProxyAgent,
@@ -30,8 +30,9 @@ else:
 test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip or skip_openai,
+    skip,
     reason="dependency is not installed OR requested to skip",
 )
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):

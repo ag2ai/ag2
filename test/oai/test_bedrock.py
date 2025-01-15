@@ -148,13 +148,13 @@ def test_create_response(mock_chat, bedrock_client):
     response = bedrock_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Bedrock response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Bedrock response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_bedrock_response_id", "Response ID should match the mocked response ID"
-    assert (
-        response.model == "anthropic.claude-3-sonnet-20240229-v1:0"
-    ), "Response model should match the mocked response model"
+    assert response.model == "anthropic.claude-3-sonnet-20240229-v1:0", (
+        "Response model should match the mocked response model"
+    )
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
     assert response.usage.completion_tokens == 20, "Response completion tokens should match the mocked response usage"
 
@@ -271,9 +271,9 @@ def test_oai_messages_to_bedrock_messages(bedrock_client):
         {"role": "user", "content": [{"text": "Summarise the conversation."}]},
     ]
 
-    assert (
-        messages == expected_messages
-    ), "Final 'system' message was not changed to 'user' or continue messages not included"
+    assert messages == expected_messages, (
+        "Final 'system' message was not changed to 'user' or continue messages not included"
+    )
 
     # Test that the last message is a user or system message and if not, add a continue message
     test_messages = [

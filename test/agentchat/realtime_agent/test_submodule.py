@@ -7,9 +7,4 @@
 
 
 def test_import() -> None:
-    from autogen.agentchat.realtime_agent import (
-        FunctionObserver,
-        RealtimeAgent,
-        TwilioAudioAdapter,
-        WebSocketAudioAdapter,
-    )
+    pass

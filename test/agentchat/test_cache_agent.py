@@ -14,24 +14,25 @@ import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 
-from ..conftest import Credentials, skip_openai, skip_redis  # noqa: E402
+from ..conftest import Credentials, skip_redis
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
-    skip_openai_tests = True
+    skip_tests = True
 else:
-    skip_openai_tests = False or skip_openai
+    skip_tests = False
 
 try:
-    import redis
+    import redis  # noqa: F401
 except ImportError:
     skip_redis_tests = True
 else:
     skip_redis_tests = False or skip_redis
 
 
-@pytest.mark.skipif(skip_openai_tests, reason="openai not installed OR requested to skip")
+@pytest.mark.openai
+@pytest.mark.skipif(skip_tests, reason="openai not installed")
 def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
@@ -53,7 +54,8 @@ def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     assert duration_with_warm_cache < duration_with_cold_cache
 
 
-@pytest.mark.skipif(skip_openai_tests or skip_redis_tests, reason="redis not installed OR requested to skip")
+@pytest.mark.openai
+@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
 def test_redis_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -84,7 +86,8 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
         assert duration_with_warm_cache < duration_with_cold_cache
 
 
-@pytest.mark.skipif(skip_openai_tests, reason="openai not installed OR requested to skip")
+@pytest.mark.openai
+@pytest.mark.skipif(skip_tests, reason="openai not installed")
 def test_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()

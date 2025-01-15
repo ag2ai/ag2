@@ -7,7 +7,7 @@
 import json
 import logging
 import re
-from typing import Dict, List, Union
+from typing import Union
 
 import tiktoken
 
@@ -82,6 +82,7 @@ def token_left(input: Union[str, list, dict], model="gpt-3.5-turbo-0613") -> int
 
 def count_token(input: Union[str, list, dict], model: str = "gpt-3.5-turbo-0613") -> int:
     """Count number of tokens used by an OpenAI model.
+
     Args:
         input: (str, list, dict): Input to the model.
         model: (str): Model name.
@@ -155,6 +156,9 @@ def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0
         return _num_token_from_messages(messages, model="gpt-4-0613")
     elif "mistral-" in model or "mixtral-" in model:
         logger.info("Mistral.AI models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "deepseek" in model:
+        logger.info("Deepseek models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
     else:
         raise NotImplementedError(

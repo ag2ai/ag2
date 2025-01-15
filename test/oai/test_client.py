@@ -17,23 +17,23 @@ from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, OpenAIClient
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials
 
-reason += " or openai>=1 not installed"
 TOOL_ENABLED = False
 try:
     import openai
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@pytest.mark.openai
+@pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     config_list = credentials_azure_gpt_35_turbo.config_list
     client = OpenAIWrapper(config_list=config_list)
@@ -51,7 +51,8 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.skipif(skip or not TOOL_ENABLED, reason=reason)
+@pytest.mark.openai
+@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
 def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(
@@ -83,6 +84,7 @@ def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
@@ -91,6 +93,7 @@ def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
@@ -99,7 +102,8 @@ def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@pytest.mark.openai
+@pytest.mark.skipif(skip, reason="openai>=1 not installed")
 @pytest.mark.parametrize(
     "cache_seed",
     [
@@ -113,6 +117,7 @@ def test_cost(credentials_azure_gpt_35_turbo_instruct: Credentials, cache_seed):
     print(response.cost)
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     config_list = credentials_azure_gpt_35_turbo_instruct.config_list
@@ -120,11 +125,12 @@ def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
         config.update({"price": [1000, 1000]})
     client = OpenAIWrapper(config_list=config_list, cache_seed=None)
     response = client.create(prompt="1+3=")
-    assert (
-        response.cost >= 4
-    ), f"Due to customized pricing, cost should be > 4. Message: {response.choices[0].message.content}"
+    assert response.cost >= 4, (
+        f"Due to customized pricing, cost should be > 4. Message: {response.choices[0].message.content}"
+    )
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
@@ -151,11 +157,12 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
     # check update
     response = client.create(prompt="1+3=", cache_seed=42)
-    assert (
-        client.total_usage_summary["total_cost"] == response.cost * 2
-    ), "total_cost should be equal to response.cost * 2"
+    assert client.total_usage_summary["total_cost"] == response.cost * 2, (
+        "total_cost should be equal to response.cost * 2"
+    )
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
@@ -219,6 +226,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(21)))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason="openai>=1 not installed")
 def test_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
@@ -401,7 +409,7 @@ class TestO1:
             [{"role": "user", "content": "2+2="}],
         ],
     )
-    @pytest.mark.skipif(skip, reason=reason)
+    @pytest.mark.skipif(skip, reason="openai>=1 not installed")
     def test_completition_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completition(o1_mini_client, messages)
 
@@ -412,7 +420,8 @@ class TestO1:
             [{"role": "user", "content": "2+2="}],
         ],
     )
-    @pytest.mark.skipif(skip, reason=reason)
+    @pytest.mark.skipif(skip, reason="openai>=1 not installed")
+    @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completition_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completition(o1_client, messages)
 

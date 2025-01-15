@@ -8,8 +8,7 @@ from autogen.coding.func_with_reqs import with_requirements
 
 @with_requirements(["arxiv"], ["arxiv"])
 def arxiv_download(id_list: list, download_dir="./"):
-    """
-    Downloads PDF files from ArXiv based on a list of arxiv paper IDs.
+    """Downloads PDF files from ArXiv based on a list of arxiv paper IDs.
 
     Args:
         id_list (list): A list of paper IDs to download. e.g. [2302.00006v1]

@@ -8,11 +8,10 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel
 
-import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
-from autogen.tools import BaseContext, Depends
+from autogen.tools import BaseContext, ChatContext, Depends
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials
 
 
 class MyContext(BaseContext, BaseModel):
@@ -22,21 +21,26 @@ class MyContext(BaseContext, BaseModel):
 def f_with_annotated(
     a: int,
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    chat_ctx: Annotated[ChatContext, "Chat context"],
     c: Annotated[int, "c description"] = 3,
 ) -> int:
+    assert isinstance(chat_ctx, ChatContext)
     return a + ctx.b + c
 
 
 async def f_with_annotated_async(
     a: int,
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    chat_ctx: ChatContext,
     c: Annotated[int, "c description"] = 3,
 ) -> int:
+    assert isinstance(chat_ctx, ChatContext)
     return a + ctx.b + c
 
 
 def f_without_annotated(
     a: int,
+    chat_ctx: ChatContext,
     ctx: MyContext = Depends(MyContext(b=3)),
     c: Annotated[int, "c description"] = 3,
 ) -> int:
@@ -118,7 +122,7 @@ async def f_with_default_depends_async(
 
 
 class TestDependencyInjection:
-    @pytest.fixture()
+    @pytest.fixture
     def expected_tools(self) -> list[dict[str, Any]]:
         return [
             {
@@ -155,7 +159,7 @@ class TestDependencyInjection:
             (f_with_default_depends_async, "f_with_default_depends_async", True, "7"),
         ],
     )
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_register_tools(
         self,
         mock_credentials: Credentials,
@@ -179,9 +183,9 @@ class TestDependencyInjection:
 
         assert actual == expected
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
+    @pytest.mark.openai
     @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
         class UserContext(BaseContext, BaseModel):
             username: str
@@ -209,7 +213,13 @@ class TestDependencyInjection:
 
             @user_proxy.register_for_execution()
             @agent.register_for_llm(description="Login function")
-            async def login(user: Annotated[UserContext, Depends(user)]) -> str:
+            async def login(
+                user: Annotated[UserContext, Depends(user)],
+                chat_ctx: ChatContext,
+            ) -> str:
+                expected = {"arguments": "{}", "name": "login"}
+                assert chat_ctx.last_message["tool_calls"][0]["function"] == expected
+
                 return _login(user)
 
             await user_proxy.a_initiate_chat(agent, message="Please login", max_turns=2)

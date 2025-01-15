@@ -11,7 +11,7 @@ import logging
 import os
 import threading
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
@@ -92,9 +92,7 @@ class FileLogger(BaseLogger):
         cost: float,
         start_time: str,
     ) -> None:
-        """
-        Log a chat completion.
-        """
+        """Log a chat completion."""
         thread_id = threading.get_ident()
         source_name = None
         if isinstance(source, str):
@@ -123,9 +121,7 @@ class FileLogger(BaseLogger):
             self.logger.error(f"[file_logger] Failed to log chat completion: {e}")
 
     def log_new_agent(self, agent: ConversableAgent, init_args: dict[str, Any] = {}) -> None:
-        """
-        Log a new agent instance.
-        """
+        """Log a new agent instance."""
         thread_id = threading.get_ident()
 
         try:
@@ -148,9 +144,7 @@ class FileLogger(BaseLogger):
             self.logger.error(f"[file_logger] Failed to log new agent: {e}")
 
     def log_event(self, source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
-        """
-        Log an event from an agent or a string source.
-        """
+        """Log an event from an agent or a string source."""
         from autogen import Agent
 
         # This takes an object o as input and returns a string. If the object o cannot be serialized, instead of raising an error,
@@ -192,9 +186,7 @@ class FileLogger(BaseLogger):
                 self.logger.error(f"[file_logger] Failed to log event {e}")
 
     def log_new_wrapper(self, wrapper: OpenAIWrapper, init_args: dict[str, LLMConfig | list[LLMConfig]] = {}) -> None:
-        """
-        Log a new wrapper instance.
-        """
+        """Log a new wrapper instance."""
         thread_id = threading.get_ident()
 
         try:
@@ -229,9 +221,7 @@ class FileLogger(BaseLogger):
         wrapper: OpenAIWrapper,
         init_args: dict[str, Any],
     ) -> None:
-        """
-        Log a new client instance.
-        """
+        """Log a new client instance."""
         thread_id = threading.get_ident()
 
         try:
@@ -251,9 +241,7 @@ class FileLogger(BaseLogger):
             self.logger.error(f"[file_logger] Failed to log event {e}")
 
     def log_function_use(self, source: str | Agent, function: F, args: dict[str, Any], returns: Any) -> None:
-        """
-        Log a registered function(can be a tool) use from an agent or a string source.
-        """
+        """Log a registered function(can be a tool) use from an agent or a string source."""
         thread_id = threading.get_ident()
 
         try:

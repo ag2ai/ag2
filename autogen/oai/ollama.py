@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -28,7 +28,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional, Type
 
 import ollama
 from fix_busted_json import repair_json
@@ -38,7 +38,7 @@ from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
-from autogen.oai.client_utils import should_hide_tools, validate_parameter
+from autogen.oai.client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 
 
 class OllamaClient:
@@ -82,12 +82,11 @@ class OllamaClient:
         Args:
             None
         """
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Ollama, it will be ignored.", UserWarning)
+        # Store the response format, if provided (for structured outputs)
+        self._response_format: Optional[Type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -121,10 +120,10 @@ class OllamaClient:
         # There are other, advanced, parameters such as format, system (to override system message), template, raw, etc. - not used
 
         # We won't enforce the available models
-        ollama_params["model"] = params.get("model", None)
-        assert ollama_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Ollama model to use."
+        ollama_params["model"] = params.get("model")
+        assert ollama_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Ollama model to use."
+        )
 
         ollama_params["stream"] = validate_parameter(params, "stream", bool, True, False, None, None)
 
@@ -210,7 +209,7 @@ class OllamaClient:
                 params, "manual_tool_call_step2", str, False, self.TOOL_CALL_MANUAL_STEP2, None, None
             )
 
-        # Convert AutoGen messages to Ollama messages
+        # Convert AG2 messages to Ollama messages
         ollama_messages = self.oai_messages_to_ollama_messages(
             messages,
             (
@@ -224,6 +223,13 @@ class OllamaClient:
         ollama_params = self.parse_params(params)
 
         ollama_params["messages"] = ollama_messages
+
+        # If response_format exists, we want structured outputs
+        # Based on:
+        # https://ollama.com/blog/structured-outputs
+        if params.get("response_format"):
+            self._response_format = params["response_format"]
+            ollama_params["format"] = params.get("response_format").model_json_schema()
 
         # Token counts will be returned
         prompt_tokens = 0
@@ -325,10 +331,18 @@ class OllamaClient:
                         # Blank the message content
                         response_content = ""
 
+            if ollama_finish == "stop":
+                # Not a tool call, so let's check if we need to process structured output
+                if self._response_format and response_content:
+                    try:
+                        parsed_response = self._convert_json_response(response_content)
+                        response_content = _format_json_response(parsed_response, response_content)
+                    except ValueError as e:
+                        response_content = str(e)
         else:
             raise RuntimeError("Failed to get response from Ollama.")
 
-        # Convert response to AutoGen response
+        # Convert response to AG2 response
         message = ChatCompletionMessage(
             role="assistant",
             content=response_content,
@@ -357,7 +371,6 @@ class OllamaClient:
         """Convert messages from OAI format to Ollama's format.
         We correct for any specific role orders and types, and convert tools to messages (as Ollama can't use tool messages)
         """
-
         ollama_messages = copy.deepcopy(messages)
 
         # Remove the name field
@@ -458,10 +471,34 @@ class OllamaClient:
 
         return ollama_messages
 
+    def _convert_json_response(self, response: str) -> Any:
+        """Extract and validate JSON response from the output for structured outputs.
+
+        Args:
+            response (str): The response from the API.
+
+        Returns:
+            Any: The parsed JSON response.
+        """
+        if not self._response_format:
+            return response
+
+        try:
+            # Parse JSON and validate against the Pydantic model
+            return self._response_format.model_validate_json(response)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
+            )
+
+
+def _format_json_response(response: Any, original_answer: str) -> str:
+    """Formats the JSON response for structured outputs using the format method if it exists."""
+    return response.format() if isinstance(response, FormatterProtocol) else original_answer
+
 
 def response_to_tool_call(response_string: str) -> Any:
     """Attempts to convert the response to an object, aimed to align with function format `[{},{}]`"""
-
     # We try and detect the list[dict] format:
     # Pattern 1 is [{},{}]
     # Pattern 2 is {} (without the [], so could be a single function call)
@@ -520,7 +557,6 @@ def response_to_tool_call(response_string: str) -> Any:
 
 def _object_to_tool_call(data_object: Any) -> list[dict]:
     """Attempts to convert an object to a valid tool call object List[Dict] and returns it, if it can, otherwise None"""
-
     # If it's a dictionary and not a list then wrap in a list
     if isinstance(data_object, dict):
         data_object = [data_object]
