@@ -137,10 +137,7 @@ class GeminiRealtimeClient:
 
         session_config = {
             "setup": {
-                "system_instruction": {
-                    "role": "system",
-                    "parts": [{"text": self._system_message}]
-                },
+                "system_instruction": {"role": "system", "parts": [{"text": self._system_message}]},
                 "model": f"models/{self._model}",
                 "tools": [
                     {
