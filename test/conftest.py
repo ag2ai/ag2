@@ -66,14 +66,21 @@ class Credentials:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
 
-def get_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
+def get_credentials(
+    filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0, fail_if_empty: bool = True
+) -> Credentials:
     """Fixture to load the LLM config."""
-    config_list = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        filter_dict=filter_dict,
-        file_location=KEY_LOC,
-    )
-    assert config_list, "No config list found"
+    try:
+        config_list = autogen.config_list_from_json(
+            OAI_CONFIG_LIST,
+            filter_dict=filter_dict,
+            file_location=KEY_LOC,
+        )
+    except:
+        config_list = []
+
+    if fail_if_empty:
+        assert config_list, "No config list found"
 
     return Credentials(
         llm_config={
@@ -94,11 +101,12 @@ def get_openai_config_list_from_env(
 def get_openai_credentials(
     model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
 ) -> Credentials:
-    config_list = [
-        conf
-        for conf in get_credentials(filter_dict, temperature).config_list
-        if "api_type" not in conf or conf["api_type"] == "openai"
-    ]
+    config_list = get_credentials(filter_dict, temperature, fail_if_empty=False).config_list
+
+    # Filter out non-OpenAI configs
+    config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
+
+    # If no OpenAI config found, try to get it from the environment
     if config_list == []:
         config_list = get_openai_config_list_from_env(model, filter_dict, temperature)
 
