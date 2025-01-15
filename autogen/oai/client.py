@@ -471,8 +471,7 @@ class OpenAIClient:
 
         if "messages" in params and system_not_allowed:
             # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
-            # pop the system_message from the messages and add it in the prompt at the start.
-            # replace all system messages with a user message
+            # replace the system messages with user messages preappended with "System message: "
             for msg in params["messages"]:
                 if msg["role"] == "system":
                     msg["role"] = "user"
