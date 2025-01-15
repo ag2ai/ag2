@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -82,12 +83,25 @@ def get_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: f
     )
 
 
-def get_openai_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
+def get_openai_config_list_from_env(
+    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+) -> Credentials:
+    if "OPENAI_API_KEY" in os.environ:
+        api_key = os.environ["OPENAI_API_KEY"]
+        return [{"api_key": api_key, "model": model, **filter_dict}]
+
+
+def get_openai_credentials(
+    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+) -> Credentials:
     config_list = [
         conf
         for conf in get_credentials(filter_dict, temperature).config_list
         if "api_type" not in conf or conf["api_type"] == "openai"
     ]
+    if config_list == []:
+        config_list = get_openai_config_list_from_env(model, filter_dict, temperature)
+
     assert config_list, "No OpenAI config list found"
 
     return Credentials(
@@ -122,27 +136,29 @@ def credentials_all() -> Credentials:
 
 @pytest.fixture
 def credentials_gpt_4o_mini() -> Credentials:
-    return get_openai_credentials(filter_dict={"tags": ["gpt-4o-mini"]})
+    return get_openai_credentials(model="gpt-4o-mini", filter_dict={"tags": ["gpt-4o-mini"]})
 
 
 @pytest.fixture
 def credentials_gpt_4o() -> Credentials:
-    return get_openai_credentials(filter_dict={"tags": ["gpt-4o"]})
+    return get_openai_credentials(model="gpt-4o", filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_o1_mini() -> Credentials:
-    return get_openai_credentials(filter_dict={"tags": ["o1-mini"]})
+    return get_openai_credentials(model="o1-mini", filter_dict={"tags": ["o1-mini"]})
 
 
 @pytest.fixture
 def credentials_o1() -> Credentials:
-    return get_openai_credentials(filter_dict={"tags": ["o1"]})
+    return get_openai_credentials(model="o1", filter_dict={"tags": ["o1"]})
 
 
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
-    return get_openai_credentials(filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6)
+    return get_openai_credentials(
+        model="gpt-4o-realtime-preview", filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6
+    )
 
 
 @pytest.fixture
