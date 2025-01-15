@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import dataclass
 from logging import Logger, getLogger
 from typing import Any, Callable, Optional, TypeVar, Union
 
@@ -17,6 +18,13 @@ from .realtime_observer import RealtimeObserver
 F = TypeVar("F", bound=Callable[..., Any])
 
 global_logger = getLogger(__name__)
+
+
+@dataclass
+class RealtimeAgentCallbacks:
+    """Callbacks for the Realtime Agent."""
+
+    on_observers_ready: Callable[[], Any] = lambda: None
 
 
 class RealtimeAgent(ConversableAgent):
@@ -79,6 +87,11 @@ class RealtimeAgent(ConversableAgent):
         self.register_reply(
             [Agent, None], RealtimeAgent.check_termination_and_human_reply, remove_other_reply_funcs=True
         )
+        self.callbacks = RealtimeAgentCallbacks()
+
+    def _validate_name(self, name: str) -> None:
+        # RealtimeAgent does not need to validate the name
+        pass
 
     @property
     def logger(self) -> Logger:
@@ -110,6 +123,8 @@ class RealtimeAgent(ConversableAgent):
         # wait for the observers to be ready
         for observer in self._observers:
             await observer.wait_for_ready()
+
+        await self.callbacks.on_observers_ready()
 
     async def run(self) -> None:
         """Run the agent."""

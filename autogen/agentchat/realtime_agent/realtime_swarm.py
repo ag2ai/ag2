@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import wraps
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 import anyio
-from asyncer import create_task_group, syncify
+from asyncer import asyncify, create_task_group, syncify
 
 from ..agent import Agent
+from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 
 if TYPE_CHECKING:
     from .clients import Role
@@ -16,16 +16,17 @@ if TYPE_CHECKING:
 
 from ... import SwarmAgent
 
+__all__ = ["register_swarm"]
+
 SWARM_SYSTEM_MESSAGE = (
     "You are a helpful voice assistant. Your task is to listen to user and to coordinate the tasks based on his/her inputs."
-    "Only call the 'answer_task_question' function when you have the answer from the user."
-    "You can communicate and will communicate using audio output only."
+    "You can and will communicate using audio output only."
 )
 
 QUESTION_ROLE: Role = "user"
 QUESTION_MESSAGE = (
     "I have a question/information for myself. DO NOT ANSWER YOURSELF, GET THE ANSWER FROM ME. "
-    "repeat the question to me **WITH AUDIO OUTPUT** and then call 'answer_task_question' AFTER YOU GET THE ANSWER FROM ME\n\n"
+    "repeat the question to me **WITH AUDIO OUTPUT** and AFTER YOU GET THE ANSWER FROM ME call 'answer_task_question'\n\n"
     "The question is: '{}'\n\n"
 )
 QUESTION_TIMEOUT_SECONDS = 20
@@ -47,7 +48,7 @@ class SwarmableProtocol(Protocol):
 class SwarmableRealtimeAgent(SwarmableProtocol):
     def __init__(
         self,
-        realtime_agent: RealtimeAgent,  # type: ignore
+        realtime_agent: "RealtimeAgent",
         initial_agent: SwarmAgent,
         agents: list[SwarmAgent],
     ) -> None:
@@ -127,23 +128,9 @@ class SwarmableRealtimeAgent(SwarmableProtocol):
     def start_chat(self) -> None:
         raise NotImplementedError
 
-    @classmethod
-    def create(
-        cls,
-        *,
-        realtime_agent: RealtimeAgent,  # type: ignore
-        initial_agent: SwarmAgent,
-        agents: list[SwarmAgent],
-        system_message: Optional[str] = None,
-    ) -> SwarmableProtocol:
-        """Create a SwarmableRealtimeAgent.
+    def configure_realtime_agent(self, system_message: Optional[str]) -> None:
+        realtime_agent = self._realtime_agent
 
-        Args:
-            realtime_agent (RealtimeAgent): The RealtimeAgent to create the SwarmableRealtimeAgent from.
-            initial_agent (SwarmAgent): The initial agent.
-            agents (list[SwarmAgent]): The agents in the swarm.
-            system_message (Optional[str]): The system message to set for the agent. If None, the default system message is used.
-        """
         logger = realtime_agent.logger
         if not system_message:
             if realtime_agent.system_message != "You are a helpful AI Assistant.":
@@ -154,29 +141,37 @@ class SwarmableRealtimeAgent(SwarmableProtocol):
 
         realtime_agent._oai_system_message = [{"content": system_message, "role": "system"}]
 
-        swarmable_agent = SwarmableRealtimeAgent(
-            realtime_agent=realtime_agent, initial_agent=initial_agent, agents=agents
-        )
-
         realtime_agent.register_realtime_function(
             name="answer_task_question", description="Answer question from the task"
-        )(swarmable_agent.set_answer)
+        )(self.set_answer)
 
-        swarmable_agent.patch_start_observers()
+        def on_observers_ready() -> None:
+            self._realtime_agent._tg.soonify(asyncify(initiate_swarm_chat))(
+                initial_agent=self._initial_agent,
+                agents=self._agents,
+                user_agent=self,  # type: ignore[arg-type]
+                messages="Find out what the user wants.",
+                after_work=AfterWorkOption.REVERT_TO_USER,
+            )
 
-        return swarmable_agent
+        self._realtime_agent.callbacks.on_observers_ready = on_observers_ready
 
-    def patch_start_observers(self) -> None:
-        # todo: add middleware function and refactor the code
-        org_start_observers = self._realtime_agent.start_observers
 
-        @wraps(org_start_observers)
-        async def my_start_observers(*args: Any, **kwargs: Any) -> Any:
-            nonlocal org_start_observers
-            # todo: do what you have to
-            ...
-            await org_start_observers(*args, **kwargs)
+def register_swarm(
+    *,
+    realtime_agent: RealtimeAgent,  # type: ignore
+    initial_agent: SwarmAgent,
+    agents: list[SwarmAgent],
+    system_message: Optional[str] = None,
+) -> None:
+    """Create a SwarmableRealtimeAgent.
 
-            ...
+    Args:
+        realtime_agent (RealtimeAgent): The RealtimeAgent to create the SwarmableRealtimeAgent from.
+        initial_agent (SwarmAgent): The initial agent.
+        agents (list[SwarmAgent]): The agents in the swarm.
+        system_message (Optional[str]): The system message to set for the agent. If None, the default system message is used.
+    """
+    swarmable_agent = SwarmableRealtimeAgent(realtime_agent=realtime_agent, initial_agent=initial_agent, agents=agents)
 
-        self._realtime_agent.start_observers = my_start_observers  # type: ignore[method-assign]
+    swarmable_agent.configure_realtime_agent(system_message=system_message)
