@@ -52,7 +52,7 @@ jobs:
           uv pip install --system --force-reinstall "pydantic<2.0"
       - name: Run documentation tests
         run: |
-          bash scripts/test_skip_llm.sh test/website/test_process_api_reference.py test/website/test_process_notebooks.py
+          bash scripts/test-contrib-skip-llm.sh test/website/test_process_api_reference.py test/website/test_process_notebooks.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

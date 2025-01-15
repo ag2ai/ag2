@@ -61,7 +61,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb
+          bash scripts/test-contrib-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -131,7 +131,7 @@ jobs:
       - name: Coverage
         run: |
           uv pip install --system pytest-cov>=5
-          bash scripts/test_skip_llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
+          bash scripts/test-contrib-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -162,7 +162,7 @@ jobs:
           uv pip install --system -e .
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/agent_eval/
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/agent_eval/
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -199,7 +199,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/test_gpt_assistant.py
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/test_gpt_assistant.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -236,7 +236,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -273,7 +273,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py
+          bash scripts/test-contrib-skip-llm.sh test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -312,11 +312,11 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/test_img_utils.py test/agentchat/contrib/test_lmm.py test/agentchat/contrib/test_llava.py test/agentchat/contrib/capabilities/test_vision_capability.py
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/test_img_utils.py test/agentchat/contrib/test_lmm.py test/agentchat/contrib/test_llava.py test/agentchat/contrib/capabilities/test_vision_capability.py
       - name: Image Gen Coverage
         if: ${{ matrix.os != 'windows-latest' && matrix.python-version != '3.13' }}
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -358,7 +358,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_gemini.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_gemini.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -395,7 +395,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/capabilities/test_transform_messages.py
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/capabilities/test_transform_messages.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -427,7 +427,7 @@ jobs:
           uv pip install --system llama-index llama-index-llms-openai
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/test_llamaindex_conversable_agent.py
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/test_llamaindex_conversable_agent.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -470,7 +470,7 @@ jobs:
 
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_anthropic.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_anthropic.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -512,7 +512,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_cerebras.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_cerebras.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -554,7 +554,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_mistral.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_mistral.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -596,7 +596,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_together.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_together.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -638,7 +638,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_groq.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_groq.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -676,7 +676,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_cohere.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_cohere.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -718,7 +718,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_ollama.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_ollama.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -760,7 +760,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/oai/test_bedrock.py
+          bash scripts/test-contrib-skip-llm.sh test/oai/test_bedrock.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -802,7 +802,7 @@ jobs:
           fi
       - name: Coverage
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/test_swarm.py
+          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/test_swarm.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -855,7 +855,7 @@ jobs:
             fi
         - name: Coverage
           run: |
-            bash scripts/test_skip_llm.sh test/agentchat/contrib/test_reasoning_agent.py
+            bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/test_reasoning_agent.py
         - name: Upload coverage to Codecov
           uses: codecov/codecov-action@v3
           with:
