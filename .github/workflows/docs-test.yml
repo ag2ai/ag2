@@ -50,6 +50,9 @@ jobs:
           uv pip uninstall --system -y typing_extensions typing-extensions || true
           uv pip install --system --force-reinstall "typing-extensions==4.7.1"
           uv pip install --system --force-reinstall "pydantic<2.0"
+      - name: List all installed packages and their versions
+        run: |
+          uv pip list
       - name: Run documentation tests
         run: |
           bash scripts/test.sh test/website/test_process_api_reference.py test/website/test_process_notebooks.py -m "not openai"
