@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
+    from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # noqa: F401
 
     from autogen.oai.together import TogetherClient, calculate_together_cost
 
@@ -42,7 +42,6 @@ def together_client():
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason="Together.AI dependency is not installed")
 def test_initialization():
-
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
         TogetherClient()  # Should raise an AssertionError due to missing api_key
@@ -185,9 +184,9 @@ def test_create_response(mock_create, together_client):
     response = together_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Llama response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Llama response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_together_response_id", "Response ID should match the mocked response ID"
     assert response.model == "meta-llama/Llama-3-8b-chat-hf", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
@@ -198,7 +197,6 @@ def test_create_response(mock_create, together_client):
 @pytest.mark.skipif(skip, reason="Together.AI dependency is not installed")
 @patch("autogen.oai.together.TogetherClient.create")
 def test_create_response_with_tool_call(mock_create, together_client):
-
     # Define the mock response directly within the patch
     mock_function = MagicMock(name="currency_calculator")
     mock_function.name = "currency_calculator"

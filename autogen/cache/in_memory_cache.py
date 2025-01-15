@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import sys
 from types import TracebackType
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Optional, Union
 
 from .abstract_cache_base import AbstractCache
 
@@ -17,7 +17,6 @@ else:
 
 
 class InMemoryCache(AbstractCache):
-
     def __init__(self, seed: Union[str, int] = ""):
         self._seed = str(seed)
         self._cache: dict[str, Any] = {}
@@ -39,8 +38,7 @@ class InMemoryCache(AbstractCache):
         pass
 
     def __enter__(self) -> Self:
-        """
-        Enter the runtime context related to the object.
+        """Enter the runtime context related to the object.
 
         Returns:
             self: The instance itself.
@@ -50,8 +48,7 @@ class InMemoryCache(AbstractCache):
     def __exit__(
         self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
-        """
-        Exit the runtime context related to the object.
+        """Exit the runtime context related to the object.
 
         Args:
             exc_type: The exception type if an exception was raised in the context.

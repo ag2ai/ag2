@@ -7,7 +7,7 @@
 import json
 import logging
 import re
-from typing import Dict, List, Union
+from typing import Union
 
 import tiktoken
 
@@ -82,6 +82,7 @@ def token_left(input: Union[str, list, dict], model="gpt-3.5-turbo-0613") -> int
 
 def count_token(input: Union[str, list, dict], model: str = "gpt-3.5-turbo-0613") -> int:
     """Count number of tokens used by an OpenAI model.
+
     Args:
         input: (str, list, dict): Input to the model.
         model: (str): Model name.
@@ -232,9 +233,9 @@ def num_tokens_from_functions(functions, model="gpt-3.5-turbo-0613") -> int:
         if "parameters" in function:
             parameters = function["parameters"]
             if "properties" in parameters:
-                for propertiesKey in parameters["properties"]:
-                    function_tokens += len(encoding.encode(propertiesKey))
-                    v = parameters["properties"][propertiesKey]
+                for properties_key in parameters["properties"]:
+                    function_tokens += len(encoding.encode(properties_key))
+                    v = parameters["properties"][properties_key]
                     for field in v:
                         if field == "type":
                             function_tokens += 2

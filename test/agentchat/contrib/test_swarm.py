@@ -1,14 +1,13 @@
 # Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, Dict, List, Union
+from typing import Any, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.contrib.swarm_agent import (
-    __CONTEXT_VARIABLES_PARAM_NAME__,
     __TOOL_EXECUTOR_NAME__,
     AfterWork,
     AfterWorkOption,
@@ -97,7 +96,6 @@ def test_on_condition():
 
 def test_receiving_agent():
     """Test the receiving agent based on various starting messages"""
-
     # 1. Test with a single message - should always be the initial agent
     messages_one_no_name = [{"role": "user", "content": "Initial message"}]
 
@@ -157,10 +155,10 @@ def test_resume_speaker():
     ]
 
     # Patch initiate_chat on agents so we can monitor which started the conversation
-    with patch.object(test_initial_agent, "initiate_chat") as mock_initial_chat, patch.object(
-        test_second_agent, "initiate_chat"
-    ) as mock_second_chat:
-
+    with (
+        patch.object(test_initial_agent, "initiate_chat") as mock_initial_chat,
+        patch.object(test_second_agent, "initiate_chat") as mock_second_chat,
+    ):
         mock_chat_result = MagicMock()
         mock_chat_result.chat_history = multiple_messages
 
@@ -302,7 +300,6 @@ def test_temporary_user_proxy():
 
 def test_context_variables_updating_multi_tools():
     """Test context variables handling in tool calls"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -363,7 +360,6 @@ def test_context_variables_updating_multi_tools():
 
 def test_function_transfer():
     """Tests a function call that has a transfer to agent in the SwarmResult"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -778,7 +774,6 @@ def test_on_condition_unique_function_names():
 
 def test_prepare_swarm_agents():
     """Test preparation of swarm agents including tool executor setup"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -830,7 +825,6 @@ def test_prepare_swarm_agents():
 
 def test_create_nested_chats():
     """Test creation of nested chat agents and registration of handoffs"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -941,7 +935,6 @@ def test_setup_context_variables():
 
 def test_cleanup_temp_user_messages():
     """Test cleanup of temporary user messages"""
-
     chat_result = MagicMock()
     chat_result.chat_history = [
         {"role": "user", "name": "_User", "content": "Test 1"},

@@ -10,8 +10,8 @@ __all__ = [
     "BaseContext",
     "ChatContext",
     "Depends",
+    "Tool",
     "get_function_schema",
     "load_basemodels_if_needed",
     "serialize_to_str",
-    "Tool",
 ]

@@ -9,10 +9,7 @@ from uuid import UUID
 import pytest
 
 from autogen.messages.client_messages import (
-    ActualUsageSummary,
-    ModelUsageSummary,
     StreamMessage,
-    TotalUsageSummary,
     UsageSummaryMessage,
     _change_usage_summary_format,
 )
@@ -321,15 +318,15 @@ class TestUsageSummaryMessage:
 
 class TestStreamMessage:
     def test_print(self, uuid: UUID) -> None:
-        chunk_content = "random stream chunk content"
-        stream_message = StreamMessage(uuid=uuid, chunk_content=chunk_content)
+        content = "random stream chunk content"
+        stream_message = StreamMessage(uuid=uuid, content=content)
         assert isinstance(stream_message, StreamMessage)
 
         expected_model_dump = {
             "type": "stream",
             "content": {
                 "uuid": uuid,
-                "chunk_content": chunk_content,
+                "content": content,
             },
         }
         assert stream_message.model_dump() == expected_model_dump

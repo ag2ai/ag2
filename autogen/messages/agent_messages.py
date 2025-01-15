@@ -20,26 +20,26 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "FunctionResponseMessage",
-    "ToolResponseMessage",
-    "FunctionCallMessage",
-    "ToolCallMessage",
-    "TextMessage",
-    "PostCarryoverProcessingMessage",
     "ClearAgentsHistoryMessage",
-    "SpeakerAttemptSuccessfullMessage",
-    "SpeakerAttemptFailedMultipleAgentsMessage",
-    "SpeakerAttemptFailedNoAgentsMessage",
-    "GroupChatResumeMessage",
-    "GroupChatRunChatMessage",
-    "TerminationAndHumanReplyMessage",
-    "ExecuteCodeBlockMessage",
-    "ExecuteFunctionMessage",
-    "SelectSpeakerMessage",
     "ClearConversableAgentHistoryMessage",
-    "GenerateCodeExecutionReplyMessage",
     "ConversableAgentUsageSummaryMessage",
     "ConversableAgentUsageSummaryNoCostIncurredMessage",
+    "ExecuteCodeBlockMessage",
+    "ExecuteFunctionMessage",
+    "FunctionCallMessage",
+    "FunctionResponseMessage",
+    "GenerateCodeExecutionReplyMessage",
+    "GroupChatResumeMessage",
+    "GroupChatRunChatMessage",
+    "PostCarryoverProcessingMessage",
+    "SelectSpeakerMessage",
+    "SpeakerAttemptFailedMultipleAgentsMessage",
+    "SpeakerAttemptFailedNoAgentsMessage",
+    "SpeakerAttemptSuccessfullMessage",
+    "TerminationAndHumanReplyMessage",
+    "TextMessage",
+    "ToolCallMessage",
+    "ToolResponseMessage",
 ]
 
 MessageRole = Literal["assistant", "function", "tool"]
@@ -189,7 +189,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
 
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
-    content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
+    content: Optional[Union[str, int, float, bool, list[dict[str, str]]]] = None  # type: ignore [assignment]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -215,7 +215,7 @@ def create_received_message_model(
 
     # Role is neither function nor tool
 
-    if "function_call" in message and message["function_call"]:
+    if message.get("function_call"):
         return FunctionCallMessage(
             **message,
             sender_name=sender.name,
@@ -223,7 +223,7 @@ def create_received_message_model(
             uuid=uuid,
         )
 
-    if "tool_calls" in message and message["tool_calls"]:
+    if message.get("tool_calls"):
         return ToolCallMessage(
             **message,
             sender_name=sender.name,
@@ -270,8 +270,8 @@ class PostCarryoverProcessingMessage(BaseMessage):
 
         sender_name = chat_info["sender"].name
         recipient_name = chat_info["recipient"].name
-        summary_args = chat_info.get("summary_args", None)
-        max_turns = chat_info.get("max_turns", None)
+        summary_args = chat_info.get("summary_args")
+        max_turns = chat_info.get("max_turns")
 
         # Fix Callable in chat_info
         summary_method = chat_info.get("summary_method", "")
@@ -680,7 +680,7 @@ class SelectSpeakerMessage(BaseMessage):
         f("Please select the next speaker from the following list:")
         agent_names = self.agent_names or []
         for i, agent_name in enumerate(agent_names):
-            f(f"{i+1}: {agent_name}")
+            f(f"{i + 1}: {agent_name}")
 
 
 @wrap_message

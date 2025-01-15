@@ -14,7 +14,7 @@ from autogen import GroupChat, GroupChatManager
 from autogen.agentchat.contrib.llamaindex_conversable_agent import LLamaIndexConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, reason, skip_openai
+from ...conftest import MOCK_OPEN_AI_API_KEY, reason
 
 skip_reasons = [reason]
 try:
@@ -30,21 +30,20 @@ except ImportError as e:
     pass
 
 
-openaiKey = MOCK_OPEN_AI_API_KEY
+openai_key = MOCK_OPEN_AI_API_KEY
 
 
 @pytest.mark.skipif(skip_for_dependencies, reason=skip_reason)
 @patch("llama_index.core.agent.ReActAgent.chat")
 def test_group_chat_with_llama_index_conversable_agent(chat_mock: MagicMock) -> None:
-    """
-    Tests the group chat functionality with two MultimodalConversable Agents.
+    """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.
     Each agent is set to describe an image in a unique style, but the chat should not exceed the specified max_rounds.
     """
     llm = OpenAI(
         model="gpt-4o",
         temperature=0.0,
-        api_key=openaiKey,
+        api_key=openai_key,
     )
 
     chat_mock.return_value = AgentChatResponse(

@@ -32,6 +32,9 @@ jobs:
         with:
           lfs: true
           fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -41,10 +44,9 @@ jobs:
           python-version: "3.8"
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pydoc-markdown pyyaml termcolor nbclient
+          uv pip install --system pydoc-markdown pyyaml termcolor nbclient
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
-          pip install databind.core==4.4.2 databind.json==4.4.2
+          uv pip install --system databind.core==4.4.2 databind.json==4.4.2
 
       - name: Install quarto
         uses: quarto-dev/quarto-actions/setup@v2
@@ -72,6 +74,9 @@ jobs:
         with:
           lfs: true
           fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -81,10 +86,9 @@ jobs:
           python-version: "3.8"
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pydoc-markdown pyyaml termcolor nbclient
+          uv pip install --system pydoc-markdown pyyaml termcolor nbclient
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
-          pip install databind.core==4.4.2 databind.json==4.4.2
+          uv pip install --system databind.core==4.4.2 databind.json==4.4.2
 
       - name: Install quarto
         uses: quarto-dev/quarto-actions/setup@v2

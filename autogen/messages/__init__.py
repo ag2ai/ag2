@@ -4,4 +4,4 @@
 
 from .base_message import BaseMessage, get_annotated_type_for_message_classes, wrap_message
 
-__all__ = ["BaseMessage", "wrap_message", "get_annotated_type_for_message_classes"]
+__all__ = ["BaseMessage", "get_annotated_type_for_message_classes", "wrap_message"]

@@ -75,3 +75,6 @@ except ImportError:
         force_color: bool | None = None,
     ) -> str:
         return str(text)
+
+
+__all__ = ["colored"]

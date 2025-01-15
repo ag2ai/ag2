@@ -12,8 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import reason, skip_openai
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials
 
 func_def = {
     "name": "get_random_number",
@@ -25,10 +24,7 @@ func_def = {
 }
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 @pytest.mark.parametrize(
     "key, value, sync",
     [
@@ -38,7 +34,7 @@ func_def = {
     ],
 )
 @pytest.mark.asyncio
-async def test_function_call_groupchat(key, value, sync):
+async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key, value, sync):
     import random
 
     class Function:
@@ -49,21 +45,9 @@ async def test_function_call_groupchat(key, value, sync):
             return random.randint(0, 100)
 
     # llm_config without functions
-    config_list_4omini_no_tools = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
-    llm_config_no_function = {"config_list": config_list_4omini_no_tools}
-
-    # llm_config with functions
-    config_list_4omini = autogen.config_list_from_json(
-        OAI_CONFIG_LIST,
-        file_location=KEY_LOC,
-        filter_dict={"tags": ["gpt-4o-mini"]},
-    )
+    llm_config_no_function = credentials_gpt_4o_mini.llm_config
     llm_config = {
-        "config_list": config_list_4omini,
+        "config_list": credentials_gpt_4o_mini.config_list,
         key: value,
     }
 

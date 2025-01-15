@@ -4,14 +4,14 @@
 
 
 from abc import ABC
-from typing import Annotated, Any, Callable, Literal, Optional, Type, TypeVar, Union
+from typing import Annotated, Any, Callable, Literal, Optional, TypeVar, Union
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
 
 PetType = TypeVar("PetType", bound=Literal["cat", "dog"])
 
-__all__ = ["BaseMessage", "wrap_message", "get_annotated_type_for_message_classes"]
+__all__ = ["BaseMessage", "get_annotated_type_for_message_classes", "wrap_message"]
 
 
 class BaseMessage(BaseModel, ABC):
@@ -34,10 +34,10 @@ def camel2snake(name: str) -> str:
     return "".join(["_" + i.lower() if i.isupper() else i for i in name]).lstrip("_")
 
 
-_message_classes: dict[str, Type[BaseModel]] = {}
+_message_classes: dict[str, type[BaseModel]] = {}
 
 
-def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
+def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
     """Wrap a message class with a type field to be used in a union type
 
     This is needed for proper serialization and deserialization of messages in a union type.
@@ -59,7 +59,7 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
         content: message_cls  # type: ignore[valid-type]
 
         def __init__(self, *args: Any, **data: Any):
-            if set(data.keys()) <= {"type", "content"} and "content" in data:
+            if set(data.keys()) == {"type", "content"} and "content" in data:
                 super().__init__(*args, **data)
             else:
                 if "content" in data:
@@ -71,18 +71,18 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
         def print(self, f: Optional[Callable[..., Any]] = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
 
-    Wrapper = create_model(message_cls.__name__, __base__=WrapperBase)
+    wrapper_cls = create_model(message_cls.__name__, __base__=WrapperBase)
 
-    _message_classes[type_name] = Wrapper
+    _message_classes[type_name] = wrapper_cls
 
-    return Wrapper
+    return wrapper_cls
 
 
-def get_annotated_type_for_message_classes() -> Type[Any]:
+def get_annotated_type_for_message_classes() -> type[Any]:
     # this is a dynamic type so we need to disable the type checker
     union_type = Union[tuple(_message_classes.values())]  # type: ignore[valid-type]
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]
 
 
-def get_message_classes() -> dict[str, Type[BaseModel]]:
+def get_message_classes() -> dict[str, type[BaseModel]]:
     return _message_classes

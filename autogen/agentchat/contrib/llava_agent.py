@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import json
 import logging
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import replicate
 import requests
@@ -34,13 +34,12 @@ class LLaVAAgent(MultimodalConversableAgent):
         *args,
         **kwargs,
     ):
-        """
-        Args:
-            name (str): agent name.
-            system_message (str): system message for the ChatCompletion inference.
-                Please override this attribute if you want to reprogram the agent.
-            **kwargs (dict): Please refer to other kwargs in
-                [ConversableAgent](../conversable_agent#init).
+        """Args:
+        name (str): agent name.
+        system_message (str): system message for the ChatCompletion inference.
+            Please override this attribute if you want to reprogram the agent.
+        **kwargs (dict): Please refer to other kwargs in
+            [ConversableAgent](../conversable_agent#init).
         """
         super().__init__(
             name,
@@ -156,10 +155,7 @@ def llava_call_binary(
 
 
 def llava_call(prompt: str, llm_config: dict) -> str:
-    """
-    Makes a call to the LLaVA service to generate text based on a given prompt
-    """
-
+    """Makes a call to the LLaVA service to generate text based on a given prompt"""
     prompt, images = llava_formatter(prompt, order_image_tokens=False)
 
     for im in images:
@@ -172,5 +168,5 @@ def llava_call(prompt: str, llm_config: dict) -> str:
         config_list=llm_config["config_list"],
         max_new_tokens=llm_config.get("max_new_tokens", 2000),
         temperature=llm_config.get("temperature", 0.5),
-        seed=llm_config.get("seed", None),
+        seed=llm_config.get("seed"),
     )

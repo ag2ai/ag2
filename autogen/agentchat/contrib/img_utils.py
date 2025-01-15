@@ -10,7 +10,7 @@ import os
 import re
 from io import BytesIO
 from math import ceil
-from typing import Dict, List, Tuple, Union
+from typing import Union
 
 import requests
 from PIL import Image
@@ -38,8 +38,7 @@ MODEL_PARAMS = {
 
 
 def get_pil_image(image_file: Union[str, Image.Image]) -> Image.Image:
-    """
-    Loads an image from a file and returns a PIL Image object.
+    """Loads an image from a file and returns a PIL Image object.
 
     Parameters:
         image_file (str, or Image): The filename, URL, URI, or base64 string of the image file.
@@ -77,8 +76,7 @@ def get_pil_image(image_file: Union[str, Image.Image]) -> Image.Image:
 
 
 def get_image_data(image_file: Union[str, Image.Image], use_b64=True) -> bytes:
-    """
-    Loads an image and returns its data either as raw bytes or in base64-encoded format.
+    """Loads an image and returns its data either as raw bytes or in base64-encoded format.
 
     This function first loads an image from the specified file, URL, or base64 string using
     the `get_pil_image` function. It then saves this image in memory in PNG format and
@@ -108,8 +106,7 @@ def get_image_data(image_file: Union[str, Image.Image], use_b64=True) -> bytes:
 
 
 def llava_formatter(prompt: str, order_image_tokens: bool = False) -> tuple[str, list[str]]:
-    """
-    Formats the input prompt by replacing image tags and returns the new prompt along with image locations.
+    """Formats the input prompt by replacing image tags and returns the new prompt along with image locations.
 
     Parameters:
         - prompt (str): The input string that may contain image tags like `<img ...>`.
@@ -119,7 +116,6 @@ def llava_formatter(prompt: str, order_image_tokens: bool = False) -> tuple[str,
     Returns:
         - Tuple[str, List[str]]: A tuple containing the formatted string and a list of images (loaded in b64 format).
     """
-
     # Initialize variables
     new_prompt = prompt
     image_locations = []
@@ -154,8 +150,7 @@ def llava_formatter(prompt: str, order_image_tokens: bool = False) -> tuple[str,
 
 
 def pil_to_data_uri(image: Image.Image) -> str:
-    """
-    Converts a PIL Image object to a data URI.
+    """Converts a PIL Image object to a data URI.
 
     Parameters:
         image (Image.Image): The PIL Image object.
@@ -190,8 +185,7 @@ def convert_base64_to_data_uri(base64_image):
 
 
 def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dict]]:
-    """
-    Formats the input prompt by replacing image tags and returns a list of text and images.
+    """Formats the input prompt by replacing image tags and returns a list of text and images.
 
     Args:
         - prompt (str): The input string that may contain image tags like `<img ...>`.
@@ -239,8 +233,7 @@ def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dic
 
 
 def extract_img_paths(paragraph: str) -> list:
-    """
-    Extract image paths (URLs or local paths) from a text paragraph.
+    """Extract image paths (URLs or local paths) from a text paragraph.
 
     Parameters:
         paragraph (str): The input text paragraph.
@@ -259,8 +252,7 @@ def extract_img_paths(paragraph: str) -> list:
 
 
 def _to_pil(data: str) -> Image.Image:
-    """
-    Converts a base64 encoded image data string to a PIL Image object.
+    """Converts a base64 encoded image data string to a PIL Image object.
 
     This function first decodes the base64 encoded string to bytes, then creates a BytesIO object from the bytes,
     and finally creates and returns a PIL Image object from the BytesIO object.
@@ -275,8 +267,7 @@ def _to_pil(data: str) -> Image.Image:
 
 
 def message_formatter_pil_to_b64(messages: list[dict]) -> list[dict]:
-    """
-    Converts the PIL image URLs in the messages to base64 encoded data URIs.
+    """Converts the PIL image URLs in the messages to base64 encoded data URIs.
 
     This function iterates over a list of message dictionaries. For each message,
     if it contains a 'content' key with a list of items, it looks for items
@@ -333,8 +324,7 @@ def message_formatter_pil_to_b64(messages: list[dict]) -> list[dict]:
 def num_tokens_from_gpt_image(
     image_data: Union[str, Image.Image], model: str = "gpt-4-vision", low_quality: bool = False
 ) -> int:
-    """
-    Calculate the number of tokens required to process an image based on its dimensions
+    """Calculate the number of tokens required to process an image based on its dimensions
     after scaling for different GPT models. Supports "gpt-4-vision", "gpt-4o", and "gpt-4o-mini".
     This function scales the image so that its longest edge is at most 2048 pixels and its shortest
     edge is at most 768 pixels (for "gpt-4-vision"). It then calculates the number of 512x512 tiles
@@ -353,11 +343,10 @@ def num_tokens_from_gpt_image(
     Examples:
     --------
     >>> from PIL import Image
-    >>> img = Image.new('RGB', (2500, 2500), color = 'red')
+    >>> img = Image.new("RGB", (2500, 2500), color="red")
     >>> num_tokens_from_gpt_image(img, model="gpt-4-vision")
     765
     """
-
     image = get_pil_image(image_data)  # PIL Image
     width, height = image.size
 

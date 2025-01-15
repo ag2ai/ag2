@@ -13,21 +13,36 @@ __all__ = ["UsageSummaryMessage"]
 
 
 class ModelUsageSummary(BaseModel):
+    """Model usage summary."""
+
     model: str
+    """Model name."""
     completion_tokens: int
+    """Number of tokens used for completion."""
     cost: float
+    """Cost of the completion."""
     prompt_tokens: int
+    """Number of tokens used for prompt."""
     total_tokens: int
+    """Total number of tokens used."""
 
 
 class ActualUsageSummary(BaseModel):
+    """Actual usage summary."""
+
     usages: Optional[list[ModelUsageSummary]] = None
+    """List of model usage summaries."""
     total_cost: Optional[float] = None
+    """Total cost."""
 
 
 class TotalUsageSummary(BaseModel):
+    """Total usage summary."""
+
     usages: Optional[list[ModelUsageSummary]] = None
+    """List of model usage summaries."""
     total_cost: Optional[float] = None
+    """Total cost."""
 
 
 Mode = Literal["both", "total", "actual"]
@@ -58,9 +73,14 @@ def _change_usage_summary_format(
 
 @wrap_message
 class UsageSummaryMessage(BaseMessage):
+    """Usage summary message."""
+
     actual: ActualUsageSummary
+    """Actual usage summary."""
     total: TotalUsageSummary
+    """Total usage summary."""
     mode: Mode
+    """Mode to display the usage summary."""
 
     def __init__(
         self,
@@ -127,10 +147,13 @@ class UsageSummaryMessage(BaseMessage):
 
 @wrap_message
 class StreamMessage(BaseMessage):
-    chunk_content: str
+    """Stream message."""
 
-    def __init__(self, *, uuid: Optional[UUID] = None, chunk_content: str) -> None:
-        super().__init__(uuid=uuid, chunk_content=chunk_content)
+    content: str
+    """Content of the message."""
+
+    def __init__(self, *, uuid: Optional[UUID] = None, content: str) -> None:
+        super().__init__(uuid=uuid, content=content)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -138,7 +161,7 @@ class StreamMessage(BaseMessage):
         # Set the terminal text color to green
         f("\033[32m", end="")
 
-        f(self.chunk_content, end="", flush=True)
+        f(self.content, end="", flush=True)
 
         # Reset the terminal text color
         f("\033[0m\n")

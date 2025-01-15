@@ -18,9 +18,8 @@ from autogen.messages.agent_messages import (
     ConversableAgentUsageSummaryMessage,
     ConversableAgentUsageSummaryNoCostIncurredMessage,
     ExecuteCodeBlockMessage,
-    ExecutedFunctionMessage,
     ExecuteFunctionMessage,
-    FunctionCall,
+    ExecutedFunctionMessage,
     FunctionCallMessage,
     FunctionResponseMessage,
     GenerateCodeExecutionReplyMessage,
@@ -36,14 +35,11 @@ from autogen.messages.agent_messages import (
     SpeakerAttemptSuccessfullMessage,
     TerminationAndHumanReplyMessage,
     TextMessage,
-    ToolCall,
     ToolCallMessage,
-    ToolResponse,
     ToolResponseMessage,
     UsingAutoReplyMessage,
     create_received_message_model,
 )
-from autogen.oai.client import OpenAIWrapper
 
 
 @pytest.fixture(autouse=True)
@@ -305,9 +301,34 @@ class TestToolCallMessage:
 
 
 class TestTextMessage:
-    def test_print_context_message(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-        message = {"content": "hello {name}", "context": {"name": "there"}}
-
+    @pytest.mark.parametrize(
+        "message, expected_content",
+        [
+            (
+                {"content": "hello {name}", "context": {"name": "there"}},
+                "hello {name}",
+            ),
+            (
+                {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Please extract table from the following image and convert it to Markdown.",
+                        }
+                    ]
+                },
+                "Please extract table from the following image and convert it to Markdown.",
+            ),
+        ],
+    )
+    def test_print_messages(
+        self,
+        uuid: UUID,
+        sender: ConversableAgent,
+        recipient: ConversableAgent,
+        message: dict[str, Any],
+        expected_content: str,
+    ) -> None:
         actual = create_received_message_model(uuid=uuid, message=message, sender=sender, recipient=recipient)
 
         assert isinstance(actual, TextMessage)
@@ -315,7 +336,7 @@ class TestTextMessage:
             "type": "text",
             "content": {
                 "uuid": uuid,
-                "content": "hello {name}",
+                "content": message["content"],
                 "sender_name": "sender",
                 "recipient_name": "recipient",
             },
@@ -325,11 +346,9 @@ class TestTextMessage:
         mock = MagicMock()
         actual.print(f=mock)
 
-        # print(mock.call_args_list)
-
         expected_call_args_list = [
             call("\x1b[33msender\x1b[0m (to recipient):\n", flush=True),
-            call("hello {name}", flush=True),
+            call(expected_content, flush=True),
             call(
                 "\n",
                 "--------------------------------------------------------------------------------",
@@ -713,7 +732,7 @@ class TestGroupChatResumeMessage:
 class TestGroupChatRunChatMessage:
     def test_print(self, uuid: UUID) -> None:
         speaker = ConversableAgent(
-            "assistant uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+            "assistant_uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
         )
         silent = False
 
@@ -724,7 +743,7 @@ class TestGroupChatRunChatMessage:
             "type": "group_chat_run_chat",
             "content": {
                 "uuid": uuid,
-                "speaker_name": "assistant uno",
+                "speaker_name": "assistant_uno",
                 "verbose": True,
             },
         }
@@ -735,7 +754,7 @@ class TestGroupChatRunChatMessage:
 
         # print(mock.call_args_list)
 
-        expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant uno\n\x1b[0m", flush=True)]
+        expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant_uno\n\x1b[0m", flush=True)]
 
         assert mock.call_args_list == expected_call_args_list
 

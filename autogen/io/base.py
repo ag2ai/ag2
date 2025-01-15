@@ -12,7 +12,7 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 from autogen.messages.base_message import BaseMessage
 
-__all__ = ("OutputStream", "InputStream", "IOStream")
+__all__ = ("IOStream", "InputStream", "OutputStream")
 
 logger = logging.getLogger(__name__)
 

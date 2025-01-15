@@ -2,9 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from contextlib import contextmanager
-from typing import Generator, Type
-from uuid import uuid4
+from collections.abc import Generator
+from uuid import UUID
 
 import pytest
 from pydantic import BaseModel
@@ -12,13 +11,12 @@ from pydantic import BaseModel
 from autogen.messages.base_message import (
     BaseMessage,
     _message_classes,
-    get_annotated_type_for_message_classes,
     wrap_message,
 )
 
 
-@pytest.fixture()
-def TestMessage() -> Generator[Type[BaseMessage], None, None]:
+@pytest.fixture
+def TestMessage() -> Generator[type[BaseMessage], None, None]:  # noqa: N802
     org_message_classes = _message_classes.copy()
     try:
 
@@ -35,10 +33,8 @@ def TestMessage() -> Generator[Type[BaseMessage], None, None]:
 
 
 class TestBaseMessage:
-    def test_model_dump_validate(self, TestMessage: Type[BaseModel]) -> None:
-        uuid = uuid4()
-
-        print(f"{TestMessage=}")
+    def test_model_dump_validate(self, TestMessage: type[BaseModel], uuid: UUID) -> None:  # noqa: N803
+        # print(f"{TestMessage=}")
 
         message = TestMessage(uuid=uuid, sender="sender", receiver="receiver", content="Hello, World!")
 
@@ -58,4 +54,20 @@ class TestBaseMessage:
         assert model.model_dump() == expected
 
         model = TestMessage(**expected)
+        assert model.model_dump() == expected
+
+    def test_single_content_parameter_message(self, uuid: UUID) -> None:
+        @wrap_message
+        class TestSingleContentParameterMessage(BaseMessage):
+            content: str
+
+        message = TestSingleContentParameterMessage(uuid=uuid, content="Hello, World!")
+
+        expected = {"type": "test_single_content_parameter", "content": {"content": "Hello, World!", "uuid": uuid}}
+        assert message.model_dump() == expected
+
+        model = TestSingleContentParameterMessage.model_validate(expected)
+        assert model.model_dump() == expected
+
+        model = TestSingleContentParameterMessage(**expected)
         assert model.model_dump() == expected
