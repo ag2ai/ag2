@@ -135,6 +135,16 @@ def credentials_gpt_4o() -> Credentials:
 
 
 @pytest.fixture
+def credentials_o1_mini() -> Credentials:
+    return get_openai_credentials(filter_dict={"tags": ["o1-mini"]})
+
+
+@pytest.fixture
+def credentials_o1() -> Credentials:
+    return get_openai_credentials(filter_dict={"tags": ["o1"]})
+
+
+@pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
     return get_openai_credentials(filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6)
 

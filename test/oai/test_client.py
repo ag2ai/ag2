@@ -9,7 +9,7 @@
 import os
 import shutil
 import time
-import warnings
+from collections.abc import Generator
 
 import pytest
 
@@ -27,14 +27,13 @@ try:
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
-    from openai.types.chat.chat_completion import ChatCompletionMessage
 except ImportError:
     skip = True
 else:
     skip = False or skip_openai
 
 
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@pytest.mark.skipif(skip, reason=reason)
 def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     config_list = credentials_azure_gpt_35_turbo.config_list
     client = OpenAIWrapper(config_list=config_list)
@@ -52,7 +51,7 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
+@pytest.mark.skipif(skip or not TOOL_ENABLED, reason=reason)
 def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(
@@ -283,102 +282,143 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
-@pytest.mark.skipif(skip, reason=reason)
-def test_oai_reasoning_remove_unsupported_params():
-    """Test that unsupported parameters are removed with appropriate warnings"""
-    client = OpenAIClient(OpenAI(), None)
+class TestO1:
+    @pytest.fixture
+    def mock_oai_client(self, mock_credentials: Credentials) -> OpenAIClient:
+        config = mock_credentials.config_list[0]
+        api_key = config["api_key"]
+        return OpenAIClient(OpenAI(api_key=api_key), None)
 
-    test_params = {
-        "model": "o1-mini",
-        "temperature": 0.7,
-        "frequency_penalty": 1.0,
-        "presence_penalty": 0.5,
-        "top_p": 0.9,
-        "logprobs": 5,
-        "top_logprobs": 3,
-        "logit_bias": {1: 2},
-        "valid_param": "keep_me",
-    }
+    @pytest.fixture
+    def o1_mini_client(self, credentials_o1_mini: Credentials) -> Generator[OpenAIWrapper, None, None]:
+        config_list = credentials_o1_mini.config_list
+        yield OpenAIWrapper(config_list=config_list, cache_seed=42)
 
-    with pytest.warns(UserWarning) as warning_records:
-        processed_params, _ = client._process_reasoning_model_params(test_params)
+    @pytest.fixture
+    def o1_client(self, credentials_o1: Credentials) -> Generator[OpenAIWrapper, None, None]:
+        config_list = credentials_o1.config_list
+        yield OpenAIWrapper(config_list=config_list, cache_seed=42)
 
-    # Verify all unsupported params were removed
-    assert all(
-        param not in processed_params
-        for param in [
-            "temperature",
-            "frequency_penalty",
-            "presence_penalty",
-            "top_p",
-            "logprobs",
-            "top_logprobs",
-            "logit_bias",
-        ]
+    def test_reasoning_remove_unsupported_params(self, mock_oai_client: OpenAIClient) -> None:
+        """Test that unsupported parameters are removed with appropriate warnings"""
+        test_params = {
+            "model": "o1-mini",
+            "temperature": 0.7,
+            "frequency_penalty": 1.0,
+            "presence_penalty": 0.5,
+            "top_p": 0.9,
+            "logprobs": 5,
+            "top_logprobs": 3,
+            "logit_bias": {1: 2},
+            "valid_param": "keep_me",
+        }
+
+        with pytest.warns(UserWarning) as warning_records:
+            mock_oai_client._process_reasoning_model_params(test_params)
+
+        # Verify all unsupported params were removed
+        assert all(
+            param not in test_params
+            for param in [
+                "temperature",
+                "frequency_penalty",
+                "presence_penalty",
+                "top_p",
+                "logprobs",
+                "top_logprobs",
+                "logit_bias",
+            ]
+        )
+
+        # Verify valid params were kept
+        assert "valid_param" in test_params
+        assert test_params["valid_param"] == "keep_me"
+
+        # Verify appropriate warnings were raised
+        assert len(warning_records) == 7  # One for each unsupported param
+
+    def test_oai_reasoning_max_tokens_replacement(self, mock_oai_client: OpenAIClient) -> None:
+        """Test that max_tokens is replaced with max_completion_tokens"""
+        test_params = {"model": "o1-mini", "max_tokens": 100}
+
+        mock_oai_client._process_reasoning_model_params(test_params)
+
+        assert "max_tokens" not in test_params
+        assert "max_completion_tokens" in test_params
+        assert test_params["max_completion_tokens"] == 100
+
+    @pytest.mark.parametrize(
+        ["model_name", "should_merge"],
+        [
+            ("o1-mini", True),  # TODO: Change to False when o1-mini points to a newer model, e.g. 2024-12-...
+            ("o1-preview", True),  # TODO: Change to False when o1-preview points to a newer model, e.g. 2024-12-...
+            ("o1-mini-2024-09-12", True),
+            ("o1-preview-2024-09-12", True),
+            ("o1", False),
+            ("o1-2024-12-17", False),
+        ],
     )
+    def test_oai_reasoning_system_message_handling(
+        self, model_name: str, should_merge: str, mock_oai_client: OpenAIClient
+    ) -> None:
+        """Test system message handling for different model types"""
+        system_msg = "You are an AG2 Agent."
+        user_msg = "Help me with my problem."
+        test_params = {
+            "model": model_name,
+            "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": user_msg}],
+        }
 
-    # Verify valid params were kept
-    assert "valid_param" in processed_params
-    assert processed_params["valid_param"] == "keep_me"
+        mock_oai_client._process_reasoning_model_params(test_params)
 
-    # Verify appropriate warnings were raised
-    assert len(warning_records) == 7  # One for each unsupported param
+        assert len(test_params["messages"]) == 2
+        if should_merge:
+            # Check system message was merged into user message
+            assert test_params["messages"][0]["content"] == f"System message: {system_msg}"
+            assert test_params["messages"][0]["role"] == "user"
+        else:
+            # Check messages remained unchanged
+            assert test_params["messages"][0]["content"] == system_msg
+            assert test_params["messages"][0]["role"] == "system"
 
+    def _test_completition(self, client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        assert isinstance(client, OpenAIWrapper)
+        response = client.create(messages=messages, cache_seed=123)
 
-@pytest.mark.skipif(skip, reason=reason)
-def test_oai_reasoning_max_tokens_replacement():
-    """Test that max_tokens is replaced with max_completion_tokens"""
-    client = OpenAIClient(OpenAI(), None)
+        assert response
+        print(f"{response=}")
 
-    test_params = {"model": "o1-mini", "max_tokens": 100}
+        text_or_completion_object = client.extract_text_or_completion_object(response)
+        print(f"{text_or_completion_object=}")
+        assert text_or_completion_object
+        assert isinstance(text_or_completion_object[0], str)
+        assert "4" in text_or_completion_object[0]
 
-    processed_params, _ = client._process_reasoning_model_params(test_params)
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            [{"role": "system", "content": "You are an assistant"}, {"role": "user", "content": "2+2="}],
+            [{"role": "user", "content": "2+2="}],
+        ],
+    )
+    @pytest.mark.skipif(skip, reason=reason)
+    def test_completition_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completition(o1_mini_client, messages)
 
-    assert "max_tokens" not in processed_params
-    assert "max_completion_tokens" in processed_params
-    assert processed_params["max_completion_tokens"] == 100
-
-
-@pytest.mark.skipif(skip, reason=reason)
-@pytest.mark.parametrize(
-    "model_name,should_merge",
-    [
-        ("o1-mini", True),  # TODO: Change to False when o1-mini points to a newer model, e.g. 2024-12-...
-        ("o1-preview", True),  # TODO: Change to False when o1-preview points to a newer model, e.g. 2024-12-...
-        ("o1-mini-2024-09-12", True),
-        ("o1-preview-2024-09-12", True),
-        ("o1", False),
-        ("o1-2024-12-17", False),
-    ],
-)
-def test_oai_reasoning_system_message_handling(model_name, should_merge):
-    """Test system message handling for different model types"""
-    client = OpenAIClient(OpenAI(), None)
-
-    system_msg = "You are an AG2 Agent."
-    user_msg = "Help me with my problem."
-    test_params = {
-        "model": model_name,
-        "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": user_msg}],
-    }
-
-    processed_params, sys_msg_dict = client._process_reasoning_model_params(test_params)
-
-    if should_merge:
-        # Check system message was merged into user message
-        assert len(processed_params["messages"]) == 1
-        assert processed_params["messages"][0]["content"] == f"{system_msg}\n\n{user_msg}"
-        assert sys_msg_dict["role"] == "system"
-        assert sys_msg_dict["content"] == system_msg
-    else:
-        # Check messages remained unchanged
-        assert len(processed_params["messages"]) == 2
-        assert processed_params["messages"][0]["content"] == system_msg
-        assert processed_params["messages"][1]["content"] == user_msg
-        assert sys_msg_dict == {}
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            [{"role": "system", "content": "You are an assistant"}, {"role": "user", "content": "2+2="}],
+            [{"role": "user", "content": "2+2="}],
+        ],
+    )
+    @pytest.mark.skipif(skip, reason=reason)
+    def test_completition_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completition(o1_client, messages)
 
 
 if __name__ == "__main__":
+    pass
     # test_aoai_chat_completion()
     # test_oai_tool_calling_extraction()
     # test_chat_completion()
@@ -387,6 +427,3 @@ if __name__ == "__main__":
     # test_usage_summary()
     # test_legacy_cache()
     # test_cache()
-    # test_oai_reasoning_remove_unsupported_params()
-    # test_oai_reasoning_max_tokens_replacement()
-    test_oai_reasoning_system_message_handling("o1-mini", True)

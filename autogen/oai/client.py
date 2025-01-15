@@ -309,10 +309,10 @@ class OpenAIClient:
             create_or_parse = completions.create
 
         # needs to be updated when the o3 is released to generalize
-        _is_o1 = "model" in params and params["model"].startswith("o1")
+        is_o1 = "model" in params and params["model"].startswith("o1")
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params and not _is_o1:
+        if params.get("stream", False) and "messages" in params and not is_o1:
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
@@ -419,7 +419,7 @@ class OpenAIClient:
         else:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
-            if _is_o1:
+            if is_o1:
                 # add a warning that model does not support stream
                 if params.get("stream", False):
                     warnings.warn(
@@ -427,21 +427,25 @@ class OpenAIClient:
                     )
                 if params.get("tools", False):
                     raise ModelToolNotSupportedError(params.get("model"))
-                params, _system_msg_dict = self._process_reasoning_model_params(params)
+                self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
             # remove the system_message from the response and add it in the prompt at the start.
-            if _is_o1:
-                params["messages"][0]["content"] = params["messages"][0]["content"].split("\n\n", 1)[1]
-                params["messages"].insert(0, _system_msg_dict)
+            if is_o1:
+                for msg in params["messages"]:
+                    if msg["role"] == "user" and msg["content"].startswith("System message: "):
+                        msg["role"] = "system"
+                        msg["content"] = msg["content"][len("System message: ") :]
 
         return response
 
-    def _process_reasoning_model_params(self, params):
+    def _process_reasoning_model_params(self, params) -> None:
         """
         Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
+        print(f"{params=}")
+
         # Unsupported parameters
         unsupported_params = [
             "temperature",
@@ -461,7 +465,6 @@ class OpenAIClient:
         # and max_tokens isn't valid
         if "max_tokens" in params:
             params["max_completion_tokens"] = params.pop("max_tokens")
-        sys_msg_dict = {}  # placeholder if messages are not present
 
         # TODO - When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
         system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
@@ -469,11 +472,11 @@ class OpenAIClient:
         if "messages" in params and system_not_allowed:
             # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
             # pop the system_message from the messages and add it in the prompt at the start.
-            _system_message = params["messages"][0]["content"]
-            sys_msg_dict = params["messages"].pop(0)
-            params["messages"][0]["content"] = _system_message + "\n\n" + params["messages"][0]["content"]
-
-        return params, sys_msg_dict
+            # replace all system messages with a user message
+            for msg in params["messages"]:
+                if msg["role"] == "system":
+                    msg["role"] = "user"
+                    msg["content"] = f"System message: {msg['content']}"
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
         """Calculate the cost of the response."""
