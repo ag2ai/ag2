@@ -8,6 +8,7 @@ on:
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
       - ".github/workflows/docs-check-broken-links.yml"
+      - ".github/workflows/docs-test.yml"
   push:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
       - ".github/workflows/docs-check-broken-links.yml"
+      - ".github/workflows/docs-test.yml"
   workflow_dispatch:
   merge_group:
     types: [checks_requested]
