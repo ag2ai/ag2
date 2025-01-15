@@ -10,19 +10,20 @@ import inspect
 import logging
 import sys
 import uuid
+import warnings
 from typing import Any, Callable, Optional, Protocol, Union
 
 from pydantic import BaseModel, schema_json_of
 
-from autogen.cache import Cache
-from autogen.io.base import IOStream
-from autogen.logger.logger_utils import get_current_ts
-from autogen.oai.client_utils import FormatterProtocol, logging_formatter
-from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
-from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
-from autogen.token_count_utils import count_token
-
+from ..cache import Cache
+from ..exception_utils import ModelToolNotSupportedError
+from ..io.base import IOStream
+from ..logger.logger_utils import get_current_ts
 from ..messages.client_messages import StreamMessage, UsageSummaryMessage
+from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
+from ..token_count_utils import count_token
+from .client_utils import FormatterProtocol, logging_formatter
+from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
 TOOL_ENABLED = False
 try:
@@ -302,8 +303,11 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
 
+        # needs to be updated when the o3 is released to generalize
+        is_o1 = "model" in params and params["model"].startswith("o1")
+
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params:
+        if params.get("stream", False) and "messages" in params and not is_o1:
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
@@ -410,10 +414,63 @@ class OpenAIClient:
         else:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
+            if is_o1:
+                # add a warning that model does not support stream
+                if params.get("stream", False):
+                    warnings.warn(
+                        f"The {params.get('model')} model does not support streaming. The stream will be set to False."
+                    )
+                if params.get("tools", False):
+                    raise ModelToolNotSupportedError(params.get("model"))
+                self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
+            # remove the system_message from the response and add it in the prompt at the start.
+            if is_o1:
+                for msg in params["messages"]:
+                    if msg["role"] == "user" and msg["content"].startswith("System message: "):
+                        msg["role"] = "system"
+                        msg["content"] = msg["content"][len("System message: ") :]
 
         return response
+
+    def _process_reasoning_model_params(self, params) -> None:
+        """
+        Cater for the reasoning model (o1, o3..) parameters
+        please refer: https://platform.openai.com/docs/guides/reasoning#limitations
+        """
+        print(f"{params=}")
+
+        # Unsupported parameters
+        unsupported_params = [
+            "temperature",
+            "frequency_penalty",
+            "presence_penalty",
+            "top_p",
+            "logprobs",
+            "top_logprobs",
+            "logit_bias",
+        ]
+        model_name = params.get("model")
+        for param in unsupported_params:
+            if param in params:
+                warnings.warn(f"`{param}` is not supported with {model_name} model and will be ignored.")
+                params.pop(param)
+        # Replace max_tokens with max_completion_tokens as reasoning tokens are now factored in
+        # and max_tokens isn't valid
+        if "max_tokens" in params:
+            params["max_completion_tokens"] = params.pop("max_tokens")
+
+        # TODO - When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
+        system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
+
+        if "messages" in params and system_not_allowed:
+            # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
+            # replace the system messages with user messages preappended with "System message: "
+            for msg in params["messages"]:
+                if msg["role"] == "system":
+                    msg["role"] = "user"
+                    msg["content"] = f"System message: {msg['content']}"
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
         """Calculate the cost of the response."""
