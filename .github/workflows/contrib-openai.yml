@@ -68,7 +68,7 @@ jobs:
   #         AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
   #         OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
   #       run: |
-  #         bash scripts/test_skip_llm.sh test/agentchat/contrib/retrievechat/ test/agentchat/contrib/retrievechat
+  #         bash scripts/test.sh test/agentchat/contrib/retrievechat/ test/agentchat/contrib/retrievechat
   #     - name: Upload coverage to Codecov
   #       uses: codecov/codecov-action@v3
   #       with:
@@ -106,7 +106,7 @@ jobs:
   #         AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
   #         OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
   #       run: |
-  #         bash scripts/test_skip_llm.sh test/agentchat/contrib/agent_eval/test_agent_eval.py
+  #         bash scripts/test.sh test/agentchat/contrib/agent_eval/test_agent_eval.py
   #     - name: Upload coverage to Codecov
   #       uses: codecov/codecov-action@v3
   #       with:
@@ -147,7 +147,7 @@ jobs:
   #         AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
   #         OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
   #       run: |
-  #         bash scripts/test_skip_llm.sh test/agentchat/contrib/test_gpt_assistant.py
+  #         bash scripts/test.sh test/agentchat/contrib/test_gpt_assistant.py
   #     - name: Upload coverage to Codecov
   #       uses: codecov/codecov-action@v3
   #       with:
@@ -185,7 +185,7 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
+          bash scripts/test.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -227,7 +227,7 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/test_agent_builder.py
+          bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -265,7 +265,7 @@ jobs:
   #         OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
   #         BING_API_KEY: ${{ secrets.BING_API_KEY }}
   #       run: |
-  #         bash scripts/test_skip_llm.sh test/agentchat/contrib/test_web_surfer.py
+  #         bash scripts/test.sh test/agentchat/contrib/test_web_surfer.py
   #     - name: Upload coverage to Codecov
   #       uses: codecov/codecov-action@v3
   #       with:
@@ -301,7 +301,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          bash scripts/test_skip_llm.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
+          bash scripts/test.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -339,7 +339,7 @@ jobs:
   #         AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
   #         OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
   #       run: |
-  #         bash scripts/test_skip_llm.sh test/agentchat/contrib/test_agent_optimizer.py
+  #         bash scripts/test.sh test/agentchat/contrib/test_agent_optimizer.py
   #     - name: Upload coverage to Codecov
   #       uses: codecov/codecov-action@v3
   #       with:
