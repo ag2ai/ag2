@@ -179,14 +179,14 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
     _test_two_agents_logging(credentials, db_connection)
 
 
-def _test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
+def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials, db_connection):
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
         "teacher",
         system_message=TEACHER_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=credentials_gpt_4o.llm_config,
+        llm_config=credentials.llm_config,
         max_consecutive_auto_reply=2,
     )
 
@@ -194,7 +194,7 @@ def _test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_
         "student",
         system_message=STUDENT_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials2.llm_config,
         max_consecutive_auto_reply=1,
     )
 
@@ -202,7 +202,7 @@ def _test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_
         agents=[teacher, student], messages=[], max_round=3, speaker_selection_method="round_robin"
     )
 
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=credentials_gpt_4o_mini.llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=credentials2.llm_config)
 
     student.initiate_chat(
         group_chat_manager,
@@ -227,9 +227,7 @@ def _test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_
     # Verify oai clients
     cur.execute(OAI_CLIENTS_QUERY)
     rows = cur.fetchall()
-    assert len(rows) == len(credentials_gpt_4o_mini.config_list) * 2 + len(
-        credentials_gpt_4o.config_list
-    )  # two agents and chat manager
+    assert len(rows) == len(credentials2.config_list) * 2 + len(credentials.config_list)  # two agents and chat manager
 
     # Verify oai wrappers
     cur.execute(OAI_WRAPPERS_QUERY)

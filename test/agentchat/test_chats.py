@@ -487,10 +487,9 @@ def test_chats_exceptions(credentials_gpt_4o: Credentials, tasks_work_dir: str):
         )
 
 
-@pytest.mark.openai
-def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
+def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
     llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list,
+        "config_list": credentials.config_list,
         "timeout": 120,
     }
 
@@ -541,6 +540,16 @@ def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str)
         summary_method="reflection_with_llm",
     )
     print(res.summary, res.cost, res.chat_history)
+
+
+@pytest.mark.openai
+def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
+    _test_chats_w_func(credentials_gpt_4o_mini, tasks_work_dir)
+
+
+@pytest.mark.gemini
+def test_chats_w_func_gemini(credentials_gemini_pro: Credentials, tasks_work_dir: str):
+    _test_chats_w_func(credentials_gemini_pro, tasks_work_dir)
 
 
 @pytest.mark.openai
