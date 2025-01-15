@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from autogen.agentchat.contrib.swarm_agent import SwarmAgent
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
+from autogen.agentchat.realtime_agent.realtime_swarm import register_swarm
 from autogen.tools.dependency_injection import Field as AG2Field
 
 from ...conftest import Credentials
@@ -64,7 +65,8 @@ class TestSwarmE2E:
                 functions=[get_weather],
             )
 
-            agent.register_swarm(
+            register_swarm(
+                realtime_agent=agent,
                 initial_agent=weatherman,
                 agents=[weatherman],
             )

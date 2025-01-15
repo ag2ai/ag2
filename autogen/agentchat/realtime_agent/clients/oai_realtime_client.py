@@ -34,7 +34,6 @@ class OpenAIRealtimeClient:
         *,
         llm_config: dict[str, Any],
         voice: str,
-        system_message: str,
         logger: Optional[Logger] = None,
     ) -> None:
         """(Experimental) Client for OpenAI Realtime API.
@@ -44,7 +43,6 @@ class OpenAIRealtimeClient:
         """
         self._llm_config = llm_config
         self._voice = voice
-        self._system_message = system_message
         self._logger = logger
 
         self._connection: Optional[AsyncRealtimeConnection] = None
@@ -132,7 +130,6 @@ class OpenAIRealtimeClient:
         session_update = {
             "turn_detection": {"type": "server_vad"},
             "voice": self._voice,
-            "instructions": self._system_message,
             "modalities": ["audio", "text"],
             "temperature": self._temperature,
         }
@@ -175,7 +172,7 @@ class OpenAIRealtimeClient:
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], voice: str, system_message: str, logger: Logger, **kwargs: Any
+        cls, llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
@@ -189,9 +186,7 @@ class OpenAIRealtimeClient:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
         if llm_config["config_list"][0].get("api_type", "openai") == "openai" and list(kwargs.keys()) == []:
-            return lambda: OpenAIRealtimeClient(
-                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
-            )
+            return lambda: OpenAIRealtimeClient(llm_config=llm_config, voice=voice, logger=logger, **kwargs)
         return None
 
 
@@ -203,7 +198,6 @@ class OpenAIRealtimeWebRTCClient:
         *,
         llm_config: dict[str, Any],
         voice: str,
-        system_message: str,
         websocket: "WebSocket",
         logger: Optional[Logger] = None,
     ) -> None:
@@ -214,7 +208,6 @@ class OpenAIRealtimeWebRTCClient:
         """
         self._llm_config = llm_config
         self._voice = voice
-        self._system_message = system_message
         self._logger = logger
         self._websocket = websocket
 
@@ -309,7 +302,6 @@ class OpenAIRealtimeWebRTCClient:
         session_update = {
             "turn_detection": {"type": "server_vad"},
             "voice": self._voice,
-            "instructions": self._system_message,
             "modalities": ["audio", "text"],
             "temperature": self._temperature,
         }
@@ -367,7 +359,7 @@ class OpenAIRealtimeWebRTCClient:
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], voice: str, system_message: str, logger: Logger, **kwargs: Any
+        cls, llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
@@ -381,20 +373,14 @@ class OpenAIRealtimeWebRTCClient:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
         if llm_config["config_list"][0].get("api_type", "openai") == "openai" and list(kwargs.keys()) == ["websocket"]:
-            return lambda: OpenAIRealtimeWebRTCClient(
-                llm_config=llm_config, voice=voice, system_message=system_message, logger=logger, **kwargs
-            )
+            return lambda: OpenAIRealtimeWebRTCClient(llm_config=llm_config, voice=voice, logger=logger, **kwargs)
 
         return None
 
 
 # needed for mypy to check if OpenAIRealtimeWebRTCClient implements RealtimeClientProtocol
 if TYPE_CHECKING:
-    _client: RealtimeClientProtocol = OpenAIRealtimeClient(
-        llm_config={}, voice="alloy", system_message="You are a helpful AI voice assistant."
-    )
+    _client: RealtimeClientProtocol = OpenAIRealtimeClient(llm_config={}, voice="alloy")
 
     def _rtc_client(websocket: "WebSocket") -> RealtimeClientProtocol:
-        return OpenAIRealtimeWebRTCClient(
-            llm_config={}, voice="alloy", system_message="You are a helpful AI voice assistant.", websocket=websocket
-        )
+        return OpenAIRealtimeWebRTCClient(llm_config={}, voice="alloy", websocket=websocket)

@@ -18,7 +18,6 @@ class TestGeminiRealtimeClient:
         return GeminiRealtimeClient(
             llm_config=llm_config,
             voice="charon",
-            system_message="You are a helpful AI assistant with voice capabilities.",
         )
 
     def test_init(self, mock_credentials: Credentials) -> None:
@@ -27,7 +26,6 @@ class TestGeminiRealtimeClient:
         client = GeminiRealtimeClient(
             llm_config=llm_config,
             voice="charon",
-            system_message="You are a helpful AI assistant with voice capabilities.",
         )
         assert isinstance(client, RealtimeClientProtocol)
 
