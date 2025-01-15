@@ -11,7 +11,7 @@ Install the `anthropic` package by running `pip install --upgrade anthropic`.
 - https://docs.anthropic.com/en/docs/quickstart-guide
 
 ```python
-import ag2
+import autogen
 
 config_list = [
     {
@@ -30,7 +30,7 @@ Install the `anthropic` package by running `pip install --upgrade anthropic`.
 - https://docs.anthropic.com/en/docs/quickstart-guide
 
 ```python
-import ag2
+import autogen
 
 config_list = [
     {
@@ -53,7 +53,7 @@ Install the `anthropic` package by running `pip install anthropic[vertex]`.
 
 ```python
 
-import ag2
+import autogen
 config_list = [
     {
         "model": "claude-3-5-sonnet-20240620-v1:0",
