@@ -16,7 +16,6 @@ import autogen
 from ..conftest import Credentials
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_structured_output(credentials_gpt_4o: Credentials):
     class ResponseModel(BaseModel):

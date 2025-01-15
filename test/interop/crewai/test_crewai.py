@@ -56,7 +56,6 @@ class TestCrewAIInteroperability:
 
             assert self.tool.func(args=args) == "Hello, World!"
 
-    @pytest.mark.llm
     @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
         user_proxy = UserProxyAgent(

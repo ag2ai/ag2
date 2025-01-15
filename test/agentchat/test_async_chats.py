@@ -15,7 +15,6 @@ from autogen import AssistantAgent, UserProxyAgent
 from ..conftest import Credentials
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.asyncio
 async def test_async_chats(credentials_gpt_4o_mini: Credentials):

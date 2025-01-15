@@ -26,7 +26,6 @@ else:
     skip = False
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip or sys.platform in ["darwin", "win32"],

@@ -183,7 +183,6 @@ class TestDependencyInjection:
 
         assert actual == expected
 
-    @pytest.mark.llm
     @pytest.mark.openai
     @pytest.mark.parametrize("is_async", [False, True])
     @pytest.mark.asyncio

@@ -25,7 +25,6 @@ else:
     skip = False
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
@@ -220,7 +219,6 @@ async def test_a_execute_function():
     assert (await user.a_execute_function(func_call))[1]["content"] == "42"
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip or not sys.version.startswith("3.10"),

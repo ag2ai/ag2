@@ -44,7 +44,6 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert self.tool.description == "Roll a six-sided dice and return the result."
         assert self.tool.func() in ["1", "2", "3", "4", "5", "6"]
 
-    @pytest.mark.llm
     @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(
@@ -186,7 +185,6 @@ class TestPydanticAIInteroperabilityWithContext:
 
         assert chatbot.llm_config["tools"] == expected_tools  # type: ignore[index]
 
-    @pytest.mark.llm
     @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(

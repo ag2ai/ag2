@@ -49,7 +49,6 @@ def builder() -> AgentBuilder:
     )
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_build(builder: AgentBuilder):
     building_task = (
@@ -73,7 +72,6 @@ def test_build(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip,
@@ -122,7 +120,6 @@ def test_build_from_library(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_save(builder: AgentBuilder):
     building_task = (
@@ -151,7 +148,6 @@ def test_save(builder: AgentBuilder):
     _config_check(saved_configs)
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_load(builder: AgentBuilder):
     config_save_path = f"{here}/example_test_agent_builder_config.json"
@@ -171,7 +167,6 @@ def test_load(builder: AgentBuilder):
     _config_check(loaded_agent_configs)
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_clear_agent(builder: AgentBuilder):
     config_save_path = f"{here}/example_test_agent_builder_config.json"

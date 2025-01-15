@@ -16,7 +16,6 @@ from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 from ..conftest import Credentials
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials):
     assistant1 = AssistantAgent(
@@ -69,7 +68,6 @@ def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Cre
     print("Total usage summary:", total_usage_summary)
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_agent_usage(credentials: Credentials):
     config_list = credentials.config_list

@@ -93,7 +93,6 @@ def test_web_surfer() -> None:
             response = function_map["summarize_page"]()
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     skip_all,

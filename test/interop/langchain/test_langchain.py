@@ -51,7 +51,6 @@ class TestLangChainInteroperability:
         tool_input = self.model_type(query="LangChain")  # type: ignore[misc]
         assert self.tool.func(tool_input=tool_input) == "LangChain Integration"
 
-    @pytest.mark.llm
     @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         llm_config = credentials_gpt_4o.llm_config
@@ -102,7 +101,6 @@ class TestLangChainInteroperabilityWithoutPydanticInput:
         tool_input = self.model_type(query="LangChain", max_length=100)  # type: ignore[misc]
         assert self.tool.func(tool_input=tool_input) == "LangChain Integration, max_length: 100"
 
-    @pytest.mark.llm
     @pytest.mark.openai
     def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
         llm_config = credentials_gpt_4o.llm_config

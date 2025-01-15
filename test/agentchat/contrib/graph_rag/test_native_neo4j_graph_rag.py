@@ -110,7 +110,6 @@ def neo4j_native_query_engine_auto():
     return query_engine
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,
@@ -125,7 +124,6 @@ def test_neo4j_native_query_engine(neo4j_native_query_engine):
     assert query_result.answer.find("BUZZ") >= 0
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,

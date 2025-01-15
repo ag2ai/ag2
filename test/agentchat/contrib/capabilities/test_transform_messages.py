@@ -15,7 +15,6 @@ from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimi
 from ....conftest import Credentials
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> None:
     """Test the TransformMessages capability to handle long contexts.

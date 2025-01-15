@@ -206,7 +206,6 @@ def test_custom_preparer():
     assert external_agent.chat_messages[soc][-1]["content"] == "All tests passed."
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_function_calling(credentials_all: Credentials):
     llm_config = {"config_list": credentials_all.config_list}
@@ -282,7 +281,6 @@ def test_function_calling(credentials_all: Credentials):
     )
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 def test_tool_use(credentials_all: Credentials):
     llm_config = credentials_all.llm_config

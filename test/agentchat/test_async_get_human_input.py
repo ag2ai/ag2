@@ -16,7 +16,6 @@ import autogen
 from ..conftest import Credentials
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.asyncio
 async def test_async_get_human_input(credentials_gpt_4o_mini: Credentials):
@@ -44,7 +43,6 @@ async def test_async_get_human_input(credentials_gpt_4o_mini: Credentials):
     print("Human input:", res.human_input)
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.asyncio
 async def test_async_max_turn(credentials_gpt_4o_mini: Credentials):

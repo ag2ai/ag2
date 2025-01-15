@@ -37,7 +37,6 @@ else:
     skip = False
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or not QDRANT_INSTALLED or skip,
@@ -76,7 +75,6 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     print(conversations)
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(not QDRANT_INSTALLED, reason="qdrant_client is not installed")
 def test_qdrant_filter():
@@ -93,7 +91,6 @@ def test_qdrant_filter():
     assert len(results["ids"][0]) == 4
 
 
-@pytest.mark.llm
 @pytest.mark.openai
 @pytest.mark.skipif(not QDRANT_INSTALLED, reason="qdrant_client is not installed")
 def test_qdrant_search():

@@ -251,7 +251,6 @@ markers = [
     "gemini",
     "redis",
     "docker",
-    "llm",
 ]
 
 [tool.black]
