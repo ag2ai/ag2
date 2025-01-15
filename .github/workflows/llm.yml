@@ -49,13 +49,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
+        if: matrix.llm == 'openai'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm == 'gemini' # Add other LLMs here
-        run: uv pip install --system -e ".[${{ matrix.llm }}]"
+        if: matrix.llm == 'gemini'
+        run: |
+          docker --version
+          uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
+          python -c "import autogen"
       - name: Tests - ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
