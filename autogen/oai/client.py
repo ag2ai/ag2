@@ -13,7 +13,7 @@ import uuid
 import warnings
 from typing import Any, Callable, Optional, Protocol, Union
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, schema_json_of
 
 from ..cache import Cache
 from ..exception_utils import ModelToolNotSupportedError
@@ -873,7 +873,7 @@ class OpenAIWrapper:
                 with cache_client as cache:
                     # Try to get the response from cache
                     key = get_key(
-                        {**params, **{"response_format": TypeAdapter.json_schema(params["response_format"])}}
+                        {**params, **{"response_format": schema_json_of(params["response_format"])}}
                         if "response_format" in params
                         else params
                     )
