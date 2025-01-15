@@ -28,12 +28,7 @@ jobs:
         python-version: ["3.9"]
         llm: ["openai", "gemini"]
     runs-on: ${{ matrix.os }}
-    environment: openai1
-    env:  # Set env at the job level
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-      AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
-      OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+    # environment: openai1
     services:
       redis:
         image: redis
@@ -62,6 +57,11 @@ jobs:
         if: matrix.llm == 'gemini'
         run: uv pip install --system -e ".[gemini]"
       - name: Tests - ${{ matrix.llm }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: bash scripts/test_llm.sh -m "${{ matrix.llm }}"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
