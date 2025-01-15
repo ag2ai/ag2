@@ -79,31 +79,31 @@ class UpdateSystemMessage:
     """Update the agent's system message before they reply
 
     Args:
-        update_function: The string or function to update the agent's system message. Can be a string or a Callable.
+        content_updater: The format string or function to update the agent's system message. Can be a format string or a Callable.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
-                def my_update_function(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+                def my_content_updater(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
     """
 
-    update_function: Union[Callable, str]
+    content_updater: Union[Callable, str]
 
     def __post_init__(self):
-        if isinstance(self.update_function, str):
+        if isinstance(self.content_updater, str):
             # find all {var} in the string
-            vars = re.findall(r"\{(\w+)\}", self.update_function)
+            vars = re.findall(r"\{(\w+)\}", self.content_updater)
             if len(vars) == 0:
                 warnings.warn("Update function string contains no variables. This is probably unintended.")
 
-        elif isinstance(self.update_function, Callable):
-            sig = signature(self.update_function)
+        elif isinstance(self.content_updater, Callable):
+            sig = signature(self.content_updater)
             if len(sig.parameters) != 2:
                 raise ValueError(
-                    "Update function must accept two parameters of type ConversableAgent and List[Dict[str, Any]], respectively"
+                    "The update function must accept two parameters of type ConversableAgent and List[Dict[str, Any]], respectively"
                 )
             if sig.return_annotation != str:
-                raise ValueError("Update function must return a string")
+                raise ValueError("The update function must return a string")
         else:
-            raise ValueError("Update function must be either a string or a callable")
+            raise ValueError("The update function must be either a string or a callable")
 
 
 class UPDATE_SYSTEM_MESSAGE(UpdateSystemMessage):  # noqa: N801
@@ -212,6 +212,9 @@ class ConversableAgent(LLMAgent):
             Only used in Swarms at this stage:
             https://docs.ag2.ai/docs/reference/agentchat/contrib/swarm_agent
         functions (List[Callable]): A list of functions to register with the agent.
+            These functions will be provided to the LLM, however they won't, by default, be executed by the agent.
+            If the agent is in a swarm, the swarm's tool executor will execute the function.
+            When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
         update_agent_state_before_reply (List[Callable]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
@@ -444,16 +447,16 @@ class ConversableAgent(LLMAgent):
                     def update_system_message_wrapper(
                         agent: ConversableAgent, messages: list[dict[str, Any]]
                     ) -> list[dict[str, Any]]:
-                        if isinstance(update_func.update_function, str):
+                        if isinstance(update_func.content_updater, str):
                             # Templates like "My context variable passport is {passport}" will
                             # use the context_variables for substitution
                             sys_message = OpenAIWrapper.instantiate(
-                                template=update_func.update_function,
+                                template=update_func.content_updater,
                                 context=agent._context_variables,
                                 allow_format_str_template=True,
                             )
                         else:
-                            sys_message = update_func.update_function(agent, messages)
+                            sys_message = update_func.content_updater(agent, messages)
 
                         agent.update_system_message(sys_message)
                         return messages

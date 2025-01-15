@@ -1549,21 +1549,21 @@ def test_update_system_message():
     """Tests the update_agent_state_before_reply functionality with multiple scenarios"""
 
     # Test invalid update function
-    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
+    with pytest.raises(ValueError, match="The update function must be either a string or a callable"):
         ConversableAgent("agent3", update_agent_state_before_reply=UpdateSystemMessage(123))
 
     # Test invalid callable (wrong number of parameters)
     def invalid_update_function(context_variables):
         return "Invalid function"
 
-    with pytest.raises(ValueError, match="Update function must accept two parameters"):
+    with pytest.raises(ValueError, match="The update function must accept two parameters"):
         ConversableAgent("agent4", update_agent_state_before_reply=UpdateSystemMessage(invalid_update_function))
 
     # Test invalid callable (wrong return type)
     def invalid_return_function(context_variables, messages) -> dict:
         return {}
 
-    with pytest.raises(ValueError, match="Update function must return a string"):
+    with pytest.raises(ValueError, match="The update function must return a string"):
         ConversableAgent("agent5", update_agent_state_before_reply=UpdateSystemMessage(invalid_return_function))
 
 
