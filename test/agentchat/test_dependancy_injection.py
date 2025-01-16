@@ -245,3 +245,9 @@ class TestDependencyInjection:
     @pytest.mark.asyncio
     async def test_end2end_gemini(self, credentials_gemini_pro, is_async: bool) -> None:
         self._test_end2end(credentials_gemini_pro, is_async)
+
+    @pytest.mark.anthropic
+    @pytest.mark.parametrize("is_async", [False, True])
+    @pytest.mark.asyncio
+    async def test_end2end_anthropic(self, credentials_anthropic_claude_sonnet, is_async: bool) -> None:
+        self._test_end2end(credentials_anthropic_claude_sonnet, is_async)

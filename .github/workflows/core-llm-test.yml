@@ -20,7 +20,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai", "gemini"]
+        llm: ["openai", "gemini", "anthropic"]
         python-version: ["3.9"]
         os: [ubuntu-latest]
       fail-fast: false
@@ -52,7 +52,7 @@ jobs:
           uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm == 'gemini'
+        if: matrix.llm != 'openai'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
@@ -61,6 +61,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}

@@ -4,4 +4,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-bash scripts/test.sh -m "not (openai or gemini)" "$@"
+bash scripts/test.sh -m "not (openai or gemini or anthropic)" "$@"

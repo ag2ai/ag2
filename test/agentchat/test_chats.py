@@ -552,6 +552,11 @@ def test_chats_w_func_gemini(credentials_gemini_pro: Credentials, tasks_work_dir
     _test_chats_w_func(credentials_gemini_pro, tasks_work_dir)
 
 
+@pytest.mark.anthropic
+def test_chats_w_func_anthropic(credentials_anthropic_claude_sonnet: Credentials, tasks_work_dir: str):
+    _test_chats_w_func(credentials_anthropic_claude_sonnet, tasks_work_dir)
+
+
 @pytest.mark.openai
 def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str) -> None:
     llm_config_40mini = credentials_gpt_4o_mini.llm_config
