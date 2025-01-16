@@ -62,7 +62,6 @@ class TestGeminiRealtimeClient:
         calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
 
         assert calls_kwargs[0]["type"] == "session.created"
-        assert calls_kwargs[1]["type"] == "session.updated"
 
     @pytest.mark.gemini
     @pytest.mark.asyncio

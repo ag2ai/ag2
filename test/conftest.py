@@ -56,13 +56,16 @@ class Secrets:
 
     @staticmethod
     def sanitize_secrets(data: str) -> str:
-        print(f"data: {data}")
-        print(type(data))
-        print(f"secrets: {Secrets._secrets}")
         for secret in Secrets._secrets:
             data = data.replace(secret, "*" * len(secret))
-        print(f"Output data: {data}")
         return data
+
+    @staticmethod
+    def needs_sanitizing(data: str) -> bool:
+        for secret in Secrets._secrets:
+            if secret in data:
+                return True
+        return False
 
 
 class Credentials:
@@ -176,7 +179,7 @@ def credentials_gpt_4o_realtime() -> Credentials:
 
 @pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
-    return get_google_credentials(filter_dict={"tags": ["gemini-realtime", "realtime"]}, temperature=0.6)
+    return get_google_credentials(filter_dict={"tags": ["gemini-realtime"]}, temperature=0.6)
 
 
 @pytest.fixture
@@ -211,20 +214,23 @@ def pytest_sessionfinish(session, exitstatus):
         session.exitstatus = 0
 
 
+class CensoredError(Exception):
+    def __init__(self, exception: Exception):
+        self.exception = exception
+        self.__traceback__ = exception.__traceback__
+        original_message = "".join([repr(arg) for arg in exception.args])
+        message = Secrets.sanitize_secrets(original_message)
+        super().__init__(message)
+
+
 def pytest_runtest_makereport(item, call):
     """
     Hook to customize the exception output.
     This is called after each test call.
     """
     if call.excinfo is not None:  # This means the test failed
+        original_message = "".join([repr(arg) for arg in call.excinfo.value.args])
 
-        class CensoredError(Exception):
-            def __init__(self, exception: Exception):
-                self.exception = exception
-                self.__traceback__ = exception.__traceback__
-                original_message = "".join([repr(arg) for arg in exception.args])
-                message = Secrets.sanitize_secrets(original_message)
-                super().__init__(message)
-
-        new_exception = CensoredError(call.excinfo.value)
-        call.excinfo = pytest.ExceptionInfo.from_exception(new_exception)
+        if Secrets.needs_sanitizing(original_message):
+            censored_exception = CensoredError(call.excinfo.value)
+            call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
