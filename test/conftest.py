@@ -24,14 +24,14 @@ reason = "requested to skip"
 
 # Registers command-line options like '--skip-docker' and '--skip-redis' via pytest hook.
 # When these flags are set, it indicates that tests requiring OpenAI or Redis (respectively) should be skipped.
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--skip-redis", action="store_true", help="Skip all tests that require redis")
     parser.addoption("--skip-docker", action="store_true", help="Skip all tests that require docker")
 
 
 # pytest hook implementation extracting command line args and exposing it globally
 @pytest.hookimpl(tryfirst=True)
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     global skip_redis
     skip_redis = config.getoption("--skip-redis", False)
     global skip_docker
@@ -90,27 +90,29 @@ def get_credentials(
     )
 
 
-def get_openai_config_list_from_env(
-    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
-) -> Credentials:
-    if "OPENAI_API_KEY" in os.environ:
-        api_key = os.environ["OPENAI_API_KEY"]
-        return [{"api_key": api_key, "model": model, **filter_dict}]
+def get_config_list_from_env(
+    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+) -> list[dict[str, Any]]:
+    if env_var_name in os.environ:
+        api_key = os.environ[env_var_name]
+        return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
+    return []
 
 
-def get_openai_credentials(
-    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+def get_llm_credentials(
+    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
 ) -> Credentials:
     config_list = get_credentials(filter_dict, temperature, fail_if_empty=False).config_list
 
     # Filter out non-OpenAI configs
-    config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
+    if api_type == "openai":
+        config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
 
     # If no OpenAI config found, try to get it from the environment
     if config_list == []:
-        config_list = get_openai_config_list_from_env(model, filter_dict, temperature)
+        config_list = get_config_list_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
-    assert config_list, "No OpenAI config list found"
+    assert config_list, f"No {api_type} config list found and could not be created from an env var {env_var_name}"
 
     return Credentials(
         llm_config={
@@ -144,34 +146,47 @@ def credentials_all() -> Credentials:
 
 @pytest.fixture
 def credentials_gpt_4o_mini() -> Credentials:
-    return get_openai_credentials(model="gpt-4o-mini", filter_dict={"tags": ["gpt-4o-mini"]})
+    return get_llm_credentials(
+        "OPENAI_API_KEY", model="gpt-4o-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
+    )
 
 
 @pytest.fixture
 def credentials_gpt_4o() -> Credentials:
-    return get_openai_credentials(model="gpt-4o", filter_dict={"tags": ["gpt-4o"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="gpt-4o", api_type="openai", filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_o1_mini() -> Credentials:
-    return get_openai_credentials(model="o1-mini", filter_dict={"tags": ["o1-mini"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="o1-mini", api_type="openai", filter_dict={"tags": ["o1-mini"]})
 
 
 @pytest.fixture
 def credentials_o1() -> Credentials:
-    return get_openai_credentials(model="o1", filter_dict={"tags": ["o1"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="o1", api_type="openai", filter_dict={"tags": ["o1"]})
 
 
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
-    return get_openai_credentials(
-        model="gpt-4o-realtime-preview", filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6
+    return get_llm_credentials(
+        "OPENAI_API_KEY",
+        model="gpt-4o-realtime-preview",
+        filter_dict={"tags": ["gpt-4o-realtime"]},
+        api_type="openai",
+        temperature=0.6,
     )
 
 
 @pytest.fixture
 def credentials() -> Credentials:
     return get_credentials(filter_dict={"tags": ["gpt-4o"]})
+
+
+@pytest.fixture
+def credentials_gemini_pro() -> Credentials:
+    return get_llm_credentials(
+        "GEMINI_API_KEY", model="gemini-pro", api_type="google", filter_dict={"tags": ["gemini-pro"]}
+    )
 
 
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
@@ -193,7 +208,7 @@ def mock_credentials() -> Credentials:
     return get_mock_credentials(model="gpt-4o")
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Exit status 5 means there were no tests collected
     # so we should set the exit status to 1
     # https://docs.pytest.org/en/stable/reference/exit-codes.html

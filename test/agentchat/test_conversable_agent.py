@@ -983,13 +983,11 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
+async def _test_function_registration_e2e_async(credentials: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
         system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-        llm_config=credentials_gpt_4o.llm_config,
+        llm_config=credentials.llm_config,
     )
 
     # create a UserProxyAgent instance named "user_proxy"
@@ -1044,6 +1042,18 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
 
     timer_mock.assert_called_once_with(num_seconds="1")
     stopwatch_mock.assert_called_once_with(num_seconds="2")
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
+    await _test_function_registration_e2e_async(credentials_gpt_4o)
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async_gemini(credentials_gemini_pro: Credentials) -> None:
+    await _test_function_registration_e2e_async(credentials_gemini_pro)
 
 
 @pytest.mark.openai

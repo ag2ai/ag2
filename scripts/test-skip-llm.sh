@@ -4,4 +4,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-pytest --ff -vv --durations=10 --durations-min=1.0 "$@"
+bash scripts/test.sh -m "not (openai or gemini)" "$@"

@@ -183,15 +183,12 @@ class TestDependencyInjection:
 
         assert actual == expected
 
-    @pytest.mark.openai
-    @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
+    async def _test_end2end(self, credentials, is_async: bool) -> None:
         class UserContext(BaseContext, BaseModel):
             username: str
             password: str
 
-        agent = ConversableAgent(name="agent", llm_config=credentials_gpt_4o_mini.llm_config)
+        agent = ConversableAgent(name="agent", llm_config=credentials.llm_config)
         user = UserContext(username="user23", password="password23")
         users = [user]
 
@@ -236,3 +233,15 @@ class TestDependencyInjection:
             UserContext(username="user23", password="password23"),
             "Login successful.",
         )
+
+    @pytest.mark.openai
+    @pytest.mark.parametrize("is_async", [False, True])
+    @pytest.mark.asyncio
+    async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
+        self._test_end2end(credentials_gpt_4o_mini, is_async)
+
+    @pytest.mark.gemini
+    @pytest.mark.parametrize("is_async", [False, True])
+    @pytest.mark.asyncio
+    async def test_end2end_gemini(self, credentials_gemini_pro, is_async: bool) -> None:
+        self._test_end2end(credentials_gemini_pro, is_async)
