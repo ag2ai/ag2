@@ -40,7 +40,7 @@ jobs:
           uv pip install --system -e ".[test,docs]"
       - name: Run documentation tests
         run: |
-          bash scripts/test-contrib-skip-llm.sh test/website/test_process_api_reference.py test/website/test_process_notebooks.py
+          bash scripts/test-skip-llm.sh test/website/test_process_api_reference.py test/website/test_process_notebooks.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

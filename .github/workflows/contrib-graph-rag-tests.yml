@@ -60,7 +60,7 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           uv pip install --system pytest-cov>=5
-          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
+          bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -108,7 +108,7 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           uv pip install --system pytest-cov>=5
-          bash scripts/test-contrib-skip-llm.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
+          bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

@@ -42,17 +42,17 @@ See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#testi
 
 To skip tests that require access to LLM services and Docker, run:
 ```bash
-bash scripts/test-skip-llm.sh --skip-docker
+bash scripts/test-skip-contrib-and-llm.sh --skip-docker
 ```
 
 To run tests for all LLM services (OpenAI, Gemini, etc.), use:
 ```bash
-bash scripts/test-llm.sh
+bash scripts/test-llm-skip-contrib.sh
 ```
 
 To run tests specifically for the OpenAI LLM service, use:
 ```bash
-bash scripts/test-llm.sh -m "openai"
+bash scripts/test-llm-skip-contrib.sh -m "openai"
 ```
 
 ## Coverage

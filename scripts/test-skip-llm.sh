@@ -4,4 +4,4 @@
 
 #!/usr/bin/env bash
 
-bash scripts/test-contrib-skip-llm.sh --ignore=test/agentchat/contrib "$@"
+bash scripts/test.sh -m "not (openai or gemini)" "$@"
