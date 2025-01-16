@@ -131,6 +131,13 @@ def get_llm_credentials(
     ]
     assert config_list, f"No {api_type} config list found"
 
+    return Credentials(
+        llm_config={
+            "config_list": config_list,
+            "temperature": temperature,
+        }
+    )
+
 
 def get_openai_config_list_from_env(
     model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
