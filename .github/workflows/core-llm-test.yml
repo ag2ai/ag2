@@ -12,7 +12,7 @@ on:
       - "notebook/agentchat_auto_feedback_from_code_execution.ipynb"
       - "notebook/agentchat_function_call.ipynb"
       - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
-      - ".github/workflows/core-llm-test.yml.yml"
+      - ".github/workflows/core-llm-test.yml"
 permissions:
   {}
 
@@ -23,6 +23,7 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.9"]
         llm: ["openai", "gemini"]
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     environment: openai1
     services:
@@ -62,7 +63,7 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
-        run: bash scripts/test_llm.sh -m "${{ matrix.llm }}"
+        run: bash scripts/test_core_llm.sh -m "${{ matrix.llm }}"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
