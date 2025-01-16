@@ -20,9 +20,9 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.9"]
         llm: ["openai", "gemini"]
+        python-version: ["3.9"]
+        os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     environment: openai1
