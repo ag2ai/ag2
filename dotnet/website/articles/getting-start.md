@@ -23,4 +23,4 @@ Getting started with AutoGen.Net by following the [tutorial](../tutorial/Chat-wi
 You can find more examples under the [sample project](https://github.com/ag2ai/ag2/tree/dotnet/dotnet/sample/AutoGen.BasicSamples).
 
 ### Report a bug or request a feature
-You can report a bug or request a feature by creating a new issue in the [github issue](https://github.com/ag2ai/ag2/issues) and specifying label the label "donet" 
+You can report a bug or request a feature by creating a new issue in the [github issue](https://github.com/ag2ai/ag2/issues) and specifying the label "donet" 
