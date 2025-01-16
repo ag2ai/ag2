@@ -181,9 +181,7 @@ def credentials_gemini_pro() -> Credentials:
 
 @pytest.fixture
 def credentials_anthropic_claude_sonnet() -> Credentials:
-    # TODO: change tag to claude
-    # return get_credentials(filter_dict={"tags": ["anthropic-claude-sonnet"]})
-    return get_credentials(filter_dict={"tags": ["gpt-4o"]})
+    return get_credentials(filter_dict={"tags": ["anthropic-claude-sonnet"]})
 
 
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:

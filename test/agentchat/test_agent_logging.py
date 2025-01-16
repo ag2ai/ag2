@@ -176,7 +176,7 @@ def test_two_agents_logging_gemini(credentials_gemini_pro: Credentials, db_conne
 
 @pytest.mark.anthropic
 def test_two_agents_logging_anthropic(credentials_anthropic_claude_sonnet: Credentials, db_connection) -> None:
-    _test_two_agents_logging(credentials_anthropic_claude_sonnet, db_connection)  # , row_classes=["GeminiClient"])
+    _test_two_agents_logging(credentials_anthropic_claude_sonnet, db_connection, row_classes=["AnthropicClient"])
 
 
 @pytest.mark.openai
