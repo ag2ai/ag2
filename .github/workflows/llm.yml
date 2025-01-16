@@ -26,7 +26,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         python-version: ["3.9"]
-        llm: ["openai", "gemini"]
+        llm: ["openai", "gemini", "anthropic"]
     runs-on: ${{ matrix.os }}
     environment: openai1
     services:
@@ -55,7 +55,7 @@ jobs:
           uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm == 'gemini'
+        if: matrix.llm == 'gemini' || matrix.llm == 'anthropic'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
