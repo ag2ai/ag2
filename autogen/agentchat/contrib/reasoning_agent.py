@@ -414,6 +414,7 @@ class ReasoningAgent(AssistantAgent):
             )
             self._code_execution_config = False  # the reasoning agent itself should not execute code.
         else:
+            self._user_proxy = None
             # `code_execution_config` is not given, we should remove instructions with python execution
             # This line of code filters out lines from the `tot_msg` string that contain the words 'python' or '```' (indicating Python code blocks).
             tot_msg = "\n".join([
