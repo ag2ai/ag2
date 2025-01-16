@@ -20,7 +20,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai", "gemini"]
+        llm: ["openai", "gemini", "anthropic"]
         python-version: ["3.9"]
         os: [ubuntu-latest]
       fail-fast: false
@@ -52,7 +52,7 @@ jobs:
           uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm == 'gemini'
+        if: matrix.llm == 'gemini' || matrix.llm == 'anthropic'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
