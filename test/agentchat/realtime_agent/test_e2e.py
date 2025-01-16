@@ -29,7 +29,7 @@ class TestE2E:
 
         """
         llm_config = credentials_gpt_4o_realtime.llm_config
-        openai_api_key = credentials_gpt_4o_realtime.openai_api_key
+        openai_api_key = credentials_gpt_4o_realtime.api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()

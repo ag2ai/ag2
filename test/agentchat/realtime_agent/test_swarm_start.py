@@ -31,7 +31,7 @@ class TestSwarmE2E:
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
 
         """
-        openai_api_key = credentials_gpt_4o_realtime.openai_api_key
+        openai_api_key = credentials_gpt_4o_realtime.api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()

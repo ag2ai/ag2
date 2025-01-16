@@ -38,11 +38,42 @@ def pytest_configure(config):
     skip_docker = config.getoption("--skip-docker", False)
 
 
+class Secrets:
+    _secrets: set[str] = set()
+
+    @staticmethod
+    def add_secret(secret: str) -> None:
+        Secrets._secrets.add(secret)
+
+        for i in range(0, len(secret), 16):
+            chunk = secret[i : (i + 16)]
+            if len(chunk) > 8:
+                Secrets._secrets.add(chunk)
+
+    @staticmethod
+    def remove_secret(secret: str) -> None:
+        Secrets._secrets.remove(secret)
+
+    @staticmethod
+    def sanitize_secrets(data: str) -> str:
+        for secret in Secrets._secrets:
+            data = data.replace(secret, "*" * len(secret))
+        return data
+
+    @staticmethod
+    def needs_sanitizing(data: str) -> bool:
+        for secret in Secrets._secrets:
+            if secret in data:
+                return True
+        return False
+
+
 class Credentials:
     """Credentials for the OpenAI API."""
 
     def __init__(self, llm_config: dict[str, Any]) -> None:
         self.llm_config = llm_config
+        Secrets.add_secret(self.api_key)
 
     def sanitize(self) -> dict[str, Any]:
         llm_config = self.llm_config.copy()
@@ -62,7 +93,7 @@ class Credentials:
         return self.llm_config["config_list"]  # type: ignore[no-any-return]
 
     @property
-    def openai_api_key(self) -> str:
+    def api_key(self) -> str:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
 
@@ -99,6 +130,13 @@ def get_llm_credentials(
         if "api_type" not in conf or conf["api_type"] == api_type
     ]
     assert config_list, f"No {api_type} config list found"
+
+    return Credentials(
+        llm_config={
+            "config_list": config_list,
+            "temperature": temperature,
+        }
+    )
 
 
 def get_openai_config_list_from_env(
@@ -186,7 +224,7 @@ def credentials_gpt_4o_realtime() -> Credentials:
 
 @pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
-    return get_google_credentials(filter_dict={"tags": ["gemini-realtime", "realtime"]}, temperature=0.6)
+    return get_google_credentials(filter_dict={"tags": ["gemini-realtime"]}, temperature=0.6)
 
 
 @pytest.fixture
@@ -219,3 +257,25 @@ def pytest_sessionfinish(session, exitstatus):
     # https://docs.pytest.org/en/stable/reference/exit-codes.html
     if exitstatus == 5:
         session.exitstatus = 0
+
+
+class CensoredError(Exception):
+    def __init__(self, exception: Exception):
+        self.exception = exception
+        self.__traceback__ = exception.__traceback__
+        original_message = "".join([repr(arg) for arg in exception.args])
+        message = Secrets.sanitize_secrets(original_message)
+        super().__init__(message)
+
+
+def pytest_runtest_makereport(item, call):
+    """
+    Hook to customize the exception output.
+    This is called after each test call.
+    """
+    if call.excinfo is not None:  # This means the test failed
+        original_message = "".join([repr(arg) for arg in call.excinfo.value.args])
+
+        if Secrets.needs_sanitizing(original_message):
+            censored_exception = CensoredError(call.excinfo.value)
+            call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)

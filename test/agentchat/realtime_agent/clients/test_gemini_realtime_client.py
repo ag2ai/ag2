@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+from unittest.mock import MagicMock
+
 import pytest
 from anyio import move_on_after
 
@@ -39,28 +41,27 @@ class TestGeminiRealtimeClient:
 
         assert not scope.cancelled_caught
 
-    # @pytest.mark.gemini
-    # @pytest.mark.asyncio
-    # async def test_start_read_events(self, client: GeminiRealtimeClient) -> None:
-    #     mock = MagicMock()
+    @pytest.mark.gemini
+    @pytest.mark.asyncio
+    async def test_start_read_events(self, client: GeminiRealtimeClient) -> None:
+        mock = MagicMock()
 
-    #     async with client.connect():
-    #         # read events for 3 seconds and then interrupt
-    #         with move_on_after(3) as scope:
-    #             print("Reading events...")
+        async with client.connect():
+            # read events for 3 seconds and then interrupt
+            with move_on_after(3) as scope:
+                print("Reading events...")
 
-    #             async for event in client.read_events():
-    #                 print(f"-> Received event: {event}")
-    #                 mock(**event)
+                async for event in client.read_events():
+                    print(f"-> Received event: {event}")
+                    mock(**event)
 
-    #     # checking if the scope was cancelled by move_on_after
-    #     assert scope.cancelled_caught
+        # checking if the scope was cancelled by move_on_after
+        assert scope.cancelled_caught
 
-    #     # check that we received the expected two events
-    #     calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
+        # check that we received the expected session.created event
+        calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
 
-    #     assert calls_kwargs[0]["type"] == "session.created"
-    #     assert calls_kwargs[1]["type"] == "session.updated"
+        assert calls_kwargs[0]["type"] == "session.created"
 
     # @pytest.mark.gemini
     # @pytest.mark.asyncio
