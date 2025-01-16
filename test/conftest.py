@@ -5,6 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -55,17 +56,57 @@ class Secrets:
         Secrets._secrets.remove(secret)
 
     @staticmethod
-    def sanitize_secrets(data: str) -> str:
+    def sanitize_secrets(data: str, x=5) -> str:
+        """
+        Censors substrings of length `x` or greater derived from any secret in the list.
+
+        Args:
+            data (str): The string to be censored.
+            x (int): The minimum length of substrings to match.
+
+        Returns:
+            str: The censored string.
+        """
+        # Build a list of all substrings of length >= x from each secret
+        substrings = set()
         for secret in Secrets._secrets:
-            data = data.replace(secret, "*" * len(secret))
-        return data
+            for length in range(x, len(secret) + 1):  # Generate substrings of lengths >= x
+                substrings.update(secret[i : i + length] for i in range(len(secret) - length + 1))
+
+        # Create a regex pattern to match any of these substrings
+        pattern = re.compile("|".join(re.escape(sub) for sub in substrings))
+
+        # Replace all matches with the mask
+        def mask_match(match):
+            return "*" * len(match.group(0))
+
+        return pattern.sub(mask_match, data)
 
     @staticmethod
-    def needs_sanitizing(data: str) -> bool:
+    def needs_sanitizing(data: str, x=5) -> bool:
+        """
+        Checks if the string contains any substrings of length `x` or greater derived from any secret in the list.
+
+        Args:
+            data (str): The string to be checked.
+            x (int): The minimum length of substrings to match.
+
+        Returns:
+            bool: True if the string contains any secrets, False otherwise.
+        """
+        # Build a list of all substrings of length >= x from each secret
+        substrings = set()
         for secret in Secrets._secrets:
-            if secret in data:
-                return True
-        return False
+            for length in range(x, len(secret) + 1):
+                substrings.update(secret[i : i + length] for i in range(len(secret) - length + 1))
+
+        # Create a regex pattern to match any of these substrings
+        pattern = re.compile("|".join(re.escape(sub) for sub in substrings))
+
+        # Check if there is a match
+        pattern_match = pattern.search(data)
+
+        return pattern_match is not None
 
 
 class Credentials:
