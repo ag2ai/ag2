@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 from pathlib import Path
 from typing import Any, Optional
 
@@ -37,11 +38,39 @@ def pytest_configure(config):
     skip_docker = config.getoption("--skip-docker", False)
 
 
+class Secrets:
+    _secrets: set[str] = set()
+
+    @staticmethod
+    def add_secret(secret: str) -> None:
+        Secrets._secrets.add(secret)
+
+        for i in range(0, len(secret), 16):
+            chunk = secret[i : (i + 16)]
+            if len(chunk) > 8:
+                Secrets._secrets.add(chunk)
+
+    @staticmethod
+    def remove_secret(secret: str) -> None:
+        Secrets._secrets.remove(secret)
+
+    @staticmethod
+    def sanitize_secrets(data: str) -> str:
+        print(f"data: {data}")
+        print(type(data))
+        print(f"secrets: {Secrets._secrets}")
+        for secret in Secrets._secrets:
+            data = data.replace(secret, "*" * len(secret))
+        print(f"Output data: {data}")
+        return data
+
+
 class Credentials:
     """Credentials for the OpenAI API."""
 
     def __init__(self, llm_config: dict[str, Any]) -> None:
         self.llm_config = llm_config
+        Secrets.add_secret(self.api_key)
 
     def sanitize(self) -> dict[str, Any]:
         llm_config = self.llm_config.copy()
@@ -61,7 +90,7 @@ class Credentials:
         return self.llm_config["config_list"]  # type: ignore[no-any-return]
 
     @property
-    def openai_api_key(self) -> str:
+    def api_key(self) -> str:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
 
@@ -180,3 +209,22 @@ def pytest_sessionfinish(session, exitstatus):
     # https://docs.pytest.org/en/stable/reference/exit-codes.html
     if exitstatus == 5:
         session.exitstatus = 0
+
+
+def pytest_runtest_makereport(item, call):
+    """
+    Hook to customize the exception output.
+    This is called after each test call.
+    """
+    if call.excinfo is not None:  # This means the test failed
+
+        class CensoredError(Exception):
+            def __init__(self, exception: Exception):
+                self.exception = exception
+                self.__traceback__ = exception.__traceback__
+                original_message = "".join([repr(arg) for arg in exception.args])
+                message = Secrets.sanitize_secrets(original_message)
+                super().__init__(message)
+
+        new_exception = CensoredError(call.excinfo.value)
+        call.excinfo = pytest.ExceptionInfo.from_exception(new_exception)
