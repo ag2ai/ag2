@@ -189,6 +189,16 @@ def credentials_gemini_pro() -> Credentials:
     )
 
 
+@pytest.fixture
+def credentials_anthropic_claude_sonnet() -> Credentials:
+    return get_llm_credentials(
+        "ANTHROPIC_API_KEY",
+        model="claude-3-sonnet-20240229",
+        api_type="anthropic",
+        filter_dict={"tags": ["anthropic-claude-sonnet"]},
+    )
+
+
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
     llm_config = {
         "config_list": [

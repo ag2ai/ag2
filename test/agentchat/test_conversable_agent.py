@@ -1056,6 +1056,12 @@ async def test_function_registration_e2e_async_gemini(credentials_gemini_pro: Cr
     await _test_function_registration_e2e_async(credentials_gemini_pro)
 
 
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async_anthropic(credentials_anthropic_claude_sonnet: Credentials) -> None:
+    await _test_function_registration_e2e_async(credentials_anthropic_claude_sonnet)
+
+
 @pytest.mark.openai
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
