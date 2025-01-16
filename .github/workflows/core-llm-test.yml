@@ -63,7 +63,7 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
-        run: bash scripts/test_core_llm.sh -m "${{ matrix.llm }}"
+        run: bash scripts/test-core-llm.sh -m "${{ matrix.llm }}"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
