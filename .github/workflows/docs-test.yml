@@ -8,6 +8,7 @@ on:
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
       - ".github/workflows/docs-check-broken-links.yml"
+      - ".github/workflows/docs-test.yml"
   push:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
       - ".github/workflows/docs-check-broken-links.yml"
+      - ".github/workflows/docs-test.yml"
   workflow_dispatch:
   merge_group:
     types: [checks_requested]
@@ -33,23 +35,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
-      - name: Install packages and dependencies for all tests
+      - name: Install packages
         run: |
-          uv pip install --system pytest-cov>=5
-      - name: Install base package
-        run: |
-          uv pip install --system -e "."
-      - name: Install packages and dependencies for Documentation
-        run: |
-          uv pip install --system pydoc-markdown pyyaml termcolor nbclient
-          # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
-          uv pip install --system databind.core==4.4.2 databind.json==4.4.2
-      # Force reinstall specific versions to fix typing-extensions import error in CI
-      - name: Force install specific versions of typing-extensions and pydantic
-        run: |
-          uv pip uninstall --system -y typing_extensions typing-extensions || true
-          uv pip install --system --force-reinstall "typing-extensions==4.7.1"
-          uv pip install --system --force-reinstall "pydantic<2.0"
+          uv pip install --system -e ".[test,docs]"
       - name: Run documentation tests
         run: |
           bash scripts/test.sh test/website/test_process_api_reference.py test/website/test_process_notebooks.py -m "not openai"

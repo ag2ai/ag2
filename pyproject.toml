@@ -62,7 +62,7 @@ dependencies = [
     "python-dotenv",
     "tiktoken",
     # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
-    "pydantic>=1.10,<3,!=2.6.0",  # could be both V1 and V2
+    "pydantic>=2.6.1,<3",
     "docker",
     "packaging",
     "websockets>=14,<15",
@@ -169,7 +169,7 @@ cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 mistral = ["mistralai>=1.0.1"]
 groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.5.8"]
-ollama = ["ollama>=0.3.3", "fix_busted_json>=0.0.18"]
+ollama = ["ollama>=0.4.5", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 
 ## dev dependencies
