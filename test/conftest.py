@@ -24,14 +24,14 @@ reason = "requested to skip"
 
 # Registers command-line options like '--skip-docker' and '--skip-redis' via pytest hook.
 # When these flags are set, it indicates that tests requiring OpenAI or Redis (respectively) should be skipped.
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--skip-redis", action="store_true", help="Skip all tests that require redis")
     parser.addoption("--skip-docker", action="store_true", help="Skip all tests that require docker")
 
 
 # pytest hook implementation extracting command line args and exposing it globally
 @pytest.hookimpl(tryfirst=True)
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     global skip_redis
     skip_redis = config.getoption("--skip-redis", False)
     global skip_docker
@@ -95,7 +95,7 @@ def get_config_list_from_env(
 ) -> list[dict[str, Any]]:
     if env_var_name in os.environ:
         api_key = os.environ[env_var_name]
-        return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]
+        return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
     return []
 
 
@@ -208,7 +208,7 @@ def mock_credentials() -> Credentials:
     return get_mock_credentials(model="gpt-4o")
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Exit status 5 means there were no tests collected
     # so we should set the exit status to 1
     # https://docs.pytest.org/en/stable/reference/exit-codes.html

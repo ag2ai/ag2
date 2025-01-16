@@ -347,7 +347,9 @@ files = [
     "test/interop",
     "test/agentchat/realtime_agent",
     "test/messages",
+    "test/conftest.py",
 ]
+
 exclude = [
     "autogen/math_utils\\.py",
     "autogen/oai/completion\\.py",
