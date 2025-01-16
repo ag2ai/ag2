@@ -112,7 +112,7 @@ def get_llm_credentials(
     if config_list == []:
         config_list = get_config_list_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
-    assert config_list, "No OpenAI config list found"
+    assert config_list, f"No {api_type} config list found and could not be created from an env var {env_var_name}"
 
     return Credentials(
         llm_config={
