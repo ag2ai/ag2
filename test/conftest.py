@@ -90,25 +90,27 @@ def get_credentials(
     )
 
 
-def get_openai_config_list_from_env(
-    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
-) -> Credentials:
-    if "OPENAI_API_KEY" in os.environ:
-        api_key = os.environ["OPENAI_API_KEY"]
-        return [{"api_key": api_key, "model": model, **filter_dict}]
+def get_config_list_from_env(
+    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+) -> list[dict[str, Any]]:
+    if env_var_name in os.environ:
+        api_key = os.environ[env_var_name]
+        return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]
+    return []
 
 
-def get_openai_credentials(
-    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+def get_llm_credentials(
+    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
 ) -> Credentials:
     config_list = get_credentials(filter_dict, temperature, fail_if_empty=False).config_list
 
     # Filter out non-OpenAI configs
-    config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
+    if api_type == "openai":
+        config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
 
     # If no OpenAI config found, try to get it from the environment
     if config_list == []:
-        config_list = get_openai_config_list_from_env(model, filter_dict, temperature)
+        config_list = get_config_list_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
     assert config_list, "No OpenAI config list found"
 
@@ -144,28 +146,34 @@ def credentials_all() -> Credentials:
 
 @pytest.fixture
 def credentials_gpt_4o_mini() -> Credentials:
-    return get_openai_credentials(model="gpt-4o-mini", filter_dict={"tags": ["gpt-4o-mini"]})
+    return get_llm_credentials(
+        "OPENAI_API_KEY", model="gpt-4o-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
+    )
 
 
 @pytest.fixture
 def credentials_gpt_4o() -> Credentials:
-    return get_openai_credentials(model="gpt-4o", filter_dict={"tags": ["gpt-4o"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="gpt-4o", api_type="openai", filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_o1_mini() -> Credentials:
-    return get_openai_credentials(model="o1-mini", filter_dict={"tags": ["o1-mini"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="o1-mini", api_type="openai", filter_dict={"tags": ["o1-mini"]})
 
 
 @pytest.fixture
 def credentials_o1() -> Credentials:
-    return get_openai_credentials(model="o1", filter_dict={"tags": ["o1"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="o1", api_type="openai", filter_dict={"tags": ["o1"]})
 
 
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
-    return get_openai_credentials(
-        model="gpt-4o-realtime-preview", filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6
+    return get_llm_credentials(
+        "OPENAI_API_KEY",
+        model="gpt-4o-realtime-preview",
+        filter_dict={"tags": ["gpt-4o-realtime"]},
+        api_type="openai",
+        temperature=0.6,
     )
 
 
@@ -176,7 +184,9 @@ def credentials() -> Credentials:
 
 @pytest.fixture
 def credentials_gemini_pro() -> Credentials:
-    return get_credentials(filter_dict={"tags": ["gemini-pro"]})
+    return get_llm_credentials(
+        "GEMINI_API_KEY", model="gemini-pro", api_type="google", filter_dict={"tags": ["gemini-pro"]}
+    )
 
 
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:

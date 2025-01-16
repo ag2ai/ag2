@@ -132,7 +132,7 @@ jobs:
           flags: unittests
 
   # https://github.com/marketplace/actions/alls-green#why
-  check: # This job does nothing and is only used for the branch protection
+  check-contrib-test-llm: # This job does nothing and is only used for the branch protection
     # from: https://github.com/re-actors/alls-green
     # Important: For this to work properly, it is a must to have the job always
     # run, otherwise GitHub will make it skipped when any of the dependencies
