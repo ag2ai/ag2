@@ -179,6 +179,12 @@ def credentials_gemini_pro() -> Credentials:
     return get_credentials(filter_dict={"tags": ["gemini-pro"]})
 
 
+@pytest.fixture
+def credentials_anthropic_claude_sonnet() -> Credentials:
+    # TODO: change tag to claude
+    return get_credentials(filter_dict={"tags": ["gpt-4o"]})
+
+
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
     llm_config = {
         "config_list": [

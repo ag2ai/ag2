@@ -52,6 +52,12 @@ async def test_async_get_human_input_gemini(credentials_gemini_pro: Credentials)
     await _test_async_get_human_input(credentials_gemini_pro)
 
 
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_async_get_human_input_anthropic(credentials_anthropic_claude_sonnet: Credentials) -> None:
+    await _test_async_get_human_input(credentials_anthropic_claude_sonnet)
+
+
 async def _test_async_max_turn(credentials: Credentials):
     config_list = credentials.config_list
 
@@ -90,3 +96,9 @@ async def test_async_max_turn(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 async def test_async_max_turn_gemini(credentials_gemini_pro: Credentials):
     await _test_async_max_turn(credentials_gemini_pro)
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_async_max_turn_anthropic(credentials_anthropic_claude_sonnet: Credentials):
+    await _test_async_max_turn(credentials_anthropic_claude_sonnet)

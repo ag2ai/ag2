@@ -100,6 +100,12 @@ async def test_async_groupchat_gemini(credentials_gemini_pro: Credentials):
     await _test_async_groupchat(credentials_gemini_pro)
 
 
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_async_groupchat_anthropic(credentials_anthropic_claude_sonnet: Credentials):
+    await _test_async_groupchat(credentials_anthropic_claude_sonnet)
+
+
 async def _test_stream(credentials: Credentials):
     config_list = credentials.config_list
     data = asyncio.Future()
@@ -176,3 +182,9 @@ async def test_stream(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 async def test_stream_gemini(credentials_gemini_pro: Credentials):
     await _test_stream(credentials_gemini_pro)
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_stream_anthropic(credentials_anthropic_claude_sonnet: Credentials):
+    await _test_stream(credentials_anthropic_claude_sonnet)

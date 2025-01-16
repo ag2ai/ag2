@@ -174,6 +174,11 @@ def test_two_agents_logging_gemini(credentials_gemini_pro: Credentials, db_conne
     _test_two_agents_logging(credentials_gemini_pro, db_connection, row_classes=["GeminiClient"])
 
 
+@pytest.mark.anthropic
+def test_two_agents_logging_anthropic(credentials_anthropic_claude_sonnet: Credentials, db_connection) -> None:
+    _test_two_agents_logging(credentials_anthropic_claude_sonnet, db_connection)  # , row_classes=["GeminiClient"])
+
+
 @pytest.mark.openai
 def test_two_agents_logging(credentials: Credentials, db_connection):
     _test_two_agents_logging(credentials, db_connection)
@@ -253,6 +258,11 @@ def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials,
 @pytest.mark.gemini
 def test_groupchat_logging_gemini(credentials_gemini_pro: Credentials, db_connection):
     _test_groupchat_logging(credentials_gemini_pro, credentials_gemini_pro, db_connection)
+
+
+@pytest.mark.anthropic
+def test_groupchat_logging_anthropic(credentials_anthropic_claude_sonnet: Credentials, db_connection):
+    _test_groupchat_logging(credentials_anthropic_claude_sonnet, credentials_anthropic_claude_sonnet, db_connection)
 
 
 @pytest.mark.openai
