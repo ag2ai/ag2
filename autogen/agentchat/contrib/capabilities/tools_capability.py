@@ -4,20 +4,20 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from autogen.agentchat.assistant_agent import ConversableAgent
+from autogen.agentchat import ConversableAgent, register_function
 
 
 @dataclass
 class ToolSpecs:
     tool_func: Callable[..., Any]
-    caller: ConversableAgent
-    executor: ConversableAgent
     tool_description: str
     tool_name: Optional[str] = None
 
 
 class ToolsCapability:
-    """Adding a list of tools as composable capabilities to an agent."""
+    """Adding a list of tools as composable capabilities to a single agent.
+    Note: both caller and executor of the tools are the same agent.
+    """
 
     def __init__(self, tool_list: list[ToolSpecs]):
         self.tools = [specs for specs in tool_list]
@@ -27,10 +27,10 @@ class ToolsCapability:
         Add tools to the given agent.
         """
         for specs in self.tools:
-            agent.register_function(
+            register_function(
                 f=specs.tool_func,
-                caller=specs.caller,
-                executor=specs.executor,
-                tool_description=specs.tool_description,
-                tool_name=specs.tool_name,
+                caller=agent,
+                executor=agent,
+                description=specs.tool_description,
+                name=specs.tool_name,
             )
