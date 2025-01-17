@@ -91,7 +91,7 @@ class Tool:
 
     def register_tool(self, agent: "ConversableAgent") -> None:
         """
-        Register a tool to be both proposed and execyted by an agent.
+        Register a tool to be both proposed and executed by an agent.
 
         Args:
             agent (ConversableAgent): The agent to which the tool will be registered.
