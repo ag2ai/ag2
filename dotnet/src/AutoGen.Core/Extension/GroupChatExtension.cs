@@ -92,7 +92,7 @@ public static class GroupChatExtension
                 .FindLastIndex(x => x.IsGroupChatClearMessage());
 
         // if multiple clr messages, e.g [msg, clr, msg, clr, msg, clr, msg]
-        // only keep the the messages after the second last clr message.
+        // only keep the messages after the second last clr message.
         if (messages.Count(m => m.IsGroupChatClearMessage()) > 1)
         {
             lastCLRMessageIndex = messages.ToList()
