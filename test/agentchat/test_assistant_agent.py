@@ -12,7 +12,7 @@ import pytest
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
-from ..conftest import Credentials, credentials_param_set_list
+from ..conftest import Credentials, credentials_all_llms
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -55,7 +55,7 @@ def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     print("Result summary:", res.summary)
 
 
-@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
 def test_ai_user_proxy_agent(
     credentials: Credentials,
 ) -> None:

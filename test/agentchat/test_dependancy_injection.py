@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, ChatContext, Depends
 
-from ..conftest import Credentials, credentials_param_set_list
+from ..conftest import Credentials, credentials_all_llms
 
 
 class MyContext(BaseContext, BaseModel):
@@ -234,7 +234,7 @@ class TestDependencyInjection:
             "Login successful.",
         )
 
-    @pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+    @pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
     @pytest.mark.parametrize("is_async", [False, True])
     def test_end2end(
         self,

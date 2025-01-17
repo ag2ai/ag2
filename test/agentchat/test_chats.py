@@ -16,7 +16,7 @@ import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import Credentials, credentials_param_set_list
+from ..conftest import Credentials, credentials_all_llms
 
 
 @pytest.fixture
@@ -542,7 +542,7 @@ def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
     print(res.summary, res.cost, res.chat_history)
 
 
-@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
 def test_chats_w_func(
     credentials: Credentials,
     tasks_work_dir: str,

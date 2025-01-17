@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, credentials_param_set_list
+from ..conftest import Credentials, credentials_all_llms
 
 
 async def _test_async_get_human_input(credentials: Credentials) -> None:
@@ -40,7 +40,7 @@ async def _test_async_get_human_input(credentials: Credentials) -> None:
     print("Human input:", res.human_input)
 
 
-@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
 def test_async_get_human_input(
     credentials: Credentials,
 ) -> None:
@@ -75,7 +75,7 @@ async def _test_async_max_turn(credentials: Credentials):
     )
 
 
-@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
 def test_async_max_turn(
     credentials: Credentials,
 ) -> None:

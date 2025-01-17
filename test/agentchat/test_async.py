@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, credentials_param_set_list
+from ..conftest import Credentials, credentials_all_llms
 
 
 def get_market_news(ind, ind_upper):
@@ -88,7 +88,7 @@ async def _test_async_groupchat(credentials: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
 def test_async_groupchat(
     credentials: Credentials,
 ) -> None:
@@ -161,7 +161,7 @@ async def _test_stream(credentials: Credentials):
             # print("Chat summary and cost:", res.summary, res.cost)
 
 
-@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
 def test_stream(
     credentials: Credentials,
 ) -> None:

@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, credentials_param_set_list
+from ..conftest import Credentials, credentials_all_llms
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -1044,7 +1044,7 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
 def test_function_registration_e2e_async(
     credentials: Credentials,
 ) -> None:
