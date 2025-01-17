@@ -3,10 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import importlib
-import sys
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Generator, Iterable, Union
+from typing import Generator, Iterable, Union
 
 from autogen.exception_utils import AutogenImportError
 
@@ -23,15 +22,15 @@ def check_for_missing_imports() -> Generator[None, None, None]:
         pass  # Ignore ImportErrors during this context
 
 
-class DummyModule:
-    """A dummy module that raises ImportError when any attribute is accessed"""
+# class DummyModule:
+#     """A dummy module that raises ImportError when any attribute is accessed"""
 
-    def __init__(self, name: str, dep_target: str):
-        self._name = name
-        self._dep_target = dep_target
+#     def __init__(self, name: str, dep_target: str):
+#         self._name = name
+#         self._dep_target = dep_target
 
-    def __getattr__(self, attr: str) -> Any:
-        raise AutogenImportError(missing_modules=self._name, dep_target=self._dep_target)
+#     def __getattr__(self, attr: str) -> Any:
+#         raise AutogenImportError(missing_modules=self._name, dep_target=self._dep_target)
 
 
 def requires_optional_import(modules: Union[str, Iterable[str]], dep_target: str):
@@ -55,9 +54,9 @@ def requires_optional_import(modules: Union[str, Iterable[str]], dep_target: str
             except ImportError:
                 missing_modules.append(module_name)
                 # Create dummy module
-                dummy_module = DummyModule(module_name, dep_target)
-                dummy_modules[module_name] = dummy_module
-                sys.modules[module_name] = dummy_module
+                # dummy_module = DummyModule(module_name, dep_target)
+                # dummy_modules[module_name] = dummy_module
+                # sys.modules[module_name] = dummy_module
 
         if missing_modules:
             # Replace real class with dummy that raises ImportError
