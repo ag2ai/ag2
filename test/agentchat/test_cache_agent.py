@@ -14,7 +14,7 @@ import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 
-from ..conftest import Credentials, skip_redis
+from ..conftest import Credentials
 
 try:
     from openai import OpenAI  # noqa: F401
@@ -28,7 +28,7 @@ try:
 except ImportError:
     skip_redis_tests = True
 else:
-    skip_redis_tests = False or skip_redis
+    skip_redis_tests = False
 
 
 @pytest.mark.openai
@@ -85,6 +85,7 @@ def _test_redis_cache(credentials: Credentials):
 
 
 @pytest.mark.openai
+@pytest.mark.redis
 @pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
 def test_redis_cache(credentials_gpt_4o_mini: Credentials):
     _test_redis_cache(credentials_gpt_4o_mini)
@@ -92,6 +93,7 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.skip(reason="Currently not working")
 @pytest.mark.gemini
+@pytest.mark.redis
 @pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
 def test_redis_cache_gemini(credentials_gemini_pro: Credentials):
     _test_redis_cache(credentials_gemini_pro)
@@ -99,6 +101,7 @@ def test_redis_cache_gemini(credentials_gemini_pro: Credentials):
 
 @pytest.mark.skip(reason="Currently not working")
 @pytest.mark.anthropic
+@pytest.mark.redis
 @pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
 def test_redis_cache_anthropic(credentials_anthropic_claude_sonnet: Credentials):
     _test_redis_cache(credentials_anthropic_claude_sonnet)

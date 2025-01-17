@@ -12,30 +12,11 @@ import pytest
 
 import autogen
 
-skip_redis = False
-skip_docker = False
-
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 MOCK_OPEN_AI_API_KEY = "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
 
 reason = "requested to skip"
-
-
-# Registers command-line options like '--skip-docker' and '--skip-redis' via pytest hook.
-# When these flags are set, it indicates that tests requiring OpenAI or Redis (respectively) should be skipped.
-def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption("--skip-redis", action="store_true", help="Skip all tests that require redis")
-    parser.addoption("--skip-docker", action="store_true", help="Skip all tests that require docker")
-
-
-# pytest hook implementation extracting command line args and exposing it globally
-@pytest.hookimpl(tryfirst=True)
-def pytest_configure(config: pytest.Config) -> None:
-    global skip_redis
-    skip_redis = config.getoption("--skip-redis", False)
-    global skip_docker
-    skip_docker = config.getoption("--skip-docker", False)
 
 
 class Credentials:
