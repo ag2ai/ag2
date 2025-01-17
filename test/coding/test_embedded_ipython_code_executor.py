@@ -14,10 +14,19 @@ from typing import Union
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.code_utils import (
+    decide_use_docker,
+    is_docker_running,
+)
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
 
-from ..conftest import MOCK_OPEN_AI_API_KEY, skip_docker
+from ..conftest import MOCK_OPEN_AI_API_KEY
+
+if not is_docker_running() or not decide_use_docker(use_docker=None):
+    skip_docker_test = True
+else:
+    skip_docker_test = False
 
 try:
     from autogen.coding.jupyter import (
@@ -43,7 +52,7 @@ try:
     else:
         classes_to_test = [EmbeddedIPythonCodeExecutor, LocalJupyterCodeExecutor]
 
-    if not skip_docker:
+    if not skip_docker_test:
         classes_to_test.append(DockerJupyterExecutor)
 
     skip = False

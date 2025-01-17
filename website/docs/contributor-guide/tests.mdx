@@ -34,15 +34,15 @@ See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#testi
 ## Skip flags for tests
 
 - `-m`: Used to select or deselect specific groups of tests marked with pytest markers, such as tests for LLM services like OpenAI, Gemini etc. For example, you can mark tests with `@pytest.mark.openai` and then use `-m openai` to run only those tests.
-- `--skip-docker`: Skips tests that explicitly require Docker.
-- `--skip-redis`: Skips tests that require a Redis server.
+- `-m "not docker"`: Skips tests that explicitly require Docker.
+- `-m "not redis"`: Skips tests that require a Redis server.
 
 
 **Examples:**
 
 To skip tests that require access to LLM services and Docker, run:
 ```bash
-bash scripts/test-core-skip-llm.sh --skip-docker
+bash scripts/test-core-skip-llm.sh -m "not docker"
 ```
 
 To run tests for all LLM services (OpenAI, Gemini, etc.), use:
