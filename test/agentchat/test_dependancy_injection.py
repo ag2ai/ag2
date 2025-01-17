@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, ChatContext, Depends
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 
 class MyContext(BaseContext, BaseModel):
@@ -234,20 +234,11 @@ class TestDependencyInjection:
             "Login successful.",
         )
 
-    @pytest.mark.openai
+    @pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
     @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
-        self._test_end2end(credentials_gpt_4o_mini, is_async)
-
-    @pytest.mark.gemini
-    @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end_gemini(self, credentials_gemini_pro, is_async: bool) -> None:
-        self._test_end2end(credentials_gemini_pro, is_async)
-
-    @pytest.mark.anthropic
-    @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end_anthropic(self, credentials_anthropic_claude_sonnet, is_async: bool) -> None:
-        self._test_end2end(credentials_anthropic_claude_sonnet, is_async)
+    def test_end2end(
+        self,
+        credentials: Credentials,
+        is_async: bool,
+    ) -> None:
+        self._test_end2end(credentials, is_async)
