@@ -143,6 +143,12 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
                 raise ValueError(
                     f"Invalid {retval} for parameter {k}, should be a DescriptionField, got {type(retval)}"
                 )
+        elif (
+            hasattr(v, "__args__")
+            and hasattr(v.__args__[0], "__metadata__")
+            and isinstance(v.__args__[0].__metadata__[0], AG2Field)
+        ):
+            return v.__args__[0].__metadata__[0].description
         else:
             return k
 
