@@ -49,7 +49,6 @@ __all__ = [
     "SwarmAgent",
     "SwarmResult",
     "ThinkNode",
-    "ThinkNode",
     "UpdateCondition",
     "UpdateSystemMessage",
     "UserProxyAgent",
