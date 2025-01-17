@@ -7,7 +7,7 @@
 import json
 import sqlite3
 import uuid
-from typing import Any, Generator
+from typing import Any, Generator, Optional
 
 import pytest
 from _pytest.mark import ParameterSet
@@ -43,7 +43,7 @@ EVENTS_QUERY = (
 
 
 @pytest.fixture(scope="function")
-def db_connection() -> Generator[sqlite3.Connection | None, Any, None]:
+def db_connection() -> Generator[Optional[sqlite3.Connection], Any, None]:
     autogen.runtime_logging.start(config={"dbname": ":memory:"})
     con = autogen.runtime_logging.get_connection()
     con.row_factory = sqlite3.Row
@@ -53,7 +53,7 @@ def db_connection() -> Generator[sqlite3.Connection | None, Any, None]:
 
 
 def _test_two_agents_logging(
-    credentials: Credentials, db_connection: Generator[sqlite3.Connection | None, Any, None], row_classes: list[str]
+    credentials: Credentials, db_connection: Generator[Optional[sqlite3.Connection], Any, None], row_classes: list[str]
 ) -> None:
     cur = db_connection.cursor()
 
@@ -177,7 +177,7 @@ def _test_two_agents_logging(
 def test_two_agents_logging(
     credentials_fixture: ParameterSet,
     request: pytest.FixtureRequest,
-    db_connection: Generator[sqlite3.Connection | None, Any, None],
+    db_connection: Generator[Optional[sqlite3.Connection], Any, None],
 ) -> None:
     credentials = request.getfixturevalue(credentials_fixture)
     # Determine the client classes based on the markers applied to the current test
@@ -269,7 +269,7 @@ def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials,
 def test_groupchat_logging(
     credentials_fixture: ParameterSet,
     request: pytest.FixtureRequest,
-    db_connection: Generator[sqlite3.Connection | None, Any, None],
+    db_connection: Generator[Optional[sqlite3.Connection], Any, None],
 ) -> None:
     credentials = request.getfixturevalue(credentials_fixture)
     _test_groupchat_logging(credentials, credentials, db_connection)
