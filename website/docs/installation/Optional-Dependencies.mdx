@@ -3,7 +3,7 @@
 AG2 installs OpenAI package by default. To use LLMs by other providers, you can install the following packages:
 
 ```bash
-pip install autogen[gemini,anthropic,mistral,together,groq,cohere]
+pip install ag2[gemini,anthropic,mistral,together,groq,cohere]
 ```
 
 Check out the [notebook](/notebooks/autogen_uniformed_api_calling) and
@@ -15,7 +15,7 @@ To use LLM caching with Redis, you need to install the Python package with
 the option `redis`:
 
 ```bash
-pip install "autogen[redis]"
+pip install "ag2[redis]"
 ```
 
 See [LLM Caching](/docs/topics/llm-caching) for details.
@@ -26,7 +26,7 @@ To use the IPython code executor, you need to install the `jupyter-client`
 and `ipykernel` packages:
 
 ```bash
-pip install "autogen[ipython]"
+pip install "ag2[ipython]"
 ```
 
 To use the IPython code executor:
@@ -37,32 +37,22 @@ from autogen import UserProxyAgent
 proxy = UserProxyAgent(name="proxy", code_execution_config={"executor": "ipython-embedded"})
 ```
 
-## blendsearch
-
-`pyautogen<0.2` offers a cost-effective hyperparameter optimization technique [EcoOptiGen](https://arxiv.org/abs/2303.04673) for tuning Large Language Models. Please install with the [blendsearch] option to use it.
-
-```bash
-pip install "autogen[blendsearch]<0.2"
-```
-
-Checkout [Optimize for Code Generation](https://github.com/ag2ai/ag2/blob/main/notebook/oai_completion.ipynb) and [Optimize for Math](https://github.com/ag2ai/ag2/blob/main/notebook/oai_chatgpt_gpt4.ipynb) for details.
-
 ## retrievechat
 
-`autogen` supports retrieval-augmented generation tasks such as question answering and code generation with RAG agents. Please install with the [retrievechat] option to use it with ChromaDB.
+`ag2` supports retrieval-augmented generation tasks such as question answering and code generation with RAG agents. Please install with the [retrievechat] option to use it with ChromaDB.
 
 ```bash
-pip install "autogen[retrievechat]"
+pip install "ag2[retrievechat]"
 ```
 
-Alternatively `autogen` also supports PGVector and Qdrant which can be installed in place of ChromaDB, or alongside it.
+Alternatively `ag2` also supports PGVector and Qdrant which can be installed in place of ChromaDB, or alongside it.
 
 ```bash
-pip install "autogen[retrievechat-pgvector]"
+pip install "ag2[retrievechat-pgvector]"
 ```
 
 ```bash
-pip install "autogen[retrievechat-qdrant]"
+pip install "ag2[retrievechat-qdrant]"
 ```
 
 RetrieveChat can handle various types of documents. By default, it can process
@@ -87,7 +77,7 @@ Example notebooks:
 To use Teachability, please install AG2 with the [teachable] option.
 
 ```bash
-pip install "autogen[teachable]"
+pip install "ag2[teachable]"
 ```
 
 Example notebook: [Chatting with a teachable agent](/notebooks/agentchat_teachability)
@@ -97,35 +87,45 @@ Example notebook: [Chatting with a teachable agent](/notebooks/agentchat_teachab
 We offered Multimodal Conversable Agent and LLaVA Agent. Please install with the [lmm] option to use it.
 
 ```bash
-pip install "autogen[lmm]"
+pip install "ag2[lmm]"
 ```
 
 Example notebook: [LLaVA Agent](/notebooks/agentchat_lmm_llava)
 
-## mathchat
-
-`pyautogen<0.2` offers an experimental agent for math problem solving. Please install with the [mathchat] option to use it.
-
-```bash
-pip install "autogen[mathchat]<0.2"
-```
-
-Example notebook: [Using MathChat to Solve Math Problems](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_MathChat.ipynb)
-
 ## Graph
 
-To use a graph in `GroupChat`, particularly for graph visualization, please install AutoGen with the [graph] option.
+To use a graph in `GroupChat`, particularly for graph visualization, please install AG2 with the [graph] option.
 
 ```bash
-pip install "autogen[graph]"
+pip install "ag2[graph]"
 ```
 
 Example notebook: [Finite State Machine graphs to set speaker transition constraints](/notebooks/agentchat_groupchat_finite_state_machine)
 
 ## Long Context Handling
 
-AG2 includes support for handling long textual contexts by leveraging the LLMLingua library for text compression. To enable this functionality, please install AutoGen with the `[long-context]` option:
+AG2 includes support for handling long textual contexts by leveraging the LLMLingua library for text compression. To enable this functionality, please install AG2 with the `[long-context]` option:
 
 ```bash
-pip install "autogen[long-context]"
+pip install "ag2[long-context]"
 ```
+
+## mathchat
+
+`pyautogen<0.2` offers an experimental agent for math problem solving. Please install with the [mathchat] option to use it.
+
+```bash
+pip install "pyautogen[mathchat]<0.2"
+```
+
+Example notebook: [Using MathChat to Solve Math Problems](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_MathChat.ipynb)
+
+## blendsearch
+
+`pyautogen<0.2` offers a cost-effective hyperparameter optimization technique [EcoOptiGen](https://arxiv.org/abs/2303.04673) for tuning Large Language Models. Please install with the [blendsearch] option to use it.
+
+```bash
+pip install "pyautogen[blendsearch]<0.2"
+```
+
+Checkout [Optimize for Code Generation](https://github.com/ag2ai/ag2/blob/main/notebook/oai_completion.ipynb) and [Optimize for Math](https://github.com/ag2ai/ag2/blob/main/notebook/oai_chatgpt_gpt4.ipynb) for details.
