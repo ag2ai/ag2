@@ -11,9 +11,8 @@ on:
       - "test/agentchat/contrib/**"
       - "test/test_browser_utils.py"
       - "test/test_retrieve_utils.py"
-      - ".github/workflows/contrib-tests.yml"
+      - ".github/workflows/contrib-test.yml"
       - "pyproject.toml"
-      - "scripts/test-skip-llm.sh"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
