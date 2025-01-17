@@ -52,7 +52,6 @@ __all__ = [
     "UpdateCondition",
     "UpdateSystemMessage",
     "UserProxyAgent",
-    "UserProxyAgent",
     "a_initiate_swarm_chat",
     "gather_usage_summary",
     "initiate_chats",
