@@ -16,6 +16,7 @@ from typing import Annotated, Any, Callable, Literal
 from unittest.mock import MagicMock
 
 import pytest
+from _pytest.mark import ParameterSet
 from pydantic import BaseModel, Field
 
 import autogen
@@ -23,7 +24,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_param_fixtures
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -1044,22 +1045,13 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
-    await _test_function_registration_e2e_async(credentials_gpt_4o)
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio
-async def test_function_registration_e2e_async_gemini(credentials_gemini_pro: Credentials) -> None:
-    await _test_function_registration_e2e_async(credentials_gemini_pro)
-
-
-@pytest.mark.anthropic
-@pytest.mark.asyncio
-async def test_function_registration_e2e_async_anthropic(credentials_anthropic_claude_sonnet: Credentials) -> None:
-    await _test_function_registration_e2e_async(credentials_anthropic_claude_sonnet)
+@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+def test_function_registration_e2e_async(
+    credentials_fixture: ParameterSet,
+    request: pytest.FixtureRequest,
+) -> None:
+    credentials = request.getfixturevalue(credentials_fixture)
+    _test_function_registration_e2e_async(credentials)
 
 
 @pytest.mark.openai

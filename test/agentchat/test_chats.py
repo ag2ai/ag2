@@ -11,12 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Annotated, Literal, TypeVar
 
 import pytest
+from _pytest.mark import ParameterSet
 
 import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_param_fixtures
 
 
 @pytest.fixture
@@ -542,19 +543,14 @@ def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
     print(res.summary, res.cost, res.chat_history)
 
 
-@pytest.mark.openai
-def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
-    _test_chats_w_func(credentials_gpt_4o_mini, tasks_work_dir)
-
-
-@pytest.mark.gemini
-def test_chats_w_func_gemini(credentials_gemini_pro: Credentials, tasks_work_dir: str):
-    _test_chats_w_func(credentials_gemini_pro, tasks_work_dir)
-
-
-@pytest.mark.anthropic
-def test_chats_w_func_anthropic(credentials_anthropic_claude_sonnet: Credentials, tasks_work_dir: str):
-    _test_chats_w_func(credentials_anthropic_claude_sonnet, tasks_work_dir)
+@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+def test_chats_w_func(
+    credentials_fixture: ParameterSet,
+    request: pytest.FixtureRequest,
+    tasks_work_dir: str,
+) -> None:
+    credentials = request.getfixturevalue(credentials_fixture)
+    _test_chats_w_func(credentials, tasks_work_dir)
 
 
 @pytest.mark.openai

@@ -9,10 +9,11 @@
 import os
 
 import pytest
+from _pytest.mark import ParameterSet
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_param_fixtures
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -55,19 +56,13 @@ def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     print("Result summary:", res.summary)
 
 
-@pytest.mark.gemini
-def test_ai_user_proxy_agent_gemini(credentials_gemini_pro: Credentials) -> None:
-    _test_ai_user_proxy_agent(credentials_gemini_pro)
-
-
-@pytest.mark.anthropic
-def test_ai_user_proxy_agent_anthropic(credentials_anthropic_claude_sonnet: Credentials) -> None:
-    _test_ai_user_proxy_agent(credentials_anthropic_claude_sonnet)
-
-
-@pytest.mark.openai
-def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials) -> None:
-    _test_ai_user_proxy_agent(credentials_gpt_4o_mini)
+@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+def test_ai_user_proxy_agent(
+    credentials_fixture: ParameterSet,
+    request: pytest.FixtureRequest,
+) -> None:
+    credentials = request.getfixturevalue(credentials_fixture)
+    _test_ai_user_proxy_agent(credentials)
 
 
 @pytest.mark.openai

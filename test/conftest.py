@@ -224,3 +224,19 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # https://docs.pytest.org/en/stable/reference/exit-codes.html
     if exitstatus == 5:
         session.exitstatus = 0
+
+
+credentials_param_fixtures = [
+    pytest.param(
+        credentials_gpt_4o.__name__,
+        marks=pytest.mark.openai,
+    ),
+    pytest.param(
+        credentials_gemini_pro.__name__,
+        marks=pytest.mark.gemini,
+    ),
+    pytest.param(
+        credentials_anthropic_claude_sonnet.__name__,
+        marks=pytest.mark.anthropic,
+    ),
+]

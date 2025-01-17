@@ -6,12 +6,13 @@ from typing import Annotated, Any, Callable
 from unittest.mock import MagicMock
 
 import pytest
+from _pytest.mark import ParameterSet
 from pydantic import BaseModel
 
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, ChatContext, Depends
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_param_fixtures
 
 
 class MyContext(BaseContext, BaseModel):
@@ -234,20 +235,13 @@ class TestDependencyInjection:
             "Login successful.",
         )
 
-    @pytest.mark.openai
+    @pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
     @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
-        self._test_end2end(credentials_gpt_4o_mini, is_async)
-
-    @pytest.mark.gemini
-    @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end_gemini(self, credentials_gemini_pro, is_async: bool) -> None:
-        self._test_end2end(credentials_gemini_pro, is_async)
-
-    @pytest.mark.anthropic
-    @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end_anthropic(self, credentials_anthropic_claude_sonnet, is_async: bool) -> None:
-        self._test_end2end(credentials_anthropic_claude_sonnet, is_async)
+    def test_end2end(
+        self,
+        credentials_fixture: ParameterSet,
+        request: pytest.FixtureRequest,
+        is_async: bool,
+    ) -> None:
+        credentials = request.getfixturevalue(credentials_fixture)
+        self._test_end2end(credentials, is_async)

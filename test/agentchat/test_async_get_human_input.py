@@ -9,10 +9,11 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from _pytest.mark import ParameterSet
 
 import autogen
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_param_fixtures
 
 
 async def _test_async_get_human_input(credentials: Credentials) -> None:
@@ -40,22 +41,13 @@ async def _test_async_get_human_input(credentials: Credentials) -> None:
     print("Human input:", res.human_input)
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_async_get_human_input(credentials_gpt_4o_mini: Credentials) -> None:
-    await _test_async_get_human_input(credentials_gpt_4o_mini)
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio
-async def test_async_get_human_input_gemini(credentials_gemini_pro: Credentials) -> None:
-    await _test_async_get_human_input(credentials_gemini_pro)
-
-
-@pytest.mark.anthropic
-@pytest.mark.asyncio
-async def test_async_get_human_input_anthropic(credentials_anthropic_claude_sonnet: Credentials) -> None:
-    await _test_async_get_human_input(credentials_anthropic_claude_sonnet)
+@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+def test_async_get_human_input(
+    credentials_fixture: ParameterSet,
+    request: pytest.FixtureRequest,
+) -> None:
+    credentials = request.getfixturevalue(credentials_fixture)
+    _test_async_get_human_input(credentials)
 
 
 async def _test_async_max_turn(credentials: Credentials):
@@ -86,19 +78,10 @@ async def _test_async_max_turn(credentials: Credentials):
     )
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_async_max_turn(credentials_gpt_4o_mini: Credentials):
-    await _test_async_max_turn(credentials_gpt_4o_mini)
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio
-async def test_async_max_turn_gemini(credentials_gemini_pro: Credentials):
-    await _test_async_max_turn(credentials_gemini_pro)
-
-
-@pytest.mark.anthropic
-@pytest.mark.asyncio
-async def test_async_max_turn_anthropic(credentials_anthropic_claude_sonnet: Credentials):
-    await _test_async_max_turn(credentials_anthropic_claude_sonnet)
+@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+def test_async_max_turn(
+    credentials_fixture: ParameterSet,
+    request: pytest.FixtureRequest,
+) -> None:
+    credentials = request.getfixturevalue(credentials_fixture)
+    _test_async_max_turn(credentials)
