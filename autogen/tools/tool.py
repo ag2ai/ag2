@@ -89,6 +89,16 @@ class Tool:
         """
         agent.register_for_execution()(self)
 
+    def register_tool(self, agent: "ConversableAgent") -> None:
+        """
+        Register a tool to be both proposed and execyted by an agent.
+
+        Args:
+            agent (ConversableAgent): The agent to which the tool will be registered.
+        """
+        self.register_for_llm(agent)
+        self.register_for_execution(agent)
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the tool by calling its underlying function with the provided arguments.
 

@@ -5,18 +5,19 @@
 import pytest
 
 from autogen import AssistantAgent
-from autogen.agentchat.contrib.capabilities.tools_capability import ToolSpecs, ToolsCapability
+from autogen.agentchat.contrib.capabilities.tools_capability import ToolsCapability
+from autogen.tools import Tool
 
 
 @pytest.fixture
-def add_tool_spec():
+def add_tools():
     def add(x: int, y: int) -> int:
         return x + y
 
-    return ToolSpecs(
-        tool_func=add,
-        tool_description="Provide add function to two argument and return sum.",
-        tool_name="add_function",
+    return Tool(
+        name="add_function",
+        description="Provide add function to two argument and return sum.",
+        func_or_tool=add,
     )
 
 
@@ -31,9 +32,9 @@ def test_agent():
 
 
 class TestToolsCapability:
-    def test_add_capability(self, add_tool_spec, test_agent) -> None:
+    def test_add_capability(self, add_tools, test_agent) -> None:
         # Arrange
-        tools_capability = ToolsCapability(tool_list=[add_tool_spec])
+        tools_capability = ToolsCapability(tool_list=[add_tools])
         assert "tools" not in test_agent.llm_config
         # Act
         tools_capability.add_to_agent(agent=test_agent)
