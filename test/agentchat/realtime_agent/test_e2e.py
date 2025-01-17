@@ -11,6 +11,7 @@ from anyio import Event, move_on_after, sleep
 from asyncer import create_task_group
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
+from pytest import FixtureRequest
 
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
@@ -22,14 +23,14 @@ logger = getLogger(__name__)
 
 @pytest.mark.openai
 class TestE2E:
-    async def _test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:
+    async def _test_e2e(self, credentials_llm: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
 
         """
-        llm_config = credentials_gpt_4o_realtime.llm_config
-        openai_api_key = credentials_gpt_4o_realtime.api_key
+        llm_config = credentials_llm.llm_config
+        api_key = credentials_llm.api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
@@ -74,7 +75,7 @@ class TestE2E:
                     "event": "media",
                     "media": {
                         "timestamp": 0,
-                        "payload": text_to_speech(text="How is the weather in Seattle?", openai_api_key=openai_api_key),
+                        "payload": text_to_speech(text="How is the weather in Seattle?", openai_api_key=api_key),
                     },
                 }
             )
@@ -95,7 +96,8 @@ class TestE2E:
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
     @pytest.mark.asyncio
-    async def test_e2e(self, credentials_gpt_4o_realtime: Credentials) -> None:
+    @pytest.mark.parametrize("credentials_llm_realtime", ["credentials_gpt_4o_realtime"])
+    async def test_e2e(self, credentials_llm_realtime: str, request: FixtureRequest) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 3 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
@@ -105,7 +107,8 @@ class TestE2E:
         count = 5
         while True:
             try:
-                await self._test_e2e(credentials_gpt_4o_realtime=credentials_gpt_4o_realtime)
+                credentials = request.getfixturevalue(credentials_llm_realtime)
+                await self._test_e2e(credentials_llm=credentials)
                 return  # Exit the function if the test passes
             except Exception as e:
                 logger.warning(
