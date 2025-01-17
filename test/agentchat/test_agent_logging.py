@@ -15,7 +15,7 @@ from _pytest.mark import ParameterSet
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import Credentials, credentials_param_fixtures
+from ..conftest import Credentials, credentials_param_set_list
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
@@ -173,7 +173,7 @@ def _test_two_agents_logging(
         assert row["timestamp"], "timestamp is empty"
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials_fixture", credentials_param_set_list)
 def test_two_agents_logging(
     credentials_fixture: ParameterSet,
     request: pytest.FixtureRequest,
@@ -265,11 +265,9 @@ def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials,
     assert rows[0]["id"] == 1 and rows[0]["version_number"] == 1
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_groupchat_logging(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
     db_connection: Generator[Optional[sqlite3.Connection], Any, None],
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_groupchat_logging(credentials, credentials, db_connection)

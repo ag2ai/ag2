@@ -11,13 +11,12 @@ from tempfile import TemporaryDirectory
 from typing import Annotated, Literal, TypeVar
 
 import pytest
-from _pytest.mark import ParameterSet
 
 import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import Credentials, credentials_param_fixtures
+from ..conftest import Credentials, credentials_param_set_list
 
 
 @pytest.fixture
@@ -543,13 +542,11 @@ def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
     print(res.summary, res.cost, res.chat_history)
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_chats_w_func(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
     tasks_work_dir: str,
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_chats_w_func(credentials, tasks_work_dir)
 
 

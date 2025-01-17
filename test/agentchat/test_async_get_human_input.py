@@ -9,11 +9,10 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from _pytest.mark import ParameterSet
 
 import autogen
 
-from ..conftest import Credentials, credentials_param_fixtures
+from ..conftest import Credentials, credentials_param_set_list
 
 
 async def _test_async_get_human_input(credentials: Credentials) -> None:
@@ -41,12 +40,10 @@ async def _test_async_get_human_input(credentials: Credentials) -> None:
     print("Human input:", res.human_input)
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_async_get_human_input(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_async_get_human_input(credentials)
 
 
@@ -78,10 +75,8 @@ async def _test_async_max_turn(credentials: Credentials):
     )
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_async_max_turn(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_async_max_turn(credentials)

@@ -9,11 +9,10 @@
 import asyncio
 
 import pytest
-from _pytest.mark import ParameterSet
 
 import autogen
 
-from ..conftest import Credentials, credentials_param_fixtures
+from ..conftest import Credentials, credentials_param_set_list
 
 
 def get_market_news(ind, ind_upper):
@@ -89,12 +88,10 @@ async def _test_async_groupchat(credentials: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_async_groupchat(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_async_groupchat(credentials)
 
 
@@ -164,10 +161,8 @@ async def _test_stream(credentials: Credentials):
             # print("Chat summary and cost:", res.summary, res.cost)
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_stream(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_stream(credentials)

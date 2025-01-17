@@ -16,7 +16,6 @@ from typing import Annotated, Any, Callable, Literal
 from unittest.mock import MagicMock
 
 import pytest
-from _pytest.mark import ParameterSet
 from pydantic import BaseModel, Field
 
 import autogen
@@ -24,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, credentials_param_fixtures
+from ..conftest import Credentials, credentials_param_set_list
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -1045,12 +1044,10 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_function_registration_e2e_async(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_function_registration_e2e_async(credentials)
 
 

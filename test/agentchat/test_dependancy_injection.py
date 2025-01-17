@@ -6,13 +6,12 @@ from typing import Annotated, Any, Callable
 from unittest.mock import MagicMock
 
 import pytest
-from _pytest.mark import ParameterSet
 from pydantic import BaseModel
 
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, ChatContext, Depends
 
-from ..conftest import Credentials, credentials_param_fixtures
+from ..conftest import Credentials, credentials_param_set_list
 
 
 class MyContext(BaseContext, BaseModel):
@@ -235,13 +234,11 @@ class TestDependencyInjection:
             "Login successful.",
         )
 
-    @pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+    @pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
     @pytest.mark.parametrize("is_async", [False, True])
     def test_end2end(
         self,
-        credentials_fixture: ParameterSet,
-        request: pytest.FixtureRequest,
+        credentials: Credentials,
         is_async: bool,
     ) -> None:
-        credentials = request.getfixturevalue(credentials_fixture)
         self._test_end2end(credentials, is_async)

@@ -9,11 +9,10 @@
 import os
 
 import pytest
-from _pytest.mark import ParameterSet
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
-from ..conftest import Credentials, credentials_param_fixtures
+from ..conftest import Credentials, credentials_param_set_list
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -56,12 +55,10 @@ def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     print("Result summary:", res.summary)
 
 
-@pytest.mark.parametrize("credentials_fixture", credentials_param_fixtures)
+@pytest.mark.parametrize("credentials", credentials_param_set_list, indirect=True)
 def test_ai_user_proxy_agent(
-    credentials_fixture: ParameterSet,
-    request: pytest.FixtureRequest,
+    credentials: Credentials,
 ) -> None:
-    credentials = request.getfixturevalue(credentials_fixture)
     _test_ai_user_proxy_agent(credentials)
 
 

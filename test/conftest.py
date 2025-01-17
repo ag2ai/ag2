@@ -207,9 +207,9 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 0
 
 
-credentials_param_fixtures = [
+credentials_param_set_list = [
     pytest.param(
-        credentials_gpt_4o.__name__,
+        credentials_gpt_4o_mini.__name__,
         marks=pytest.mark.openai,
     ),
     pytest.param(
