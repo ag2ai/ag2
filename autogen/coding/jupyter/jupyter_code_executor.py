@@ -21,7 +21,7 @@ else:
     from typing_extensions import Self
 
 
-from ..base import CodeBlock, CodeExecutor, CodeExtractor, IPythonCodeResult
+from ..base import CodeBlock, CodeExecutor, CodeExtractor, IPythonCodeResult, IPythonCodeResultOutputList
 from ..markdown_code_extractor import MarkdownCodeExtractor
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .jupyter_client import JupyterClient
@@ -121,6 +121,46 @@ class JupyterCodeExecutor(CodeExecutor):
         return IPythonCodeResult(
             exit_code=0, output="\n".join([str(output) for output in outputs]), output_files=output_files
         )
+
+    def execute_code_blocks_output_list(self, code_blocks: list[CodeBlock]) -> IPythonCodeResultOutputList:
+        """(Experimental) Execute a list of code blocks and return the result.
+
+        This method executes a list of code blocks as cells in the Jupyter kernel.
+        See: https://jupyter-client.readthedocs.io/en/stable/messaging.html
+        for the message protocol.
+
+        Args:
+            code_blocks (List[CodeBlock]): A list of code blocks to execute.
+
+        Returns:
+            IPythonCodeResult: The result of the code execution.
+        """
+        self._jupyter_kernel_client.wait_for_ready()
+        outputs = []
+        output_files = []
+        for code_block in code_blocks:
+            code = silence_pip(code_block.code, code_block.language)
+            result = self._jupyter_kernel_client.execute(code, timeout_seconds=self._timeout)
+            if result.is_ok:
+                outputs.append(result.output)
+                for data in result.data_items:
+                    if data.mime_type == "image/png":
+                        path = self._save_image(data.data)
+                        outputs.append(f"Image data saved to {path}")
+                        output_files.append(path)
+                    elif data.mime_type == "text/html":
+                        path = self._save_html(data.data)
+                        outputs.append(f"HTML data saved to {path}")
+                        output_files.append(path)
+                    else:
+                        outputs.append(json.dumps(data.data))
+            else:
+                return IPythonCodeResultOutputList(
+                    exit_code=1,
+                    outputs=[f"ERROR: {result.output}"],
+                )
+
+        return IPythonCodeResultOutputList(exit_code=0, outputs=outputs, output_files=output_files)
 
     def restart(self) -> None:
         """(Experimental) Restart a new session."""

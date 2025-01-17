@@ -90,6 +90,14 @@ class IPythonCodeResult(CodeResult):
     )
 
 
+class IPythonCodeResultOutputList(BaseModel):
+    outputs: list[str] = Field(description="The outputs from executing each cell.")
+    output_files: list[str] = Field(
+        default_factory=list,
+        description="The list of files that the executed code blocks generated.",
+    )
+
+
 CodeExecutionConfig = TypedDict(
     "CodeExecutionConfig",
     {
