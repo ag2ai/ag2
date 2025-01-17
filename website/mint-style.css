@@ -674,10 +674,10 @@ table {
       mask: var(--ecosystem-icon);
     }
 
-    h5[data-text="AutoGen Studio"]:before {
+    /* h5[data-text="AutoGen Studio"]:before {
       content: "";
       mask: var(--autogen-icon);
-    }
+    } */
 
     li > div {
       width: 100%;
