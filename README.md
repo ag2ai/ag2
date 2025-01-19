@@ -11,6 +11,16 @@
 
 # [AG2](https://github.com/ag2ai/ag2)
 
+## Key Features
+- 🤖 Multi-Agent Framework - Build and orchestrate AI agent interactions
+- 🔧 Flexible Integration - Support for various LLMs (OpenAI, Anthropic, etc.)
+- 🛠 Tool Usage - Agents can use external tools and execute code
+- 👥 Human-in-the-Loop - Seamless human participation when needed
+- 🔄 Autonomous Workflows - Agents can work independently or collaboratively
+- 🎯 Task-Oriented - Designed for complex problem-solving
+
+[📚 Documentation](https://docs.ag2.ai/) | [💡 Examples](https://github.com/ag2ai/build-with-ag2) | [🤝 Contributing](https://docs.ag2.ai/docs/contributor-guide/contributing)
+
 [📚 Cite paper](#related-papers).
 <!-- <p align="center">
     <img src="https://github.com/ag2ai/ag2/blob/main/website/static/img/flaml.svg"  width=200>
@@ -80,7 +90,13 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 ## What is AG2
 
-AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
+AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. Think of it as the "PyTorch for AI Agents" - providing the fundamental building blocks needed to create, deploy, and manage AI agent systems.
+
+### Core Concepts
+- **Agents**: Autonomous entities powered by LLMs that can reason, plan, and execute tasks
+- **Conversations**: Structured communication patterns between agents
+- **Tools**: External capabilities that agents can leverage
+- **Workflows**: Customizable patterns for agent collaboration
 
 **Open Source Statement**: The project welcomes contributions from developers and organizations worldwide. Our goal is to foster a collaborative and inclusive community where diverse perspectives and expertise can drive innovation and enhance the project's capabilities. Whether you are an individual contributor or represent an organization, we invite you to join us in shaping the future of this project. Together, we can build something truly remarkable.
 
@@ -337,3 +353,35 @@ This project is a spin-off of [AutoGen](https://github.com/microsoft/autogen) an
 - Modifications and additions made in this fork are licensed under the Apache License, Version 2.0. See the  [LICENSE](./LICENSE) file for the full license text.
 
 We have documented these changes for clarity and to ensure transparency with our user and contributor community. For more details, please see the [NOTICE](./NOTICE.md) file.
+
+## Quick Examples
+
+### Basic Two-Agent Chat
+```python
+from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
+
+# Initialize agents
+assistant = AssistantAgent("assistant", llm_config={"config_list": config_list})
+user_proxy = UserProxyAgent("user_proxy")
+
+# Start conversation
+user_proxy.initiate_chat(assistant, message="Explain how AG2 can help in data analysis.")
+```
+
+### Multi-Agent Task Solving
+```python
+from autogen import AssistantAgent, UserProxyAgent, GroupChat, GroupChatManager
+
+# Create multiple agents
+analyst = AssistantAgent("analyst")
+coder = AssistantAgent("coder")
+reviewer = AssistantAgent("reviewer")
+
+# Set up group chat
+agents = [analyst, coder, reviewer]
+group_chat = GroupChat(agents=agents, messages=[])
+manager = GroupChatManager(groupchat=group_chat)
+
+# Start group task
+user_proxy.initiate_chat(manager, message="Analyze this dataset and create visualizations.")
+```
