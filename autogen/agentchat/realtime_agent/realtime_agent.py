@@ -10,7 +10,6 @@ from asyncer import asyncify, create_task_group, syncify
 from fastapi import WebSocket
 
 from ...tools import Tool
-from .. import SwarmAgent
 from ..agent import Agent
 from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ..conversable_agent import ConversableAgent
@@ -105,8 +104,8 @@ class RealtimeAgent(ConversableAgent):
         self._answer_event: anyio.Event = anyio.Event()
         self._answer: str = ""
         self._start_swarm_chat = False
-        self._initial_agent: Optional[SwarmAgent] = None
-        self._agents: Optional[list[SwarmAgent]] = None
+        self._initial_agent: Optional[ConversableAgent] = None
+        self._agents: Optional[list[ConversableAgent]] = None
 
     def _validate_name(self, name: str) -> None:
         # RealtimeAgent does not need to validate the name
@@ -138,15 +137,15 @@ class RealtimeAgent(ConversableAgent):
     def register_swarm(
         self,
         *,
-        initial_agent: SwarmAgent,
-        agents: list[SwarmAgent],
+        initial_agent: ConversableAgent,
+        agents: list[ConversableAgent],
         system_message: Optional[str] = None,
     ) -> None:
         """Register a swarm of agents with the Realtime Agent.
 
         Args:
-            initial_agent (SwarmAgent): The initial agent.
-            agents (list[SwarmAgent]): The agents in the swarm.
+            initial_agent (ConversableAgent): The initial agent.
+            agents (list[ConversableAgent]): The agents in the swarm.
             system_message (str): The system message for the agent.
         """
         logger = self.logger

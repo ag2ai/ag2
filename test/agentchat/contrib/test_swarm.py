@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 from typing import Any, Union
@@ -6,14 +6,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.agentchat.agent import Agent
 from autogen.agentchat.contrib.swarm_agent import (
-    AFTER_WORK,
-    ON_CONDITION,
-    UPDATE_SYSTEM_MESSAGE,
     __TOOL_EXECUTOR_NAME__,
+    AfterWork,
     AfterWorkOption,
-    SwarmAgent,
+    OnCondition,
     SwarmResult,
+    UpdateCondition,
     _cleanup_temp_user_messages,
     _create_nested_chats,
     _prepare_swarm_agents,
@@ -21,19 +21,23 @@ from autogen.agentchat.contrib.swarm_agent import (
     _setup_context_variables,
     a_initiate_swarm_chat,
     initiate_swarm_chat,
+    register_hand_off,
 )
-from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
 TEST_MESSAGES = [{"role": "user", "content": "Initial message"}]
 
 
-def test_swarm_agent_initialization():
-    """Test SwarmAgent initialization with valid and invalid parameters"""
-    # Invalid functions parameter
-    with pytest.raises(TypeError):
-        SwarmAgent("test_agent", functions="invalid")
+class NotConversableAgent(Agent):
+    """Dummy class to test invalid agent types"""
+
+    def __init__(
+        self,
+        name: str,
+    ):
+        super().__init__(name)
 
 
 def test_swarm_result():
@@ -49,44 +53,45 @@ def test_swarm_result():
     assert result.context_variables == context
 
     # Test with agent
-    agent = SwarmAgent("test")
+    agent = ConversableAgent("test")
     result = SwarmResult(values="test", agent=agent)
     assert result.agent == agent
 
 
 def test_after_work_initialization():
-    """Test AFTER_WORK initialization with different options"""
+    """Test AfterWork initialization with different options"""
     # Test with AfterWorkOption
-    after_work = AFTER_WORK(AfterWorkOption.TERMINATE)
+    after_work = AfterWork(AfterWorkOption.TERMINATE)
     assert after_work.agent == AfterWorkOption.TERMINATE
 
     # Test with string
-    after_work = AFTER_WORK("TERMINATE")
+    after_work = AfterWork("TERMINATE")
     assert after_work.agent == AfterWorkOption.TERMINATE
 
-    # Test with SwarmAgent
-    agent = SwarmAgent("test")
-    after_work = AFTER_WORK(agent)
+    # Test with ConversableAgent
+    agent = ConversableAgent("test")
+    after_work = AfterWork(agent)
     assert after_work.agent == agent
 
     # Test with Callable
-    def test_callable(x: int) -> SwarmAgent:
+    def test_callable(x: int) -> ConversableAgent:
         return agent
 
-    after_work = AFTER_WORK(test_callable)
+    after_work = AfterWork(test_callable)
     assert after_work.agent == test_callable
 
     # Test with invalid option
     with pytest.raises(ValueError):
-        AFTER_WORK("INVALID_OPTION")
+        AfterWork("INVALID_OPTION")
 
 
 def test_on_condition():
-    """Test ON_CONDITION initialization"""
-    # Test with a ConversableAgent
-    test_conversable_agent = ConversableAgent("test_conversable_agent")
-    with pytest.raises(AssertionError, match="'target' must be a SwarmAgent or a Dict"):
-        _ = ON_CONDITION(target=test_conversable_agent, condition="test condition")
+    """Test OnCondition initialization"""
+
+    # Test with a base Agent
+    test_conversable_agent = NotConversableAgent("test_conversable_agent")
+    with pytest.raises(AssertionError, match="'target' must be a ConversableAgent or a dict"):
+        _ = OnCondition(target=test_conversable_agent, condition="test condition")
 
 
 def test_receiving_agent():
@@ -94,7 +99,7 @@ def test_receiving_agent():
     # 1. Test with a single message - should always be the initial agent
     messages_one_no_name = [{"role": "user", "content": "Initial message"}]
 
-    test_initial_agent = SwarmAgent("InitialAgent")
+    test_initial_agent = ConversableAgent("InitialAgent")
 
     # Test the chat
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
@@ -106,7 +111,7 @@ def test_receiving_agent():
     assert chat_result.chat_history[1].get("name") == "InitialAgent"
 
     # 2. Test with a single message from an existing agent (should still be initial agent)
-    test_second_agent = SwarmAgent("SecondAgent")
+    test_second_agent = ConversableAgent("SecondAgent")
 
     messages_one_w_name = [{"role": "user", "content": "Initial message", "name": "SecondAgent"}]
 
@@ -138,8 +143,9 @@ def test_receiving_agent():
 
 def test_resume_speaker():
     """Tests resumption of chat with multiple messages"""
-    test_initial_agent = SwarmAgent("InitialAgent")
-    test_second_agent = SwarmAgent("SecondAgent")
+
+    test_initial_agent = ConversableAgent("InitialAgent")
+    test_second_agent = ConversableAgent("SecondAgent")
 
     # For multiple messages, last agent initiates the chat
     multiple_messages = [
@@ -173,8 +179,9 @@ def test_resume_speaker():
 
 def test_after_work_options():
     """Test different after work options"""
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
+
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
     user_agent = UserProxyAgent("test_user")
 
     # Fake generate_oai_reply
@@ -186,14 +193,14 @@ def test_after_work_options():
     agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply)
 
     # 1. Test TERMINATE
-    agent1.after_work = AFTER_WORK(AfterWorkOption.TERMINATE)
+    agent1._swarm_after_work = AfterWork(AfterWorkOption.TERMINATE)
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2]
     )
     assert last_speaker == agent1
 
     # 2. Test REVERT_TO_USER
-    agent1.after_work = AFTER_WORK(AfterWorkOption.REVERT_TO_USER)
+    agent1._swarm_after_work = AfterWork(AfterWorkOption.REVERT_TO_USER)
 
     test_messages = [
         {"role": "user", "content": "Initial message"},
@@ -209,7 +216,7 @@ def test_after_work_options():
     assert chat_result.chat_history[3]["name"] == "test_user"
 
     # 3. Test STAY
-    agent1.after_work = AFTER_WORK(AfterWorkOption.STAY)
+    agent1._swarm_after_work = AfterWork(AfterWorkOption.STAY)
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], max_rounds=4
     )
@@ -223,7 +230,7 @@ def test_after_work_options():
     def test_callable(last_speaker, messages, groupchat):
         return agent2
 
-    agent1.after_work = AFTER_WORK(test_callable)
+    agent1._swarm_after_work = AfterWork(test_callable)
 
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], max_rounds=4
@@ -234,7 +241,8 @@ def test_after_work_options():
 
 
 def test_on_condition_handoff():
-    """Test ON_CONDITION in handoffs"""
+    """Test OnCondition in handoffs"""
+
     testing_llm_config = {
         "config_list": [
             {
@@ -244,10 +252,10 @@ def test_on_condition_handoff():
         ]
     }
 
-    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
-    agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=testing_llm_config)
 
-    agent1.register_hand_off(hand_to=ON_CONDITION(target=agent2, condition="always take me to agent 2"))
+    register_hand_off(agent1, hand_to=OnCondition(target=agent2, condition="always take me to agent 2"))
 
     # Fake generate_oai_reply
     def mock_generate_oai_reply(*args, **kwargs):
@@ -278,8 +286,8 @@ def test_on_condition_handoff():
 
 def test_temporary_user_proxy():
     """Test that temporary user proxy agent name is cleared"""
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
 
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2]
@@ -314,8 +322,8 @@ def test_context_variables_updating_multi_tools():
         context_variables["my_key"] += 100
         return SwarmResult(values=f"Test 2 {param2}", context_variables=context_variables, agent=agent1)
 
-    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
-    agent2 = SwarmAgent("agent2", functions=[test_func_1, test_func_2], llm_config=testing_llm_config)
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", functions=[test_func_1, test_func_2], llm_config=testing_llm_config)
 
     # Fake generate_oai_reply
     def mock_generate_oai_reply(*args, **kwargs):
@@ -369,8 +377,8 @@ def test_function_transfer():
         context_variables["my_key"] += 1
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
-    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
-    agent2 = SwarmAgent("agent2", functions=[test_func_1], llm_config=testing_llm_config)
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", functions=[test_func_1], llm_config=testing_llm_config)
 
     # Fake generate_oai_reply
     def mock_generate_oai_reply(*args, **kwargs):
@@ -403,8 +411,8 @@ def test_function_transfer():
 
 def test_invalid_parameters():
     """Test various invalid parameter combinations"""
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
 
     # Test invalid initial agent type
     with pytest.raises(AssertionError):
@@ -420,38 +428,40 @@ def test_invalid_parameters():
 
 
 def test_non_swarm_in_hand_off():
-    """Test that SwarmAgents in the group chat are the only agents in hand-offs"""
-    agent1 = SwarmAgent("agent1")
-    bad_agent = ConversableAgent("bad_agent")
+    """Test that agents in the group chat are the only agents in hand-offs"""
+
+    agent1 = ConversableAgent("agent1")
+    bad_agent = NotConversableAgent("bad_agent")
 
     with pytest.raises(AssertionError, match="Invalid After Work value"):
-        agent1.register_hand_off(hand_to=AFTER_WORK(bad_agent))
+        register_hand_off(agent1, hand_to=AfterWork(bad_agent))
 
-    with pytest.raises(AssertionError, match="'target' must be a SwarmAgent or a Dict"):
-        agent1.register_hand_off(hand_to=ON_CONDITION(target=bad_agent, condition="Testing"))
+    with pytest.raises(AssertionError, match="'target' must be a ConversableAgent or a dict"):
+        register_hand_off(agent1, hand_to=OnCondition(target=bad_agent, condition="Testing"))
 
-    with pytest.raises(ValueError, match="hand_to must be a list of ON_CONDITION or AFTER_WORK"):
-        agent1.register_hand_off(0)
+    with pytest.raises(ValueError, match="hand_to must be a list of OnCondition or AfterWork"):
+        register_hand_off(agent1, 0)
 
 
 def test_initialization():
     """Test initiate_swarm_chat"""
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
-    agent3 = SwarmAgent("agent3")
-    bad_agent = ConversableAgent("bad_agent")
 
-    with pytest.raises(AssertionError, match="Agents must be a list of SwarmAgents"):
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
+    agent3 = ConversableAgent("agent3")
+    bad_agent = NotConversableAgent("bad_agent")
+
+    with pytest.raises(AssertionError, match="Agents must be a list of ConversableAgent"):
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=agent2, messages=TEST_MESSAGES, agents=[agent1, agent2, bad_agent], max_rounds=3
         )
 
-    with pytest.raises(AssertionError, match="initial_agent must be a SwarmAgent"):
+    with pytest.raises(AssertionError, match="initial_agent must be a ConversableAgent"):
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=bad_agent, messages=TEST_MESSAGES, agents=[agent1, agent2], max_rounds=3
         )
 
-    agent1.register_hand_off(hand_to=AFTER_WORK(agent3))
+    register_hand_off(agent1, hand_to=AfterWork(agent3))
 
     with pytest.raises(AssertionError, match="Agent in hand-off must be in the agents list"):
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
@@ -477,9 +487,9 @@ def test_update_system_message():
     template_message = "Template message with {test_var}"
 
     # Create agents with different update configurations
-    agent1 = SwarmAgent("agent1", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(custom_update_function))
+    agent1 = ConversableAgent("agent1", update_agent_state_before_reply=UpdateSystemMessage(custom_update_function))
 
-    agent2 = SwarmAgent("agent2", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(template_message))
+    agent2 = ConversableAgent("agent2", update_agent_state_before_reply=UpdateSystemMessage(template_message))
 
     # Mock the reply function to capture the system message
     def mock_generate_oai_reply(*args, **kwargs):
@@ -514,33 +524,15 @@ def test_update_system_message():
     # Verify template result
     assert message_container.captured_sys_message == "Template message with test_value"
 
-    # Test invalid update function
-    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
-        SwarmAgent("agent3", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(123))
-
-    # Test invalid callable (wrong number of parameters)
-    def invalid_update_function(context_variables):
-        return "Invalid function"
-
-    with pytest.raises(ValueError, match="Update function must accept two parameters"):
-        SwarmAgent("agent4", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(invalid_update_function))
-
-    # Test invalid callable (wrong return type)
-    def invalid_return_function(context_variables, messages) -> dict:
-        return {}
-
-    with pytest.raises(ValueError, match="Update function must return a string"):
-        SwarmAgent("agent5", update_agent_state_before_reply=UPDATE_SYSTEM_MESSAGE(invalid_return_function))
-
     # Test multiple update functions
     def another_update_function(context_variables: dict[str, Any], messages: list[dict]) -> str:
         return "Another update"
 
-    agent6 = SwarmAgent(
+    agent6 = ConversableAgent(
         "agent6",
         update_agent_state_before_reply=[
-            UPDATE_SYSTEM_MESSAGE(custom_update_function),
-            UPDATE_SYSTEM_MESSAGE(another_update_function),
+            UpdateSystemMessage(custom_update_function),
+            UpdateSystemMessage(another_update_function),
         ],
     )
 
@@ -571,14 +563,14 @@ def test_string_agent_params_for_transfer():
         value = "Hello, World!"
         return SwarmResult(values=value, context_variables=context_variables, agent="agent_2")
 
-    # Create SwarmAgent instances
-    agent_1 = SwarmAgent(
+    # Create agent instances
+    agent_1 = ConversableAgent(
         name="agent_1",
         system_message="Your task is to call hello_world() function.",
         llm_config=testing_llm_config,
         functions=[hello_world],
     )
-    agent_2 = SwarmAgent(
+    agent_2 = ConversableAgent(
         name="agent_2",
         system_message="Your task is to let the user know what the previous agent said.",
         llm_config=testing_llm_config,
@@ -610,7 +602,7 @@ def test_string_agent_params_for_transfer():
         agents=[agent_1, agent_2],
         context_variables={},
         messages="Begin by calling the hello_world() function.",
-        after_work=AFTER_WORK(AfterWorkOption.TERMINATE),
+        after_work=AfterWork(AfterWorkOption.TERMINATE),
         max_rounds=5,
     )
 
@@ -623,13 +615,13 @@ def test_string_agent_params_for_transfer():
         value = "Hello, World!"
         return SwarmResult(values=value, context_variables=context_variables, agent="agent_unknown")
 
-    agent_1 = SwarmAgent(
+    agent_1 = ConversableAgent(
         name="agent_1",
         system_message="Your task is to call hello_world() function.",
         llm_config=testing_llm_config,
         functions=[hello_world],
     )
-    agent_2 = SwarmAgent(
+    agent_2 = ConversableAgent(
         name="agent_2",
         system_message="Your task is to let the user know what the previous agent said.",
         llm_config=testing_llm_config,
@@ -647,13 +639,14 @@ def test_string_agent_params_for_transfer():
             agents=[agent_1, agent_2],
             context_variables={},
             messages="Begin by calling the hello_world() function.",
-            after_work=AFTER_WORK(AfterWorkOption.TERMINATE),
+            after_work=AfterWork(AfterWorkOption.TERMINATE),
             max_rounds=5,
         )
 
 
 def test_after_work_callable():
-    """Test Callable in an AFTER_WORK handoff"""
+    """Test Callable in an AfterWork handoff"""
+
     testing_llm_config = {
         "config_list": [
             {
@@ -663,41 +656,44 @@ def test_after_work_callable():
         ]
     }
 
-    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
-    agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
-    agent3 = SwarmAgent("agent3", llm_config=testing_llm_config)
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=testing_llm_config)
+    agent3 = ConversableAgent("agent3", llm_config=testing_llm_config)
 
     def return_agent(
-        last_speaker: SwarmAgent, messages: list[dict[str, Any]], groupchat: GroupChat
-    ) -> Union[AfterWorkOption, SwarmAgent, str]:
+        last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+    ) -> Union[AfterWorkOption, ConversableAgent, str]:
         return agent2
 
     def return_agent_str(
-        last_speaker: SwarmAgent, messages: list[dict[str, Any]], groupchat: GroupChat
-    ) -> Union[AfterWorkOption, SwarmAgent, str]:
+        last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+    ) -> Union[AfterWorkOption, ConversableAgent, str]:
         return "agent3"
 
     def return_after_work_option(
-        last_speaker: SwarmAgent, messages: list[dict[str, Any]], groupchat: GroupChat
-    ) -> Union[AfterWorkOption, SwarmAgent, str]:
+        last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+    ) -> Union[AfterWorkOption, ConversableAgent, str]:
         return AfterWorkOption.TERMINATE
 
-    agent1.register_hand_off(
+    register_hand_off(
+        agent=agent1,
         hand_to=[
-            AFTER_WORK(agent=return_agent),
-        ]
+            AfterWork(agent=return_agent),
+        ],
     )
 
-    agent2.register_hand_off(
+    register_hand_off(
+        agent=agent2,
         hand_to=[
-            AFTER_WORK(agent=return_agent_str),
-        ]
+            AfterWork(agent=return_agent_str),
+        ],
     )
 
-    agent3.register_hand_off(
+    register_hand_off(
+        agent=agent3,
         hand_to=[
-            AFTER_WORK(agent=return_after_work_option),
-        ]
+            AfterWork(agent=return_after_work_option),
+        ],
     )
 
     # Fake generate_oai_reply
@@ -724,7 +720,8 @@ def test_after_work_callable():
 
 
 def test_on_condition_unique_function_names():
-    """Test that ON_CONDITION in handoffs generate unique function names"""
+    """Test that OnCondition in handoffs generate unique function names"""
+
     testing_llm_config = {
         "config_list": [
             {
@@ -734,15 +731,16 @@ def test_on_condition_unique_function_names():
         ]
     }
 
-    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
-    agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=testing_llm_config)
 
-    agent1.register_hand_off(
+    register_hand_off(
+        agent=agent1,
         hand_to=[
-            ON_CONDITION(target=agent2, condition="always take me to agent 2"),
-            ON_CONDITION(target=agent2, condition="sometimes take me there"),
-            ON_CONDITION(target=agent2, condition="always take me there"),
-        ]
+            OnCondition(target=agent2, condition="always take me to agent 2"),
+            OnCondition(target=agent2, condition="sometimes take me there"),
+            OnCondition(target=agent2, condition="always take me there"),
+        ],
     )
 
     # Fake generate_oai_reply
@@ -786,9 +784,9 @@ def test_prepare_swarm_agents():
     }
 
     # Create test agents
-    agent1 = SwarmAgent("agent1", llm_config=testing_llm_config)
-    agent2 = SwarmAgent("agent2", llm_config=testing_llm_config)
-    agent3 = SwarmAgent("agent3", llm_config=testing_llm_config)
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=testing_llm_config)
+    agent3 = ConversableAgent("agent3", llm_config=testing_llm_config)
 
     # Add some functions to test tool executor aggregation
     def test_func1():
@@ -797,11 +795,11 @@ def test_prepare_swarm_agents():
     def test_func2():
         pass
 
-    agent1.add_single_function(test_func1)
-    agent2.add_single_function(test_func2)
+    agent1._add_single_function(test_func1)
+    agent2._add_single_function(test_func2)
 
     # Add handoffs to test validation
-    agent1.register_hand_off(AFTER_WORK(agent=agent2))
+    register_hand_off(agent=agent1, hand_to=AfterWork(agent=agent2))
 
     # Test valid preparation
     tool_executor, nested_chat_agents = _prepare_swarm_agents(agent1, [agent1, agent2])
@@ -813,14 +811,14 @@ def test_prepare_swarm_agents():
 
     # Test invalid initial agent type
     with pytest.raises(AssertionError):
-        _prepare_swarm_agents(ConversableAgent("invalid"), [agent1, agent2])
+        _prepare_swarm_agents(NotConversableAgent("invalid"), [agent1, agent2])
 
     # Test invalid agents list
     with pytest.raises(AssertionError):
-        _prepare_swarm_agents(agent1, [agent1, ConversableAgent("invalid")])
+        _prepare_swarm_agents(agent1, [agent1, NotConversableAgent("invalid")])
 
     # Test missing handoff agent
-    agent3.register_hand_off(AFTER_WORK(agent=SwarmAgent("missing")))
+    register_hand_off(agent=agent3, hand_to=AfterWork(agent=ConversableAgent("missing")))
     with pytest.raises(AssertionError):
         _prepare_swarm_agents(agent1, [agent1, agent2, agent3])
 
@@ -836,8 +834,8 @@ def test_create_nested_chats():
         ]
     }
 
-    test_agent = SwarmAgent("test_agent", llm_config=testing_llm_config)
-    test_agent_2 = SwarmAgent("test_agent_2", llm_config=testing_llm_config)
+    test_agent = ConversableAgent("test_agent", llm_config=testing_llm_config)
+    test_agent_2 = ConversableAgent("test_agent_2", llm_config=testing_llm_config)
     nested_chat_agents = []
 
     nested_chat_one = {
@@ -857,7 +855,7 @@ def test_create_nested_chats():
         "use_async": False,
     }
 
-    test_agent.register_hand_off(ON_CONDITION(target=nested_chat_config, condition="test condition"))
+    register_hand_off(agent=test_agent, hand_to=OnCondition(target=nested_chat_config, condition="test condition"))
 
     # Create nested chats
     _create_nested_chats(test_agent, nested_chat_agents)
@@ -868,14 +866,15 @@ def test_create_nested_chats():
 
     # Verify nested chat configuration
     # The nested chat agent should have a handoff back to the passed in agent
-    assert nested_chat_agents[0].after_work.agent == test_agent
+    assert nested_chat_agents[0]._swarm_after_work.agent == test_agent
 
 
 def test_process_initial_messages():
     """Test processing of initial messages in different scenarios"""
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
-    nested_agent = SwarmAgent("nested_chat_agent1_1")
+
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
+    nested_agent = ConversableAgent("nested_chat_agent1_1")
     user_agent = UserProxyAgent("test_user")
 
     # Test single string message
@@ -915,9 +914,10 @@ def test_process_initial_messages():
 
 def test_setup_context_variables():
     """Test setup of context variables across agents"""
-    tool_execution = SwarmAgent(__TOOL_EXECUTOR_NAME__)
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
+
+    tool_execution = ConversableAgent(__TOOL_EXECUTOR_NAME__)
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
 
     groupchat = GroupChat(agents=[tool_execution, agent1, agent2], messages=[])
     manager = GroupChatManager(groupchat)
@@ -953,8 +953,9 @@ def test_cleanup_temp_user_messages():
 @pytest.mark.asyncio
 async def test_a_initiate_swarm_chat():
     """Test async swarm chat"""
-    agent1 = SwarmAgent("agent1")
-    agent2 = SwarmAgent("agent2")
+
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
     user_agent = UserProxyAgent("test_user")
 
     # Mock async reply function
@@ -988,6 +989,113 @@ async def test_a_initiate_swarm_chat():
     )
 
     assert context_vars == test_context
+
+
+def test_update_on_condition_str():
+    """Test UpdateOnConditionStr updates condition strings properly for handoffs"""
+
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=testing_llm_config)
+
+    # Test container to capture condition
+    class ConditionContainer:
+        def __init__(self):
+            self.captured_condition = None
+
+    condition_container = ConditionContainer()
+
+    # Test with string template
+    register_hand_off(
+        agent1,
+        hand_to=OnCondition(
+            target=agent2, condition=UpdateCondition(update_function="Transfer when {test_var} is active")
+        ),
+    )
+
+    # Mock LLM responses
+    def mock_generate_oai_reply_tool_1_2(*args, **kwargs):
+        # Get the function description (condition) from the agent's function map
+        func_name = "transfer_agent1_to_agent2"
+        # Store the condition for verification by accessing the function's description
+        func = args[0]._function_map[func_name]
+        condition_container.captured_condition = func._description
+        return True, {
+            "role": "assistant",
+            "name": "agent1",
+            "tool_calls": [{"type": "function", "function": {"name": func_name}}],
+        }
+
+    agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply_tool_1_2)
+    agent2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Response from agent2"))
+
+    # Test string template substitution
+    chat_result, context_vars, last_speaker = initiate_swarm_chat(
+        initial_agent=agent1,
+        messages=TEST_MESSAGES,
+        agents=[agent1, agent2],
+        context_variables={"test_var": "condition1"},
+        max_rounds=3,
+    )
+
+    assert condition_container.captured_condition == "Transfer when condition1 is active"
+
+    # Test with callable function
+    def custom_update_function(agent: ConversableAgent, messages: list[dict]) -> str:
+        return f"Transfer based on {agent.get_context('test_var')} with {len(messages)} messages"
+
+    agent3 = ConversableAgent("agent3", llm_config=testing_llm_config)
+    register_hand_off(
+        agent2, hand_to=OnCondition(target=agent3, condition=UpdateCondition(update_function=custom_update_function))
+    )
+
+    # Reset condition container
+    condition_container.captured_condition = None
+
+    def mock_generate_oai_reply_tool_2_3(*args, **kwargs):
+        # Get the function description (condition) from the agent's function map
+        func_name = "transfer_agent2_to_agent3"
+        # Store the condition for verification by accessing the function's description
+        func = args[0]._function_map[func_name]
+        condition_container.captured_condition = func._description
+        return True, {
+            "role": "assistant",
+            "name": "agent1",
+            "tool_calls": [{"type": "function", "function": {"name": func_name}}],
+        }
+
+    agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply_tool_2_3)
+    agent3.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Response from agent3"))
+
+    # Test callable function update
+    chat_result, context_vars, last_speaker = initiate_swarm_chat(
+        initial_agent=agent2,
+        messages=TEST_MESSAGES,
+        agents=[agent2, agent3],
+        context_variables={"test_var": "condition2"},
+        max_rounds=3,
+    )
+
+    assert condition_container.captured_condition == "Transfer based on condition2 with 1 messages"
+
+    # Test invalid update function
+    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
+        UpdateCondition(update_function=123)
+
+    # Test invalid callable signature
+    def invalid_update_function(x: int) -> str:
+        return "test"
+
+    with pytest.raises(ValueError, match="Update function must accept two parameters"):
+        UpdateCondition(update_function=invalid_update_function)
 
 
 if __name__ == "__main__":

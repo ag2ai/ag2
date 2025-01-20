@@ -12,7 +12,7 @@ from asyncer import create_task_group
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 
-from autogen.agentchat.contrib.swarm_agent import SwarmAgent
+from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 from autogen.tools.dependency_injection import Field as AG2Field
 
@@ -57,7 +57,7 @@ class TestSwarmE2E:
             def get_weather(location: Annotated[str, AG2Field(description="city")]) -> str:
                 return "The weather is cloudy." if location == "Seattle" else "The weather is sunny."
 
-            weatherman = SwarmAgent(
+            weatherman = ConversableAgent(
                 name="Weatherman",
                 system_message="You are a weatherman. You can answer questions about the weather.",
                 llm_config=credentials_gpt_4o_mini.llm_config,
