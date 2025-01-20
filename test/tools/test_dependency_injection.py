@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import sys
 from typing import Annotated, Callable, Optional, get_type_hints
 
 import pytest
@@ -203,6 +204,10 @@ def test_string_metadata_to_description_field() -> None:
     assert isinstance(field_info, Field)
     assert field_info.description == "b description"
 
-    # field_info = type_hints["c"].__args__[0].__metadata__[0]
-    # assert isinstance(field_info, Field)
-    # assert field_info.description == "c description"
+    if sys.version_info < (3, 11):
+        field_info = type_hints["c"].__args__[0].__metadata__[0]
+    else:
+        field_info = type_hints["c"].__metadata__[0]
+
+    assert isinstance(field_info, Field)
+    assert field_info.description == "c description"
