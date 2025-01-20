@@ -11,7 +11,7 @@ on:
       - "test/agentchat/contrib/**"
       - "test/test_browser_utils.py"
       - "test/test_retrieve_utils.py"
-      - ".github/workflows/contrib-tests.yml"
+      - ".github/workflows/contrib-test.yml"
       - "pyproject.toml"
 
 concurrency:
@@ -249,7 +249,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

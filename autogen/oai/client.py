@@ -17,6 +17,7 @@ from pydantic import BaseModel, schema_json_of
 
 from ..cache import Cache
 from ..exception_utils import ModelToolNotSupportedError
+from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
 from ..logger.logger_utils import get_current_ts
 from ..messages.client_messages import StreamMessage, UsageSummaryMessage
@@ -26,13 +27,10 @@ from .client_utils import FormatterProtocol, logging_formatter
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
 TOOL_ENABLED = False
-try:
+with optional_import_block() as openai_result:
     import openai
-except ImportError:
-    ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
-    OpenAI = object
-    AzureOpenAI = object
-else:
+
+if openai_result.is_successful:
     # raises exception if openai>=1 is installed and something is wrong with imports
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
     from openai import __version__ as openai_version
@@ -50,8 +48,12 @@ else:
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
     ERROR = None
+else:
+    ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
+    OpenAI = object
+    AzureOpenAI = object
 
-try:
+with optional_import_block() as cerebras_result:
     from cerebras.cloud.sdk import (  # noqa
         AuthenticationError as cerebras_AuthenticationError,
         InternalServerError as cerebras_InternalServerError,
@@ -60,12 +62,13 @@ try:
 
     from autogen.oai.cerebras import CerebrasClient
 
+if cerebras_result.is_successful:
     cerebras_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     cerebras_AuthenticationError = cerebras_InternalServerError = cerebras_RateLimitError = Exception  # noqa: N816
-    cerebras_import_exception = e
+    cerebras_import_exception = ImportError("cerebras_cloud_sdk not found")
 
-try:
+with optional_import_block() as gemini_result:
     from google.api_core.exceptions import (  # noqa
         InternalServerError as gemini_InternalServerError,
         ResourceExhausted as gemini_ResourceExhausted,
@@ -73,12 +76,13 @@ try:
 
     from autogen.oai.gemini import GeminiClient
 
+if gemini_result.is_successful:
     gemini_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     gemini_InternalServerError = gemini_ResourceExhausted = Exception  # noqa: N816
-    gemini_import_exception = e
+    gemini_import_exception = ImportError("google-generativeai not found")
 
-try:
+with optional_import_block() as anthropic_result:
     from anthropic import (  # noqa
         InternalServerError as anthorpic_InternalServerError,
         RateLimitError as anthorpic_RateLimitError,
@@ -86,12 +90,13 @@ try:
 
     from autogen.oai.anthropic import AnthropicClient
 
+if anthropic_result.is_successful:
     anthropic_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     anthorpic_InternalServerError = anthorpic_RateLimitError = Exception  # noqa: N816
-    anthropic_import_exception = e
+    anthropic_import_exception = ImportError("anthropic not found")
 
-try:
+with optional_import_block() as mistral_result:
     from mistralai.models import (  # noqa
         HTTPValidationError as mistral_HTTPValidationError,
         SDKError as mistral_SDKError,
@@ -99,22 +104,24 @@ try:
 
     from autogen.oai.mistral import MistralAIClient
 
+if mistral_result.is_successful:
     mistral_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     mistral_SDKError = mistral_HTTPValidationError = Exception  # noqa: N816
-    mistral_import_exception = e
+    mistral_import_exception = ImportError("mistralai not found")
 
-try:
+with optional_import_block() as together_result:
     from together.error import TogetherException as together_TogetherException
 
     from autogen.oai.together import TogetherClient
 
+if together_result.is_successful:
     together_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     together_TogetherException = Exception  # noqa: N816
-    together_import_exception = e
+    together_import_exception = ImportError("together not found")
 
-try:
+with optional_import_block() as groq_result:
     from groq import (  # noqa
         APIConnectionError as groq_APIConnectionError,
         InternalServerError as groq_InternalServerError,
@@ -123,12 +130,13 @@ try:
 
     from autogen.oai.groq import GroqClient
 
+if groq_result.is_successful:
     groq_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     groq_InternalServerError = groq_RateLimitError = groq_APIConnectionError = Exception  # noqa: N816
-    groq_import_exception = e
+    groq_import_exception = ImportError("groq not found")
 
-try:
+with optional_import_block() as cohere_result:
     from cohere.errors import (  # noqa
         InternalServerError as cohere_InternalServerError,
         ServiceUnavailableError as cohere_ServiceUnavailableError,
@@ -137,12 +145,13 @@ try:
 
     from autogen.oai.cohere import CohereClient
 
+if cohere_result.is_successful:
     cohere_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     cohere_InternalServerError = cohere_TooManyRequestsError = cohere_ServiceUnavailableError = Exception  # noqa: N816
-    cohere_import_exception = e
+    cohere_import_exception = ImportError("cohere not found")
 
-try:
+with optional_import_block() as ollama_result:
     from ollama import (  # noqa
         RequestError as ollama_RequestError,
         ResponseError as ollama_ResponseError,
@@ -150,12 +159,13 @@ try:
 
     from autogen.oai.ollama import OllamaClient
 
+if ollama_result.is_successful:
     ollama_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     ollama_RequestError = ollama_ResponseError = Exception  # noqa: N816
-    ollama_import_exception = e
+    ollama_import_exception = ImportError("ollama not found")
 
-try:
+with optional_import_block() as bedrock_result:
     from botocore.exceptions import (  # noqa
         BotoCoreError as bedrock_BotoCoreError,
         ClientError as bedrock_ClientError,
@@ -163,10 +173,11 @@ try:
 
     from autogen.oai.bedrock import BedrockClient
 
+if bedrock_result.is_successful:
     bedrock_import_exception: Optional[ImportError] = None
-except ImportError as e:
+else:
     bedrock_BotoCoreError = bedrock_ClientError = Exception  # noqa: N816
-    bedrock_import_exception = e
+    bedrock_import_exception = ImportError("botocore not found")
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -503,6 +514,7 @@ class OpenAIClient:
         }
 
 
+@require_optional_import("openai", "openai")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
 

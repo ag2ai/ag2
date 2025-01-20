@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from typing import Annotated, Callable, get_type_hints
+import sys
+from typing import Annotated, Callable, Optional, get_type_hints
 
 import pytest
 from pydantic import BaseModel
@@ -189,28 +190,24 @@ class TestRemoveInjectedParamsFromSignature:
 
 
 def test_string_metadata_to_description_field() -> None:
-    def f(a: int, b: Annotated[int, "b description"]) -> int:
+    def f(
+        a: int,
+        b: Annotated[int, "b description"],
+        c: Annotated[Optional[int], "c description"] = None,
+    ) -> int:
         return a + b
-
-    type_hints = get_type_hints(f, include_extras=True)
-
-    params_with_string_metadata = []
-    for param, annotation in type_hints.items():
-        if hasattr(annotation, "__metadata__"):
-            metadata = annotation.__metadata__
-            if metadata and isinstance(metadata[0], str):
-                params_with_string_metadata.append(param)
-
-    assert params_with_string_metadata == ["b"]
 
     f = _string_metadata_to_description_field(f)
     type_hints = get_type_hints(f, include_extras=True)
-    for param, annotation in type_hints.items():
-        if hasattr(annotation, "__metadata__"):
-            metadata = annotation.__metadata__
-            if metadata and isinstance(metadata[0], str):
-                raise AssertionError("The string metadata should have been replaced with Pydantic's Field")
 
     field_info = type_hints["b"].__metadata__[0]
     assert isinstance(field_info, Field)
     assert field_info.description == "b description"
+
+    if sys.version_info < (3, 11):
+        field_info = type_hints["c"].__args__[0].__metadata__[0]
+    else:
+        field_info = type_hints["c"].__metadata__[0]
+
+    assert isinstance(field_info, Field)
+    assert field_info.description == "c description"

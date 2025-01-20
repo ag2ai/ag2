@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Callable
+from typing import Annotated, Any, Callable, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,6 +23,7 @@ def f_with_annotated(
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     chat_ctx: Annotated[ChatContext, "Chat context"],
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     assert isinstance(chat_ctx, ChatContext)
     return a + ctx.b + c
@@ -33,6 +34,7 @@ async def f_with_annotated_async(
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     chat_ctx: ChatContext,
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     assert isinstance(chat_ctx, ChatContext)
     return a + ctx.b + c
@@ -43,6 +45,7 @@ def f_without_annotated(
     chat_ctx: ChatContext,
     ctx: MyContext = Depends(MyContext(b=3)),
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx.b + c
 
@@ -51,6 +54,7 @@ async def f_without_annotated_async(
     a: int,
     ctx: MyContext = Depends(MyContext(b=3)),
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx.b + c
 
@@ -59,6 +63,7 @@ def f_with_annotated_and_depends(
     a: int,
     ctx: MyContext = MyContext(b=4),
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx.b + c
 
@@ -67,6 +72,7 @@ async def f_with_annotated_and_depends_async(
     a: int,
     ctx: MyContext = MyContext(b=4),
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx.b + c
 
@@ -76,6 +82,7 @@ def f_with_multiple_depends(
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx.b + ctx2.b + c
 
@@ -85,6 +92,7 @@ async def f_with_multiple_depends_async(
     ctx: Annotated[MyContext, Depends(MyContext(b=2))],
     ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx.b + ctx2.b + c
 
@@ -93,6 +101,7 @@ def f_wihout_base_context(
     a: int,
     ctx: Annotated[int, Depends(lambda a: a + 2)],
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx + c
 
@@ -101,6 +110,7 @@ async def f_wihout_base_context_async(
     a: int,
     ctx: Annotated[int, Depends(lambda a: a + 2)],
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx + c
 
@@ -109,6 +119,7 @@ def f_with_default_depends(
     a: int,
     ctx: int = Depends(lambda a: a + 2),
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx + c
 
@@ -117,6 +128,7 @@ async def f_with_default_depends_async(
     a: int,
     ctx: int = Depends(lambda a: a + 2),
     c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
 ) -> int:
     return a + ctx + c
 
@@ -135,6 +147,11 @@ class TestDependencyInjection:
                         "properties": {
                             "a": {"type": "integer", "description": "a"},
                             "c": {"type": "integer", "description": "c description", "default": 3},
+                            "d": {
+                                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                                "description": "d description",
+                                "default": None,
+                            },
                         },
                         "required": ["a"],
                     },
@@ -224,7 +241,10 @@ class TestDependencyInjection:
 
             @user_proxy.register_for_execution()
             @agent.register_for_llm(description="Login function")
-            def login(user: Annotated[UserContext, Depends(user)]) -> str:
+            def login(
+                user: Annotated[UserContext, Depends(user)],
+                additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+            ) -> str:
                 return _login(user)
 
             user_proxy.initiate_chat(agent, message="Please login", max_turns=2)

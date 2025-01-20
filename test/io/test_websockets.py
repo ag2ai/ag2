@@ -12,22 +12,21 @@ from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
-from websockets.exceptions import ConnectionClosed
 
 import autogen
 from autogen.cache.cache import Cache
+from autogen.import_utils import optional_import_block
 from autogen.io import IOWebsockets
 from autogen.messages.base_message import BaseMessage, wrap_message
 
 from ..conftest import Credentials
 
 # Check if the websockets module is available
-try:
+with optional_import_block() as result:
+    from websockets.exceptions import ConnectionClosed
     from websockets.sync.client import connect as ws_connect
-except ImportError:  # pragma: no cover
-    skip_test = True
-else:
-    skip_test = False
+
+skip_test = not result.is_successful
 
 
 @wrap_message
