@@ -12,27 +12,26 @@ import uuid
 from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
-import markdownify
-import requests
-from bs4 import BeautifulSoup
+from .import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    import markdownify
+    import requests
+    from bs4 import BeautifulSoup
 
 # Optional PDF support
-IS_PDF_CAPABLE = False
-try:
+with optional_import_block() as result:
     import pdfminer
     import pdfminer.high_level
 
-    IS_PDF_CAPABLE = True
-except ModuleNotFoundError:
-    pass
+IS_PDF_CAPABLE = result.is_successful
 
 # Other optional dependencies
-try:
+with optional_import_block():
     import pathvalidate
-except ModuleNotFoundError:
-    pass
 
 
+@require_optional_import(["markdownify", "request", "bs4", "pathvalidate"], "websurfer")
 class SimpleTextBrowser:
     """(In preview) An extremely simple text-based web browser comparable to Lynx. Suitable for Agentic use."""
 
