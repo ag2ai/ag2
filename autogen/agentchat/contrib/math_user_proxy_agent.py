@@ -384,7 +384,6 @@ def get_from_dict_or_env(data: dict[str, Any], key: str, env_key: str, default: 
         )
 
 
-@require_optional_import("wolframalpha", "mathchat")
 class WolframAlphaAPIWrapper(BaseModel):
     """Wrapper for Wolfram Alpha.
 
@@ -408,6 +407,7 @@ class WolframAlphaAPIWrapper(BaseModel):
 
     @root_validator(skip_on_failure=True)
     @classmethod
+    @require_optional_import("wolframalpha", "mathchat")
     def validate_environment(cls, values: dict) -> dict:
         """Validate that api key and python package exists in environment."""
         wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
