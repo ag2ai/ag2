@@ -87,13 +87,13 @@ public partial class MistralClientAgentTests
             randomSeed: 0)
             .RegisterMessageConnector();
 
-        var weatherFunctionArgumets = """
+        var weatherFunctionArguments = """
             {
                 "city": "Seattle"
             }
             """;
-        var functionCallResult = await this.GetWeatherWrapper(weatherFunctionArgumets);
-        var toolCall = new ToolCall(this.GetWeatherFunctionContract.Name!, weatherFunctionArgumets)
+        var functionCallResult = await this.GetWeatherWrapper(weatherFunctionArguments);
+        var toolCall = new ToolCall(this.GetWeatherFunctionContract.Name!, weatherFunctionArguments)
         {
             ToolCallId = "012345678", // Mistral AI requires the tool call id to be a length of 9
             Result = functionCallResult,
@@ -101,7 +101,7 @@ public partial class MistralClientAgentTests
         IMessage[] chatHistory = [
             new TextMessage(Role.User, "what's the weather in Seattle?"),
             new ToolCallMessage([toolCall], from: agent.Name),
-            new ToolCallResultMessage([toolCall], weatherFunctionArgumets),
+            new ToolCallResultMessage([toolCall], weatherFunctionArguments),
         ];
 
         var reply = await agent.SendAsync(chatHistory: chatHistory);
