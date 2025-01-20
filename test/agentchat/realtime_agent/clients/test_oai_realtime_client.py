@@ -8,7 +8,7 @@ import pytest
 from anyio import move_on_after
 
 from autogen.agentchat.realtime_agent.clients import OpenAIRealtimeClient, RealtimeClientProtocol
-from autogen.agentchat.realtime_agent.realtime_events import SessionCreated, SessionUpdated
+from autogen.agentchat.realtime_agent.realtime_events import AudioDelta, SessionCreated, SessionUpdated
 
 from ....conftest import Credentials
 
@@ -83,10 +83,9 @@ class TestOAIRealtimeClient:
         assert scope.cancelled_caught
 
         # check that we received the expected two events
-        calls_kwargs = [arg_list.args for arg_list in mock.call_args_list]
-        assert isinstance(calls_kwargs[0][0], SessionCreated)
-        assert isinstance(calls_kwargs[1][0], SessionUpdated)
+        calls_args = [arg_list.args for arg_list in mock.call_args_list]
+        assert isinstance(calls_args[0][0], SessionCreated)
+        assert isinstance(calls_args[1][0], SessionUpdated)
 
-        print(calls_kwargs[3][0].raw_message)
-        assert calls_kwargs[3][0].raw_message["type"] == "conversation.item.created"
-        assert calls_kwargs[3][0].raw_message["item"]["content"][0]["text"] == "Hello, how are you?"
+        # check that we received the model audio response
+        assert isinstance(calls_args[-1][0], AudioDelta)

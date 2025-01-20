@@ -9,7 +9,7 @@ import pytest
 from anyio import move_on_after
 
 from autogen.agentchat.realtime_agent.clients import GeminiRealtimeClient, RealtimeClientProtocol
-from autogen.agentchat.realtime_agent.realtime_events import SessionCreated
+from autogen.agentchat.realtime_agent.realtime_events import AudioDelta, SessionCreated
 
 from ....conftest import Credentials
 
@@ -87,8 +87,5 @@ class TestGeminiRealtimeClient:
         calls_args = [arg_list.args for arg_list in mock.call_args_list]
         assert isinstance(calls_args[0][0], SessionCreated)
 
-        # assert calls_kwargs[2]["type"] == "error"
-        # assert calls_kwargs[2]["error"]["message"] == "Cancellation failed: no active response found"
-
-        # assert calls_kwargs[3]["type"] == "conversation.item.created"
-        # assert calls_kwargs[3]["item"]["content"][0]["text"] == "Hello, how are you?"
+        # check that we received the model audio response
+        assert isinstance(calls_args[-1][0], AudioDelta)
