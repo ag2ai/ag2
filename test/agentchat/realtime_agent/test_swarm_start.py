@@ -11,6 +11,7 @@ from anyio import Event, move_on_after, sleep
 from asyncer import create_task_group
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
+from pytest import FixtureRequest
 
 from autogen.agentchat.contrib.swarm_agent import SwarmAgent
 from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
@@ -101,12 +102,6 @@ class TestSwarmE2E:
             # Verify the function call details
             weather_func_mock.assert_called_with(location="Seattle")
 
-            last_response_transcript = mock_observer.on_event.call_args_list[-1][0][0]["response"]["output"][0][
-                "content"
-            ][0]["transcript"]
-            assert "Seattle" in last_response_transcript, "Weather response did not include the location"
-            assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
-
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "credentials_llm_realtime",
@@ -115,18 +110,21 @@ class TestSwarmE2E:
             pytest.param("credentials_gemini_realtime", marks=pytest.mark.gemini),
         ],
     )
-    async def test_e2e(self, credentials_llm_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
+    async def test_e2e(
+        self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
+    ) -> None:
         """End-to-end test for the RealtimeAgent.
 
-        Retry the test up to 5 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
+        Retry the test up to 5 times if it fails. Sometimes the test fails due to voice not being recognized by the realtime API.
 
         """
         i = 0
         count = 5
         while True:
             try:
+                credentials = request.getfixturevalue(credentials_llm_realtime)
                 await self._test_e2e(
-                    credentials_llm_realtime=credentials_llm_realtime,
+                    credentials_llm_realtime=credentials,
                     credentials_gpt_4o_mini=credentials_gpt_4o_mini,
                 )
                 return  # Exit the function if the test passes

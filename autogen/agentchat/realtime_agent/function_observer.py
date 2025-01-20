@@ -30,7 +30,7 @@ class FunctionObserver(RealtimeObserver):
             event (dict[str, Any]): The event from the OpenAI Realtime API.
         """
         if isinstance(event, FunctionCall):
-            self.logger.info(f"Received event: {event.type}", event)
+            self.logger.info("Received function call event")
             await self.call_function(
                 call_id=event.call_id,
                 name=event.name,

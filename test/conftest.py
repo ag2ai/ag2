@@ -309,14 +309,14 @@ class CensoredError(Exception):
         super().__init__(message)
 
 
-def pytest_runtest_makereport(item, call):
-    """
-    Hook to customize the exception output.
-    This is called after each test call.
-    """
-    if call.excinfo is not None:  # This means the test failed
-        original_message = "".join([repr(arg) for arg in call.excinfo.value.args])
+# def pytest_runtest_makereport(item, call):
+#     """
+#     Hook to customize the exception output.
+#     This is called after each test call.
+#     """
+#     if call.excinfo is not None:  # This means the test failed
+#         original_message = "".join([repr(arg) for arg in call.excinfo.value.args])
 
-        if Secrets.needs_sanitizing(original_message):
-            censored_exception = CensoredError(call.excinfo.value)
-            call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
+#         if Secrets.needs_sanitizing(original_message):
+#             censored_exception = CensoredError(call.excinfo.value)
+#             call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)

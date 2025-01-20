@@ -43,12 +43,12 @@ def _parse_oai_message(message: dict[str, Any]) -> RealtimeEvent:
         return AudioDelta(raw_message=message, delta=message["delta"], item_id=message["item_id"])
     elif message.get("type") == "input_audio_buffer.speech_started":
         return SpeechStarted(raw_message=message)
-    elif message.get("type") == "tool.call":
+    elif message.get("type") == "response.function_call_arguments.done":
         return FunctionCall(
             raw_message=message,
             call_id=message["call_id"],
             name=message["name"],
-            arguments=message["arguments"],
+            arguments=json.loads(message["arguments"]),
         )
     else:
         return RealtimeEvent(raw_message=message)
@@ -195,7 +195,6 @@ class OpenAIRealtimeClient:
         try:
             async for message in self._connection:
                 for event in self._parse_message(message.model_dump()):
-                    self.logger.debug(f"Received event: {event}")
                     yield event
 
         finally:

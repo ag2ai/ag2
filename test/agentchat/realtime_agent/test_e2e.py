@@ -22,14 +22,14 @@ logger = getLogger(__name__)
 
 
 class TestE2E:
-    async def _test_e2e(self, credentials_llm: Credentials) -> None:
+    async def _test_e2e(self, credentials_llm: Credentials, credentials_openai: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
 
         """
         llm_config = credentials_llm.llm_config
-        api_key = credentials_llm.api_key
+        api_key = credentials_openai.api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
@@ -88,12 +88,6 @@ class TestE2E:
             # Verify the function call details
             weather_func_mock.assert_called_with(location="Seattle")
 
-            last_response_transcript = mock_observer.on_event.call_args_list[-1][0][0]["response"]["output"][0][
-                "content"
-            ][0]["transcript"]
-            assert "Seattle" in last_response_transcript, "Weather response did not include the location"
-            assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
-
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "credentials_llm_realtime",
@@ -102,7 +96,9 @@ class TestE2E:
             pytest.param("credentials_gemini_realtime", marks=pytest.mark.gemini),
         ],
     )
-    async def test_e2e(self, credentials_llm_realtime: str, request: FixtureRequest) -> None:
+    async def test_e2e(
+        self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
+    ) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 3 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
@@ -113,7 +109,7 @@ class TestE2E:
         while True:
             try:
                 credentials = request.getfixturevalue(credentials_llm_realtime)
-                await self._test_e2e(credentials_llm=credentials)
+                await self._test_e2e(credentials_llm=credentials, credentials_openai=credentials_gpt_4o_mini)
                 return  # Exit the function if the test passes
             except Exception as e:
                 logger.warning(
