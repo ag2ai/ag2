@@ -232,6 +232,7 @@ class OpenAIRealtimeClient:
         return None
 
 
+@register_realtime_client()
 class OpenAIRealtimeWebRTCClient:
     """(Experimental) Client for OpenAI Realtime API that uses WebRTC protocol."""
 
