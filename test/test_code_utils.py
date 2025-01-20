@@ -31,11 +31,11 @@ from autogen.code_utils import (
     is_docker_running,
 )
 
-from .conftest import Credentials, skip_docker
+from .conftest import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-if skip_docker or not is_docker_running() or not decide_use_docker(use_docker=None):
+if not is_docker_running() or not decide_use_docker(use_docker=None):
     skip_docker_test = True
 else:
     skip_docker_test = False
@@ -179,6 +179,7 @@ def scrape(url):
     assert len(codeblocks) == 1 and codeblocks[0] == ("", "source setup.sh")
 
 
+@pytest.mark.docker
 @pytest.mark.skipif(skip_docker_test, reason="docker is not running or requested to skip docker tests")
 def test_execute_code(use_docker=True):
     # Test execute code and save the code to a file.
@@ -243,6 +244,7 @@ def test_execute_code(use_docker=True):
             assert isinstance(image, str)
 
 
+@pytest.mark.docker
 @pytest.mark.skipif(skip_docker_test, reason="docker is not running or requested to skip docker tests")
 def test_execute_code_with_custom_filename_on_docker():
     with tempfile.TemporaryDirectory() as tempdir:
@@ -257,6 +259,7 @@ def test_execute_code_with_custom_filename_on_docker():
         assert image == "python:codetest.py"
 
 
+@pytest.mark.docker
 @pytest.mark.skipif(
     skip_docker_test,
     reason="docker is not running or requested to skip docker tests",

@@ -11,16 +11,17 @@ from typing import Union
 
 import tiktoken
 
-try:
+from .import_utils import optional_import_block
+
+with optional_import_block() as result:
     from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image
 
-    img_util_imported = True
-except ImportError:
+img_util_imported = result.is_successful
+
+if not result.is_successful:
 
     def num_tokens_from_gpt_image(*args, **kwargs):
         return 0
-
-    img_util_imported = False
 
 
 logger = logging.getLogger(__name__)
@@ -156,6 +157,9 @@ def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0
         return _num_token_from_messages(messages, model="gpt-4-0613")
     elif "mistral-" in model or "mixtral-" in model:
         logger.info("Mistral.AI models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "deepseek" in model:
+        logger.info("Deepseek models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
     else:
         raise NotImplementedError(

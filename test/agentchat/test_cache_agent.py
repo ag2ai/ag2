@@ -14,7 +14,7 @@ import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 
-from ..conftest import Credentials, skip_redis
+from ..conftest import Credentials
 
 try:
     from openai import OpenAI  # noqa: F401
@@ -28,7 +28,7 @@ try:
 except ImportError:
     skip_redis_tests = True
 else:
-    skip_redis_tests = False or skip_redis
+    skip_redis_tests = False
 
 
 @pytest.mark.openai
@@ -54,19 +54,17 @@ def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     assert duration_with_warm_cache < duration_with_cold_cache
 
 
-@pytest.mark.openai
-@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
-def test_redis_cache(credentials_gpt_4o_mini: Credentials):
+def _test_redis_cache(credentials: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     start_time = time.time()
     with Cache.redis(random_cache_seed, redis_url) as cache_client:
-        cold_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
+        cold_cache_messages = run_conversation(credentials, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_conversation(credentials_gpt_4o_mini, cache_seed=None, cache=cache_client)
+        warm_cache_messages = run_conversation(credentials, cache_seed=None, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
@@ -74,16 +72,39 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
 
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     with Cache.redis(random_cache_seed, redis_url) as cache_client:
-        cold_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
+        cold_cache_messages = run_groupchat_conversation(credentials, cache=cache_client)
         end_time = time.time()
         duration_with_cold_cache = end_time - start_time
 
         start_time = time.time()
-        warm_cache_messages = run_groupchat_conversation(credentials_gpt_4o_mini, cache=cache_client)
+        warm_cache_messages = run_groupchat_conversation(credentials, cache=cache_client)
         end_time = time.time()
         duration_with_warm_cache = end_time - start_time
         assert cold_cache_messages == warm_cache_messages
         assert duration_with_warm_cache < duration_with_cold_cache
+
+
+@pytest.mark.openai
+@pytest.mark.redis
+@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
+def test_redis_cache(credentials_gpt_4o_mini: Credentials):
+    _test_redis_cache(credentials_gpt_4o_mini)
+
+
+@pytest.mark.skip(reason="Currently not working")
+@pytest.mark.gemini
+@pytest.mark.redis
+@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
+def test_redis_cache_gemini(credentials_gemini_pro: Credentials):
+    _test_redis_cache(credentials_gemini_pro)
+
+
+@pytest.mark.skip(reason="Currently not working")
+@pytest.mark.anthropic
+@pytest.mark.redis
+@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
+def test_redis_cache_anthropic(credentials_anthropic_claude_sonnet: Credentials):
+    _test_redis_cache(credentials_anthropic_claude_sonnet)
 
 
 @pytest.mark.openai

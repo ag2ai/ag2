@@ -31,6 +31,7 @@ class TestInteroperability:
     @pytest.mark.skipif(
         sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
     )
+    @pytest.mark.skipif(sys.platform == "win32", reason="This test is not supported on Windows")
     def test_crewai(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
         from crewai_tools import FileReadTool
@@ -47,7 +48,7 @@ class TestInteroperability:
             assert tool.name == "Read_a_file_s_content"
             assert (
                 tool.description
-                == "A tool that can be used to read None's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+                == "A tool that reads the content of a file. To use this tool, provide a 'file_path' parameter with the path to the file you want to read. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
             model_type = crewai_tool.args_schema

@@ -732,7 +732,7 @@ class TestGroupChatResumeMessage:
 class TestGroupChatRunChatMessage:
     def test_print(self, uuid: UUID) -> None:
         speaker = ConversableAgent(
-            "assistant uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+            "assistant_uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
         )
         silent = False
 
@@ -743,7 +743,7 @@ class TestGroupChatRunChatMessage:
             "type": "group_chat_run_chat",
             "content": {
                 "uuid": uuid,
-                "speaker_name": "assistant uno",
+                "speaker_name": "assistant_uno",
                 "verbose": True,
             },
         }
@@ -754,7 +754,7 @@ class TestGroupChatRunChatMessage:
 
         # print(mock.call_args_list)
 
-        expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant uno\n\x1b[0m", flush=True)]
+        expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant_uno\n\x1b[0m", flush=True)]
 
         assert mock.call_args_list == expected_call_args_list
 

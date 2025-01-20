@@ -151,14 +151,14 @@ class TestUpdateNavigation:
                     ],
                 },
                 {"group": "API Reference", "pages": ["PLACEHOLDER"]},
-                {
-                    "group": "AutoGen Studio",
-                    "pages": [
-                        "docs/autogen-studio/getting-started",
-                        "docs/autogen-studio/usage",
-                        "docs/autogen-studio/faqs",
-                    ],
-                },
+                # {
+                #     "group": "AutoGen Studio",
+                #     "pages": [
+                #         "docs/autogen-studio/getting-started",
+                #         "docs/autogen-studio/usage",
+                #         "docs/autogen-studio/faqs",
+                #     ],
+                # },
             ],
         }
 
@@ -172,7 +172,7 @@ class TestUpdateNavigation:
         {
             "title": "Using RetrieveChat Powered by MongoDB Atlas for Retrieve Augmented Code Generation and Question Answering",
             "link": "/notebooks/agentchat_RetrieveChat_mongodb",
-            "description": "Explore the use of AutoGen's RetrieveChat for tasks like code generation from docstrings, answering complex questions with human feedback, and exploiting features like Update Context, custom prompts, and few-shot learning.",
+            "description": "Explore the use of RetrieveChat for tasks like code generation from docstrings, answering complex questions with human feedback, and exploiting features like Update Context, custom prompts, and few-shot learning.",
             "image": null,
             "tags": [
                 "MongoDB",
@@ -182,7 +182,7 @@ class TestUpdateNavigation:
             "source": "/notebook/agentchat_RetrieveChat_mongodb.ipynb"
         },
         {
-            "title": "Mitigating Prompt hacking with JSON Mode in Autogen",
+            "title": "Mitigating Prompt hacking with JSON Mode",
             "link": "/notebooks/JSON_mode_example",
             "description": "Use JSON mode and Agent Descriptions to mitigate prompt manipulation and control speaker transition.",
             "image": null,
@@ -218,7 +218,6 @@ class TestUpdateNavigation:
             expected = {
                 "group": "Examples",
                 "pages": [
-                    "notebooks/Examples",
                     {
                         "group": "Examples by Notebook",
                         "pages": [

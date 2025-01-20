@@ -6,20 +6,17 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
 
 import autogen
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_async_get_human_input(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+async def _test_async_get_human_input(credentials: Credentials) -> None:
+    config_list = credentials.config_list
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -43,10 +40,15 @@ async def test_async_get_human_input(credentials_gpt_4o_mini: Credentials):
     print("Human input:", res.human_input)
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_async_max_turn(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_async_get_human_input(
+    credentials: Credentials,
+) -> None:
+    _test_async_get_human_input(credentials)
+
+
+async def _test_async_max_turn(credentials: Credentials):
+    config_list = credentials.config_list
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -73,6 +75,8 @@ async def test_async_max_turn(credentials_gpt_4o_mini: Credentials):
     )
 
 
-if __name__ == "__main__":
-    # asyncio.run(test_async_get_human_input())
-    asyncio.run(test_async_max_turn())
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_async_max_turn(
+    credentials: Credentials,
+) -> None:
+    _test_async_max_turn(credentials)

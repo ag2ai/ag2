@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 
 def get_market_news(ind, ind_upper):
@@ -56,10 +56,8 @@ def get_market_news(ind, ind_upper):
     return feeds_summary
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+async def _test_async_groupchat(credentials: Credentials):
+    config_list = credentials.config_list
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -90,10 +88,15 @@ async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_stream(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_async_groupchat(
+    credentials: Credentials,
+) -> None:
+    _test_async_groupchat(credentials)
+
+
+async def _test_stream(credentials: Credentials):
+    config_list = credentials.config_list
     data = asyncio.Future()
 
     async def add_stock_price_data():
@@ -158,6 +161,8 @@ async def test_stream(credentials_gpt_4o_mini: Credentials):
             # print("Chat summary and cost:", res.summary, res.cost)
 
 
-if __name__ == "__main__":
-    # asyncio.run(test_stream())
-    asyncio.run(test_async_groupchat())
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_stream(
+    credentials: Credentials,
+) -> None:
+    _test_stream(credentials)

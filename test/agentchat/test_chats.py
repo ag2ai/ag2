@@ -16,7 +16,7 @@ import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 
 @pytest.fixture
@@ -487,10 +487,9 @@ def test_chats_exceptions(credentials_gpt_4o: Credentials, tasks_work_dir: str):
         )
 
 
-@pytest.mark.openai
-def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str):
+def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
     llm_config = {
-        "config_list": credentials_gpt_4o_mini.config_list,
+        "config_list": credentials.config_list,
         "timeout": 120,
     }
 
@@ -541,6 +540,14 @@ def test_chats_w_func(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str)
         summary_method="reflection_with_llm",
     )
     print(res.summary, res.cost, res.chat_history)
+
+
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_chats_w_func(
+    credentials: Credentials,
+    tasks_work_dir: str,
+) -> None:
+    _test_chats_w_func(credentials, tasks_work_dir)
 
 
 @pytest.mark.openai

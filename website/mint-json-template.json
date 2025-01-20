@@ -171,14 +171,6 @@
       "pages": ["PLACEHOLDER"]
     },
     {
-      "group": "AutoGen Studio",
-      "pages": [
-        "docs/autogen-studio/getting-started",
-        "docs/autogen-studio/usage",
-        "docs/autogen-studio/faqs"
-      ]
-    },
-    {
       "group": "Ecosystem",
       "pages": [
         "docs/ecosystem/agentops",

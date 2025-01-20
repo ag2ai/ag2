@@ -18,11 +18,11 @@ USER autogen
 # Set environment variable
 # ENV OPENAI_API_KEY="{OpenAI-API-Key}"
 
-# Clone the AutoGen repository
+# Clone the AG2 repository
 RUN git clone https://github.com/ag2ai/ag2.git /home/autogen/ag2
 WORKDIR /home/autogen/ag2
 
-# Install AutoGen in editable mode with extra components
+# Install AG2 in editable mode with extra components
 RUN sudo pip install --upgrade pip && \
     sudo pip install -e .[test,teachable,lmm,retrievechat,mathchat,blendsearch] && \
     pip install pytest-xdist pytest-cov

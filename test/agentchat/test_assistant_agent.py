@@ -7,27 +7,21 @@
 #!/usr/bin/env python3 -m pytest
 
 import os
-import sys
 
 import pytest
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 here = os.path.abspath(os.path.dirname(__file__))
 
 
-@pytest.mark.openai
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows",
-)
-def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials):
+def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
 
-    config_list = credentials_gpt_4o_mini.config_list
+    config_list = credentials.config_list
 
     assistant = AssistantAgent(
         "assistant",
@@ -59,6 +53,13 @@ def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials):
     )
     print(conversations)
     print("Result summary:", res.summary)
+
+
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_ai_user_proxy_agent(
+    credentials: Credentials,
+) -> None:
+    _test_ai_user_proxy_agent(credentials)
 
 
 @pytest.mark.openai
