@@ -26,10 +26,11 @@ from flaml.tune.space import is_constant
 # Restore logging by removing the NullHandler
 flaml_logger.removeHandler(null_handler)
 
+from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import logging_formatter
 from .openai_utils import get_key
 
-try:
+with optional_import_block() as result:
     import diskcache
     import openai
     from openai import (
@@ -42,12 +43,24 @@ try:
     )
     from openai import Completion as OpenAICompletion
 
-    ERROR = None
-    assert openai.__version__ < "1"
-except (AssertionError, ImportError):
-    OpenAICompletion = object
-    # The autogen.Completion class requires openai<1
+ERROR = None
+if not result.is_successful:
     ERROR = AssertionError("(Deprecated) The autogen.Completion class requires openai<1 and diskcache. ")
+
+
+@require_optional_import("openai", "openai")
+def check_openai_version() -> Optional[AssertionError]:
+    try:
+        assert openai.__version__ < "1"
+        error = None
+    except AssertionError:
+        # The autogen.Completion class requires openai<1
+        error = AssertionError("(Deprecated) The autogen.Completion class requires openai<1 and diskcache. ")
+    return error
+
+
+ERROR = ERROR or check_openai_version()
+
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -57,6 +70,7 @@ if not logger.handlers:
     logger.addHandler(_ch)
 
 
+@require_optional_import(["openai", "diskcache"], "openai")
 class Completion(OpenAICompletion):
     """`(openai<1)` A class for OpenAI completion API.
 

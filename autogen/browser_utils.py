@@ -31,7 +31,7 @@ with optional_import_block():
     import pathvalidate
 
 
-@require_optional_import(["markdownify", "request", "bs4", "pathvalidate"], "websurfer")
+@require_optional_import(["markdownify", "request", "bs4", "pdfminer", "pathvalidate"], "websurfer")
 class SimpleTextBrowser:
     """(In preview) An extremely simple text-based web browser comparable to Lynx. Suitable for Agentic use."""
 

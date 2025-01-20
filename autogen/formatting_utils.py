@@ -9,9 +9,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Literal
 
-try:
+from .import_utils import optional_import_block
+
+with optional_import_block() as result:
     from termcolor import colored
-except ImportError:
+
+if not result.is_successful:
     # termcolor is an optional dependency - if it cannot be imported then no color is used.
     # Alternatively the envvar NO_COLOR can be used to disable color.
     # To allow for proper typing and for termcolor to be optional we need to re-define the types used in the lib here.

@@ -7,24 +7,26 @@
 import os
 from typing import Callable
 
+from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import chroma_results_to_query_results, filter_results_by_distance, get_logger
 
-try:
+with optional_import_block() as result:
     import chromadb
-
-    if chromadb.__version__ < "0.4.15":
-        raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
     import chromadb.errors
     import chromadb.utils.embedding_functions as ef
     from chromadb.api.models.Collection import Collection
-except ImportError:
-    raise ImportError("Please install chromadb: `pip install chromadb`")
+
+if result.is_successful:
+    if chromadb.__version__ < "0.4.15":
+        raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
+
 
 CHROMADB_MAX_BATCH_SIZE = os.environ.get("CHROMADB_MAX_BATCH_SIZE", 40000)
 logger = get_logger(__name__)
 
 
+@require_optional_import("chromadb", "retrievechat")
 class ChromaVectorDB(VectorDB):
     """A vector database that uses ChromaDB as the backend."""
 

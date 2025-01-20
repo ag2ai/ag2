@@ -28,12 +28,12 @@ from chromadb.api.types import QueryResult
 
 from autogen.token_count_utils import count_token
 
-try:
+from .import_utils import optional_import_block
+
+with optional_import_block() as result:
     from unstructured.partition.auto import partition
 
-    HAS_UNSTRUCTURED = True
-except ImportError:
-    HAS_UNSTRUCTURED = False
+HAS_UNSTRUCTURED = result.is_successful
 
 logger = logging.getLogger(__name__)
 TEXT_FORMATS = [

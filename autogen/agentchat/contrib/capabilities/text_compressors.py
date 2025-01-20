@@ -6,14 +6,17 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Optional, Protocol
 
-IMPORT_ERROR: Optional[Exception] = None
-try:
+from ....import_utils import optional_import_block, requires_optional_import
+
+with optional_import_block() as result:
     import llmlingua
-except ImportError:
+    from llmlingua import PromptCompressor
+
+if result.is_successful:
+    IMPORT_ERROR: Optional[Exception] = None
+else:
     IMPORT_ERROR = ImportError("LLMLingua is not installed. Please install it with `pip install autogen[long-context]`")
     PromptCompressor = object
-else:
-    from llmlingua import PromptCompressor
 
 
 class TextCompressor(Protocol):
@@ -27,6 +30,7 @@ class TextCompressor(Protocol):
         ...
 
 
+@requires_optional_import("llmlingua", "long-context")
 class LLMLingua:
     """Compresses text messages using LLMLingua for improved efficiency in processing and response generation.
 

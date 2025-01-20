@@ -9,13 +9,14 @@ import logging
 from collections.abc import Sequence
 from typing import Optional, Union
 
+from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
-try:
+with optional_import_block():
+    from fastembed import TextEmbedding
     from qdrant_client import QdrantClient, models
-except ImportError:
-    raise ImportError("Please install qdrant-client: `pip install qdrant-client`")
+
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,7 @@ class EmbeddingFunction(abc.ABC):
         raise NotImplementedError
 
 
+@require_optional_import("fastembed", "retrievechat-qdrant")
 class FastEmbedEmbeddingFunction(EmbeddingFunction):
     """Embedding function implementation using FastEmbed - https://qdrant.github.io/fastembed."""
 
@@ -57,12 +59,6 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
         Raises:
             ValueError: If the model_name is not in the format `<org>/<model>` e.g. BAAI/bge-small-en-v1.5.
         """
-        try:
-            from fastembed import TextEmbedding
-        except ImportError as e:
-            raise ValueError(
-                "The 'fastembed' package is not installed. Please install it with `pip install fastembed`",
-            ) from e
         self._batch_size = batch_size
         self._parallel = parallel
         self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir, threads=threads, **kwargs)
@@ -73,6 +69,7 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
         return [embedding.tolist() for embedding in embeddings]
 
 
+@require_optional_import("qdrant_client", "retrievechat-qdrant")
 class QdrantVectorDB(VectorDB):
     """A vector database implementation that uses Qdrant as the backend."""
 

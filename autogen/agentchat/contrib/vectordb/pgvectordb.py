@@ -12,24 +12,20 @@ from typing import Callable, Optional, Union
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
-try:
+with optional_import_block():
     import pgvector  # noqa: F401
-    from pgvector.psycopg import register_vector
-except ImportError:
-    raise ImportError("Please install pgvector: `pip install pgvector`")
-
-try:
     import psycopg
-except ImportError:
-    raise ImportError("Please install pgvector: `pip install psycopg`")
+    from pgvector.psycopg import register_vector
 
 PGVECTOR_MAX_BATCH_SIZE = os.environ.get("PGVECTOR_MAX_BATCH_SIZE", 40000)
 logger = get_logger(__name__)
 
 
+@require_optional_import("psycopg", "retrievechat-pgvector")
 class Collection:
     """A Collection object for PGVector.
 
@@ -543,6 +539,7 @@ class Collection:
         cursor.close()
 
 
+@require_optional_import(["pgvector", "psycopg"], "retrievechat-pgvector")
 class PGVectorDB(VectorDB):
     """A vector database that uses PGVector as the backend."""
 
