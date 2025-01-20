@@ -71,7 +71,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test,cosmosdb,interop,websurfer]
+          uv pip install --system -e .[test,cosmosdb,interop]
           python -c "import autogen"
           uv pip install --system pytest-cov>=5 mock
       - name: Install optional dependencies for code executors
