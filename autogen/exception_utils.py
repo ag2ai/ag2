@@ -4,11 +4,10 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Iterable, Union
+from typing import Any
 
 __all__ = [
     "AgentNameConflict",
-    "AutogenImportError",
     "InvalidCarryOverType",
     "ModelToolNotSupportedError",
     "NoEligibleSpeaker",
@@ -66,24 +65,4 @@ class ModelToolNotSupportedError(Exception):
         model: str,
     ):
         self.message = f"Tools are not supported with {model} models. Refer to the documentation at https://platform.openai.com/docs/guides/reasoning#limitations"
-        super().__init__(self.message)
-
-
-class AutogenImportError(ImportError):
-    """
-    Exception raised when a required module is not found.
-    """
-
-    def __init__(
-        self,
-        missing_modules: Union[str, Iterable[str]],
-        dep_target: str,
-    ):
-        if isinstance(missing_modules, str):
-            missing_modules = [missing_modules]
-
-        missing_modules_str = ", ".join(f"'{x}'" for x in missing_modules)
-        self.message = (
-            f"Missing imported module {missing_modules_str}, please install it using 'pip install ag2[{dep_target}]'"
-        )
         super().__init__(self.message)
