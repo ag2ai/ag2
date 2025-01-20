@@ -40,6 +40,7 @@ class TestCrewAIInteroperability:
         # runtime check
         assert isinstance(interop, Interoperable)
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="This test is not supported on Windows")
     def test_convert_tool(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             file_path = f"{tmp_dir}/test.txt"
