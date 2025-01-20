@@ -304,7 +304,6 @@ def _determine_next_agent(
         tool_execution._next_agent = None
 
         if not isinstance(next_agent, AfterWorkOption):
-
             # Check for string, access agent from group chat.
 
             if isinstance(next_agent, str):
@@ -331,7 +330,6 @@ def _determine_next_agent(
         raise ValueError("No swarm agent found in the message history")
 
     if after_work_condition is None:
-
         # If the user last spoke, return to the agent prior
         if (user_agent and last_speaker == user_agent) or groupchat.messages[-1]["role"] == "tool":
             return last_swarm_speaker

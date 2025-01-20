@@ -998,7 +998,6 @@ def test_swarmresult_afterworkoption():
     def call_determine_next_agent(
         next_agent_afterworkoption: AfterWorkOption, swarm_afterworkoption: AfterWorkOption
     ) -> Optional[Agent]:
-
         last_speaker_agent = SwarmAgent("dummy_1")
         tool_executor = SwarmAgent(__TOOL_EXECUTOR_NAME__)
         user = UserProxyAgent("User")
