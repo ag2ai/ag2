@@ -26,24 +26,29 @@ from flaml.tune.space import is_constant
 # Restore logging by removing the NullHandler
 flaml_logger.removeHandler(null_handler)
 
+from ..import_utils import optional_import_block
 from .client_utils import logging_formatter
 from .openai_utils import get_key
 
 try:
-    import diskcache
-    import openai
-    from openai import (
-        APIConnectionError,
-        APIError,
-        AuthenticationError,
-        BadRequestError,
-        RateLimitError,
-        Timeout,
-    )
-    from openai import Completion as OpenAICompletion
+    with optional_import_block() as result:
+        import diskcache
+        import openai
+        from openai import (
+            APIConnectionError,
+            APIError,
+            AuthenticationError,
+            BadRequestError,
+            RateLimitError,
+            Timeout,
+        )
+        from openai import Completion as OpenAICompletion
 
-    ERROR = None
-    assert openai.__version__ < "1"
+    if result.is_successful:
+        ERROR = None
+        assert openai.__version__ < "1"
+    else:
+        raise ImportError("openai<1 is required.")
 except (AssertionError, ImportError):
     OpenAICompletion = object
     # The autogen.Completion class requires openai<1

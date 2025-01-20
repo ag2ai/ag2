@@ -15,6 +15,9 @@ from tempfile import TemporaryDirectory
 import pytest
 import requests
 
+from autogen.browser_utils import SimpleTextBrowser
+from autogen.import_utils import optional_import_block
+
 BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
 BLOG_POST_STRING = "Large language models (LLMs) are powerful tools that can generate natural language texts for various applications, such as chatbots, summarization, translation, and more. GPT-4 is currently the state of the art LLM in the world. Is model selection irrelevant? What about inference parameters?"
@@ -33,12 +36,16 @@ BING_QUERY = "Microsoft"
 BING_TITLE = f"{BING_QUERY} - Search"
 BING_STRING = f"A Bing search for '{BING_QUERY}' found"
 
-try:
-    from autogen.browser_utils import SimpleTextBrowser
-except ImportError:
-    skip_all = True
-else:
-    skip_all = False
+
+with optional_import_block() as result:
+    import markdownify  # noqa: F401
+    import pathvalidate  # noqa: F401
+    import requests
+    from bs4 import BeautifulSoup  # noqa: F401
+
+
+skip_all = not result.is_successful
+
 
 try:
     BING_API_KEY = os.environ["BING_API_KEY"]
