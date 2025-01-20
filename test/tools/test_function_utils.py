@@ -128,7 +128,7 @@ def test_get_param_annotations() -> None:
     typed_signature = get_typed_signature(f)
     param_annotations = get_param_annotations(typed_signature)
 
-    assert param_annotations == expected, param_annotations
+    assert param_annotations == expected, param_annotations  # type: ignore[comparison-overlap]
 
 
 def test_get_missing_annotations() -> None:
