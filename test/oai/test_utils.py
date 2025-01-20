@@ -456,7 +456,7 @@ def test_reminder_to_update_deepseek_pricing_after_promotion():
     # Get the pricing tuple for deepseek-chat
     input_price, output_price = OAI_PRICE1K["deepseek-chat"]
 
-    # Before promo end date: Assert current promotional pricing
+    # After promo end date: Assert promotional pricing has been updated
     if current_time > promo_end_date:
         assert (input_price, output_price) != (0.00014, 0.00028), (
             f"DeepSeek promotional period ended on {promo_end_date.strftime('%B %d, %Y at %H:%M %Z')}. "
