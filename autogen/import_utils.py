@@ -14,8 +14,19 @@ __all__ = ["optional_import_block", "require_optional_import"]
 logger = getLogger(__name__)
 
 
+class Result:
+    def __init__(self):
+        self._failed: Optional[bool] = None
+
+    @property
+    def is_successful(self):
+        if self._failed is None:
+            raise ValueError("Result not set")
+        return not self._failed
+
+
 @contextmanager
-def optional_import_block() -> Generator[None, None, None]:
+def optional_import_block() -> Generator[Result, None, None]:
     """Guard a block of code to suppress ImportErrors
 
     A context manager to temporarily suppress ImportErrors.
@@ -28,12 +39,14 @@ def optional_import_block() -> Generator[None, None, None]:
         import some_other_module
     ```
     """
+    result = Result()
     try:
-        yield
+        yield result
+        result._failed = False
     except ImportError as e:
         # Ignore ImportErrors during this context
         logger.info(f"Ignoring ImportError: {e}")
-        pass
+        result._failed = True
 
 
 def get_missing_imports(modules: Union[str, Iterable[str]]):
@@ -198,9 +211,6 @@ class PatchProperty(PatchObject):
 
     def get_object_with_metadata(self) -> Any:
         return self.o.fget
-
-
-_count = 0
 
 
 @PatchObject.register()
