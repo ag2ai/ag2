@@ -218,7 +218,6 @@ class TestUpdateNavigation:
             expected = {
                 "group": "Examples",
                 "pages": [
-                    "notebooks/Examples",
                     {
                         "group": "Examples by Notebook",
                         "pages": [
