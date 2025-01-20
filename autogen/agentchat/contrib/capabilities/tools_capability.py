@@ -8,6 +8,8 @@ from autogen.tools import Tool
 
 class ToolsCapability:
     """Adding a list of tools as composable capabilities to a single agent.
+    This class can be inherited from to allow code to run at the point of creating or adding the capability.
+
     Note: both caller and executor of the tools are the same agent.
     """
 

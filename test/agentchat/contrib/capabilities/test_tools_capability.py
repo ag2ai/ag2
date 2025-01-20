@@ -38,5 +38,6 @@ class TestToolsCapability:
         assert "tools" not in test_agent.llm_config
         # Act
         tools_capability.add_to_agent(agent=test_agent)
-        # Assert
-        assert len(test_agent.llm_config["tools"]) == 1
+        # Assert that the tool was added for LLM and Execution
+        assert len(test_agent.llm_config["tools"]) == 1  # LLM
+        assert len(test_agent.function_map) == 1  # Execution
