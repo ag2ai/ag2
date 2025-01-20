@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib
 import inspect
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
@@ -41,6 +42,7 @@ def optional_import_block() -> Generator[Result, None, None]:
     """
     result = Result()
     try:
+        print("inside with")
         yield result
         result._failed = False
     except ImportError as e:
@@ -61,7 +63,18 @@ def get_missing_imports(modules: Union[str, Iterable[str]]):
     if isinstance(modules, str):
         modules = [modules]
 
-    return [m for m in modules if m not in globals()]
+    missing_modules = []
+    for module_name in modules:
+        try:
+            importlib.import_module(module_name)
+        except ImportError:
+            missing_modules.append(module_name)
+    return missing_modules
+
+    # to_return = [m for m in modules if m not in globals()]
+    # print(f"{modules=}")
+    # print(f"{to_return=}")
+    # return to_return
 
 
 T = TypeVar("T")
