@@ -84,6 +84,13 @@ def test_get_parameter_json_schema() -> None:
         "description": "parameter a",
         "default": "3.14",
     }
+    assert get_parameter_json_schema(
+        "d", Annotated[Optional[str], AG2Field(description="parameter d")], {"d": None}
+    ) == {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "default": None,
+        "description": "parameter d",
+    }
 
     class B(BaseModel):
         b: float
