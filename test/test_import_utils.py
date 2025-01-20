@@ -18,10 +18,16 @@ class TestOptionalImportBlock:
             import some_other_module
 
         assert ast is not None
-        with pytest.raises(UnboundLocalError, match="local variable 'some_module' referenced before assignment"):
+        with pytest.raises(
+            UnboundLocalError,
+            match=r"(local variable 'some_module' referenced before assignment|cannot access local variable 'some_module' where it is not associated with a value)",
+        ):
             some_module
 
-        with pytest.raises(UnboundLocalError, match="local variable 'some_other_module' referenced before assignment"):
+        with pytest.raises(
+            UnboundLocalError,
+            match=r"(local variable 'some_other_module' referenced before assignment|cannot access local variable 'some_other_module' where it is not associated with a value)",
+        ):
             some_other_module
 
 
