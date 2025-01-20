@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Optional, Protocol
 
-from ....import_utils import optional_import_block, requires_optional_import
+from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block() as result:
     import llmlingua
@@ -30,7 +30,7 @@ class TextCompressor(Protocol):
         ...
 
 
-@requires_optional_import("llmlingua", "long-context")
+@require_optional_import("llmlingua", "long-context")
 class LLMLingua:
     """Compresses text messages using LLMLingua for improved efficiency in processing and response generation.
 
