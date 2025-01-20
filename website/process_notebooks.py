@@ -592,7 +592,7 @@ def start_thread_to_terminate_when_parent_process_dies(ppid: int):
 
 def copy_examples_mdx_files(website_dir: str) -> None:
     # The mdx files to copy to the notebooks directory
-    example_section_mdx_files = ["Examples", "Gallery", "Notebooks"]
+    example_section_mdx_files = ["Gallery", "Notebooks"]
 
     # Create notebooks directory if it doesn't exist
     website_dir = Path(website_dir)
@@ -669,7 +669,7 @@ def extract_example_group(metadata_path):
         ],
     }
 
-    example_group = {"group": "Examples", "pages": ["notebooks/Examples", notebooks_entry, "notebooks/Gallery"]}
+    example_group = {"group": "Examples", "pages": [notebooks_entry, "notebooks/Gallery"]}
 
     return example_group
 
