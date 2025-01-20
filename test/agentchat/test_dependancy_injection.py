@@ -241,7 +241,10 @@ class TestDependencyInjection:
 
             @user_proxy.register_for_execution()
             @agent.register_for_llm(description="Login function")
-            def login(user: Annotated[UserContext, Depends(user)]) -> str:
+            def login(
+                user: Annotated[UserContext, Depends(user)],
+                additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+            ) -> str:
                 return _login(user)
 
             user_proxy.initiate_chat(agent, message="Please login", max_turns=2)

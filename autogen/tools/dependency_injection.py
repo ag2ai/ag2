@@ -160,10 +160,12 @@ def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[
         if hasattr(annotation, "__metadata__"):
             metadata = annotation.__metadata__
             if metadata and isinstance(metadata[0], str):
-                # Replace string metadata with DescriptionField
+                # Replace string metadata with Field
                 annotation.__metadata__ = (Field(description=metadata[0]),)
         elif hasattr(annotation, "__args__") and hasattr(annotation.__args__[0], "__metadata__"):
-            annotation.__args__[0].__metadata__ = (Field(description=annotation.__args__[0].__metadata__[0]),)
+            metadata = annotation.__args__[0].__metadata__
+            if metadata and isinstance(metadata[0], str):
+                annotation.__args__[0].__metadata__ = (Field(description=metadata[0]),)
     return func
 
 
