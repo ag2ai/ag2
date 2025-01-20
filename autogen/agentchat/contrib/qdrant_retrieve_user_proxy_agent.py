@@ -15,17 +15,17 @@ from autogen.agentchat.contrib.vectordb.utils import (
 )
 from autogen.retrieve_utils import TEXT_FORMATS, get_files_from_dir, split_files_to_chunks
 
+from ...import_utils import optional_import_block, require_optional_import
+
 logger = get_logger(__name__)
 
-try:
+with optional_import_block():
     import fastembed  # noqa: F401
     from qdrant_client import QdrantClient, models
     from qdrant_client.fastembed_common import QueryResponse
-except ImportError as e:
-    logger.fatal("Failed to import qdrant_client with fastembed. Try running 'pip install qdrant_client[fastembed]'")
-    raise e
 
 
+@require_optional_import(["fastembed", "qdrant_client"], "retrievechat-qdrant")
 class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
     def __init__(
         self,
@@ -158,6 +158,7 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
         self._results = results
 
 
+@require_optional_import(["fastembed", "qdrant_client"], "retrievechat-qdrant")
 def create_qdrant_from_dir(
     dir_path: str,
     max_tokens: int = 4000,
@@ -263,6 +264,7 @@ def create_qdrant_from_dir(
         )
 
 
+@require_optional_import("qdrant_client", "retrievechat-qdrant")
 def query_qdrant(
     query_texts: list[str],
     n_results: int = 10,

@@ -9,6 +9,7 @@ from typing import Any
 __all__ = [
     "AgentNameConflict",
     "InvalidCarryOverType",
+    "ModelToolNotSupportedError",
     "NoEligibleSpeaker",
     "SenderRequired",
     "UndefinedNextAgent",

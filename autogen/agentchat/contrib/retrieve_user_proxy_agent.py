@@ -12,10 +12,6 @@ from typing import Any, Callable, Literal, Optional, Union
 
 from IPython import get_ipython
 
-try:
-    import chromadb
-except ImportError as e:
-    raise ImportError(f"{e}. You can try `pip install autogen[retrievechat]`, or install `chromadb` manually.")
 from autogen.agentchat import UserProxyAgent
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.contrib.vectordb.base import Document, QueryResults, VectorDB, VectorDBFactory
@@ -35,6 +31,10 @@ from autogen.retrieve_utils import (
 from autogen.token_count_utils import count_token
 
 from ...formatting_utils import colored
+from ...import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    import chromadb
 
 logger = get_logger(__name__)
 
@@ -91,6 +91,7 @@ HASH_LENGTH = int(os.environ.get("HASH_LENGTH", 8))
 UPDATE_CONTEXT_IN_PROMPT = "you should reply exactly `UPDATE CONTEXT`"
 
 
+@require_optional_import("chromadb", "retrievechat")
 class RetrieveUserProxyAgent(UserProxyAgent):
     """(In preview) The Retrieval-Augmented User Proxy retrieves document chunks based on the embedding
     similarity, and sends them along with the question to the Retrieval-Augmented Assistant
