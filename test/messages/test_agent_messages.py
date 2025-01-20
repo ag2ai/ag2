@@ -319,6 +319,19 @@ class TestTextMessage:
                 },
                 "Please extract table from the following image and convert it to Markdown.",
             ),
+            (
+                {
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png"
+                            },
+                        }
+                    ]
+                },
+                "<image>",
+            ),
         ],
     )
     def test_print_messages(
