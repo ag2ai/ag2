@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, Optional
 
+from ..realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
 from .realtime_client import Role, register_realtime_client
 
 if TYPE_CHECKING:
@@ -179,7 +180,7 @@ class GeminiRealtimeClient:
         finally:
             self._connection = None
 
-    async def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
+    async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read Audio Events"""
         if self._connection is None:
             raise RuntimeError("Client is not connected, call connect() first.")
@@ -187,54 +188,39 @@ class GeminiRealtimeClient:
 
         self._is_reading_events = True
 
-        async for raw_response in self.connection:
-            response = json.loads(raw_response.decode("ascii")) if isinstance(raw_response, bytes) else raw_response
-            try:
-                events = self.dispatch(response)
-                for event in events:
-                    yield event
-            except (KeyError, ValueError):
-                self.logger.error(f"Failed to parse message: {response}")
+        async for raw_message in self.connection:
+            message = json.loads(raw_message.decode("ascii")) if isinstance(raw_message, bytes) else raw_message
+            events = self._parse_message(message)
+            for event in events:
+                yield event
 
-    def dispatch(self, response: dict[str, Any]) -> list[dict[str, Any]]:
+    def _parse_message(self, response: dict[str, Any]) -> list[RealtimeEvent]:
         # Determine the type of message and dispatch it to the appropriate handler
         if "serverContent" in response and "modelTurn" in response["serverContent"]:
-            return self.parse_audio_response(response)
+            b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
+            return [
+                AudioDelta(
+                    delta=b64data,
+                    item_id=None,
+                    raw_message=response,
+                )
+            ]
         elif "toolCall" in response:
-            return self.parse_tool_call(response)
+            return [
+                FunctionCall(
+                    raw_message=response,
+                    call_id=call["id"],
+                    name=call["name"],
+                    arguments=call["args"],
+                )
+                for call in response["toolCall"]["functionCalls"]
+            ]
         elif "setupComplete" in response:
-            return self.parse_setup_complete(response)
+            return [
+                SessionCreated(raw_message=response),
+            ]
         else:
-            raise ValueError("Unknown message type")
-
-    def parse_setup_complete(self, response: dict[str, Any]) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "session.created",
-            }
-        ]
-
-    def parse_audio_response(self, response: dict[str, Any]) -> list[dict[str, Any]]:
-        # Handle audio response
-        b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
-        return [
-            {
-                "type": "response.audio.delta",
-                "delta": b64data,
-                "item_id": None,
-            }
-        ]
-
-    def parse_tool_call(self, response: dict[str, Any]) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "response.function_call_arguments.done",
-                "name": call["name"],
-                "arguments": json.dumps(call["args"]),
-                "call_id": call["id"],
-            }
-            for call in response["toolCall"]["functionCalls"]
-        ]
+            return [RealtimeEvent(raw_message=response)]
 
     @classmethod
     def get_factory(

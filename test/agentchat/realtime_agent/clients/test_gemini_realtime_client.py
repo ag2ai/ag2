@@ -9,6 +9,7 @@ import pytest
 from anyio import move_on_after
 
 from autogen.agentchat.realtime_agent.clients import GeminiRealtimeClient, RealtimeClientProtocol
+from autogen.agentchat.realtime_agent.realtime_events import SessionCreated
 
 from ....conftest import Credentials
 
@@ -53,15 +54,15 @@ class TestGeminiRealtimeClient:
 
                 async for event in client.read_events():
                     print(f"-> Received event: {event}")
-                    mock(**event)
+                    mock(event)
 
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
         # check that we received the expected session.created event
-        calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
+        calls_args = [arg_list.args for arg_list in mock.call_args_list]
 
-        assert calls_kwargs[0]["type"] == "session.created"
+        assert isinstance(calls_args[0][0], SessionCreated)
 
     @pytest.mark.gemini
     @pytest.mark.asyncio
@@ -74,17 +75,17 @@ class TestGeminiRealtimeClient:
                 print("Reading events...")
                 async for event in client.read_events():
                     print(f"-> Received event: {event}")
-                    mock(**event)
+                    mock(event)
 
-                    if event["type"] == "session.created":
+                    if isinstance(event, SessionCreated):
                         await client.send_text(role="user", text="Hello, how are you?")
 
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
         # check that we received the expected two events
-        calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
-        assert calls_kwargs[0]["type"] == "session.created"
+        calls_args = [arg_list.args for arg_list in mock.call_args_list]
+        assert isinstance(calls_args[0][0], SessionCreated)
 
         # assert calls_kwargs[2]["type"] == "error"
         # assert calls_kwargs[2]["error"]["message"] == "Cancellation failed: no active response found"

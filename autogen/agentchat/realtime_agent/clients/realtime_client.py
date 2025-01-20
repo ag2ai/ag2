@@ -6,6 +6,8 @@ from collections.abc import AsyncGenerator
 from logging import Logger
 from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, Type, TypeVar, runtime_checkable
 
+from ..realtime_events import RealtimeEvent
+
 __all__ = ["RealtimeClientProtocol", "Role", "get_client", "register_realtime_client"]
 
 # define role literal type for typing
@@ -60,8 +62,19 @@ class RealtimeClientProtocol(Protocol):
 
     def connect(self) -> AsyncContextManager[None]: ...
 
-    def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
+    def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read messages from a Realtime API."""
+        ...
+
+    def _parse_message(self, message: dict[str, Any]) -> list[RealtimeEvent]:
+        """Parse a message from a Realtime API.
+
+        Args:
+            message (dict[str, Any]): The message to parse.
+
+        Returns:
+            list[RealtimeEvent]: The parsed events.
+        """
         ...
 
     @classmethod

@@ -13,6 +13,7 @@ import httpx
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 
+from ..realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated, SessionUpdated, SpeechStarted
 from .realtime_client import Role, register_realtime_client
 
 if TYPE_CHECKING:
@@ -23,6 +24,34 @@ if TYPE_CHECKING:
 __all__ = ["OpenAIRealtimeClient", "Role"]
 
 global_logger = getLogger(__name__)
+
+
+def _parse_oai_message(message: dict[str, Any]) -> RealtimeEvent:
+    """Parse a message from the OpenAI Realtime API.
+
+    Args:
+        message (dict[str, Any]): The message to parse.
+
+    Returns:
+        RealtimeEvent: The parsed event.
+    """
+    if message.get("type") == "session.created":
+        return SessionCreated(raw_message=message)
+    elif message.get("type") == "session.updated":
+        return SessionUpdated(raw_message=message)
+    elif message.get("type") == "response.audio.delta":
+        return AudioDelta(raw_message=message, delta=message["delta"], item_id=message["item_id"])
+    elif message.get("type") == "input_audio_buffer.speech_started":
+        return SpeechStarted(raw_message=message)
+    elif message.get("type") == "tool.call":
+        return FunctionCall(
+            raw_message=message,
+            call_id=message["call_id"],
+            name=message["name"],
+            arguments=message["arguments"],
+        )
+    else:
+        return RealtimeEvent(raw_message=message)
 
 
 @register_realtime_client()
@@ -158,17 +187,29 @@ class OpenAIRealtimeClient:
         finally:
             self._connection = None
 
-    async def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
+    async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read messages from the OpenAI Realtime API."""
         if self._connection is None:
             raise RuntimeError("Client is not connected, call connect() first.")
 
         try:
-            async for event in self._connection:
-                yield event.model_dump()
+            async for message in self._connection:
+                for event in self._parse_message(message.model_dump()):
+                    yield event
 
         finally:
             self._connection = None
+
+    def _parse_message(self, message: dict[str, Any]) -> list[RealtimeEvent]:
+        """Parse a message from the OpenAI Realtime API.
+
+        Args:
+            message (dict[str, Any]): The message to parse.
+
+        Returns:
+            RealtimeEvent: The parsed event.
+        """
+        return [_parse_oai_message(message)]
 
     @classmethod
     def get_factory(
@@ -340,22 +381,31 @@ class OpenAIRealtimeWebRTCClient:
         finally:
             pass
 
-    async def read_events(self) -> AsyncGenerator[dict[str, Any], None]:
+    async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read messages from the OpenAI Realtime API.
         Again, in case of WebRTC, we do not read OpenAI messages directly since we
         do not hold connection to OpenAI. Instead we read messages from the websocket, and javascript
         client on the other side of the websocket that is connected to OpenAI is relaying events to us.
         """
-        logger = self.logger
         while True:
             try:
                 message_json = await self._websocket.receive_text()
                 message = json.loads(message_json)
-                if "function" in message["type"]:
-                    logger.info("Received function message", message)
-                yield message
+                for event in self._parse_message(message):
+                    yield event
             except Exception:
                 break
+
+    def _parse_message(self, message: dict[str, Any]) -> list[RealtimeEvent]:
+        """Parse a message from the OpenAI Realtime API.
+
+        Args:
+            message (dict[str, Any]): The message to parse.
+
+        Returns:
+            RealtimeEvent: The parsed event.
+        """
+        return [_parse_oai_message(message)]
 
     @classmethod
     def get_factory(
