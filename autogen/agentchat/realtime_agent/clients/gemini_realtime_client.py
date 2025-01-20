@@ -40,7 +40,6 @@ class GeminiRealtimeClient:
         self,
         *,
         llm_config: dict[str, Any],
-        voice: str,
         logger: Optional[Logger] = None,
     ) -> None:
         """(Experimental) Client for Gemini Realtime API.
@@ -49,12 +48,12 @@ class GeminiRealtimeClient:
             llm_config (dict[str, Any]): The config for the client.
         """
         self._llm_config = llm_config
-        self._voice = voice
         self._logger = logger
         self._connection: Optional["ClientConnection"] = None
         config = llm_config["config_list"][0]
 
         self._model: str = config["model"]
+        self._voice = config.get("voice", "charon")
         self._temperature: float = config.get("temperature", 0.8)  # type: ignore[union-attr]
 
         self._response_modality = "AUDIO"
@@ -227,7 +226,7 @@ class GeminiRealtimeClient:
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any
+        cls, llm_config: dict[str, Any], logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
@@ -241,10 +240,10 @@ class GeminiRealtimeClient:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
         if llm_config["config_list"][0].get("api_type") == "google" and list(kwargs.keys()) == []:
-            return lambda: GeminiRealtimeClient(llm_config=llm_config, voice=voice, logger=logger, **kwargs)
+            return lambda: GeminiRealtimeClient(llm_config=llm_config, logger=logger, **kwargs)
         return None
 
 
 # needed for mypy to check if GeminiRealtimeClient implements RealtimeClientProtocol
 if TYPE_CHECKING:
-    _client: RealtimeClientProtocol = GeminiRealtimeClient(llm_config={}, voice="Charon")
+    _client: RealtimeClientProtocol = GeminiRealtimeClient(llm_config={})

@@ -62,7 +62,6 @@ class OpenAIRealtimeClient:
         self,
         *,
         llm_config: dict[str, Any],
-        voice: str,
         logger: Optional[Logger] = None,
     ) -> None:
         """(Experimental) Client for OpenAI Realtime API.
@@ -71,13 +70,14 @@ class OpenAIRealtimeClient:
             llm_config (dict[str, Any]): The config for the client.
         """
         self._llm_config = llm_config
-        self._voice = voice
         self._logger = logger
 
         self._connection: Optional[AsyncRealtimeConnection] = None
 
         config = llm_config["config_list"][0]
         self._model: str = config["model"]
+        self._voice: str = config.get("voice", "alloy")
+
         self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
 
         self._client = AsyncOpenAI(
@@ -213,7 +213,7 @@ class OpenAIRealtimeClient:
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any
+        cls, llm_config: dict[str, Any], logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
@@ -227,7 +227,7 @@ class OpenAIRealtimeClient:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
         if llm_config["config_list"][0].get("api_type", "openai") == "openai" and list(kwargs.keys()) == []:
-            return lambda: OpenAIRealtimeClient(llm_config=llm_config, voice=voice, logger=logger, **kwargs)
+            return lambda: OpenAIRealtimeClient(llm_config=llm_config, logger=logger, **kwargs)
         return None
 
 
@@ -239,7 +239,6 @@ class OpenAIRealtimeWebRTCClient:
         self,
         *,
         llm_config: dict[str, Any],
-        voice: str,
         websocket: "WebSocket",
         logger: Optional[Logger] = None,
     ) -> None:
@@ -249,12 +248,12 @@ class OpenAIRealtimeWebRTCClient:
             llm_config (dict[str, Any]): The config for the client.
         """
         self._llm_config = llm_config
-        self._voice = voice
         self._logger = logger
         self._websocket = websocket
 
         config = llm_config["config_list"][0]
         self._model: str = config["model"]
+        self._voice: str = config.get("voice", "alloy")
         self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
         self._config = config
 
@@ -410,7 +409,7 @@ class OpenAIRealtimeWebRTCClient:
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any
+        cls, llm_config: dict[str, Any], logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
@@ -424,14 +423,14 @@ class OpenAIRealtimeWebRTCClient:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
         """
         if llm_config["config_list"][0].get("api_type", "openai") == "openai" and list(kwargs.keys()) == ["websocket"]:
-            return lambda: OpenAIRealtimeWebRTCClient(llm_config=llm_config, voice=voice, logger=logger, **kwargs)
+            return lambda: OpenAIRealtimeWebRTCClient(llm_config=llm_config, logger=logger, **kwargs)
 
         return None
 
 
 # needed for mypy to check if OpenAIRealtimeWebRTCClient implements RealtimeClientProtocol
 if TYPE_CHECKING:
-    _client: RealtimeClientProtocol = OpenAIRealtimeClient(llm_config={}, voice="alloy")
+    _client: RealtimeClientProtocol = OpenAIRealtimeClient(llm_config={})
 
     def _rtc_client(websocket: "WebSocket") -> RealtimeClientProtocol:
-        return OpenAIRealtimeWebRTCClient(llm_config={}, voice="alloy", websocket=websocket)
+        return OpenAIRealtimeWebRTCClient(llm_config={}, websocket=websocket)

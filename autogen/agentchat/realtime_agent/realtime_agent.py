@@ -37,7 +37,6 @@ class RealtimeAgent:
         audio_adapter: Optional[RealtimeObserver] = None,
         system_message: str = "You are a helpful AI Assistant.",
         llm_config: dict[str, Any],
-        voice: str = "alloy",
         logger: Optional[Logger] = None,
         **client_kwargs: Any,
     ):
@@ -48,7 +47,6 @@ class RealtimeAgent:
             audio_adapter (Optional[RealtimeObserver] = None): The audio adapter for the agent.
             system_message (str): The system message for the agent.
             llm_config (dict[str, Any], bool): The config for the agent.
-            voice (str): The voice for the agent.
             logger (Optional[Logger]): The logger for the agent.
             **client_kwargs (Any): The keyword arguments for the client.
         """
@@ -57,7 +55,7 @@ class RealtimeAgent:
         self._system_message = system_message
 
         self._realtime_client: RealtimeClientProtocol = get_client(
-            llm_config=llm_config, voice=voice, logger=self.logger, **client_kwargs
+            llm_config=llm_config, logger=self.logger, **client_kwargs
         )
 
         self._registred_realtime_tools: dict[str, Tool] = {}

@@ -19,7 +19,6 @@ class TestOAIRealtimeClient:
         llm_config = credentials_gpt_4o_realtime.llm_config
         return OpenAIRealtimeClient(
             llm_config=llm_config,
-            voice="alloy",
         )
 
     def test_init(self, mock_credentials: Credentials) -> None:
@@ -27,7 +26,6 @@ class TestOAIRealtimeClient:
 
         client = OpenAIRealtimeClient(
             llm_config=llm_config,
-            voice="alloy",
         )
         assert isinstance(client, RealtimeClientProtocol)
 

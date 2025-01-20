@@ -79,14 +79,12 @@ class RealtimeClientProtocol(Protocol):
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any
+        cls, llm_config: dict[str, Any], logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
         Args:
-            model (str): The model to create the client for.
-            voice (str): The voice to use.
-            system_message (str): The system message to use.
+            llm_config (dict[str, Any]): The config for the client.
             kwargs (Any): Additional arguments.
 
         Returns:
@@ -125,13 +123,11 @@ def register_realtime_client() -> Callable[[Type[T]], Type[T]]:
     return decorator
 
 
-def get_client(llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
+def get_client(llm_config: dict[str, Any], logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
     """Get a registered Realtime API client.
 
     Args:
         llm_config (dict[str, Any]): The config for the client.
-        voice (str): The voice to use.
-        system_message (str): The system message to use.
         kwargs (Any): Additional arguments.
 
     Returns:
@@ -139,7 +135,7 @@ def get_client(llm_config: dict[str, Any], voice: str, logger: Logger, **kwargs:
     """
     global _realtime_client_classes
     for _, client_cls in _realtime_client_classes.items():
-        factory = client_cls.get_factory(llm_config=llm_config, voice=voice, logger=logger, **kwargs)
+        factory = client_cls.get_factory(llm_config=llm_config, logger=logger, **kwargs)
         if factory:
             return factory()
 

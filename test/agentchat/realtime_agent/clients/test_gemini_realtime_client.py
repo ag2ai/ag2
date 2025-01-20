@@ -20,7 +20,6 @@ class TestGeminiRealtimeClient:
         llm_config = credentials_gemini_realtime.llm_config
         return GeminiRealtimeClient(
             llm_config=llm_config,
-            voice="charon",
         )
 
     def test_init(self, mock_credentials: Credentials) -> None:
@@ -28,7 +27,6 @@ class TestGeminiRealtimeClient:
 
         client = GeminiRealtimeClient(
             llm_config=llm_config,
-            voice="charon",
         )
         assert isinstance(client, RealtimeClientProtocol)
 
