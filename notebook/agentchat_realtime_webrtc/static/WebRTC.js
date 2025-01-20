@@ -4,8 +4,14 @@ export async function init(webSocketUrl) {
     const pc = new RTCPeerConnection();
     let dc = null;  // data connection
     const quedMessages = [] // queue messages from the server before the data connection is open
+    let resolve, reject
+    let completed = new Promise((_resolve, _reject) => {
+            resolve = _resolve
+            reject = _reject
+    })
 
-    async function openRTC(init_message) {
+
+    async function openRTC(init_message, resolve, reject) {
         const data = init_message.config;
         const EPHEMERAL_KEY = data.client_secret.value;
 
@@ -54,18 +60,19 @@ export async function init(webSocketUrl) {
         };
         await pc.setRemoteDescription(answer);
         console.log("Connected to OpenAI WebRTC")
-        _dc.onopen = e => { 
+        _dc.onopen = e => {
             console.log("Data connection opened.")
             for (const init_chunk of init_message.init) {
-                _dc.send(JSON.stringify(init_chunk)) 
+                _dc.send(JSON.stringify(init_chunk))
             }
             console.log("Sent init chunks to OpenAI WebRTC")
             for (const qmsg of quedMessages) {
-                _dc.send(qmsg) 
+                _dc.send(qmsg)
             }
             console.log("Sent queued messages to OpenAI WebRTC")
             microphone.enabled = true;
             dc = _dc
+            resolve()
         }
     }
 
@@ -80,7 +87,7 @@ export async function init(webSocketUrl) {
         console.info("Received Message from AG2 backend", message)
         const type = message.type
         if (type == "ag2.init") {
-            await openRTC(message)
+            await openRTC(message, resolve, reject)
             return
         }
         const messageJSON = JSON.stringify(message)
@@ -91,4 +98,6 @@ export async function init(webSocketUrl) {
             quedMessages.push(messageJSON)
         }
     }
+    await completed
+    console.log("WebRTC fully opertional")
 }
