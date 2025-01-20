@@ -5,6 +5,7 @@
 import sys
 from typing import Any, Optional
 
+from ...import_utils import optional_import_block
 from ...tools import Tool
 from ..registry import register_interoperable_class
 
@@ -13,8 +14,7 @@ __all__ = ["LangChainInteroperability"]
 
 @register_interoperable_class("langchain")
 class LangChainInteroperability:
-    """
-    A class implementing the `Interoperable` protocol for converting Langchain tools
+    """A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.
 
     This class takes a `LangchainTool` and converts it into a standard `Tool` object,
@@ -24,8 +24,7 @@ class LangChainInteroperability:
 
     @classmethod
     def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
-        """
-        Converts a given Langchain tool into a general `Tool` format.
+        """Converts a given Langchain tool into a general `Tool` format.
 
         This method verifies that the provided tool is a valid `LangchainTool`,
         processes the tool's input and description, and returns a standardized
@@ -66,9 +65,10 @@ class LangChainInteroperability:
         if sys.version_info < (3, 9):
             return "This submodule is only supported for Python versions 3.9 and above"
 
-        try:
-            import langchain_core.tools
-        except ImportError:
+        with optional_import_block() as result:
+            import langchain_core.tools  # noqa: F401
+
+        if not result.is_successful:
             return (
                 "Please install `interop-langchain` extra to use this module:\n\n\tpip install ag2[interop-langchain]"
             )

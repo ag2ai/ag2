@@ -1,9 +1,10 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,6 +17,8 @@ except ImportError:
     OllamaClient = object
     InternalServerError = object
     skip = True
+
+from pydantic import BaseModel
 
 
 # Fixtures for mock data
@@ -34,7 +37,6 @@ def mock_response():
 
 @pytest.fixture
 def ollama_client():
-
     # Set Ollama client with some default values
     client = OllamaClient()
 
@@ -50,7 +52,6 @@ skip_reason = "Ollama dependency is not installed"
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_initialization():
-
     # Creation works without an api_key
     OllamaClient()
 
@@ -144,9 +145,9 @@ def test_create_response(mock_chat, ollama_client):
     response = ollama_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Ollama response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Ollama response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_ollama_response_id", "Response ID should match the mocked response ID"
     assert response.model == "llama3.1:8b", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
@@ -231,36 +232,36 @@ def test_manual_tool_calling_parsing(ollama_client):
         },
     ]
 
-    assert (
-        response_tool_calls == expected_tool_calls
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (full string match)"
+    assert response_tool_calls == expected_tool_calls, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (full string match)"
+    )
 
     # Test the parsing with a substring containing the response content (should still pass)
     response_content = """I will call two functions, weather_forecast and currency_calculator:\n[{"name": "weather_forecast", "arguments":{"location": "New York"}},{"name": "currency_calculator", "arguments":{"base_amount": 123.45, "quote_currency": "EUR", "base_currency": "USD"}}]"""
 
     response_tool_calls = response_to_tool_call(response_content)
 
-    assert (
-        response_tool_calls == expected_tool_calls
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (partial string match)"
+    assert response_tool_calls == expected_tool_calls, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (partial string match)"
+    )
 
     # Test the parsing with an invalid function call
     response_content = """[{"function": "weather_forecast", "args":{"location": "New York"}},{"function": "currency_calculator", "args":{"base_amount": 123.45, "quote_currency": "EUR", "base_currency": "USD"}}]"""
 
     response_tool_calls = response_to_tool_call(response_content)
 
-    assert (
-        response_tool_calls is None
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (invalid function call)"
+    assert response_tool_calls is None, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (invalid function call)"
+    )
 
     # Test the parsing with plain text
     response_content = """Call the weather_forecast function and pass in 'New York' as the 'location' argument."""
 
     response_tool_calls = response_to_tool_call(response_content)
 
-    assert (
-        response_tool_calls is None
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (no function in text)"
+    assert response_tool_calls is None, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (no function in text)"
+    )
 
 
 # Test message conversion from OpenAI to Ollama format
@@ -306,3 +307,56 @@ def test_oai_messages_to_ollama_messages(ollama_client):
     ]
 
     assert messages == expected_messages, "'Please continue' message was not appended."
+
+
+# Test message conversion from OpenAI to Ollama format
+@pytest.mark.skipif(skip, reason=skip_reason)
+def test_extract_json_response(ollama_client):
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: List[Step]
+        final_answer: str
+
+    # Set up the response format
+    ollama_client._response_format = MathReasoning
+
+    # Test case 1: JSON within tags - CORRECT
+    tagged_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }"""
+
+    result = ollama_client._convert_json_response(tagged_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
+
+    # Test case 2: Invalid JSON - RAISE ERROR
+    invalid_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Missing closing brace"
+                ],
+                "final_answer": "x = -3.75"
+            """
+
+    with pytest.raises(
+        ValueError, match="Failed to parse response as valid JSON matching the schema for Structured Output: "
+    ):
+        ollama_client._convert_json_response(invalid_response)
+
+    # Test case 3: No JSON content - RAISE ERROR
+    no_json_response = "This response contains no JSON at all."
+
+    with pytest.raises(
+        ValueError,
+        match="Failed to parse response as valid JSON matching the schema for Structured Output:",
+    ):
+        ollama_client._convert_json_response(no_json_response)

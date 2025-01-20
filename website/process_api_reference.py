@@ -14,7 +14,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 
 def run_pydoc_markdown(config_file: Path) -> None:
@@ -87,7 +87,7 @@ def convert_md_to_mdx(input_dir: Path) -> None:
 
 def get_mdx_files(directory: Path) -> list[str]:
     """Get all MDX files in directory and subdirectories."""
-    return [f"{str(p.relative_to(directory).with_suffix(''))}".replace("\\", "/") for p in directory.rglob("*.mdx")]
+    return [f"{p.relative_to(directory).with_suffix('')!s}".replace("\\", "/") for p in directory.rglob("*.mdx")]
 
 
 def add_prefix(path: str, parent_groups: list[str] = None) -> str:
@@ -128,8 +128,7 @@ def create_nav_structure(paths: list[str], parent_groups: list[str] = None) -> l
 
 
 def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
-    """
-    Update the 'API Reference' section in mint.json navigation with new pages.
+    """Update the 'API Reference' section in mint.json navigation with new pages.
 
     Args:
         mint_json_path: Path to mint.json file
@@ -174,6 +173,18 @@ def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path) -> None:
     update_nav(mint_json_path, nav_structure)
 
 
+def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_path: Path) -> None:
+    # if mint.json already exists, delete it
+    if mint_json_path.exists():
+        os.remove(mint_json_path)
+
+    # Copy the template file to mint.json
+    mint_json_template_content = read_file_content(mint_json_template_path)
+
+    # Write content to mint.json
+    write_file_content(mint_json_path, mint_json_template_content)
+
+
 def main() -> None:
     script_dir = Path(__file__).parent.absolute()
 
@@ -195,6 +206,13 @@ def main() -> None:
     # Convert MD to MDX
     print("Converting MD files to MDX...")
     convert_md_to_mdx(args.api_dir)
+
+    # Create mint.json from the template file
+    mint_json_template_path = script_dir / "mint-json-template.json"
+    mint_json_path = script_dir / "mint.json"
+
+    print("Generating mint.json from template...")
+    generate_mint_json_from_template(mint_json_template_path, mint_json_path)
 
     # Update mint.json
     update_mint_json_with_api_nav(script_dir, args.api_dir)

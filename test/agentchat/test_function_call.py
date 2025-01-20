@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
+import asyncio
 import json
 import sys
 
@@ -14,16 +15,17 @@ import pytest
 import autogen
 from autogen.math_utils import eval_math_responses
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     functions = [
@@ -160,14 +162,12 @@ def test_execute_function():
 
 @pytest.mark.asyncio
 async def test_a_execute_function():
-    import time
-
     from autogen.agentchat import UserProxyAgent
 
     # Create an async function
     async def add_num(num_to_be_added):
         given_num = 10
-        time.sleep(1)
+        asyncio.sleep(1)
         return str(num_to_be_added + given_num)
 
     user = UserProxyAgent(name="test", function_map={"add_num": add_num})
@@ -219,6 +219,7 @@ async def test_a_execute_function():
     assert (await user.a_execute_function(func_call))[1]["content"] == "42"
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
     skip or not sys.version.startswith("3.10"),
     reason=reason,

@@ -14,10 +14,19 @@ from typing import Union
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.code_utils import (
+    decide_use_docker,
+    is_docker_running,
+)
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
 
-from ..conftest import MOCK_OPEN_AI_API_KEY, skip_docker  # noqa: E402
+from ..conftest import MOCK_OPEN_AI_API_KEY
+
+if not is_docker_running() or not decide_use_docker(use_docker=None):
+    skip_docker_test = True
+else:
+    skip_docker_test = False
 
 try:
     from autogen.coding.jupyter import (
@@ -43,7 +52,7 @@ try:
     else:
         classes_to_test = [EmbeddedIPythonCodeExecutor, LocalJupyterCodeExecutor]
 
-    if not skip_docker:
+    if not skip_docker_test:
         classes_to_test.append(DockerJupyterExecutor)
 
     skip = False
@@ -78,7 +87,7 @@ def test_create(cls) -> None:
 @pytest.mark.parametrize("cls", classes_to_test)
 def test_init(cls) -> None:
     executor = cls(timeout=10, kernel_name="python3", output_dir=".")
-    assert executor._timeout == 10 and executor._kernel_name == "python3" and executor._output_dir == Path(".")
+    assert executor._timeout == 10 and executor._kernel_name == "python3" and executor._output_dir == Path()
 
     # Try invalid output directory.
     with pytest.raises(ValueError, match="Output directory .* does not exist."):

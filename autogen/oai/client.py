@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,33 +10,31 @@ import inspect
 import logging
 import sys
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
+import warnings
+from typing import Any, Callable, Optional, Protocol, Union
 
 from pydantic import BaseModel, schema_json_of
 
-from autogen.cache import Cache
-from autogen.io.base import IOStream
-from autogen.logger.logger_utils import get_current_ts
-from autogen.oai.client_utils import logging_formatter
-from autogen.oai.openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
-from autogen.runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
-from autogen.token_count_utils import count_token
-
+from ..cache import Cache
+from ..exception_utils import ModelToolNotSupportedError
+from ..import_utils import optional_import_block, require_optional_import
+from ..io.base import IOStream
+from ..logger.logger_utils import get_current_ts
 from ..messages.client_messages import StreamMessage, UsageSummaryMessage
+from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
+from ..token_count_utils import count_token
+from .client_utils import FormatterProtocol, logging_formatter
+from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
 TOOL_ENABLED = False
-try:
+with optional_import_block() as openai_result:
     import openai
-except ImportError:
-    ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
-    OpenAI = object
-    AzureOpenAI = object
-else:
+
+if openai_result.is_successful:
     # raises exception if openai>=1 is installed and something is wrong with imports
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
-    from openai import __version__ as OPENAIVERSION
+    from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
-    from openai.resources import Completions
     from openai.types.chat import ChatCompletion
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
     from openai.types.chat.chat_completion_chunk import (
@@ -44,15 +42,18 @@ else:
         ChoiceDeltaToolCall,
         ChoiceDeltaToolCallFunction,
     )
-    from openai.types.chat.parsed_chat_completion import ParsedChatCompletion, ParsedChatCompletionMessage
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
     ERROR = None
+else:
+    ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
+    OpenAI = object
+    AzureOpenAI = object
 
-try:
+with optional_import_block() as cerebras_result:
     from cerebras.cloud.sdk import (  # noqa
         AuthenticationError as cerebras_AuthenticationError,
         InternalServerError as cerebras_InternalServerError,
@@ -61,12 +62,13 @@ try:
 
     from autogen.oai.cerebras import CerebrasClient
 
+if cerebras_result.is_successful:
     cerebras_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    cerebras_AuthenticationError = cerebras_InternalServerError = cerebras_RateLimitError = Exception
-    cerebras_import_exception = e
+else:
+    cerebras_AuthenticationError = cerebras_InternalServerError = cerebras_RateLimitError = Exception  # noqa: N816
+    cerebras_import_exception = ImportError("cerebras_cloud_sdk not found")
 
-try:
+with optional_import_block() as gemini_result:
     from google.api_core.exceptions import (  # noqa
         InternalServerError as gemini_InternalServerError,
         ResourceExhausted as gemini_ResourceExhausted,
@@ -74,12 +76,13 @@ try:
 
     from autogen.oai.gemini import GeminiClient
 
+if gemini_result.is_successful:
     gemini_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    gemini_InternalServerError = gemini_ResourceExhausted = Exception
-    gemini_import_exception = e
+else:
+    gemini_InternalServerError = gemini_ResourceExhausted = Exception  # noqa: N816
+    gemini_import_exception = ImportError("google-generativeai not found")
 
-try:
+with optional_import_block() as anthropic_result:
     from anthropic import (  # noqa
         InternalServerError as anthorpic_InternalServerError,
         RateLimitError as anthorpic_RateLimitError,
@@ -87,12 +90,13 @@ try:
 
     from autogen.oai.anthropic import AnthropicClient
 
+if anthropic_result.is_successful:
     anthropic_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    anthorpic_InternalServerError = anthorpic_RateLimitError = Exception
-    anthropic_import_exception = e
+else:
+    anthorpic_InternalServerError = anthorpic_RateLimitError = Exception  # noqa: N816
+    anthropic_import_exception = ImportError("anthropic not found")
 
-try:
+with optional_import_block() as mistral_result:
     from mistralai.models import (  # noqa
         HTTPValidationError as mistral_HTTPValidationError,
         SDKError as mistral_SDKError,
@@ -100,22 +104,24 @@ try:
 
     from autogen.oai.mistral import MistralAIClient
 
+if mistral_result.is_successful:
     mistral_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    mistral_SDKError = mistral_HTTPValidationError = Exception
-    mistral_import_exception = e
+else:
+    mistral_SDKError = mistral_HTTPValidationError = Exception  # noqa: N816
+    mistral_import_exception = ImportError("mistralai not found")
 
-try:
+with optional_import_block() as together_result:
     from together.error import TogetherException as together_TogetherException
 
     from autogen.oai.together import TogetherClient
 
+if together_result.is_successful:
     together_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    together_TogetherException = Exception
-    together_import_exception = e
+else:
+    together_TogetherException = Exception  # noqa: N816
+    together_import_exception = ImportError("together not found")
 
-try:
+with optional_import_block() as groq_result:
     from groq import (  # noqa
         APIConnectionError as groq_APIConnectionError,
         InternalServerError as groq_InternalServerError,
@@ -124,12 +130,13 @@ try:
 
     from autogen.oai.groq import GroqClient
 
+if groq_result.is_successful:
     groq_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    groq_InternalServerError = groq_RateLimitError = groq_APIConnectionError = Exception
-    groq_import_exception = e
+else:
+    groq_InternalServerError = groq_RateLimitError = groq_APIConnectionError = Exception  # noqa: N816
+    groq_import_exception = ImportError("groq not found")
 
-try:
+with optional_import_block() as cohere_result:
     from cohere.errors import (  # noqa
         InternalServerError as cohere_InternalServerError,
         ServiceUnavailableError as cohere_ServiceUnavailableError,
@@ -138,12 +145,13 @@ try:
 
     from autogen.oai.cohere import CohereClient
 
+if cohere_result.is_successful:
     cohere_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    cohere_InternalServerError = cohere_TooManyRequestsError = cohere_ServiceUnavailableError = Exception
-    cohere_import_exception = e
+else:
+    cohere_InternalServerError = cohere_TooManyRequestsError = cohere_ServiceUnavailableError = Exception  # noqa: N816
+    cohere_import_exception = ImportError("cohere not found")
 
-try:
+with optional_import_block() as ollama_result:
     from ollama import (  # noqa
         RequestError as ollama_RequestError,
         ResponseError as ollama_ResponseError,
@@ -151,12 +159,13 @@ try:
 
     from autogen.oai.ollama import OllamaClient
 
+if ollama_result.is_successful:
     ollama_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    ollama_RequestError = ollama_ResponseError = Exception
-    ollama_import_exception = e
+else:
+    ollama_RequestError = ollama_ResponseError = Exception  # noqa: N816
+    ollama_import_exception = ImportError("ollama not found")
 
-try:
+with optional_import_block() as bedrock_result:
     from botocore.exceptions import (  # noqa
         BotoCoreError as bedrock_BotoCoreError,
         ClientError as bedrock_ClientError,
@@ -164,10 +173,11 @@ try:
 
     from autogen.oai.bedrock import BedrockClient
 
+if bedrock_result.is_successful:
     bedrock_import_exception: Optional[ImportError] = None
-except ImportError as e:
-    bedrock_BotoCoreError = bedrock_ClientError = Exception
-    bedrock_import_exception = e
+else:
+    bedrock_BotoCoreError = bedrock_ClientError = Exception  # noqa: N816
+    bedrock_import_exception = ImportError("botocore not found")
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -182,8 +192,7 @@ OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
 class ModelClient(Protocol):
-    """
-    A client class must implement the following methods:
+    """A client class must implement the following methods:
     - create must return a response object that implements the ModelClientResponseProtocol
     - cost must return the cost of the response
     - get_usage must return a dict with the following keys:
@@ -215,8 +224,7 @@ class ModelClient(Protocol):
     def message_retrieval(
         self, response: ModelClientResponseProtocol
     ) -> Union[list[str], list[ModelClient.ModelClientResponseProtocol.Choice.Message]]:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -306,8 +314,11 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
 
+        # needs to be updated when the o3 is released to generalize
+        is_o1 = "model" in params and params["model"].startswith("o1")
+
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params:
+        if params.get("stream", False) and "messages" in params and not is_o1:
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
@@ -384,7 +395,7 @@ class OpenAIClient:
                 ),
             )
             for i in range(len(response_contents)):
-                if OPENAIVERSION >= "1.5":  # pragma: no cover
+                if openai_version >= "1.5":  # pragma: no cover
                     # OpenAI versions 1.5.0 and above
                     choice = Choice(
                         index=i,
@@ -414,10 +425,63 @@ class OpenAIClient:
         else:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
+            if is_o1:
+                # add a warning that model does not support stream
+                if params.get("stream", False):
+                    warnings.warn(
+                        f"The {params.get('model')} model does not support streaming. The stream will be set to False."
+                    )
+                if params.get("tools", False):
+                    raise ModelToolNotSupportedError(params.get("model"))
+                self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
+            # remove the system_message from the response and add it in the prompt at the start.
+            if is_o1:
+                for msg in params["messages"]:
+                    if msg["role"] == "user" and msg["content"].startswith("System message: "):
+                        msg["role"] = "system"
+                        msg["content"] = msg["content"][len("System message: ") :]
 
         return response
+
+    def _process_reasoning_model_params(self, params) -> None:
+        """
+        Cater for the reasoning model (o1, o3..) parameters
+        please refer: https://platform.openai.com/docs/guides/reasoning#limitations
+        """
+        print(f"{params=}")
+
+        # Unsupported parameters
+        unsupported_params = [
+            "temperature",
+            "frequency_penalty",
+            "presence_penalty",
+            "top_p",
+            "logprobs",
+            "top_logprobs",
+            "logit_bias",
+        ]
+        model_name = params.get("model")
+        for param in unsupported_params:
+            if param in params:
+                warnings.warn(f"`{param}` is not supported with {model_name} model and will be ignored.")
+                params.pop(param)
+        # Replace max_tokens with max_completion_tokens as reasoning tokens are now factored in
+        # and max_tokens isn't valid
+        if "max_tokens" in params:
+            params["max_completion_tokens"] = params.pop("max_tokens")
+
+        # TODO - When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
+        system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
+
+        if "messages" in params and system_not_allowed:
+            # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
+            # replace the system messages with user messages preappended with "System message: "
+            for msg in params["messages"]:
+                if msg["role"] == "system":
+                    msg["role"] = "user"
+                    msg["content"] = f"System message: {msg['content']}"
 
     def cost(self, response: Union[ChatCompletion, Completion]) -> float:
         """Calculate the cost of the response."""
@@ -433,7 +497,7 @@ class OpenAIClient:
         n_output_tokens = response.usage.completion_tokens if response.usage is not None else 0  # type: ignore [union-attr]
         if n_output_tokens is None:
             n_output_tokens = 0
-        tmp_price1K = OAI_PRICE1K[model]
+        tmp_price1K = OAI_PRICE1K[model]  # noqa: N806
         # First value is input token rate, second value is output token rate
         if isinstance(tmp_price1K, tuple):
             return (tmp_price1K[0] * n_input_tokens + tmp_price1K[1] * n_output_tokens) / 1000  # type: ignore [no-any-return]
@@ -450,11 +514,7 @@ class OpenAIClient:
         }
 
 
-@runtime_checkable
-class FormatterProtocol(Protocol):
-    def format(self) -> str: ...
-
-
+@require_optional_import("openai", "openai")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
 
@@ -483,13 +543,12 @@ class OpenAIWrapper:
         config_list: Optional[list[dict[str, Any]]] = None,
         **base_config: Any,
     ):
-        """
-        Args:
+        """Args:
             config_list: a list of config dicts to override the base_config.
                 They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method. E.g.,
 
         ```python
-        config_list=[
+        config_list = [
             {
                 "model": "gpt-4",
                 "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
@@ -506,7 +565,7 @@ class OpenAIWrapper:
             {
                 "model": "llama-7B",
                 "base_url": "http://127.0.0.1:8080",
-            }
+            },
         ]
         ```
 
@@ -514,7 +573,6 @@ class OpenAIWrapper:
                 and additional kwargs.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `base_config` or in each config of `config_list`.
         """
-
         if logging_enabled():
             log_new_wrapper(self, locals())
         openai_config, extra_kwargs = self._separate_openai_config(base_config)
@@ -770,6 +828,7 @@ class OpenAIWrapper:
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
             - api_version (str | None): The api version. Default to None. E.g., "2024-02-01".
+
         Raises:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
@@ -1059,8 +1118,7 @@ class OpenAIWrapper:
         # future proofing for when tool calls other than function calls are supported
         if tool_calls_chunk.type and tool_calls_chunk.type != "function":
             raise NotImplementedError(
-                f"Tool call type {tool_calls_chunk.type} is currently not supported. "
-                "Only function calls are supported."
+                f"Tool call type {tool_calls_chunk.type} is currently not supported. Only function calls are supported."
             )
 
         # Handle tool call

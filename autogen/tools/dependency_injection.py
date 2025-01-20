@@ -6,17 +6,23 @@ import inspect
 import sys
 from abc import ABC
 from functools import wraps
-from typing import Any, Callable, Iterable, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
+
+from autogen.agentchat import Agent
+
+if TYPE_CHECKING:
+    from ..agentchat.conversable_agent import ConversableAgent
 
 __all__ = [
     "BaseContext",
     "ChatContext",
     "Depends",
     "Field",
+    "get_context_params",
     "inject_params",
 ]
 
@@ -38,10 +44,34 @@ class ChatContext(BaseContext):
     It inherits from `BaseContext` and adds the `messages` attribute.
     """
 
-    messages: list[str] = []
+    def __init__(self, agent: "ConversableAgent") -> None:
+        """Initializes the ChatContext with an agent.
+
+        Args:
+            agent: The agent to use for retrieving chat messages.
+        """
+        self._agent = agent
+
+    @property
+    def chat_messages(self) -> dict[Agent, list[dict[Any, Any]]]:
+        """The messages in the chat.
+
+        Returns:
+            A dictionary of agents and their messages.
+        """
+        return self._agent.chat_messages
+
+    @property
+    def last_message(self) -> Optional[dict[str, Any]]:
+        """The last message in the chat.
+
+        Returns:
+            The last message in the chat.
+        """
+        return self._agent.last_message()
 
 
-def Depends(x: Any) -> Any:
+def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 
     Args:
@@ -56,10 +86,27 @@ def Depends(x: Any) -> Any:
     return FastDepends(x)
 
 
-def _is_base_context_param(param: inspect.Parameter) -> bool:
+def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContext], type[ChatContext]]) -> list[str]:
+    """Gets the names of the context parameters in a function signature.
+
+    Args:
+        func: The function to inspect for context parameters.
+        subclass: The subclass to search for.
+
+    Returns:
+        A list of parameter names that are instances of the specified subclass.
+    """
+
+    sig = inspect.signature(func)
+    return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
+
+
+def _is_context_param(
+    param: inspect.Parameter, subclass: Union[type[BaseContext], type[ChatContext]] = BaseContext
+) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
-    return isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext)
+    return isinstance(param_annotation, type) and issubclass(param_annotation, subclass)
 
 
 def _is_depends_param(param: inspect.Parameter) -> bool:
@@ -81,7 +128,7 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
         func = _fix_staticmethod(func)
 
     sig = inspect.signature(func)
-    params_to_remove = [p.name for p in sig.parameters.values() if _is_base_context_param(p) or _is_depends_param(p)]
+    params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
     _remove_params(func, sig, params_to_remove)
     return func
 
@@ -110,11 +157,19 @@ def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[
     type_hints = get_type_hints(func, include_extras=True)
 
     for _, annotation in type_hints.items():
+        # Check if the annotation itself has metadata (using __metadata__)
         if hasattr(annotation, "__metadata__"):
             metadata = annotation.__metadata__
             if metadata and isinstance(metadata[0], str):
-                # Replace string metadata with DescriptionField
+                # Replace string metadata with Field
                 annotation.__metadata__ = (Field(description=metadata[0]),)
+        # For Python < 3.11, annotations like `Optional` are stored as `Union`, so metadata
+        # would be in the first element of __args__ (e.g., `__args__[0]` for `int` in `Optional[int]`)
+        elif hasattr(annotation, "__args__") and hasattr(annotation.__args__[0], "__metadata__"):
+            metadata = annotation.__args__[0].__metadata__
+            if metadata and isinstance(metadata[0], str):
+                # Replace string metadata with Field
+                annotation.__args__[0].__metadata__ = (Field(description=metadata[0]),)
     return func
 
 

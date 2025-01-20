@@ -10,7 +10,7 @@ import sys
 import time
 from collections import defaultdict
 from time import sleep
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 
@@ -26,26 +26,31 @@ from flaml.tune.space import is_constant
 # Restore logging by removing the NullHandler
 flaml_logger.removeHandler(null_handler)
 
+from ..import_utils import optional_import_block
 from .client_utils import logging_formatter
 from .openai_utils import get_key
 
 try:
-    import diskcache
-    import openai
-    from openai import (
-        APIConnectionError,
-        APIError,
-        AuthenticationError,
-        BadRequestError,
-        RateLimitError,
-        Timeout,
-    )
-    from openai import Completion as openai_Completion
+    with optional_import_block() as result:
+        import diskcache
+        import openai
+        from openai import (
+            APIConnectionError,
+            APIError,
+            AuthenticationError,
+            BadRequestError,
+            RateLimitError,
+            Timeout,
+        )
+        from openai import Completion as OpenAICompletion
 
-    ERROR = None
-    assert openai.__version__ < "1"
+    if result.is_successful:
+        ERROR = None
+        assert openai.__version__ < "1"
+    else:
+        raise ImportError("openai<1 is required.")
 except (AssertionError, ImportError):
-    openai_Completion = object
+    OpenAICompletion = object
     # The autogen.Completion class requires openai<1
     ERROR = AssertionError("(Deprecated) The autogen.Completion class requires openai<1 and diskcache. ")
 
@@ -57,7 +62,7 @@ if not logger.handlers:
     logger.addHandler(_ch)
 
 
-class Completion(openai_Completion):
+class Completion(OpenAICompletion):
     """`(openai<1)` A class for OpenAI completion API.
 
     It also supports: ChatCompletion, Azure OpenAI API.
@@ -81,7 +86,7 @@ class Completion(openai_Completion):
     }
 
     # price per 1k tokens
-    price1K = {
+    price1K = {  # noqa: N815
         "text-ada-001": 0.0004,
         "text-babbage-001": 0.0005,
         "text-curie-001": 0.002,
@@ -256,12 +261,8 @@ class Completion(openai_Completion):
                 sleep(retry_wait_time)
             except (RateLimitError, Timeout) as err:
                 time_left = max_retry_period - (time.time() - start_time + retry_wait_time)
-                if (
-                    time_left > 0
-                    and isinstance(err, RateLimitError)
-                    or time_left > request_timeout
-                    and isinstance(err, Timeout)
-                    and "request_timeout" not in config
+                if (time_left > 0 and isinstance(err, RateLimitError)) or (
+                    time_left > request_timeout and isinstance(err, Timeout) and "request_timeout" not in config
                 ):
                     if isinstance(err, Timeout):
                         request_timeout <<= 1
@@ -471,7 +472,7 @@ class Completion(openai_Completion):
                     prune
                     and target_output_tokens
                     and avg_n_tokens <= target_output_tokens * (1 - ratio)
-                    and (num_completions < config_n or num_completions == config_n and data_limit == data_length)
+                    and (num_completions < config_n or (num_completions == config_n and data_limit == data_length))
                 ):
                     # update valid n
                     cls._max_valid_n_per_max_tokens[region_key] = valid_n = cls._max_valid_n_per_max_tokens.get(
@@ -769,7 +770,7 @@ class Completion(openai_Completion):
                     "model": "llama-7B",
                     "base_url": "http://127.0.0.1:8080",
                     "api_type": "openai",
-                }
+                },
             ],
             prompt="Hi",
         )
@@ -953,7 +954,7 @@ class Completion(openai_Completion):
                 An example agg_method in str:
 
         ```python
-        agg_method = 'median'
+        agg_method = "median"
         ```
                 An example agg_method in a Callable:
 
@@ -964,7 +965,7 @@ class Completion(openai_Completion):
                 An example agg_method in a dict of Callable:
 
         ```python
-        agg_method={'median_success': np.median, 'avg_success': np.mean}
+        agg_method = {"median_success": np.median, "avg_success": np.mean}
         ```
 
             return_responses_and_per_instance_result (bool): Whether to also return responses
@@ -1063,7 +1064,7 @@ class Completion(openai_Completion):
         usage = response["usage"]
         n_input_tokens = usage["prompt_tokens"]
         n_output_tokens = usage.get("completion_tokens", 0)
-        price1K = cls.price1K[model]
+        price1K = cls.price1K[model]  # noqa: N806
         if isinstance(price1K, tuple):
             return (price1K[0] * n_input_tokens + price1K[1] * n_output_tokens) / 1000
         return price1K * (n_input_tokens + n_output_tokens) / 1000

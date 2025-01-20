@@ -8,7 +8,6 @@
 
 import inspect
 import json
-import os
 import sys
 
 import pytest
@@ -20,14 +19,15 @@ from autogen.oai.client import TOOL_ENABLED
 from ..conftest import Credentials
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
-    skip_openai = True
+    skip = True
 else:
-    from ..conftest import skip_openai
+    skip = False
 
 
-@pytest.mark.skipif(skip_openai or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
+@pytest.mark.openai
+@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     tools = [
@@ -80,7 +80,8 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     print(eval_math_responses(**arguments))
 
 
-@pytest.mark.skipif(skip_openai or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
+@pytest.mark.openai
+@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
 def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     functions = [
@@ -129,8 +130,9 @@ def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credent
     print(eval_math_responses(**arguments))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(
-    skip_openai or not TOOL_ENABLED or not sys.version.startswith("3.10"),
+    skip or not TOOL_ENABLED or not sys.version.startswith("3.10"),
     reason="do not run if openai is <1.1.0 or py!=3.10 or requested to skip",
 )
 def test_update_tool(credentials_gpt_4o: Credentials):
@@ -170,9 +172,9 @@ def test_update_tool(credentials_gpt_4o: Credentials):
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
     print("Message:", messages1)
     print("Summary:", res.summary)
-    assert (
-        messages1.replace("TERMINATE", "") == res.summary
-    ), "Message (removing TERMINATE) and summary should be the same"
+    assert messages1.replace("TERMINATE", "") == res.summary, (
+        "Message (removing TERMINATE) and summary should be the same"
+    )
 
     assistant.update_tool_signature("greet_user", is_remove=True)
     res = user_proxy.initiate_chat(

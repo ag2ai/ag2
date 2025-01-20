@@ -2,24 +2,139 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Callable
+from typing import Annotated, Any, Callable, Optional
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
 
-import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
-from autogen.tools import BaseContext, Depends
+from autogen.tools import BaseContext, ChatContext, Depends
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, credentials_all_llms
+
+
+class MyContext(BaseContext, BaseModel):
+    b: int
+
+
+def f_with_annotated(
+    a: int,
+    ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    chat_ctx: Annotated[ChatContext, "Chat context"],
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    assert isinstance(chat_ctx, ChatContext)
+    return a + ctx.b + c
+
+
+async def f_with_annotated_async(
+    a: int,
+    ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    chat_ctx: ChatContext,
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    assert isinstance(chat_ctx, ChatContext)
+    return a + ctx.b + c
+
+
+def f_without_annotated(
+    a: int,
+    chat_ctx: ChatContext,
+    ctx: MyContext = Depends(MyContext(b=3)),
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx.b + c
+
+
+async def f_without_annotated_async(
+    a: int,
+    ctx: MyContext = Depends(MyContext(b=3)),
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx.b + c
+
+
+def f_with_annotated_and_depends(
+    a: int,
+    ctx: MyContext = MyContext(b=4),
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx.b + c
+
+
+async def f_with_annotated_and_depends_async(
+    a: int,
+    ctx: MyContext = MyContext(b=4),
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx.b + c
+
+
+def f_with_multiple_depends(
+    a: int,
+    ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx.b + ctx2.b + c
+
+
+async def f_with_multiple_depends_async(
+    a: int,
+    ctx: Annotated[MyContext, Depends(MyContext(b=2))],
+    ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx.b + ctx2.b + c
+
+
+def f_wihout_base_context(
+    a: int,
+    ctx: Annotated[int, Depends(lambda a: a + 2)],
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx + c
+
+
+async def f_wihout_base_context_async(
+    a: int,
+    ctx: Annotated[int, Depends(lambda a: a + 2)],
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx + c
+
+
+def f_with_default_depends(
+    a: int,
+    ctx: int = Depends(lambda a: a + 2),
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx + c
+
+
+async def f_with_default_depends_async(
+    a: int,
+    ctx: int = Depends(lambda a: a + 2),
+    c: Annotated[int, "c description"] = 3,
+    d: Annotated[Optional[int], "d description"] = None,
+) -> int:
+    return a + ctx + c
 
 
 class TestDependencyInjection:
-    class MyContext(BaseContext, BaseModel):
-        b: int
-
-    @pytest.fixture()
+    @pytest.fixture
     def expected_tools(self) -> list[dict[str, Any]]:
         return [
             {
@@ -32,98 +147,17 @@ class TestDependencyInjection:
                         "properties": {
                             "a": {"type": "integer", "description": "a"},
                             "c": {"type": "integer", "description": "c description", "default": 3},
+                            "d": {
+                                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                                "description": "d description",
+                                "default": None,
+                            },
                         },
                         "required": ["a"],
                     },
                 },
             }
         ]
-
-    def f_with_annotated(
-        a: int,
-        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + c
-
-    async def f_with_annotated_async(
-        a: int,
-        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + c
-
-    def f_without_annotated(
-        a: int,
-        ctx: MyContext = Depends(MyContext(b=3)),
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + c
-
-    async def f_without_annotated_async(
-        a: int,
-        ctx: MyContext = Depends(MyContext(b=3)),
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + c
-
-    def f_with_annotated_and_depends(
-        a: int,
-        ctx: MyContext = MyContext(b=4),
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + c
-
-    async def f_with_annotated_and_depends_async(
-        a: int,
-        ctx: MyContext = MyContext(b=4),
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + c
-
-    def f_with_multiple_depends(
-        a: int,
-        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
-        ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + ctx2.b + c
-
-    async def f_with_multiple_depends_async(
-        a: int,
-        ctx: Annotated[MyContext, Depends(MyContext(b=2))],
-        ctx2: Annotated[MyContext, Depends(MyContext(b=3))],
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx.b + ctx2.b + c
-
-    def f_wihout_base_context(
-        a: int,
-        ctx: Annotated[int, Depends(lambda a: a + 2)],
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx + c
-
-    async def f_wihout_base_context_async(
-        a: int,
-        ctx: Annotated[int, Depends(lambda a: a + 2)],
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx + c
-
-    def f_with_default_depends(
-        a: int,
-        ctx: int = Depends(lambda a: a + 2),
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx + c
-
-    async def f_with_default_depends_async(
-        a: int,
-        ctx: int = Depends(lambda a: a + 2),
-        c: Annotated[int, "c description"] = 3,
-    ) -> int:
-        return a + ctx + c
 
     @pytest.mark.parametrize(
         ("func", "func_name", "is_async", "expected"),
@@ -142,7 +176,7 @@ class TestDependencyInjection:
             (f_with_default_depends_async, "f_with_default_depends_async", True, "7"),
         ],
     )
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_register_tools(
         self,
         mock_credentials: Credentials,
@@ -166,15 +200,12 @@ class TestDependencyInjection:
 
         assert actual == expected
 
-    @pytest.mark.skipif(skip_openai, reason=reason)
-    @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio()
-    async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
+    async def _test_end2end(self, credentials, is_async: bool) -> None:
         class UserContext(BaseContext, BaseModel):
             username: str
             password: str
 
-        agent = ConversableAgent(name="agent", llm_config=credentials_gpt_4o_mini.llm_config)
+        agent = ConversableAgent(name="agent", llm_config=credentials.llm_config)
         user = UserContext(username="user23", password="password23")
         users = [user]
 
@@ -196,7 +227,13 @@ class TestDependencyInjection:
 
             @user_proxy.register_for_execution()
             @agent.register_for_llm(description="Login function")
-            async def login(user: Annotated[UserContext, Depends(user)]) -> str:
+            async def login(
+                user: Annotated[UserContext, Depends(user)],
+                chat_ctx: ChatContext,
+            ) -> str:
+                expected = {"arguments": "{}", "name": "login"}
+                assert chat_ctx.last_message["tool_calls"][0]["function"] == expected
+
                 return _login(user)
 
             await user_proxy.a_initiate_chat(agent, message="Please login", max_turns=2)
@@ -204,7 +241,10 @@ class TestDependencyInjection:
 
             @user_proxy.register_for_execution()
             @agent.register_for_llm(description="Login function")
-            def login(user: Annotated[UserContext, Depends(user)]) -> str:
+            def login(
+                user: Annotated[UserContext, Depends(user)],
+                additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+            ) -> str:
                 return _login(user)
 
             user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
@@ -213,3 +253,12 @@ class TestDependencyInjection:
             UserContext(username="user23", password="password23"),
             "Login successful.",
         )
+
+    @pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_end2end(
+        self,
+        credentials: Credentials,
+        is_async: bool,
+    ) -> None:
+        self._test_end2end(credentials, is_async)

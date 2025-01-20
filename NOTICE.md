@@ -1,6 +1,6 @@
 ## NOTICE
 
-Copyright (c) 2023-2024, Owners of https://github.com/ag2ai
+Copyright (c) 2023-2025, Owners of https://github.com/ag2ai
 
 This project is a fork of https://github.com/microsoft/autogen.
 
@@ -12,8 +12,8 @@ This project, i.e., https://github.com/ag2ai/ag2, is licensed under the Apache L
 
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 
-Ongoing MIT-licensed contributions:
-This project regularly incorporates code merged from the [original repository](https://github.com/microsoft/autogen) after the initial fork. This merged code remains under the original MIT license. For specific details on merged commits, please refer to the project's commit history.
-The MIT license applies to portions of code originating from the [original repository](https://github.com/microsoft/autogen) as described above.
+MIT-licensed contributions:
+The MIT license applies to portions of code originating from the [original repository](https://github.com/microsoft/autogen).
+For specific details on merged commits, please refer to the project's commit history.
 
-Last updated: 08/25/2024
+Last updated: 01/16/2025

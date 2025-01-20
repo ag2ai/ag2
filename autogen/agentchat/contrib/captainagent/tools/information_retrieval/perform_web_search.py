@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def perform_web_search(query, count=10, offset=0):
-    """
-    Perform a web search using Bing API.
+    """Perform a web search using Bing API.
 
     Args:
         query (str): The search query.
@@ -42,7 +41,7 @@ def perform_web_search(query, count=10, offset=0):
     # Process the search results
     search_results = response.json()
     for index, result in enumerate(search_results["webPages"]["value"]):
-        print(f"Search Result {index+1}:")
+        print(f"Search Result {index + 1}:")
         print(result["name"])
         print(result["url"])
         print(result["snippet"])

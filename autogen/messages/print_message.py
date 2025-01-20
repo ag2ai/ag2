@@ -12,9 +12,14 @@ from .base_message import BaseMessage, wrap_message
 
 @wrap_message
 class PrintMessage(BaseMessage):
+    """Print message"""
+
     objects: list[str]
+    """List of objects to print"""
     sep: str
+    """Separator between objects"""
     end: str
+    """End of the print"""
 
     def __init__(
         self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False, uuid: Optional[UUID] = None

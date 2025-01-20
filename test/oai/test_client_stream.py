@@ -11,16 +11,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen import OpenAIWrapper, config_list_from_json
+from autogen import OpenAIWrapper
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, reason
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
     # raises exception if openai>=1 is installed and something is wrong with imports
     # otherwise the test will be skipped
@@ -32,6 +32,7 @@ else:
     )
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
@@ -40,6 +41,7 @@ def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> No
     print(client.extract_text_or_completion_object(response))
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
@@ -82,6 +84,7 @@ def test__update_dict_from_chunk() -> None:
     assert d["s"] == "beginning and end"
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test__update_function_call_from_chunk() -> None:
     function_call_chunks = [
@@ -114,6 +117,7 @@ def test__update_function_call_from_chunk() -> None:
     ChatCompletionMessage(role="assistant", function_call=full_function_call, content=None)
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test__update_tool_calls_from_chunk() -> None:
     tool_calls_chunks = [
@@ -187,6 +191,9 @@ def test__update_tool_calls_from_chunk() -> None:
 
 
 # todo: remove when OpenAI removes functions from the API
+
+
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
     functions = [
@@ -216,6 +223,9 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 # test for tool support instead of the deprecated function calls
+
+
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
     tools = [
@@ -257,6 +267,7 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(tool_calls) > 0
 
 
+@pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_completion_stream(credentials_azure_gpt_35_turbo_instruct: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)

@@ -4,8 +4,7 @@
 def calculate_fraction_sum(
     fraction1_numerator: int, fraction1_denominator: int, fraction2_numerator: int, fraction2_denominator: int
 ):
-    """
-    Calculates the sum of two fractions and returns the result as a mixed number.
+    """Calculates the sum of two fractions and returns the result as a mixed number.
 
     Args:
         fraction1_numerator: The numerator of the first fraction.

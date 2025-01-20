@@ -6,32 +6,27 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
 import sys
 
 import pytest
 
-import autogen
 from autogen.agentchat.contrib.math_user_proxy_agent import (
     MathUserProxyAgent,
     _add_print_to_last_line,
     _remove_print,
 )
 
-from ..conftest import Credentials, skip_openai  # noqa: E402
+from ..conftest import Credentials
 
 try:
-    from openai import OpenAI
+    from openai import OpenAI  # noqa: F401
 except ImportError:
     skip = True
 else:
-    skip = False or skip_openai
+    skip = False
 
 
-@pytest.mark.skipif(
-    skip or sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows",
-)
+@pytest.mark.openai
 def test_math_user_proxy_agent(
     credentials_gpt_4o_mini: Credentials,
 ):

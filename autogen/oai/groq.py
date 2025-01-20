@@ -8,13 +8,9 @@
 
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "groq",
-            "model": "mixtral-8x7b-32768",
-            "api_key": os.environ.get("GROQ_API_KEY")
-            }
-    ]}
+    llm_config = {
+        "config_list": [{"api_type": "groq", "model": "mixtral-8x7b-32768", "api_key": os.environ.get("GROQ_API_KEY")}]
+    }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
     ```
@@ -31,13 +27,12 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from groq import Groq, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from pydantic import BaseModel
 
 from autogen.oai.client_utils import should_hide_tools, validate_parameter
 
@@ -60,21 +55,20 @@ class GroqClient:
             api_key (str): The API key for using Groq (or environment variable GROQ_API_KEY needs to be set)
         """
         # Ensure we have the api_key upon instantiation
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("GROQ_API_KEY")
 
-        assert (
-            self.api_key
-        ), "Please include the api_key in your config list entry for Groq or set the GROQ_API_KEY env variable."
+        assert self.api_key, (
+            "Please include the api_key in your config list entry for Groq or set the GROQ_API_KEY env variable."
+        )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Groq API, it will be ignored.", UserWarning)
-        self.base_url = kwargs.get("base_url", None)
+        self.base_url = kwargs.get("base_url")
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -102,10 +96,10 @@ class GroqClient:
 
         # Check that we have what we need to use Groq's API
         # We won't enforce the available models as they are likely to change
-        groq_params["model"] = params.get("model", None)
-        assert groq_params[
-            "model"
-        ], "Please specify the 'model' in your config list entry to nominate the Groq model to use."
+        groq_params["model"] = params.get("model")
+        assert groq_params["model"], (
+            "Please specify the 'model' in your config list entry to nominate the Groq model to use."
+        )
 
         # Validate allowed Groq parameters
         # https://console.groq.com/docs/api-reference#chat
@@ -261,7 +255,6 @@ def oai_messages_to_groq_messages(messages: list[dict[str, Any]]) -> list[dict[s
     """Convert messages from OAI format to Groq's format.
     We correct for any specific role orders and types.
     """
-
     groq_messages = copy.deepcopy(messages)
 
     # Remove the name field

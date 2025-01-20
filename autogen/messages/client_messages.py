@@ -13,21 +13,36 @@ __all__ = ["UsageSummaryMessage"]
 
 
 class ModelUsageSummary(BaseModel):
+    """Model usage summary."""
+
     model: str
+    """Model name."""
     completion_tokens: int
+    """Number of tokens used for completion."""
     cost: float
+    """Cost of the completion."""
     prompt_tokens: int
+    """Number of tokens used for prompt."""
     total_tokens: int
+    """Total number of tokens used."""
 
 
 class ActualUsageSummary(BaseModel):
+    """Actual usage summary."""
+
     usages: Optional[list[ModelUsageSummary]] = None
+    """List of model usage summaries."""
     total_cost: Optional[float] = None
+    """Total cost."""
 
 
 class TotalUsageSummary(BaseModel):
+    """Total usage summary."""
+
     usages: Optional[list[ModelUsageSummary]] = None
+    """List of model usage summaries."""
     total_cost: Optional[float] = None
+    """Total cost."""
 
 
 Mode = Literal["both", "total", "actual"]
@@ -58,9 +73,14 @@ def _change_usage_summary_format(
 
 @wrap_message
 class UsageSummaryMessage(BaseMessage):
+    """Usage summary message."""
+
     actual: ActualUsageSummary
+    """Actual usage summary."""
     total: TotalUsageSummary
+    """Total usage summary."""
     mode: Mode
+    """Mode to display the usage summary."""
 
     def __init__(
         self,
@@ -127,7 +147,10 @@ class UsageSummaryMessage(BaseMessage):
 
 @wrap_message
 class StreamMessage(BaseMessage):
+    """Stream message."""
+
     content: str
+    """Content of the message."""
 
     def __init__(self, *, uuid: Optional[UUID] = None, content: str) -> None:
         super().__init__(uuid=uuid, content=content)

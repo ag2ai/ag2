@@ -8,11 +8,10 @@ import pytest
 
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.contrib.swarm_agent import (
-    __CONTEXT_VARIABLES_PARAM_NAME__,
-    __TOOL_EXECUTOR_NAME__,
     AFTER_WORK,
     ON_CONDITION,
     UPDATE_SYSTEM_MESSAGE,
+    __TOOL_EXECUTOR_NAME__,
     AfterWorkOption,
     SwarmAgent,
     SwarmResult,
@@ -34,7 +33,6 @@ TEST_MESSAGES = [{"role": "user", "content": "Initial message"}]
 
 def test_swarm_agent_initialization():
     """Test SwarmAgent initialization with valid and invalid parameters"""
-
     # Invalid functions parameter
     with pytest.raises(TypeError):
         SwarmAgent("test_agent", functions="invalid")
@@ -87,7 +85,6 @@ def test_after_work_initialization():
 
 def test_on_condition():
     """Test ON_CONDITION initialization"""
-
     # Test with a ConversableAgent
     test_conversable_agent = ConversableAgent("test_conversable_agent")
     with pytest.raises(AssertionError, match="'target' must be a SwarmAgent or a Dict"):
@@ -96,7 +93,6 @@ def test_on_condition():
 
 def test_receiving_agent():
     """Test the receiving agent based on various starting messages"""
-
     # 1. Test with a single message - should always be the initial agent
     messages_one_no_name = [{"role": "user", "content": "Initial message"}]
 
@@ -144,7 +140,6 @@ def test_receiving_agent():
 
 def test_resume_speaker():
     """Tests resumption of chat with multiple messages"""
-
     test_initial_agent = SwarmAgent("InitialAgent")
     test_second_agent = SwarmAgent("SecondAgent")
 
@@ -160,7 +155,6 @@ def test_resume_speaker():
         patch.object(test_initial_agent, "initiate_chat") as mock_initial_chat,
         patch.object(test_second_agent, "initiate_chat") as mock_second_chat,
     ):
-
         mock_chat_result = MagicMock()
         mock_chat_result.chat_history = multiple_messages
 
@@ -181,7 +175,6 @@ def test_resume_speaker():
 
 def test_after_work_options():
     """Test different after work options"""
-
     agent1 = SwarmAgent("agent1")
     agent2 = SwarmAgent("agent2")
     user_agent = UserProxyAgent("test_user")
@@ -244,7 +237,6 @@ def test_after_work_options():
 
 def test_on_condition_handoff():
     """Test ON_CONDITION in handoffs"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -302,7 +294,6 @@ def test_temporary_user_proxy():
 
 def test_context_variables_updating_multi_tools():
     """Test context variables handling in tool calls"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -363,7 +354,6 @@ def test_context_variables_updating_multi_tools():
 
 def test_function_transfer():
     """Tests a function call that has a transfer to agent in the SwarmResult"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -433,7 +423,6 @@ def test_invalid_parameters():
 
 def test_non_swarm_in_hand_off():
     """Test that SwarmAgents in the group chat are the only agents in hand-offs"""
-
     agent1 = SwarmAgent("agent1")
     bad_agent = ConversableAgent("bad_agent")
 
@@ -449,7 +438,6 @@ def test_non_swarm_in_hand_off():
 
 def test_initialization():
     """Test initiate_swarm_chat"""
-
     agent1 = SwarmAgent("agent1")
     agent2 = SwarmAgent("agent2")
     agent3 = SwarmAgent("agent3")
@@ -668,7 +656,6 @@ def test_string_agent_params_for_transfer():
 
 def test_after_work_callable():
     """Test Callable in an AFTER_WORK handoff"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -740,7 +727,6 @@ def test_after_work_callable():
 
 def test_on_condition_unique_function_names():
     """Test that ON_CONDITION in handoffs generate unique function names"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -792,7 +778,6 @@ def test_on_condition_unique_function_names():
 
 def test_prepare_swarm_agents():
     """Test preparation of swarm agents including tool executor setup"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -844,7 +829,6 @@ def test_prepare_swarm_agents():
 
 def test_create_nested_chats():
     """Test creation of nested chat agents and registration of handoffs"""
-
     testing_llm_config = {
         "config_list": [
             {
@@ -891,7 +875,6 @@ def test_create_nested_chats():
 
 def test_process_initial_messages():
     """Test processing of initial messages in different scenarios"""
-
     agent1 = SwarmAgent("agent1")
     agent2 = SwarmAgent("agent2")
     nested_agent = SwarmAgent("nested_chat_agent1_1")
@@ -934,7 +917,6 @@ def test_process_initial_messages():
 
 def test_setup_context_variables():
     """Test setup of context variables across agents"""
-
     tool_execution = SwarmAgent(__TOOL_EXECUTOR_NAME__)
     agent1 = SwarmAgent("agent1")
     agent2 = SwarmAgent("agent2")
@@ -955,7 +937,6 @@ def test_setup_context_variables():
 
 def test_cleanup_temp_user_messages():
     """Test cleanup of temporary user messages"""
-
     chat_result = MagicMock()
     chat_result.chat_history = [
         {"role": "user", "name": "_User", "content": "Test 1"},
@@ -974,7 +955,6 @@ def test_cleanup_temp_user_messages():
 @pytest.mark.asyncio
 async def test_a_initiate_swarm_chat():
     """Test async swarm chat"""
-
     agent1 = SwarmAgent("agent1")
     agent2 = SwarmAgent("agent2")
     user_agent = UserProxyAgent("test_user")

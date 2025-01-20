@@ -1,6 +1,6 @@
 # Maintainers
 
-## Here is a list of maintainers for the AutoGen project.
+## Here is a list of maintainers for the AG2 project.
 
 | Name            | GitHub Handle                                              | Organization           | Features                                |
 |-----------------|------------------------------------------------------------|------------------------|-----------------------------------------|

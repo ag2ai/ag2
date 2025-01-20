@@ -8,14 +8,18 @@ ci:
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
     - id: check-added-large-files
     - id: check-ast
     - id: check-yaml
     - id: check-toml
     - id: check-json
-      exclude: ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
+      exclude: |
+        (?x)^(
+          .devcontainer/.*devcontainer\.json |
+          ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
+        )$
     - id: check-byte-order-marker
       exclude: .gitignore
     - id: check-merge-conflict
@@ -23,17 +27,16 @@ repos:
     - id: trailing-whitespace
     - id: end-of-file-fixer
     - id: no-commit-to-branch
-  - repo: https://github.com/psf/black
-    rev: 24.4.2
+  - repo: local
     hooks:
-    - id: black
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.8
-    hooks:
-      - id: ruff
-        types_or: [ python, pyi, jupyter ]
-        args: ["--fix", "--ignore=E402"]
-        exclude: notebook/agentchat_databricks_dbrx.ipynb
+      - id: lint
+        name: linting and formatting
+        entry: "scripts/pre-commit-lint.sh"
+        language: python
+        #        language_version: python3.9
+        types: [python]
+        require_serial: true
+        verbose: true
   - repo: https://github.com/codespell-project/codespell
     rev: v2.3.0
     hooks:
@@ -62,7 +65,7 @@ repos:
       entry: "./scripts/pre-commit-mypy-run.sh"
       language: python
       # use your preferred Python version
-      # language_version: python3.8
+      # language_version: python3.9
       additional_dependencies: []
       types: [python]
       # use require_serial so that script
@@ -80,7 +83,14 @@ repos:
           notebook/.* |
           website/.*
         )$
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.8.5
+
+  - repo: local
     hooks:
-      - id: nbqa-black
+      - id: generate-devcontainer-files
+        name: Generate devcontainer files
+        entry: "scripts/devcontainer/generate-devcontainers.sh"
+        language: python
+        require_serial: true
+        verbose: true
+        additional_dependencies: ['jinja2']
+        files: ^(scripts/devcontainer/.*)$

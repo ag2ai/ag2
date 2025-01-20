@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials, credentials_all_llms
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -37,6 +37,15 @@ def conversable_agent():
         llm_config=False,
         human_input_mode="NEVER",
     )
+
+
+@pytest.mark.parametrize("name", ["agent name", "agent_name ", " agent\nname", " agent\tname"])
+def test_conversable_agent_name_with_white_space_raises_error(name: str) -> None:
+    with pytest.raises(
+        ValueError,
+        match=f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'",
+    ):
+        ConversableAgent(name=name)
 
 
 def test_sync_trigger():
@@ -387,9 +396,9 @@ def test_conversable_agent():
     pre_len = len(dummy_agent_1.chat_messages[dummy_agent_2])
     with pytest.raises(ValueError):
         dummy_agent_1.receive({"message": "hello"}, dummy_agent_2)
-    assert pre_len == len(
-        dummy_agent_1.chat_messages[dummy_agent_2]
-    ), "When the message is not an valid openai message, it should not be appended to the oai conversation."
+    assert pre_len == len(dummy_agent_1.chat_messages[dummy_agent_2]), (
+        "When the message is not an valid openai message, it should not be appended to the oai conversation."
+    )
 
     # monkeypatch.setattr(sys, "stdin", StringIO("exit"))
     dummy_agent_1.send("TERMINATE", dummy_agent_2)  # send a str
@@ -406,9 +415,9 @@ def test_conversable_agent():
     with pytest.raises(ValueError):
         dummy_agent_1.send({"message": "hello"}, dummy_agent_2)
 
-    assert pre_len == len(
-        dummy_agent_1.chat_messages[dummy_agent_2]
-    ), "When the message is not a valid openai message, it should not be appended to the oai conversation."
+    assert pre_len == len(dummy_agent_1.chat_messages[dummy_agent_2]), (
+        "When the message is not a valid openai message, it should not be appended to the oai conversation."
+    )
 
     # update system message
     dummy_agent_1.update_system_message("new system message")
@@ -451,16 +460,16 @@ def test_generate_reply():
     messages = [{"function_call": {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}, "role": "assistant"}]
 
     # when sender is None, messages is provided
-    assert (
-        dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == 15
-    ), "generate_reply not working when sender is None"
+    assert dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == 15, (
+        "generate_reply not working when sender is None"
+    )
 
     # when sender is provided, messages is None
     dummy_agent_1 = ConversableAgent(name="dummy_agent_1", llm_config=False, human_input_mode="ALWAYS")
     dummy_agent_2._oai_messages[dummy_agent_1] = messages
-    assert (
-        dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == 15
-    ), "generate_reply not working when messages is None"
+    assert dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == 15, (
+        "generate_reply not working when messages is None"
+    )
 
     dummy_agent_2.register_reply(["str", None], ConversableAgent.generate_oai_reply)
     with pytest.raises(SenderRequired):
@@ -575,7 +584,7 @@ def test_update_function_signature_and_register_functions(mock_credentials: Cred
 
 
 def test__wrap_function_sync():
-    CurrencySymbol = Literal["USD", "EUR"]
+    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
@@ -613,7 +622,7 @@ def test__wrap_function_sync():
 
 @pytest.mark.asyncio
 async def test__wrap_function_async():
-    CurrencySymbol = Literal["USD", "EUR"]
+    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
@@ -812,7 +821,7 @@ def test_register_for_llm_with_docstring(mock_credentials: Credentials):
     assert exec_python.description == "Execute a Python cell."
 
 
-def test_register_for_llm_without_LLM():
+def test_register_for_llm_without_LLM():  # noqa: N802
     agent = ConversableAgent(name="agent", llm_config=None)
     with pytest.raises(
         AssertionError,
@@ -912,10 +921,7 @@ def test_register_functions(mock_credentials: Credentials):
     assert agent.llm_config["tools"] == expected
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -968,7 +974,7 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     # 'await' is used to pause and resume code execution for async IO operations.
     # Without 'await', an async function returns a coroutine object but doesn't execute the function.
     # With 'await', the async function is executed and the current function is paused until the awaited function returns a result.
-    user_proxy.initiate_chat(  # noqa: F704
+    user_proxy.initiate_chat(
         coder,
         message="Create a timer for 1 second and then a stopwatch for 2 seconds.",
     )
@@ -977,16 +983,11 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
-@pytest.mark.asyncio()
-async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
+async def _test_function_registration_e2e_async(credentials: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
         system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-        llm_config=credentials_gpt_4o.llm_config,
+        llm_config=credentials.llm_config,
     )
 
     # create a UserProxyAgent instance named "user_proxy"
@@ -1034,7 +1035,7 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
     # 'await' is used to pause and resume code execution for async IO operations.
     # Without 'await', an async function returns a coroutine object but doesn't execute the function.
     # With 'await', the async function is executed and the current function is paused until the awaited function returns a result.
-    await user_proxy.a_initiate_chat(  # noqa: F704
+    await user_proxy.a_initiate_chat(
         coder,
         message="Create a timer for 1 second and then a stopwatch for 2 seconds.",
     )
@@ -1043,9 +1044,15 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
-def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_function_registration_e2e_async(
+    credentials: Credentials,
+) -> None:
+    _test_function_registration_e2e_async(credentials)
 
+
+@pytest.mark.openai
+def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
         name="assistant",
@@ -1064,7 +1071,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(res.chat_history) <= 6
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_message_func(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1115,7 +1122,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
     print(chat_res_play.summary)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_summary(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1346,7 +1353,6 @@ def test_chat_history():
 
 
 def test_http_client():
-
     import httpx
 
     with pytest.raises(TypeError):
@@ -1367,7 +1373,6 @@ def test_http_client():
 
 
 def test_adding_duplicate_function_warning():
-
     config_base = [{"base_url": "http://0.0.0.0:8000", "api_key": "NULL"}]
 
     agent = autogen.ConversableAgent(
@@ -1476,7 +1481,7 @@ def test_handle_carryover():
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_context_variables():
     # Test initialization with context_variables
     initial_context = {"test_key": "test_value", "number": 42, "nested": {"inner": "value"}}

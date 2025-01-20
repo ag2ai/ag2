@@ -8,7 +8,7 @@ import functools
 import inspect
 import json
 from logging import getLogger
-from typing import Annotated, Any, Callable, Dict, ForwardRef, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field
 from typing_extensions import Literal, get_args, get_origin
@@ -134,17 +134,15 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
     """
 
     def type2description(k: str, v: Union[Annotated[type[Any], str], type[Any]]) -> str:
-        # handles Annotated
-        if hasattr(v, "__metadata__"):
-            retval = v.__metadata__[0]
-            if isinstance(retval, AG2Field):
-                return retval.description  # type: ignore[return-value]
-            else:
-                raise ValueError(
-                    f"Invalid {retval} for parameter {k}, should be a DescriptionField, got {type(retval)}"
-                )
-        else:
+        if not hasattr(v, "__metadata__"):
             return k
+
+        # handles Annotated
+        retval = v.__metadata__[0]
+        if isinstance(retval, AG2Field):
+            return retval.description  # type: ignore[return-value]
+        else:
+            raise ValueError(f"Invalid {retval} for parameter {k}, should be a DescriptionField, got {type(retval)}")
 
     schema = type2schema(v)
     if k in default_values:
@@ -208,6 +206,7 @@ def get_missing_annotations(typed_signature: inspect.Signature, required: list[s
     """Get the missing annotations of a function
 
     Ignores the parameters with default values as they are not required to be annotated, but logs a warning.
+
     Args:
         typed_signature: The signature of the function with type annotations
         required: The required parameters of the function
@@ -236,10 +235,10 @@ def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, de
         TypeError: If the function is not annotated
 
     Examples:
-
     ```python
     def f(a: Annotated[str, "Parameter a"], b: int = 2, c: Annotated[float, "Parameter c"] = 0.1) -> None:
         pass
+
 
     get_function_schema(f, description="function f")
 

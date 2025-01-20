@@ -7,20 +7,21 @@
 import json
 import logging
 import re
-from typing import Dict, List, Union
+from typing import Union
 
 import tiktoken
 
-try:
+from .import_utils import optional_import_block
+
+with optional_import_block() as result:
     from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image
 
-    img_util_imported = True
-except ImportError:
+img_util_imported = result.is_successful
+
+if not result.is_successful:
 
     def num_tokens_from_gpt_image(*args, **kwargs):
         return 0
-
-    img_util_imported = False
 
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,7 @@ def token_left(input: Union[str, list, dict], model="gpt-3.5-turbo-0613") -> int
 
 def count_token(input: Union[str, list, dict], model: str = "gpt-3.5-turbo-0613") -> int:
     """Count number of tokens used by an OpenAI model.
+
     Args:
         input: (str, list, dict): Input to the model.
         model: (str): Model name.
@@ -155,6 +157,9 @@ def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0
         return _num_token_from_messages(messages, model="gpt-4-0613")
     elif "mistral-" in model or "mixtral-" in model:
         logger.info("Mistral.AI models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "deepseek" in model:
+        logger.info("Deepseek models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
     else:
         raise NotImplementedError(
@@ -232,9 +237,9 @@ def num_tokens_from_functions(functions, model="gpt-3.5-turbo-0613") -> int:
         if "parameters" in function:
             parameters = function["parameters"]
             if "properties" in parameters:
-                for propertiesKey in parameters["properties"]:
-                    function_tokens += len(encoding.encode(propertiesKey))
-                    v = parameters["properties"][propertiesKey]
+                for properties_key in parameters["properties"]:
+                    function_tokens += len(encoding.encode(properties_key))
+                    v = parameters["properties"][properties_key]
                     for field in v:
                         if field == "type":
                             function_tokens += 2

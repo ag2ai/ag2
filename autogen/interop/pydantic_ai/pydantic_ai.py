@@ -9,6 +9,7 @@ from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
 
+from ...import_utils import optional_import_block
 from ..registry import register_interoperable_class
 from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
@@ -17,8 +18,7 @@ __all__ = ["PydanticAIInteroperability"]
 
 @register_interoperable_class("pydanticai")
 class PydanticAIInteroperability:
-    """
-    A class implementing the `Interoperable` protocol for converting Pydantic AI tools
+    """A class implementing the `Interoperable` protocol for converting Pydantic AI tools
     into a general `Tool` format.
 
     This class takes a `PydanticAITool` and converts it into a standard `Tool` object,
@@ -32,8 +32,7 @@ class PydanticAIInteroperability:
         ctx: Any,
         tool: Any,
     ) -> Callable[..., Any]:
-        """
-        Wraps the tool's function to inject context parameters and handle retries.
+        """Wraps the tool's function to inject context parameters and handle retries.
 
         This method ensures that context parameters are properly passed to the tool
         when invoked and that retries are managed according to the tool's settings.
@@ -88,8 +87,7 @@ class PydanticAIInteroperability:
 
     @classmethod
     def convert_tool(cls, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
-        """
-        Converts a given Pydantic AI tool into a general `Tool` format.
+        """Converts a given Pydantic AI tool into a general `Tool` format.
 
         This method verifies that the provided tool is a valid `PydanticAITool`,
         handles context dependencies if necessary, and returns a standardized `Tool` object.
@@ -154,9 +152,10 @@ class PydanticAIInteroperability:
         if sys.version_info < (3, 9):
             return "This submodule is only supported for Python versions 3.9 and above"
 
-        try:
-            import pydantic_ai.tools
-        except ImportError:
+        with optional_import_block() as result:
+            import pydantic_ai.tools  # noqa: F401
+
+        if not result.is_successful:
             return "Please install `interop-pydantic-ai` extra to use this module:\n\n\tpip install ag2[interop-pydantic-ai]"
 
         return None

@@ -7,27 +7,26 @@
 import json
 from pprint import pprint
 from tempfile import TemporaryDirectory
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
-from websockets.exceptions import ConnectionClosed
 
 import autogen
 from autogen.cache.cache import Cache
+from autogen.import_utils import optional_import_block
 from autogen.io import IOWebsockets
 from autogen.messages.base_message import BaseMessage, wrap_message
 
-from ..conftest import Credentials, skip_openai
+from ..conftest import Credentials
 
 # Check if the websockets module is available
-try:
+with optional_import_block() as result:
+    from websockets.exceptions import ConnectionClosed
     from websockets.sync.client import connect as ws_connect
-except ImportError:  # pragma: no cover
-    skip_test = True
-else:
-    skip_test = False
+
+skip_test = not result.is_successful
 
 
 @wrap_message
@@ -108,7 +107,7 @@ class TestConsoleIOWithWebsockets:
 
         print("Test passed.", flush=True)
 
-    @pytest.mark.skipif(skip_openai, reason="requested to skip")
+    @pytest.mark.openai
     def test_chat(self, credentials_gpt_4o_mini: Credentials) -> None:
         print("Testing setup", flush=True)
 
@@ -150,7 +149,7 @@ class TestConsoleIOWithWebsockets:
                         flush=True,
                     )
                     try:
-                        user_proxy.initiate_chat(  # noqa: F704
+                        user_proxy.initiate_chat(
                             agent,
                             message=initial_msg,
                             cache=cache,

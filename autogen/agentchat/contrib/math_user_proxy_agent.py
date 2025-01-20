@@ -7,7 +7,7 @@
 import os
 import re
 from time import sleep
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, Extra, root_validator
 
@@ -15,6 +15,11 @@ from autogen._pydantic import PYDANTIC_V1
 from autogen.agentchat import Agent, UserProxyAgent
 from autogen.code_utils import UNKNOWN, execute_code, extract_code, infer_lang
 from autogen.math_utils import get_answer
+
+from ...import_utils import optional_import_block, require_optional_import
+
+with optional_import_block() as result:
+    import wolframalpha
 
 PROMPTS = {
     # default
@@ -124,7 +129,7 @@ def _add_print_to_last_line(code):
 
 
 def _remove_print(code):
-    """remove all print statements from a string."""
+    """Remove all print statements from a string."""
     lines = code.splitlines()
     lines = [line for line in lines if not line.startswith("print(")]
     return "\n".join(lines)
@@ -147,23 +152,22 @@ class MathUserProxyAgent(UserProxyAgent):
         max_invalid_q_per_step=3,  # a parameter needed in MathChat
         **kwargs,
     ):
-        """
-        Args:
-            name (str): name of the agent
-            is_termination_msg (function): a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message.
-                The dict can contain the following keys: "content", "role", "name", "function_call".
-            human_input_mode (str): whether to ask for human inputs every time a message is received.
-                Possible values are "ALWAYS", "TERMINATE", "NEVER".
-                (1) When "ALWAYS", the agent prompts for human input every time a message is received.
-                    Under this mode, the conversation stops when the human input is "exit",
-                    or when is_termination_msg is True and there is no human input.
-                (2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or
-                    the number of auto reply reaches the max_consecutive_auto_reply.
-                (3) (Default) When "NEVER", the agent will never prompt for human input. Under this mode, the conversation stops
-                    when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
-            default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
-            max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
-            **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
+        """Args:
+        name (str): name of the agent
+        is_termination_msg (function): a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message.
+            The dict can contain the following keys: "content", "role", "name", "function_call".
+        human_input_mode (str): whether to ask for human inputs every time a message is received.
+            Possible values are "ALWAYS", "TERMINATE", "NEVER".
+            (1) When "ALWAYS", the agent prompts for human input every time a message is received.
+                Under this mode, the conversation stops when the human input is "exit",
+                or when is_termination_msg is True and there is no human input.
+            (2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or
+                the number of auto reply reaches the max_consecutive_auto_reply.
+            (3) (Default) When "NEVER", the agent will never prompt for human input. Under this mode, the conversation stops
+                when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
+        default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
+        max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
+        **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
         """
         super().__init__(
             name=name,
@@ -366,9 +370,9 @@ class MathUserProxyAgent(UserProxyAgent):
 
 def get_from_dict_or_env(data: dict[str, Any], key: str, env_key: str, default: Optional[str] = None) -> str:
     """Get a value from a dictionary or an environment variable."""
-    if key in data and data[key]:
+    if data.get(key):
         return data[key]
-    elif env_key in os.environ and os.environ[env_key]:
+    elif os.environ.get(env_key):
         return os.environ[env_key]
     elif default is not None:
         return default
@@ -402,16 +406,13 @@ class WolframAlphaAPIWrapper(BaseModel):
             extra = Extra.forbid
 
     @root_validator(skip_on_failure=True)
+    @classmethod
+    @require_optional_import("wolframalpha", "mathchat")
     def validate_environment(cls, values: dict) -> dict:
         """Validate that api key and python package exists in environment."""
         wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
         values["wolfram_alpha_appid"] = wolfram_alpha_appid
 
-        try:
-            import wolframalpha
-
-        except ImportError as e:
-            raise ImportError("wolframalpha is not installed. Please install it with `pip install wolframalpha`") from e
         client = wolframalpha.Client(wolfram_alpha_appid)
         values["wolfram_client"] = client
 

@@ -14,7 +14,6 @@ import sys
 import uuid
 from pathlib import Path
 from types import TracebackType
-from typing import Dict, Optional, Type, Union
 
 import docker
 

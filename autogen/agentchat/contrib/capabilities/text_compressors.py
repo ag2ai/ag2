@@ -4,15 +4,12 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Protocol
 
-IMPORT_ERROR: Optional[Exception] = None
-try:
+from ....import_utils import optional_import_block, require_optional_import
+
+with optional_import_block() as result:
     import llmlingua
-except ImportError:
-    IMPORT_ERROR = ImportError("LLMLingua is not installed. Please install it with `pip install autogen[long-context]`")
-    PromptCompressor = object
-else:
     from llmlingua import PromptCompressor
 
 
@@ -27,6 +24,7 @@ class TextCompressor(Protocol):
         ...
 
 
+@require_optional_import("llmlingua", "long-context")
 class LLMLingua:
     """Compresses text messages using LLMLingua for improved efficiency in processing and response generation.
 
@@ -43,8 +41,7 @@ class LLMLingua:
         ),
         structured_compression: bool = False,
     ) -> None:
-        """
-        Args:
+        """Args:
             prompt_compressor_kwargs (dict): A dictionary of keyword arguments for the PromptCompressor. Defaults to a
                 dictionary with model_name set to "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
                 use_llmlingua2 set to True, and device_map set to "cpu".
@@ -56,9 +53,6 @@ class LLMLingua:
         Raises:
             ImportError: If the llmlingua library is not installed.
         """
-        if IMPORT_ERROR:
-            raise IMPORT_ERROR
-
         self._prompt_compressor = PromptCompressor(**prompt_compressor_kwargs)
 
         assert isinstance(self._prompt_compressor, llmlingua.PromptCompressor)

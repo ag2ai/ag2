@@ -12,7 +12,7 @@ import inspect
 from dataclasses import dataclass, field
 from importlib.abc import SourceLoader
 from textwrap import dedent, indent
-from typing import Any, Callable, Generic, List, Set, TypeVar, Union
+from typing import Any, Callable, Generic, TypeVar, Union
 
 from typing_extensions import ParamSpec
 
@@ -162,7 +162,7 @@ def with_requirements(
 
 
 def _build_python_functions_file(
-    funcs: list[FunctionWithRequirements[Any, P] | Callable[..., Any] | FunctionWithRequirementsStr]
+    funcs: list[FunctionWithRequirements[Any, P] | Callable[..., Any] | FunctionWithRequirementsStr],
 ) -> str:
     # First collect all global imports
     global_imports: set[str] = set()

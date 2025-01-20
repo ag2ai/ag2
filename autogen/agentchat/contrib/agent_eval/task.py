@@ -10,9 +10,7 @@ from pydantic import BaseModel
 
 
 class Task(BaseModel):
-    """
-    Class representing a task for agent completion, includes example agent execution for criteria generation.
-    """
+    """Class representing a task for agent completion, includes example agent execution for criteria generation."""
 
     name: str
     description: str
@@ -28,10 +26,11 @@ class Task(BaseModel):
 
     @staticmethod
     def parse_json_str(task: str):
-        """
-        Create a Task object from a json object.
+        """Create a Task object from a json object.
+
         Args:
             json_data (dict): A dictionary that represents the task.
+
         Returns:
             Task: A Task object that represents the json task information.
         """

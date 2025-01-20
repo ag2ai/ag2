@@ -6,17 +6,17 @@
 # SPDX-License-Identifier: MIT
 import abc
 import logging
-import os
 from collections.abc import Sequence
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Optional, Union
 
+from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
-try:
+with optional_import_block():
+    from fastembed import TextEmbedding
     from qdrant_client import QdrantClient, models
-except ImportError:
-    raise ImportError("Please install qdrant-client: `pip install qdrant-client`")
+
 
 logger = get_logger(__name__)
 
@@ -29,6 +29,7 @@ class EmbeddingFunction(abc.ABC):
         raise NotImplementedError
 
 
+@require_optional_import("fastembed", "retrievechat-qdrant")
 class FastEmbedEmbeddingFunction(EmbeddingFunction):
     """Embedding function implementation using FastEmbed - https://qdrant.github.io/fastembed."""
 
@@ -58,12 +59,6 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
         Raises:
             ValueError: If the model_name is not in the format `<org>/<model>` e.g. BAAI/bge-small-en-v1.5.
         """
-        try:
-            from fastembed import TextEmbedding
-        except ImportError as e:
-            raise ValueError(
-                "The 'fastembed' package is not installed. Please install it with `pip install fastembed`",
-            ) from e
         self._batch_size = batch_size
         self._parallel = parallel
         self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir, threads=threads, **kwargs)
@@ -74,10 +69,9 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
         return [embedding.tolist() for embedding in embeddings]
 
 
+@require_optional_import("qdrant_client", "retrievechat-qdrant")
 class QdrantVectorDB(VectorDB):
-    """
-    A vector database implementation that uses Qdrant as the backend.
-    """
+    """A vector database implementation that uses Qdrant as the backend."""
 
     def __init__(
         self,
@@ -89,8 +83,7 @@ class QdrantVectorDB(VectorDB):
         collection_options: dict = {},
         **kwargs,
     ) -> None:
-        """
-        Initialize the vector database.
+        """Initialize the vector database.
 
         Args:
             client: qdrant_client.QdrantClient | An instance of QdrantClient.
@@ -107,8 +100,7 @@ class QdrantVectorDB(VectorDB):
         self.type = "qdrant"
 
     def create_collection(self, collection_name: str, overwrite: bool = False, get_or_create: bool = True) -> None:
-        """
-        Create a collection in the vector database.
+        """Create a collection in the vector database.
         Case 1. if the collection does not exist, create the collection.
         Case 2. the collection exists, if overwrite is True, it will overwrite the collection.
         Case 3. the collection exists and overwrite is False, if get_or_create is True, it will get the collection,
@@ -137,8 +129,7 @@ class QdrantVectorDB(VectorDB):
             raise ValueError(f"Collection {collection_name} already exists.")
 
     def get_collection(self, collection_name: str = None):
-        """
-        Get the collection from the vector database.
+        """Get the collection from the vector database.
 
         Args:
             collection_name: str | The name of the collection.
@@ -163,8 +154,7 @@ class QdrantVectorDB(VectorDB):
         return self.client.delete_collection(collection_name)
 
     def insert_docs(self, docs: list[Document], collection_name: str = None, upsert: bool = False) -> None:
-        """
-        Insert documents into the collection of the vector database.
+        """Insert documents into the collection of the vector database.
 
         Args:
             docs: List[Document] | A list of documents. Each document is a TypedDict `Document`.
@@ -200,8 +190,7 @@ class QdrantVectorDB(VectorDB):
         raise ValueError("Some IDs do not exist. Skipping update")
 
     def delete_docs(self, ids: list[ItemID], collection_name: str = None, **kwargs) -> None:
-        """
-        Delete documents from the collection of the vector database.
+        """Delete documents from the collection of the vector database.
 
         Args:
             ids: List[ItemID] | A list of document ids. Each id is a typed `ItemID`.
@@ -221,8 +210,7 @@ class QdrantVectorDB(VectorDB):
         distance_threshold: float = 0,
         **kwargs,
     ) -> QueryResults:
-        """
-        Retrieve documents from the collection of the vector database based on the queries.
+        """Retrieve documents from the collection of the vector database based on the queries.
 
         Args:
             queries: List[str] | A list of queries. Each query is a string.
@@ -254,8 +242,7 @@ class QdrantVectorDB(VectorDB):
     def get_docs_by_ids(
         self, ids: list[ItemID] = None, collection_name: str = None, include=True, **kwargs
     ) -> list[Document]:
-        """
-        Retrieve documents from the collection of the vector database based on the ids.
+        """Retrieve documents from the collection of the vector database based on the ids.
 
         Args:
             ids: List[ItemID] | A list of document ids. If None, will return all the documents. Default is None.
@@ -307,9 +294,7 @@ class QdrantVectorDB(VectorDB):
         return [self._scored_point_to_document(scored_point) for scored_point in scored_points]
 
     def _validate_update_ids(self, collection_name: str, ids: list[str]) -> bool:
-        """
-        Validates all the IDs exist in the collection
-        """
+        """Validates all the IDs exist in the collection"""
         retrieved_ids = [
             point.id for point in self.client.retrieve(collection_name, ids=ids, with_payload=False, with_vectors=False)
         ]
@@ -321,9 +306,7 @@ class QdrantVectorDB(VectorDB):
         return True
 
     def _validate_upsert_ids(self, collection_name: str, ids: list[str]) -> bool:
-        """
-        Validate none of the IDs exist in the collection
-        """
+        """Validate none of the IDs exist in the collection"""
         retrieved_ids = [
             point.id for point in self.client.retrieve(collection_name, ids=ids, with_payload=False, with_vectors=False)
         ]

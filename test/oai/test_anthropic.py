@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,24 +7,30 @@
 #!/usr/bin/env python3 -m pytest
 
 import os
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 try:
+    from anthropic.types import Message, TextBlock
+
     from autogen.oai.anthropic import AnthropicClient, _calculate_cost
 
     skip = False
 except ImportError:
     AnthropicClient = object
+    Message = object
+    TextBlock = object
     skip = True
 
+from typing import List
+
+from pydantic import BaseModel
 from typing_extensions import Literal
 
 reason = "Anthropic dependency not installed!"
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_completion():
     class MockCompletion:
         def __init__(
@@ -48,7 +54,7 @@ def mock_completion():
     return MockCompletion
 
 
-@pytest.fixture()
+@pytest.fixture
 def anthropic_client():
     return AnthropicClient(api_key="dummy_api_key")
 
@@ -66,7 +72,7 @@ def test_initialization_missing_api_key():
     AnthropicClient(api_key="dummy_api_key")
 
 
-@pytest.fixture()
+@pytest.fixture
 def anthropic_client_with_aws_credentials():
     return AnthropicClient(
         aws_access_key="dummy_access_key",
@@ -76,7 +82,7 @@ def anthropic_client_with_aws_credentials():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def anthropic_client_with_vertexai_credentials():
     return AnthropicClient(
         gcp_project_id="dummy_project_id",
@@ -92,31 +98,31 @@ def test_intialization(anthropic_client):
 
 @pytest.mark.skipif(skip, reason=reason)
 def test_intialization_with_aws_credentials(anthropic_client_with_aws_credentials):
-    assert (
-        anthropic_client_with_aws_credentials.aws_access_key == "dummy_access_key"
-    ), "`aws_access_key` should be correctly set in the config"
-    assert (
-        anthropic_client_with_aws_credentials.aws_secret_key == "dummy_secret_key"
-    ), "`aws_secret_key` should be correctly set in the config"
-    assert (
-        anthropic_client_with_aws_credentials.aws_session_token == "dummy_session_token"
-    ), "`aws_session_token` should be correctly set in the config"
-    assert (
-        anthropic_client_with_aws_credentials.aws_region == "us-west-2"
-    ), "`aws_region` should be correctly set in the config"
+    assert anthropic_client_with_aws_credentials.aws_access_key == "dummy_access_key", (
+        "`aws_access_key` should be correctly set in the config"
+    )
+    assert anthropic_client_with_aws_credentials.aws_secret_key == "dummy_secret_key", (
+        "`aws_secret_key` should be correctly set in the config"
+    )
+    assert anthropic_client_with_aws_credentials.aws_session_token == "dummy_session_token", (
+        "`aws_session_token` should be correctly set in the config"
+    )
+    assert anthropic_client_with_aws_credentials.aws_region == "us-west-2", (
+        "`aws_region` should be correctly set in the config"
+    )
 
 
 @pytest.mark.skipif(skip, reason=reason)
 def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai_credentials):
-    assert (
-        anthropic_client_with_vertexai_credentials.gcp_project_id == "dummy_project_id"
-    ), "`gcp_project_id` should be correctly set in the config"
-    assert (
-        anthropic_client_with_vertexai_credentials.gcp_region == "us-west-2"
-    ), "`gcp_region` should be correctly set in the config"
-    assert (
-        anthropic_client_with_vertexai_credentials.gcp_auth_token == "dummy_auth_token"
-    ), "`gcp_auth_token` should be correctly set in the config"
+    assert anthropic_client_with_vertexai_credentials.gcp_project_id == "dummy_project_id", (
+        "`gcp_project_id` should be correctly set in the config"
+    )
+    assert anthropic_client_with_vertexai_credentials.gcp_region == "us-west-2", (
+        "`gcp_region` should be correctly set in the config"
+    )
+    assert anthropic_client_with_vertexai_credentials.gcp_auth_token == "dummy_auth_token", (
+        "`gcp_auth_token` should be correctly set in the config"
+    )
 
 
 # Test cost calculation
@@ -153,3 +159,117 @@ def test_load_config(anthropic_client):
     }
     result = anthropic_client.load_config(params)
     assert result == expected_params, "Config should be correctly loaded"
+
+
+@pytest.mark.skipif(skip, reason=reason)
+def test_extract_json_response(anthropic_client):
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: List[Step]
+        final_answer: str
+
+    # Set up the response format
+    anthropic_client._response_format = MathReasoning
+
+    # Test case 1: JSON within tags - CORRECT
+    tagged_response = Message(
+        id="msg_123",
+        content=[
+            TextBlock(
+                text="""<json_response>
+            {
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }
+            </json_response>""",
+                type="text",
+            )
+        ],
+        model="claude-3-5-sonnet-latest",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    result = anthropic_client._extract_json_response(tagged_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
+
+    # Test case 2: Plain JSON without tags - SHOULD STILL PASS
+    plain_response = Message(
+        id="msg_123",
+        content=[
+            TextBlock(
+                text="""Here's the solution:
+            {
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }""",
+                type="text",
+            )
+        ],
+        model="claude-3-5-sonnet-latest",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    result = anthropic_client._extract_json_response(plain_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
+
+    # Test case 3: Invalid JSON - RAISE ERROR
+    invalid_response = Message(
+        id="msg_123",
+        content=[
+            TextBlock(
+                text="""<json_response>
+            {
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Missing closing brace"
+                ],
+                "final_answer": "x = -3.75"
+            """,
+                type="text",
+            )
+        ],
+        model="claude-3-5-sonnet-latest",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    with pytest.raises(
+        ValueError, match="Failed to parse response as valid JSON matching the schema for Structured Output: "
+    ):
+        anthropic_client._extract_json_response(invalid_response)
+
+    # Test case 4: No JSON content - RAISE ERROR
+    no_json_response = Message(
+        id="msg_123",
+        content=[TextBlock(text="This response contains no JSON at all.", type="text")],
+        model="claude-3-5-sonnet-latest",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    with pytest.raises(ValueError, match="No valid JSON found in response for Structured Output."):
+        anthropic_client._extract_json_response(no_json_response)
