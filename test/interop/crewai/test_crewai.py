@@ -40,7 +40,6 @@ class TestCrewAIInteroperability:
         # runtime check
         assert isinstance(interop, Interoperable)
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="This test is not supported on Windows")
     def test_convert_tool(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             file_path = f"{tmp_dir}/test.txt"
@@ -50,7 +49,7 @@ class TestCrewAIInteroperability:
             assert self.tool.name == "Read_a_file_s_content"
             assert (
                 self.tool.description
-                == "A tool that can be used to read None's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+                == "A tool that reads the content of a file. To use this tool, provide a 'file_path' parameter with the path to the file you want to read. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
             args = self.model_type(file_path=file_path)
