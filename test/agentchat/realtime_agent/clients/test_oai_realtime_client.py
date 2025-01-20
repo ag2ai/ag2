@@ -85,5 +85,5 @@ class TestOAIRealtimeClient:
         assert isinstance(calls_args[0][0], SessionCreated)
         assert isinstance(calls_args[1][0], SessionUpdated)
 
-        # check that we received the model audio response
-        assert isinstance(calls_args[-1][0], AudioDelta)
+        # check that we received the model response (audio or just text)
+        assert isinstance(calls_args[-1][0], AudioDelta) or (calls_args[-1][0].raw_message["type"] == "response.done")

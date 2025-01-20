@@ -10,15 +10,18 @@ from autogen import OpenAIWrapper
 from autogen.agentchat import Agent, ConversableAgent
 from autogen.agentchat.contrib.vectordb.utils import get_logger
 
+from ...import_utils import optional_import_block, require_optional_import
+
 logger = get_logger(__name__)
 
-try:
+with optional_import_block() as result:
     from llama_index.core.agent.runner.base import AgentRunner
     from llama_index.core.base.llms.types import ChatMessage
     from llama_index.core.chat_engine.types import AgentChatResponse
     from pydantic import BaseModel
     from pydantic import __version__ as pydantic_version
 
+if result.is_successful:
     # let's Avoid: AttributeError: type object 'Config' has no attribute 'copy'
     # check for v1 like in autogen/_pydantic.py
     is_pydantic_v1 = pydantic_version.startswith("1.")
@@ -35,11 +38,8 @@ try:
     # Added to mitigate PydanticSchemaGenerationError
     BaseModel.model_config = Config
 
-except ImportError as e:
-    logger.fatal("Failed to import llama-index. Try running 'pip install llama-index'")
-    raise e
 
-
+@require_optional_import("llama_index", "neo4j")
 class LLamaIndexConversableAgent(ConversableAgent):
     def __init__(
         self,

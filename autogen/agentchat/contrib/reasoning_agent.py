@@ -7,6 +7,7 @@ import re
 import warnings
 from typing import Optional
 
+from ...import_utils import optional_import_block
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
 
@@ -169,9 +170,10 @@ def visualize_tree(root: ThinkNode) -> None:
     Args:
         root (ThinkNode): The root node of the tree.
     """
-    try:
+    with optional_import_block() as result:
         from graphviz import Digraph
-    except ImportError:
+
+    if not result.is_successful:
         print("Please install graphviz: pip install graphviz")
         return
 

@@ -191,6 +191,8 @@ def test__update_tool_calls_from_chunk() -> None:
 
 
 # todo: remove when OpenAI removes functions from the API
+
+
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
@@ -221,6 +223,8 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 # test for tool support instead of the deprecated function calls
+
+
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:

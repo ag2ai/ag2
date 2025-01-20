@@ -13,30 +13,11 @@ import pytest
 
 import autogen
 
-skip_redis = False
-skip_docker = False
-
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 MOCK_OPEN_AI_API_KEY = "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
 
 reason = "requested to skip"
-
-
-# Registers command-line options like '--skip-docker' and '--skip-redis' via pytest hook.
-# When these flags are set, it indicates that tests requiring OpenAI or Redis (respectively) should be skipped.
-def pytest_addoption(parser):
-    parser.addoption("--skip-redis", action="store_true", help="Skip all tests that require redis")
-    parser.addoption("--skip-docker", action="store_true", help="Skip all tests that require docker")
-
-
-# pytest hook implementation extracting command line args and exposing it globally
-@pytest.hookimpl(tryfirst=True)
-def pytest_configure(config):
-    global skip_redis
-    skip_redis = config.getoption("--skip-redis", False)
-    global skip_docker
-    skip_docker = config.getoption("--skip-docker", False)
 
 
 class Secrets:
@@ -56,7 +37,7 @@ class Secrets:
         Secrets._secrets.remove(secret)
 
     @staticmethod
-    def sanitize_secrets(data: str, x=5) -> str:
+    def sanitize_secrets(data: str, x: int = 5) -> str:
         """
         Censors substrings of length `x` or greater derived from any secret in the list.
 
@@ -68,7 +49,7 @@ class Secrets:
             str: The censored string.
         """
         # Build a list of all substrings of length >= x from each secret
-        substrings = set()
+        substrings: set[str] = set()
         for secret in Secrets._secrets:
             for length in range(x, len(secret) + 1):  # Generate substrings of lengths >= x
                 substrings.update(secret[i : i + length] for i in range(len(secret) - length + 1))
@@ -77,13 +58,13 @@ class Secrets:
         pattern = re.compile("|".join(re.escape(sub) for sub in substrings))
 
         # Replace all matches with the mask
-        def mask_match(match):
+        def mask_match(match: re.Match[str]) -> str:
             return "*" * len(match.group(0))
 
         return pattern.sub(mask_match, data)
 
     @staticmethod
-    def needs_sanitizing(data: str, x=5) -> bool:
+    def needs_sanitizing(data: str, x: int = 5) -> bool:
         """
         Checks if the string contains any substrings of length `x` or greater derived from any secret in the list.
 
@@ -95,7 +76,7 @@ class Secrets:
             bool: True if the string contains any secrets, False otherwise.
         """
         # Build a list of all substrings of length >= x from each secret
-        substrings = set()
+        substrings: set[str] = set()
         for secret in Secrets._secrets:
             for length in range(x, len(secret) + 1):
                 substrings.update(secret[i : i + length] for i in range(len(secret) - length + 1))
@@ -162,45 +143,29 @@ def get_credentials(
     )
 
 
+def get_config_list_from_env(
+    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+) -> list[dict[str, Any]]:
+    if env_var_name in os.environ:
+        api_key = os.environ[env_var_name]
+        return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
+    return []
+
+
 def get_llm_credentials(
-    api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
-) -> Credentials:
-    config_list = [
-        conf
-        for conf in get_credentials(filter_dict, temperature).config_list
-        if "api_type" not in conf or conf["api_type"] == api_type
-    ]
-    assert config_list, f"No {api_type} config list found"
-
-    return Credentials(
-        llm_config={
-            "config_list": config_list,
-            "temperature": temperature,
-        }
-    )
-
-
-def get_openai_config_list_from_env(
-    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
-) -> Credentials:
-    if "OPENAI_API_KEY" in os.environ:
-        api_key = os.environ["OPENAI_API_KEY"]
-        return [{"api_key": api_key, "model": model, **filter_dict}]
-
-
-def get_openai_credentials(
-    model: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
 ) -> Credentials:
     config_list = get_credentials(filter_dict, temperature, fail_if_empty=False).config_list
 
     # Filter out non-OpenAI configs
-    config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
+    if api_type == "openai":
+        config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
 
     # If no OpenAI config found, try to get it from the environment
     if config_list == []:
-        config_list = get_openai_config_list_from_env(model, filter_dict, temperature)
+        config_list = get_config_list_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
-    assert config_list, "No OpenAI config list found"
+    assert config_list, f"No {api_type} config list found and could not be created from an env var {env_var_name}"
 
     return Credentials(
         llm_config={
@@ -208,10 +173,6 @@ def get_openai_credentials(
             "temperature": temperature,
         }
     )
-
-
-def get_google_credentials(filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0) -> Credentials:
-    return get_llm_credentials("google", filter_dict, temperature)
 
 
 @pytest.fixture
@@ -238,39 +199,64 @@ def credentials_all() -> Credentials:
 
 @pytest.fixture
 def credentials_gpt_4o_mini() -> Credentials:
-    return get_openai_credentials(model="gpt-4o-mini", filter_dict={"tags": ["gpt-4o-mini"]})
+    return get_llm_credentials(
+        "OPENAI_API_KEY", model="gpt-4o-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
+    )
 
 
 @pytest.fixture
 def credentials_gpt_4o() -> Credentials:
-    return get_openai_credentials(model="gpt-4o", filter_dict={"tags": ["gpt-4o"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="gpt-4o", api_type="openai", filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_o1_mini() -> Credentials:
-    return get_openai_credentials(model="o1-mini", filter_dict={"tags": ["o1-mini"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="o1-mini", api_type="openai", filter_dict={"tags": ["o1-mini"]})
 
 
 @pytest.fixture
 def credentials_o1() -> Credentials:
-    return get_openai_credentials(model="o1", filter_dict={"tags": ["o1"]})
+    return get_llm_credentials("OPENAI_API_KEY", model="o1", api_type="openai", filter_dict={"tags": ["o1"]})
 
 
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
-    return get_openai_credentials(
-        model="gpt-4o-realtime-preview", filter_dict={"tags": ["gpt-4o-realtime"]}, temperature=0.6
+    return get_llm_credentials(
+        "OPENAI_API_KEY",
+        model="gpt-4o-realtime-preview",
+        filter_dict={"tags": ["gpt-4o-realtime"]},
+        api_type="openai",
+        temperature=0.6,
     )
 
 
 @pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
-    return get_google_credentials(filter_dict={"tags": ["gemini-realtime"]}, temperature=0.6)
+    return get_llm_credentials(
+        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-realtime"]}
+    )
 
 
 @pytest.fixture
 def credentials() -> Credentials:
     return get_credentials(filter_dict={"tags": ["gpt-4o"]})
+
+
+@pytest.fixture
+def credentials_gemini_pro() -> Credentials:
+    return get_llm_credentials(
+        "GEMINI_API_KEY", model="gemini-pro", api_type="google", filter_dict={"tags": ["gemini-pro"]}
+    )
+
+
+@pytest.fixture
+def credentials_anthropic_claude_sonnet() -> Credentials:
+    return get_llm_credentials(
+        "ANTHROPIC_API_KEY",
+        model="claude-3-sonnet-20240229",
+        api_type="anthropic",
+        filter_dict={"tags": ["anthropic-claude-sonnet"]},
+    )
 
 
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
@@ -292,7 +278,7 @@ def mock_credentials() -> Credentials:
     return get_mock_credentials(model="gpt-4o")
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Exit status 5 means there were no tests collected
     # so we should set the exit status to 1
     # https://docs.pytest.org/en/stable/reference/exit-codes.html
@@ -320,3 +306,19 @@ class CensoredError(Exception):
 #         if Secrets.needs_sanitizing(original_message):
 #             censored_exception = CensoredError(call.excinfo.value)
 #             call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
+
+
+credentials_all_llms = [
+    pytest.param(
+        credentials_gpt_4o_mini.__name__,
+        marks=pytest.mark.openai,
+    ),
+    pytest.param(
+        credentials_gemini_pro.__name__,
+        marks=pytest.mark.gemini,
+    ),
+    pytest.param(
+        credentials_anthropic_claude_sonnet.__name__,
+        marks=pytest.mark.anthropic,
+    ),
+]

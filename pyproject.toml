@@ -249,6 +249,7 @@ markers = [
     "all",
     "openai",
     "gemini",
+    "anthropic",
     "redis",
     "docker",
 ]
@@ -312,7 +313,6 @@ exclude = [
     # This file needs to be either upgraded or removed and therefore should be
     # ignore from type checking for now
     "math_utils\\.py$",
-    "**/cap/py/autogencap/proto/*",
 ]
 
 [tool.ruff.lint.mccabe]
@@ -347,7 +347,9 @@ files = [
     "test/interop",
     "test/agentchat/realtime_agent",
     "test/messages",
+    "test/conftest.py",
 ]
+
 exclude = [
     "autogen/math_utils\\.py",
     "autogen/oai/completion\\.py",

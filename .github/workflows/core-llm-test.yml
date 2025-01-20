@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies and run tests with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: OpenAI
+name: Core tests with LLMs
 
 on:
   pull_request:
@@ -12,20 +12,18 @@ on:
       - "notebook/agentchat_auto_feedback_from_code_execution.ipynb"
       - "notebook/agentchat_function_call.ipynb"
       - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
-      - ".github/workflows/openai.yml"
+      - ".github/workflows/core-llm-test.yml"
 permissions:
   {}
-  # actions: read
-  # checks: read
-  # contents: read
-  # deployments: read
 
 jobs:
   test:
     strategy:
       matrix:
+        llm: ["openai", "gemini", "anthropic"]
+        python-version: ["3.9"]
         os: [ubuntu-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     environment: openai1
     services:
@@ -48,36 +46,26 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
+        if: matrix.llm == 'openai'
         run: |
           docker --version
-          uv pip install --system -e ".[test]"
+          uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
-      - name: Install packages for test when needed
-        if: matrix.python-version == '3.9'
+      - name: Install packages for ${{ matrix.llm }}
+        if: matrix.llm != 'openai'
         run: |
-          uv pip install --system docker
-          uv pip install --system -e .[redis,interop]
-      - name: Coverage
-        if: matrix.python-version == '3.9'
+          docker --version
+          uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
+          python -c "import autogen"
+      - name: LLM tests using ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
-        run: |
-          bash scripts/test.sh test --ignore=test/agentchat/contrib --durations=10 --durations-min=1.0
-      - name: Coverage and check notebook outputs
-        if: matrix.python-version != '3.9'
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
-          WOLFRAM_ALPHA_APPID: ${{ secrets.WOLFRAM_ALPHA_APPID }}
-          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
-        run: |
-          uv pip install --system nbconvert nbformat ipykernel
-          bash scripts/test.sh test/test_notebook.py --durations=10 --durations-min=1.0
-          cat "$(pwd)/test/executed_openai_notebook_output.txt"
+        run: bash scripts/test-core-llm.sh -m "${{ matrix.llm }}"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

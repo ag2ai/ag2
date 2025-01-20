@@ -1,10 +1,10 @@
-# Devcontainer Configurations for AutoGen
+# Devcontainer Configurations for AG2
 
-Welcome to the `.devcontainer` directory! Here you'll find Dockerfiles and devcontainer configurations that are essential for setting up your AutoGen development environment. Below is a brief overview and how you can utilize them effectively.
+Welcome to the `.devcontainer` directory! Here you'll find Dockerfiles and devcontainer configurations that are essential for setting up your AG2 development environment. Below is a brief overview and how you can utilize them effectively.
 
 These configurations can be used with Codespaces and locally.
 
-## Developing AutoGen with Devcontainers
+## Developing AG2 with Devcontainers
 
 ### Prerequisites
 
@@ -17,7 +17,7 @@ These configurations can be used with Codespaces and locally.
 1. Open the project in Visual Studio Code.
 2. Press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
 3. Select the desired python environment and wait for the container to build.
-4. Once the container is built, you can start developing AutoGen.
+4. Once the container is built, you can start developing AG2.
 
 ### Troubleshooting Common Issues
 

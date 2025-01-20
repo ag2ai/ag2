@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -983,13 +983,11 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
+async def _test_function_registration_e2e_async(credentials: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
         system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-        llm_config=credentials_gpt_4o.llm_config,
+        llm_config=credentials.llm_config,
     )
 
     # create a UserProxyAgent instance named "user_proxy"
@@ -1044,6 +1042,13 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
 
     timer_mock.assert_called_once_with(num_seconds="1")
     stopwatch_mock.assert_called_once_with(num_seconds="2")
+
+
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_function_registration_e2e_async(
+    credentials: Credentials,
+) -> None:
+    _test_function_registration_e2e_async(credentials)
 
 
 @pytest.mark.openai

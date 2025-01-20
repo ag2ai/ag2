@@ -33,7 +33,7 @@ body:
     attributes:
       label: Additional Information
       description: |
-        - AutoGen Version: <!-- Specify the AutoGen version (e.g., v0.2.0) -->
+        - Package Name & Version: <!-- Specify the package name and version (e.g., autogen v0.7.2) -->
         - Operating System: <!-- Specify the OS (e.g., Windows 10, Ubuntu 20.04) -->
         - Python Version: <!-- Specify the Python version (e.g., 3.9) -->
         - Related Issues: <!-- Link to any related issues here (e.g., #1) -->

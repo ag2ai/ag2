@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, ChatContext, Depends
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 
 class MyContext(BaseContext, BaseModel):
@@ -183,15 +183,12 @@ class TestDependencyInjection:
 
         assert actual == expected
 
-    @pytest.mark.openai
-    @pytest.mark.parametrize("is_async", [False, True])
-    @pytest.mark.asyncio
-    async def test_end2end(self, credentials_gpt_4o_mini, is_async: bool) -> None:
+    async def _test_end2end(self, credentials, is_async: bool) -> None:
         class UserContext(BaseContext, BaseModel):
             username: str
             password: str
 
-        agent = ConversableAgent(name="agent", llm_config=credentials_gpt_4o_mini.llm_config)
+        agent = ConversableAgent(name="agent", llm_config=credentials.llm_config)
         user = UserContext(username="user23", password="password23")
         users = [user]
 
@@ -236,3 +233,12 @@ class TestDependencyInjection:
             UserContext(username="user23", password="password23"),
             "Login successful.",
         )
+
+    @pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+    @pytest.mark.parametrize("is_async", [False, True])
+    def test_end2end(
+        self,
+        credentials: Credentials,
+        is_async: bool,
+    ) -> None:
+        self._test_end2end(credentials, is_async)

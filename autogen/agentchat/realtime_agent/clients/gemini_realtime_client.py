@@ -163,7 +163,7 @@ class GeminiRealtimeClient:
     async def session_update(self, session_options: dict[str, Any]) -> None:
         """Record or apply session updates."""
         if self._is_reading_events:
-            self.logger.warning("Is reading events. Session update would be ignored.")
+            self.logger.warning("Is reading events. Session update will be ignored.")
         # Record session updates
         else:
             self._pending_session_updates.update(session_options)

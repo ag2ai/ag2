@@ -1,13 +1,13 @@
 ---
-title: Portkey Integration with AutoGen
+title: Portkey Integration
 ---
 
 
 <img src="https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Autogen.png?raw=true" alt="Portkey Metrics Visualization"  />
 
-[Portkey](https://portkey.ai) is a 2-line upgrade to make your AutoGen agents reliable, cost-efficient, and fast.
+[Portkey](https://portkey.ai) is a 2-line upgrade to make your AG2 agents reliable, cost-efficient, and fast.
 
-Portkey adds 4 core production capabilities to any AutoGen agent:
+Portkey adds 4 core production capabilities to any AG2 agent:
 1. Routing to 200+ LLMs
 2. Making each LLM call more robust
 3. Full-stack tracing & cost, performance analytics
@@ -19,7 +19,7 @@ Portkey adds 4 core production capabilities to any AutoGen agent:
 2. ```bash
    pip install -qU pyautogen portkey-ai
    ```
-   **Configure AutoGen with Portkey:**
+   **Configure AG2 with Portkey:**
 
    ```python
    from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
@@ -81,7 +81,7 @@ Here’s the output from your Agent’s run on Portkey's dashboard<br />
 <img src="https://github.com/siddharthsambharia-portkey/Portkey-Product-Images/blob/main/Portkey-Dashboard.png?raw=true" alt="Portkey Dashboard" />
 
 ## Key Features
-Portkey offers a range of advanced features to enhance your AutoGen agents. Here’s an overview
+Portkey offers a range of advanced features to enhance your AG2 agents. Here’s an overview
 
 | Feature | Description |
 |---------|-------------|
@@ -97,7 +97,7 @@ Portkey offers a range of advanced features to enhance your AutoGen agents. Here
 
 ## Colab Notebook
 
-For a hands-on example of integrating Portkey with Autogen, check out our notebook<br /> <br />[![Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://git.new/Portkey-Autogen) .
+For a hands-on example of integrating Portkey with AG2, check out our notebook<br /> <br />[![Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://git.new/Portkey-Autogen) .
 
 
 
@@ -124,7 +124,7 @@ config = [
     }
 ]
 ```
-Note: AutoGen messages will go through Portkey's AI Gateway following OpenAI's API signature. Some language models may not work properly because messages need to be in a specific role order.
+Note: AG2 messages will go through Portkey's AI Gateway following OpenAI's API signature. Some language models may not work properly because messages need to be in a specific role order.
 
 ### Reliability
 
@@ -184,7 +184,7 @@ Access detailed logs and traces of agent activities, function calls, and errors.
 </AccordionGroup>
 
 ### Guardrails
-AutoGen agents, while powerful, can sometimes produce unexpected or undesired outputs. Portkey's Guardrails feature helps enforce agent behavior in real-time, ensuring your AutoGen agents operate within specified parameters. Verify both the **inputs** to and *outputs* from your agents to ensure they adhere to specified formats and content guidelines. Learn more about Portkey's Guardrails [here](https://portkey.ai/docs/product/guardrails)
+AG2 agents, while powerful, can sometimes produce unexpected or undesired outputs. Portkey's Guardrails feature helps enforce agent behavior in real-time, ensuring your AG2 agents operate within specified parameters. Verify both the **inputs** to and *outputs* from your agents to ensure they adhere to specified formats and content guidelines. Learn more about Portkey's Guardrails [here](https://portkey.ai/docs/product/guardrails)
 
 ### Continuous Improvement
 
