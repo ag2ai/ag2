@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import importlib
 import inspect
+import sys
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from functools import wraps
@@ -42,7 +42,6 @@ def optional_import_block() -> Generator[Result, None, None]:
     """
     result = Result()
     try:
-        print("inside with")
         yield result
         result._failed = False
     except ImportError as e:
@@ -63,18 +62,7 @@ def get_missing_imports(modules: Union[str, Iterable[str]]):
     if isinstance(modules, str):
         modules = [modules]
 
-    missing_modules = []
-    for module_name in modules:
-        try:
-            importlib.import_module(module_name)
-        except ImportError:
-            missing_modules.append(module_name)
-    return missing_modules
-
-    # to_return = [m for m in modules if m not in globals()]
-    # print(f"{modules=}")
-    # print(f"{to_return=}")
-    # return to_return
+    return [m for m in modules if m not in sys.modules]
 
 
 T = TypeVar("T")
@@ -135,7 +123,7 @@ class PatchObject(ABC):
 
     @classmethod
     def create(cls, o: T, *, missing_modules: Iterable[str], dep_target: str) -> Optional["PatchObject"]:
-        print(f"{cls._registry=}")
+        # print(f"{cls._registry=}")
         for subclass in cls._registry:
             if subclass.accept(o):
                 return subclass(o, missing_modules, dep_target)
@@ -247,7 +235,7 @@ class PatchClass(PatchObject):
 
 
 def patch_object(o: T, *, missing_modules: Iterable[str], dep_target: str, fail_if_not_patchable: bool = True) -> T:
-    print(f"Patching object {o=}")
+    # print(f"Patching object {o=}")
     patcher = PatchObject.create(o, missing_modules=missing_modules, dep_target=dep_target)
     if fail_if_not_patchable and patcher is None:
         raise ValueError(f"Cannot patch object of type {type(o)}")
