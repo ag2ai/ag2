@@ -20,7 +20,7 @@
 > **:tada: IMPORTANT**
 >
 > :fire: :tada: **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
-> A new organization [AG2ai](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
+> A new organization [AG2AI](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
 >
 > We invite collaborators from all organizations and individuals to join the development.
 
@@ -87,7 +87,7 @@ AG2 (formerly AutoGen) is an open-source programming framework for building AI a
 The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
 
 
-![AutoGen Overview](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png)
+![AG2 Overview](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png)
 
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">

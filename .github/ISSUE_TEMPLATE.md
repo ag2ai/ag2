@@ -2,8 +2,8 @@
 <!-- A clear and concise description of the issue or feature request. -->
 
 ### Environment
-- AutoGen version: <!-- Specify the AutoGen version (e.g., v0.2.0) -->
-- Python version: <!-- Specify the Python version (e.g., 3.9) -->
+- Package name & version: <!-- Specify the ag2 package name and version (e.g., autogen v0.7.2) -->
+- Python version: <!-- Specify the Python version (e.g., 3.12) -->
 - Operating System: <!-- Specify the OS (e.g., Windows 10, Ubuntu 20.04) -->
 
 ### Steps to Reproduce (for bugs)
