@@ -7,13 +7,15 @@
 import json
 import sqlite3
 import uuid
+from typing import Any, Generator, Optional
 
 import pytest
+from _pytest.mark import ParameterSet
 
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
@@ -41,7 +43,7 @@ EVENTS_QUERY = (
 
 
 @pytest.fixture(scope="function")
-def db_connection():
+def db_connection() -> Generator[Optional[sqlite3.Connection], Any, None]:
     autogen.runtime_logging.start(config={"dbname": ":memory:"})
     con = autogen.runtime_logging.get_connection()
     con.row_factory = sqlite3.Row
@@ -50,7 +52,9 @@ def db_connection():
     autogen.runtime_logging.stop()
 
 
-def _test_two_agents_logging(credentials: Credentials, db_connection, row_classes=["AzureOpenAI", "OpenAI"]) -> None:
+def _test_two_agents_logging(
+    credentials: Credentials, db_connection: Generator[Optional[sqlite3.Connection], Any, None], row_classes: list[str]
+) -> None:
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
@@ -169,19 +173,25 @@ def _test_two_agents_logging(credentials: Credentials, db_connection, row_classe
         assert row["timestamp"], "timestamp is empty"
 
 
-@pytest.mark.gemini
-def test_two_agents_logging_gemini(credentials_gemini_pro: Credentials, db_connection) -> None:
-    _test_two_agents_logging(credentials_gemini_pro, db_connection, row_classes=["GeminiClient"])
+@pytest.mark.parametrize("credentials_fixture", credentials_all_llms)
+def test_two_agents_logging(
+    credentials_fixture: ParameterSet,
+    request: pytest.FixtureRequest,
+    db_connection: Generator[Optional[sqlite3.Connection], Any, None],
+) -> None:
+    credentials = request.getfixturevalue(credentials_fixture)
+    # Determine the client classes based on the markers applied to the current test
+    applied_markers = [mark.name for mark in request.node.iter_markers()]
+    if "gemini" in applied_markers:
+        row_classes = ["GeminiClient"]
+    elif "anthropic" in applied_markers:
+        row_classes = ["AnthropicClient"]
+    elif "openai" in applied_markers:
+        row_classes = ["AzureOpenAI", "OpenAI"]
+    else:
+        raise ValueError("Unknown client class")
 
-
-@pytest.mark.anthropic
-def test_two_agents_logging_anthropic(credentials_anthropic_claude_sonnet: Credentials, db_connection) -> None:
-    _test_two_agents_logging(credentials_anthropic_claude_sonnet, db_connection, row_classes=["AnthropicClient"])
-
-
-@pytest.mark.openai
-def test_two_agents_logging(credentials: Credentials, db_connection):
-    _test_two_agents_logging(credentials, db_connection)
+    _test_two_agents_logging(credentials, db_connection, row_classes)
 
 
 def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials, db_connection):
@@ -255,16 +265,9 @@ def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials,
     assert rows[0]["id"] == 1 and rows[0]["version_number"] == 1
 
 
-@pytest.mark.gemini
-def test_groupchat_logging_gemini(credentials_gemini_pro: Credentials, db_connection):
-    _test_groupchat_logging(credentials_gemini_pro, credentials_gemini_pro, db_connection)
-
-
-@pytest.mark.anthropic
-def test_groupchat_logging_anthropic(credentials_anthropic_claude_sonnet: Credentials, db_connection):
-    _test_groupchat_logging(credentials_anthropic_claude_sonnet, credentials_anthropic_claude_sonnet, db_connection)
-
-
-@pytest.mark.openai
-def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
-    _test_groupchat_logging(credentials_gpt_4o, credentials_gpt_4o_mini, db_connection)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_groupchat_logging(
+    credentials: Credentials,
+    db_connection: Generator[Optional[sqlite3.Connection], Any, None],
+) -> None:
+    _test_groupchat_logging(credentials, credentials, db_connection)

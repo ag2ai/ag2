@@ -96,7 +96,7 @@ public class OllamaAgentTests
     }
 
     [ApiKeyFact("OLLAMA_HOST")]
-    public async Task ItReturnValidMessageUsingLLavaAsync()
+    public async Task ItReturnsValidMessageUsingLLavaAsync()
     {
         var host = Environment.GetEnvironmentVariable("OLLAMA_HOST")
                    ?? throw new InvalidOperationException("OLLAMA_HOST is not set.");
@@ -160,7 +160,7 @@ public class OllamaAgentTests
     }
 
     [ApiKeyFact("OLLAMA_HOST")]
-    public async Task ItReturnValidStreamingMessageUsingLLavaAsync()
+    public async Task ItReturnsValidStreamingMessageUsingLLavaAsync()
     {
         var host = Environment.GetEnvironmentVariable("OLLAMA_HOST")
                    ?? throw new InvalidOperationException("OLLAMA_HOST is not set.");

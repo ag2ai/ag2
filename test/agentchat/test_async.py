@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials
+from ..conftest import Credentials, credentials_all_llms
 
 
 def get_market_news(ind, ind_upper):
@@ -88,22 +88,11 @@ async def _test_async_groupchat(credentials: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
-    await _test_async_groupchat(credentials_gpt_4o_mini)
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio
-async def test_async_groupchat_gemini(credentials_gemini_pro: Credentials):
-    await _test_async_groupchat(credentials_gemini_pro)
-
-
-@pytest.mark.anthropic
-@pytest.mark.asyncio
-async def test_async_groupchat_anthropic(credentials_anthropic_claude_sonnet: Credentials):
-    await _test_async_groupchat(credentials_anthropic_claude_sonnet)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_async_groupchat(
+    credentials: Credentials,
+) -> None:
+    _test_async_groupchat(credentials)
 
 
 async def _test_stream(credentials: Credentials):
@@ -172,19 +161,8 @@ async def _test_stream(credentials: Credentials):
             # print("Chat summary and cost:", res.summary, res.cost)
 
 
-@pytest.mark.openai
-@pytest.mark.asyncio
-async def test_stream(credentials_gpt_4o_mini: Credentials):
-    await _test_stream(credentials_gpt_4o_mini)
-
-
-@pytest.mark.gemini
-@pytest.mark.asyncio
-async def test_stream_gemini(credentials_gemini_pro: Credentials):
-    await _test_stream(credentials_gemini_pro)
-
-
-@pytest.mark.anthropic
-@pytest.mark.asyncio
-async def test_stream_anthropic(credentials_anthropic_claude_sonnet: Credentials):
-    await _test_stream(credentials_anthropic_claude_sonnet)
+@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+def test_stream(
+    credentials: Credentials,
+) -> None:
+    _test_stream(credentials)
