@@ -197,14 +197,17 @@ class GeminiRealtimeClient:
     def _parse_message(self, response: dict[str, Any]) -> list[RealtimeEvent]:
         # Determine the type of message and dispatch it to the appropriate handler
         if "serverContent" in response and "modelTurn" in response["serverContent"]:
-            b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
-            return [
-                AudioDelta(
-                    delta=b64data,
-                    item_id=None,
-                    raw_message=response,
-                )
-            ]
+            try:
+                b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
+                return [
+                    AudioDelta(
+                        delta=b64data,
+                        item_id=None,
+                        raw_message=response,
+                    )
+                ]
+            except KeyError:
+                return []
         elif "toolCall" in response:
             return [
                 FunctionCall(

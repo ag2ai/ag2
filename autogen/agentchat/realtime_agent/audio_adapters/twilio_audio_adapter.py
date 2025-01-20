@@ -51,9 +51,6 @@ class TwilioAudioAdapter(RealtimeObserver):
         """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
         logger = self.logger
 
-        if event.raw_message["type"] in LOG_EVENT_TYPES:
-            logger.info(f"Received event: {event.raw_message['type']}", event.raw_message)
-
         if isinstance(event, AudioDelta):
             audio_payload = base64.b64encode(base64.b64decode(event.delta)).decode("utf-8")
             audio_delta = {"event": "media", "streamSid": self.stream_sid, "media": {"payload": audio_payload}}

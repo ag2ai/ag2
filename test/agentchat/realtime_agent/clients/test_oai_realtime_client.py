@@ -87,5 +87,6 @@ class TestOAIRealtimeClient:
         assert isinstance(calls_kwargs[0][0], SessionCreated)
         assert isinstance(calls_kwargs[1][0], SessionUpdated)
 
+        print(calls_kwargs[3][0].raw_message)
         assert calls_kwargs[3][0].raw_message["type"] == "conversation.item.created"
-        assert calls_kwargs[3][0].raw_message["content"][0]["text"] == "Hello, how are you?"
+        assert calls_kwargs[3][0].raw_message["item"]["content"][0]["text"] == "Hello, how are you?"

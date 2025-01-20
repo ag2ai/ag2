@@ -23,15 +23,14 @@ from .realtime_test_utils import text_to_speech, trace
 logger = getLogger(__name__)
 
 
-@pytest.mark.openai
 class TestSwarmE2E:
-    async def _test_e2e(self, credentials_gpt_4o_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
+    async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
 
         """
-        openai_api_key = credentials_gpt_4o_realtime.api_key
+        openai_api_key = credentials_gpt_4o_mini.api_key
 
         # Event for synchronization and tracking state
         weather_func_called_event = Event()
@@ -48,7 +47,7 @@ class TestSwarmE2E:
             audio_adapter = WebSocketAudioAdapter(websocket)
             agent = RealtimeAgent(
                 name="Weather_Bot",
-                llm_config=credentials_gpt_4o_realtime.llm_config,
+                llm_config=credentials_llm_realtime.llm_config,
                 audio_adapter=audio_adapter,
             )
 
@@ -109,7 +108,14 @@ class TestSwarmE2E:
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
     @pytest.mark.asyncio
-    async def test_e2e(self, credentials_gpt_4o_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
+    @pytest.mark.parametrize(
+        "credentials_llm_realtime",
+        [
+            pytest.param("credentials_gpt_4o_realtime", marks=pytest.mark.openai),
+            pytest.param("credentials_gemini_realtime", marks=pytest.mark.gemini),
+        ],
+    )
+    async def test_e2e(self, credentials_llm_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 5 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
@@ -120,7 +126,7 @@ class TestSwarmE2E:
         while True:
             try:
                 await self._test_e2e(
-                    credentials_gpt_4o_realtime=credentials_gpt_4o_realtime,
+                    credentials_llm_realtime=credentials_llm_realtime,
                     credentials_gpt_4o_mini=credentials_gpt_4o_mini,
                 )
                 return  # Exit the function if the test passes

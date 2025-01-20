@@ -195,6 +195,7 @@ class OpenAIRealtimeClient:
         try:
             async for message in self._connection:
                 for event in self._parse_message(message.model_dump()):
+                    self.logger.debug(f"Received event: {event}")
                     yield event
 
         finally:

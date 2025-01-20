@@ -21,7 +21,6 @@ from .realtime_test_utils import text_to_speech, trace
 logger = getLogger(__name__)
 
 
-@pytest.mark.openai
 class TestE2E:
     async def _test_e2e(self, credentials_llm: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
@@ -96,7 +95,13 @@ class TestE2E:
             assert "cloudy" in last_response_transcript, "Weather response did not include the weather condition"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("credentials_llm_realtime", ["credentials_gpt_4o_realtime"])
+    @pytest.mark.parametrize(
+        "credentials_llm_realtime",
+        [
+            pytest.param("credentials_gpt_4o_realtime", marks=pytest.mark.openai),
+            pytest.param("credentials_gemini_realtime", marks=pytest.mark.gemini),
+        ],
+    )
     async def test_e2e(self, credentials_llm_realtime: str, request: FixtureRequest) -> None:
         """End-to-end test for the RealtimeAgent.
 

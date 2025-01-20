@@ -49,11 +49,6 @@ class WebSocketAudioAdapter(RealtimeObserver):
     async def on_event(self, event: RealtimeEvent) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to websocket."""
         logger = self.logger
-        if event.raw_message["type"] in LOG_EVENT_TYPES:
-            if event.raw_message["type"] == "error":
-                logger.warning(f"Received event {event.raw_message['type']}: {event.raw_message}")
-            else:
-                logger.info(f"Received event {event.raw_message['type']}: {event.raw_message}")
 
         if isinstance(event, AudioDelta):
             audio_payload = base64.b64encode(base64.b64decode(event.delta)).decode("utf-8")
