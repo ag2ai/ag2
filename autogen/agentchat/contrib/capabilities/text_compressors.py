@@ -4,19 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block() as result:
     import llmlingua
     from llmlingua import PromptCompressor
-
-if result.is_successful:
-    IMPORT_ERROR: Optional[Exception] = None
-else:
-    IMPORT_ERROR = ImportError("LLMLingua is not installed. Please install it with `pip install autogen[long-context]`")
-    PromptCompressor = object
 
 
 class TextCompressor(Protocol):
@@ -59,9 +53,6 @@ class LLMLingua:
         Raises:
             ImportError: If the llmlingua library is not installed.
         """
-        if IMPORT_ERROR:
-            raise IMPORT_ERROR
-
         self._prompt_compressor = PromptCompressor(**prompt_compressor_kwargs)
 
         assert isinstance(self._prompt_compressor, llmlingua.PromptCompressor)
