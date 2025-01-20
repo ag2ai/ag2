@@ -303,8 +303,8 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
 
-        # needs to be updated when the o3 is released to generalize
-        is_o1 = "model" in params and params["model"].startswith("o1")
+        # HACK: needs to be updated when the o3 is released to generalize
+        is_o1 = "model" in params and "o1-" in params["model"]
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
         if params.get("stream", False) and "messages" in params and not is_o1:
@@ -461,8 +461,8 @@ class OpenAIClient:
         if "max_tokens" in params:
             params["max_completion_tokens"] = params.pop("max_tokens")
 
-        # TODO - When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
-        system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
+        # HACK: When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
+        system_not_allowed = "o1-" in model_name
 
         if "messages" in params and system_not_allowed:
             # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
