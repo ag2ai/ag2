@@ -55,11 +55,11 @@ def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     print("Result summary:", res.summary)
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_ai_user_proxy_agent(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_ai_user_proxy_agent(credentials)
+    _test_ai_user_proxy_agent(credentials_from_test_param)
 
 
 @pytest.mark.openai
