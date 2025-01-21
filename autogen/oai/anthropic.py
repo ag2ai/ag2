@@ -78,19 +78,22 @@ import time
 import warnings
 from typing import Any, Optional, Type
 
-from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
-from anthropic import __version__ as anthropic_version
-from anthropic.types import Message, TextBlock, ToolUseBlock
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
-from autogen.oai.client_utils import FormatterProtocol, validate_parameter
+from ..import_utils import optional_import_block, require_optional_import
+from .client_utils import FormatterProtocol, validate_parameter
 
-TOOL_ENABLED = anthropic_version >= "0.23.1"
-if TOOL_ENABLED:
-    pass
+with optional_import_block():
+    from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
+    from anthropic import __version__ as anthropic_version
+    from anthropic.types import Message, TextBlock, ToolUseBlock
+
+    TOOL_ENABLED = anthropic_version >= "0.23.1"
+    if TOOL_ENABLED:
+        pass
 
 
 ANTHROPIC_PRICING_1k = {
@@ -106,6 +109,7 @@ ANTHROPIC_PRICING_1k = {
 }
 
 
+@require_optional_import("anthropic", "anthropic")
 class AnthropicClient:
     def __init__(self, **kwargs: Any):
         """Initialize the Anthropic API client.
@@ -393,7 +397,7 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
         # Add formatting to last user message
         params["system"] += "\n\n" + format_content
 
-    def _extract_json_response(self, response: Message) -> Any:
+    def _extract_json_response(self, response: "Message") -> Any:
         """Extract and validate JSON response from the output for structured outputs.
 
         Args:
@@ -435,6 +439,7 @@ def _format_json_response(response: Any) -> str:
     return response.format() if isinstance(response, FormatterProtocol) else response
 
 
+@require_optional_import("anthropic", "anthropic")
 def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Anthropic format.
     We correct for any specific role orders and types, etc.
