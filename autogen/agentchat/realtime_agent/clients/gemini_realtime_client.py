@@ -188,8 +188,8 @@ class GeminiRealtimeClient:
         self._is_reading_events = True
 
         async for raw_message in self.connection:
-            message = json.loads(raw_message.decode("ascii")) if isinstance(raw_message, bytes) else raw_message
-            events = self._parse_message(message)
+            message = raw_message.decode("ascii") if isinstance(raw_message, bytes) else raw_message
+            events = self._parse_message(json.loads(message))
             for event in events:
                 yield event
 
