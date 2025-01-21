@@ -285,7 +285,7 @@ class ConversableAgent(LLMAgent):
         }
 
     def _validate_name_if_api_tpye_openai(self, name: str) -> None:
-        if not self.llm_config or "config_list" not in self.llm_config:
+        if not self.llm_config or "config_list" not in self.llm_config or len(self.llm_config["config_list"]) == 0:
             return
 
         config_list = self.llm_config.get("config_list")
