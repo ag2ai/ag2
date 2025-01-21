@@ -13,14 +13,13 @@ import pytest
 
 import autogen
 
-from ..conftest import reason, skip_openai  # noqa: E402
-from .test_assistant_agent import KEY_LOC, OAI_CONFIG_LIST
+from ..conftest import Credentials
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 @pytest.mark.asyncio
-async def test_async_get_human_input():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
+async def test_async_get_human_input(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -44,10 +43,10 @@ async def test_async_get_human_input():
     print("Human input:", res.human_input)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 @pytest.mark.asyncio
-async def test_async_max_turn():
-    config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, KEY_LOC, filter_dict={"tags": ["gpt-4o-mini"]})
+async def test_async_max_turn(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -69,9 +68,9 @@ async def test_async_max_turn():
     print("Result summary:", res.summary)
     print("Human input:", res.human_input)
     print("chat history:", res.chat_history)
-    assert (
-        len(res.chat_history) == 6
-    ), f"Chat history should have 6 messages because max_turns is set to 3 (and user keep request try again) but has {len(res.chat_history)}."
+    assert len(res.chat_history) == 6, (
+        f"Chat history should have 6 messages because max_turns is set to 3 (and user keep request try again) but has {len(res.chat_history)}."
+    )
 
 
 if __name__ == "__main__":

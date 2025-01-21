@@ -6,26 +6,27 @@
 # SPDX-License-Identifier: MIT
 """Create a OpenAI-compatible client for Gemini features.
 
-
 Example:
     ```python
-    llm_config={
-        "config_list": [{
-            "api_type": "google",
-            "model": "gemini-pro",
-            "api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),
-            "safety_settings": [
+    llm_config = {
+        "config_list": [
+            {
+                "api_type": "google",
+                "model": "gemini-pro",
+                "api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),
+                "safety_settings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
                     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
-                    ],
-            "top_p":0.5,
-            "max_tokens": 2048,
-            "temperature": 1.0,
-            "top_k": 5
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+                ],
+                "top_p": 0.5,
+                "max_tokens": 2048,
+                "temperature": 1.0,
+                "top_k": 5,
             }
-    ]}
+        ]
+    }
 
     agent = autogen.AssistantAgent("my_agent", llm_config=llm_config)
     ```
@@ -48,31 +49,31 @@ import random
 import re
 import time
 import warnings
-from collections.abc import Mapping
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import google.generativeai as genai
-import PIL
 import requests
 import vertexai
+from PIL import Image
 from google.ai.generativelanguage import Content, FunctionCall, FunctionDeclaration, FunctionResponse, Part, Tool
 from google.ai.generativelanguage_v1beta.types import Schema
 from google.auth.credentials import Credentials
+from google.generativeai.types import GenerateContentResponse
 from jsonschema import ValidationError
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
-from PIL import Image
-from pydantic import BaseModel
 from vertexai.generative_models import (
     Content as VertexAIContent,
 )
 from vertexai.generative_models import FunctionDeclaration as vaiFunctionDeclaration
+from vertexai.generative_models import (
+    GenerationResponse as VertexAIGenerationResponse,
+)
 from vertexai.generative_models import GenerativeModel
 from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
 from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
-from vertexai.generative_models import Image as VertexAIImage
 from vertexai.generative_models import Part as VertexAIPart
 from vertexai.generative_models import SafetySetting as VertexAISafetySetting
 from vertexai.generative_models import (
@@ -110,9 +111,9 @@ class GeminiClient:
         if "location" in params:
             vertexai_init_args["location"] = params["location"]
         if "credentials" in params:
-            assert isinstance(
-                params["credentials"], Credentials
-            ), "Object type google.auth.credentials.Credentials is expected!"
+            assert isinstance(params["credentials"], Credentials), (
+                "Object type google.auth.credentials.Credentials is expected!"
+            )
             vertexai_init_args["credentials"] = params["credentials"]
         if vertexai_init_args:
             vertexai.init(**vertexai_init_args)
@@ -136,7 +137,7 @@ class GeminiClient:
             location (str): Compute region to be used, like 'us-west1'.
                 This parameter is only valid in case no API key is specified.
         """
-        self.api_key = kwargs.get("api_key", None)
+        self.api_key = kwargs.get("api_key")
         if not self.api_key:
             self.api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
             if self.api_key is None:
@@ -147,16 +148,15 @@ class GeminiClient:
         else:
             self.use_vertexai = False
         if not self.use_vertexai:
-            assert ("project_id" not in kwargs) and (
-                "location" not in kwargs
-            ), "Google Cloud project and compute location cannot be set when using an API Key!"
+            assert ("project_id" not in kwargs) and ("location" not in kwargs), (
+                "Google Cloud project and compute location cannot be set when using an API Key!"
+            )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
             warnings.warn("response_format is not supported for Gemini. It will be ignored.", UserWarning)
 
     def message_retrieval(self, response) -> list:
-        """
-        Retrieve and return a list of strings or a list of Choice.Message from the response.
+        """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
@@ -179,13 +179,12 @@ class GeminiClient:
         }
 
     def create(self, params: dict) -> ChatCompletion:
-
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:
-            assert ("project_id" not in params) and (
-                "location" not in params
-            ), "Google Cloud project and compute location cannot be set when using an API Key!"
+            assert ("project_id" not in params) and ("location" not in params), (
+                "Google Cloud project and compute location cannot be set when using an API Key!"
+            )
         model_name = params.get("model", "gemini-pro")
 
         if model_name == "gemini-pro-vision":
@@ -203,7 +202,7 @@ class GeminiClient:
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
-        system_instruction = params.get("system_instruction", None)
+        system_instruction = params.get("system_instruction")
         response_validation = params.get("response_validation", True)
         if "tools" in params:
             tools = self._tools_to_gemini_tools(params["tools"])
@@ -265,11 +264,22 @@ class GeminiClient:
         ans = ""
         random_id = random.randint(0, 10000)
         prev_function_calls = []
-        for part in response.parts:
 
+        if isinstance(response, GenerateContentResponse):
+            parts = response.parts
+        elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
+            # google.generativeai also raises an error len(candidates) != 1:
+            if len(response.candidates) != 1:
+                raise ValueError(
+                    f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
+                )
+            parts = response.candidates[0].content.parts
+        else:
+            raise ValueError(f"Unexpected response type: {type(response)}")
+
+        for part in parts:
             # Function calls
             if fn_call := part.function_call:
-
                 # If we have a repeated function call, ignore it
                 if fn_call not in prev_function_calls:
                     autogen_tool_calls.append(
@@ -332,7 +342,7 @@ class GeminiClient:
         """Convert AutoGen content to Gemini parts, catering for text and tool calls"""
         rst = []
 
-        if message["role"] == "tool":
+        if "role" in message and message["role"] == "tool":
             # Tool call recommendation
 
             function_name = self.tool_call_function_map[message["tool_call_id"]]
@@ -355,7 +365,6 @@ class GeminiClient:
             return rst, "tool"
         elif "tool_calls" in message and len(message["tool_calls"]) != 0:
             for tool_call in message["tool_calls"]:
-
                 function_id = tool_call["id"]
                 function_name = tool_call["function"]["name"]
                 self.tool_call_function_map[function_id] = function_name
@@ -468,13 +477,7 @@ class GeminiClient:
                     if self.use_vertexai
                     else rst.append(Content(parts=parts, role=role))
                 )
-            elif part_type == "tool":
-                rst.append(
-                    VertexAIContent(parts=parts, role="function")
-                    if self.use_vertexai
-                    else rst.append(Content(parts=parts, role="function"))
-                )
-            elif part_type == "tool_call":
+            elif part_type == "tool" or part_type == "tool_call":
                 rst.append(
                     VertexAIContent(parts=parts, role="function")
                     if self.use_vertexai
@@ -527,7 +530,6 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
-
         functions = []
         for tool in tools:
             if self.use_vertexai:
@@ -608,9 +610,9 @@ class GeminiClient:
 
         return param_schema
 
+    @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
-
         function_parameter["type_"] = function_parameter["type"].upper()
 
         # Parameter properties and items
@@ -687,7 +689,6 @@ def get_image_data(image_file: str, use_b64=True) -> bytes:
 
 
 def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: int, model_name: str) -> float:
-
     def total_cost_mil(cost_per_mil_input: float, cost_per_mil_output: float):
         # Cost per million
         return cost_per_mil_input * input_tokens / 1e6 + cost_per_mil_output * output_tokens / 1e6

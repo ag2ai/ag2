@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import json
 import sys
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
 import pytest
 
@@ -291,7 +291,7 @@ def test_generate_function_call_reply_on_function_call_message(is_function_async
     assert (finished, retval) == (True, _function_use_message_1_error_expected_reply)
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 @pytest.mark.parametrize("is_function_async", [True, False])
 async def test_a_generate_function_call_reply_on_function_call_message(is_function_async: bool) -> None:
     agent = ConversableAgent(name="agent", llm_config=False)
@@ -388,7 +388,7 @@ def test_generate_tool_calls_reply_on_function_call_message(is_function_async: b
     assert (finished, retval) == (True, _tool_use_message_1_error_expected_reply)
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 @pytest.mark.parametrize("is_function_async", [True, False])
 async def test_a_generate_tool_calls_reply_on_function_call_message(is_function_async: bool) -> None:
     agent = ConversableAgent(name="agent", llm_config=False)

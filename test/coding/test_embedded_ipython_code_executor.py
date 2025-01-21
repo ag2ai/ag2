@@ -17,7 +17,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
 
-from ..conftest import MOCK_OPEN_AI_API_KEY, skip_docker  # noqa: E402
+from ..conftest import MOCK_OPEN_AI_API_KEY, skip_docker
 
 try:
     from autogen.coding.jupyter import (
@@ -78,7 +78,7 @@ def test_create(cls) -> None:
 @pytest.mark.parametrize("cls", classes_to_test)
 def test_init(cls) -> None:
     executor = cls(timeout=10, kernel_name="python3", output_dir=".")
-    assert executor._timeout == 10 and executor._kernel_name == "python3" and executor._output_dir == Path(".")
+    assert executor._timeout == 10 and executor._kernel_name == "python3" and executor._output_dir == Path()
 
     # Try invalid output directory.
     with pytest.raises(ValueError, match="Output directory .* does not exist."):

@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 def modular_inverse_sum(expressions, modulus):
-    """
-    Calculates the sum of modular inverses of the given expressions modulo the specified modulus.
+    """Calculates the sum of modular inverses of the given expressions modulo the specified modulus.
 
     Args:
         expressions (list): A list of numbers for which the modular inverses need to be calculated.

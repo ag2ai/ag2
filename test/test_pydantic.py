@@ -4,9 +4,9 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Annotated, Dict, List, Optional, Tuple, Union
+from typing import Annotated, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from autogen._pydantic import model_dump, model_dump_json, type2schema
 

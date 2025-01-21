@@ -14,7 +14,6 @@ from typing import Any, Callable, Optional, Union
 from pydantic import BaseModel
 
 from autogen.oai import OpenAIWrapper
-from autogen.tools import get_function_schema
 
 from ..agent import Agent
 from ..chat import ChatResult
@@ -101,7 +100,7 @@ class AfterWork:
                 self.next_agent_selection_msg = None
 
 
-class AFTER_WORK(AfterWork):
+class AFTER_WORK(AfterWork):  # noqa: N801
     """Deprecated: Use AfterWork instead. This class will be removed in a future version (TBD)."""
 
     def __init__(self, *args, **kwargs):
@@ -140,9 +139,9 @@ class OnCondition:
     def __post_init__(self):
         # Ensure valid types
         if self.target is not None:
-            assert isinstance(self.target, ConversableAgent) or isinstance(
-                self.target, dict
-            ), "'target' must be a ConversableAgent or a dict"
+            assert isinstance(self.target, ConversableAgent) or isinstance(self.target, dict), (
+                "'target' must be a ConversableAgent or a dict"
+            )
 
         # Ensure they have a condition
         if isinstance(self.condition, str):
@@ -156,7 +155,7 @@ class OnCondition:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
 
 
-class ON_CONDITION(OnCondition):
+class ON_CONDITION(OnCondition):  # noqa: N801
     """Deprecated: Use OnCondition instead. This class will be removed in a future version (TBD)."""
 
     def __init__(self, *args, **kwargs):
@@ -265,7 +264,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
             nested_chats["chat_queue"],
             reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
             or "summary_from_nested_chats",
-            config=nested_chats.get("config", None),
+            config=nested_chats.get("config"),
             trigger=lambda sender: True,
             position=0,
             use_async=nested_chats.get("use_async", False),
@@ -735,8 +734,7 @@ async def a_initiate_swarm_chat(
 
 
 class SwarmResult(BaseModel):
-    """
-    Encapsulates the possible return values for a swarm agent function.
+    """Encapsulates the possible return values for a swarm agent function.
 
     Args:
         values (str): The result values as a string.
@@ -795,13 +793,12 @@ def register_hand_off(
 
     for transit in hand_to:
         if isinstance(transit, AfterWork):
-            assert isinstance(
-                transit.agent, (AfterWorkOption, ConversableAgent, str, Callable)
-            ), "Invalid After Work value"
+            assert isinstance(transit.agent, (AfterWorkOption, ConversableAgent, str, Callable)), (
+                "Invalid After Work value"
+            )
             agent._swarm_after_work = transit
             agent._swarm_after_work_selection_msg = transit.next_agent_selection_msg
         elif isinstance(transit, OnCondition):
-
             if isinstance(transit.target, ConversableAgent):
                 # Transition to agent
 
@@ -884,7 +881,6 @@ def _generate_swarm_tool_reply(
 
     message = messages[-1]
     if "tool_calls" in message:
-
         tool_call_count = len(message["tool_calls"])
 
         # Loop through tool calls individually (so context can be updated after each function call)
@@ -892,7 +888,6 @@ def _generate_swarm_tool_reply(
         tool_responses_inner = []
         contents = []
         for index in range(tool_call_count):
-
             # Deep copy to ensure no changes to messages when we insert the context variables
             message_copy = copy.deepcopy(message)
 
@@ -909,7 +904,6 @@ def _generate_swarm_tool_reply(
                     # Inject the context variables into the tool call if it has the parameter
                     sig = signature(func)
                     if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
-
                         current_args = json.loads(tool_call["function"]["arguments"])
                         current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = agent._context_variables
                         tool_call["function"]["arguments"] = json.dumps(current_args)
@@ -943,3 +937,16 @@ def _generate_swarm_tool_reply(
 
         return True, tool_message
     return False, None
+
+
+class SwarmAgent(ConversableAgent):
+    """SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD)"""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        super().__init__(*args, **kwargs)

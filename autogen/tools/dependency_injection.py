@@ -6,40 +6,107 @@ import inspect
 import sys
 from abc import ABC
 from functools import wraps
-from typing import Any, Callable, Iterable, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
+
+from autogen.agentchat import Agent
+
+if TYPE_CHECKING:
+    from ..agentchat.conversable_agent import ConversableAgent
 
 __all__ = [
     "BaseContext",
     "ChatContext",
     "Depends",
     "Field",
+    "get_context_params",
     "inject_params",
 ]
 
 
 class BaseContext(ABC):
+    """Base class for context classes.
+
+    This is the base class for defining various context types that may be used
+    throughout the application. It serves as a parent for specific context classes.
+    """
+
     pass
 
 
 class ChatContext(BaseContext):
-    messages: list[str] = []
+    """ChatContext class that extends BaseContext.
+
+    This class is used to represent a chat context that holds a list of messages.
+    It inherits from `BaseContext` and adds the `messages` attribute.
+    """
+
+    def __init__(self, agent: "ConversableAgent") -> None:
+        """Initializes the ChatContext with an agent.
+
+        Args:
+            agent: The agent to use for retrieving chat messages.
+        """
+        self._agent = agent
+
+    @property
+    def chat_messages(self) -> dict[Agent, list[dict[Any, Any]]]:
+        """The messages in the chat.
+
+        Returns:
+            A dictionary of agents and their messages.
+        """
+        return self._agent.chat_messages
+
+    @property
+    def last_message(self) -> Optional[dict[str, Any]]:
+        """The last message in the chat.
+
+        Returns:
+            The last message in the chat.
+        """
+        return self._agent.last_message()
 
 
-def Depends(x: Any) -> Any:
+def Depends(x: Any) -> Any:  # noqa: N802
+    """Creates a dependency for injection based on the provided context or type.
+
+    Args:
+        x: The context or dependency to be injected.
+
+    Returns:
+        A FastDepends object that will resolve the dependency for injection.
+    """
     if isinstance(x, BaseContext):
         return FastDepends(lambda: x)
 
     return FastDepends(x)
 
 
-def _is_base_context_param(param: inspect.Parameter) -> bool:
+def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContext], type[ChatContext]]) -> list[str]:
+    """Gets the names of the context parameters in a function signature.
+
+    Args:
+        func: The function to inspect for context parameters.
+        subclass: The subclass to search for.
+
+    Returns:
+        A list of parameter names that are instances of the specified subclass.
+    """
+
+    sig = inspect.signature(func)
+    return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
+
+
+def _is_context_param(
+    param: inspect.Parameter, subclass: Union[type[BaseContext], type[ChatContext]] = BaseContext
+) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
-    return isinstance(param_annotation, type) and issubclass(param_annotation, BaseContext)
+    return isinstance(param_annotation, type) and issubclass(param_annotation, subclass)
 
 
 def _is_depends_param(param: inspect.Parameter) -> bool:
@@ -61,13 +128,24 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
         func = _fix_staticmethod(func)
 
     sig = inspect.signature(func)
-    params_to_remove = [p.name for p in sig.parameters.values() if _is_base_context_param(p) or _is_depends_param(p)]
+    params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
     _remove_params(func, sig, params_to_remove)
     return func
 
 
 class Field:
+    """Represents a description field for use in type annotations.
+
+    This class is used to store a description for an annotated field, often used for
+    documenting or validating fields in a context or data model.
+    """
+
     def __init__(self, description: str) -> None:
+        """Initializes the Field with a description.
+
+        Args:
+            description: The description text for the field.
+        """
         self._description = description
 
     @property
@@ -102,6 +180,17 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Injects parameters into a function, removing injected dependencies from its signature.
+
+    This function is used to modify a function by injecting dependencies and removing
+    injected parameters from the function's signature.
+
+    Args:
+        f: The function to modify with dependency injection.
+
+    Returns:
+        The modified function with injected dependencies and updated signature.
+    """
     # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
     if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
         f = _fix_staticmethod(f)

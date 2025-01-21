@@ -12,7 +12,7 @@ import pytest
 from autogen.agentchat.conversable_agent import ConversableAgent
 
 try:
-    from PIL import Image
+    from PIL import Image  # noqa: F401
 
     from autogen.agentchat.contrib.capabilities.vision_capability import VisionCapability
 except ImportError:
@@ -40,7 +40,7 @@ def vision_capability(lmm_config):
 
 @pytest.fixture
 def conversable_agent():
-    return ConversableAgent(name="conversable agent", llm_config=False)
+    return ConversableAgent(name="conversable_agent", llm_config=False)
 
 
 @pytest.mark.skipif(

@@ -34,7 +34,6 @@ def mock_response():
 
 @pytest.fixture
 def ollama_client():
-
     # Set Ollama client with some default values
     client = OllamaClient()
 
@@ -50,7 +49,6 @@ skip_reason = "Ollama dependency is not installed"
 # Test initialization and configuration
 @pytest.mark.skipif(skip, reason=skip_reason)
 def test_initialization():
-
     # Creation works without an api_key
     OllamaClient()
 
@@ -144,9 +142,9 @@ def test_create_response(mock_chat, ollama_client):
     response = ollama_client.create(params)
 
     # Assertions to check if response is structured as expected
-    assert (
-        response.choices[0].message.content == "Example Ollama response"
-    ), "Response content should match expected output"
+    assert response.choices[0].message.content == "Example Ollama response", (
+        "Response content should match expected output"
+    )
     assert response.id == "mock_ollama_response_id", "Response ID should match the mocked response ID"
     assert response.model == "llama3.1:8b", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
@@ -231,36 +229,36 @@ def test_manual_tool_calling_parsing(ollama_client):
         },
     ]
 
-    assert (
-        response_tool_calls == expected_tool_calls
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (full string match)"
+    assert response_tool_calls == expected_tool_calls, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (full string match)"
+    )
 
     # Test the parsing with a substring containing the response content (should still pass)
     response_content = """I will call two functions, weather_forecast and currency_calculator:\n[{"name": "weather_forecast", "arguments":{"location": "New York"}},{"name": "currency_calculator", "arguments":{"base_amount": 123.45, "quote_currency": "EUR", "base_currency": "USD"}}]"""
 
     response_tool_calls = response_to_tool_call(response_content)
 
-    assert (
-        response_tool_calls == expected_tool_calls
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (partial string match)"
+    assert response_tool_calls == expected_tool_calls, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (partial string match)"
+    )
 
     # Test the parsing with an invalid function call
     response_content = """[{"function": "weather_forecast", "args":{"location": "New York"}},{"function": "currency_calculator", "args":{"base_amount": 123.45, "quote_currency": "EUR", "base_currency": "USD"}}]"""
 
     response_tool_calls = response_to_tool_call(response_content)
 
-    assert (
-        response_tool_calls is None
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (invalid function call)"
+    assert response_tool_calls is None, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (invalid function call)"
+    )
 
     # Test the parsing with plain text
     response_content = """Call the weather_forecast function and pass in 'New York' as the 'location' argument."""
 
     response_tool_calls = response_to_tool_call(response_content)
 
-    assert (
-        response_tool_calls is None
-    ), "Manual Tool Calling Parsing of response did not yield correct tool_calls (no function in text)"
+    assert response_tool_calls is None, (
+        "Manual Tool Calling Parsing of response did not yield correct tool_calls (no function in text)"
+    )
 
 
 # Test message conversion from OpenAI to Ollama format

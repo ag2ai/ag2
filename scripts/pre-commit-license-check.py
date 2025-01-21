@@ -77,7 +77,7 @@ def get_files_to_check() -> List[Path]:
     """Determine which files to check based on environment."""
     try:
         if "--all-files" in sys.argv:
-            return list(Path(".").rglob("*.py"))
+            return list(Path().rglob("*.py"))
 
         if os.getenv("GITHUB_ACTIONS") == "true":
             return get_github_pr_files()
