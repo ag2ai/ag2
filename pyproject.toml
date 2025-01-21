@@ -116,10 +116,10 @@ graph-rag-falkor-db = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.5",
-    "llama-index-graph-stores-neo4j==0.4.2",
-    "llama-index-core==0.12.5",
-    "llama-index-readers-web==0.3.3",
+    "llama-index==0.12.11",
+    "llama-index-graph-stores-neo4j==0.4.5",
+    "llama-index-core==0.12.11",
+    "llama-index-readers-web==0.3.4",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -195,12 +195,12 @@ docs = [
 ]
 
 types = [
-    "mypy==1.9.0",
+    "mypy==1.14.1",
     "pyautogen[test, jupyter-executor, interop]",
 ]
 
 lint = [
-    "ruff==0.9.1",
+    "ruff==0.9.2",
     "codespell==2.3.0",
     "pyupgrade-directories==0.3.0",
 ]
@@ -209,7 +209,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.0.1",
     "detect-secrets==1.5.0",
-    "uv==0.5.16",
+    "uv==0.5.21",
 ]
 
 

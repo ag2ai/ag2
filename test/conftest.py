@@ -309,6 +309,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 0
 
 
+@pytest.fixture
+def credentials_from_test_param(request: pytest.FixtureRequest) -> Credentials:
+    fixture_name = request.param
+    # Lookup the fixture function based on the fixture name
+    credentials = request.getfixturevalue(fixture_name)
+    if not isinstance(credentials, Credentials):
+        raise ValueError(f"Fixture {fixture_name} did not return a Credentials object")
+    return credentials
+
+
 credentials_all_llms = [
     pytest.param(
         credentials_gpt_4o_mini.__name__,

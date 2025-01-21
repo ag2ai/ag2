@@ -3,15 +3,20 @@ title: Frequently Asked Questions
 sidebarTitle: FAQ
 ---
 
-## Install the correct package - `autogen`
+## Install the correct package
 
-The name of Autogen package at PyPI is `autogen`:
-
-```
+The valid aliases of AG2 package at PyPI are `ag2`, `autogen`, and `pyautogen`.
+Any one of the following three lines works:
+```bash
+pip install ag2
 pip install autogen
+pip install pyautogen
 ```
 
-Typical errors that you might face when using the wrong package are `AttributeError: module 'autogen' has no attribute 'Agent'`, `AttributeError: module 'autogen' has no attribute 'config_list_from_json'` etc.
+After installation of any of them, you can import `autogen` using the same import statement:
+```python
+import autogen
+```
 
 ## Set your API endpoints
 
@@ -33,8 +38,8 @@ In version >=1, OpenAI renamed their `api_base` parameter to `base_url`. So for 
 
 Yes. You currently have two options:
 
-- Autogen can work with any API endpoint which complies with OpenAI-compatible RESTful APIs - e.g. serving local LLM via FastChat or LM Studio. Please check [here](/blog/2023-07-14-Local-LLMs) for an example.
-- You can supply your own custom model implementation and use it with Autogen. Please check [here](/blog/2024-01-26-Custom-Models) for more information.
+- `autogen` can work with any API endpoint which complies with OpenAI-compatible RESTful APIs - e.g. serving local LLM via FastChat or LM Studio. Please check [here](/blog/2023-07-14-Local-LLMs) for an example.
+- You can supply your own custom model implementation and use it with `autogen`. Please check [here](/blog/2024-01-26-Custom-Models) for more information.
 
 ## Handle Rate Limit Error and Timeout Error
 
@@ -104,12 +109,12 @@ By default it runs code in a docker container. If you want to run code locally
 for each code-execution agent, or set `AUTOGEN_USE_DOCKER` to `False` as an
 environment variable.
 
-You can also develop your AutoGen application in a docker container.
+You can also develop your AG2 application in a docker container.
 For example, when developing in [GitHub codespace](https://codespaces.new/ag2ai/ag2?quickstart=1),
-AutoGen runs in a docker container.
+AG2 runs in a docker container.
 If you are not developing in GitHub Codespaces,
 follow instructions [here](/docs/installation/Docker#step-1-install-docker)
-to install and run AutoGen in docker.
+to install and run AG2 in docker.
 
 ## Agents keep thanking each other when using `gpt-3.5-turbo`
 
@@ -156,9 +161,7 @@ Explanation: Per [this gist](https://gist.github.com/defulmere/8b9695e415a442710
 
 ## How to register a reply function
 
-(from [issue #478](https://github.com/microsoft/autogen/issues/478))
-
-See here /docs/reference/agentchat/conversable_agent/#register_reply
+See [here](/docs/reference/agentchat/conversable_agent/#register_reply)
 
 For example, you can register a reply function that gets called when `generate_reply` is called for an agent.
 
@@ -187,11 +190,11 @@ In the above, we register a `print_messages` function that is called each time t
 
 ## How to get last message ?
 
-Refer to /docs/reference/agentchat/conversable_agent/#last_message
+Refer to [here](/docs/reference/agentchat/conversable_agent/#last_message)
 
 ## How to get each agent message ?
 
-Please refer to /docs/reference/agentchat/conversable_agent#chat_messages
+Please refer to [here](/docs/reference/agentchat/conversable_agent#chat_messages)
 
 ## When using autogen docker, is it always necessary to reinstall modules?
 
@@ -228,7 +231,7 @@ You can also disable the cache. See [here](/docs/topics/llm-caching#disabling-ca
 
 ## Agents are throwing due to docker not running, how can I resolve this?
 
-If running AutoGen locally the default for agents who execute code is for them to try and perform code execution within a docker container. If docker is not running, this will cause the agent to throw an error. To resolve this you have some options.
+If running AG2 locally the default for agents who execute code is for them to try and perform code execution within a docker container. If docker is not running, this will cause the agent to throw an error. To resolve this you have some options.
 
 ### If you want to disable code execution entirely
 
@@ -260,11 +263,11 @@ user_proxy = autogen.UserProxyAgent(
 
 ### What should I do if I get the error "TypeError: Assistants.create() got an unexpected keyword argument 'file_ids'"?
 
-This error typically occurs when using Autogen version earlier than 0.2.27 in combination with OpenAI library version 1.21 or later. The issue arises because the older version of Autogen does not support the file_ids parameter used by newer versions of the OpenAI API.
-To resolve this issue, you need to upgrade your Autogen library to version 0.2.27 or higher that ensures compatibility between Autogen and the OpenAI library.
+This error typically occurs when using `pyautogen` version earlier than 0.2.27 in combination with OpenAI library version 1.21 or later. The issue arises because the older version of `pyautogen` does not support the file_ids parameter used by newer versions of the OpenAI API.
+To resolve this issue, you need to upgrade your `pyautogen` package to version 0.2.27 or higher that ensures compatibility between AG2 and the OpenAI library.
 
 ```python
-pip install --upgrade autogen
+pip install --upgrade pyautogen
 ```
 
 ## None of the devcontainers are building due to "Hash sum mismatch", what should I do?

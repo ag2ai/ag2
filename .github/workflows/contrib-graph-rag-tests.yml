@@ -9,7 +9,7 @@ on:
     paths:
       - "autogen/agentchat/contrib/graph_rag/**"
       - "test/agentchat/contrib/graph_rag/**"
-      - ".github/workflows/contrib-tests.yml"
+      - ".github/workflows/contrib-test.yml"
       - "pyproject.toml"
 
 concurrency:

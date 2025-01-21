@@ -40,11 +40,11 @@ async def _test_async_get_human_input(credentials: Credentials) -> None:
     print("Human input:", res.human_input)
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_async_get_human_input(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_async_get_human_input(credentials)
+    _test_async_get_human_input(credentials_from_test_param)
 
 
 async def _test_async_max_turn(credentials: Credentials):
@@ -75,8 +75,8 @@ async def _test_async_max_turn(credentials: Credentials):
     )
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_async_max_turn(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_async_max_turn(credentials)
+    _test_async_max_turn(credentials_from_test_param)

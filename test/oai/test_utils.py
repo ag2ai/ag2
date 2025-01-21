@@ -10,13 +10,14 @@ import json
 import logging
 import os
 import tempfile
+from datetime import datetime, timezone
 from unittest import mock
 from unittest.mock import patch
 
 import pytest
 
 import autogen
-from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, filter_config, is_valid_api_key
+from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, OAI_PRICE1K, filter_config, is_valid_api_key
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
@@ -444,6 +445,24 @@ def test_is_valid_api_key():
     assert is_valid_api_key("sk-aut0-gen--asajsdjsd22372X23kjdfdfdf2329ffUUDSDS12121212212")
     assert is_valid_api_key("sk--aut0-gen-asajsdjsd22372X23kjdfdfdf2329ffUUDSDS12121212212")
     assert is_valid_api_key(MOCK_OPEN_AI_API_KEY)
+
+
+def test_reminder_to_update_deepseek_pricing_after_promotion():
+    # Reference: https://api-docs.deepseek.com/quick_start/pricing
+    # Define the promotion end date - February 8th, 2025 at 16:00 UTC
+    promo_end_date = datetime(2025, 2, 8, 16, 0, tzinfo=timezone.utc)
+    current_time = datetime.now(timezone.utc)
+
+    # Get the pricing tuple for deepseek-chat
+    input_price, output_price = OAI_PRICE1K["deepseek-chat"]
+
+    # After promo end date: Assert promotional pricing has been updated
+    if current_time > promo_end_date:
+        assert (input_price, output_price) != (0.00014, 0.00028), (
+            f"DeepSeek promotional period ended on {promo_end_date.strftime('%B %d, %Y at %H:%M %Z')}. "
+            "Please update OAI_PRICE1K['deepseek-chat'] to standard pricing."
+            "Check https://api-docs.deepseek.com/quick_start/pricing for more details."
+        )
 
 
 if __name__ == "__main__":
