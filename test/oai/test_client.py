@@ -10,6 +10,7 @@ import os
 import shutil
 import time
 from collections.abc import Generator
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -288,6 +289,57 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
         # Test legacy cache is not used.
         assert not os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(123)))
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
+
+
+class TestOpenAIClientBadRequestsError:
+    def test_is_agent_name_error_message(self) -> None:
+        assert OpenAIClient._is_agent_name_error_message("Invalid 'messages[0].something") is False
+        for i in range(5):
+            error_message = f"Invalid 'messages[{i}].name': string does not match pattern. Expected a string that matches the pattern ..."
+            assert OpenAIClient._is_agent_name_error_message(error_message) is True
+
+    @pytest.mark.parametrize(
+        "error_message, raise_new_error",
+        [
+            (
+                "Invalid 'messages[0].name': string does not match pattern. Expected a string that matches the pattern ...",
+                True,
+            ),
+            (
+                "Invalid 'messages[1].name': string does not match pattern. Expected a string that matches the pattern ...",
+                True,
+            ),
+            (
+                "Invalid 'messages[0].something': string does not match pattern. Expected a string that matches the pattern ...",
+                False,
+            ),
+        ],
+    )
+    def test_handle_openai_bad_request_error(self, error_message: str, raise_new_error: bool) -> None:
+        def raise_bad_request_error(error_message: str) -> None:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {
+                "error": {
+                    "message": error_message,
+                }
+            }
+            body = {"error": {"message": "Bad Request error occurred"}}
+            raise openai.BadRequestError("Bad Request", response=mock_response, body=body)
+
+        # Function raises BadRequestError
+        with pytest.raises(openai.BadRequestError):
+            raise_bad_request_error(error_message=error_message)
+
+        wrapped_raise_bad_request_error = OpenAIClient._handle_openai_bad_request_error(raise_bad_request_error)
+        if raise_new_error:
+            with pytest.raises(
+                ValueError,
+                match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
+            ):
+                wrapped_raise_bad_request_error(error_message=error_message)
+        else:
+            with pytest.raises(openai.BadRequestError):
+                wrapped_raise_bad_request_error(error_message=error_message)
 
 
 class TestO1:

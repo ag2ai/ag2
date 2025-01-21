@@ -290,11 +290,13 @@ class OpenAIClient:
                 for choice in choices
             ]
 
-    def _is_agent_name_error_message(self, message: str) -> bool:
+    @staticmethod
+    def _is_agent_name_error_message(message: str) -> bool:
         pattern = re.compile(r"Invalid 'messages\[\d+\]\.name': string does not match pattern.")
         return True if pattern.match(message) else False
 
-    def _create_or_parse_with_exception_handling(self, func: Callable[..., Any]) -> Callable[..., Any]:
+    @staticmethod
+    def _handle_openai_bad_request_error(func: Callable[..., Any]) -> Callable[..., Any]:
         def wrapper(*args: Any, **kwargs: Any):
             try:
                 return func(*args, **kwargs)
@@ -302,13 +304,12 @@ class OpenAIClient:
                 response_json = e.response.json()
                 # Check if the error message is related to the agent name. If so, raise a ValueError with a more informative message.
                 if "error" in response_json and "message" in response_json["error"]:
-                    pattern = re.compile(r"Invalid 'messages\[\d+\]\.name': string does not match pattern.")
-                    if pattern.match(response_json["error"]["message"]):
+                    if OpenAIClient._is_agent_name_error_message(response_json["error"]["message"]):
                         error_message = (
-                            f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols. "
-                            "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters. "
-                            "Check the agent name and try again. "
-                            f"Here is the full BadRequestError from openai: {e.message}."
+                            f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.\n"
+                            "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters.\n"
+                            "Check the agent name and try again.\n"
+                            f"Here is the full BadRequestError from openai:\n{e.message}."
                         )
                         raise ValueError(error_message)
 
@@ -341,7 +342,7 @@ class OpenAIClient:
             completions = self._oai_client.chat.completions if "messages" in params else self._oai_client.completions  # type: ignore [attr-defined]
             create_or_parse = completions.create
         # Wrap _create_or_parse with exception handling
-        create_or_parse = self._create_or_parse_with_exception_handling(create_or_parse)
+        create_or_parse = OpenAIClient._handle_openai_bad_request_error(create_or_parse)
 
         # needs to be updated when the o3 is released to generalize
         is_o1 = "model" in params and params["model"].startswith("o1")
