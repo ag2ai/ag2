@@ -18,41 +18,40 @@ from autogen.oai import OpenAIWrapper
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
-from ..groupchat import GroupChat, GroupChatManager
+from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
 
 
 @dataclass
-class UpdateCondition:
-    """Update the condition string before they reply
+class ContextStr:
+    """A string that requires context variable substitution.
+
+    Use the format method to substitute context variables into the string.
 
     Args:
-        update_function: The string or function to update the condition string. Can be a string or a Callable.
-            If a string, it will be used as a template and substitute the context variables.
-            If a Callable, it should have the signature:
-                def my_update_function(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+        template: The string to be substituted with context variables. It is expected that the string will contain {var} placeholders
+            and that string format will be able to replace all values.
     """
 
-    update_function: Union[Callable, str]
+    template: str
 
-    def __post_init__(self):
-        if isinstance(self.update_function, str):
-            assert self.update_function.strip(), " please provide a non-empty string or a callable"
-            # find all {var} in the string
-            vars = re.findall(r"\{(\w+)\}", self.update_function)
-            if len(vars) == 0:
-                warnings.warn("Update function string contains no variables. This is probably unintended.")
+    def __init__(self, template: str):
+        self.template = template
 
-        elif isinstance(self.update_function, Callable):
-            sig = signature(self.update_function)
-            if len(sig.parameters) != 2:
-                raise ValueError(
-                    "Update function must accept two parameters of type ConversableAgent and List[Dict[str, Any]], respectively"
-                )
-            if sig.return_annotation != str:
-                raise ValueError("Update function must return a string")
-        else:
-            raise ValueError("Update function must be either a string or a callable")
+    def format(self, context_variables: dict[str, Any]) -> str:
+        """Substitute context variables into the string.
+
+        Args:
+            context_variables: The context variables to substitute into the string.
+        """
+        return OpenAIWrapper.instantiate(
+            template=self.template,
+            context=context_variables,
+            allow_format_str_template=True,
+        )
+
+    def __str__(self) -> str:
+        return f"ContextStr, unformatted: {self.template}"
 
 
 # Created tool executor's name
@@ -74,13 +73,31 @@ class AfterWork:
         agent: The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
                 def my_after_work_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+        next_agent_selection_msg: Optional[Union[str, Callable]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
+            If a string, it will be used as a template and substitute the context variables.
+            If a Callable, it should have the signature:
+                def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
     """
 
     agent: Union[AfterWorkOption, ConversableAgent, str, Callable]
+    next_agent_selection_msg: Optional[Union[str, ContextStr, Callable]] = None
 
     def __post_init__(self):
         if isinstance(self.agent, str):
             self.agent = AfterWorkOption(self.agent.upper())
+
+        # next_agent_selection_msg is only valid for when agent is AfterWorkOption.SWARM_MANAGER, but isn't mandatory
+        if self.next_agent_selection_msg is not None:
+
+            if not isinstance(self.next_agent_selection_msg, (str, ContextStr, Callable)):
+                raise ValueError("next_agent_selection_msg must be a string, ContextStr, or a Callable")
+
+            if self.agent != AfterWorkOption.SWARM_MANAGER:
+                warnings.warn(
+                    "next_agent_selection_msg is only valid for agent=AfterWorkOption.SWARM_MANAGER. Ignoring the value.",
+                    UserWarning,
+                )
+                self.next_agent_selection_msg = None
 
 
 class AFTER_WORK(AfterWork):  # noqa: N801
@@ -103,13 +120,20 @@ class OnCondition:
         target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/topics/swarm#registering-handoffs-to-a-nested-chat
-        condition (str): The condition for transitioning to the target agent, evaluated by the LLM to determine whether to call the underlying function/tool which does the transition.
-        available (Union[Callable, str]): Optional condition to determine if this OnCondition is available. Can be a Callable or a string.
-            If a string, it will look up the value of the context variable with that name, which should be a bool.
+        condition (Union[str, ContextStr, Callable]): The condition for transitioning to the target agent, evaluated by the LLM.
+            If a string or Callable, no automatic context variable substitution occurs.
+            If a ContextStr, context variable substitution occurs.
+            The Callable signature is:
+                def my_condition_string(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+        available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
+            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
+            The Callable signature is:
+                def my_available_func(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> bool
+
     """
 
     target: Union[ConversableAgent, dict[str, Any]] = None
-    condition: Union[str, UpdateCondition] = ""
+    condition: Union[str, ContextStr, Callable] = ""
     available: Optional[Union[Callable, str]] = None
 
     def __post_init__(self):
@@ -123,7 +147,9 @@ class OnCondition:
         if isinstance(self.condition, str):
             assert self.condition.strip(), "'condition' must be a non-empty string"
         else:
-            assert isinstance(self.condition, UpdateCondition), "'condition' must be a string or UpdateOnConditionStr"
+            assert isinstance(
+                self.condition, (ContextStr, Callable)
+            ), "'condition' must be a string, ContextStr, or callable"
 
         if self.available is not None:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
@@ -153,6 +179,7 @@ def _establish_swarm_agent(agent: ConversableAgent):
         return f"Swarm agent --> {self.name}"
 
     agent._swarm_after_work = None
+    agent._swarm_after_work_selection_msg = None
 
     # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
     # List of Dictionaries containing the nested_chats and condition
@@ -328,6 +355,58 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
             del message["name"]
 
 
+def _prepare_groupchat_auto_speaker(
+    groupchat: GroupChat,
+    last_swarm_agent: ConversableAgent,
+    after_work_next_agent_selection_msg: Optional[Union[str, ContextStr, Callable]],
+) -> None:
+    """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
+
+    Tool Executor and Nested Chat agents will be removed from the available agents list.
+
+    Args:
+        groupchat (GroupChat): GroupChat instance.
+        last_swarm_agent (ConversableAgent): The last swarm agent for which the LLM config is used
+        after_work_next_agent_selection_msg (Union[str, ContextStr, Callable]): Optional message to use for the agent selection (in internal group chat).
+            if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
+            if a ContextStr, it will substitute the agentlist first and then the context variables
+            if a Callable, it will not substitute the agentlist or context variables, signature:
+                def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+    """
+
+    def substitute_agentlist(template: str) -> str:
+        # Run through group chat's string substitution first for {agentlist}
+        # We need to do this so that the next substitution doesn't fail with agentlist
+        # and we can remove the tool executor and nested chats from the available agents list
+        agent_list = [
+            agent
+            for agent in groupchat.agents
+            if agent.name != __TOOL_EXECUTOR_NAME__ and not agent.name.startswith("nested_chat_")
+        ]
+
+        groupchat.select_speaker_prompt_template = template
+        return groupchat.select_speaker_prompt(agent_list)
+
+    if after_work_next_agent_selection_msg is None:
+        # If there's no selection message, restore the default and filter out the tool executor and nested chat agents
+        groupchat.select_speaker_prompt_template = substitute_agentlist(SELECT_SPEAKER_PROMPT_TEMPLATE)
+    elif isinstance(after_work_next_agent_selection_msg, str):
+        # No context variable substitution for string, but agentlist will be substituted
+        groupchat.select_speaker_prompt_template = substitute_agentlist(after_work_next_agent_selection_msg)
+    elif isinstance(after_work_next_agent_selection_msg, ContextStr):
+        # Replace the agentlist in the string first, putting it into a new ContextStr
+        agent_list_replaced_string = ContextStr(substitute_agentlist(after_work_next_agent_selection_msg.template))
+
+        # Then replace the context variables
+        groupchat.select_speaker_prompt_template = agent_list_replaced_string.format(
+            last_swarm_agent._context_variables
+        )
+    elif isinstance(after_work_next_agent_selection_msg, Callable):
+        groupchat.select_speaker_prompt_template = substitute_agentlist(
+            after_work_next_agent_selection_msg(last_swarm_agent, groupchat.messages)
+        )
+
+
 def _determine_next_agent(
     last_speaker: ConversableAgent,
     groupchat: GroupChat,
@@ -385,11 +464,14 @@ def _determine_next_agent(
     if (user_agent and last_speaker == user_agent) or groupchat.messages[-1]["role"] == "tool":
         return last_swarm_speaker
 
+    after_work_next_agent_selection_msg = None
+
     # Resolve after_work condition (agent-level overrides global)
     after_work_condition = (
         last_swarm_speaker._swarm_after_work if last_swarm_speaker._swarm_after_work is not None else swarm_after_work
     )
     if isinstance(after_work_condition, AfterWork):
+        after_work_next_agent_selection_msg = after_work_condition.next_agent_selection_msg
         after_work_condition = after_work_condition.agent
 
     # Evaluate callable after_work
@@ -411,6 +493,7 @@ def _determine_next_agent(
         elif after_work_condition == AfterWorkOption.STAY:
             return last_speaker
         elif after_work_condition == AfterWorkOption.SWARM_MANAGER:
+            _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_next_agent_selection_msg)
             return "auto"
     else:
         raise ValueError("Invalid After Work condition or return value from callable")
@@ -456,11 +539,44 @@ def create_swarm_transition(
     return swarm_transition
 
 
+def _create_swarm_manager(
+    groupchat: GroupChat, swarm_manager_args: dict[str, Any], agents: list[ConversableAgent]
+) -> GroupChatManager:
+    """Create a GroupChatManager for the swarm chat utilising any arguments passed in and ensure an LLM Config exists if needed
+
+    Args:
+        groupchat (GroupChat): Swarm groupchat.
+        swarm_manager_args (dict[str, Any]): Swarm manager arguments to create the GroupChatManager.
+
+    Returns:
+        GroupChatManager: GroupChatManager instance.
+    """
+    manager_args = (swarm_manager_args or {}).copy()
+    if "groupchat" in manager_args:
+        raise ValueError("'groupchat' cannot be specified in swarm_manager_args as it is set by initiate_swarm_chat")
+    manager = GroupChatManager(groupchat, **manager_args)
+
+    # Ensure that our manager has an LLM Config if we have any AfterWorkOption.SWARM_MANAGER after works
+    if manager.llm_config is False:
+        for agent in agents:
+            if (
+                agent._swarm_after_work
+                and isinstance(agent._swarm_after_work.agent, AfterWorkOption)
+                and agent._swarm_after_work.agent == AfterWorkOption.SWARM_MANAGER
+            ):
+                raise ValueError(
+                    "The swarm manager doesn't have an LLM Config and it is required for AfterWorkOption.SWARM_MANAGER. Use the swarm_manager_args to specify the LLM Config for the swarm manager."
+                )
+
+    return manager
+
+
 def initiate_swarm_chat(
     initial_agent: ConversableAgent,
     messages: Union[list[dict[str, Any]], str],
     agents: list[ConversableAgent],
     user_agent: Optional[UserProxyAgent] = None,
+    swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
     after_work: Optional[Union[AfterWorkOption, Callable]] = AfterWork(AfterWorkOption.TERMINATE),
@@ -472,6 +588,7 @@ def initiate_swarm_chat(
         messages: Initial message(s).
         agents: List of swarm agents.
         user_agent: Optional user proxy agent for falling back to.
+        swarm_manager_args: Optional group chat manager arguments used to establish the swarm's groupchat manager, required when AfterWorkOption.SWARM_MANAGER is used.
         max_rounds: Maximum number of conversation rounds.
         context_variables: Starting context variables.
         after_work: Method to handle conversation continuation when an agent doesn't select the next agent. If no agent is selected and no tool calls are output, we will use this method to determine the next agent.
@@ -512,7 +629,7 @@ def initiate_swarm_chat(
         speaker_selection_method=swarm_transition,
     )
 
-    manager = GroupChatManager(groupchat)
+    manager = _create_swarm_manager(groupchat, swarm_manager_args, agents)
 
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables or {})
@@ -540,6 +657,7 @@ async def a_initiate_swarm_chat(
     messages: Union[list[dict[str, Any]], str],
     agents: list[ConversableAgent],
     user_agent: Optional[UserProxyAgent] = None,
+    swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
     after_work: Optional[Union[AfterWorkOption, Callable]] = AfterWork(AfterWorkOption.TERMINATE),
@@ -551,6 +669,7 @@ async def a_initiate_swarm_chat(
         messages: Initial message(s).
         agents: List of swarm agents.
         user_agent: Optional user proxy agent for falling back to.
+        swarm_manager_args: Optional group chat manager arguments used to establish the swarm's groupchat manager, required when AfterWorkOption.SWARM_MANAGER is used.
         max_rounds: Maximum number of conversation rounds.
         context_variables: Starting context variables.
         after_work: Method to handle conversation continuation when an agent doesn't select the next agent. If no agent is selected and no tool calls are output, we will use this method to determine the next agent.
@@ -591,7 +710,7 @@ async def a_initiate_swarm_chat(
         speaker_selection_method=swarm_transition,
     )
 
-    manager = GroupChatManager(groupchat)
+    manager = _create_swarm_manager(groupchat, swarm_manager_args, agents)
 
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables or {})
@@ -678,6 +797,7 @@ def register_hand_off(
                 "Invalid After Work value"
             )
             agent._swarm_after_work = transit
+            agent._swarm_after_work_selection_msg = transit.next_agent_selection_msg
         elif isinstance(transit, OnCondition):
             if isinstance(transit.target, ConversableAgent):
                 # Transition to agent
@@ -734,15 +854,10 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
         # then add the function if it is available, so that the function signature is updated
         if is_available:
             condition = on_condition.condition
-            if isinstance(condition, UpdateCondition):
-                if isinstance(condition.update_function, str):
-                    condition = OpenAIWrapper.instantiate(
-                        template=condition.update_function,
-                        context=agent._context_variables,
-                        allow_format_str_template=True,
-                    )
-                else:
-                    condition = condition.update_function(agent, messages)
+            if isinstance(condition, ContextStr):
+                condition = condition.format(context_variables=agent._context_variables)
+            elif isinstance(condition, Callable):
+                condition = condition(agent, messages)
             agent._add_single_function(func, func_name, condition)
 
 
