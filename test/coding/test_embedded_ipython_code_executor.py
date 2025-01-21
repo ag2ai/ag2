@@ -20,6 +20,7 @@ from autogen.code_utils import (
 )
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
+from autogen.import_utils import optional_import_block
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
@@ -28,13 +29,16 @@ if not is_docker_running() or not decide_use_docker(use_docker=None):
 else:
     skip_docker_test = False
 
-try:
+classes_to_test = []
+with optional_import_block() as result:
     from autogen.coding.jupyter import (
         DockerJupyterServer,
         EmbeddedIPythonCodeExecutor,
         JupyterCodeExecutor,
         LocalJupyterServer,
     )
+
+if result.is_successful:
 
     class DockerJupyterExecutor(JupyterCodeExecutor):
         def __init__(self, **kwargs):
@@ -55,12 +59,12 @@ try:
     if not skip_docker_test:
         classes_to_test.append(DockerJupyterExecutor)
 
-    skip = False
-    skip_reason = ""
-except ImportError as e:
-    skip = True
-    skip_reason = "Dependencies for EmbeddedIPythonCodeExecutor or LocalJupyterCodeExecutor not installed. " + e.msg
-    classes_to_test = []
+skip = not result.is_successful
+skip_reason = (
+    ""
+    if result.is_successful
+    else "Dependencies for EmbeddedIPythonCodeExecutor or LocalJupyterCodeExecutor not installed."
+)
 
 
 @pytest.mark.parametrize("cls", classes_to_test)

@@ -13,22 +13,19 @@ import pytest
 import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
+from autogen.import_utils import optional_import_block
 
 from ..conftest import Credentials
 
-try:
+with optional_import_block() as result:
     from openai import OpenAI  # noqa: F401
-except ImportError:
-    skip_tests = True
-else:
-    skip_tests = False
 
-try:
+skip_tests = not result.is_successful
+
+with optional_import_block() as result:
     import redis  # noqa: F401
-except ImportError:
-    skip_redis_tests = True
-else:
-    skip_redis_tests = False
+
+skip_redis_tests = not result.is_successful
 
 
 @pytest.mark.openai

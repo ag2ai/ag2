@@ -13,16 +13,15 @@ import pytest
 
 import autogen
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.import_utils import optional_import_block
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
-try:
+with optional_import_block() as result:
     from autogen.agentchat.contrib.img_utils import get_pil_image
     from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 base64_encoded_image = (

@@ -12,16 +12,15 @@ import os
 import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
+from autogen.import_utils import optional_import_block
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST
 
-try:
+with optional_import_block() as result:
     import chromadb  # noqa: F401
     import huggingface_hub  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 here = os.path.abspath(os.path.dirname(__file__))
 
