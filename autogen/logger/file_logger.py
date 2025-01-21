@@ -143,7 +143,7 @@ class FileLogger(BaseLogger):
 
     def log_event(self, source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
         """Log an event from an agent or a string source."""
-        from autogen import Agent
+        from .. import Agent
 
         # This takes an object o as input and returns a string. If the object o cannot be serialized, instead of raising an error,
         # it returns a string indicating that the object is non-serializable, along with its type's qualified name obtained using __qualname__.
