@@ -31,7 +31,7 @@ class FalkorGraphQueryEngine:
         username: str | None = None,
         password: str | None = None,
         model: Optional["GenerativeModel"] = None,
-        ontology: "Ontology" | None = None,
+        ontology: Optional["Ontology"] = None,
     ):
         """Initialize a FalkorDB knowledge graph.
         Please also refer to https://github.com/FalkorDB/GraphRAG-SDK/blob/main/graphrag_sdk/kg.py
