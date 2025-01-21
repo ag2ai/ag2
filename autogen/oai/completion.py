@@ -20,8 +20,13 @@ flaml_logger = logging.getLogger("flaml")
 null_handler = logging.NullHandler()
 flaml_logger.addHandler(null_handler)
 
-from flaml import BlendSearch, tune
-from flaml.tune.space import is_constant
+from ..import_utils import optional_import_block, require_optional_import
+
+with optional_import_block() as result:
+    from flaml import BlendSearch, tune
+    from flaml.tune.space import is_constant
+
+FLAML_INSTALLED = result.is_successful
 
 # Restore logging by removing the NullHandler
 flaml_logger.removeHandler(null_handler)
@@ -111,26 +116,30 @@ class Completion(OpenAICompletion):
         "gpt-4-32k-0613": (0.06, 0.12),
     }
 
-    default_search_space = {
-        "model": tune.choice(
-            [
-                "text-ada-001",
-                "text-babbage-001",
-                "text-davinci-003",
-                "gpt-3.5-turbo",
-                "gpt-4",
-            ]
-        ),
-        "temperature_or_top_p": tune.choice(
-            [
-                {"temperature": tune.uniform(0, 2)},
-                {"top_p": tune.uniform(0, 1)},
-            ]
-        ),
-        "max_tokens": tune.lograndint(50, 1000),
-        "n": tune.randint(1, 100),
-        "prompt": "{prompt}",
-    }
+    default_search_space = (
+        {
+            "model": tune.choice(
+                [
+                    "text-ada-001",
+                    "text-babbage-001",
+                    "text-davinci-003",
+                    "gpt-3.5-turbo",
+                    "gpt-4",
+                ]
+            ),
+            "temperature_or_top_p": tune.choice(
+                [
+                    {"temperature": tune.uniform(0, 2)},
+                    {"top_p": tune.uniform(0, 1)},
+                ]
+            ),
+            "max_tokens": tune.lograndint(50, 1000),
+            "n": tune.randint(1, 100),
+            "prompt": "{prompt}",
+        }
+        if FLAML_INSTALLED
+        else {}
+    )
 
     cache_seed = 41
     cache_path = f".cache/{cache_seed}"
@@ -525,6 +534,7 @@ class Completion(OpenAICompletion):
         return result
 
     @classmethod
+    @require_optional_import("flaml", "flaml")
     def tune(
         cls,
         data: list[dict],
@@ -1213,5 +1223,5 @@ class ChatCompletion(Completion):
     """`(openai<1)` A class for OpenAI API ChatCompletion. Share the same API as Completion."""
 
     default_search_space = Completion.default_search_space.copy()
-    default_search_space["model"] = tune.choice(["gpt-3.5-turbo", "gpt-4"])
+    default_search_space["model"] = tune.choice(["gpt-3.5-turbo", "gpt-4"]) if FLAML_INSTALLED else {}
     openai_completion_class = not ERROR and openai.ChatCompletion
