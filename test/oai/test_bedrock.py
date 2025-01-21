@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
-    from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
+from autogen.import_utils import optional_import_block
+from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
 
-    skip = False
-except ImportError:
-    BedrockClient = object
-    InternalServerError = object
-    skip = True
+with optional_import_block() as result:
+    import boto3  # noqa: F401
+    from botocore.config import Config  # noqa: F401
+
+skip = not result.is_successful
 
 
 # Fixtures for mock data

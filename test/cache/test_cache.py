@@ -9,15 +9,13 @@
 import unittest
 from unittest.mock import ANY, MagicMock, patch
 
-try:
+from autogen.cache.cache import Cache
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from azure.cosmos import CosmosClient
 
-    skip_azure = False
-except ImportError:
-    CosmosClient = object
-    skip_azure = True
-
-from autogen.cache.cache import Cache
+skip_azure = not result.is_successful
 
 
 class TestCache(unittest.TestCase):

@@ -11,15 +11,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.import_utils import optional_import_block
+
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
-try:
+with optional_import_block() as result:
     from autogen.agentchat.contrib.llava_agent import LLaVAAgent, _llava_call_binary_with_config, llava_call
-except ImportError:
-    skip = True
 
-else:
-    skip = False
+skip = not result.is_successful
 
 
 @pytest.mark.skipif(skip, reason="dependency is not installed")

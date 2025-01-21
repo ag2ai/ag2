@@ -8,14 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
-    from autogen.oai.cerebras import CerebrasClient, calculate_cerebras_cost
+from autogen.import_utils import optional_import_block
+from autogen.oai.cerebras import CerebrasClient, calculate_cerebras_cost
 
-    skip = False
-except ImportError:
-    CerebrasClient = object
-    InternalServerError = object
-    skip = True
+with optional_import_block() as result:
+    from cerebras.cloud.sdk import Cerebras, Stream  # noqa: F401
+
+skip = not result.is_successful
 
 
 # Fixtures for mock data

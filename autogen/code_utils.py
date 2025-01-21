@@ -20,8 +20,7 @@ from typing import Callable, Optional, Union
 
 import docker
 
-from autogen import oai
-
+from . import oai
 from .types import UserMessageImageContentPart, UserMessageTextContentPart
 
 SENTINEL = object()

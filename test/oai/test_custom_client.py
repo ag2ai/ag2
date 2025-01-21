@@ -8,13 +8,13 @@
 import pytest
 
 from autogen import OpenAIWrapper
+from autogen.import_utils import optional_import_block
 
-try:
+with optional_import_block() as result:
     from openai import OpenAI  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
+
 
 TEST_COST = 20000000
 TEST_CUSTOM_RESPONSE = "This is a custom response."

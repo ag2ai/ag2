@@ -14,20 +14,16 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
+from autogen.import_utils import optional_import_block
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from ...conftest import reason
 
-skip_reasons = [reason]
-try:
+
+with optional_import_block() as result:
     from graphviz import Digraph  # noqa: F401
 
-    skip_for_dependencies = False
-    skip_reason = ""
-except ImportError as e:
-    skip_for_dependencies = True
-    skip_reason = f"dependency not installed: {e.msg}"
-    pass
+skip_for_dependencies = not result.is_successful
+skip_reason = "" if result.is_successful else "dependency not installed"
 
 here = os.path.abspath(os.path.dirname(__file__))
 

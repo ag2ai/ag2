@@ -9,16 +9,15 @@ import tempfile
 import pytest
 
 from autogen.coding.base import CodeBlock
-from autogen.coding.local_commandline_code_executor import LocalCommandLineCodeExecutor
-
-try:
-    import pandas
-except ImportError:
-    skip = True
-else:
-    skip = False
-
 from autogen.coding.func_with_reqs import FunctionWithRequirements, with_requirements
+from autogen.coding.local_commandline_code_executor import LocalCommandLineCodeExecutor
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
+    import pandas
+
+skip = not result.is_successful
+
 
 classes_to_test = [LocalCommandLineCodeExecutor]
 

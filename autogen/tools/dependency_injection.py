@@ -12,7 +12,7 @@ from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
 
-from autogen.agentchat import Agent
+from ..agentchat import Agent
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent

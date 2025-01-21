@@ -11,12 +11,12 @@ import sys
 
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     import openai  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -24,7 +24,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 def run_notebook(input_nb, output_nb="executed_openai_notebook.ipynb", save=False):
     import nbformat
-    from nbconvert.preprocessors import CellExecutionError, ExecutePreprocessor
+    from nbconvert.preprocessors import ExecutePreprocessor
 
     try:
         nb_loc = os.path.join(here, os.pardir, "notebook")
@@ -44,8 +44,6 @@ def run_notebook(input_nb, output_nb="executed_openai_notebook.ipynb", save=Fals
                             nb_output_file.write(output["text"].strip() + "\n")
                         elif "data" in output and "text/plain" in output["data"]:
                             nb_output_file.write(output["data"]["text/plain"].strip() + "\n")
-    except CellExecutionError:
-        raise
     finally:
         if save:
             with open(os.path.join(here, output_nb), "w", encoding="utf-8") as nb_executed_file:

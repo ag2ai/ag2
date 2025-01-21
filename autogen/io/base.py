@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Optional, Protocol, runtime_checkable
 
-from autogen.messages.base_message import BaseMessage
+from ..messages.base_message import BaseMessage
 
 __all__ = ("IOStream", "InputStream", "OutputStream")
 

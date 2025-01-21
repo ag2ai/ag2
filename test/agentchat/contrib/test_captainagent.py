@@ -7,16 +7,15 @@ import pytest
 
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
+from autogen.import_utils import optional_import_block
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials, reason
 
-try:
+with optional_import_block() as result:
     import chromadb  # noqa: F401
     import huggingface_hub  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 @pytest.mark.openai

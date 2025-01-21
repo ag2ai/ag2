@@ -7,10 +7,12 @@ import json
 from logging import Logger
 from typing import TYPE_CHECKING, Any, Optional
 
+from ...import_utils import optional_import_block
 from .realtime_observer import RealtimeObserver
 
 if TYPE_CHECKING:
-    from fastapi.websockets import WebSocket
+    with optional_import_block():
+        from fastapi.websockets import WebSocket
 
 
 LOG_EVENT_TYPES = [
@@ -144,5 +146,5 @@ class TwilioAudioAdapter(RealtimeObserver):
 
 if TYPE_CHECKING:
 
-    def twilio_audio_adapter(websocket: WebSocket) -> RealtimeObserver:
+    def twilio_audio_adapter(websocket: "WebSocket") -> RealtimeObserver:
         return TwilioAudioAdapter(websocket)

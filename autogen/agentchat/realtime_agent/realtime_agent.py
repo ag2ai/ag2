@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from logging import Logger, getLogger
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
 
 import anyio
 from asyncer import asyncify, create_task_group, syncify
-from fastapi import WebSocket
 
+from ...import_utils import optional_import_block
 from ...tools import Tool
 from .. import SwarmAgent
 from ..agent import Agent
@@ -18,6 +18,10 @@ from .function_observer import FunctionObserver
 from .oai_realtime_client import OpenAIRealtimeClient, OpenAIRealtimeWebRTCClient, Role
 from .realtime_client import RealtimeClientProtocol
 from .realtime_observer import RealtimeObserver
+
+if TYPE_CHECKING:
+    with optional_import_block():
+        from fastapi import WebSocket
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -49,7 +53,7 @@ class RealtimeAgent(ConversableAgent):
         llm_config: dict[str, Any],
         voice: str = "alloy",
         logger: Optional[Logger] = None,
-        websocket: Optional[WebSocket] = None,
+        websocket: Optional["WebSocket"] = None,
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
 

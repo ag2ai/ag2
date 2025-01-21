@@ -10,8 +10,11 @@ from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     import google.auth  # noqa: F401
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
@@ -24,17 +27,7 @@ try:
 
     from autogen.oai.gemini import GeminiClient
 
-    skip = False
-except ImportError:
-    GeminiClient = object
-    VertexAIHarmBlockThreshold = object
-    VertexAIHarmCategory = object
-    VertexAISafetySetting = object
-    vertexai_global_config = object
-    InternalServerError = object
-    skip = True
-
-from pydantic import BaseModel
+skip = not result.is_successful
 
 
 # Fixtures for mock data

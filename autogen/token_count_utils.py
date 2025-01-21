@@ -11,14 +11,16 @@ from typing import Union
 
 import tiktoken
 
+from .agentchat.contrib.img_utils import num_tokens_from_gpt_image
 from .import_utils import optional_import_block
 
+# if PIL is not imported, we will redefine num_tokens_from_gpt_image to return 0 tokens for images
+# Otherwise, it would raise an ImportError
 with optional_import_block() as result:
-    from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image
+    import PIL  # noqa: F401
 
-img_util_imported = result.is_successful
-
-if not result.is_successful:
+pil_imported = result.is_successful
+if not pil_imported:
 
     def num_tokens_from_gpt_image(*args, **kwargs):
         return 0
@@ -181,7 +183,7 @@ def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0
                         num_tokens += len(encoding.encode(part["text"]))
                     if "image_url" in part:
                         assert "url" in part["image_url"]
-                        if not img_util_imported and not logger.img_dependency_warned:
+                        if not pil_imported and not logger.img_dependency_warned:
                             logger.warning(
                                 "img_utils or PIL not imported. Skipping image token count."
                                 "Please install autogen with [lmm] option.",
