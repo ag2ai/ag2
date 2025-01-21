@@ -13,10 +13,12 @@ import httpx
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 
+from ...import_utils import optional_import_block
 from .realtime_client import Role
 
 if TYPE_CHECKING:
-    from fastapi.websockets import WebSocket
+    with optional_import_block():
+        from fastapi.websockets import WebSocket
 
     from .realtime_client import RealtimeClientProtocol
 
