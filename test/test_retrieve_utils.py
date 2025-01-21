@@ -13,21 +13,24 @@ import os
 import pytest
 
 from autogen.import_utils import optional_import_block
+from autogen.retrieve_utils import (
+    create_vector_db_from_dir,
+    extract_text_from_pdf,
+    get_files_from_dir,
+    is_url,
+    parse_html_to_markdown,
+    query_vector_db,
+    split_files_to_chunks,
+    split_text_to_chunks,
+)
+from autogen.token_count_utils import count_token
 
 with optional_import_block() as result:
+    import bs4  # noqa: F401
     import chromadb
+    import markdownify  # noqa: F401
+    import pypdf  # noqa: F401
 
-    from autogen.retrieve_utils import (
-        create_vector_db_from_dir,
-        extract_text_from_pdf,
-        get_files_from_dir,
-        is_url,
-        parse_html_to_markdown,
-        query_vector_db,
-        split_files_to_chunks,
-        split_text_to_chunks,
-    )
-    from autogen.token_count_utils import count_token
 
 skip = not result.is_successful
 
