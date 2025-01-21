@@ -28,6 +28,7 @@ QUESTION_ROLE: "Role" = "user"
 QUESTION_MESSAGE = (
     "I have a question/information for myself. DO NOT ANSWER YOURSELF, GET THE ANSWER FROM ME. "
     "repeat the question to me **WITH AUDIO OUTPUT** and AFTER YOU GET THE ANSWER FROM ME call 'answer_task_question' with the answer in first person\n\n"
+    "IMPORTANT: repeat just the question, without any additional information or context\n\n"
     "The question is: '{}'\n\n"
 )
 QUESTION_TIMEOUT_SECONDS = 20
