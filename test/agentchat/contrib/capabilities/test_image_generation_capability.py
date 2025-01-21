@@ -15,19 +15,18 @@ from autogen import code_utils
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.cache.cache import Cache
+from autogen.import_utils import optional_import_block
 from autogen.oai import openai_utils
 
-try:
+from ....conftest import MOCK_OPEN_AI_API_KEY
+
+with optional_import_block() as result:
     from PIL import Image
 
     from autogen.agentchat.contrib.capabilities import generate_images
     from autogen.agentchat.contrib.img_utils import get_pil_image
-except ImportError:
-    skip_requirement = True
-else:
-    skip_requirement = False
 
-from ....conftest import MOCK_OPEN_AI_API_KEY
+skip_requirement = not result.is_successful
 
 filter_dict = {"model": ["gpt-4o-mini"]}
 

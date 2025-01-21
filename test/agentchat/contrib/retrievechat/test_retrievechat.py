@@ -10,9 +10,11 @@ import sys
 
 import pytest
 
+from autogen.import_utils import optional_import_block
+
 from ....conftest import Credentials, reason
 
-try:
+with optional_import_block() as result:
     import chromadb
     import openai  # noqa: F401
     from chromadb.utils import embedding_functions as ef
@@ -21,10 +23,8 @@ try:
     from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
         RetrieveUserProxyAgent,
     )
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
 
