@@ -8,12 +8,12 @@
 
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image  # noqa: F401
 
-    img_util_imported = True
-except ImportError:
-    img_util_imported = False
+img_util_imported = result.is_successful
 
 
 from autogen.token_count_utils import (

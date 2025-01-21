@@ -11,12 +11,12 @@ import sys
 
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     import openai  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 here = os.path.abspath(os.path.dirname(__file__))

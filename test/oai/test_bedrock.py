@@ -8,14 +8,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
 
-    skip = False
-except ImportError:
-    BedrockClient = object
-    InternalServerError = object
-    skip = True
+skip = not result.is_successful
 
 
 # Fixtures for mock data
