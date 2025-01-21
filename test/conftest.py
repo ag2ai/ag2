@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import pytest
+from pytest import CallInfo, Item
 
 import autogen
 
@@ -117,6 +118,28 @@ class Credentials:
     @property
     def api_key(self) -> str:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
+
+
+class CensoredError(Exception):
+    def __init__(self, exception: BaseException):
+        self.exception = exception
+        self.__traceback__ = exception.__traceback__
+        original_message = "".join([repr(arg) for arg in exception.args])
+        message = Secrets.sanitize_secrets(original_message)
+        super().__init__(message)
+
+
+def pytest_runtest_makereport(item: Item, call: CallInfo[Any]) -> None:
+    """
+    Hook to customize the exception output.
+    This is called after each test call.
+    """
+    if call.excinfo is not None:  # This means the test failed
+        original_message = "".join([repr(arg) for arg in call.excinfo.value.args])
+
+        if Secrets.needs_sanitizing(original_message):
+            censored_exception = CensoredError(call.excinfo.value)
+            call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
 
 
 def get_credentials(
@@ -284,28 +307,6 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # https://docs.pytest.org/en/stable/reference/exit-codes.html
     if exitstatus == 5:
         session.exitstatus = 0
-
-
-class CensoredError(Exception):
-    def __init__(self, exception: Exception):
-        self.exception = exception
-        self.__traceback__ = exception.__traceback__
-        original_message = "".join([repr(arg) for arg in exception.args])
-        message = Secrets.sanitize_secrets(original_message)
-        super().__init__(message)
-
-
-# def pytest_runtest_makereport(item, call):
-#     """
-#     Hook to customize the exception output.
-#     This is called after each test call.
-#     """
-#     if call.excinfo is not None:  # This means the test failed
-#         original_message = "".join([repr(arg) for arg in call.excinfo.value.args])
-
-#         if Secrets.needs_sanitizing(original_message):
-#             censored_exception = CensoredError(call.excinfo.value)
-#             call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
 
 
 credentials_all_llms = [
