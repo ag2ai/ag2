@@ -1,4 +1,4 @@
-export async function init(webSocketUrl) {
+export async function ag2Connect(webSocketUrl) {
 
     let ws
     const pc = new RTCPeerConnection();

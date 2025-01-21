@@ -5,7 +5,7 @@ const main = async () => {
     const eConnected = document.getElementById("connected")
     eConnecting.style.display = "block"
     eConnected.style.display = "none"
-    await init(socketUrl);
+    await ag2Connect(socketUrl);
     eConnecting.style.display = "none"
     eConnected.style.display = "block"
 }
