@@ -12,19 +12,18 @@ from typing import Any
 import pytest
 
 from autogen import code_utils
+from autogen.agentchat.contrib.capabilities import generate_images
+from autogen.agentchat.contrib.img_utils import get_pil_image
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.cache.cache import Cache
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.oai import openai_utils
 
 from ....conftest import MOCK_OPEN_AI_API_KEY
 
 with optional_import_block() as result:
     from PIL import Image
-
-    from autogen.agentchat.contrib.capabilities import generate_images
-    from autogen.agentchat.contrib.img_utils import get_pil_image
 
 skip_requirement = not result.is_successful
 
@@ -91,7 +90,7 @@ def image_gen_capability():
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip_requirement, reason="Dependencies are not installed.")
+@skip_on_missing_imports("PIL", "unknown")
 def test_dalle_image_generator(dalle_config: dict[str, Any]):
     """Tests DalleImageGenerator capability to generate images by calling the OpenAI API."""
     dalle_generator = dalle_image_generator(dalle_config, RESOLUTIONS[0], QUALITIES[0])

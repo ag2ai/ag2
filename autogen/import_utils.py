@@ -10,7 +10,7 @@ from functools import wraps
 from logging import getLogger
 from typing import Any, Callable, Generator, Iterable, Optional, Type, TypeVar, Union
 
-__all__ = ["optional_import_block", "require_optional_import"]
+__all__ = ["optional_import_block", "require_optional_import", "skip_on_missing_imports"]
 
 logger = getLogger(__name__)
 
@@ -260,5 +260,35 @@ def require_optional_import(modules: Union[str, Iterable[str]], dep_target: str)
 
         def decorator(o: T) -> T:
             return patch_object(o, missing_modules=missing_modules, dep_target=dep_target)
+
+    return decorator
+
+
+def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+    """Decorator to skip a test if an optional module is missing
+
+    Args:
+        module: Module name
+        dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
+    """
+
+    missing_modules = get_missing_imports(modules)
+
+    if not missing_modules:
+
+        def decorator(o: T) -> T:
+            return o
+    else:
+
+        def decorator(o: T) -> T:
+            import pytest
+
+            @pytest.mark.skip(
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+            )
+            def _skip(*args, **kwargs):
+                pass
+
+            return _skip
 
     return decorator
