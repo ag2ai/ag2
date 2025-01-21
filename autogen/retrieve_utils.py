@@ -160,6 +160,7 @@ def extract_text_from_pdf(file: str) -> str:
     return text
 
 
+@require_optional_import("unstructured", "unknown")
 def split_files_to_chunks(
     files: list,
     max_tokens: int = 4000,
