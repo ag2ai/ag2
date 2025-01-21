@@ -1481,19 +1481,32 @@ def test_handle_carryover():
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
 
 
-def test_conversable_agent_with_whitespaces_in_name(credentials_anthropic_claude_sonnet: Credentials) -> None:
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+def test_conversable_agent_with_whitespaces_in_name_end2end(
+    credentials_from_test_param: Credentials,
+    request: pytest.FixtureRequest,
+) -> None:
     agent = ConversableAgent(
         name="first_agent",
-        llm_config=credentials_anthropic_claude_sonnet.llm_config,
+        llm_config=credentials_from_test_param.llm_config,
     )
-
-    # assert agent.llm_config is None, agent.llm_config
 
     user_proxy = UserProxyAgent(
         name="user proxy",
         human_input_mode="NEVER",
     )
-    user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=1)
+
+    # Get the parameter name request node
+    current_llm = request.node.callspec.id
+    if "gpt_4" in current_llm:
+        with pytest.raises(
+            ValueError,
+            match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
+        ):
+            user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
+    # anthropic and gemini will not raise an error if agent name contains whitespaces
+    else:
+        user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
 
 
 @pytest.mark.openai
