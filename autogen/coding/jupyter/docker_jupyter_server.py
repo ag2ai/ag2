@@ -17,14 +17,12 @@ from types import TracebackType
 
 import docker
 
-from ..docker_commandline_code_executor import _wait_for_ready
-
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
 
-
+from ..docker_commandline_code_executor import _wait_for_ready
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .jupyter_client import JupyterClient
 
