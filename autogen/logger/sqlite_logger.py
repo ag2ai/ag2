@@ -307,7 +307,7 @@ class SqliteLogger(BaseLogger):
             agent (ConversableAgent): Agent to log.
             init_args (dict[str, Any]): Initialization arguments of the agent
         """
-        from autogen import Agent
+        from .. import Agent
 
         if self.con is None:
             return

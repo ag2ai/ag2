@@ -546,7 +546,7 @@ class PGVectorDB(VectorDB):
     def __init__(
         self,
         *,
-        conn: Optional[psycopg.Connection] = None,
+        conn: Optional["psycopg.Connection"] = None,
         connection_string: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[Union[int, str]] = None,
@@ -603,7 +603,7 @@ class PGVectorDB(VectorDB):
 
     def establish_connection(
         self,
-        conn: Optional[psycopg.Connection] = None,
+        conn: Optional["psycopg.Connection"] = None,
         connection_string: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[Union[int, str]] = None,
@@ -611,7 +611,7 @@ class PGVectorDB(VectorDB):
         username: Optional[str] = None,
         password: Optional[str] = None,
         connect_timeout: Optional[int] = 10,
-    ) -> psycopg.Connection:
+    ) -> "psycopg.Connection":
         """Establishes a connection to a PostgreSQL database using psycopg.
 
         Args:

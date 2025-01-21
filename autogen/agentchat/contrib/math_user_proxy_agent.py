@@ -11,12 +11,11 @@ from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, Extra, root_validator
 
-from autogen._pydantic import PYDANTIC_V1
-from autogen.agentchat import Agent, UserProxyAgent
-from autogen.code_utils import UNKNOWN, execute_code, extract_code, infer_lang
-from autogen.math_utils import get_answer
-
+from ..._pydantic import PYDANTIC_V1
+from ...code_utils import UNKNOWN, execute_code, extract_code, infer_lang
 from ...import_utils import optional_import_block, require_optional_import
+from ...math_utils import get_answer
+from .. import Agent, UserProxyAgent
 
 with optional_import_block() as result:
     import wolframalpha
