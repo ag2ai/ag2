@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -12,25 +12,25 @@ class RealtimeEvent(BaseModel):
 
 
 class SessionCreated(RealtimeEvent):
-    type: str = "session.created"
+    type: Literal["session.created"] = "session.created"
 
 
 class SessionUpdated(RealtimeEvent):
-    type: str = "session.updated"
+    type: Literal["session.updated"] = "session.updated"
 
 
 class AudioDelta(RealtimeEvent):
-    type: str = "response.audio.delta"
+    type: Literal["response.audio.delta"] = "response.audio.delta"
     delta: str
     item_id: Any
 
 
 class SpeechStarted(RealtimeEvent):
-    type: str = "input_audio_buffer.speech_started"
+    type: Literal["input_audio_buffer.speech_started"] = "input_audio_buffer.speech_started"
 
 
 class FunctionCall(RealtimeEvent):
-    type: str = "response.function_call_arguments.done"
+    type: Literal["response.function_call_arguments.done"] = "response.function_call_arguments.done"
     name: str
     arguments: dict[str, Any]
     call_id: str

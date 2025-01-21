@@ -10,7 +10,6 @@ from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionC
 __all__ = ["parse_oai_message"]
 
 
-# todo. remove all ifs
 def parse_oai_message(message: dict[str, Any]) -> RealtimeEvent:
     """Parse a message from the OpenAI Realtime API.
 
