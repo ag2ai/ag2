@@ -9,16 +9,16 @@ import sys
 import pytest
 from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
     from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import (
         FalkorGraphQueryEngine,
         GraphStoreQueryResult,
     )
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 reason = "do not run on MacOS or windows OR dependency is not installed"
 

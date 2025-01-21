@@ -8,16 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # noqa: F401
 
     from autogen.oai.together import TogetherClient, calculate_together_cost
 
-    skip = False
-except ImportError:
-    TogetherClient = object
-    InternalServerError = object
-    skip = True
+skip = not result.is_successful
 
 
 # Fixtures for mock data

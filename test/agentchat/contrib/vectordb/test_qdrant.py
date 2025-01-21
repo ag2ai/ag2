@@ -9,18 +9,18 @@ import sys
 
 import pytest
 
+from autogen.import_utils import optional_import_block
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-try:
+with optional_import_block() as result:
     import uuid
 
     from qdrant_client import QdrantClient
 
     from autogen.agentchat.contrib.vectordb.qdrant import QdrantVectorDB
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 @pytest.mark.skipif(skip, reason="dependency is not installed")

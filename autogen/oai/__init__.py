@@ -4,10 +4,10 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from autogen.cache.cache import Cache
-from autogen.oai.client import ModelClient, OpenAIWrapper
-from autogen.oai.completion import ChatCompletion, Completion
-from autogen.oai.openai_utils import (
+from ..cache.cache import Cache
+from .client import ModelClient, OpenAIWrapper
+from .completion import ChatCompletion, Completion
+from .openai_utils import (
     config_list_from_dotenv,
     config_list_from_json,
     config_list_from_models,

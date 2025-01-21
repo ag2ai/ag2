@@ -10,19 +10,20 @@ from typing import Literal
 
 import pytest
 
+from autogen.import_utils import optional_import_block
+
 from ....conftest import reason
 
-try:
+with optional_import_block() as result:
     from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
     from autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine import (
         GraphStoreQueryResult,
         Neo4jGraphQueryEngine,
     )
 
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
+
 
 # Configure the logging
 logging.basicConfig(level=logging.INFO)
