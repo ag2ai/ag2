@@ -10,6 +10,10 @@ import sys
 
 import pytest
 
+from autogen import AssistantAgent
+from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
+    RetrieveUserProxyAgent,
+)
 from autogen.import_utils import optional_import_block
 
 from ....conftest import Credentials, reason
@@ -17,12 +21,9 @@ from ....conftest import Credentials, reason
 with optional_import_block() as result:
     import chromadb
     import openai  # noqa: F401
+    from IPython import get_ipython  # noqa: F401
     from chromadb.utils import embedding_functions as ef
 
-    from autogen import AssistantAgent
-    from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
-        RetrieveUserProxyAgent,
-    )
 
 skip = not result.is_successful
 
