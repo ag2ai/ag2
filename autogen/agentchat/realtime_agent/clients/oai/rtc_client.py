@@ -15,8 +15,8 @@ from ..realtime_client import Role, register_realtime_client
 from .utils import parse_oai_message
 
 if TYPE_CHECKING:
+    from ...websockets import WebSocketProtocol as WebSocket
     from ..realtime_client import RealtimeClientProtocol
-    from ..websockets import WebSocketProtocol as WebSocket
 
 __all__ = ["OpenAIRealtimeWebRTCClient"]
 

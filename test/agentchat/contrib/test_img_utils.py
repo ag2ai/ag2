@@ -14,7 +14,9 @@ from unittest.mock import patch
 import pytest
 import requests
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     import numpy as np
     from PIL import Image
 
@@ -28,10 +30,8 @@ try:
         message_formatter_pil_to_b64,
         num_tokens_from_gpt_image,
     )
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 base64_encoded_image = (

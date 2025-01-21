@@ -10,16 +10,14 @@ import pickle
 import unittest
 from unittest.mock import MagicMock, patch
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from azure.cosmos.exceptions import CosmosResourceNotFoundError
 
     from autogen.cache.cosmos_db_cache import CosmosDBCache
 
-    skip_test = False
-except ImportError:
-    CosmosResourceNotFoundError = Exception
-    CosmosDBCache = object
-    skip_test = True
+skip_test = not result.is_successful
 
 
 class TestCosmosDBCache(unittest.TestCase):

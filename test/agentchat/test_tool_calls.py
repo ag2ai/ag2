@@ -13,17 +13,16 @@ import sys
 import pytest
 
 import autogen
+from autogen.import_utils import optional_import_block
 from autogen.math_utils import eval_math_responses
 from autogen.oai.client import TOOL_ENABLED
 
 from ..conftest import Credentials
 
-try:
+with optional_import_block() as result:
     from openai import OpenAI  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 @pytest.mark.openai

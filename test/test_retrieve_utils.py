@@ -8,34 +8,36 @@
 
 """Unit test for retrieve_utils.py"""
 
-import pytest
-
-try:
-    import chromadb
-
-    from autogen.retrieve_utils import (
-        create_vector_db_from_dir,
-        extract_text_from_pdf,
-        get_files_from_dir,
-        is_url,
-        parse_html_to_markdown,
-        query_vector_db,
-        split_files_to_chunks,
-        split_text_to_chunks,
-    )
-    from autogen.token_count_utils import count_token
-except ImportError:
-    skip = True
-else:
-    skip = False
 import os
 
-try:
+import pytest
+
+from autogen.import_utils import optional_import_block
+from autogen.retrieve_utils import (
+    create_vector_db_from_dir,
+    extract_text_from_pdf,
+    get_files_from_dir,
+    is_url,
+    parse_html_to_markdown,
+    query_vector_db,
+    split_files_to_chunks,
+    split_text_to_chunks,
+)
+from autogen.token_count_utils import count_token
+
+with optional_import_block() as result:
+    import bs4  # noqa: F401
+    import chromadb
+    import markdownify  # noqa: F401
+    import pypdf  # noqa: F401
+
+
+skip = not result.is_successful
+
+with optional_import_block() as result:
     from unstructured.partition.auto import partition  # noqa: F401
 
-    HAS_UNSTRUCTURED = True
-except ImportError:
-    HAS_UNSTRUCTURED = False
+HAS_UNSTRUCTURED = result.is_successful
 
 test_dir = os.path.join(os.path.dirname(__file__), "test_files")
 expected_text = """AutoGen is an advanced tool designed to assist developers in harnessing the capabilities
@@ -136,9 +138,9 @@ class TestRetrieveUtils:
         assert isinstance(results, dict) and any("autogen" in res[0].lower() for res in results.get("documents", []))
 
     def test_custom_vector_db(self):
-        try:
+        with optional_import_block() as result:
             import lancedb
-        except ImportError:
+        if not result.is_successful:
             return
         from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 

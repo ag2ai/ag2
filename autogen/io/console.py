@@ -7,9 +7,8 @@
 import getpass
 from typing import Any
 
-from autogen.messages.base_message import BaseMessage
-from autogen.messages.print_message import PrintMessage
-
+from ..messages.base_message import BaseMessage
+from ..messages.print_message import PrintMessage
 from .base import IOStream
 
 __all__ = ("IOConsole",)

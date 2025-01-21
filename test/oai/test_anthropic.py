@@ -10,17 +10,14 @@ import os
 
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
     from autogen.oai.anthropic import AnthropicClient, _calculate_cost
 
-    skip = False
-except ImportError:
-    AnthropicClient = object
-    Message = object
-    TextBlock = object
-    skip = True
+skip = not result.is_successful
 
 from typing import List
 

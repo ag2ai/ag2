@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, AsyncIterator, Protocol, runtime_checkable
 
 __all__ = ["WebSocketProtocol"]
 
@@ -16,3 +16,5 @@ class WebSocketProtocol(Protocol):
     async def receive_json(self, mode: str = "text") -> Any: ...
 
     async def receive_text(self) -> str: ...
+
+    def iter_text(self) -> AsyncIterator[str]: ...

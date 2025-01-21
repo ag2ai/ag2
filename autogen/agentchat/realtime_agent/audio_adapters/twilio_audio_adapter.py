@@ -11,7 +11,7 @@ from ..realtime_events import AudioDelta, RealtimeEvent, SpeechStarted
 from ..realtime_observer import RealtimeObserver
 
 if TYPE_CHECKING:
-    from fastapi.websockets import WebSocket
+    from ..websockets import WebSocketProtocol as WebSocket
 
 
 LOG_EVENT_TYPES = [
@@ -142,5 +142,5 @@ class TwilioAudioAdapter(RealtimeObserver):
 
 if TYPE_CHECKING:
 
-    def twilio_audio_adapter(websocket: WebSocket) -> RealtimeObserver:
+    def twilio_audio_adapter(websocket: "WebSocket") -> RealtimeObserver:
         return TwilioAudioAdapter(websocket)

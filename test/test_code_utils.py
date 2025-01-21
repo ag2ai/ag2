@@ -30,6 +30,7 @@ from autogen.code_utils import (
     infer_lang,
     is_docker_running,
 )
+from autogen.import_utils import optional_import_block
 
 from .conftest import Credentials
 
@@ -390,9 +391,9 @@ def test_create_virtual_env_with_extra_args():
 
 
 def _test_improve(credentials_all: Credentials):
-    try:
+    with optional_import_block() as result:
         import openai  # noqa: F401
-    except ImportError:
+    if not result.is_successful:
         return
     config_list = credentials_all.config_list
     improved, _ = improve_function(

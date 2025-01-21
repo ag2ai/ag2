@@ -8,12 +8,10 @@ from logging import Logger
 from typing import TYPE_CHECKING, Optional
 
 from ..realtime_events import AudioDelta, RealtimeEvent, SpeechStarted
+from ..realtime_observer import RealtimeObserver
 
 if TYPE_CHECKING:
-    from fastapi.websockets import WebSocket
-
-
-from ..realtime_observer import RealtimeObserver
+    from ..websockets import WebSocketProtocol as WebSocket
 
 LOG_EVENT_TYPES = [
     "error",
@@ -135,5 +133,5 @@ class WebSocketAudioAdapter(RealtimeObserver):
 
 if TYPE_CHECKING:
 
-    def websocket_audio_adapter(websocket: WebSocket) -> RealtimeObserver:
+    def websocket_audio_adapter(websocket: "WebSocket") -> RealtimeObserver:
         return WebSocketAudioAdapter(websocket)

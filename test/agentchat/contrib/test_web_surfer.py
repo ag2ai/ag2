@@ -12,6 +12,7 @@ import re
 import pytest
 
 from autogen import UserProxyAgent
+from autogen.import_utils import optional_import_block
 
 from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
 
@@ -19,12 +20,11 @@ BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
 BING_QUERY = "Microsoft"
 
-try:
+with optional_import_block() as result:
     from autogen.agentchat.contrib.web_surfer import WebSurferAgent
-except ImportError:
-    skip_all = True
-else:
-    skip_all = False
+
+skip_all = not result.is_successful
+
 
 try:
     BING_API_KEY = os.environ["BING_API_KEY"]

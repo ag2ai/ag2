@@ -15,21 +15,21 @@ import pytest
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
+from autogen.import_utils import optional_import_block
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, OpenAIClient
 
 from ..conftest import Credentials
 
 TOOL_ENABLED = False
-try:
+
+with optional_import_block() as result:
     import openai
     from openai import OpenAI  # noqa: F401
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 @pytest.mark.openai

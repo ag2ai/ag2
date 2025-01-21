@@ -8,17 +8,17 @@ from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-try:
-    from autogen.oai.ollama import OllamaClient, response_to_tool_call
-
-    skip = False
-except ImportError:
-    OllamaClient = object
-    InternalServerError = object
-    skip = True
-
 from pydantic import BaseModel
+
+from autogen.import_utils import optional_import_block
+from autogen.oai.ollama import OllamaClient, response_to_tool_call
+
+with optional_import_block() as result:
+    import ollama  # noqa: F401
+    from fix_busted_json import repair_json  # noqa: F401
+    from ollama import Client  # noqa: F401
+
+skip = not result.is_successful
 
 
 # Fixtures for mock data

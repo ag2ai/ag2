@@ -13,21 +13,17 @@ import pytest
 from autogen import GroupChat, GroupChatManager
 from autogen.agentchat.contrib.llamaindex_conversable_agent import LLamaIndexConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.import_utils import optional_import_block
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, reason
+from ...conftest import MOCK_OPEN_AI_API_KEY
 
-skip_reasons = [reason]
-try:
+with optional_import_block() as result:
     from llama_index.core.agent import ReActAgent
     from llama_index.core.chat_engine.types import AgentChatResponse
     from llama_index.llms.openai import OpenAI
 
-    skip_for_dependencies = False
-    skip_reason = ""
-except ImportError as e:
-    skip_for_dependencies = True
-    skip_reason = f"dependency not installed: {e.msg}"
-    pass
+skip_for_dependencies = not result.is_successful
+skip_reason = "" if result.is_successful else "dependency not installed"
 
 
 openai_key = MOCK_OPEN_AI_API_KEY
