@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 import httpx
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
@@ -291,11 +290,17 @@ class OpenAIRealtimeWebRTCClient:
         # await self.connection.response.cancel() #why is this here?
         await self._websocket.send_json(
             {
-                "type": "connection.conversation.item.create",
+                "type": "response.cancel",
+            }
+        )
+        await self._websocket.send_json(
+            {
+                "type": "conversation.item.create",
                 "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
             }
         )
         # await self.connection.response.create()
+        await self._websocket.send_json({"type": "response.create"})
 
     async def send_audio(self, audio: str) -> None:
         """Send audio to the OpenAI Realtime API.
@@ -338,7 +343,7 @@ class OpenAIRealtimeWebRTCClient:
         await self._websocket.send_json({"type": "session.update", "session": session_options})
         logger.info("Sending session update finished")
 
-    async def _initialize_session(self) -> None:
+    def session_init_data(self) -> List[dict[str, Any]]:
         """Control initial session with OpenAI."""
         session_update = {
             "turn_detection": {"type": "server_vad"},
@@ -346,7 +351,9 @@ class OpenAIRealtimeWebRTCClient:
             "modalities": ["audio", "text"],
             "temperature": self._temperature,
         }
-        await self.session_update(session_options=session_update)
+        return [{"type": "session.update", "session": session_update}]
+
+    async def _initialize_session(self) -> None: ...
 
     @asynccontextmanager
     async def connect(self) -> AsyncGenerator[None, None]:
@@ -374,9 +381,8 @@ class OpenAIRealtimeWebRTCClient:
                 json_data = response.json()
                 json_data["model"] = self._model
             if self._websocket is not None:
-                await self._websocket.send_json({"type": "ag2.init", "config": json_data})
-            await asyncio.sleep(10)
-            await self._initialize_session()
+                session_init = self.session_init_data()
+                await self._websocket.send_json({"type": "ag2.init", "config": json_data, "init": session_init})
             yield
         finally:
             pass
