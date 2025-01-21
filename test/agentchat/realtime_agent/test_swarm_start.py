@@ -28,7 +28,7 @@ class TestSwarmE2E:
     async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
-        Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
+        Create a FastAPI app with a WebSocket endpoint that handles audio stream and Realtime API.
 
         """
         openai_api_key = credentials_gpt_4o_mini.api_key
@@ -42,7 +42,7 @@ class TestSwarmE2E:
 
         @app.websocket("/media-stream")
         async def handle_media_stream(websocket: WebSocket) -> None:
-            """Handle WebSocket connections providing audio stream and OpenAI."""
+            """Handle WebSocket connections providing audio stream and Realtime API."""
             await websocket.accept()
 
             audio_adapter = WebSocketAudioAdapter(websocket)

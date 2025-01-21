@@ -25,7 +25,7 @@ class TestE2E:
     async def _test_e2e(self, credentials_llm: Credentials, credentials_openai: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
 
-        Create a FastAPI app with a WebSocket endpoint that handles audio stream and OpenAI.
+        Create a FastAPI app with a WebSocket endpoint that handles audio stream and Realtime API.
 
         """
         llm_config = credentials_llm.llm_config
@@ -40,13 +40,13 @@ class TestE2E:
 
         @app.websocket("/media-stream")
         async def handle_media_stream(websocket: WebSocket) -> None:
-            """Handle WebSocket connections providing audio stream and OpenAI."""
+            """Handle WebSocket connections providing audio stream and Realtime API."""
             await websocket.accept()
 
             audio_adapter = WebSocketAudioAdapter(websocket)
             agent = RealtimeAgent(
                 name="Weather Bot",
-                system_message="Hello there! I am an AI voice assistant powered by Autogen and the OpenAI Realtime API. You can ask me about weather, jokes, or anything you can imagine. Start by saying 'How can I help you?'",
+                system_message="You are an AI voice assistant powered by Autogen and Realtime API. You can answer questions about weather. Start by saying 'How can I help you?'",
                 llm_config=llm_config,
                 audio_adapter=audio_adapter,
             )
@@ -101,7 +101,7 @@ class TestE2E:
     ) -> None:
         """End-to-end test for the RealtimeAgent.
 
-        Retry the test up to 3 times if it fails. Sometimes the test fails due to voice not being recognized by the OpenAI API.
+        Retry the test up to 5 times if it fails. Sometimes the test fails due to voice not being recognized by the Realtime API.
 
         """
         i = 0
