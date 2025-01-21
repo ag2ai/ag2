@@ -40,12 +40,23 @@ def conversable_agent():
 
 
 @pytest.mark.parametrize("name", ["agent name", "agent_name ", " agent\nname", " agent\tname"])
-def test_conversable_agent_name_with_white_space_raises_error(name: str) -> None:
+def test_conversable_agent_name_with_white_space(
+    name: str,
+    mock_credentials: Credentials,
+) -> None:
+    agent = ConversableAgent(name=name)
+    assert agent.name == name
+
+    llm_config = mock_credentials.llm_config
     with pytest.raises(
         ValueError,
         match=f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'",
     ):
-        ConversableAgent(name=name)
+        ConversableAgent(name=name, llm_config=llm_config)
+
+    llm_config["config_list"][0]["api_type"] = "something-else"
+    agent = ConversableAgent(name=name, llm_config=llm_config)
+    assert agent.name == name
 
 
 def test_sync_trigger():
