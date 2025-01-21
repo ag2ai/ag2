@@ -290,6 +290,11 @@ class OpenAIRealtimeWebRTCClient:
         # await self.connection.response.cancel() #why is this here?
         await self._websocket.send_json(
             {
+                "type": "response.cancel",
+            }
+        )
+        await self._websocket.send_json(
+            {
                 "type": "conversation.item.create",
                 "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
             }
