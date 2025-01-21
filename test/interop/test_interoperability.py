@@ -7,12 +7,20 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.interop import Interoperability
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
+with optional_import_block():
+    from crewai_tools import FileReadTool
+
+with optional_import_block():
+    pass  # type: ignore[import]
+
 
 class TestInteroperability:
+    @skip_on_missing_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
 
@@ -28,12 +36,9 @@ class TestInteroperability:
         if sys.version_info >= (3, 13):
             assert actual == ["langchain", "pydanticai"]
 
-    @pytest.mark.skipif(
-        sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
-    )
+    @skip_on_missing_imports("crewai_tools", "interop-crewai")
     def test_crewai(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
-        from crewai_tools import FileReadTool
 
         crewai_tool = FileReadTool()
 
@@ -56,9 +61,7 @@ class TestInteroperability:
 
             assert tool.func(args=args) == "Hello, World!"
 
-    @pytest.mark.skipif(
-        sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
-    )
-    @pytest.mark.skip(reason="This test is not yet implemented")
+    @pytest.mark.skip("This test is not yet implemented")
+    @skip_on_missing_imports("langchain", "interop-langchain")
     def test_langchain(self) -> None:
         raise NotImplementedError("This test is not yet implemented")
