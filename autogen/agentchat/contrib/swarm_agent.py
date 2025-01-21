@@ -223,7 +223,7 @@ def _process_initial_messages(
     temp_user_proxy = None
     temp_user_list = []
     if len(messages) == 1 and "name" not in messages[0] and not user_agent:
-        temp_user_proxy = UserProxyAgent(name="_User")
+        temp_user_proxy = UserProxyAgent(name="_User", code_execution_config=False)
         last_agent = temp_user_proxy
         temp_user_list.append(temp_user_proxy)
     else:
