@@ -14,6 +14,7 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
 from process_notebooks import (
     add_authors_and_social_img_to_blog_posts,
+    convert_callout_blocks,
     ensure_mint_json_exists,
     extract_example_group,
     generate_nav_group,
@@ -341,3 +342,115 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         assert '<p class="name">Davor Runje</p>' in actual
         assert '<p class="name">Davorin</p>' in actual
         assert '<p class="name">Chi Wang</p>' not in actual
+
+
+class TestConvertCalloutBlocks:
+    @pytest.fixture
+    def content(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Callout
+
+            :::note
+            This is a note.
+            :::
+
+            :::warning
+            This is a warning.
+            :::
+
+            :::tip
+            This is a tip.
+            :::
+
+            :::info
+            This is an info.
+            :::
+
+            ````{=mdx}
+            :::tabs
+            <Tab title="OpenAI">
+                - `model` (str, required): The identifier of the model to be used, such as 'gpt-4', 'gpt-3.5-turbo'.
+            </Tab>
+            <Tab title="Azure OpenAI">
+                - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
+            </Tab>
+            <Tab title="Other OpenAI compatible">
+                - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
+            </Tab>
+            :::
+            ````
+
+            ## Conclusion
+
+            This is a conclusion.
+            """)
+
+    @pytest.fixture
+    def expected(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Callout
+
+
+            <div class="note">
+            <Note>
+            This is a note.
+            </Note>
+            </div>
+
+
+            <div class="warning">
+            <Warning>
+            This is a warning.
+            </Warning>
+            </div>
+
+
+            <div class="tip">
+            <Tip>
+            This is a tip.
+            </Tip>
+            </div>
+
+
+            <div class="info">
+            <Info>
+            This is an info.
+            </Info>
+            </div>
+
+
+            <div class="tabs">
+            <Tabs>
+            <Tab title="OpenAI">
+                - `model` (str, required): The identifier of the model to be used, such as 'gpt-4', 'gpt-3.5-turbo'.
+            </Tab>
+            <Tab title="Azure OpenAI">
+                - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
+            </Tab>
+            <Tab title="Other OpenAI compatible">
+                - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
+            </Tab>
+            </Tabs>
+            </div>
+
+
+            ## Conclusion
+
+            This is a conclusion.
+            """)
+
+    def test_convert_callout_blocks(self, content: str, expected: str) -> str:
+        actual = convert_callout_blocks(content)
+        assert actual == expected, actual

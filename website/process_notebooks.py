@@ -371,6 +371,7 @@ def convert_callout_blocks(content: str) -> str:
         "info Requirements": "Info",
         "check": "Check",
         "danger": "Warning",
+        "tabs": "Tabs",
     }
 
     # Regex explanation (using alternation):
