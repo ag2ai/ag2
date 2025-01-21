@@ -265,9 +265,9 @@ def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials,
     assert rows[0]["id"] == 1 and rows[0]["version_number"] == 1
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_groupchat_logging(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
     db_connection: Generator[Optional[sqlite3.Connection], Any, None],
 ) -> None:
-    _test_groupchat_logging(credentials, credentials, db_connection)
+    _test_groupchat_logging(credentials_from_test_param, credentials_from_test_param, db_connection)

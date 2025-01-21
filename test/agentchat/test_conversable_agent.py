@@ -1044,11 +1044,11 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_function_registration_e2e_async(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_function_registration_e2e_async(credentials)
+    _test_function_registration_e2e_async(credentials_from_test_param)
 
 
 @pytest.mark.openai

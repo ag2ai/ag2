@@ -88,11 +88,11 @@ async def _test_async_groupchat(credentials: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_async_groupchat(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_async_groupchat(credentials)
+    _test_async_groupchat(credentials_from_test_param)
 
 
 async def _test_stream(credentials: Credentials):
@@ -161,8 +161,8 @@ async def _test_stream(credentials: Credentials):
             # print("Chat summary and cost:", res.summary, res.cost)
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_stream(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_stream(credentials)
+    _test_stream(credentials_from_test_param)
