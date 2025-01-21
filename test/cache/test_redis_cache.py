@@ -12,10 +12,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.cache.redis_cache import RedisCache
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
-    from autogen.cache.redis_cache import RedisCache
+    import redis  # noqa: F401
+
 
 skip_redis_tests = not result.is_successful
 
