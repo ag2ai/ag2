@@ -1,11 +1,12 @@
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, Union
+from typing import Any, Optional, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.agentchat.agent import Agent
 from autogen.agentchat.contrib.swarm_agent import (
     AFTER_WORK,
     ON_CONDITION,
@@ -16,6 +17,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     SwarmResult,
     _cleanup_temp_user_messages,
     _create_nested_chats,
+    _determine_next_agent,
     _prepare_swarm_agents,
     _process_initial_messages,
     _setup_context_variables,
@@ -988,6 +990,49 @@ async def test_a_initiate_swarm_chat():
     )
 
     assert context_vars == test_context
+
+
+def test_swarmresult_afterworkoption():
+    """Tests processing of the return of an AfterWorkOption in a SwarmResult. This is put in the tool executors _next_agent attribute."""
+
+    def call_determine_next_agent(
+        next_agent_afterworkoption: AfterWorkOption, swarm_afterworkoption: AfterWorkOption
+    ) -> Optional[Agent]:
+        last_speaker_agent = SwarmAgent("dummy_1")
+        tool_executor = SwarmAgent(__TOOL_EXECUTOR_NAME__)
+        user = UserProxyAgent("User")
+        groupchat = GroupChat(
+            agents=[last_speaker_agent],
+            messages=[
+                {"tool_calls": "", "role": "tool", "content": "Test message"},
+                {"role": "tool", "content": "Test message 2", "name": "dummy_1"},
+            ],
+        )
+
+        tool_executor._next_agent = next_agent_afterworkoption
+
+        return _determine_next_agent(
+            last_speaker=last_speaker_agent,
+            groupchat=groupchat,
+            initial_agent=last_speaker_agent,
+            use_initial_agent=False,
+            tool_execution=tool_executor,
+            swarm_agent_names=["dummy_1"],
+            user_agent=user,
+            swarm_after_work=swarm_afterworkoption,
+        )
+
+    next_speaker = call_determine_next_agent(AfterWorkOption.TERMINATE, AfterWorkOption.STAY)
+    assert next_speaker is None, "Expected None as the next speaker for AfterWorkOption.TERMINATE"
+
+    next_speaker = call_determine_next_agent(AfterWorkOption.STAY, AfterWorkOption.TERMINATE)
+    assert next_speaker.name == "dummy_1", "Expected the last speaker as the next speaker for AfterWorkOption.TERMINATE"
+
+    next_speaker = call_determine_next_agent(AfterWorkOption.REVERT_TO_USER, AfterWorkOption.TERMINATE)
+    assert next_speaker.name == "User", "Expected the user agent as the next speaker for AfterWorkOption.REVERT_TO_USER"
+
+    next_speaker = call_determine_next_agent(AfterWorkOption.SWARM_MANAGER, AfterWorkOption.TERMINATE)
+    assert next_speaker == "auto", "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
 
 if __name__ == "__main__":
