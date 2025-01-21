@@ -4,7 +4,7 @@
 
 
 from abc import ABC
-from typing import Annotated, Any, Callable, Literal, Optional, TypeVar, Union
+from typing import Annotated, Any, Callable, Generic, Literal, Optional, Type, TypeVar, Union
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
@@ -34,10 +34,18 @@ def camel2snake(name: str) -> str:
     return "".join(["_" + i.lower() if i.isupper() else i for i in name]).lstrip("_")
 
 
-_message_classes: dict[str, type[BaseModel]] = {}
+T = TypeVar("T", bound=BaseMessage)
 
 
-def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
+class _Message(Generic[T], BaseModel):
+    type: str
+    content: T
+
+
+_message_classes: dict[str, type[_Message[Any]]] = {}
+
+
+def wrap_message(message_cls: type[T]) -> type[_Message[T]]:
     """Wrap a message class with a type field to be used in a union type
 
     This is needed for proper serialization and deserialization of messages in a union type.
@@ -53,7 +61,7 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
     type_name = camel2snake(message_cls.__name__)
     type_name = type_name[: -len("_message")]
 
-    class WrapperBase(BaseModel):
+    class _MessageWrapper(BaseModel):
         # these types are generated dynamically so we need to disable the type checker
         type: Literal[type_name] = type_name  # type: ignore[valid-type]
         content: message_cls  # type: ignore[valid-type]
@@ -71,7 +79,7 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
         def print(self, f: Optional[Callable[..., Any]] = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
 
-    wrapper_cls = create_model(message_cls.__name__, __base__=WrapperBase)
+    wrapper_cls: Type[_Message[T]] = create_model(message_cls.__name__, __base__=_MessageWrapper)  # type: ignore[assignment,arg-type]
 
     _message_classes[type_name] = wrapper_cls
 
@@ -84,5 +92,5 @@ def get_annotated_type_for_message_classes() -> type[Any]:
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]
 
 
-def get_message_classes() -> dict[str, type[BaseModel]]:
+def get_message_classes() -> dict[str, type[_Message[Any]]]:
     return _message_classes

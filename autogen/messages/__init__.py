@@ -2,6 +2,32 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .base_message import BaseMessage, get_annotated_type_for_message_classes, wrap_message
+from .base_message import BaseMessage
+from .input_messages import (
+    InputRequestMessage,
+    InputResponseMessage,
+    MultipleChoiceInputRequestMessage,
+    MultipleChoiceInputResponseMessage,
+    PasswordInputRequestMessage,
+    PasswordInputResponseMessage,
+    SingleChoiceInputRequestMessage,
+    SingleChoiceInputResponseMessage,
+    TextInputRequestMessage,
+    TextInputResponsetMessage,
+)
+from .print_message import PrintMessage
 
-__all__ = ["BaseMessage", "get_annotated_type_for_message_classes", "wrap_message"]
+__all__ = [
+    "BaseMessage",
+    "InputRequestMessage",
+    "InputResponseMessage",
+    "MultipleChoiceInputRequestMessage",
+    "MultipleChoiceInputResponseMessage",
+    "PasswordInputRequestMessage",
+    "PasswordInputResponseMessage",
+    "PrintMessage",
+    "SingleChoiceInputRequestMessage",
+    "SingleChoiceInputResponseMessage",
+    "TextInputRequestMessage",
+    "TextInputResponsetMessage",
+]

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Optional, Protocol, runtime_checkable
 
-from autogen.messages.base_message import BaseMessage
+from autogen.messages import BaseMessage, InputRequestMessage, InputResponseMessage
 
 __all__ = ("IOStream", "InputStream", "OutputStream")
 
@@ -53,6 +53,14 @@ class InputStream(Protocol):
 
         """
         ...  # pragma: no cover
+
+    def receive(self, request: InputRequestMessage) -> InputResponseMessage:
+        """Receive data from the input stream.
+
+        Args:
+            message (BaseMessage): BaseMessage from autogen.messages.base_message
+        """
+        ...
 
 
 @runtime_checkable

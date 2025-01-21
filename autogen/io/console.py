@@ -5,17 +5,23 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import getpass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from autogen.messages.base_message import BaseMessage
-from autogen.messages.print_message import PrintMessage
+from autogen.messages import (
+    BaseMessage,
+    InputRequestMessage,
+    InputResponseMessage,
+    PasswordInputRequestMessage,
+    PrintMessage,
+    TextInputRequestMessage,
+)
 
 from .base import IOStream
 
 __all__ = ("IOConsole",)
 
 
-class IOConsole(IOStream):
+class IOConsole:
     """A console input/output stream."""
 
     def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
@@ -51,5 +57,31 @@ class IOConsole(IOStream):
 
         """
         if password:
-            return getpass.getpass(prompt if prompt != "" else "Password: ")
-        return input(prompt)
+            # return getpass.getpass(prompt if prompt != "" else "Password: ")
+            request = PasswordInputRequestMessage(prompt=prompt)
+        else:
+            # return input(prompt)
+            request = TextInputRequestMessage(prompt=prompt)
+
+        response = self.receive(request)
+        return str(response)
+
+    def receive(self, request: InputRequestMessage) -> InputResponseMessage:
+        """Receive data from the input stream.
+
+        Args:
+            message (BaseMessage): BaseMessage from autogen.messages.base_message
+        """
+        self.send(request)
+        if isinstance(request, PasswordInputRequestMessage):
+            password = getpass.getpass()
+            return PasswordInputRequestMessage(password=password, request=request)
+        else:
+            text = input()
+            return TextInputRequestMessage(text=text, request=request)
+
+
+if TYPE_CHECKING:
+
+    def _create_io_console() -> IOStream:
+        return IOConsole()
