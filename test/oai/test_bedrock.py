@@ -9,9 +9,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import optional_import_block
+from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
 
 with optional_import_block() as result:
-    from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
+    import boto3  # noqa: F401
+    from botocore.config import Config  # noqa: F401
 
 skip = not result.is_successful
 

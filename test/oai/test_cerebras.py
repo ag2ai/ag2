@@ -9,9 +9,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import optional_import_block
+from autogen.oai.cerebras import CerebrasClient, calculate_cerebras_cost
 
 with optional_import_block() as result:
-    from autogen.oai.cerebras import CerebrasClient, calculate_cerebras_cost
+    from cerebras.cloud.sdk import Cerebras, Stream  # noqa: F401
 
 skip = not result.is_successful
 

@@ -11,9 +11,12 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block
+from autogen.oai.ollama import OllamaClient, response_to_tool_call
 
 with optional_import_block() as result:
-    from autogen.oai.ollama import OllamaClient, response_to_tool_call
+    import ollama  # noqa: F401
+    from fix_busted_json import repair_json  # noqa: F401
+    from ollama import Client  # noqa: F401
 
 skip = not result.is_successful
 
