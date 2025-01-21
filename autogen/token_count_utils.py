@@ -11,13 +11,15 @@ from typing import Union
 
 import tiktoken
 
-from .agentchat.contrib.img_utils import num_tokens_from_gpt_image
+# from .agentchat.contrib.img_utils import num_tokens_from_gpt_image
 from .import_utils import optional_import_block
 
 # if PIL is not imported, we will redefine num_tokens_from_gpt_image to return 0 tokens for images
 # Otherwise, it would raise an ImportError
 with optional_import_block() as result:
     import PIL  # noqa: F401
+
+    from .agentchat.contrib.img_utils import num_tokens_from_gpt_image
 
 pil_imported = result.is_successful
 if not pil_imported:
