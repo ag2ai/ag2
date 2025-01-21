@@ -2,28 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-
-"""
-## Setup
-    pip install google-genai
-"""
-
 import json
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, Optional
 
-from ..realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
-from .realtime_client import Role, register_realtime_client
+from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
+from ..realtime_client import Role, register_realtime_client
 
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
 
-    from .realtime_client import RealtimeClientProtocol
+    from ..realtime_client import RealtimeClientProtocol
 
 from websockets.asyncio.client import connect
 
-__all__ = ["GeminiRealtimeClient", "Role"]
+__all__ = ["GeminiRealtimeClient"]
 
 global_logger = getLogger(__name__)
 
@@ -49,6 +43,7 @@ class GeminiRealtimeClient:
         """
         self._llm_config = llm_config
         self._logger = logger
+
         self._connection: Optional["ClientConnection"] = None
         config = llm_config["config_list"][0]
 
@@ -58,7 +53,12 @@ class GeminiRealtimeClient:
 
         self._response_modality = "AUDIO"
 
-        self.api_key = config.get("api_key", None)
+        self._api_key = config.get("api_key", None)
+        # todo: add test with base_url just to make sure it works
+        self._base_url: str = config.get(
+            "base_url",
+            f"wss://{HOST}/ws/google.ai.generativelanguage.{API_VERSION}.GenerativeService.BidiGenerateContent?key={self._api_key}",
+        )
         self._final_config: Dict[str, Any] = {}
         self._pending_session_updates: dict[str, Any] = {}
         self._is_reading_events = False
@@ -171,10 +171,10 @@ class GeminiRealtimeClient:
     @asynccontextmanager
     async def connect(self) -> AsyncGenerator[None, None]:
         """Connect to the Gemini Realtime API."""
-        # https://github.com/google-gemini/cookbook/blob/main/gemini-2/websockets/live_api_starter.py#L82
-        uri = f"wss://{HOST}/ws/google.ai.generativelanguage.{API_VERSION}.GenerativeService.BidiGenerateContent?key={self.api_key}"
         try:
-            async with connect(uri, additional_headers={"Content-Type": "application/json"}) as self._connection:
+            async with connect(
+                self._base_url, additional_headers={"Content-Type": "application/json"}
+            ) as self._connection:
                 yield
         finally:
             self._connection = None
