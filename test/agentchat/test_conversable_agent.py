@@ -1481,6 +1481,21 @@ def test_handle_carryover():
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
 
 
+def test_conversable_agent_with_whitespaces_in_name(credentials_anthropic_claude_sonnet: Credentials) -> None:
+    agent = ConversableAgent(
+        name="first_agent",
+        llm_config=credentials_anthropic_claude_sonnet.llm_config,
+    )
+
+    # assert agent.llm_config is None, agent.llm_config
+
+    user_proxy = UserProxyAgent(
+        name="user proxy",
+        human_input_mode="NEVER",
+    )
+    user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=1)
+
+
 @pytest.mark.openai
 def test_context_variables():
     # Test initialization with context_variables

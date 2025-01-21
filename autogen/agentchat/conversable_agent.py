@@ -163,7 +163,7 @@ class ConversableAgent(LLMAgent):
             code_execution_config.copy() if hasattr(code_execution_config, "copy") else code_execution_config
         )
 
-        self._validate_name(name)
+        # self._validate_name(name)
         self._name = name
         # a dictionary of conversations, default value is list
         if chat_messages is None:
