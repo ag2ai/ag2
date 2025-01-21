@@ -126,12 +126,3 @@ When using the search tool, input should be:
         user_proxy.initiate_chat(recipient=chatbot, message="search for LangChain, Use max 100 characters", max_turns=5)
 
         self.mock.assert_called()
-
-
-@skip_on_missing_imports("langchain", "interop-langchain")
-class TestLangChainInteroperabilityIfNotSupported:
-    def test_get_unsupported_reason(self) -> None:
-        assert (
-            LangChainInteroperability.get_unsupported_reason()
-            == "This submodule is only supported for Python versions 3.9 and above"
-        )

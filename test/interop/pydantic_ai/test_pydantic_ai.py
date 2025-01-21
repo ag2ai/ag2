@@ -205,12 +205,3 @@ class TestPydanticAIInteroperabilityWithContext:
                 return
 
         assert False, "No tool response found in chat messages"
-
-
-@skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
-class TestPydanticAIInteroperabilityIfNotSupported:
-    def test_get_unsupported_reason(self) -> None:
-        assert (
-            PydanticAIInteroperability.get_unsupported_reason()
-            == "This submodule is only supported for Python versions 3.9 and above"
-        )
