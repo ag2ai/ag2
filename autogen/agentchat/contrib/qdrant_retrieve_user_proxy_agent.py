@@ -7,15 +7,14 @@
 import warnings
 from typing import Callable, Literal, Optional
 
-from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
-from autogen.agentchat.contrib.vectordb.utils import (
+from ...import_utils import optional_import_block, require_optional_import
+from ...retrieve_utils import TEXT_FORMATS, get_files_from_dir, split_files_to_chunks
+from ..contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
+from ..contrib.vectordb.utils import (
     chroma_results_to_query_results,
     filter_results_by_distance,
     get_logger,
 )
-from autogen.retrieve_utils import TEXT_FORMATS, get_files_from_dir, split_files_to_chunks
-
-from ...import_utils import optional_import_block, require_optional_import
 
 logger = get_logger(__name__)
 
@@ -162,7 +161,7 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
 def create_qdrant_from_dir(
     dir_path: str,
     max_tokens: int = 4000,
-    client: QdrantClient = None,
+    client: "QdrantClient" = None,
     collection_name: str = "all-my-documents",
     chunk_mode: str = "multi_lines",
     must_break_at_empty_line: bool = True,
@@ -173,8 +172,8 @@ def create_qdrant_from_dir(
     extra_docs: bool = False,
     parallel: int = 0,
     on_disk: bool = False,
-    quantization_config: Optional[models.QuantizationConfig] = None,
-    hnsw_config: Optional[models.HnswConfigDiff] = None,
+    quantization_config: Optional["models.QuantizationConfig"] = None,
+    hnsw_config: Optional["models.HnswConfigDiff"] = None,
     payload_indexing: bool = False,
     qdrant_client_options: Optional[dict] = {},
 ):
@@ -268,12 +267,12 @@ def create_qdrant_from_dir(
 def query_qdrant(
     query_texts: list[str],
     n_results: int = 10,
-    client: QdrantClient = None,
+    client: "QdrantClient" = None,
     collection_name: str = "all-my-documents",
     search_string: str = "",
     embedding_model: str = "BAAI/bge-small-en-v1.5",
     qdrant_client_options: Optional[dict] = {},
-) -> list[list[QueryResponse]]:
+) -> list[list["QueryResponse"]]:
     """Perform a similarity search with filters on a Qdrant collection
 
     Args:

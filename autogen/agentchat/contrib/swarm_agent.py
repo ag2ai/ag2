@@ -12,9 +12,8 @@ from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel
 
-from autogen.oai import OpenAIWrapper
-from autogen.tools import get_function_schema
-
+from ...oai import OpenAIWrapper
+from ...tools import get_function_schema
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import ConversableAgent
