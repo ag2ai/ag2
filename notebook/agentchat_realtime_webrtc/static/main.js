@@ -1,4 +1,4 @@
-import { init } from './WebRTC.js';
+import { ag2Connect } from './WebRTC.js';
 
 const main = async () => {
     const eConnecting = document.getElementById("connecting")
