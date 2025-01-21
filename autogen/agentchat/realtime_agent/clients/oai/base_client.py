@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from openai import AsyncOpenAI
+from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 
 from ...realtime_events import RealtimeEvent
@@ -43,12 +43,22 @@ class OpenAIRealtimeClient:
         self._connection: Optional[AsyncRealtimeConnection] = None
 
         config = llm_config["config_list"][0]
+        # model is passed to self._client.beta.realtime.connect function later
         self._model: str = config["model"]
         self._voice: str = config.get("voice", "alloy")
-
         self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
 
-        self._client = AsyncOpenAI(**config)
+        self._client = AsyncOpenAI(
+            api_key=config.get("api_key", None),
+            organization=config.get("organization", None),
+            project=config.get("project", None),
+            base_url=config.get("base_url", None),
+            websocket_base_url=config.get("websocket_base_url", None),
+            timeout=config.get("timeout", NOT_GIVEN),
+            max_retries=config.get("max_retries", DEFAULT_MAX_RETRIES),
+            default_headers=config.get("default_headers", None),
+            default_query=config.get("default_query", None),
+        )
 
     @property
     def logger(self) -> Logger:
