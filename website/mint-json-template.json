@@ -129,6 +129,7 @@
             "docs/topics/non-openai-models/cloud-litellm-watsonx",
             "docs/topics/non-openai-models/cloud-mistralai",
             "docs/topics/non-openai-models/cloud-togetherai",
+            "docs/topics/non-openai-models/cloud-deepseek-v3",
             "docs/topics/non-openai-models/local-litellm-ollama",
             "docs/topics/non-openai-models/local-lm-studio",
             "docs/topics/non-openai-models/local-ollama",
