@@ -89,7 +89,7 @@ HASH_LENGTH = int(os.environ.get("HASH_LENGTH", 8))
 UPDATE_CONTEXT_IN_PROMPT = "you should reply exactly `UPDATE CONTEXT`"
 
 
-@require_optional_import(["chromadb", "ipython"], "retrievechat")
+@require_optional_import(["chromadb", "IPython"], "retrievechat")
 class RetrieveUserProxyAgent(UserProxyAgent):
     """(In preview) The Retrieval-Augmented User Proxy retrieves document chunks based on the embedding
     similarity, and sends them along with the question to the Retrieval-Augmented Assistant
