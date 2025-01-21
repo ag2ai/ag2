@@ -872,7 +872,11 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
 </div>"""
 
             # Generate authors HTML
-            authors_html = construct_authors_html(authors_list, all_authors_info)
+            authors_html = (
+                construct_authors_html(authors_list, all_authors_info)
+                if '<div class="blog-authors">' not in content
+                else ""
+            )
 
             # Combine content
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
