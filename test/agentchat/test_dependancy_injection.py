@@ -254,11 +254,11 @@ class TestDependencyInjection:
             "Login successful.",
         )
 
-    @pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+    @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
     @pytest.mark.parametrize("is_async", [False, True])
     def test_end2end(
         self,
-        credentials: Credentials,
+        credentials_from_test_param: Credentials,
         is_async: bool,
     ) -> None:
-        self._test_end2end(credentials, is_async)
+        self._test_end2end(credentials_from_test_param, is_async)

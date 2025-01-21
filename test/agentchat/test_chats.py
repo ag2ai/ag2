@@ -542,12 +542,12 @@ def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
     print(res.summary, res.cost, res.chat_history)
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 def test_chats_w_func(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
     tasks_work_dir: str,
 ) -> None:
-    _test_chats_w_func(credentials, tasks_work_dir)
+    _test_chats_w_func(credentials_from_test_param, tasks_work_dir)
 
 
 @pytest.mark.openai
