@@ -57,7 +57,7 @@ class TestGeminiRealtimeClient:
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
-        # check that we received the expected session.created event
+        # check that we received the expected SessionCreated event
         calls_args = [arg_list.args for arg_list in mock.call_args_list]
 
         assert isinstance(calls_args[0][0], SessionCreated)
@@ -81,9 +81,8 @@ class TestGeminiRealtimeClient:
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
-        # check that we received the expected two events
+        # check that we received the expected SessionCreated and AudioDelta events
         calls_args = [arg_list.args for arg_list in mock.call_args_list]
         assert isinstance(calls_args[0][0], SessionCreated)
 
-        # check that we received the model audio response
         assert isinstance(calls_args[-1][0], AudioDelta)
