@@ -18,7 +18,7 @@ _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
 
 
-def docline_parse_docs(
+def docling_parse_docs(
     input_file_path: str,
     output_dir_path: str,
 ) -> list[ConversionResult]:
