@@ -7,7 +7,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
-from autogen.agentchat.contrib.rag.document_utils import (
+from autogen.agentchat.contrib.document_utils import (
     _download_rendered_html,
     download_url,
     handle_input,
@@ -80,7 +80,7 @@ def mock_chrome_driver_manager():
         yield mock
 
 
-def test_valid_url(mock_chrome):
+def test_download_with_valid_url(mock_chrome):
     url = "https://www.google.com"
     mock_chrome.return_value.get.return_value = None
     mock_chrome.return_value.page_source = "<html>Test HTML</html>"
@@ -89,7 +89,7 @@ def test_valid_url(mock_chrome):
     assert html_content != ""
 
 
-def test_invalid_url(mock_chrome):
+def test_download_with_invalid_url(mock_chrome):
     url = "invalid_url"
     mock_chrome.return_value.get.side_effect = Exception("Invalid URL")
     with pytest.raises(Exception):
@@ -115,7 +115,7 @@ mock_html_value = "<html>Example</html>"
 
 @pytest.fixture
 def mock_download():
-    with patch("autogen.agentchat.contrib.rag.document_utils._download_rendered_html") as mock:
+    with patch("autogen.agentchat.contrib.document_utils._download_rendered_html") as mock:
         mock.return_value = mock_html_value
         yield mock
 
@@ -164,7 +164,7 @@ def test_download_url_no_output_dir(mock_download, mock_open_file):
 
 def test_download_url_invalid_url():
     url = "invalid url"
-    with patch("autogen.agentchat.contrib.rag.document_utils._download_rendered_html") as mock_download:
+    with patch("autogen.agentchat.contrib.document_utils._download_rendered_html") as mock_download:
         mock_download.side_effect = Exception("Invalid URL")
         with pytest.raises(Exception):
             download_url(url)

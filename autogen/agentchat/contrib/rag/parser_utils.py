@@ -12,7 +12,7 @@ from docling.datamodel.document import ConversionResult
 from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-from autogen.agentchat.contrib.rag.document_utils import handle_input
+from autogen.agentchat.contrib.document_utils import handle_input
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
@@ -26,6 +26,15 @@ def docline_parse_docs(
     Convert documents into a Deep Search document format using EasyOCR
     with CPU only, and export the document and its tables to the specified
     output directory.
+
+    Supported formats:
+        PDF,
+        IMAGE,
+        DOCX,
+        HTML,
+        PPTX,
+        ASCIIDOC,
+        MD,
 
     Args:
         input_file_path (str): The path/directory to the documents to convert.
