@@ -9,13 +9,15 @@
 import pytest
 
 from autogen import ConversableAgent
+from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
 from autogen.import_utils import optional_import_block
 
 from ....conftest import Credentials
 
 with optional_import_block() as result:
-    from autogen.agentchat.contrib.capabilities.teachability import Teachability
+    import chromadb  # noqa: F401
+
 
 skip = not result.is_successful
 
