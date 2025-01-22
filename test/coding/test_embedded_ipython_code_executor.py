@@ -20,6 +20,12 @@ from autogen.code_utils import (
 )
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
+from autogen.coding.jupyter import (
+    DockerJupyterServer,
+    EmbeddedIPythonCodeExecutor,
+    JupyterCodeExecutor,
+    LocalJupyterServer,
+)
 from autogen.import_utils import optional_import_block
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
@@ -31,12 +37,7 @@ else:
 
 classes_to_test = []
 with optional_import_block() as result:
-    from autogen.coding.jupyter import (
-        DockerJupyterServer,
-        EmbeddedIPythonCodeExecutor,
-        JupyterCodeExecutor,
-        LocalJupyterServer,
-    )
+    from jupyter_client import KernelManager  # noqa: F401
 
 if result.is_successful:
 
