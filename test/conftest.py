@@ -153,7 +153,7 @@ class CensoredError(Exception):
 
 def get_credentials(
     filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0, fail_if_empty: bool = True
-) -> Credentials:
+) -> Optional[Credentials]:
     """Fixture to load the LLM config."""
     try:
         config_list = autogen.config_list_from_json(
@@ -164,8 +164,10 @@ def get_credentials(
     except Exception:
         config_list = []
 
-    if fail_if_empty:
-        assert config_list, "No config list found"
+    if len(config_list) == 0:
+        if fail_if_empty:
+            raise ValueError("No config list found")
+        return None
 
     return Credentials(
         llm_config={
@@ -187,7 +189,8 @@ def get_config_list_from_env(
 def get_llm_credentials(
     env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
 ) -> Credentials:
-    config_list = get_credentials(filter_dict, temperature, fail_if_empty=False).config_list
+    credentials = get_credentials(filter_dict, temperature, fail_if_empty=False)
+    config_list = credentials.config_list if credentials else []
 
     # Filter out non-OpenAI configs
     if api_type == "openai":
@@ -210,29 +213,29 @@ def get_llm_credentials(
 
 @pytest.fixture
 def credentials_azure() -> Credentials:
-    return get_credentials(filter_dict={"api_type": ["azure"]})
+    return get_credentials(filter_dict={"api_type": ["azure"]})  # type: ignore[return-value]
 
 
 @pytest.fixture
 def credentials_azure_gpt_35_turbo() -> Credentials:
-    return get_credentials(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
+    return get_credentials(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})  # type: ignore[return-value]
 
 
 @pytest.fixture
 def credentials_azure_gpt_35_turbo_instruct() -> Credentials:
-    return get_credentials(
+    return get_credentials(  # type: ignore[return-value]
         filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
     )
 
 
 @pytest.fixture
 def credentials_all() -> Credentials:
-    return get_credentials()
+    return get_credentials()  # type: ignore[return-value]
 
 
 @pytest.fixture
 def credentials_gpt_4o_mini() -> Credentials:
-    return get_llm_credentials(
+    return get_llm_credentials(  # type: ignore[return-value]
         "OPENAI_API_KEY", model="gpt-4o-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
     )
 
@@ -272,7 +275,7 @@ def credentials_gemini_realtime() -> Credentials:
 
 @pytest.fixture
 def credentials() -> Credentials:
-    return get_credentials(filter_dict={"tags": ["gpt-4o"]})
+    return get_credentials(filter_dict={"tags": ["gpt-4o"]})  # type: ignore[return-value]
 
 
 @pytest.fixture
