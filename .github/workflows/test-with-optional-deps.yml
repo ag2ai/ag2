@@ -86,7 +86,7 @@ jobs:
         run: |
           uv pip install --system "requests<2.32.0"
           bash scripts/test.sh test/test_import.py
-          bash scripts/test.sh -m ${{ matrix.optional-dependencies }}
+          bash scripts/test.sh -m ${{ replace(matrix.optional-dependencies, '-', '_') }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
