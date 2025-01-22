@@ -12,7 +12,7 @@ import inspect
 import os
 import time
 import unittest
-from typing import Annotated, Any, Callable, Literal
+from typing import Annotated, Any, Callable, Literal, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -1045,10 +1045,11 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
-def test_function_registration_e2e_async(
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
 ) -> None:
-    _test_function_registration_e2e_async(credentials_from_test_param)
+    await _test_function_registration_e2e_async(credentials_from_test_param)
 
 
 @pytest.mark.openai
@@ -1540,6 +1541,32 @@ def test_context_variables():
         "test_key": "bulk_updated_value",
     }
     assert agent._context_variables == expected_final_context
+
+
+@pytest.mark.skip(reason="This test is failing. We need to investigate the issue.")
+@pytest.mark.gemini
+def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value(
+    credentials_gemini_pro: Credentials,
+) -> None:
+    agent = ConversableAgent(name="agent", llm_config=credentials_gemini_pro.llm_config)
+
+    user_proxy = UserProxyAgent(
+        name="user_proxy_1",
+        human_input_mode="NEVER",
+    )
+
+    mock = MagicMock()
+
+    @user_proxy.register_for_execution()
+    @agent.register_for_llm(description="Login function")
+    def login(
+        additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+    ) -> str:
+        return "Login successful."
+
+    user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
+
+    mock.assert_called_once()
 
 
 if __name__ == "__main__":

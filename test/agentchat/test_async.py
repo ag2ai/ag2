@@ -89,10 +89,11 @@ async def _test_async_groupchat(credentials: Credentials):
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
-def test_async_groupchat(
+@pytest.mark.asyncio
+async def test_async_groupchat(
     credentials_from_test_param: Credentials,
 ) -> None:
-    _test_async_groupchat(credentials_from_test_param)
+    await _test_async_groupchat(credentials_from_test_param)
 
 
 async def _test_stream(credentials: Credentials):
@@ -162,7 +163,8 @@ async def _test_stream(credentials: Credentials):
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
-def test_stream(
+@pytest.mark.asyncio
+async def test_stream(
     credentials_from_test_param: Credentials,
 ) -> None:
-    _test_stream(credentials_from_test_param)
+    await _test_stream(credentials_from_test_param)
