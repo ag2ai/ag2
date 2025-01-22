@@ -3,14 +3,21 @@
 set -e
 set -x
 
-# Function to build documentation
-docs_build() {
-    cd website &&
-        python ./process_api_reference.py &&
+docs_generate() {
+    cd website && \
+        python ./process_api_reference.py && \
         python ./process_notebooks.py render
 }
 
-# Execute the function only if the script is run directly
+install_packages() {
+    pip install -e ".[docs]"
+}
+
+docs_build() {
+    install_packages && \
+    docs_generate
+}
+
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     docs_build
 fi
