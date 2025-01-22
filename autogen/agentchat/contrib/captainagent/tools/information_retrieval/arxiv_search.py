@@ -4,13 +4,9 @@
 
 
 from ......coding.func_with_reqs import with_requirements
-from ......import_utils import optional_import_block
-
-with optional_import_block():
-    import arxiv
 
 
-@with_requirements(["arxiv"], ["arxiv"])
+@with_requirements(["arxiv"])
 def arxiv_search(query, max_results=10, sortby="relevance"):
     """Search for articles on arXiv based on the given query.
 
@@ -28,6 +24,7 @@ def arxiv_search(query, max_results=10, sortby="relevance"):
             - 'doi': The DOI of the article (If applicable).
             - 'published': The publication date of the article in the format 'Y-M'.
     """
+    import arxiv
 
     def get_author(r):
         return ", ".join(a.name for a in r.authors)
