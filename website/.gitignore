@@ -11,6 +11,7 @@ docs/reference
 /notebooks
 /blog
 mint.json
+/snippets/data/NotebooksMetadata.mdx
 
 docs/tutorial/*.mdx
 docs/tutorial/**/*.png
