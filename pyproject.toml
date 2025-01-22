@@ -183,11 +183,11 @@ test = [
     "ipykernel==6.29.5",
     "nbconvert==7.16.5",
     "nbformat==5.10.4",
-    "pytest-cov>=5",
+    "pytest-cov==6.0.0",
     "pytest-asyncio==0.25.2",
-    "pytest>=8,<9",
+    "pytest==8.3.4",
     "pandas==2.2.3",
-    "fastapi>=0.115.0,<1",
+    "fastapi==0.115.6",
 ]
 
 docs = [
