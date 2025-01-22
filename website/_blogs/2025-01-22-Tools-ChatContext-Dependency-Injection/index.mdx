@@ -5,15 +5,18 @@ authors:
 tags: [tools, tool calling, dependency injection]
 ---
 
-In this post, we’ll build upon the concepts introduced in the [Tools with Dependency Injection](/blog/2025-01-07-Tools-Dependency-Injection/index) to demonstrate how to use [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) for more advanced workflows.
+## Introduction
 
-By leveraging [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext), we can track the flow of conversations, ensuring proper function execution order. For example, before retrieving a user’s account balance, we’ll ensure the user has logged in first. This approach prevents unauthorized actions and enhances security.
+In this post, we’ll build upon the concepts introduced in our previous blog on [Tools with Dependency Injection](/blog/2025-01-07-Tools-Dependency-Injection/index). We’ll take a deeper look at how [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) can be used to manage the flow of conversations in a more structured and secure way.
 
-**Benefits of Using [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext)**
-- Flow Control: It helps enforce the correct sequence of function calls.
-- Enhanced Security: Ensures actions depend on preconditions like authentication.
-- Simplified Debugging: Logs conversation history, making it easier to trace issues.
+By using [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext), we can track and control the sequence of function calls during a conversation. This is particularly useful in situations where one task must be completed before another — for example, ensuring that a user logs in before they can check their account balance. This approach helps to prevent errors and enhances the security of the system.
 
+**Benefits of Using [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext)**:
+- **Flow Control**: Ensures tasks are performed in the correct order, reducing the chance of mistakes.
+- **Enhanced Security**: Prevents unauthorized actions, such as accessing sensitive data before authentication.
+- **Simplified Debugging**: Logs the conversation history, making it easier to trace and resolve issues.
+
+<Note>This blog builds on the concepts shared in the [notebook](/notebooks/tools_chat_context_dependency_injection).</Note>
 
 ## Installation
 
@@ -35,11 +38,13 @@ from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.tools.dependency_injection import BaseContext, ChatContext, Depends
 ```
 
-## Define BaseContext Class
+## Account and Helper Functions
 
-The following [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext) class and helper functions are adapted from
-the previous tutorial. They define the structure for securely handling
+The following `Account` class and helper functions are adapted from
+the [Tools with Dependency Injection](/blog/2025-01-07-Tools-Dependency-Injection/index) post. They define the structure for securely handling
 account data and operations like login and balance retrieval.
+
+### Define Account Class
 
 ```python
 class Account(BaseContext, BaseModel):
@@ -57,7 +62,7 @@ account_ballace_dict = {
 }
 ```
 
-## Helper Functions
+### Helper Functions
 
 These functions validate account credentials and retrieve account
 balances.
@@ -79,9 +84,9 @@ Configure the agents for the interaction.
 
 -   `config_list` defines the LLM configurations, including the model
     and API key.
--   `UserProxyAgent` simulates user inputs without requiring actual
+-   [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent) simulates user inputs without requiring actual
     human interaction (set to `NEVER`).
--   `AssistantAgent` represents the AI agent, configured with the LLM
+-   [`AssistantAgent`](/docs/reference/agentchat/assistant_agent) represents the AI agent, configured with the LLM
     settings.
 
 ```python
@@ -99,7 +104,7 @@ user_proxy = UserProxyAgent(
 
 ## Injecting a ChatContext Parameter
 
-Now let’s upgrade the example from the previous tutorial by introducing
+Now let’s upgrade the example from the previous post by introducing
 the [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) parameter. This enhancement allows us to enforce
 proper execution order in the workflow, ensuring that users log in
 before accessing sensitive data like account balances.
@@ -152,6 +157,14 @@ Finally, we initiate a chat to retrieve the balance.
 ```python
 user_proxy.initiate_chat(agent, message="Get users balance", max_turns=4)
 ```
+
+When `user_proxy.initiate_chat(agent, message="Get users balance", max_turns=4)` is called, the following happens:
+
+- **User Request**: The user sends the message `"Get users balance"`, prompting the agent to suggest calling `get_balance`.
+- **First Function Call**: The agent attempts to execute `get_balance`, but since the user isn't logged in, it raises an error: `"Please login first"`. The agent then suggests calling `login` to authenticate the user.
+- **Login Execution**: The `login` function is executed, confirming the user's login with `"You are logged in"`.
+- **Second Function Call**: With the user logged in, the agent successfully calls `get_balance` and retrieves the balance.
+- **Final Response**: The agent responds with `"Your balance is 200 USD"`, confirming the correct execution of the workflow.
 
 ```console
 user_proxy_1 (to agent):
