@@ -13,9 +13,13 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block
+from autogen.oai.gemini import GeminiClient
 
 with optional_import_block() as result:
+    import google.ai  # noqa: F401
     import google.auth  # noqa: F401
+    import vertexai  # noqa: F401
+    from PIL import Image  # noqa: F401
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
@@ -24,8 +28,6 @@ with optional_import_block() as result:
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
     from vertexai.generative_models import SafetySetting as VertexAISafetySetting
-
-    from autogen.oai.gemini import GeminiClient
 
 skip = not result.is_successful
 

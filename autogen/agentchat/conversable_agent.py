@@ -163,8 +163,6 @@ class ConversableAgent(LLMAgent):
             code_execution_config.copy() if hasattr(code_execution_config, "copy") else code_execution_config
         )
 
-        self._validate_name(name)
-        self._name = name
         # a dictionary of conversations, default value is list
         if chat_messages is None:
             self._oai_messages = defaultdict(list)
@@ -190,6 +188,8 @@ class ConversableAgent(LLMAgent):
                 ) from e
 
         self._validate_llm_config(llm_config)
+        self._validate_name(name)
+        self._name = name
 
         if logging_enabled():
             log_new_agent(self, locals())
@@ -285,6 +285,15 @@ class ConversableAgent(LLMAgent):
         }
 
     def _validate_name(self, name: str) -> None:
+        if not self.llm_config or "config_list" not in self.llm_config or len(self.llm_config["config_list"]) == 0:
+            return
+
+        config_list = self.llm_config.get("config_list")
+        # The validation is currently done only for openai endpoints
+        # (other ones do not have the issue with whitespace in the name)
+        if "api_type" in config_list[0] and config_list[0]["api_type"] != "openai":
+            return
+
         # Validation for name using regex to detect any whitespace
         if re.search(r"\s", name):
             raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")

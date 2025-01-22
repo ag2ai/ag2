@@ -10,7 +10,7 @@ from autogen.import_utils import optional_import_block, require_optional_import
 
 
 class TestOptionalImportBlock:
-    def test_optional_import_block(self):
+    def test_optional_import_block(self) -> None:
         with optional_import_block():
             import ast
 
@@ -32,8 +32,8 @@ class TestOptionalImportBlock:
 
 
 class TestRequiresOptionalImportCallables:
-    def test_function_attributes(self):
-        def dummy_function():
+    def test_function_attributes(self) -> None:
+        def dummy_function() -> None:
             """Dummy function to test requires_optional_import"""
             pass
 
@@ -52,9 +52,9 @@ class TestRequiresOptionalImportCallables:
         ):
             actual()
 
-    def test_function_call(self):
+    def test_function_call(self) -> None:
         @require_optional_import("some_optional_module", "optional_dep")
-        def dummy_function():
+        def dummy_function() -> None:
             """Dummy function to test requires_optional_import"""
             pass
 
@@ -64,9 +64,9 @@ class TestRequiresOptionalImportCallables:
         ):
             dummy_function()
 
-    def test_method_attributes(self):
+    def test_method_attributes(self) -> None:
         class DummyClass:
-            def dummy_method(self):
+            def dummy_method(self) -> None:
                 """Dummy method to test requires_optional_import"""
                 pass
 
@@ -76,7 +76,7 @@ class TestRequiresOptionalImportCallables:
         DummyClass.__module__ = "some_random_module.dummy_stuff"
         DummyClass.dummy_method.__module__ = "some_random_module.dummy_stuff"
 
-        DummyClass.dummy_method = require_optional_import("some_optional_module", "optional_dep")(
+        DummyClass.dummy_method = require_optional_import("some_optional_module", "optional_dep")(  # type: ignore[method-assign]
             DummyClass.dummy_method
         )
 
@@ -92,10 +92,10 @@ class TestRequiresOptionalImportCallables:
         ):
             dummy.dummy_method()
 
-    def test_method_call(self):
+    def test_method_call(self) -> None:
         class DummyClass:
             @require_optional_import("some_optional_module", "optional_dep")
-            def dummy_method(self):
+            def dummy_method(self) -> None:
                 """Dummy method to test requires_optional_import"""
                 pass
 
@@ -106,11 +106,11 @@ class TestRequiresOptionalImportCallables:
         ):
             dummy.dummy_method()
 
-    def test_static_call(self):
+    def test_static_call(self) -> None:
         class DummyClass:
             @require_optional_import("some_optional_module", "optional_dep")
             @staticmethod
-            def dummy_static_function():
+            def dummy_static_function() -> None:
                 """Dummy static function to test requires_optional_import"""
                 pass
 
@@ -121,10 +121,10 @@ class TestRequiresOptionalImportCallables:
         ):
             dummy.dummy_static_function()
 
-    def test_property_call(self):
+    def test_property_call(self) -> None:
         class DummyClass:
-            @require_optional_import("some_optional_module", "optional_dep")
             @property
+            @require_optional_import("some_optional_module", "optional_dep")
             def dummy_property(self) -> int:
                 """Dummy property to test requires_optional_import"""
                 return 4
@@ -142,17 +142,17 @@ class TestRequiresOptionalImportClasses:
     def dummy_cls(self) -> Type[Any]:
         @require_optional_import("some_optional_module", "optional_dep")
         class DummyClass:
-            def dummy_method(self):
+            def dummy_method(self) -> None:
                 """Dummy method to test requires_optional_import"""
                 pass
 
             @staticmethod
-            def dummy_static_method():
+            def dummy_static_method() -> None:
                 """Dummy static method to test requires_optional_import"""
                 pass
 
             @classmethod
-            def dummy_class_method(cls):
+            def dummy_class_method(cls) -> None:
                 """Dummy class method to test requires_optional_import"""
                 pass
 
@@ -163,7 +163,7 @@ class TestRequiresOptionalImportClasses:
 
         return DummyClass
 
-    def test_class_init_call(self, dummy_cls: Type[Any]):
+    def test_class_init_call(self, dummy_cls: Type[Any]) -> None:
         with pytest.raises(
             ImportError,
             match=r"Module 'some_optional_module' needed for __init__ is missing, please install it using 'pip install ag2\[optional_dep\]'",

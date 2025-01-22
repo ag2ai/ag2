@@ -200,7 +200,7 @@ class TestDependencyInjection:
 
         assert actual == expected
 
-    async def _test_end2end(self, credentials, is_async: bool) -> None:
+    async def _test_end2end(self, credentials: Credentials, is_async: bool) -> None:
         class UserContext(BaseContext, BaseModel):
             username: str
             password: str
@@ -243,7 +243,6 @@ class TestDependencyInjection:
             @agent.register_for_llm(description="Login function")
             def login(
                 user: Annotated[UserContext, Depends(user)],
-                additional_notes: Annotated[Optional[str], "Additional notes"] = None,
             ) -> str:
                 return _login(user)
 
@@ -256,9 +255,10 @@ class TestDependencyInjection:
 
     @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
     @pytest.mark.parametrize("is_async", [False, True])
-    def test_end2end(
+    @pytest.mark.asyncio
+    async def test_end2end(
         self,
         credentials_from_test_param: Credentials,
         is_async: bool,
     ) -> None:
-        self._test_end2end(credentials_from_test_param, is_async)
+        await self._test_end2end(credentials_from_test_param, is_async)

@@ -106,9 +106,11 @@ def get_messages_with_names_post_filtered() -> list[dict]:
 def get_text_compressors() -> list[TextCompressor]:
     compressors: list[TextCompressor] = [_MockTextCompressor()]
     with optional_import_block() as result:
-        from autogen.agentchat.contrib.capabilities.text_compressors import LLMLingua
+        import llmlingua  # noqa: F401
 
     if result.is_successful:
+        from autogen.agentchat.contrib.capabilities.text_compressors import LLMLingua
+
         compressors.append(LLMLingua())
 
     return compressors

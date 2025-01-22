@@ -24,9 +24,11 @@ else:
 
 from ..docker_commandline_code_executor import _wait_for_ready
 from .base import JupyterConnectable, JupyterConnectionInfo
+from .import_utils import require_jupyter_kernel_gateway_installed
 from .jupyter_client import JupyterClient
 
 
+@require_jupyter_kernel_gateway_installed()
 class DockerJupyterServer(JupyterConnectable):
     DEFAULT_DOCKERFILE = """FROM quay.io/jupyter/docker-stacks-foundation
 

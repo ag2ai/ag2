@@ -9,6 +9,7 @@ import sys
 
 import pytest
 
+from autogen.agentchat.contrib.vectordb.chromadb import ChromaVectorDB
 from autogen.import_utils import optional_import_block
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -18,7 +19,6 @@ with optional_import_block() as result:
     import chromadb.errors
     import sentence_transformers  # noqa: F401
 
-    from autogen.agentchat.contrib.vectordb.chromadb import ChromaVectorDB
 
 skip = not result.is_successful
 

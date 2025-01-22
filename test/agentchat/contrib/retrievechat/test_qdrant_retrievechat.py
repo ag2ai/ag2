@@ -12,6 +12,11 @@ import sys
 import pytest
 
 from autogen import AssistantAgent
+from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
+    QdrantRetrieveUserProxyAgent,
+    create_qdrant_from_dir,
+    query_qdrant,
+)
 from autogen.import_utils import optional_import_block
 
 from ....conftest import Credentials
@@ -20,11 +25,6 @@ with optional_import_block() as result:
     import fastembed  # noqa: F401
     from qdrant_client import QdrantClient
 
-    from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
-        QdrantRetrieveUserProxyAgent,
-        create_qdrant_from_dir,
-        query_qdrant,
-    )
 
 QDRANT_INSTALLED = result.is_successful
 

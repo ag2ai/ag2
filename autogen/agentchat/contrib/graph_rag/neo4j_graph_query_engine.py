@@ -94,7 +94,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         self.schema = schema
         self.strict = strict
 
-    def init_db(self, input_doc: list[Document] | None = None):
+    def init_db(self, input_doc: Optional[list[Document]] = None):
         """Build the knowledge graph with input documents."""
         self.documents = self._load_doc(input_doc)
 
