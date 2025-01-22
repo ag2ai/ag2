@@ -10,12 +10,13 @@ import pickle
 import unittest
 from unittest.mock import MagicMock, patch
 
+from autogen.cache.cosmos_db_cache import CosmosDBCache
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
+    from azure.cosmos import CosmosClient  # noqa: F401
     from azure.cosmos.exceptions import CosmosResourceNotFoundError
 
-    from autogen.cache.cosmos_db_cache import CosmosDBCache
 
 skip_test = not result.is_successful
 
