@@ -271,7 +271,7 @@ class QdrantVectorDB(VectorDB):
     def _points_to_documents(self, points) -> list[Document]:
         return [self._point_to_document(point) for point in points]
 
-    def _scored_point_to_document(self, scored_point: models.ScoredPoint) -> tuple[Document, float]:
+    def _scored_point_to_document(self, scored_point: "models.ScoredPoint") -> tuple[Document, float]:
         return self._point_to_document(scored_point), scored_point.score
 
     def _documents_to_points(self, documents: list[Document]):
@@ -290,7 +290,7 @@ class QdrantVectorDB(VectorDB):
         ]
         return points
 
-    def _scored_points_to_documents(self, scored_points: list[models.ScoredPoint]) -> list[tuple[Document, float]]:
+    def _scored_points_to_documents(self, scored_points: list["models.ScoredPoint"]) -> list[tuple[Document, float]]:
         return [self._scored_point_to_document(scored_point) for scored_point in scored_points]
 
     def _validate_update_ids(self, collection_name: str, ids: list[str]) -> bool:

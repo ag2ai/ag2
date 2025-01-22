@@ -15,11 +15,11 @@ from typing import Union
 import requests
 
 from ...import_utils import optional_import_block, require_optional_import
+from .. import utils
 
 with optional_import_block():
     from PIL import Image
 
-from autogen.agentchat import utils
 
 # Parameters for token counting for images for different models
 MODEL_PARAMS = {

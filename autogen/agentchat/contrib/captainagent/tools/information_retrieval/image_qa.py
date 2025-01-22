@@ -5,7 +5,7 @@ import os
 
 from PIL import Image
 
-from autogen.coding.func_with_reqs import with_requirements
+from ......coding.func_with_reqs import with_requirements
 
 
 @with_requirements(["transformers", "torch"], ["transformers", "torch", "PIL", "os"])
