@@ -25,7 +25,7 @@ from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Dict, List, Tuple, Union
+from typing import Any, Collection, Dict, List, Sequence, Tuple, Union
 
 from termcolor import colored
 
@@ -37,10 +37,10 @@ except ImportError:
 
 try:
     import nbclient  # noqa: F401
-    from nbclient.client import (
+    from nbclient.client import NotebookClient
+    from nbclient.exceptions import (
         CellExecutionError,
         CellTimeoutError,
-        NotebookClient,
     )
 except ImportError:
     if current_process().name == "MainProcess":
@@ -66,8 +66,8 @@ class Result:
 def check_quarto_bin(quarto_bin: str = "quarto") -> None:
     """Check if quarto is installed."""
     try:
-        version = subprocess.check_output([quarto_bin, "--version"], text=True).strip()
-        version = tuple(map(int, version.split(".")))
+        version_str = subprocess.check_output([quarto_bin, "--version"], text=True).strip()
+        version = tuple(map(int, version_str.split(".")))
         if version < (1, 5, 23):
             print("Quarto version is too old. Please upgrade to 1.5.23 or later.")
             sys.exit(1)
@@ -82,12 +82,13 @@ def notebooks_target_dir(website_directory: Path) -> Path:
     return website_directory / "notebooks"
 
 
-def load_metadata(notebook: Path) -> dict:
+def load_metadata(notebook: Path) -> dict[str, dict[str, Union[str, list[str], None]]]:
     content = json.load(notebook.open(encoding="utf-8"))
-    return content["metadata"]
+    metadata: dict[str, dict[str, Union[str, list[str], None]]] = content.get("metadata", {})
+    return metadata
 
 
-def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
+def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]]:
     """Return a reason to skip the notebook, or None if it should not be skipped."""
     if notebook.suffix != ".ipynb":
         return "not a notebook"
@@ -129,8 +130,9 @@ def skip_reason_or_none_if_ok(notebook: Path) -> str | None:
         return "description is not in front matter"
 
     # Make sure tags is a list of strings
-    if not all([isinstance(tag, str) for tag in front_matter["tags"]]):
-        return "tags must be a list of strings"
+    if front_matter["tags"] is not None:
+        if not all([isinstance(tag, str) for tag in front_matter["tags"]]):
+            return "tags must be a list of strings"
 
     # Make sure description is a string
     if not isinstance(front_matter["description"], str):
@@ -151,7 +153,7 @@ def extract_title(notebook: Path) -> str | None:
     # find the # title
     for line in first_cell["source"]:
         if line.startswith("# "):
-            title = line[2:].strip()
+            title: str = line[2:].strip()
             # Strip off the { if it exists
             if "{" in title:
                 title = title[: title.find("{")].strip()
@@ -249,7 +251,7 @@ NB_VERSION = 4
 
 
 def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, NotebookError | NotebookSkip | None]:
-    nb = nbformat.read(str(notebook_path), NB_VERSION)
+    nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore
 
     if "skip_test" in nb.metadata:
         return notebook_path, NotebookSkip(reason=nb.metadata.skip_test)
@@ -313,7 +315,7 @@ def get_error_info(nb: NotebookNode) -> NotebookError | None:
 
 
 def add_front_matter_to_metadata_mdx(
-    front_matter: dict[str, str | list[str]], website_dir: Path, rendered_mdx: Path
+    front_matter: dict[str, Union[str, list[str], None]], website_dir: Path, rendered_mdx: Path
 ) -> None:
     source = front_matter.get("source_notebook")
     if isinstance(source, str) and source.startswith("/website/docs/"):
@@ -427,7 +429,7 @@ def convert_callout_blocks(content: str) -> str:
         r")"
     )
 
-    def replace_callout(m: re.Match) -> str:
+    def replace_callout(m: re.Match[str]) -> str:
         # Determine the matched alternative and extract the corresponding groups.
         ctype = m.group("callout_type_backtick") or m.group("callout_type_no_backtick")
         inner = m.group("inner_backtick") or m.group("inner_no_backtick") or ""
@@ -458,7 +460,7 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path
         str: The converted markdown content with standard image syntax
     """
 
-    def resolve_path(match):
+    def resolve_path(match: re.Match[str]) -> str:
         img_pattern = r"!\[(.*?)\]\((.*?)\)"
         img_match = re.search(img_pattern, match.group(1))
         if not img_match:
@@ -473,7 +475,9 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path
 
 
 # rendered_notebook is the final mdx file
-def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: dict, website_dir: Path) -> None:
+def post_process_mdx(
+    rendered_mdx: Path, source_notebooks: Path, front_matter: dict[str, Union[str, list[str], None]], website_dir: Path
+) -> None:
     with open(rendered_mdx, encoding="utf-8") as f:
         content = f.read()
 
@@ -536,7 +540,7 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: d
     add_front_matter_to_metadata_mdx(front_matter, website_dir, rendered_mdx)
 
     # Dump front_matter to ysaml
-    front_matter = yaml.dump(front_matter, default_flow_style=False)
+    front_matter_str = yaml.dump(front_matter, default_flow_style=False)
 
     # Convert callout blocks
     content = convert_callout_blocks(content)
@@ -546,10 +550,10 @@ def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: d
 
     # Rewrite the content as
     # ---
-    # front_matter
+    # front_matter_str
     # ---
     # content
-    new_content = f"---\n{front_matter}---\n{content}"
+    new_content = f"---\n{front_matter_str}---\n{content}"
     with open(rendered_mdx, "w", encoding="utf-8") as f:
         f.write(new_content)
 
@@ -582,7 +586,7 @@ def fmt_error(notebook: Path, error: NotebookError | str) -> str:
         raise ValueError("error must be a string or a NotebookError")
 
 
-def start_thread_to_terminate_when_parent_process_dies(ppid: int):
+def start_thread_to_terminate_when_parent_process_dies(ppid: int) -> None:
     pid = os.getpid()
 
     def f() -> None:
@@ -602,12 +606,12 @@ def copy_examples_mdx_files(website_dir: str) -> None:
     example_section_mdx_files = ["Gallery", "Notebooks"]
 
     # Create notebooks directory if it doesn't exist
-    website_dir = Path(website_dir)
-    notebooks_dir = website_dir / "notebooks"
+    website_dir_path = Path(website_dir)
+    notebooks_dir = website_dir_path / "notebooks"
     notebooks_dir.mkdir(parents=True, exist_ok=True)
 
     for mdx_file in example_section_mdx_files:
-        src_mdx_file_path = (website_dir / "docs" / f"{mdx_file}.mdx").resolve()
+        src_mdx_file_path = (website_dir_path / "docs" / f"{mdx_file}.mdx").resolve()
         dest_mdx_file_path = (notebooks_dir / f"{mdx_file}.mdx").resolve()
         # Copy mdx file to notebooks directory
         shutil.copy(src_mdx_file_path, dest_mdx_file_path)
@@ -619,7 +623,7 @@ def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
         raise FileNotFoundError(f"Directory not found: {input_dir}")
 
     # Sort files by parent directory date (if exists) and name
-    def sort_key(file_path):
+    def sort_key(file_path: Path) -> Tuple[datetime, str]:
         dirname = file_path.parent.name
         try:
             # Extract date from directory name (first 3 parts)
@@ -648,7 +652,7 @@ def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[
     return {"group": group_header, "pages": sorted_dir_files}
 
 
-def extract_example_group(metadata_path):
+def extract_example_group(metadata_path: Path) -> dict[str, Sequence[Collection[str]]]:
     # Read NotebooksMetadata.mdx and extract metadata links
     with open(metadata_path, encoding="utf-8") as f:
         content = f.read()
@@ -657,7 +661,7 @@ def extract_example_group(metadata_path):
         end = content.rfind("]")
         if start == -1 or end == -1:
             print("Could not find notebooksMetadata in the file")
-            return
+            return {}
         metadata_str = content[start + 32 : end + 1]
         notebooks_metadata = json.loads(metadata_str)
 
@@ -705,10 +709,13 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     # add talks to navigation
     talks_dir = website_dir / "talks"
     talks_section = generate_nav_group(talks_dir, "Talks", "talks")
+    talks_section_pages = (
+        [talks_section["pages"]] if isinstance(talks_section["pages"], str) else talks_section["pages"]
+    )
 
     # Add "talks/future_talks/index" item at the beginning of the list
-    future_talks_index = talks_section["pages"].pop()
-    talks_section["pages"].insert(0, future_talks_index)
+    future_talks_index = talks_section_pages.pop()
+    talks_section_pages.insert(0, future_talks_index)
     mint_config["navigation"].append(talks_section)
 
     # add blogs to navigation
@@ -737,7 +744,7 @@ def fix_internal_references(content: str, root_path: Path, current_file_path: Pa
         current_file_path: Path of the current file being processed
     """
 
-    def resolve_link(match):
+    def resolve_link(match: re.Match[str]) -> str:
         display_text, raw_path = match.groups()
         try:
             path_parts = raw_path.split("#")
@@ -960,7 +967,7 @@ def main() -> None:
     filtered_notebooks = []
     for notebook in collected_notebooks:
         reason = skip_reason_or_none_if_ok(notebook)
-        if reason:
+        if reason and isinstance(reason, str):
             print(fmt_skip(notebook, reason))
         else:
             filtered_notebooks.append(notebook)
