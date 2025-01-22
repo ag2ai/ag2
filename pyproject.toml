@@ -345,6 +345,7 @@ files = [
     "autogen/interop",
     "autogen/agentchat/realtime_agent",
     "autogen/messages",
+    "autogen/agentchat/experimental",
     "test/test_pydantic.py",
     "test/io",
     "test/tools",

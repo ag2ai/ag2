@@ -14,6 +14,7 @@ import re
 import warnings
 from collections import defaultdict
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Literal,
@@ -66,8 +67,13 @@ logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+if TYPE_CHECKING:
+    # checks if ConversableAgent is implementing LLMAgent protocol
+    def create_conversible_agent(name: str) -> LLMAgent:
+        return ConversableAgent(name)
 
-class ConversableAgent(LLMAgent):
+
+class ConversableAgent:
     """(In preview) A class for generic conversable agents which can be configured as assistant or user proxy.
 
     After receiving each message, the agent will send a reply to the sender unless the msg is a termination msg.
@@ -283,6 +289,10 @@ class ConversableAgent(LLMAgent):
             "process_message_before_send": [],
             "update_agent_state": [],
         }
+
+        # check if the agent is implementing LLMAgent protocol
+        if not isinstance(self, LLMAgent):
+            raise TypeError("ConversableAgent must implement LLMAgent protocol")
 
     def _validate_name(self, name: str) -> None:
         # Validation for name using regex to detect any whitespace
