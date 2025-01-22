@@ -86,8 +86,9 @@ jobs:
         run: |
           uv pip install --system "requests<2.32.0"
           bash scripts/test.sh test/test_import.py
-          OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }//[-]/_}"
-          bash scripts/test.sh -m "$OPTIONAL_DEPENDENCIES"
+          OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
+          MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
+          bash scripts/test.sh -m "$MARKER"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
