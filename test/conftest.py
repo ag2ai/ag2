@@ -97,6 +97,8 @@ class Credentials:
 
     def __init__(self, llm_config: dict[str, Any]) -> None:
         self.llm_config = llm_config
+        config_list = llm_config["config_list"]
+        assert len(config_list) > 0
         Secrets.add_secret(self.api_key)
 
     def sanitize(self) -> dict[str, Any]:
