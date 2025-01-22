@@ -321,15 +321,21 @@ def add_front_matter_to_metadata_mdx(
 
     metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
 
+    if not metadata_mdx.exists():
+        with open(metadata_mdx, "w", encoding="utf-8") as f:
+            f.write(
+                "{/*\nAuto-generated file - DO NOT EDIT\nPlease edit the add_front_matter_to_metadata_mdx function in process_notebooks.py\n*/}\n\n"
+            )
+            f.write("export const notebooksMetadata = [];\n")
+
     metadata = []
-    if metadata_mdx.exists():
-        with open(metadata_mdx, encoding="utf-8") as f:
-            content = f.read()
-            if content:
-                start = content.find("export const notebooksMetadata = [")
-                end = content.rfind("]")
-                if start != -1 and end != -1:
-                    metadata = json.loads(content[start + 32 : end + 1])
+    with open(metadata_mdx, encoding="utf-8") as f:
+        content = f.read()
+        if content:
+            start = content.find("export const notebooksMetadata = [")
+            end = content.rfind("]")
+            if start != -1 and end != -1:
+                metadata = json.loads(content[start + 32 : end + 1])
 
     # Create new entry for current notebook
     entry = {
@@ -899,6 +905,21 @@ def ensure_mint_json_exists(website_dir: Path) -> None:
         sys.exit(1)
 
 
+def cleanup_tmp_dirs_if_no_metadata(website_dir: Path) -> None:
+    """Remove the temporary notebooks directory if NotebooksMetadata.mdx is not found.
+
+    This is to ensure a clean build and generate the metadata file as well as to
+    update the navigation with correct entries.
+    """
+    metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+    if not metadata_mdx.exists():
+        print(f"NotebooksMetadata.mdx not found at {metadata_mdx}")
+
+        notebooks_dir = website_dir / "notebooks"
+        print(f"Removing the {notebooks_dir} and to ensure a clean build.")
+        shutil.rmtree(notebooks_dir, ignore_errors=True)
+
+
 def main() -> None:
     script_dir = Path(__file__).parent.absolute()
     parser = argparse.ArgumentParser()
@@ -929,6 +950,7 @@ def main() -> None:
         sys.exit(1)
 
     ensure_mint_json_exists(args.website_directory)
+    cleanup_tmp_dirs_if_no_metadata(args.website_directory)
 
     if args.notebooks:
         collected_notebooks = args.notebooks
