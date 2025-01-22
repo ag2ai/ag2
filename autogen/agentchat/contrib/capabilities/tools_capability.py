@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.agentchat import ConversableAgent
-from autogen.tools import Tool
+from ....agentchat import ConversableAgent
+from ....tools import Tool
 
 
 class ToolsCapability:

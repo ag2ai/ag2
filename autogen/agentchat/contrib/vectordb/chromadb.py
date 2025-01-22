@@ -69,7 +69,7 @@ class ChromaVectorDB(VectorDB):
 
     def create_collection(
         self, collection_name: str, overwrite: bool = False, get_or_create: bool = True
-    ) -> Collection:
+    ) -> "Collection":
         """Create a collection in the vector database.
         Case 1. if the collection does not exist, create the collection.
         Case 2. the collection exists, if overwrite is True, it will overwrite the collection.
@@ -111,7 +111,7 @@ class ChromaVectorDB(VectorDB):
         else:
             raise ValueError(f"Collection {collection_name} already exists.")
 
-    def get_collection(self, collection_name: str = None) -> Collection:
+    def get_collection(self, collection_name: str = None) -> "Collection":
         """Get the collection from the vector database.
 
         Args:
@@ -149,7 +149,7 @@ class ChromaVectorDB(VectorDB):
             self.active_collection = None
 
     def _batch_insert(
-        self, collection: Collection, embeddings=None, ids=None, metadatas=None, documents=None, upsert=False
+        self, collection: "Collection", embeddings=None, ids=None, metadatas=None, documents=None, upsert=False
     ) -> None:
         batch_size = int(CHROMADB_MAX_BATCH_SIZE)
         for i in range(0, len(documents), min(batch_size, len(documents))):

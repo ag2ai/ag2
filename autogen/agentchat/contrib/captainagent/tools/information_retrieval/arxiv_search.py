@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import arxiv
 
-from autogen.coding.func_with_reqs import with_requirements
+from ......coding.func_with_reqs import with_requirements
 
 
 @with_requirements(["arxiv"], ["arxiv"])

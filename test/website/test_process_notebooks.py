@@ -270,6 +270,64 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                 tags: [Realtime API, Voice Agents, Swarm Teams, Twilio, AI Tools]
                 ---
 
+                <div>
+                    <img noZoom className="social-share-img"
+                    src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+                    alt="social preview"
+                    style={{ position: 'absolute', left: '-9999px' }}
+                    />
+                </div>
+
+                <div class="blog-authors">
+                    <p class="authors">Authors:</p>
+                    <CardGroup cols={2}>
+                        <Card href="https://github.com/marklysze">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/marklysze.png" />
+                            </div>
+                            <div>
+                                <p class="name">Mark Sze</p>
+                                <p>Software Engineer at AG2.ai</p>
+                            </div>
+                            </div>
+                        </Card>
+                        <Card href="https://github.com/sternakt">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/sternakt.png" />
+                            </div>
+                            <div>
+                                <p class="name">Tvrtko Sternak</p>
+                                <p>Machine Learning Engineer at Airt</p>
+                            </div>
+                            </div>
+                        </Card>
+                        <Card href="https://github.com/davorrunje">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/davorrunje.png" />
+                            </div>
+                            <div>
+                                <p class="name">Davor Runje</p>
+                                <p>CTO at Airt</p>
+                            </div>
+                            </div>
+                        </Card>
+                        <Card href="https://github.com/davorinrusevljan">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/davorinrusevljan.png" />
+                            </div>
+                            <div>
+                                <p class="name">Davorin</p>
+                                <p>Developer</p>
+                            </div>
+                            </div>
+                        </Card>
+                    </CardGroup>
+                </div>
+
                 lorem ipsum""").lstrip()
             (post2_dir / "index.mdx").write_text(post2_content)
 
@@ -332,6 +390,9 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         assert '<p class="name">Chi Wang</p>' in actual
         assert '<p class="name">Davor Runje</p>' not in actual
 
+        assert actual.count('<div class="blog-authors">') == 1
+        assert actual.count('<p class="name">Chi Wang</p>') == 1
+
         # Verify content of second blog post
         post2_path = generated_blog_dir / "2023-06-28-MathChat" / "index.mdx"
         actual = post2_path.read_text()
@@ -342,6 +403,9 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         assert '<p class="name">Davor Runje</p>' in actual
         assert '<p class="name">Davorin</p>' in actual
         assert '<p class="name">Chi Wang</p>' not in actual
+
+        assert actual.count('<div class="blog-authors">') == 1
+        assert actual.count('<p class="name">Mark Sze</p>') == 1
 
 
 class TestConvertCalloutBlocks:

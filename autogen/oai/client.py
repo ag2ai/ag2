@@ -60,7 +60,7 @@ with optional_import_block() as cerebras_result:
         RateLimitError as cerebras_RateLimitError,
     )
 
-    from autogen.oai.cerebras import CerebrasClient
+    from .cerebras import CerebrasClient
 
 if cerebras_result.is_successful:
     cerebras_import_exception: Optional[ImportError] = None
@@ -74,7 +74,7 @@ with optional_import_block() as gemini_result:
         ResourceExhausted as gemini_ResourceExhausted,
     )
 
-    from autogen.oai.gemini import GeminiClient
+    from .gemini import GeminiClient
 
 if gemini_result.is_successful:
     gemini_import_exception: Optional[ImportError] = None
@@ -88,7 +88,7 @@ with optional_import_block() as anthropic_result:
         RateLimitError as anthorpic_RateLimitError,
     )
 
-    from autogen.oai.anthropic import AnthropicClient
+    from .anthropic import AnthropicClient
 
 if anthropic_result.is_successful:
     anthropic_import_exception: Optional[ImportError] = None
@@ -102,7 +102,7 @@ with optional_import_block() as mistral_result:
         SDKError as mistral_SDKError,
     )
 
-    from autogen.oai.mistral import MistralAIClient
+    from .mistral import MistralAIClient
 
 if mistral_result.is_successful:
     mistral_import_exception: Optional[ImportError] = None
@@ -113,7 +113,7 @@ else:
 with optional_import_block() as together_result:
     from together.error import TogetherException as together_TogetherException
 
-    from autogen.oai.together import TogetherClient
+    from .together import TogetherClient
 
 if together_result.is_successful:
     together_import_exception: Optional[ImportError] = None
@@ -128,7 +128,7 @@ with optional_import_block() as groq_result:
         RateLimitError as groq_RateLimitError,
     )
 
-    from autogen.oai.groq import GroqClient
+    from .groq import GroqClient
 
 if groq_result.is_successful:
     groq_import_exception: Optional[ImportError] = None
@@ -143,7 +143,7 @@ with optional_import_block() as cohere_result:
         TooManyRequestsError as cohere_TooManyRequestsError,
     )
 
-    from autogen.oai.cohere import CohereClient
+    from .cohere import CohereClient
 
 if cohere_result.is_successful:
     cohere_import_exception: Optional[ImportError] = None
@@ -157,7 +157,7 @@ with optional_import_block() as ollama_result:
         ResponseError as ollama_ResponseError,
     )
 
-    from autogen.oai.ollama import OllamaClient
+    from .ollama import OllamaClient
 
 if ollama_result.is_successful:
     ollama_import_exception: Optional[ImportError] = None
@@ -171,7 +171,7 @@ with optional_import_block() as bedrock_result:
         ClientError as bedrock_ClientError,
     )
 
-    from autogen.oai.bedrock import BedrockClient
+    from .bedrock import BedrockClient
 
 if bedrock_result.is_successful:
     bedrock_import_exception: Optional[ImportError] = None
