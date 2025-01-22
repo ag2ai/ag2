@@ -75,7 +75,7 @@ class GeminiRealtimeClient:
             raise RuntimeError("Gemini WebSocket is not initialized")
         return self._connection
 
-    async def send_function_result(self, call_id: str, result: str) -> None:  # Looks like Gemini doesn't results.
+    async def send_function_result(self, call_id: str, result: str) -> None:
         """Send the result of a function call to the Gemini Realtime API.
 
         Args:
@@ -128,6 +128,7 @@ class GeminiRealtimeClient:
         pass
 
     async def _initialize_session(self) -> None:
+        """Initialize the session with the Gemini Realtime API."""
         session_config = {
             "setup": {
                 "system_instruction": {
@@ -141,9 +142,7 @@ class GeminiRealtimeClient:
                             {
                                 "name": tool_schema["name"],
                                 "description": tool_schema["description"],
-                                "parameters": tool_schema[
-                                    "parameters"
-                                ],  # GeminiClient._create_gemini_function_parameters(tool_schema["parameters"]),
+                                "parameters": tool_schema["parameters"],
                             }
                             for tool_schema in self._pending_session_updates.get("tools", [])
                         ]
@@ -161,10 +160,13 @@ class GeminiRealtimeClient:
         await self.connection.send(json.dumps(session_config))
 
     async def session_update(self, session_options: dict[str, Any]) -> None:
-        """Record or apply session updates."""
+        """Record session updates to be applied when the connection is established.
+
+        Args:
+            session_options (dict[str, Any]): The session options to update.
+        """
         if self._is_reading_events:
             self.logger.warning("Is reading events. Session update will be ignored.")
-        # Record session updates
         else:
             self._pending_session_updates.update(session_options)
 
@@ -180,7 +182,7 @@ class GeminiRealtimeClient:
             self._connection = None
 
     async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
-        """Read Audio Events"""
+        """Read Events from the Gemini Realtime API."""
         if self._connection is None:
             raise RuntimeError("Client is not connected, call connect() first.")
         await self._initialize_session()
@@ -194,7 +196,14 @@ class GeminiRealtimeClient:
                 yield event
 
     def _parse_message(self, response: dict[str, Any]) -> list[RealtimeEvent]:
-        # Determine the type of message and dispatch it to the appropriate handler
+        """Parse a message from the Gemini Realtime API.
+
+        Args:
+            response (dict[str, Any]): The response to parse.
+
+        Returns:
+            list[RealtimeEvent]: The parsed events.
+        """
         if "serverContent" in response and "modelTurn" in response["serverContent"]:
             try:
                 b64data = response["serverContent"]["modelTurn"]["parts"][0]["inlineData"].pop("data")
@@ -232,8 +241,7 @@ class GeminiRealtimeClient:
 
         Args:
             model (str): The model to create the client for.
-            voice (str): The voice to use.
-            system_message (str): The system message to use.
+            logger (Logger): The logger for the client.
             kwargs (Any): Additional arguments.
 
         Returns:
