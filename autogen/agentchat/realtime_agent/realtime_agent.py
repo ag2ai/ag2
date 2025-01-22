@@ -112,7 +112,7 @@ class RealtimeAgent(ConversableAgent):
         self._initial_agent: Optional[SwarmAgent] = None
         self._agents: Optional[list[SwarmAgent]] = None
 
-    def _validate_name_if_api_tpye_openai(self, name: str) -> None:
+    def _validate_name(self, name: str) -> None:
         # RealtimeAgent does not need to validate the name
         pass
 
