@@ -18,9 +18,6 @@ _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
 
 
-from typing import List
-
-
 def docline_parse_docs(
     input_file_path: str,
     output_dir_path: str,
@@ -40,7 +37,7 @@ def docline_parse_docs(
     """
     logging.basicConfig(level=logging.INFO)
 
-    input_doc_paths: List[Path] = handle_input(input_file_path)
+    input_doc_paths: list[Path] = handle_input(input_file_path, output_dir=output_dir_path)
 
     if not input_doc_paths:
         raise ValueError("No documents found.")

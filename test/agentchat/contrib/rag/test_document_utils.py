@@ -2,14 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import mock_open, patch
 
 import pytest
-import requests
 
-from autogen.agentchat.contrib.rag.document_utils import download_url, handle_input, is_url, list_files
+from autogen.agentchat.contrib.rag.document_utils import (
+    _download_rendered_html,
+    download_url,
+    handle_input,
+    is_url,
+    list_files,
+)
 
 
 def test_valid_url():
@@ -58,60 +62,112 @@ def test_logger_error(caplog):
     assert "Error when checking if None is a valid URL" in caplog.text
 
 
-@pytest.fixture
-def mock_response():
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.text = "<html>Example</html>"
-    return mock_response
-
-
-def test_valid_url(mock_response):
-    url = "https://www.example.com"
-    with patch("requests.get", return_value=mock_response):
-        filepath = download_url(url)
-        assert isinstance(filepath, Path)
-        assert os.path.exists(filepath)
-
-
-def test_valid_url_with_output_dir(mock_response):
-    url = "https://www.example.com"
-    output_dir = "/tmp"
-    with patch("requests.get", return_value=mock_response):
-        filepath = download_url(url, output_dir)
-        assert isinstance(filepath, Path)
-        assert os.path.exists(filepath)
-        assert str(filepath).startswith(output_dir)
-
-
-def test_non_existent_output_dir(mock_response):
-    url = "https://www.example.com"
-    output_dir = "/non/existent/dir"
-    with patch("requests.get", return_value=mock_response):
-        with pytest.raises(FileNotFoundError):
-            download_url(url, output_dir)
-
-
-def test_invalid_url():
-    url = "https://www.example.com"
-    with patch("requests.get", side_effect=requests.exceptions.HTTPError):
-        with pytest.raises(requests.exceptions.HTTPError):
-            download_url(url)
-
-
 def test_non_string_input():
     url = 123
     with pytest.raises(Exception):
         download_url(url)
 
 
-def test_download_url(mock_response, tmpdir):
+@pytest.fixture
+def mock_chrome():
+    with patch("selenium.webdriver.Chrome") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_chrome_driver_manager():
+    with patch("webdriver_manager.chrome.ChromeDriverManager.install") as mock:
+        yield mock
+
+
+def test_valid_url(mock_chrome):
+    url = "https://www.google.com"
+    mock_chrome.return_value.get.return_value = None
+    mock_chrome.return_value.page_source = "<html>Test HTML</html>"
+    html_content = _download_rendered_html(url)
+    assert isinstance(html_content, str)
+    assert html_content != ""
+
+
+def test_invalid_url(mock_chrome):
+    url = "invalid_url"
+    mock_chrome.return_value.get.side_effect = Exception("Invalid URL")
+    with pytest.raises(Exception):
+        _download_rendered_html(url)
+
+
+def test_chrome_driver_not_installed(mock_chrome_driver_manager):
+    url = "https://www.google.com"
+    mock_chrome_driver_manager.side_effect = Exception("Chrome driver not installed")
+    with pytest.raises(Exception):
+        _download_rendered_html(url)
+
+
+def test_chrome_driver_connection_error(mock_chrome):
+    url = "https://www.google.com"
+    mock_chrome.return_value.get.side_effect = Exception("Connection error")
+    with pytest.raises(Exception):
+        _download_rendered_html(url)
+
+
+mock_html_value = "<html>Example</html>"
+
+
+@pytest.fixture
+def mock_download():
+    with patch("autogen.agentchat.contrib.rag.document_utils._download_rendered_html") as mock:
+        mock.return_value = mock_html_value
+        yield mock
+
+
+@pytest.fixture
+def mock_open_file():
+    with patch("builtins.open", new_callable=mock_open) as mock_file:
+        yield mock_file
+
+
+def test_download_url_valid_html(mock_download, mock_open_file, tmp_path):
+    url = "https://www.example.com/index.html"
+    filepath = download_url(url, tmp_path.resolve())
+    assert filepath.suffix == ".html"
+    mock_open_file.assert_called_with(str(filepath), "w", encoding="utf-8")
+    m_file_handle = mock_open_file()
+    m_file_handle.write.assert_called_with(mock_html_value)
+
+
+def test_download_url_non_html(mock_download, mock_open_file, tmp_path):
+    url = "https://www.example.com/image.jpg"
+    with pytest.raises(ValueError):
+        download_url(url, tmp_path.resolve())
+
+
+def test_download_url_no_extension(mock_download, mock_open_file, tmp_path):
+    url = "https://www.example.com/path"
+    filepath = download_url(url, str(tmp_path))
+    assert filepath.suffix == ".html"
+    mock_open_file.assert_called_with(str(filepath), "w", encoding="utf-8")
+    m_file_handle = mock_open_file()
+    m_file_handle.write.assert_called_with(mock_html_value)
+
+
+def test_download_url_no_output_dir(mock_download, mock_open_file):
     url = "https://www.example.com"
-    with patch("requests.get", return_value=mock_response):
-        filepath = download_url(url, output_dir=tmpdir)
-        assert filepath.exists()
-        with open(filepath, "r", encoding="utf-8") as file:
-            assert file.read() == "<html>Example</html>"
+    with patch("os.getcwd") as mock_getcwd:
+        mock_getcwd.return_value = "/fake/cwd"
+        filepath = download_url(url)
+        assert filepath.parent == Path("/fake/cwd")
+        assert filepath.suffix == ".html"
+        mock_open_file.assert_called_with(str(filepath), "w", encoding="utf-8")
+        m_file_handle = mock_open_file()
+        m_file_handle.write.assert_called_with(mock_html_value)
+
+
+def test_download_url_invalid_url():
+    url = "invalid url"
+    with patch("autogen.agentchat.contrib.rag.document_utils._download_rendered_html") as mock_download:
+        mock_download.side_effect = Exception("Invalid URL")
+        with pytest.raises(Exception):
+            download_url(url)
 
 
 def test_list_files(tmpdir):
@@ -124,15 +180,6 @@ def test_list_files(tmpdir):
     assert len(file_list) == 2
     assert str(file_list[0]) == str(file1)
     assert str(file_list[1]) == str(file2)
-
-
-def test_handle_input_url(mock_response, tmpdir):
-    url = "https://www.example.com"
-    with patch("requests.get", return_value=mock_response):
-        filepath = handle_input(url, output_dir=tmpdir)
-        assert filepath[0].exists()
-        with open(filepath[0], "r", encoding="utf-8") as file:
-            assert file.read() == "<html>Example</html>"
 
 
 def test_handle_input_directory(tmpdir):

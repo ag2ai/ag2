@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 _logger = logging.getLogger(__name__)
 
@@ -30,15 +32,54 @@ def is_url(url: str) -> bool:
         return False
 
 
+def _download_rendered_html(url: str) -> str:
+    """
+    Downloads a rendered HTML page of a given URL using headless ChromeDriver.
+
+    Args:
+        url (str): URL of the page to download.
+
+    Returns:
+        str: The rendered HTML content of the page.
+    """
+    # Set up Chrome options
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Enable headless mode
+    options.add_argument("--disable-gpu")  # Disabling GPU hardware acceleration
+    options.add_argument("--no-sandbox")  # Bypass OS security model
+    options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
+
+    # Set the location of the ChromeDriver
+    service = Service(ChromeDriverManager().install())
+
+    # Create a new instance of the Chrome driver with specified options
+    driver = webdriver.Chrome(service=service, options=options)
+
+    # Open a page
+    driver.get(url)
+
+    # Get the rendered HTML
+    html_content = driver.page_source
+
+    # Close the browser
+    driver.quit()
+
+    return html_content
+
+
 def download_url(url: str, output_dir: str = None) -> Path:
     """Download the content of a URL and save it as an HTML file."""
-    response = requests.get(url)
-    response.raise_for_status()  # Raise an exception for bad requests
+    rendered_html = _download_rendered_html(url)
+    url_path = Path(urlparse(url).path)
+    if url_path.suffix and url_path.suffix != ".html":
+        raise ValueError("Only HTML files can be downloaded directly.")
 
-    filename = Path(urlparse(url).path).name or "downloaded_content.html"
+    filename = url_path.name or "downloaded_content.html"
+    if len(filename) < 5 or filename[-5:] != ".html":
+        filename += ".html"
     filepath = os.path.join(output_dir, filename) if output_dir else os.path.join(os.getcwd(), filename)
     with open(filepath, "w", encoding="utf-8") as file:
-        file.write(response.text)
+        file.write(rendered_html)
 
     return Path(filepath)
 
