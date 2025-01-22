@@ -1045,10 +1045,11 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
-def test_function_registration_e2e_async(
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
 ) -> None:
-    _test_function_registration_e2e_async(credentials_from_test_param)
+    await _test_function_registration_e2e_async(credentials_from_test_param)
 
 
 @pytest.mark.openai
