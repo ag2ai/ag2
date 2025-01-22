@@ -10,6 +10,7 @@ import urllib.parse
 
 import pytest
 
+from autogen.agentchat.contrib.vectordb.pgvectordb import PGVectorDB
 from autogen.import_utils import optional_import_block
 
 from ....conftest import reason
@@ -19,7 +20,6 @@ with optional_import_block() as result:
     import psycopg
     import sentence_transformers  # noqa: F401
 
-    from autogen.agentchat.contrib.vectordb.pgvectordb import PGVectorDB
 
 skip = not result.is_successful
 
