@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 import pytest
-from _pytest.outcomes import Skipped
-from pytest import CallInfo, Item
 
+# from _pytest.outcomes import Skipped
+# from pytest import CallInfo, Item
 import autogen
 
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
@@ -130,23 +130,23 @@ class CensoredError(Exception):
         super().__init__(message)
 
 
-def pytest_runtest_makereport(item: Item, call: CallInfo[Any]) -> None:
-    """
-    Hook to customize the exception output.
-    This is called after each test call.
-    """
-    if call.excinfo is not None:  # This means the test failed
-        exception_value = call.excinfo.value
+# def pytest_runtest_makereport(item: Item, call: CallInfo[Any]) -> None:
+#     """
+#     Hook to customize the exception output.
+#     This is called after each test call.
+#     """
+#     if call.excinfo is not None:  # This means the test failed
+#         exception_value = call.excinfo.value
 
-        original_message = "".join([repr(arg) for arg in exception_value.args])
+#         original_message = "".join([repr(arg) for arg in exception_value.args])
 
-        # Check if this exception is a pytest skip exception
-        if isinstance(exception_value, Skipped):
-            return  # Don't modify skip exceptions
+#         # Check if this exception is a pytest skip exception
+#         if isinstance(exception_value, Skipped):
+#             return  # Don't modify skip exceptions
 
-        if Secrets.needs_sanitizing(original_message):
-            censored_exception = CensoredError(call.excinfo.value)
-            call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
+#         if Secrets.needs_sanitizing(original_message):
+#             censored_exception = CensoredError(call.excinfo.value)
+#             call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
 
 
 def get_credentials(
