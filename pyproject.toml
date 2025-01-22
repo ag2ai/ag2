@@ -209,6 +209,7 @@ lint = [
 ]
 
 dev = [
+    "toml==0.10.2",
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
@@ -268,7 +269,7 @@ fix = true
 line-length = 120
 target-version = 'py39'
 #include = ["autogen", "test", "docs"]
-#exclude = []
+exclude = ["setup_*.py"]
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
