@@ -40,12 +40,23 @@ def conversable_agent():
 
 
 @pytest.mark.parametrize("name", ["agent name", "agent_name ", " agent\nname", " agent\tname"])
-def test_conversable_agent_name_with_white_space_raises_error(name: str) -> None:
+def test_conversable_agent_name_with_white_space(
+    name: str,
+    mock_credentials: Credentials,
+) -> None:
+    agent = ConversableAgent(name=name)
+    assert agent.name == name
+
+    llm_config = mock_credentials.llm_config
     with pytest.raises(
         ValueError,
         match=f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'",
     ):
-        ConversableAgent(name=name)
+        ConversableAgent(name=name, llm_config=llm_config)
+
+    llm_config["config_list"][0]["api_type"] = "something-else"
+    agent = ConversableAgent(name=name, llm_config=llm_config)
+    assert agent.name == name
 
 
 def test_sync_trigger():
@@ -1480,6 +1491,34 @@ def test_handle_carryover():
 
     proc_content_empty_carryover = dummy_agent_1._handle_carryover(message=content, kwargs={"carryover": None})
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
+
+
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+def test_conversable_agent_with_whitespaces_in_name_end2end(
+    credentials_from_test_param: Credentials,
+    request: pytest.FixtureRequest,
+) -> None:
+    agent = ConversableAgent(
+        name="first_agent",
+        llm_config=credentials_from_test_param.llm_config,
+    )
+
+    user_proxy = UserProxyAgent(
+        name="user proxy",
+        human_input_mode="NEVER",
+    )
+
+    # Get the parameter name request node
+    current_llm = request.node.callspec.id
+    if "gpt_4" in current_llm:
+        with pytest.raises(
+            ValueError,
+            match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
+        ):
+            user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
+    # anthropic and gemini will not raise an error if agent name contains whitespaces
+    else:
+        user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
 
 
 @pytest.mark.openai
