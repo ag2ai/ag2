@@ -1,0 +1,154 @@
+---
+title: Tools with ChatContext Dependency Injection
+authors:
+  - rjambrecic
+tags: [tools, tool calling, dependency injection]
+---
+
+In this post, we’ll build upon the concepts introduced in the [Tools with Dependency Injection](/blog/2025-01-07-Tools-Dependency-Injection/index) to demonstrate how to use `ChatContext` for more advanced workflows.
+
+By leveraging `ChatContext`, we can track the flow of conversations, ensuring proper function execution order. For example, before retrieving a user’s account balance, we’ll ensure the user has logged in first. This approach prevents unauthorized actions and enhances security.
+
+**Benefits of Using `ChatContext`**
+- Flow Control: It helps enforce the correct sequence of function calls.
+- Enhanced Security: Ensures actions depend on preconditions like authentication.
+- Simplified Debugging: Logs conversation history, making it easier to trace issues.
+
+
+## Installation
+
+To install `AG2`, simply run the following command:
+
+```bash
+pip install ag2
+```
+
+## Imports
+
+```python
+import os
+from typing import Annotated, Literal
+
+from pydantic import BaseModel
+
+from autogen.agentchat import AssistantAgent, UserProxyAgent
+from autogen.tools.dependency_injection import BaseContext, ChatContext, Depends
+```
+
+## Define BaseContext Class
+
+The following `BaseContext` class and helper functions are adapted from
+the previous tutorial. They define the structure for securely handling
+account data and operations like login and balance retrieval.
+
+```python
+class Account(BaseContext, BaseModel):
+    username: str
+    password: str
+    currency: Literal["USD", "EUR"] = "USD"
+
+
+alice_account = Account(username="alice", password="password123")
+bob_account = Account(username="bob", password="password456")
+
+account_ballace_dict = {
+    (alice_account.username, alice_account.password): 300,
+    (bob_account.username, bob_account.password): 200,
+}
+```
+
+## Helper Functions
+
+These functions validate account credentials and retrieve account
+balances.
+
+```python
+def _verify_account(account: Account):
+    if (account.username, account.password) not in account_ballace_dict:
+        raise ValueError("Invalid username or password")
+
+
+def _get_balance(account: Account):
+    _verify_account(account)
+    return f"Your balance is {account_ballace_dict[(account.username, account.password)]}{account.currency}"
+```
+
+## Agent Configuration
+
+Configure the agents for the interaction.
+
+-   `config_list` defines the LLM configurations, including the model
+    and API key.
+-   `UserProxyAgent` simulates user inputs without requiring actual
+    human interaction (set to `NEVER`).
+-   `AssistantAgent` represents the AI agent, configured with the LLM
+    settings.
+
+```python
+config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+agent = AssistantAgent(
+    name="agent",
+    llm_config={"config_list": config_list},
+)
+user_proxy = UserProxyAgent(
+    name="user_proxy_1",
+    human_input_mode="NEVER",
+    llm_config=False,
+)
+```
+
+## Injecting a ChatContext Parameter
+
+Now let’s upgrade the example from the previous tutorial by introducing
+the `ChatContext` parameter. This enhancement allows us to enforce
+proper execution order in the workflow, ensuring that users log in
+before accessing sensitive data like account balances.
+
+The following functions will be registered:
+
+-   `login`: Verifies the user’s credentials and ensures they are logged
+    in.
+-   `get_balance`: Retrieves the account balance but only if the user
+    has successfully logged in first.
+
+```python
+@user_proxy.register_for_execution()
+@agent.register_for_llm(description="Login")
+def login(
+    account: Annotated[Account, Depends(bob_account)],
+) -> str:
+    _verify_account(account)
+    return "You are logged in"
+
+
+@user_proxy.register_for_execution()
+@agent.register_for_llm(description="Get balance")
+def get_balance(
+    account: Annotated[Account, Depends(bob_account)],
+    chat_context: ChatContext,
+) -> str:
+    _verify_account(account)
+
+    # Extract the list of messages exchanged with the first agent in the conversation.
+    # The chat_context.chat_messages is a dictionary where keys are agents (objects)
+    # and values are lists of message objects. We take the first value (messages of the first agent).
+    messages_with_first_agent = list(chat_context.chat_messages.values())[0]
+
+    login_function_called = False
+    for message in messages_with_first_agent:
+        if "tool_calls" in message and message["tool_calls"][0]["function"]["name"] == "login":
+            login_function_called = True
+            break
+
+    if not login_function_called:
+        raise ValueError("Please login first")
+
+    balance = _get_balance(account)
+    return balance
+```
+
+Finally, we initiate a chat to retrieve the balance.
+
+```python
+user_proxy.initiate_chat(agent, message="Get users balance", max_turns=4)
+```
