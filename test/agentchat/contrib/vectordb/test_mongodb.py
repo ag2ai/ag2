@@ -12,13 +12,13 @@ from time import monotonic, sleep
 import pytest
 
 from autogen.agentchat.contrib.vectordb.base import Document
+from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
     import pymongo  # noqa: F401
     import sentence_transformers  # noqa: F401
 
-    from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
 
 if not result.is_successful:
     # To display warning in pyproject.toml [tool.pytest.ini_options] set log_cli = true

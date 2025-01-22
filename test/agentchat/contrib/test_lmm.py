@@ -12,14 +12,16 @@ from unittest.mock import MagicMock
 import pytest
 
 import autogen
+from autogen.agentchat.contrib.img_utils import get_pil_image
+from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import optional_import_block
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
 with optional_import_block() as result:
-    from autogen.agentchat.contrib.img_utils import get_pil_image
-    from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
+    from PIL import Image  # noqa: F401
+
 
 skip = not result.is_successful
 

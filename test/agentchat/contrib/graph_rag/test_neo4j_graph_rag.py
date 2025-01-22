@@ -10,16 +10,17 @@ from typing import Literal
 
 import pytest
 
+from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
+from autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine import (
+    GraphStoreQueryResult,
+    Neo4jGraphQueryEngine,
+)
 from autogen.import_utils import optional_import_block
 
 from ....conftest import reason
 
 with optional_import_block() as result:
-    from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
-    from autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine import (
-        GraphStoreQueryResult,
-        Neo4jGraphQueryEngine,
-    )
+    from llama_index.core import PropertyGraphIndex  # noqa: F401
 
 
 skip = not result.is_successful

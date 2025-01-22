@@ -12,6 +12,7 @@ import re
 import pytest
 
 from autogen import UserProxyAgent
+from autogen.agentchat.contrib.web_surfer import WebSurferAgent
 from autogen.import_utils import optional_import_block
 
 from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
@@ -21,7 +22,12 @@ BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications
 BING_QUERY = "Microsoft"
 
 with optional_import_block() as result:
-    from autogen.agentchat.contrib.web_surfer import WebSurferAgent
+    import markdownify  # noqa: F401
+    import pathvalidate  # noqa: F401
+    import pdfminer  # noqa: F401
+    import requests  # noqa: F401
+    from bs4 import BeautifulSoup  # noqa: F401
+
 
 skip_all = not result.is_successful
 

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import optional_import_block
+from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost
 
 with optional_import_block() as result:
     from mistralai import (
@@ -22,7 +23,6 @@ with optional_import_block() as result:
         UserMessage,  # noqa: F401
     )
 
-    from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost
 
 skip = not result.is_successful
 

@@ -6,19 +6,19 @@
 # SPDX-License-Identifier: MIT
 import os
 import sys
+import uuid
 
 import pytest
 
+from autogen.agentchat.contrib.vectordb.qdrant import QdrantVectorDB
 from autogen.import_utils import optional_import_block
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 with optional_import_block() as result:
-    import uuid
-
+    from fastembed import TextEmbedding  # noqa: F401
     from qdrant_client import QdrantClient
 
-    from autogen.agentchat.contrib.vectordb.qdrant import QdrantVectorDB
 
 skip = not result.is_successful
 

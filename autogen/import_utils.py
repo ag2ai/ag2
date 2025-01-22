@@ -8,19 +8,19 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from functools import wraps
 from logging import getLogger
-from typing import Any, Callable, Generator, Iterable, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Generator, Generic, Iterable, Optional, Type, TypeVar, Union
 
-__all__ = ["optional_import_block", "require_optional_import", "skip_on_missing_imports"]
+__all__ = ["optional_import_block", "patch_object", "require_optional_import", "skip_on_missing_imports"]
 
 logger = getLogger(__name__)
 
 
 class Result:
-    def __init__(self):
+    def __init__(self) -> None:
         self._failed: Optional[bool] = None
 
     @property
-    def is_successful(self):
+    def is_successful(self) -> bool:
         if self._failed is None:
             raise ValueError("Result not set")
         return not self._failed
@@ -50,7 +50,7 @@ def optional_import_block() -> Generator[Result, None, None]:
         result._failed = True
 
 
-def get_missing_imports(modules: Union[str, Iterable[str]]):
+def get_missing_imports(modules: Union[str, Iterable[str]]) -> list[str]:
     """Get missing modules from a list of module names
 
     Args:
@@ -69,13 +69,13 @@ T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-class PatchObject(ABC):
+class PatchObject(ABC, Generic[T]):
     def __init__(self, o: T, missing_modules: Iterable[str], dep_target: str):
         if not self.accept(o):
             raise ValueError(f"Cannot patch object of type {type(o)}")
 
         self.o = o
-        self.missing_modules = missing_modules
+        self.missing_modules = list(missing_modules)
         self.dep_target = dep_target
 
     @classmethod
@@ -107,22 +107,22 @@ class PatchObject(ABC):
         if hasattr(o, "__doc__"):
             retval.__doc__ = o.__doc__
         if hasattr(o, "__name__"):
-            retval.__name__ = o.__name__
+            retval.__name__ = o.__name__  # type: ignore[attr-defined]
         if hasattr(o, "__module__"):
             retval.__module__ = o.__module__
 
-    _registry: list[Type["PatchObject"]] = []
+    _registry: list[Type["PatchObject[Any]"]] = []
 
     @classmethod
-    def register(cls) -> Callable[[Type["PatchObject"]], Type["PatchObject"]]:
-        def decorator(subclass: Type["PatchObject"]):
+    def register(cls) -> Callable[[Type["PatchObject[Any]"]], Type["PatchObject[Any]"]]:
+        def decorator(subclass: Type["PatchObject[Any]"]) -> Type["PatchObject[Any]"]:
             cls._registry.append(subclass)
             return subclass
 
         return decorator
 
     @classmethod
-    def create(cls, o: T, *, missing_modules: Iterable[str], dep_target: str) -> Optional["PatchObject"]:
+    def create(cls, o: T, *, missing_modules: Iterable[str], dep_target: str) -> Optional["PatchObject[T]"]:
         # print(f"{cls._registry=}")
         for subclass in cls._registry:
             if subclass.accept(o):
@@ -131,7 +131,7 @@ class PatchObject(ABC):
 
 
 @PatchObject.register()
-class PatchCallable(PatchObject):
+class PatchCallable(PatchObject[F]):
     @classmethod
     def accept(cls, o: Any) -> bool:
         return inspect.isfunction(o) or inspect.ismethod(o)
@@ -139,39 +139,39 @@ class PatchCallable(PatchObject):
     def patch(self) -> F:
         f: Callable[..., Any] = self.o
 
-        @wraps(f.__call__)
-        def _call(*args, **kwargs):
+        @wraps(f.__call__)  # type: ignore[operator]
+        def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
-        self.copy_metadata(_call)
+        self.copy_metadata(_call)  # type: ignore[arg-type]
 
-        return _call
+        return _call  # type: ignore[return-value]
 
 
 @PatchObject.register()
-class PatchStatic(PatchObject):
+class PatchStatic(PatchObject[F]):
     @classmethod
     def accept(cls, o: Any) -> bool:
         # return inspect.ismethoddescriptor(o)
         return isinstance(o, staticmethod)
 
     def patch(self) -> F:
-        f: Callable[..., Any] = self.o.__func__
+        f: Callable[..., Any] = self.o.__func__  # type: ignore[attr-defined]
 
         @wraps(f)
-        def _call(*args, **kwargs):
+        def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
-        self.copy_metadata(_call)
+        self.copy_metadata(_call)  # type: ignore[arg-type]
 
-        return staticmethod(_call)
+        return staticmethod(_call)  # type: ignore[return-value]
 
     def get_object_with_metadata(self) -> Any:
-        return self.o.__func__
+        return self.o.__func__  # type: ignore[attr-defined]
 
 
 @PatchObject.register()
-class PatchInit(PatchObject):
+class PatchInit(PatchObject[F]):
     @classmethod
     def accept(cls, o: Any) -> bool:
         return inspect.ismethoddescriptor(o) and o.__name__ == "__init__"
@@ -180,19 +180,19 @@ class PatchInit(PatchObject):
         f: Callable[..., Any] = self.o
 
         @wraps(f)
-        def _call(*args, **kwargs):
+        def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
-        self.copy_metadata(_call)
+        self.copy_metadata(_call)  # type: ignore[arg-type]
 
-        return staticmethod(_call)
+        return staticmethod(_call)  # type: ignore[return-value]
 
     def get_object_with_metadata(self) -> Any:
         return self.o
 
 
 @PatchObject.register()
-class PatchProperty(PatchObject):
+class PatchProperty(PatchObject[Any]):
     @classmethod
     def accept(cls, o: Any) -> bool:
         return inspect.isdatadescriptor(o) and hasattr(o, "fget")
@@ -203,7 +203,7 @@ class PatchProperty(PatchObject):
         f: Callable[..., Any] = self.o.fget
 
         @wraps(f)
-        def _call(*args, **kwargs):
+        def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
         self.copy_metadata(_call)
@@ -215,12 +215,12 @@ class PatchProperty(PatchObject):
 
 
 @PatchObject.register()
-class PatchClass(PatchObject):
+class PatchClass(PatchObject[Type[Any]]):
     @classmethod
     def accept(cls, o: Any) -> bool:
         return inspect.isclass(o)
 
-    def patch(self) -> F:
+    def patch(self) -> Type[Any]:
         # Patch __init__ method if possible
 
         for name, member in inspect.getmembers(self.o):
@@ -229,7 +229,11 @@ class PatchClass(PatchObject):
             patched = patch_object(
                 member, missing_modules=self.missing_modules, dep_target=self.dep_target, fail_if_not_patchable=False
             )
-            setattr(self.o, name, patched)
+            print(f"Patching {name=}, {member=}, {patched=}")
+            try:
+                setattr(self.o, name, patched)
+            except AttributeError:
+                pass
 
         return self.o
 
@@ -283,12 +287,8 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str)
         def decorator(o: T) -> T:
             import pytest
 
-            @pytest.mark.skip(
+            return pytest.mark.skip(  # type: ignore[return-value]
                 f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
-            )
-            def _skip(*args, **kwargs):
-                pass
-
-            return _skip
+            )(o)
 
     return decorator
