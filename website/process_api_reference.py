@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from jinja2 import Template
 
@@ -55,7 +55,7 @@ def run_pdoc3(api_dir: Path) -> None:
         sys.exit(1)
 
 
-def read_file_content(file_path: str) -> str:
+def read_file_content(file_path: Path) -> str:
     """Read content from a file.
 
     Args:
@@ -108,15 +108,15 @@ def get_mdx_files(directory: Path) -> list[str]:
     return [f"{p.relative_to(directory).with_suffix('')!s}".replace("\\", "/") for p in directory.rglob("*.mdx")]
 
 
-def add_prefix(path: str, parent_groups: list[str] = None) -> str:
+def add_prefix(path: str, parent_groups: Optional[list[str]] = None) -> str:
     """Create full path with prefix and parent groups."""
     groups = parent_groups or []
     return f"docs/reference/{'/'.join(groups + [path])}"
 
 
-def create_nav_structure(paths: list[str], parent_groups: list[str] = None) -> list[Any]:
+def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = None) -> list[Any]:
     """Convert list of file paths into nested navigation structure."""
-    groups = {}
+    groups: dict[str, list[str]] = {}
     pages = []
     parent_groups = parent_groups or []
 

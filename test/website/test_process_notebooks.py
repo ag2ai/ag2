@@ -7,6 +7,7 @@ import sys
 import tempfile
 import textwrap
 from pathlib import Path
+from typing import Generator, Optional, Union
 
 import pytest
 
@@ -24,7 +25,7 @@ from process_notebooks import (
 )
 
 
-def test_ensure_mint_json():
+def test_ensure_mint_json() -> None:
     # Test with empty temp directory - should raise SystemExit
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -36,7 +37,7 @@ def test_ensure_mint_json():
         ensure_mint_json_exists(tmp_path)  # Should not raise any exception
 
 
-def test_cleanup_tmp_dirs_if_no_metadata():
+def test_cleanup_tmp_dirs_if_no_metadata() -> None:
     # Test without the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
     # the tmp_dir / "notebooks" should be removed.
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -68,8 +69,8 @@ def test_cleanup_tmp_dirs_if_no_metadata():
 
 
 class TestAddFrontMatterToMetadataMdx:
-    def test_without_metadata_mdx(self):
-        front_matter_dict = {
+    def test_without_metadata_mdx(self) -> None:
+        front_matter_dict: dict[str, Union[str, Optional[Union[list[str]]]]] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",
@@ -118,8 +119,8 @@ export const notebooksMetadata = [
 """
             )
 
-    def test_with_metadata_mdx(self):
-        front_matter_dict = {
+    def test_with_metadata_mdx(self) -> None:
+        front_matter_dict: dict[str, Optional[Union[str, Union[list[str]]]]] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",
@@ -203,7 +204,7 @@ export const notebooksMetadata = [
 
 class TestAddBlogsToNavigation:
     @pytest.fixture
-    def test_dir(self):
+    def test_dir(self) -> Generator[Path, None, None]:
         """Create a temporary directory with test files."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -231,7 +232,7 @@ class TestAddBlogsToNavigation:
             yield tmp_path
 
     @pytest.fixture
-    def expected(self):
+    def expected(self) -> list[str]:
         return [
             "blog/2024-12-20-Tools-interoperability/index",
             "blog/2024-12-20-RetrieveChat/index",
@@ -246,11 +247,11 @@ class TestAddBlogsToNavigation:
             "blog/2023-04-21-LLM-tuning-math/index",
         ]
 
-    def test_get_sorted_files(self, test_dir, expected):
+    def test_get_sorted_files(self, test_dir: Path, expected: list[str]) -> None:
         actual = get_sorted_files(test_dir, "blog")
         assert actual == expected, actual
 
-    def test_add_blogs_to_navigation(self):
+    def test_add_blogs_to_navigation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             website_dir = Path(tmp_dir)
             blog_dir = website_dir / "blog"
@@ -374,7 +375,7 @@ class TestUpdateNavigation:
         with open(metadata_path, "w", encoding="utf-8") as f:
             f.write(notebooks_metadata_content)
 
-    def test_extract_example_group(self):
+    def test_extract_example_group(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
             self.setup(tmp_path)
@@ -403,7 +404,7 @@ class TestUpdateNavigation:
 
 class TestAddAuthorsAndSocialImgToBlogPosts:
     @pytest.fixture
-    def test_dir(self):
+    def test_dir(self) -> Generator[Path, None, None]:
         """Create temporary test directory with blog posts and authors file."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             website_dir = Path(tmp_dir)
@@ -534,7 +535,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
 
             yield website_dir
 
-    def test_add_authors_and_social_img(self, test_dir):
+    def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
         add_authors_and_social_img_to_blog_posts(test_dir)
 
@@ -682,6 +683,6 @@ class TestConvertCalloutBlocks:
             This is a conclusion.
             """)
 
-    def test_convert_callout_blocks(self, content: str, expected: str) -> str:
+    def test_convert_callout_blocks(self, content: str, expected: str) -> None:
         actual = convert_callout_blocks(content)
         assert actual == expected, actual
