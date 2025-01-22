@@ -97,8 +97,8 @@ class Credentials:
 
     def __init__(self, llm_config: dict[str, Any]) -> None:
         self.llm_config = llm_config
-        config_list = llm_config["config_list"]
-        assert len(config_list) > 0
+        if len(self.llm_config["config_list"]) == 0:
+            raise ValueError("No config list found")
         Secrets.add_secret(self.api_key)
 
     def sanitize(self) -> dict[str, Any]:
@@ -193,10 +193,11 @@ def get_llm_credentials(
     if api_type == "openai":
         config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
 
-    # If no OpenAI config found, try to get it from the environment
+    # If no config found, try to get it from the environment
     if config_list == []:
         config_list = get_config_list_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
+    # If still no config found, raise an error
     assert config_list, f"No {api_type} config list found and could not be created from an env var {env_var_name}"
 
     return Credentials(
