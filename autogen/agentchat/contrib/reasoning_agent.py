@@ -343,9 +343,9 @@ class ReasoningAgent(AssistantAgent):
                     exploration_constant (float): UCT exploration parameter (default: 1.41)
 
                 Example configs:
-                    {"method": "beam_search", "beam_size": 5, "max_depth": 4}
-                    {"method": "mcts", "nsim": 10, "exploration_constant": 2.0}
-                    {"method": "lats", "nsim": 5, "forest_size": 3}
+                    `{"method": "beam_search", "beam_size": 5, "max_depth": 4}`
+                    `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
+                    `{"method": "lats", "nsim": 5, "forest_size": 3}`
         """
         super().__init__(name=name, llm_config=llm_config, **kwargs)
         self._verbose = verbose

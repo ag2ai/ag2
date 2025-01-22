@@ -190,8 +190,10 @@ test = [
     "fastapi==0.115.6",
 ]
 
+# docs dependencies
 docs = [
-    "pydoc-markdown==4.8.2",
+    "pdoc3==0.11.5",
+    "jinja2==3.1.5",
     "pyyaml==6.0.2",
     "termcolor==2.5.0",
     "nbclient==0.10.2",

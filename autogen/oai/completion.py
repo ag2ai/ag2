@@ -760,40 +760,40 @@ class Completion(OpenAICompletion):
                 Only the differences from the default config need to be provided.
                 E.g.,
 
-        ```python
-        response = oai.Completion.create(
-            config_list=[
-                {
-                    "model": "gpt-4",
-                    "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
-                    "api_type": "azure",
-                    "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
-                    "api_version": "2024-02-01",
-                },
-                {
-                    "model": "gpt-3.5-turbo",
-                    "api_key": os.environ.get("OPENAI_API_KEY"),
-                    "api_type": "openai",
-                    "base_url": "https://api.openai.com/v1",
-                },
-                {
-                    "model": "llama-7B",
-                    "base_url": "http://127.0.0.1:8080",
-                    "api_type": "openai",
-                },
-            ],
-            prompt="Hi",
-        )
-        ```
+                ```python
+                    response = oai.Completion.create(
+                        config_list = [
+                            {
+                                "model": "gpt-4",
+                                "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
+                                "api_type": "azure",
+                                "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
+                                "api_version": "2024-02-01",
+                            },
+                            {
+                                "model": "gpt-3.5-turbo",
+                                "api_key": os.environ.get("OPENAI_API_KEY"),
+                                "api_type": "openai",
+                                "base_url": "https://api.openai.com/v1",
+                            },
+                            {
+                                "model": "llama-7B",
+                                "base_url": "http://127.0.0.1:8080",
+                                "api_type": "openai",
+                            },
+                        ],
+                        prompt="Hi",
+                    )
+                ```
 
             filter_func (Callable, Optional): A function that takes in the context and the response and returns a boolean to indicate whether the response is valid. E.g.,
 
-        ```python
-        def yes_or_no_filter(context, config, response):
-            return context.get("yes_or_no_choice", False) is False or any(
-                text in ["Yes.", "No."] for text in oai.Completion.extract_text(response)
-            )
-        ```
+                ```python
+                    def yes_or_no_filter(context, config, response):
+                        return context.get("yes_or_no_choice", False) is False or any(
+                            text in ["Yes.", "No."] for text in oai.Completion.extract_text(response)
+                        )
+                ```
 
             raise_on_ratelimit_or_timeout (bool, Optional): Whether to raise RateLimitError or Timeout when all configs fail.
                 When set to False, -1 will be returned when all configs fail.
