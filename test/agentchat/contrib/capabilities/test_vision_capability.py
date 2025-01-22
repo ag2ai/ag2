@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.agentchat.contrib.capabilities.vision_capability import VisionCapability
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
     from PIL import Image  # noqa: F401
 
-    from autogen.agentchat.contrib.capabilities.vision_capability import VisionCapability
 
 skip_test = not result.is_successful
 

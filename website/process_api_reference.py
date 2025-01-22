@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from jinja2 import Template
+
 
 def run_pydoc_markdown(config_file: Path) -> None:
     """Run pydoc-markdown with the specified config file.
@@ -179,10 +181,15 @@ def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_pa
         os.remove(mint_json_path)
 
     # Copy the template file to mint.json
-    mint_json_template_content = read_file_content(mint_json_template_path)
+    contents = read_file_content(mint_json_template_path)
+    mint_json_template_content = Template(contents).render()
+
+    # Parse the rendered template content as JSON
+    mint_json_data = json.loads(mint_json_template_content)
 
     # Write content to mint.json
-    write_file_content(mint_json_path, mint_json_template_content)
+    with open(mint_json_path, "w") as f:
+        json.dump(mint_json_data, f, indent=2)
 
 
 def main() -> None:
@@ -208,7 +215,7 @@ def main() -> None:
     convert_md_to_mdx(args.api_dir)
 
     # Create mint.json from the template file
-    mint_json_template_path = script_dir / "mint-json-template.json"
+    mint_json_template_path = script_dir / "mint-json-template.json.jinja"
     mint_json_path = script_dir / "mint.json"
 
     print("Generating mint.json from template...")

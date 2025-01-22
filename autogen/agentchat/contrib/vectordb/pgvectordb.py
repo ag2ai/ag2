@@ -10,7 +10,6 @@ import urllib.parse
 from typing import Callable, Optional, Union
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
@@ -20,12 +19,13 @@ with optional_import_block():
     import pgvector  # noqa: F401
     import psycopg
     from pgvector.psycopg import register_vector
+    from sentence_transformers import SentenceTransformer
 
 PGVECTOR_MAX_BATCH_SIZE = os.environ.get("PGVECTOR_MAX_BATCH_SIZE", 40000)
 logger = get_logger(__name__)
 
 
-@require_optional_import("psycopg", "retrievechat-pgvector")
+@require_optional_import(["psycopg", "sentence_transformers"], "retrievechat-pgvector")
 class Collection:
     """A Collection object for PGVector.
 
@@ -539,7 +539,7 @@ class Collection:
         cursor.close()
 
 
-@require_optional_import(["pgvector", "psycopg"], "retrievechat-pgvector")
+@require_optional_import(["pgvector", "psycopg", "sentence_transformers"], "retrievechat-pgvector")
 class PGVectorDB(VectorDB):
     """A vector database that uses PGVector as the backend."""
 

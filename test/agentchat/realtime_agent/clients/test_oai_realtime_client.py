@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 from anyio import move_on_after
 
-from autogen.agentchat.realtime_agent.oai_realtime_client import OpenAIRealtimeClient
-from autogen.agentchat.realtime_agent.realtime_client import RealtimeClientProtocol
+from autogen.agentchat.realtime_agent.clients import OpenAIRealtimeClient, RealtimeClientProtocol
+from autogen.agentchat.realtime_agent.realtime_events import AudioDelta, SessionCreated, SessionUpdated
 
-from ...conftest import Credentials
+from ....conftest import Credentials
 
 
 class TestOAIRealtimeClient:
@@ -19,8 +19,6 @@ class TestOAIRealtimeClient:
         llm_config = credentials_gpt_4o_realtime.llm_config
         return OpenAIRealtimeClient(
             llm_config=llm_config,
-            voice="alloy",
-            system_message="You are a helpful AI assistant with voice capabilities.",
         )
 
     def test_init(self, mock_credentials: Credentials) -> None:
@@ -28,8 +26,6 @@ class TestOAIRealtimeClient:
 
         client = OpenAIRealtimeClient(
             llm_config=llm_config,
-            voice="alloy",
-            system_message="You are a helpful AI assistant with voice capabilities.",
         )
         assert isinstance(client, RealtimeClientProtocol)
 
@@ -55,15 +51,15 @@ class TestOAIRealtimeClient:
 
                 async for event in client.read_events():
                     print(f"-> Received event: {event}")
-                    mock(**event)
+                    mock(event)
 
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
         # check that we received the expected two events
-        calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
-        assert calls_kwargs[0]["type"] == "session.created"
-        assert calls_kwargs[1]["type"] == "session.updated"
+        calls_kwargs = [arg_list.args for arg_list in mock.call_args_list]
+        assert isinstance(calls_kwargs[0][0], SessionCreated)
+        assert isinstance(calls_kwargs[1][0], SessionUpdated)
 
     @pytest.mark.openai
     @pytest.mark.asyncio
@@ -76,21 +72,18 @@ class TestOAIRealtimeClient:
                 print("Reading events...")
                 async for event in client.read_events():
                     print(f"-> Received event: {event}")
-                    mock(**event)
+                    mock(event)
 
-                    if event["type"] == "session.updated":
+                    if isinstance(event, SessionUpdated):
                         await client.send_text(role="user", text="Hello, how are you?")
 
         # checking if the scope was cancelled by move_on_after
         assert scope.cancelled_caught
 
         # check that we received the expected two events
-        calls_kwargs = [arg_list.kwargs for arg_list in mock.call_args_list]
-        assert calls_kwargs[0]["type"] == "session.created"
-        assert calls_kwargs[1]["type"] == "session.updated"
+        calls_args = [arg_list.args for arg_list in mock.call_args_list]
+        assert isinstance(calls_args[0][0], SessionCreated)
+        assert isinstance(calls_args[1][0], SessionUpdated)
 
-        assert calls_kwargs[2]["type"] == "error"
-        assert calls_kwargs[2]["error"]["message"] == "Cancellation failed: no active response found"
-
-        assert calls_kwargs[3]["type"] == "conversation.item.created"
-        assert calls_kwargs[3]["item"]["content"][0]["text"] == "Hello, how are you?"
+        # check that we received the model response (audio or just text)
+        assert isinstance(calls_args[-1][0], AudioDelta) or (calls_args[-1][0].raw_message["type"] == "response.done")

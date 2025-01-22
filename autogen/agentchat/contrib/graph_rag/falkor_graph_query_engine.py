@@ -28,8 +28,8 @@ class FalkorGraphQueryEngine:
         name: str,
         host: str = "127.0.0.1",
         port: int = 6379,
-        username: str | None = None,
-        password: str | None = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         model: Optional["GenerativeModel"] = None,
         ontology: Optional["Ontology"] = None,
     ):
