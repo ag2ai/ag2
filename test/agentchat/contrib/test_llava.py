@@ -11,12 +11,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.agentchat.contrib.llava_agent import LLaVAAgent, _llava_call_binary_with_config, llava_call
 from autogen.import_utils import optional_import_block
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
 with optional_import_block() as result:
-    from autogen.agentchat.contrib.llava_agent import LLaVAAgent, _llava_call_binary_with_config, llava_call
+    import replicate  # noqa: F401
 
 skip = not result.is_successful
 
