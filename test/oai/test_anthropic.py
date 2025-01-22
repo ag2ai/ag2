@@ -11,11 +11,11 @@ import os
 import pytest
 
 from autogen.import_utils import optional_import_block
+from autogen.oai.anthropic import AnthropicClient, _calculate_cost
 
 with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
-    from autogen.oai.anthropic import AnthropicClient, _calculate_cost
 
 skip = not result.is_successful
 

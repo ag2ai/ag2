@@ -9,9 +9,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import optional_import_block
+from autogen.oai.groq import GroqClient, calculate_groq_cost
 
 with optional_import_block() as result:
-    from autogen.oai.groq import GroqClient, calculate_groq_cost
+    from groq import Groq  # noqa: F401
 
 skip = not result.is_successful
 
