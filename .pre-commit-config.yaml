@@ -29,6 +29,17 @@ repos:
     - id: no-commit-to-branch
   - repo: local
     hooks:
+      - id: build-setup-scripts
+        name: build setup scripts
+        entry: "scripts/pre-commit-build-setup-files.sh"
+        language: python
+        #        language_version: python3.9
+        types: [python]
+        require_serial: true
+        verbose: true
+        additional_dependencies: ['jinja2', 'toml', 'ruff']
+  - repo: local
+    hooks:
       - id: lint
         name: linting and formatting
         entry: "scripts/pre-commit-lint.sh"
