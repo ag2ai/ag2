@@ -7,7 +7,7 @@ import sys
 import tempfile
 import textwrap
 from pathlib import Path
-from typing import Generator, Union
+from typing import Generator, Optional, Union
 
 import pytest
 
@@ -70,7 +70,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
 
 class TestAddFrontMatterToMetadataMdx:
     def test_without_metadata_mdx(self) -> None:
-        front_matter_dict: dict[str, Union[str, Union[list[str] | None]]] = {
+        front_matter_dict: dict[str, Union[str, Optional[Union[list[str]]]]] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",
@@ -120,7 +120,7 @@ export const notebooksMetadata = [
             )
 
     def test_with_metadata_mdx(self) -> None:
-        front_matter_dict: dict[str, Union[str, Union[list[str] | None]]] = {
+        front_matter_dict: dict[str, Optional[Union[str, Union[list[str]]]]] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",
