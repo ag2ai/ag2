@@ -20,12 +20,6 @@ from autogen.code_utils import (
 )
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
-from autogen.coding.jupyter import (
-    DockerJupyterServer,
-    EmbeddedIPythonCodeExecutor,
-    JupyterCodeExecutor,
-    LocalJupyterServer,
-)
 from autogen.import_utils import optional_import_block
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
@@ -37,7 +31,18 @@ else:
 
 classes_to_test = []
 with optional_import_block() as result:
+    import websocket  # noqa: F401
     from jupyter_client import KernelManager  # noqa: F401
+    from jupyter_client.kernelspec import KernelSpecManager  # noqa: F401
+
+    # This has to be here
+    # because autogen.coding.jupyter.helpers is written in a way that it will raise an ImportError
+    from autogen.coding.jupyter import (
+        DockerJupyterServer,
+        EmbeddedIPythonCodeExecutor,
+        JupyterCodeExecutor,
+        LocalJupyterServer,
+    )
 
 if result.is_successful:
 
