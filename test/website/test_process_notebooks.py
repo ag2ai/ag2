@@ -14,6 +14,8 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
 from process_notebooks import (
     add_authors_and_social_img_to_blog_posts,
+    add_front_matter_to_metadata_mdx,
+    cleanup_tmp_dirs_if_no_metadata,
     convert_callout_blocks,
     ensure_mint_json_exists,
     extract_example_group,
@@ -32,6 +34,171 @@ def test_ensure_mint_json():
         # Now create mint.json - should not raise error
         (tmp_path / "mint.json").touch()
         ensure_mint_json_exists(tmp_path)  # Should not raise any exception
+
+
+def test_cleanup_tmp_dirs_if_no_metadata():
+    # Test without the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+    # the tmp_dir / "notebooks" should be removed.
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        notebooks_dir = tmp_path / "notebooks"
+        notebooks_dir.mkdir(parents=True, exist_ok=True)
+        (notebooks_dir / "example-1.mdx").touch()
+        (notebooks_dir / "example-2.mdx").touch()
+
+        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        assert not notebooks_dir.exists()
+
+    # Test with the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+    # the tmp_dir / "notebooks" should not be removed.
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+
+        notebooks_dir = tmp_path / "notebooks"
+        notebooks_dir.mkdir(parents=True, exist_ok=True)
+        (notebooks_dir / "example-1.mdx").touch()
+        (notebooks_dir / "example-2.mdx").touch()
+
+        metadata_dir = tmp_path / "snippets" / "data"
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        (metadata_dir / "NotebooksMetadata.mdx").touch()
+
+        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        assert notebooks_dir.exists()
+
+
+class TestAddFrontMatterToMetadataMdx:
+    def test_without_metadata_mdx(self):
+        front_matter_dict = {
+            "title": "some title",
+            "link": "/notebooks/some-title",
+            "description": "some description",
+            "image": "some image",
+            "tags": ["tag1", "tag2"],
+            "source_notebook": "/notebook/some-title.ipynb",
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            metadata_dir = tmp_path / "snippets" / "data"
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+
+            rendered_mdx = tmp_path / "source"
+            rendered_mdx.mkdir(parents=True, exist_ok=True)
+            (rendered_mdx / "some-title.mdx").touch()
+
+            # when the metadata file is not present, the file should be created and the front matter should be added
+            add_front_matter_to_metadata_mdx(front_matter_dict, tmp_path, rendered_mdx)
+
+            assert (metadata_dir / "NotebooksMetadata.mdx").exists()
+
+            with open(metadata_dir / "NotebooksMetadata.mdx", "r") as f:
+                actual = f.read()
+
+            assert (
+                actual
+                == """{/*
+Auto-generated file - DO NOT EDIT
+Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.py
+*/}
+
+export const notebooksMetadata = [
+    {
+        "title": "some title",
+        "link": "/notebooks/source",
+        "description": "some description",
+        "image": "some image",
+        "tags": [
+            "tag1",
+            "tag2"
+        ],
+        "source": "/notebook/some-title.ipynb"
+    }
+];
+"""
+            )
+
+    def test_with_metadata_mdx(self):
+        front_matter_dict = {
+            "title": "some title",
+            "link": "/notebooks/some-title",
+            "description": "some description",
+            "image": "some image",
+            "tags": ["tag1", "tag2"],
+            "source_notebook": "/notebook/some-title.ipynb",
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            metadata_dir = tmp_path / "snippets" / "data"
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+            metadata_content = """{/*
+Auto-generated file - DO NOT EDIT
+Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.py
+*/}
+
+export const notebooksMetadata = [
+    {
+        "title": "some other title",
+        "link": "/notebooks/some-other-title",
+        "description": "some other description",
+        "image": "some other image",
+        "tags": [
+            "tag3",
+            "tag4"
+        ],
+        "source": "/notebook/some-other-title.ipynb"
+    }
+];
+"""
+            with open(metadata_dir / "NotebooksMetadata.mdx", "w") as f:
+                f.write(metadata_content)
+
+            rendered_mdx = tmp_path / "source"
+            rendered_mdx.mkdir(parents=True, exist_ok=True)
+            (rendered_mdx / "some-title.mdx").touch()
+
+            # when the metadata file is present, the front matter should be added to the existing metadata
+            add_front_matter_to_metadata_mdx(front_matter_dict, tmp_path, rendered_mdx)
+
+            assert (metadata_dir / "NotebooksMetadata.mdx").exists()
+
+            with open(metadata_dir / "NotebooksMetadata.mdx", "r") as f:
+                actual = f.read()
+
+            assert (
+                actual
+                == """{/*
+Auto-generated file - DO NOT EDIT
+Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.py
+*/}
+
+export const notebooksMetadata = [
+    {
+        "title": "some other title",
+        "link": "/notebooks/some-other-title",
+        "description": "some other description",
+        "image": "some other image",
+        "tags": [
+            "tag3",
+            "tag4"
+        ],
+        "source": "/notebook/some-other-title.ipynb"
+    },
+    {
+        "title": "some title",
+        "link": "/notebooks/source",
+        "description": "some description",
+        "image": "some image",
+        "tags": [
+            "tag1",
+            "tag2"
+        ],
+        "source": "/notebook/some-title.ipynb"
+    }
+];
+"""
+            )
 
 
 class TestAddBlogsToNavigation:
