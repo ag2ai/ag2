@@ -72,9 +72,10 @@ if not skip_docker_test:
         "jupyter_client",
         "ipykernel",
     ],
-    "jupyter_executor",
+    "jupyter-executor",
 )
 @skip_on_missing_jupyter_kernel_gateway()
+@pytest.mark.jupyter_executor
 class TestCodeExecutor:
     def test_import_utils(self) -> None:
         pass
