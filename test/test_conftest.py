@@ -32,3 +32,9 @@ def test_credentials_from_test_param_fixture(
         assert first_config["api_type"] == "anthropic"
     else:
         assert False, f"Unknown LLM fixture: {current_llm}"
+
+
+@pytest.mark.deepseek
+def test_credentials_deepseek_reasoner_api_key_is_set(credentials_deepseek_reasoner: Credentials) -> None:
+    assert len(credentials_deepseek_reasoner.config_list) > 0
+    assert credentials_deepseek_reasoner.config_list[0]["api_key"] is not None
