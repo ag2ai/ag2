@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
+import copy
 import os
 import shutil
 import time
@@ -340,6 +341,40 @@ class TestOpenAIClientBadRequestsError:
         else:
             with pytest.raises(openai.BadRequestError):
                 wrapped_raise_bad_request_error(error_message=error_message)
+
+
+class TestDeepSeekPatch:
+    @pytest.mark.parametrize(
+        "model, should_patch",
+        [
+            ("deepseek-reasoner", True),
+            ("deepseek", False),
+            ("something-else", False),
+        ],
+    )
+    def test_patch_messages_for_deepseek_reasoner(self, model: str, should_patch: bool) -> None:
+        kwargs = {
+            "messages": [
+                {"role": "user", "content": "You are an AG2 Agent."},
+                {"role": "user", "content": "Help me with my problem."},
+            ],
+            "model": model,
+        }
+
+        if should_patch:
+            expected_kwargs = {
+                "messages": [
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "user", "content": "continue"},
+                ],
+                "model": "deepseek-reasoner",
+            }
+        else:
+            expected_kwargs = copy.deepcopy(kwargs)
+
+        kwargs = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
+        assert kwargs == expected_kwargs
 
 
 class TestO1:

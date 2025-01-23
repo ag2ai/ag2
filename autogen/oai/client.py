@@ -318,6 +318,11 @@ class OpenAIClient:
 
             new_messages.append(message)
 
+        # The last message of deepseek-reasoner must be a user message
+        # , or an assistant message with prefix mode on (but this is supported only for beta api)
+        if len(new_messages) > 0 and new_messages[-1]["role"] == "assistant":
+            new_messages.append({"role": "user", "content": "continue"})
+
         kwargs["messages"] = new_messages
 
         return kwargs
