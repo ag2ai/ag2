@@ -10,7 +10,7 @@ import builtins
 import io
 import json
 import logging
-import os
+import tempfile
 from types import SimpleNamespace
 from typing import Any, Optional
 from unittest import mock
@@ -2184,58 +2184,49 @@ def test_manager_resume_message_assignment():
     assert list(agent_a.chat_messages.values())[0] == prev_messages[:-1]
 
 
-# @pytest.mark.deepseek
+@pytest.mark.deepseek
 def test_groupchat_with_deepseek_reasoner(
     credentials_gpt_4o_mini: Credentials,
+    credentials_deepseek_reasoner: Credentials,
 ) -> None:
-    # Change to fixture
-    config_list_deepseek_reasoner = [
-        {
-            "model": "deepseek-reasoner",
-            "base_url": "https://api.deepseek.com/v1",
-            "api_key": os.getenv("DEEPSEEK_API_KEY"),
-            "api_type": "deepseek",
-            "tags": ["deepseek"],
-        }
-    ]
-    user_proxy = autogen.UserProxyAgent(
-        "user_proxy",
-        human_input_mode="NEVER",
-        code_execution_config={"work_dir": "coding", "use_docker": False},
-    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        user_proxy = autogen.UserProxyAgent(
+            "user_proxy",
+            human_input_mode="NEVER",
+            code_execution_config={"work_dir": tmp_dir, "use_docker": False},
+        )
 
-    supervisor = autogen.AssistantAgent(
-        "supervisor",
-        llm_config={
-            "config_list": config_list_deepseek_reasoner,
-        },
-    )
+        supervisor = autogen.AssistantAgent(
+            "supervisor",
+            llm_config={
+                "config_list": credentials_deepseek_reasoner.config_list,
+            },
+        )
 
-    assistant = autogen.AssistantAgent(
-        "assistant",
-        llm_config={
-            "config_list": config_list_deepseek_reasoner,
-        },
-    )
+        assistant = autogen.AssistantAgent(
+            "assistant",
+            llm_config={
+                "config_list": credentials_deepseek_reasoner.config_list,
+            },
+        )
 
-    groupchat = autogen.GroupChat(
-        agents=[user_proxy, supervisor, assistant],
-        messages=["A group chat"],
-        max_round=5,
-    )
+        groupchat = autogen.GroupChat(
+            agents=[user_proxy, supervisor, assistant],
+            messages=["A group chat"],
+            max_round=5,
+        )
 
-    manager = autogen.GroupChatManager(
-        groupchat=groupchat,
-        llm_config={
-            "config_list": credentials_gpt_4o_mini.config_list,
-        },
-    )
+        manager = autogen.GroupChatManager(
+            groupchat=groupchat,
+            llm_config={
+                "config_list": credentials_gpt_4o_mini.config_list,
+            },
+        )
 
-    # Group Chat
-    result = user_proxy.initiate_chat(
-        manager, message="""Give me some info about the stock market""", summary_method="reflection_with_llm"
-    )
-    assert isinstance(result.summary, str)
+        result = user_proxy.initiate_chat(
+            manager, message="""Give me some info about the stock market""", summary_method="reflection_with_llm"
+        )
+        assert isinstance(result.summary, str)
 
 
 if __name__ == "__main__":
