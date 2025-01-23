@@ -16,7 +16,7 @@ assert website_path.exists()
 assert website_path.is_dir()
 sys.path.append(str(website_path))
 
-from process_api_reference import generate_mint_json_from_template, move_files_excluding_index
+from add_api_reference_to_docs import generate_mint_json_from_template, move_files_excluding_index
 
 
 @pytest.fixture

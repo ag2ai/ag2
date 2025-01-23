@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional, Protocol, Union
 from pydantic import BaseModel, schema_json_of
 
 from ..cache import Cache
+from ..doc_utils import export_module
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
@@ -192,6 +193,7 @@ LEGACY_CACHE_DIR = ".cache"
 OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
+@export_module("autogen")
 class ModelClient(Protocol):
     """A client class must implement the following methods:
     - create must return a response object that implements the ModelClientResponseProtocol
@@ -545,6 +547,7 @@ class OpenAIClient:
 
 
 @require_optional_import("openai", "openai")
+@export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
 

@@ -13,12 +13,13 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional
 
 from jinja2 import Template
+
+from .generate_api_references import generate
 
 
 def move_files_excluding_index(api_dir: Path) -> None:
@@ -35,26 +36,6 @@ def move_files_excluding_index(api_dir: Path) -> None:
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(file_path), str(dest))
     shutil.rmtree(autogen_dir)
-
-
-def run_pdoc3(api_dir: Path) -> None:
-    """Run pydoc3 to generate the API documentation."""
-    try:
-        print(f"Generating API documentation and saving to {str(api_dir)}...")
-        subprocess.run(
-            ["pdoc", "--output-dir", str(api_dir), "--template-dir", "mako_templates", "--force", "autogen"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-        # the generated files are saved in a directory named '{api_dir}/autogen'. move all files to the parent directory
-        move_files_excluding_index(api_dir)
-
-        print("Successfully generated API documentation")
-    except subprocess.CalledProcessError as e:
-        print(f"Error running pdoc3: {e.stderr}")
-        sys.exit(1)
 
 
 def read_file_content(file_path: Path) -> str:
@@ -113,7 +94,7 @@ def get_mdx_files(directory: Path) -> list[str]:
 def add_prefix(path: str, parent_groups: Optional[list[str]] = None) -> str:
     """Create full path with prefix and parent groups."""
     groups = parent_groups or []
-    return f"docs/reference/{'/'.join(groups + [path])}"
+    return f"reference/{'/'.join(groups + [path])}"
 
 
 def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = None) -> list[Any]:
@@ -159,11 +140,8 @@ def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
         with open(mint_json_path) as f:
             mint_config = json.load(f)
 
-        # Find and update the API Reference section
-        for section in mint_config["navigation"]:
-            if section.get("group") == "API Reference":
-                section["pages"] = new_nav_pages
-                break
+        reference_section = {"group": "API Reference", "pages": new_nav_pages}
+        mint_config["navigation"].append(reference_section)
 
         # Write back to mint.json with proper formatting
         with open(mint_json_path, "w") as f:
@@ -211,14 +189,14 @@ def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_pa
 
 
 def main() -> None:
-    script_dir = Path(__file__).parent.absolute()
+    website_dir = Path(__file__).parent.absolute()
 
     parser = argparse.ArgumentParser(description="Process API reference documentation")
     parser.add_argument(
         "--api-dir",
         type=Path,
         help="Directory containing API documentation to process",
-        default=script_dir / "docs" / "reference",
+        default=website_dir / "reference",
     )
 
     args = parser.parse_args()
@@ -227,25 +205,26 @@ def main() -> None:
         # Force delete the directory and its contents
         shutil.rmtree(args.api_dir, ignore_errors=True)
 
-    api_dir_rel_path = args.api_dir.resolve().relative_to(script_dir)
+    target_dir = args.api_dir.resolve().relative_to(website_dir)
+    template_dir = website_dir / "mako_templates"
 
-    # Run pdoc3
-    print("Running pdoc3...")
-    run_pdoc3(api_dir_rel_path)
+    # Generate API reference documentation
+    print("Generating API reference documentation...")
+    generate(target_dir, template_dir)
 
     # Convert MD to MDX
     print("Converting MD files to MDX...")
     convert_md_to_mdx(args.api_dir)
 
     # Create mint.json from the template file
-    mint_json_template_path = script_dir / "mint-json-template.json.jinja"
-    mint_json_path = script_dir / "mint.json"
+    mint_json_template_path = website_dir / "mint-json-template.json.jinja"
+    mint_json_path = website_dir / "mint.json"
 
     print("Generating mint.json from template...")
     generate_mint_json_from_template(mint_json_template_path, mint_json_path)
 
     # Update mint.json
-    update_mint_json_with_api_nav(script_dir, args.api_dir)
+    update_mint_json_with_api_nav(website_dir, args.api_dir)
 
     print("API reference processing complete!")
 

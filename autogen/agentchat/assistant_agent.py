@@ -6,10 +6,12 @@
 # SPDX-License-Identifier: MIT
 from typing import Callable, Literal, Optional, Union
 
+from ..doc_utils import export_module
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
 
+@export_module("autogen")
 class AssistantAgent(ConversableAgent):
     """(In preview) Assistant agent, designed to solve a task with LLM.
 

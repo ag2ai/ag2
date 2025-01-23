@@ -4,6 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import argparse
 import importlib
 import pkgutil
 import shutil
@@ -70,6 +71,7 @@ def generate_markdown(path: Path) -> None:
     pdoc.link_inheritance(context)
 
     def recursive_markdown(mod: pdoc.Module) -> Iterable[tuple[str, str]]:  # type: ignore[no-any-unimported]
+        # Pass our custom template here
         yield mod.name, mod.text()
         for submod in mod.submodules():
             yield from recursive_markdown(submod)
@@ -84,11 +86,48 @@ def generate_markdown(path: Path) -> None:
                 f.write(text)
 
 
-submodules = import_submodules("autogen")
-print(f"{submodules=}")
+def generate(target_dir: Path, template_dir: Path) -> None:
+    # Pass the custom template directory for rendering the markdown
+    pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
-for submodule in submodules:
-    build_pdoc_dict(submodule)
+    submodules = import_submodules("autogen")
+    print(f"{submodules=}")
 
-shutil.rmtree("tmp", ignore_errors=True)
-generate_markdown(Path("tmp"))
+    for submodule in submodules:
+        build_pdoc_dict(submodule)
+
+    generate_markdown(target_dir)
+
+
+def main() -> None:
+    root_dir = Path(__file__).parent.parent.absolute()
+
+    parser = argparse.ArgumentParser(description="Generate API reference documentation")
+    parser.add_argument(
+        "--target-dir",
+        type=Path,
+        help="Directory to save the generated API documentation",
+        default=root_dir / "tmp",
+    )
+    parser.add_argument(
+        "--template-dir",
+        type=Path,
+        help="Directory containing the custom mako templates for rendering the markdown",
+        default=root_dir / "website" / "mako_templates",
+    )
+
+    args = parser.parse_args()
+    if args.target_dir.exists():
+        # Force delete the directory and its contents
+        shutil.rmtree(args.target_dir, ignore_errors=True)
+
+    if not args.template_dir.exists() or not args.template_dir.is_dir():
+        raise FileNotFoundError(f"Template directory {args.template_dir} does not exist or is not a directory")
+
+    target_dir = args.target_dir.resolve().relative_to(root_dir)
+
+    generate(target_dir, args.template_dir)
+
+
+if __name__ == "__main__":
+    main()
