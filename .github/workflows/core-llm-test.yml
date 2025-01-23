@@ -20,7 +20,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai", "gemini", "anthropic"]
+        llm: ["openai", "gemini", "anthropic", "deepseek"]
         python-version: ["3.9"]
         os: [ubuntu-latest]
       fail-fast: false
@@ -46,13 +46,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
-        if: matrix.llm == 'openai'
+        if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm != 'openai'
+        if: matrix.llm == 'gemini' || matrix.llm == 'anthropic'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"

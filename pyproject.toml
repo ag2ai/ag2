@@ -256,6 +256,7 @@ markers = [
     "openai",
     "gemini",
     "anthropic",
+    "deepseek",
     "redis",
     "docker",
 ]
