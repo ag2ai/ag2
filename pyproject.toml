@@ -124,6 +124,7 @@ neo4j = [
     "llama-index-graph-stores-neo4j==0.4.5",
     "llama-index-core==0.12.11",
     "llama-index-readers-web==0.3.4",
+    "neo4j-graphrag==1.4.2",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
