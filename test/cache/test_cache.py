@@ -9,6 +9,8 @@
 import unittest
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
+
 from autogen.cache.cache import Cache
 from autogen.import_utils import optional_import_block
 
@@ -35,6 +37,7 @@ class TestCache(unittest.TestCase):
             }
         }
 
+    @pytest.mark.redis
     @patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=MagicMock())
     def test_redis_cache_initialization(self, mock_cache_factory):
         cache = Cache(self.redis_config)
@@ -68,6 +71,7 @@ class TestCache(unittest.TestCase):
             mock_cache_instance.__enter__.assert_called()
             mock_cache_instance.__exit__.assert_called()
 
+    @pytest.mark.redis
     def test_redis_context_manager(self):
         self.context_manager_common(self.redis_config)
 
@@ -87,6 +91,7 @@ class TestCache(unittest.TestCase):
             mock_cache_instance.set.assert_called_with(key, value)
             mock_cache_instance.get.assert_called_with(key, None)
 
+    @pytest.mark.redis
     def test_redis_get_set(self):
         self.get_set_common(self.redis_config)
 
@@ -101,6 +106,7 @@ class TestCache(unittest.TestCase):
             cache.close()
             mock_cache_instance.close.assert_called()
 
+    @pytest.mark.redis
     def test_redis_close(self):
         self.close_common(self.redis_config)
 
