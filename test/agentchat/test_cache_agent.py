@@ -13,23 +13,13 @@ import pytest
 import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 
 from ..conftest import Credentials
 
-with optional_import_block() as result:
-    from openai import OpenAI  # noqa: F401
-
-skip_tests = not result.is_successful
-
-with optional_import_block() as result:
-    import redis  # noqa: F401
-
-skip_redis_tests = not result.is_successful
-
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip_tests, reason="openai not installed")
+@skip_on_missing_imports(["openai"])
 def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
@@ -83,7 +73,7 @@ def _test_redis_cache(credentials: Credentials):
 
 @pytest.mark.openai
 @pytest.mark.redis
-@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
+@skip_on_missing_imports(["openai", "redis"], "redis")
 def test_redis_cache(credentials_gpt_4o_mini: Credentials):
     _test_redis_cache(credentials_gpt_4o_mini)
 
@@ -91,7 +81,7 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.skip(reason="Currently not working")
 @pytest.mark.gemini
 @pytest.mark.redis
-@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
+@skip_on_missing_imports(["openai", "redis"], "redis")
 def test_redis_cache_gemini(credentials_gemini_pro: Credentials):
     _test_redis_cache(credentials_gemini_pro)
 
@@ -99,13 +89,13 @@ def test_redis_cache_gemini(credentials_gemini_pro: Credentials):
 @pytest.mark.skip(reason="Currently not working")
 @pytest.mark.anthropic
 @pytest.mark.redis
-@pytest.mark.skipif(skip_tests or skip_redis_tests, reason="redis not installed OR openai not installed")
+@skip_on_missing_imports(["openai", "redis"], "redis")
 def test_redis_cache_anthropic(credentials_anthropic_claude_sonnet: Credentials):
     _test_redis_cache(credentials_anthropic_claude_sonnet)
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip_tests, reason="openai not installed")
+@skip_on_missing_imports(["openai"])
 def test_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
