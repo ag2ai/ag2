@@ -42,4 +42,4 @@ https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/agentchat_RetrieveChat_pgvector
 https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/Gallery#
 https://docs.ag2.ai/_sites/docs.ag2.ai/docs/topics/non-openai-models/cloud-gemini_vertexai#
 https://investor.nvidia.com
-https://github.com/neo4j/neo4j-graphrag-python?tab=readme-ov-file
+https://github.com/neo4j/neo4j-graphrag-python

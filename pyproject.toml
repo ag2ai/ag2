@@ -180,22 +180,23 @@ bedrock = ["boto3>=1.34.149"]
 
 # test dependencies
 test = [
-    "ipykernel",
-    "nbconvert",
-    "nbformat",
-    "pre-commit",
-    "pytest-cov>=5",
-    "pytest-asyncio",
-    "pytest>=8,<9",
-    "pandas",
-    "fastapi>=0.115.0,<1",
+    "ipykernel==6.29.5",
+    "nbconvert==7.16.5",
+    "nbformat==5.10.4",
+    "pytest-cov==6.0.0",
+    "pytest-asyncio==0.25.2",
+    "pytest==8.3.4",
+    "pandas==2.2.3",
+    "fastapi==0.115.6",
 ]
 
+# docs dependencies
 docs = [
-    "pydoc-markdown",
+    "pdoc3==0.11.5",
+    "jinja2==3.1.5",
     "pyyaml==6.0.2",
-    "termcolor",
-    "nbclient",
+    "termcolor==2.5.0",
+    "nbclient==0.10.2",
 ]
 
 types = [
@@ -210,8 +211,9 @@ lint = [
 ]
 
 dev = [
+    "toml==0.10.2",
     "pyautogen[lint,test,types,docs]",
-    "pre-commit==4.0.1",
+    "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
     "uv==0.5.21",
 ]
@@ -278,8 +280,22 @@ exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
 fix = true
 line-length = 120
 target-version = 'py39'
-#include = ["autogen", "test", "docs"]
-#exclude = []
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".eggs",
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    "__pypackages__",
+    "_build",
+    "build",
+    "dist",
+    "docs",
+    # This file needs to be either upgraded or removed and therefore should be
+    # ignore from type checking for now
+    "math_utils\\.py$",
+    "setup_*.py",
+]
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
@@ -313,21 +329,6 @@ ignore = ["E501", "F403", "C901",
     "D100", "D101", "D102", "D103", "D104",
     "C901",  # too complex
 ]
-# Exclude a variety of commonly ignored directories.
-exclude = [
-    ".eggs",
-    ".git",
-    ".mypy_cache",
-    ".ruff_cache",
-    "__pypackages__",
-    "_build",
-    "build",
-    "dist",
-    "docs",
-    # This file needs to be either upgraded or removed and therefore should be
-    # ignore from type checking for now
-    "math_utils\\.py$",
-]
 
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
@@ -356,6 +357,7 @@ files = [
     "autogen/agentchat/realtime_agent",
     "autogen/messages",
     "autogen/import_utils.py",
+    "website/*.py",
     "test/test_pydantic.py",
     "test/io",
     "test/tools",
@@ -365,6 +367,7 @@ files = [
     "test/conftest.py",
     "test/test_import_utils.py",
     "test/test_import.py",
+    "test/website",
 ]
 
 exclude = [

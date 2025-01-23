@@ -11,32 +11,51 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from jinja2 import Template
 
 
-def run_pydoc_markdown(config_file: Path) -> None:
-    """Run pydoc-markdown with the specified config file.
+def move_files_excluding_index(api_dir: Path) -> None:
+    """Move files from api_dir/autogen to api_dir, excluding index.md files.
 
     Args:
-        config_file (Path): Path to the pydoc-markdown config file
+        api_dir (Path): Path to the API directory
     """
+    autogen_dir = api_dir / "autogen"
+    for file_path in autogen_dir.rglob("*"):
+        if file_path.is_file() and file_path.name != "index.md" and file_path.name != "version.md":
+            dest = api_dir / file_path.relative_to(autogen_dir)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(file_path), str(dest))
+    shutil.rmtree(autogen_dir)
+
+
+def run_pdoc3(api_dir: Path) -> None:
+    """Run pydoc3 to generate the API documentation."""
     try:
-        subprocess.run(["pydoc-markdown"], check=True, capture_output=True, text=True)
-        print(f"Successfully ran pydoc-markdown with config: {config_file}")
+        print(f"Generating API documentation and saving to {str(api_dir)}...")
+        subprocess.run(
+            ["pdoc", "--output-dir", str(api_dir), "--template-dir", "mako_templates", "--force", "autogen"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        # the generated files are saved in a directory named '{api_dir}/autogen'. move all files to the parent directory
+        move_files_excluding_index(api_dir)
+
+        print("Successfully generated API documentation")
     except subprocess.CalledProcessError as e:
-        print(f"Error running pydoc-markdown: {e.stderr}")
-        sys.exit(1)
-    except FileNotFoundError:
-        print("pydoc-markdown not found. Please install it with: pip install pydoc-markdown")
+        print(f"Error running pdoc3: {e.stderr}")
         sys.exit(1)
 
 
-def read_file_content(file_path: str) -> str:
+def read_file_content(file_path: Path) -> str:
     """Read content from a file.
 
     Args:
@@ -76,11 +95,8 @@ def convert_md_to_mdx(input_dir: Path) -> None:
         # Read content from .md file
         content = md_file.read_text(encoding="utf-8")
 
-        # Update sidenav title
-        processed_content = content.replace("sidebar_label: ", "sidebarTitle: ")
-
         # Write content to .mdx file
-        mdx_file.write_text(processed_content, encoding="utf-8")
+        mdx_file.write_text(content, encoding="utf-8")
 
         # Remove original .md file
         md_file.unlink()
@@ -92,15 +108,15 @@ def get_mdx_files(directory: Path) -> list[str]:
     return [f"{p.relative_to(directory).with_suffix('')!s}".replace("\\", "/") for p in directory.rglob("*.mdx")]
 
 
-def add_prefix(path: str, parent_groups: list[str] = None) -> str:
+def add_prefix(path: str, parent_groups: Optional[list[str]] = None) -> str:
     """Create full path with prefix and parent groups."""
     groups = parent_groups or []
     return f"docs/reference/{'/'.join(groups + [path])}"
 
 
-def create_nav_structure(paths: list[str], parent_groups: list[str] = None) -> list[Any]:
+def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = None) -> list[Any]:
     """Convert list of file paths into nested navigation structure."""
-    groups = {}
+    groups: dict[str, list[str]] = {}
     pages = []
     parent_groups = parent_groups or []
 
@@ -196,7 +212,6 @@ def main() -> None:
     script_dir = Path(__file__).parent.absolute()
 
     parser = argparse.ArgumentParser(description="Process API reference documentation")
-    parser.add_argument("--config", type=Path, help="Path to pydoc-markdown config file", default=script_dir)
     parser.add_argument(
         "--api-dir",
         type=Path,
@@ -206,9 +221,15 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Run pydoc-markdown
-    print("Running pydoc-markdown...")
-    run_pydoc_markdown(args.config)
+    if args.api_dir.exists():
+        # Force delete the directory and its contents
+        shutil.rmtree(args.api_dir, ignore_errors=True)
+
+    api_dir_rel_path = args.api_dir.resolve().relative_to(script_dir)
+
+    # Run pdoc3
+    print("Running pdoc3...")
+    run_pdoc3(api_dir_rel_path)
 
     # Convert MD to MDX
     print("Converting MD files to MDX...")

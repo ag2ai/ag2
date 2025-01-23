@@ -24,7 +24,7 @@ with optional_import_block():
     from jupyter_client import KernelManager  # type: ignore[attr-defined]
     from jupyter_client.kernelspec import KernelSpecManager
 
-__all__ = "EmbeddedIPythonCodeExecutor"
+__all__ = ["EmbeddedIPythonCodeExecutor"]
 
 
 @require_optional_import("jupyter_client", "jupyter-executor")

@@ -573,31 +573,33 @@ class OpenAIWrapper:
         config_list: Optional[list[dict[str, Any]]] = None,
         **base_config: Any,
     ):
-        """Args:
+        """Initialize the OpenAIWrapper.
+
+        Args:
             config_list: a list of config dicts to override the base_config.
                 They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method. E.g.,
 
-        ```python
-        config_list = [
-            {
-                "model": "gpt-4",
-                "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
-                "api_type": "azure",
-                "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
-                "api_version": "2024-02-01",
-            },
-            {
-                "model": "gpt-3.5-turbo",
-                "api_key": os.environ.get("OPENAI_API_KEY"),
-                "api_type": "openai",
-                "base_url": "https://api.openai.com/v1",
-            },
-            {
-                "model": "llama-7B",
-                "base_url": "http://127.0.0.1:8080",
-            },
-        ]
-        ```
+                ```python
+                    config_list = [
+                        {
+                            "model": "gpt-4",
+                            "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
+                            "api_type": "azure",
+                            "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
+                            "api_version": "2024-02-01",
+                        },
+                        {
+                            "model": "gpt-3.5-turbo",
+                            "api_key": os.environ.get("OPENAI_API_KEY"),
+                            "api_type": "openai",
+                            "base_url": "https://api.openai.com/v1",
+                        },
+                        {
+                            "model": "llama-7B",
+                            "base_url": "http://127.0.0.1:8080",
+                        },
+                    ]
+                ```
 
             base_config: base config. It can contain both keyword arguments for openai client
                 and additional kwargs.
