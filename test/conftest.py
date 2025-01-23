@@ -200,6 +200,7 @@ def get_llm_credentials(
     env_var_name: str,
     model: str,
     api_type: str,
+    *,
     base_url: Optional[str] = None,
     filter_dict: Optional[dict[str, Any]] = None,
     temperature: float = 0.0,
