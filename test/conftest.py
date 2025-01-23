@@ -295,6 +295,16 @@ def credentials_anthropic_claude_sonnet() -> Credentials:
     )
 
 
+@pytest.fixture
+def credentials_deepseek_reasoner() -> Credentials:
+    return get_llm_credentials(
+        "DEEPSEEK_API_KEY",
+        model="deepseek-reasoner",
+        api_type="deepseek",
+        filter_dict={"tags": ["deepseek-reasoner"]},
+    )
+
+
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
     llm_config = {
         "config_list": [
