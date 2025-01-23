@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.retrieve_utils import (
     create_vector_db_from_dir,
     extract_text_from_pdf,
@@ -25,19 +25,8 @@ from autogen.retrieve_utils import (
 )
 from autogen.token_count_utils import count_token
 
-with optional_import_block() as result:
-    import bs4  # noqa: F401
+with optional_import_block():
     import chromadb
-    import markdownify  # noqa: F401
-    import pypdf  # noqa: F401
-
-
-skip = not result.is_successful
-
-with optional_import_block() as result:
-    from unstructured.partition.auto import partition  # noqa: F401
-
-HAS_UNSTRUCTURED = result.is_successful
 
 test_dir = os.path.join(os.path.dirname(__file__), "test_files")
 expected_text = """AutoGen is an advanced tool designed to assist developers in harnessing the capabilities
@@ -46,7 +35,7 @@ simplify the process of building applications that leverage the power of LLMs, a
 integration, testing, and deployment."""
 
 
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["bs4", "chromadb", "markdownify", "pypdf"], "retrievechat")
 class TestRetrieveUtils:
     def test_split_text_to_chunks(self):
         long_text = "A" * 10000
@@ -137,6 +126,7 @@ class TestRetrieveUtils:
         results = query_vector_db(["autogen"], client=client)
         assert isinstance(results, dict) and any("autogen" in res[0].lower() for res in results.get("documents", []))
 
+    @skip_on_missing_imports(["lancedb"], "unknown")
     def test_custom_vector_db(self):
         with optional_import_block() as result:
             import lancedb
@@ -242,10 +232,7 @@ class TestRetrieveUtils:
         print(results["ids"][0])
         assert len(results["ids"][0]) == 4
 
-    @pytest.mark.skipif(
-        not HAS_UNSTRUCTURED,
-        reason="do not run if unstructured is not installed",
-    )
+    @skip_on_missing_imports(["unstructured"], "unknown")
     def test_unstructured(self):
         pdf_file_path = os.path.join(test_dir, "example.pdf")
         txt_file_path = os.path.join(test_dir, "example.txt")

@@ -268,7 +268,7 @@ def require_optional_import(modules: Union[str, Iterable[str]], dep_target: str)
     return decorator
 
 
-def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Optional[str] = None) -> Callable[[T], T]:
     """Decorator to skip a test if an optional module is missing
 
     Args:
@@ -287,8 +287,9 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str)
         def decorator(o: T) -> T:
             import pytest
 
+            install_target = "" if dep_target is None else f"[{dep_target}]"
             return pytest.mark.skip(  # type: ignore[return-value]
-                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2{install_target}'"
             )(o)
 
     return decorator
