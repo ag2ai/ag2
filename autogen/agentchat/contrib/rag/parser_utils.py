@@ -6,22 +6,27 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import Union
 
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.document import ConversionResult
-from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
-from docling.document_converter import DocumentConverter, PdfFormatOption
+from ....import_utils import optional_import_block, require_optional_import
+from .document_utils import handle_input
 
-from autogen.agentchat.contrib.document_utils import handle_input
+with optional_import_block():
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.document import ConversionResult
+    from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.INFO)
 
 
-def docling_parse_docs(
-    input_file_path: str,
-    output_dir_path: str,
-) -> list[ConversionResult]:
+@require_optional_import(["docling"], "rag")
+def docling_parse_docs(  # type: ignore[no-any-unimported]
+    input_file_path: Union[Path, str],
+    output_dir_path: Union[Path, str],
+) -> list["ConversionResult"]:
     """
     Convert documents into a Deep Search document format using EasyOCR
     with CPU only, and export the document and its tables to the specified
@@ -37,9 +42,8 @@ def docling_parse_docs(
         MD,
 
     Args:
-        input_file_path (str): The path/directory to the documents to convert.
-        output_dir_path (str): The path to the directory where to export the
-            converted document and its files.
+        input_file_path (Union[Path, str]): The path to the input file.
+        output_dir_path (Union[Path, str]): The path to the output directory.
 
     Returns:
         list[ConversionResult]: The result of the conversion.

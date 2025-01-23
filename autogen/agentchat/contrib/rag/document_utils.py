@@ -3,13 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-import os
 from pathlib import Path
+from typing import Any, Optional, Union
 from urllib.parse import urlparse
 
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from ....import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service as ChromeService
+    from webdriver_manager.chrome import ChromeDriverManager
 
 _logger = logging.getLogger(__name__)
 
@@ -32,6 +35,7 @@ def is_url(url: str) -> bool:
         return False
 
 
+@require_optional_import(["selenium", "webdriver_manager"], "rag")
 def _download_rendered_html(url: str) -> str:
     """
     Downloads a rendered HTML page of a given URL using headless ChromeDriver.
@@ -50,7 +54,7 @@ def _download_rendered_html(url: str) -> str:
     options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
 
     # Set the location of the ChromeDriver
-    service = Service(ChromeDriverManager().install())
+    service = ChromeService(ChromeDriverManager().install())
 
     # Create a new instance of the Chrome driver with specified options
     driver = webdriver.Chrome(service=service, options=options)
@@ -64,11 +68,12 @@ def _download_rendered_html(url: str) -> str:
     # Close the browser
     driver.quit()
 
-    return html_content
+    return html_content  # type: ignore[no-any-return]
 
 
-def download_url(url: str, output_dir: str = None) -> Path:
+def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Path:
     """Download the content of a URL and save it as an HTML file."""
+    url = str(url)
     rendered_html = _download_rendered_html(url)
     url_path = Path(urlparse(url).path)
     if url_path.suffix and url_path.suffix != ".html":
@@ -77,45 +82,40 @@ def download_url(url: str, output_dir: str = None) -> Path:
     filename = url_path.name or "downloaded_content.html"
     if len(filename) < 5 or filename[-5:] != ".html":
         filename += ".html"
-    filepath = os.path.join(output_dir, filename) if output_dir else os.path.join(os.getcwd(), filename)
-    with open(filepath, "w", encoding="utf-8") as file:
-        file.write(rendered_html)
+    output_dir = Path(output_dir) if output_dir else Path(".")
+    filepath = output_dir / filename
+    with filepath.open("w", encoding="utf-8") as f:
+        f.write(rendered_html)
 
-    return Path(filepath)
+    return filepath
 
 
-def list_files(directory: str) -> list[Path]:
+def list_files(directory: Union[Path, str]) -> list[Path]:
     """
     Recursively list all files in a directory.
 
     This function will raise an exception if the directory does not exist.
     """
-    if not os.path.isdir(directory):
+    path = Path(directory)
+
+    if not path.is_dir():
         raise ValueError(f"The directory {directory} does not exist.")
 
-    file_list = []
-    for root, _, files in os.walk(directory):
-        if root is None:
-            raise RuntimeError("The root directory is None.")
-        if files is None:
-            raise RuntimeError("The list of files is None.")
-        for file in files:
-            if file is None:
-                raise RuntimeError("One of the files is None.")
-            file_list.append(Path(os.path.join(root, file)))
-    return file_list
+    return [f for f in path.rglob("*") if f.is_file()]
 
 
-def handle_input(input_file_string: str, output_dir: str = None) -> list[Path]:
+def handle_input(input_path: Union[Path, str], output_dir: Optional[Union[Path, str]] = None) -> list[Path]:
     """Process the input string and return the appropriate file paths"""
-    if is_url(input_file_string):
+    input_path = Path(input_path)
+
+    if is_url(str(input_path)):
         _logger.info("Detected URL. Downloading content...")
-        return [download_url(url=input_file_string, output_dir=output_dir)]
-    elif os.path.isdir(input_file_string):
+        return [download_url(url=input_path, output_dir=output_dir)]
+    elif input_path.is_dir():
         _logger.info("Detected directory. Listing files...")
-        return list_files(directory=input_file_string)
-    elif os.path.isfile(input_file_string):
+        return list_files(directory=input_path)
+    elif input_path.is_file():
         _logger.info("Detected file. Returning file path...")
-        return [Path(input_file_string)]
+        return [Path(input_path)]
     else:
         raise ValueError("The input provided is neither a URL, directory, nor a file path.")

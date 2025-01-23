@@ -140,15 +140,15 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[Any]) -> None:
     if call.excinfo is not None:  # This means the test failed
         exception_value = call.excinfo.value
 
-        original_message = "".join([repr(arg) for arg in exception_value.args])
+        original_message = "".join([repr(arg) for arg in exception_value.args])  # noqa: F841
 
         # Check if this exception is a pytest skip exception
         if isinstance(exception_value, Skipped):
             return  # Don't modify skip exceptions
 
-        if Secrets.needs_sanitizing(original_message):
-            censored_exception = CensoredError(call.excinfo.value)
-            call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
+        # if Secrets.needs_sanitizing(original_message):
+        #     censored_exception = CensoredError(call.excinfo.value)
+        #     call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
 
 
 def get_credentials(
