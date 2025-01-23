@@ -1,10 +1,11 @@
+#!/usr/bin/env python
+
 # Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python
 
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ def move_files_excluding_index(api_dir: Path) -> None:
     Args:
         api_dir (Path): Path to the API directory
     """
+    return
     autogen_dir = api_dir / "autogen"
     for file_path in autogen_dir.rglob("*"):
         if file_path.is_file() and file_path.name != "index.md" and file_path.name != "version.md":

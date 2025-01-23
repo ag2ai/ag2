@@ -9,12 +9,12 @@ docs_generate() {
         python ./process_notebooks.py render
 }
 
-install_packages() {
-    pip install -e ".[docs]"
-}
+# install_packages() {
+#     pip install -e ".[docs]"
+# }
 
 docs_build() {
-    install_packages && \
+    # install_packages && \
     docs_generate
 }
 

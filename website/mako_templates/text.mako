@@ -226,6 +226,9 @@ ${cleaned_docstring | deflist}
 </%def>
 
 <%def name="class_(cls)" buffered="True">
+
+***** SPLIT HERE *****
+
     <h2 id="${cls.module.name}.${cls.name}" class="doc doc-heading">
         <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
         <span class="doc doc-object-name doc-class-name">${cls.name}</span>
@@ -239,10 +242,13 @@ ${cleaned_docstring | deflist}
        signature = f"{cls.name}(\n    {formatted_params}\n)"
    else:
        signature = f"{cls.name}({', '.join(params)})"
+
    signature = signature.replace('{', '\{').replace("<", "&lt;")
 
    cleaned_docstring = cls.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
+`${cls.module.name}.${cls.name}`
+
 ```python
 ${signature}
 ```
@@ -299,6 +305,9 @@ ${function(m)}
   submodules = module.submodules()
   heading = 'Namespace' if module.is_namespace else 'Module'
   symbol_name = module.name.split('.')[-1]
+
+  # filter out if module name is not the same
+  classes = [c for c in classes if c.__module__ != "autogen"]
 %>
 
 ---

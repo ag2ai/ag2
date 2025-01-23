@@ -12,6 +12,7 @@ from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel
 
+from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
 from ...tools import get_function_schema
 from ..agent import Agent
@@ -36,6 +37,7 @@ class AfterWorkOption(Enum):
 
 
 @dataclass
+@export_module("autogen")
 class AFTER_WORK:  # noqa: N801
     """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
 
@@ -53,6 +55,7 @@ class AFTER_WORK:  # noqa: N801
 
 
 @dataclass
+@export_module("autogen")
 class ON_CONDITION:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats
 
@@ -84,6 +87,7 @@ class ON_CONDITION:  # noqa: N801
 
 
 @dataclass
+@export_module("autogen")
 class UPDATE_SYSTEM_MESSAGE:  # noqa: N801
     """Update the agent's system message before they reply
 
