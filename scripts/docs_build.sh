@@ -5,7 +5,7 @@ set -x
 
 docs_generate() {
     cd website && \
-        python ./add_api_reference_to_docs.py && \
+        python ./generate_api_reference.py && \
         python ./process_notebooks.py render
 }
 

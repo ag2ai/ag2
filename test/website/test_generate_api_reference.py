@@ -16,7 +16,7 @@ assert website_path.exists()
 assert website_path.is_dir()
 sys.path.append(str(website_path))
 
-from add_api_reference_to_docs import generate_mint_json_from_template, move_files_excluding_index
+from generate_api_reference import generate_mint_json_from_template
 
 
 @pytest.fixture
@@ -52,33 +52,6 @@ def api_dir(tmp_path: Path) -> Path:
     (subdir2 / "index.md").write_text("index")
 
     return tmp_path
-
-
-def test_move_files_excluding_index(api_dir: Path) -> None:
-    """Test that files are moved correctly excluding index.md"""
-    # Call the function under test
-    move_files_excluding_index(api_dir)
-
-    # Verify that autogen directory no longer exists
-    assert not (api_dir / "autogen").exists()
-
-    # Verify the version.md file was not moved
-    assert not (api_dir / "version.md").exists()
-
-    # Verify files were moved correctly
-    assert (api_dir / "browser_utils.md").exists()
-    assert (api_dir / "code_utils.md").exists()
-    assert (api_dir / "agentchat" / "assistant_agent.md").exists()
-    assert (api_dir / "agentchat" / "conversable_agent.md").exists()
-    assert (api_dir / "agentchat" / "agentchat.md").exists()
-    assert (api_dir / "agentchat" / "contrib" / "agent_builder.md").exists()
-    assert (api_dir / "cache" / "cache_factory.md").exists()
-    assert (api_dir / "cache" / "disk_cache.md").exists()
-
-    # Verify index.md was not moved
-    assert not (api_dir / "agentchat" / "index.md").exists()
-    assert not (api_dir / "agentchat" / "contrib" / "index.md").exists()
-    assert not (api_dir / "cache" / "index.md").exists()
 
 
 @pytest.fixture
