@@ -121,6 +121,7 @@ def neo4j_query_engine_auto():
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
@@ -138,6 +139,7 @@ def test_neo4j_query_engine(neo4j_query_engine):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
@@ -160,6 +162,7 @@ def test_neo4j_add_records(neo4j_query_engine):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
@@ -174,6 +177,7 @@ def test_neo4j_auto(neo4j_query_engine_auto):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,
     reason=reason,

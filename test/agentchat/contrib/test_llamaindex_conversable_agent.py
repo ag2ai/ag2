@@ -29,6 +29,7 @@ skip_reason = "" if result.is_successful else "dependency not installed"
 openai_key = MOCK_OPEN_AI_API_KEY
 
 
+@pytest.mark.neo4j
 @pytest.mark.skipif(skip_for_dependencies, reason=skip_reason)
 @patch("llama_index.core.agent.ReActAgent.chat")
 def test_group_chat_with_llama_index_conversable_agent(chat_mock: MagicMock) -> None:

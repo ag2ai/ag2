@@ -114,6 +114,7 @@ def neo4j_native_query_engine_auto():
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
@@ -128,6 +129,7 @@ def test_neo4j_native_query_engine(neo4j_native_query_engine):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
@@ -141,6 +143,7 @@ def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):
     assert query_result.answer.find("BUZZ") >= 0
 
 
+@pytest.mark.neo4j
 def test_neo4j_add_records(neo4j_native_query_engine):
     """Test the add_records functionality of the Neo4j Query Engine."""
     input_path = "./test/agentchat/contrib/graph_rag/the_matrix.txt"
