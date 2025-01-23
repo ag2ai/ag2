@@ -10,6 +10,7 @@ import builtins
 import io
 import json
 import logging
+import os
 from types import SimpleNamespace
 from typing import Any, Optional
 from unittest import mock
@@ -20,6 +21,8 @@ import autogen
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflict, UndefinedNextAgent
+
+from ..conftest import Credentials
 
 
 def test_func_call_groupchat():
@@ -2179,6 +2182,60 @@ def test_manager_resume_message_assignment():
 
     # Compare agent_a's message state to previous messages (excludes last message)
     assert list(agent_a.chat_messages.values())[0] == prev_messages[:-1]
+
+
+# @pytest.mark.deepseek
+def test_groupchat_with_deepseek_reasoner(
+    credentials_gpt_4o_mini: Credentials,
+) -> None:
+    # Change to fixture
+    config_list_deepseek_reasoner = [
+        {
+            "model": "deepseek-reasoner",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": os.getenv("DEEPSEEK_API_KEY"),
+            "api_type": "deepseek",
+            "tags": ["deepseek"],
+        }
+    ]
+    user_proxy = autogen.UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config={"work_dir": "coding", "use_docker": False},
+    )
+
+    supervisor = autogen.AssistantAgent(
+        "supervisor",
+        llm_config={
+            "config_list": config_list_deepseek_reasoner,
+        },
+    )
+
+    assistant = autogen.AssistantAgent(
+        "assistant",
+        llm_config={
+            "config_list": config_list_deepseek_reasoner,
+        },
+    )
+
+    groupchat = autogen.GroupChat(
+        agents=[user_proxy, supervisor, assistant],
+        messages=["A group chat"],
+        max_round=5,
+    )
+
+    manager = autogen.GroupChatManager(
+        groupchat=groupchat,
+        llm_config={
+            "config_list": credentials_gpt_4o_mini.config_list,
+        },
+    )
+
+    # Group Chat
+    result = user_proxy.initiate_chat(
+        manager, message="""Give me some info about the stock market""", summary_method="reflection_with_llm"
+    )
+    assert isinstance(result.summary, str)
 
 
 if __name__ == "__main__":
