@@ -52,7 +52,7 @@ jobs:
           uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm == 'gemini' || matrix.llm == 'anthropic'
+        if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
