@@ -296,9 +296,24 @@ class OpenAIClient:
         return True if pattern.match(message) else False
 
     @staticmethod
+    def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:
+        for msg in messages:
+            if msg["role"] == "system":
+                messages.insert(0, messages.pop(messages.index(msg)))
+                break
+
+    @staticmethod
     def _patch_messages_for_deepseek_reasoner(**kwargs: Any) -> Any:
-        if "model" not in kwargs or kwargs["model"] != "deepseek-reasoner" or "messages" not in kwargs:
+        if (
+            "model" not in kwargs
+            or kwargs["model"] != "deepseek-reasoner"
+            or "messages" not in kwargs
+            or len(kwargs["messages"]) == 0
+        ):
             return kwargs
+
+        # The system message of deepseek-reasoner must be put on the beginning of the message sequence.
+        OpenAIClient._move_system_message_to_beginning(kwargs["messages"])
 
         new_messages = []
         previous_role = None
@@ -320,7 +335,7 @@ class OpenAIClient:
 
         # The last message of deepseek-reasoner must be a user message
         # , or an assistant message with prefix mode on (but this is supported only for beta api)
-        if len(new_messages) > 0 and new_messages[-1]["role"] == "assistant":
+        if new_messages[-1]["role"] != "user":
             new_messages.append({"role": "user", "content": "continue"})
 
         kwargs["messages"] = new_messages

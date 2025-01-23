@@ -345,6 +345,59 @@ class TestOpenAIClientBadRequestsError:
 
 class TestDeepSeekPatch:
     @pytest.mark.parametrize(
+        "messages, expected_messages",
+        [
+            (
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+        ],
+    )
+    def test_move_system_message_to_beginning(
+        self, messages: list[dict[str, str]], expected_messages: list[dict[str, str]]
+    ) -> None:
+        OpenAIClient._move_system_message_to_beginning(messages)
+        assert messages == expected_messages
+
+    @pytest.mark.parametrize(
         "model, should_patch",
         [
             ("deepseek-reasoner", True),
@@ -356,6 +409,7 @@ class TestDeepSeekPatch:
         kwargs = {
             "messages": [
                 {"role": "user", "content": "You are an AG2 Agent."},
+                {"role": "system", "content": "You are an AG2 Agent System."},
                 {"role": "user", "content": "Help me with my problem."},
             ],
             "model": model,
@@ -364,6 +418,7 @@ class TestDeepSeekPatch:
         if should_patch:
             expected_kwargs = {
                 "messages": [
+                    {"role": "system", "content": "You are an AG2 Agent System."},
                     {"role": "user", "content": "You are an AG2 Agent."},
                     {"role": "assistant", "content": "Help me with my problem."},
                     {"role": "user", "content": "continue"},
