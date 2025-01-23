@@ -95,7 +95,7 @@ jobs:
           uv pip install --system pytest
       - name: Install Neo4j and Llama-index when on linux
         run: |
-          uv pip install --system -e .[neo4j,test]
+          uv pip install --system -e .[neo4j_graph_rag,test]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -109,7 +109,6 @@ jobs:
         run: |
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
-          bash scripts/test.sh -m "neo4j"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
