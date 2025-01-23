@@ -9,7 +9,6 @@
 import os
 
 import pytest
-from sentence_transformers import SentenceTransformer
 
 from autogen import AssistantAgent
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
@@ -23,6 +22,7 @@ with optional_import_block() as result:
     import chromadb  # noqa: F401
     import pgvector  # noqa: F401
     from IPython import get_ipython  # noqa: F401
+    from sentence_transformers import SentenceTransformer
 
 
 skip = not result.is_successful
