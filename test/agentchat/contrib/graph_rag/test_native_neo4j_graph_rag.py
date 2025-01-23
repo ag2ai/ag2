@@ -80,7 +80,7 @@ def neo4j_native_query_engine():
     ]
 
     query_engine = Neo4jNativeGraphQueryEngine(
-        host="bolt://172.17.0.3",  # Change
+        host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
@@ -102,7 +102,7 @@ def neo4j_native_query_engine_auto():
     input_document = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
 
     query_engine = Neo4jNativeGraphQueryEngine(
-        host="bolt://172.17.0.3",  # Change
+        host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
