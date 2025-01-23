@@ -52,14 +52,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
-    services:
-      neo4j:
-        image: neo4j:latest
-        ports:
-          - 7687:7687
-          - 7474:7474
-        env:
-          NEO4J_AUTH: neo4j/password
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +66,7 @@ jobs:
           - "retrievechat-mongodb"
           - "retrievechat-qdrant"
           - "graph-rag-falkor-db"
-          - "neo4j"
+          # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
           - "twilio"
           - "interop"
         # exclude:
