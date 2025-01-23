@@ -11,20 +11,27 @@ from typing import Generator, Optional, Union
 
 import pytest
 
-# Add the ../../website directory to sys.path
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
-from process_notebooks import (
-    add_authors_and_social_img_to_blog_posts,
-    add_front_matter_to_metadata_mdx,
-    cleanup_tmp_dirs_if_no_metadata,
-    convert_callout_blocks,
-    ensure_mint_json_exists,
-    extract_example_group,
-    generate_nav_group,
-    get_sorted_files,
-)
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+
+with optional_import_block():
+    try:
+        # Add the ../../website directory to sys.path
+        sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
+        from process_notebooks import (
+            add_authors_and_social_img_to_blog_posts,
+            add_front_matter_to_metadata_mdx,
+            cleanup_tmp_dirs_if_no_metadata,
+            convert_callout_blocks,
+            ensure_mint_json_exists,
+            extract_example_group,
+            generate_nav_group,
+            get_sorted_files,
+        )
+    except SystemExit:
+        pass
 
 
+@skip_on_missing_imports("yaml", "docs")
 def test_ensure_mint_json() -> None:
     # Test with empty temp directory - should raise SystemExit
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -37,6 +44,7 @@ def test_ensure_mint_json() -> None:
         ensure_mint_json_exists(tmp_path)  # Should not raise any exception
 
 
+@skip_on_missing_imports("yaml", "docs")
 def test_cleanup_tmp_dirs_if_no_metadata() -> None:
     # Test without the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
     # the tmp_dir / "notebooks" should be removed.
@@ -68,6 +76,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
         assert notebooks_dir.exists()
 
 
+@skip_on_missing_imports("yaml", "docs")
 class TestAddFrontMatterToMetadataMdx:
     def test_without_metadata_mdx(self) -> None:
         front_matter_dict: dict[str, Union[str, Optional[Union[list[str]]]]] = {
@@ -202,6 +211,7 @@ export const notebooksMetadata = [
             )
 
 
+@skip_on_missing_imports("yaml", "docs")
 class TestAddBlogsToNavigation:
     @pytest.fixture
     def test_dir(self) -> Generator[Path, None, None]:
@@ -297,6 +307,7 @@ class TestAddBlogsToNavigation:
             assert actual == expected, actual
 
 
+@skip_on_missing_imports("yaml", "docs")
 class TestUpdateNavigation:
     def setup(self, temp_dir: Path) -> None:
         """Set up test files in the temporary directory."""
@@ -402,6 +413,7 @@ class TestUpdateNavigation:
             assert actual == expected, actual
 
 
+@skip_on_missing_imports("yaml", "docs")
 class TestAddAuthorsAndSocialImgToBlogPosts:
     @pytest.fixture
     def test_dir(self) -> Generator[Path, None, None]:
@@ -576,6 +588,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         assert actual.count('<p class="name">Mark Sze</p>') == 1
 
 
+@skip_on_missing_imports("yaml", "docs")
 class TestConvertCalloutBlocks:
     @pytest.fixture
     def content(self) -> str:
