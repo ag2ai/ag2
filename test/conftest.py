@@ -181,17 +181,12 @@ def get_config_list_from_env(
     env_var_name: str,
     model: str,
     api_type: str,
-    *,
-    base_url: Optional[str] = None,
     filter_dict: Optional[dict[str, Any]] = None,
     temperature: float = 0.0,
 ) -> list[dict[str, Any]]:
     if env_var_name in os.environ:
         api_key = os.environ[env_var_name]
-        config_list = [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
-        if base_url:
-            config_list[0]["base_url"] = base_url
-        return config_list
+        return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
 
     return []
 
@@ -200,8 +195,6 @@ def get_llm_credentials(
     env_var_name: str,
     model: str,
     api_type: str,
-    *,
-    base_url: Optional[str] = None,
     filter_dict: Optional[dict[str, Any]] = None,
     temperature: float = 0.0,
 ) -> Credentials:
@@ -214,14 +207,7 @@ def get_llm_credentials(
 
     # If no config found, try to get it from the environment
     if config_list == []:
-        config_list = get_config_list_from_env(
-            env_var_name,
-            model,
-            api_type,
-            base_url=base_url,
-            filter_dict=filter_dict,
-            temperature=temperature,
-        )
+        config_list = get_config_list_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
     # If still no config found, raise an error
     assert config_list, f"No {api_type} config list found and could not be created from an env var {env_var_name}"
@@ -324,8 +310,7 @@ def credentials_deepseek_reasoner() -> Credentials:
         "DEEPSEEK_API_KEY",
         model="deepseek-reasoner",
         api_type="deepseek",
-        base_url="https://api.deepseek.com/v1",
-        filter_dict={"tags": ["deepseek-reasoner"]},
+        filter_dict={"tags": ["deepseek-reasoner"], "base_url": "https://api.deepseek.com/v1"},
     )
 
 
