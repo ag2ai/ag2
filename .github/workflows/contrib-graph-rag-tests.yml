@@ -95,7 +95,7 @@ jobs:
           uv pip install --system pytest
       - name: Install Neo4j and Llama-index when on linux
         run: |
-          uv pip install --system -e .[neo4j_graph_rag,test]
+          uv pip install --system -e .[neo4j_graph_rag]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
