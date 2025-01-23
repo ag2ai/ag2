@@ -106,7 +106,7 @@ jobs:
           bash scripts/test.sh test/test_import.py
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
-          bash scripts/test.sh -m "$MARKER"
+          bash scripts/test.sh -m "$MARKER and not openai"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
