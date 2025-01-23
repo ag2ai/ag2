@@ -19,6 +19,7 @@ with optional_import_block():
     pass  # type: ignore[import]
 
 
+@pytest.mark.interop
 class TestInteroperability:
     @skip_on_missing_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
     def test_supported_types(self) -> None:

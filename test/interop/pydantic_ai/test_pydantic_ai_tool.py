@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from autogen import AssistantAgent
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.interop.pydantic_ai.pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
@@ -10,6 +12,7 @@ with optional_import_block():
     from pydantic_ai.tools import Tool as PydanticAITool
 
 
+@pytest.mark.interop
 @skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAITool:
     def test_register_for_llm(self) -> None:

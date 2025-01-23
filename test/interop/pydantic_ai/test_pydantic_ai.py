@@ -21,6 +21,7 @@ with optional_import_block():
     from pydantic_ai.tools import Tool as PydanticAITool
 
 
+@pytest.mark.interop
 @skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithotContext:
     @pytest.fixture(autouse=True)
@@ -65,6 +66,7 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert False, "No tool response found in chat messages"
 
 
+@pytest.mark.interop
 @skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityDependencyInjection:
     def test_dependency_injection(self) -> None:
@@ -124,6 +126,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             assert pydantic_ai_tool.current_retry == 3
 
 
+@pytest.mark.interop
 @skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithContext:
     @pytest.fixture(autouse=True)
