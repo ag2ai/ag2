@@ -12,7 +12,7 @@ from autogen.agentchat.contrib.graph_rag.neo4j_native_graph_query_engine import 
     GraphStoreQueryResult,
     Neo4jNativeGraphQueryEngine,
 )
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ....conftest import reason
 
@@ -119,6 +119,7 @@ def neo4j_native_query_engine_auto():
     sys.platform in ["darwin", "win32"] or skip,
     reason=reason,
 )
+@skip_on_missing_imports("neo4j_graphrag", "unknown")
 def test_neo4j_native_query_engine(neo4j_native_query_engine):
     """Test querying with initialized knowledge graph"""
     question = "Which company is the employer?"
@@ -144,6 +145,7 @@ def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):
 
 
 @pytest.mark.neo4j
+@skip_on_missing_imports("neo4j_graphrag", "unknown")
 def test_neo4j_add_records(neo4j_native_query_engine):
     """Test the add_records functionality of the Neo4j Query Engine."""
     input_path = "./test/agentchat/contrib/graph_rag/the_matrix.txt"
