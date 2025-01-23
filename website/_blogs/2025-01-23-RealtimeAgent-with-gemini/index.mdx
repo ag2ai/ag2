@@ -11,3 +11,14 @@ tags: [Realtime API, Voice Agents, Gemini]
 
 **TL;DR:**
 - RealtimeAgent now supports [Gemini Multimodal Live API](https://ai.google.dev/api/multimodal-live)
+
+**Why is this important?**
+We previously supported a Realtime Agent powered by OpenAI. In December 2024, Google rolled out [Gemini 2.0] (https://blog.google/technology/google-deepmind/google-gemini-ai-update-december-2024/), which includes the multi-modal live APIs. To ensure developers can fully leverage the capabilities of the latest LLMs, we now also support a Realtime Agent powered by Gemini.
+
+**How to use ?**
+To ensure a seamless experience for developers, we aim to minimize the required changes. The key step is to properly configure your LLM settings, including credentials, LLM setup, and tags. Once this is done, switching between different LLMs becomes straightforward. This [Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_realtime_gemini_websocket.ipynb) serves as a great example of how to instantiate a Gemini client. For the highlights and demos of Gemini 2.0. please checkout their [official tech blog](https://developers.googleblog.com/en/the-next-chapter-of-the-gemini-era-for-developers/).
+
+
+**Considerations**
+During the implementation of this agent, we observed that audio truncation is not currently natively supported by Gemini. For instance, if the server generates a 10-second audio clip, and only the first 5 seconds are played while the rest is truncated, the server may remain unaware that the remaining 5 seconds were not played.
+However, the APIs and models are evolving rapidly, and things could change very fast. In the meantime, AG2 streamlines the process of switching between models, making it easier to adapt to different use cases and overcome such challenges.
