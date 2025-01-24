@@ -73,6 +73,9 @@ jobs:
           # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
           - python-version: "3.9"
             optional-dependencies: "graph-rag-falkor-db"
+          # Issues with installing retrievechat-qdrant in python 3.13
+          - python-version: "3.13"
+            optional-dependencies: "retrievechat-qdrant"
           # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
           # Because torch and sentence_transformers creates issues while trying to install
           - os: macos-latest
@@ -84,9 +87,6 @@ jobs:
           - os: macos-latest
             python-version: "3.13"
             optional-dependencies: "retrievechat-mongodb"
-          - os: macos-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-qdrant"
           - os: windows-latest
             python-version: "3.13"
             optional-dependencies: "retrievechat"
@@ -96,9 +96,6 @@ jobs:
           - os: windows-latest
             python-version: "3.13"
             optional-dependencies: "retrievechat-mongodb"
-          - os: windows-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-qdrant"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
