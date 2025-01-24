@@ -52,7 +52,7 @@ class TestBrowserUseToolOpenai:
             headless=True,
         )
         browser = Browser(config=browser_config)
-        return BrowserUseTool(api_key=api_key, browser=browser)
+        return BrowserUseTool(api_key=api_key, browser=browser, generate_gif=False)
 
     @pytest.mark.openai
     @pytest.mark.asyncio
