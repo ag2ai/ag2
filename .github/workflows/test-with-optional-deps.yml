@@ -69,7 +69,10 @@ jobs:
           # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
           - "twilio"
           - "interop"
-        # exclude:
+        exclude:
+          # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
+          - python-version: "3.9"
+            optional-dependencies: "graph-rag-falkor-db"
         #   - os: macos-latest
         #     python-version: "3.9"
     steps:
@@ -93,8 +96,6 @@ jobs:
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
       - name: Test import all submodules
-        # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
-        if: ${{ !(matrix.python-version == '3.9' && matrix.optional-dependencies == 'graph-rag-falkor-db') }}
         shell: bash
         run: |
           uv pip install --system "requests<2.32.0"
