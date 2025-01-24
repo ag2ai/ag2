@@ -9,11 +9,13 @@ from typing import Callable, Literal, Optional, Union
 from termcolor import colored
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
+from ....doc_utils import export_module
 from ...conversable_agent import ConversableAgent
 from .agent_builder import AgentBuilder
 from .tool_retriever import ToolBuilder, format_ag2_tool, get_full_tool_description
 
 
+@export_module("autogen.agentchat.contrib.captainagent")
 class CaptainAgent(ConversableAgent):
     """(In preview) Captain agent, designed to solve a task with an agent or a group of agents."""
 

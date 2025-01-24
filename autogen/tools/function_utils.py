@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import Literal, get_args, get_origin
 
 from .._pydantic import JsonSchemaValue, evaluate_forwardref, model_dump, model_dump_json, type2schema
+from ..doc_utils import export_module
 from .dependency_injection import Field as AG2Field
 
 __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str"]
@@ -220,6 +221,7 @@ def get_missing_annotations(typed_signature: inspect.Signature, required: list[s
     return missing, unannotated_with_default
 
 
+@export_module("autogen.tools")
 def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, description: str) -> dict[str, Any]:
     """Get a JSON schema for a function as defined by the OpenAI API
 
@@ -314,6 +316,7 @@ def get_load_param_if_needed_function(t: Any) -> Optional[Callable[[dict[str, An
     return load_base_model if isinstance(t, type) and issubclass(t, BaseModel) else None
 
 
+@export_module("autogen.tools")
 def load_basemodels_if_needed(func: Callable[..., Any]) -> Callable[..., Any]:
     """A decorator to load the parameters of a function if they are Pydantic models
 
@@ -359,6 +362,7 @@ def load_basemodels_if_needed(func: Callable[..., Any]) -> Callable[..., Any]:
         return _load_parameters_if_needed
 
 
+@export_module("autogen.tools")
 def serialize_to_str(x: Any) -> str:
     if isinstance(x, str):
         return x

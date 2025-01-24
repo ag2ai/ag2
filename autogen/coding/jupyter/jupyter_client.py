@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, cast
 
+from ...doc_utils import export_module
+
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
@@ -31,6 +33,7 @@ with optional_import_block():
     from websocket import WebSocket
 
 
+@export_module("autogen.coding.jupyter")
 class JupyterClient:
     def __init__(self, connection_info: JupyterConnectionInfo):
         """(Experimental) A client for communicating with a Jupyter gateway server.
