@@ -28,7 +28,11 @@ class TestBrowserUseToolOpenai:
         self._Agent = Agent
 
     def test_broser_use_tool_init(self, mock_credentials: Credentials) -> None:
-        browser_use_tool = BrowserUseTool(llm_config=mock_credentials.llm_config)
+        config = mock_credentials.config_list[0]
+        model: str = config["model"]  # type: ignore[index]
+        api_key: str = config["api_key"]  # type: ignore[index]
+
+        browser_use_tool = BrowserUseTool(model=model, api_key=api_key)
         assert browser_use_tool.name == "browser_use"
         assert browser_use_tool.description == "Use the browser to perform a task."
         assert isinstance(browser_use_tool.func, Callable)  # type: ignore[arg-type]
@@ -46,7 +50,10 @@ class TestBrowserUseToolOpenai:
 
     @pytest.fixture()
     def browser_use_tool(self, credentials_gpt_4o_mini: Credentials) -> BrowserUseTool:
-        return BrowserUseTool(llm_config=credentials_gpt_4o_mini.llm_config)
+        config = credentials_gpt_4o_mini.config_list[0]
+        model = config["model"]
+        api_key = config["api_key"]
+        return BrowserUseTool(model=model, api_key=api_key)
 
     @pytest.mark.openai
     @pytest.mark.asyncio

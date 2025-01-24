@@ -46,7 +46,8 @@ class BrowserUseTool(Tool):
     def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
-        llm_config: dict[str, Any],
+        model: str,
+        api_key: str,
         browser: Optional["Browser"] = None,
         agent_kwargs: Optional[dict[str, Any]] = None,
         browser_config: Optional[dict[str, Any]] = None,
@@ -54,7 +55,8 @@ class BrowserUseTool(Tool):
         """Use the browser to perform a task.
 
         Args:
-            llm_config: The LLM configuration.
+            model: The model to use.
+            api_key: The API key to use.
             browser: The browser to use. If defined, browser_config must be None
             agent_kwargs: Additional keyword arguments to pass to the Agent
             browser_config: The browser configuration to use. If defined, browser must be None
@@ -80,12 +82,6 @@ class BrowserUseTool(Tool):
         # set default value for generate_gif
         if "generate_gif" not in agent_kwargs:
             agent_kwargs["generate_gif"] = False
-
-        try:
-            model: str = llm_config["config_list"][0]["model"]  # type: ignore[index]
-            api_key: str = llm_config["config_list"][0]["api_key"]  # type: ignore[index]
-        except (KeyError, TypeError):
-            raise ValueError("llm_config must be a valid config dictionary.")
 
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
