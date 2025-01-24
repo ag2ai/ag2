@@ -15,17 +15,13 @@ from autogen.agentchat.contrib.math_user_proxy_agent import (
     _add_print_to_last_line,
     _remove_print,
 )
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 
 from ..conftest import Credentials
 
-with optional_import_block() as result:
-    from openai import OpenAI  # noqa: F401
-
-skip = not result.is_successful
-
 
 @pytest.mark.openai
+@skip_on_missing_imports(["openai"])
 def test_math_user_proxy_agent(
     credentials_gpt_4o_mini: Credentials,
 ):

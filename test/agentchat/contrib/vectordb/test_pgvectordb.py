@@ -11,25 +11,22 @@ import urllib.parse
 import pytest
 
 from autogen.agentchat.contrib.vectordb.pgvectordb import PGVectorDB
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ....conftest import reason
 
 with optional_import_block() as result:
-    import pgvector  # noqa: F401
     import psycopg
-    import sentence_transformers  # noqa: F401
 
-
-skip = not result.is_successful
 
 reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
 
 
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip,
+    sys.platform in ["darwin", "win32"],
     reason=reason,
 )
+@skip_on_missing_imports(["pgvector", "psycopg", "sentence_transformers"], "retrievechat-pgvector")
 def test_pgvector():
     # test db config
     db_config = {

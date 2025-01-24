@@ -13,20 +13,16 @@ import sys
 import pytest
 
 import autogen
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 from autogen.math_utils import eval_math_responses
 from autogen.oai.client import TOOL_ENABLED
 
 from ..conftest import Credentials
 
-with optional_import_block() as result:
-    from openai import OpenAI  # noqa: F401
-
-skip = not result.is_successful
-
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
+@pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
+@skip_on_missing_imports(["openai"])
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     tools = [
@@ -80,7 +76,8 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
+@pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed or requested to skip")
+@skip_on_missing_imports(["openai"])
 def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     functions = [
@@ -131,9 +128,10 @@ def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credent
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not TOOL_ENABLED or not sys.version.startswith("3.10"),
+    not TOOL_ENABLED or not sys.version.startswith("3.10"),
     reason="do not run if openai is <1.1.0 or py!=3.10 or requested to skip",
 )
+@skip_on_missing_imports(["openai"])
 def test_update_tool(credentials_gpt_4o: Credentials):
     llm_config = {
         "config_list": credentials_gpt_4o.config_list,

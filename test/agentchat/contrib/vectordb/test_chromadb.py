@@ -10,7 +10,7 @@ import sys
 import pytest
 
 from autogen.agentchat.contrib.vectordb.chromadb import ChromaVectorDB
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -20,10 +20,7 @@ with optional_import_block() as result:
     import sentence_transformers  # noqa: F401
 
 
-skip = not result.is_successful
-
-
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["chromadb", "sentence_transformers"], "retrievechat")
 def test_chromadb():
     # test create collection
     db = ChromaVectorDB(path=".db")
