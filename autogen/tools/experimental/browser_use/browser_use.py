@@ -11,6 +11,7 @@ from ... import Depends, Tool
 
 with optional_import_block():
     from browser_use import Agent
+    from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_openai import ChatOpenAI
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
@@ -27,9 +28,16 @@ def get_browser_use_function(api_key_f: Callable[[], str]) -> Callable[[str, str
         task: Annotated[str, "The task to perform."],
         api_key: Annotated[str, Depends(api_key_f)],
     ) -> BrowserUseResult:
+        headless = True
+        browser_config = BrowserConfig(
+            headless=headless,
+        )
+        browser = Browser(config=browser_config)
+
         agent = Agent(
             task=task,
             llm=ChatOpenAI(model="gpt-4o", api_key=api_key),
+            browser=browser,
         )
         result = await agent.run()
         return BrowserUseResult(
