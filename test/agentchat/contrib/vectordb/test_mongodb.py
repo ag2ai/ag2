@@ -146,9 +146,7 @@ def collection_name():
     return f"{MONGODB_COLLECTION}_{collection_id}"
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_create_collection(db, collection_name):
     """Def create_collection(collection_name: str,
@@ -179,9 +177,7 @@ def test_create_collection(db, collection_name):
         db.create_collection(collection_name=collection_name, overwrite=False, get_or_create=False)
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_get_collection(db, collection_name):
     with pytest.raises(ValueError):
@@ -196,9 +192,7 @@ def test_get_collection(db, collection_name):
     assert collection_got.name == db.active_collection.name
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_delete_collection(db, collection_name):
     assert collection_name not in db.list_collections()
@@ -208,9 +202,7 @@ def test_delete_collection(db, collection_name):
     assert collection_name not in db.list_collections()
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_insert_docs(db, collection_name, example_documents):
     # Test that there's an active collection
@@ -237,9 +229,7 @@ def test_insert_docs(db, collection_name, example_documents):
     assert len(found[0]["embedding"]) == 384
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_update_docs(db_with_indexed_clxn, example_documents):
     db, collection = db_with_indexed_clxn
@@ -276,9 +266,7 @@ def test_update_docs(db_with_indexed_clxn, example_documents):
     assert collection.find_one({"_id": new_id}) is None
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_delete_docs(db_with_indexed_clxn, example_documents):
     db, clxn = db_with_indexed_clxn
@@ -290,9 +278,7 @@ def test_delete_docs(db_with_indexed_clxn, example_documents):
     assert {2, "2"} == {doc["_id"] for doc in clxn.find({})}
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_get_docs_by_ids(db_with_indexed_clxn, example_documents):
     db, clxn = db_with_indexed_clxn
@@ -319,18 +305,14 @@ def test_get_docs_by_ids(db_with_indexed_clxn, example_documents):
     assert len(docs) == 4
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_retrieve_docs_empty(db_with_indexed_clxn):
     db, clxn = db_with_indexed_clxn
     assert db.retrieve_docs(queries=["Cats"], collection_name=clxn.name, n_results=2) == []
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_retrieve_docs_populated_db_empty_query(db_with_indexed_clxn, example_documents):
     db, clxn = db_with_indexed_clxn
@@ -340,9 +322,7 @@ def test_retrieve_docs_populated_db_empty_query(db_with_indexed_clxn, example_do
     assert results == []
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_retrieve_docs(db_with_indexed_clxn, example_documents):
     """Begin testing Atlas Vector Search
@@ -367,9 +347,7 @@ def test_retrieve_docs(db_with_indexed_clxn, example_documents):
     assert all(["embedding" not in doc[0] for doc in results[0]])
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_retrieve_docs_with_embedding(db_with_indexed_clxn, example_documents):
     """Begin testing Atlas Vector Search
@@ -394,9 +372,7 @@ def test_retrieve_docs_with_embedding(db_with_indexed_clxn, example_documents):
     assert all(["embedding" in doc[0] for doc in results[0]])
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_retrieve_docs_multiple_queries(db_with_indexed_clxn, example_documents):
     db, clxn = db_with_indexed_clxn
@@ -420,9 +396,7 @@ def test_retrieve_docs_multiple_queries(db_with_indexed_clxn, example_documents)
     assert {doc[0]["id"] for doc in results[1]} == {"1", "2"}
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_retrieve_docs_with_threshold(db_with_indexed_clxn, example_documents):
     db, clxn = db_with_indexed_clxn
@@ -445,9 +419,7 @@ def test_retrieve_docs_with_threshold(db_with_indexed_clxn, example_documents):
     assert all([doc[1] >= 0.7 for doc in results[0]])
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(),
-)
+@pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
 @skip_on_missing_imports(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
 def test_wait_until_document_ready(collection_name, example_documents):
     database = MongoClient(MONGODB_URI)[MONGODB_DATABASE]
