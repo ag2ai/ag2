@@ -87,7 +87,6 @@ def generate_markdown(path: Path) -> None:
             yield from recursive_markdown(submod)
 
     for mod in modules:
-        # todo: pass the template here
         for module_name, text in recursive_markdown(mod):
             file_path = path / module_name.replace(".", "/") / "index.md"
             # print(f"Writing {file_path}...")
@@ -186,7 +185,7 @@ def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = 
     # Sort directories and create their structures
     sorted_groups = [
         {
-            "group": ".".join(parent_groups + [group]) if parent_groups else group,
+            "group": group,
             "pages": create_nav_structure(subpaths, parent_groups + [group]),
         }
         for group, subpaths in sorted(groups.items())
@@ -196,7 +195,7 @@ def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = 
     sorted_pages = sorted(pages)
 
     # Return directories first, then files
-    return sorted_groups + sorted_pages
+    return sorted_pages + sorted_groups
 
 
 def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
@@ -265,12 +264,10 @@ class SplitReferenceFilesBySymbols:
         self.tmp_dir = Path("tmp")
 
     def _split_content_by_symbols(self, content: str) -> dict[str, str]:
-        sections = {}
+        symbols = {}
         if "**** SYMBOL_START ****" in content:
-            sections.update(self._extract_symbol_content(content))
-        if "**** SUBMODULE_START ****" in content:
-            sections.update(self._extract_submodule_content(content))
-        return sections
+            symbols.update(self._extract_symbol_content(content))
+        return symbols
 
     def _extract_symbol_content(self, content: str) -> dict[str, str]:
         sections = {
@@ -278,10 +275,6 @@ class SplitReferenceFilesBySymbols:
             for part in content.split("**** SYMBOL_START ****")[1:]
         }
         return sections
-
-    def _extract_submodule_content(self, content: str) -> dict[str, str]:
-        submodule = content.split("**** SUBMODULE_START ****")[1].split("**** SUBMODULE_END ****")[0]
-        return {"overview": submodule}
 
     def _process_files(self) -> Iterator[tuple[Path, dict[str, str]]]:
         for md_file in self.api_dir.rglob("*.md"):

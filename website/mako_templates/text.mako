@@ -175,13 +175,15 @@ ${indent(s)}
 <%def name="function(func)" buffered="True">
 
 <%
-    metadata = "" if not func.cls else f"""
+    metadata = "" if func.cls else f"""
 ---
-sidebarTitle: ${func.name}
-title: ${func.module.name}${'.'+func.cls.name if func.cls else ''}.${func.name}
+sidebarTitle: {func.name}
+title: {func.module.name}.{func.name}
 ---
 """
 %>
+
+${metadata}
 
 <code class="doc-symbol doc-symbol-heading doc-symbol-${func.cls and 'method' or 'function'}"></code>
 ${'####'} ${func.name}

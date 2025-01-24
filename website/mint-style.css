@@ -726,13 +726,41 @@ table {
     & > div > ul > li {
       & > a,
       & > div {
-        padding-left: 2.5rem !important;
+        padding-left: 1rem !important;
       }
 
       & > ul > li {
         & > a,
         & > div {
-          padding-left: 3.5rem !important;
+          padding-left: 1.5rem !important;
+        }
+
+        & > ul > li {
+          & > a,
+          & > div {
+            padding-left: 2rem !important;
+          }
+
+          & > ul > li {
+            & > a,
+            & > div {
+              padding-left: 2.5rem !important;
+            }
+
+            & > ul > li {
+              & > a,
+              & > div {
+                padding-left: 3rem !important;
+              }
+
+              & > ul > li {
+                & > a,
+                & > div {
+                  padding-left: 3.5rem !important;
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -839,9 +867,9 @@ table {
 
       &:first-child {
         margin-top: 0;
-        h5 {
+        /* h5 {
           display: none;
-        }
+        } */
       }
     }
   }

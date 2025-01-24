@@ -346,21 +346,30 @@ sidebarTitle: agentchat
 title: autogen.agentchat
 ---
 
-**** SUBMODULE_START ****
+**** SYMBOL_START ****
 
-## Sub-modules
+    <h2 id="autogen.agentchat.MyClass" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">MyClass</span>
+        <a href="#autogen.MyClass" class="headerlink" title="Permanent link"></a>
+    </h2>
 
-* autogen.agentchat.agent
-* autogen.agentchat.assistant_agent
-* autogen.agentchat.chat
-* autogen.agentchat.contrib
-* autogen.agentchat.conversable_agent
-* autogen.agentchat.groupchat
-* autogen.agentchat.realtime_agent
-* autogen.agentchat.user_proxy_agent
-* autogen.agentchat.utils
+`autogen.MyClass`
 
-**** SUBMODULE_END ****
+```python
+MyClass(
+    name: str,
+)
+```
+
+    A class for generic conversable agents which can be configured as assistant or user proxy.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `name` | name of the agent.<br/><br/>**Type:** `str` |
+
+**** SYMBOL_END ****
 
 """
 
@@ -370,8 +379,10 @@ title: autogen.agentchat
         # create a tmp directory and add some files, finally yield the path
         with tempfile.TemporaryDirectory() as tmp_dir:
             api_dir = Path(tmp_dir)
-            (api_dir / "index.md").write_text(TestSplitReferenceFilesBySymbol.AUTOGEN_INDEX_CONTENT)
-            agentchat_path = api_dir / "agentchat"
+            autogen_dir = api_dir / "autogen"
+            autogen_dir.mkdir(parents=True, exist_ok=True)
+            (autogen_dir / "index.md").write_text(TestSplitReferenceFilesBySymbol.AUTOGEN_INDEX_CONTENT)
+            agentchat_path = autogen_dir / "agentchat"
             agentchat_path.mkdir(parents=True, exist_ok=True)
             (agentchat_path / "index.md").write_text(TestSplitReferenceFilesBySymbol.AGENTCHAT_INDEX_CONTENT)
             yield api_dir
@@ -380,11 +391,12 @@ title: autogen.agentchat
     def expected_files(self) -> list[str]:
         """Fixture providing the expected directories."""
         return [
-            "index.md",
+            # "overview.md",
             "gather_usage_summary.md",
             "config_list_from_dotenv.md",
             "ConversableAgent.md",
-            "agentchat/index.md",
+            "agentchat/MyClass.md",
+            # "agentchat/overview.md",
         ]
 
     def test_split_reference_by_symbols(self, api_dir: Path, expected_files: list[str]) -> None:
