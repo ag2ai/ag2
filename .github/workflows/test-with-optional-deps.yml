@@ -93,10 +93,12 @@ jobs:
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
       - name: Test import all submodules
+        shell: bash
         run: |
           uv pip install --system "requests<2.32.0"
           bash scripts/test.sh test/test_import.py
       - name: Test with pytest using optional dependency marks
+        shell: bash
         run: |
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
