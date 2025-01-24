@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import sys
 from typing import Callable
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -71,14 +71,19 @@ class TestBrowserUseToolOpenai:
         user_proxy.register_for_execution()(browser_use_tool)
         assistant.register_for_llm()(browser_use_tool)
 
-        # Wrap the function so we can check if it was called
-        mock = MagicMock(wraps=browser_use_tool.func)
-        browser_use_tool._func = mock
-
-        user_proxy.initiate_chat(
+        result = user_proxy.initiate_chat(
             recipient=assistant,
             message="Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment.",
             max_turns=2,
         )
 
-        mock.assert_called_once()
+        result_validated = False
+        for message in result.chat_history:
+            if "role" in message and message["role"] == "tool":
+                # Convert JSON string to Python dictionary
+                data = json.loads(message["content"])
+                assert isinstance(BrowserUseResult(**data), BrowserUseResult)
+                result_validated = True
+                break
+
+        assert result_validated, "No valid result found in the chat history."
