@@ -192,7 +192,13 @@ def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = 
     ]
 
     # Sort pages
+    overview_page = [page for page in pages if page.endswith("overview")]
+    if overview_page:
+        pages.remove(overview_page[0])
+
     sorted_pages = sorted(pages)
+    if overview_page:
+        sorted_pages.insert(0, overview_page[0])
 
     # Return directories first, then files
     return sorted_pages + sorted_groups
@@ -263,24 +269,58 @@ class SplitReferenceFilesBySymbols:
         self.api_dir = api_dir
         self.tmp_dir = Path("tmp")
 
-    def _split_content_by_symbols(self, content: str) -> dict[str, str]:
+    def _generate_overview(self, classes: list[str], functions: list[str], output_dir: Path) -> str:
+        overview = """---
+sidebarTitle: Overview
+title: Overview
+---
+"""
+        if classes:
+            overview += "\n\n## Classes\n"
+            for symbol in sorted(classes):
+                href = output_dir / symbol
+                overview += f"""<p class="overview-symbol"><a href="/{str(href).replace("tmp/", "reference/")}"><code>class {symbol}</code></a></p>"""
+            overview += "\n"
+
+        if functions:
+            overview += "\n\n## Functions\n"
+            for symbol in sorted(functions):
+                href = output_dir / symbol
+                overview += f"""<p class="overview-symbol"><a href="/{str(href).replace("tmp/", "reference/")}"><code>{symbol}</code></a></p>"""
+            overview += "\n"
+
+        return overview
+
+    def _extract_symbol_content(self, content: str, output_dir: Path) -> dict[str, str]:
+        sections = {}
+        class_symbols = []
+        function_symbols = []
+
+        for part in content.split("**** SYMBOL_START ****")[1:]:
+            symbol = part.split("```python\n")[1].split("(")[0].strip()
+            content = part.split("**** SYMBOL_END ****")[0].strip()
+            sections[symbol] = content
+
+            if "doc-symbol-class" in content:
+                class_symbols.append(symbol)
+
+            if "doc-symbol-function" in content:
+                function_symbols.append(symbol)
+
+        sections["overview"] = self._generate_overview(class_symbols, function_symbols, output_dir)
+        return sections
+
+    def _split_content_by_symbols(self, content: str, output_dir: Path) -> dict[str, str]:
         symbols = {}
         if "**** SYMBOL_START ****" in content:
-            symbols.update(self._extract_symbol_content(content))
+            symbols.update(self._extract_symbol_content(content, output_dir))
         return symbols
-
-    def _extract_symbol_content(self, content: str) -> dict[str, str]:
-        sections = {
-            part.split("```python\n")[1].split("(")[0].strip(): part.split("**** SYMBOL_END ****")[0].strip()
-            for part in content.split("**** SYMBOL_START ****")[1:]
-        }
-        return sections
 
     def _process_files(self) -> Iterator[tuple[Path, dict[str, str]]]:
         for md_file in self.api_dir.rglob("*.md"):
             output_dir = self.tmp_dir / md_file.relative_to(self.api_dir).parent
             output_dir.mkdir(parents=True, exist_ok=True)
-            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding="utf-8"))
+            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding="utf-8"), output_dir)
 
     def _clean_directory(self, directory: Path) -> None:
         for item in directory.iterdir():

@@ -391,12 +391,12 @@ MyClass(
     def expected_files(self) -> list[str]:
         """Fixture providing the expected directories."""
         return [
-            # "overview.md",
+            "overview.md",
             "gather_usage_summary.md",
             "config_list_from_dotenv.md",
             "ConversableAgent.md",
             "agentchat/MyClass.md",
-            # "agentchat/overview.md",
+            "agentchat/overview.md",
         ]
 
     def test_split_reference_by_symbols(self, api_dir: Path, expected_files: list[str]) -> None:

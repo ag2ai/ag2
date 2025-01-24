@@ -220,6 +220,28 @@ body.reference-page .headerlink:hover {
   font-size: 1rem;
   margin: 0 0.25rem;
 }
+
+body.reference-page  h2#classes,
+body.reference-page  h2#functions {
+  font-family: monospace !important;
+  font-size: 1.25rem !important;
+}
+
+body.reference-page  p.overview-symbol {
+  margin: 1rem 0;
+
+  & a {
+    text-decoration: none;
+    color: #338fd1;
+    font-family: monospace;
+    & code {
+      padding: 0.2em 0.4em;
+      background-color: #ebf3f9;
+      border-radius: 3px;
+      text-decoration: none;
+    }
+  }
+}
 /* Reference section ends */
 
 a.colab-badge, a.github-badge {
