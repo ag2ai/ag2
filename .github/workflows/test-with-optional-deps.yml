@@ -92,10 +92,12 @@ jobs:
           if [[ ${{ matrix.os }} != ubuntu-latest ]]; then
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
-      - name: Test with pytest using optional dependency marks
+      - name: Test import all submodules
         run: |
           uv pip install --system "requests<2.32.0"
           bash scripts/test.sh test/test_import.py
+      - name: Test with pytest using optional dependency marks
+        run: |
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
           bash scripts/test.sh -m "$MARKER and not openai"
