@@ -16,20 +16,19 @@ from ....conftest import Credentials
 
 with optional_import_block():
     from browser_use import Agent
-    from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_openai import ChatOpenAI
 
 
 @pytest.mark.skipif(sys.version_info < (3, 11), reason="requires Python 3.11 or higher")
-@skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
 @pytest.mark.browser_use  # todo: remove me after we merge the PR that ads it automatically
+@skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
 class TestBrowserUseToolOpenai:
     def _use_imports(self) -> None:
         self._ChatOpenAI = ChatOpenAI
         self._Agent = Agent
 
-    def test_broser_use_tool_init(self) -> None:
-        browser_use_tool = BrowserUseTool(api_key="api_key")
+    def test_broser_use_tool_init(self, mock_credentials: Credentials) -> None:
+        browser_use_tool = BrowserUseTool(llm_config=mock_credentials.llm_config)
         assert browser_use_tool.name == "browser_use"
         assert browser_use_tool.description == "Use the browser to perform a task."
         assert isinstance(browser_use_tool.func, Callable)  # type: ignore[arg-type]
@@ -46,13 +45,8 @@ class TestBrowserUseToolOpenai:
         assert browser_use_tool.function_schema == expected_schema
 
     @pytest.fixture()
-    def browser_use_tool(self, credentials_gpt_4o: Credentials) -> BrowserUseTool:
-        api_key = credentials_gpt_4o.api_key
-        browser_config = BrowserConfig(
-            headless=True,
-        )
-        browser = Browser(config=browser_config)
-        return BrowserUseTool(api_key=api_key, browser=browser, generate_gif=False)
+    def browser_use_tool(self, credentials_gpt_4o_mini: Credentials) -> BrowserUseTool:
+        return BrowserUseTool(llm_config=credentials_gpt_4o_mini.llm_config)
 
     @pytest.mark.openai
     @pytest.mark.asyncio
@@ -68,8 +62,8 @@ class TestBrowserUseToolOpenai:
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
         assistant = AssistantAgent(name="assistant", llm_config=credentials_gpt_4o.llm_config)
 
-        user_proxy.register_for_execution()(browser_use_tool)
-        assistant.register_for_llm()(browser_use_tool)
+        browser_use_tool.register_for_execution(user_proxy)
+        browser_use_tool.register_for_llm(assistant)
 
         result = user_proxy.initiate_chat(
             recipient=assistant,

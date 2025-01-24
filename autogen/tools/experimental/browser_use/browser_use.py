@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Awaitable, Callable, Optional
+from typing import Annotated, Any, Callable, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -11,7 +11,7 @@ from ... import Depends, Tool
 
 with optional_import_block():
     from browser_use import Agent
-    from browser_use.browser.browser import Browser
+    from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_openai import ChatOpenAI
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
@@ -22,47 +22,75 @@ class BrowserUseResult(BaseModel):
     final_result: Optional[str]
 
 
-@require_optional_import(["langchain_openai", "browser_use"], "browser-use")
-def get_browser_use_function(  # type: ignore[no-any-unimported]
-    api_key_f: Callable[[], str],
-    browser_f: Callable[[], Optional[Browser]],
-    generate_gif_f: Callable[[], bool],
-) -> Callable[[str, str, Any, bool], Awaitable[BrowserUseResult]]:
-    async def browser_use(  # type: ignore[no-any-unimported]
-        task: Annotated[str, "The task to perform."],
-        api_key: Annotated[str, Depends(api_key_f)],
-        browser: Annotated[Optional[Browser], Depends(browser_f)],
-        generate_gif: Annotated[bool, Depends(generate_gif_f)],
-    ) -> BrowserUseResult:
-        agent = Agent(
-            task=task,
-            llm=ChatOpenAI(model="gpt-4o", api_key=api_key),
-            browser=browser,
-            generate_gif=generate_gif,
-        )
-        result = await agent.run()
+T = TypeVar("T")
 
-        return BrowserUseResult(
-            extracted_content=result.extracted_content(),
-            final_result=result.final_result(),
-        )
 
-    return browser_use
+def on(x: T) -> Callable[[], T]:
+    def inner(_x: T = x) -> T:
+        return _x
+
+    return inner
 
 
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
 class BrowserUseTool(Tool):
-    def __init__(self, api_key: str, browser: Optional[Browser] = None, generate_gif: bool = True):  # type: ignore[no-any-unimported]
-        def api_key_f() -> str:
-            return api_key
+    def __init__(  # type: ignore[no-any-unimported]
+        self,
+        *,
+        llm_config: dict[str, Any],
+        browser: Optional["Browser"] = None,
+        agent_kwargs: Optional[dict[str, Any]] = None,
+        browser_config: Optional[dict[str, Any]] = None,
+    ):
+        """Use the browser to perform a task.
 
-        def browser_f() -> Optional[Browser]:  # type: ignore[no-any-unimported]
-            return browser
+        Args:
+            llm_config: The LLM configuration.
+            browser: The browser to use. If defined, browser_config must be None
+            agent_kwargs: Additional keyword arguments to pass to the Agent
+            browser_config: The browser configuration to use. If defined, browser must be None
+        """
+        if agent_kwargs is None:
+            agent_kwargs = {}
 
-        def generate_gif_f() -> bool:
-            return generate_gif
+        if browser_config is None:
+            browser_config = {}
 
-        browser_use = get_browser_use_function(api_key_f, browser_f, generate_gif_f)
+        if browser is not None and browser_config:
+            raise ValueError(
+                f"Cannot provide both browser and additional keyword parameters: {browser=}, {browser_config=}"
+            )
+
+        if browser is None:
+            # set default value for headless
+            headless = browser_config.pop("headless", True)
+
+            browser_config = BrowserConfig(headless=headless, **browser_config)
+            browser = Browser(config=browser_config)
+
+        # set default value for generate_gif
+        if "generate_gif" not in agent_kwargs:
+            agent_kwargs["generate_gif"] = False
+
+        try:
+            model: str = llm_config["config_list"][0]["model"]  # type: ignore[index]
+            api_key: str = llm_config["config_list"][0]["api_key"]  # type: ignore[index]
+        except (KeyError, TypeError):
+            raise ValueError("llm_config must be a valid config dictionary.")
+
+        async def browser_use(  # type: ignore[no-any-unimported]
+            task: Annotated[str, "The task to perform."],
+            api_key: Annotated[str, Depends(on(api_key))],
+            browser: Annotated[Browser, Depends(on(browser))],
+            agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
+        ) -> BrowserUseResult:
+            agent = Agent(task=task, llm=ChatOpenAI(model=model, api_key=api_key), browser=browser, **agent_kwargs)
+            result = await agent.run()
+
+            return BrowserUseResult(
+                extracted_content=result.extracted_content(),
+                final_result=result.final_result(),
+            )
 
         super().__init__(
             name="browser_use",

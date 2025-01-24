@@ -122,6 +122,10 @@ class Credentials:
     def api_key(self) -> str:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
+    @property
+    def model(self) -> str:
+        return self.llm_config["config_list"][0]["model"]  # type: ignore[no-any-return]
+
 
 class CensoredError(Exception):
     def __init__(self, exception: BaseException):
