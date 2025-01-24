@@ -16,6 +16,7 @@ from ....conftest import Credentials
 
 with optional_import_block():
     from browser_use import Agent
+    from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_openai import ChatOpenAI
 
 
@@ -47,7 +48,11 @@ class TestBrowserUseToolOpenai:
     @pytest.fixture()
     def browser_use_tool(self, credentials_gpt_4o: Credentials) -> BrowserUseTool:
         api_key = credentials_gpt_4o.api_key
-        return BrowserUseTool(api_key=api_key)
+        browser_config = BrowserConfig(
+            headless=True,
+        )
+        browser = Browser(config=browser_config)
+        return BrowserUseTool(api_key=api_key, browser=browser)
 
     @pytest.mark.openai
     @pytest.mark.asyncio

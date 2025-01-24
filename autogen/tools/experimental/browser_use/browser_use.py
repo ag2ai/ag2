@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Awaitable, Callable, Optional, Union
+from typing import Annotated, Any, Awaitable, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -11,7 +11,7 @@ from ... import Depends, Tool
 
 with optional_import_block():
     from browser_use import Agent
-    from browser_use.browser.browser import Browser, BrowserConfig
+    from browser_use.browser.browser import Browser
     from langchain_openai import ChatOpenAI
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
@@ -23,23 +23,22 @@ class BrowserUseResult(BaseModel):
 
 
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
-def get_browser_use_function(api_key_f: Callable[[], str]) -> Callable[[str, str], Awaitable[BrowserUseResult]]:
-    async def browser_use(
+def get_browser_use_function(  # type: ignore[no-any-unimported]
+    api_key_f: Callable[[], str],
+    browser_f: Callable[[], Optional[Browser]],
+) -> Callable[[str, str, Any], Awaitable[BrowserUseResult]]:
+    async def browser_use(  # type: ignore[no-any-unimported]
         task: Annotated[str, "The task to perform."],
         api_key: Annotated[str, Depends(api_key_f)],
+        browser: Annotated[Optional[Browser], Depends(browser_f)],
     ) -> BrowserUseResult:
-        headless = True
-        browser_config = BrowserConfig(
-            headless=headless,
-        )
-        browser = Browser(config=browser_config)
-
         agent = Agent(
             task=task,
             llm=ChatOpenAI(model="gpt-4o", api_key=api_key),
             browser=browser,
         )
         result = await agent.run()
+
         return BrowserUseResult(
             extracted_content=result.extracted_content(),
             final_result=result.final_result(),
@@ -50,16 +49,17 @@ def get_browser_use_function(api_key_f: Callable[[], str]) -> Callable[[str, str
 
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
 class BrowserUseTool(Tool):
-    def __init__(self, api_key: Union[str, Callable[[], str]]):
-        api_key_f: Callable[[], str] = (lambda api_key=api_key: api_key) if isinstance(api_key, str) else api_key  # type: ignore[misc]
+    def __init__(self, api_key: str, browser: Optional[Browser] = None):  # type: ignore[no-any-unimported]
+        def api_key_f() -> str:
+            return api_key
 
-        browser_use = get_browser_use_function(api_key_f)
+        def browser_f() -> Optional[Browser]:  # type: ignore[no-any-unimported]
+            return browser
+
+        browser_use = get_browser_use_function(api_key_f, browser_f)
 
         super().__init__(
             name="browser_use",
             description="Use the browser to perform a task.",
             func_or_tool=browser_use,
         )
-
-
-# asyncio.run(main())
