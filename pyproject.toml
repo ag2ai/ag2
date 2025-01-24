@@ -124,6 +124,10 @@ rag = [
     "webdriver-manager==4.0.2",
 ]
 
+browser-use = [
+    "browser-use>=0.1.27,<0.2",
+]
+
 neo4j = [
     "docx2txt==0.8",
     "llama-index==0.12.11",
@@ -265,6 +269,7 @@ markers = [
     "deepseek",
     "redis",
     "docker",
+    "browser_use",
 ]
 
 [tool.black]
