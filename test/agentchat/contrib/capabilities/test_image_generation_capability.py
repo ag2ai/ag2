@@ -25,7 +25,6 @@ from ....conftest import MOCK_OPEN_AI_API_KEY
 with optional_import_block() as result:
     from PIL import Image
 
-skip_requirement = not result.is_successful
 
 filter_dict = {"model": ["gpt-4o-mini"]}
 
@@ -102,7 +101,7 @@ def test_dalle_image_generator(dalle_config: dict[str, Any]):
 # Using cartesian product to generate all possible combinations of resolution, quality, and prompt
 @pytest.mark.parametrize("gen_config_1", itertools.product(RESOLUTIONS, QUALITIES, PROMPTS))
 @pytest.mark.parametrize("gen_config_2", itertools.product(RESOLUTIONS, QUALITIES, PROMPTS))
-@pytest.mark.skipif(skip_requirement, reason="Dependencies are not installed.")
+@skip_on_missing_imports(["PIL"], "unknown")
 def test_dalle_image_generator_cache_key(
     dalle_config: dict[str, Any], gen_config_1: tuple[str, str, str], gen_config_2: tuple[str, str, str]
 ):
@@ -125,7 +124,7 @@ def test_dalle_image_generator_cache_key(
         assert cache_key_1 != cache_key_2
 
 
-@pytest.mark.skipif(skip_requirement, reason="Dependencies are not installed.")
+@skip_on_missing_imports(["PIL"], "unknown")
 def test_image_generation_capability_positive(monkeypatch, image_gen_capability):
     """Tests ImageGeneration capability to generate images by calling the ImageGenerator.
 
@@ -153,7 +152,7 @@ def test_image_generation_capability_positive(monkeypatch, image_gen_capability)
     assert auto_reply not in processed_message
 
 
-@pytest.mark.skipif(skip_requirement, reason="Dependencies are not installed.")
+@skip_on_missing_imports(["PIL"], "unknown")
 def test_image_generation_capability_negative(monkeypatch, image_gen_capability):
     """Tests ImageGeneration capability to generate images by calling the ImageGenerator.
 
@@ -181,7 +180,7 @@ def test_image_generation_capability_negative(monkeypatch, image_gen_capability)
     assert auto_reply == processed_message
 
 
-@pytest.mark.skipif(skip_requirement, reason="Dependencies are not installed.")
+@skip_on_missing_imports(["PIL"], "unknown")
 def test_image_generation_capability_cache(monkeypatch):
     """Tests ImageGeneration capability to cache the generated images."""
     test_image_size = (256, 256)
