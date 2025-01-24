@@ -51,7 +51,7 @@ def _wait_for_predicate(predicate, err, timeout=TIMEOUT, interval=DELAY):
         sleep(DELAY)
 
 
-def _delete_search_indexes(collection: Collection, wait=True):
+def _delete_search_indexes(collection: "Collection", wait=True):
     """Deletes all indexes in a collection
 
     Args:
