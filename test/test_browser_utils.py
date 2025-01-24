@@ -16,7 +16,7 @@ import pytest
 import requests
 
 from autogen.browser_utils import SimpleTextBrowser
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
@@ -38,13 +38,7 @@ BING_STRING = f"A Bing search for '{BING_QUERY}' found"
 
 
 with optional_import_block() as result:
-    import markdownify  # noqa: F401
-    import pathvalidate  # noqa: F401
     import requests
-    from bs4 import BeautifulSoup  # noqa: F401
-
-
-skip_all = not result.is_successful
 
 
 try:
@@ -70,10 +64,7 @@ def downloads_folder():
         yield downloads_folder
 
 
-@pytest.mark.skipif(
-    skip_all,
-    reason="do not run if dependency is not installed",
-)
+@skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_simple_text_browser(downloads_folder: str):
     # Instantiate the browser
     user_agent = "python-requests/" + requests.__version__
@@ -159,9 +150,10 @@ def test_simple_text_browser(downloads_folder: str):
 
 
 @pytest.mark.skipif(
-    skip_all or skip_bing,
+    skip_bing,
     reason="do not run bing tests if key is missing",
 )
+@skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_bing_search():
     # Instantiate the browser
     user_agent = "python-requests/" + requests.__version__
