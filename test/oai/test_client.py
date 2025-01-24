@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
+import copy
 import os
 import shutil
 import time
@@ -16,7 +17,7 @@ import pytest
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, OpenAIClient
 
 from ..conftest import Credentials
@@ -30,11 +31,9 @@ with optional_import_block() as result:
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
 
-skip = not result.is_successful
-
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     config_list = credentials_azure_gpt_35_turbo.config_list
     client = OpenAIWrapper(config_list=config_list)
@@ -53,7 +52,8 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
+@pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
+@skip_on_missing_imports(["openai"])
 def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(
@@ -86,7 +86,7 @@ def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}])
@@ -95,7 +95,7 @@ def test_chat_completion(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=")
@@ -104,7 +104,7 @@ def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 @pytest.mark.parametrize(
     "cache_seed",
     [
@@ -119,7 +119,7 @@ def test_cost(credentials_azure_gpt_35_turbo_instruct: Credentials, cache_seed):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     config_list = credentials_azure_gpt_35_turbo_instruct.config_list
     for config in config_list:
@@ -132,7 +132,7 @@ def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+3=", cache_seed=None)
@@ -164,7 +164,7 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
@@ -228,7 +228,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of artificial intelligence."
@@ -340,6 +340,95 @@ class TestOpenAIClientBadRequestsError:
         else:
             with pytest.raises(openai.BadRequestError):
                 wrapped_raise_bad_request_error(error_message=error_message)
+
+
+class TestDeepSeekPatch:
+    @pytest.mark.parametrize(
+        "messages, expected_messages",
+        [
+            (
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+        ],
+    )
+    def test_move_system_message_to_beginning(
+        self, messages: list[dict[str, str]], expected_messages: list[dict[str, str]]
+    ) -> None:
+        OpenAIClient._move_system_message_to_beginning(messages)
+        assert messages == expected_messages
+
+    @pytest.mark.parametrize(
+        "model, should_patch",
+        [
+            ("deepseek-reasoner", True),
+            ("deepseek", False),
+            ("something-else", False),
+        ],
+    )
+    def test_patch_messages_for_deepseek_reasoner(self, model: str, should_patch: bool) -> None:
+        kwargs = {
+            "messages": [
+                {"role": "user", "content": "You are an AG2 Agent."},
+                {"role": "system", "content": "You are an AG2 Agent System."},
+                {"role": "user", "content": "Help me with my problem."},
+            ],
+            "model": model,
+        }
+
+        if should_patch:
+            expected_kwargs = {
+                "messages": [
+                    {"role": "system", "content": "You are an AG2 Agent System."},
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "user", "content": "continue"},
+                ],
+                "model": "deepseek-reasoner",
+            }
+        else:
+            expected_kwargs = copy.deepcopy(kwargs)
+
+        kwargs = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
+        assert kwargs == expected_kwargs
 
 
 class TestO1:

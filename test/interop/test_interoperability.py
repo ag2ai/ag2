@@ -15,9 +15,6 @@ from ..conftest import MOCK_OPEN_AI_API_KEY
 with optional_import_block():
     from crewai_tools import FileReadTool
 
-with optional_import_block():
-    pass  # type: ignore[import]
-
 
 @pytest.mark.interop
 class TestInteroperability:

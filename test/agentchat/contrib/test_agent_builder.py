@@ -12,7 +12,7 @@ import os
 import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST
 
@@ -20,7 +20,6 @@ with optional_import_block() as result:
     import chromadb  # noqa: F401
     import huggingface_hub  # noqa: F401
 
-skip = not result.is_successful
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -72,10 +71,7 @@ def test_build(builder: AgentBuilder):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip,
-    reason="dependency not installed",
-)
+@skip_on_missing_imports(["chromadb", "huggingface_hub"], "autobuild")
 def test_build_from_library(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "

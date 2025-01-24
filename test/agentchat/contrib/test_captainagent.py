@@ -7,15 +7,13 @@ import pytest
 
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials, reason
+from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials
 
 with optional_import_block() as result:
     import chromadb  # noqa: F401
     import huggingface_hub  # noqa: F401
-
-skip = not result.is_successful
 
 
 @pytest.mark.openai
@@ -58,10 +56,7 @@ def test_captain_agent_from_scratch(credentials_all: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip,
-    reason=reason,
-)
+@skip_on_missing_imports(["chromadb", "huggingface_hub"], "autobuild")
 def test_captain_agent_with_library(credentials_all: Credentials):
     config_list = credentials_all.config_list
     llm_config = {

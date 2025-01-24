@@ -12,17 +12,9 @@ from autogen.agentchat.contrib.graph_rag.neo4j_native_graph_query_engine import 
     GraphStoreQueryResult,
     Neo4jNativeGraphQueryEngine,
 )
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import reason
-
-with optional_import_block() as result:
-    from neo4j import GraphDatabase  # noqa: F401
-    from neo4j_graphrag.embeddings import Embedder  # noqa: F401
-
-
-skip = not result.is_successful
-
 
 # Configure the logging
 logging.basicConfig(level=logging.INFO)
@@ -116,10 +108,10 @@ def neo4j_native_query_engine_auto():
 @pytest.mark.openai
 @pytest.mark.neo4j
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip,
+    sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports("neo4j_graphrag", "unknown")
+@skip_on_missing_imports(["neo4j", "neo4j_graphrag"], "neo4j")
 def test_neo4j_native_query_engine(neo4j_native_query_engine):
     """Test querying with initialized knowledge graph"""
     question = "Which company is the employer?"
@@ -132,9 +124,10 @@ def test_neo4j_native_query_engine(neo4j_native_query_engine):
 @pytest.mark.openai
 @pytest.mark.neo4j
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip,
+    sys.platform in ["darwin", "win32"],
     reason=reason,
 )
+@skip_on_missing_imports(["neo4j", "neo4j_graphrag"], "neo4j")
 def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):
     """Test querying with auto-generated property graph"""
     question = "Which company is the employer?"

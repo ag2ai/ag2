@@ -9,22 +9,13 @@
 import unittest
 from unittest.mock import MagicMock
 
-import pytest
-
 import autogen
 from autogen.agentchat.contrib.img_utils import get_pil_image
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
-
-with optional_import_block() as result:
-    from PIL import Image  # noqa: F401
-
-
-skip = not result.is_successful
-
 
 base64_encoded_image = (
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4"
@@ -32,13 +23,7 @@ base64_encoded_image = (
 )
 
 
-if skip:
-    pil_image = None
-else:
-    pil_image = get_pil_image(base64_encoded_image)
-
-
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 class TestMultimodalConversableAgent(unittest.TestCase):
     def setUp(self):
         self.agent = MultimodalConversableAgent(
@@ -65,6 +50,8 @@ class TestMultimodalConversableAgent(unittest.TestCase):
         # Test updating system message
         new_message = f"We will discuss <img {base64_encoded_image}> in this conversation."
         self.agent.update_system_message(new_message)
+
+        pil_image = get_pil_image(base64_encoded_image)
         self.assertEqual(
             self.agent.system_message,
             [
@@ -97,7 +84,7 @@ class TestMultimodalConversableAgent(unittest.TestCase):
         self.agent._print_received_message.assert_called_with(message_str, sender)
 
 
-@pytest.mark.skipif(skip, reason="Dependency not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 def test_group_chat_with_lmm():
     """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.
