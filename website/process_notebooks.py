@@ -907,7 +907,7 @@ def ensure_mint_json_exists(website_dir: Path) -> None:
     if not mint_json_path.exists():
         print(f"mint.json not found at {mint_json_path}")
         print(
-            "You can either run the 'generate_api_reference.py' script before running this script or simply run the scripts/docs_build.sh script which will execute both 'generate_api_reference.py' and 'process_notebooks.py' scripts in correct order."
+            "You can either run the 'generate_api_references.py' script before running this script or simply run the scripts/docs_build.sh script which will execute both 'generate_api_references.py' and 'process_notebooks.py' scripts in correct order."
         )
         sys.exit(1)
 

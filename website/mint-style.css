@@ -96,6 +96,9 @@ body.reference-page .doc-symbol-class {
   position: relative;
   background-color: #ebf3f9;
 }
+.dark body.reference-page .doc-symbol-class {
+  background-color: #79c0ff1a;
+}
 
 body.reference-page .doc-symbol-class:before {
   content: "class" !important;
@@ -111,9 +114,17 @@ body.reference-page .doc-symbol-class:before {
   display: inline-block;
 }
 
+.dark body.reference-page .doc-symbol-method {
+  background-color: #79c0ff1a;
+}
+
 .doc-symbol-attribute {
   background-color: #f4ebe6;
   display: inline-block;
+}
+
+.dark body.reference-page .doc-symbol-attribute {
+  background-color: #79c0ff1a;
 }
 
 .doc-symbol-function:before {
@@ -123,6 +134,10 @@ body.reference-page .doc-symbol-class:before {
   font-size: 0.75rem;
   font-weight: bold;
   vertical-align: middle;
+}
+
+.dark body.reference-page .doc-symbol-function {
+  background-color: #79c0ff1a;
 }
 
 .doc-symbol-method:before {

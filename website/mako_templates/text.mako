@@ -173,6 +173,16 @@ ${indent(s)}
 %>
 
 <%def name="function(func)" buffered="True">
+
+<%
+    metadata = "" if not func.cls else f"""
+---
+sidebarTitle: ${func.name}
+title: ${func.module.name}${'.'+func.cls.name if func.cls else ''}.${func.name}
+---
+"""
+%>
+
 <code class="doc-symbol doc-symbol-heading doc-symbol-${func.cls and 'method' or 'function'}"></code>
 ${'####'} ${func.name}
 <a href="#${func.module.name}.${func.cls.name if func.cls else ''}.${func.name}" class="headerlink" title="Permanent link"></a>
@@ -226,14 +236,15 @@ ${cleaned_docstring | deflist}
 </%def>
 
 <%def name="class_(cls)" buffered="True">
-
-***** SPLIT HERE *****
-
-    <h2 id="${cls.module.name}.${cls.name}" class="doc doc-heading">
-        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
-        <span class="doc doc-object-name doc-class-name">${cls.name}</span>
-        <a href="#${cls.module.name}.${cls.name}" class="headerlink" title="Permanent link"></a>
-    </h2>
+---
+sidebarTitle: ${cls.name}
+title: ${cls.module.name}.${cls.name}
+---
+<h2 id="${cls.module.name}.${cls.name}" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+    <span class="doc doc-object-name doc-class-name">${cls.name}</span>
+    <a href="#${cls.module.name}.${cls.name}" class="headerlink" title="Permanent link"></a>
+</h2>
 
 <%
    params = cls.params(annotate=show_type_annotations)
@@ -247,7 +258,6 @@ ${cleaned_docstring | deflist}
 
    cleaned_docstring = cls.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
-`${cls.module.name}.${cls.name}`
 
 ```python
 ${signature}
@@ -310,16 +320,18 @@ ${function(m)}
   classes = [c for c in classes if c.__module__ != "autogen"]
 %>
 
+% if submodules:
+**** SUBMODULE_START ****
 ---
-sidebarTitle: ${symbol_name}
+sidebarTitle: overview
 title: ${module.name}
 ---
 
-% if submodules:
 ${h2('Sub-modules')}
     % for m in submodules:
 * ${m.name}
     % endfor
+**** SUBMODULE_END ****
 % endif
 
 % if variables:
@@ -333,14 +345,18 @@ ${variable(v)}
 % if functions:
 ${h2('Functions')}
     % for f in functions:
+**** SYMBOL_START ****
 ${function(f)}
+**** SYMBOL_END ****
 
     % endfor
 % endif
 
 % if classes:
     % for c in classes:
+**** SYMBOL_START ****
 ${class_(c)}
+**** SYMBOL_END ****
 
     % endfor
 % endif

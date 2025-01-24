@@ -18,7 +18,7 @@ import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 import pdoc
 from jinja2 import Template
@@ -259,6 +259,65 @@ def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_pa
         json.dump(mint_json_data, f, indent=2)
 
 
+class SplitReferenceFilesBySymbols:
+    def __init__(self, api_dir: Path) -> None:
+        self.api_dir = api_dir
+        self.tmp_dir = Path("tmp")
+
+    def _split_content_by_symbols(self, content: str) -> dict[str, str]:
+        sections = {}
+        if "**** SYMBOL_START ****" in content:
+            sections.update(self._extract_symbol_content(content))
+        if "**** SUBMODULE_START ****" in content:
+            sections.update(self._extract_submodule_content(content))
+        return sections
+
+    def _extract_symbol_content(self, content: str) -> dict[str, str]:
+        sections = {
+            part.split("```python\n")[1].split("(")[0].strip(): part.split("**** SYMBOL_END ****")[0].strip()
+            for part in content.split("**** SYMBOL_START ****")[1:]
+        }
+        return sections
+
+    def _extract_submodule_content(self, content: str) -> dict[str, str]:
+        submodule = content.split("**** SUBMODULE_START ****")[1].split("**** SUBMODULE_END ****")[0]
+        return {"overview": submodule}
+
+    def _process_files(self) -> Iterator[tuple[Path, dict[str, str]]]:
+        for md_file in self.api_dir.rglob("*.md"):
+            output_dir = self.tmp_dir / md_file.relative_to(self.api_dir).parent
+            output_dir.mkdir(parents=True, exist_ok=True)
+            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding="utf-8"))
+
+    def _clean_directory(self, directory: Path) -> None:
+        for item in directory.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+
+    def _move_generated_files_to_api_dir(self) -> None:
+        self._clean_directory(self.api_dir)
+        for item in self.tmp_dir.iterdir():
+            dest = self.api_dir / item.relative_to(self.tmp_dir)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            copy_func = shutil.copytree if item.is_dir() else shutil.copy2
+            print(f"Copying {'directory' if item.is_dir() else 'file'} {item} to {dest}")
+            copy_func(item, dest)
+
+    def generate(self) -> None:
+        try:
+            self.tmp_dir.mkdir(exist_ok=True)
+            for output_dir, symbols in self._process_files():
+                if symbols:
+                    for name, content in symbols.items():
+                        (output_dir / f"{name}.md").write_text(content, encoding="utf-8")
+
+            self._move_generated_files_to_api_dir()
+        finally:
+            shutil.rmtree(self.tmp_dir)
+
+
 def main() -> None:
     website_dir = Path(__file__).parent.absolute()
 
@@ -282,6 +341,10 @@ def main() -> None:
     # Generate API reference documentation
     print("Generating API reference documentation...")
     generate(target_dir, template_dir)
+
+    # Split the API reference from submodules into separate files for each symbols
+    symbol_files_generator = SplitReferenceFilesBySymbols(target_dir)
+    symbol_files_generator.generate()
 
     # Convert MD to MDX
     print("Converting MD files to MDX...")
