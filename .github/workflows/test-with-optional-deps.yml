@@ -93,6 +93,8 @@ jobs:
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
       - name: Test import all submodules
+        # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
+        if: ${{ !(matrix.python-version == '3.9' && matrix.optional-dependencies == 'graph-rag-falkor-db') }}
         shell: bash
         run: |
           uv pip install --system "requests<2.32.0"
