@@ -18,6 +18,13 @@ __all__ = ["BrowserUseResult", "BrowserUseTool"]
 
 
 class BrowserUseResult(BaseModel):
+    """The result of using the browser to perform a task.
+
+    Attributes:
+        extracted_content: List of extracted content.
+        final_result: The final result.
+    """
+
     extracted_content: list[str]
     final_result: Optional[str]
 
@@ -34,6 +41,8 @@ def on(x: T) -> Callable[[], T]:
 
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
 class BrowserUseTool(Tool):
+    """BrowserUseTool is a tool that uses the browser to perform a task."""
+
     def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
