@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Awaitable, Callable, Union
+from typing import Annotated, Awaitable, Callable, Optional, Union
+
+from pydantic import BaseModel
 
 from ....import_utils import optional_import_block, require_optional_import
 from ... import Depends, Tool
@@ -11,21 +13,29 @@ with optional_import_block():
     from browser_use import Agent
     from langchain_openai import ChatOpenAI
 
-__all__ = ["BrowserUseTool"]
+__all__ = ["BrowserUseResult", "BrowserUseTool"]
+
+
+class BrowserUseResult(BaseModel):
+    extracted_content: list[str]
+    final_result: Optional[str]
 
 
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
-def get_browser_use_function(api_key_f: Callable[[], str]) -> Callable[[str, str], Awaitable[str]]:
+def get_browser_use_function(api_key_f: Callable[[], str]) -> Callable[[str, str], Awaitable[BrowserUseResult]]:
     async def browser_use(
         task: Annotated[str, "The task to perform."],
         api_key: Annotated[str, Depends(api_key_f)],
-    ) -> str:
+    ) -> BrowserUseResult:
         agent = Agent(
             task=task,
             llm=ChatOpenAI(model="gpt-4o", api_key=api_key),
         )
         result = await agent.run()
-        return str(result)
+        return BrowserUseResult(
+            extracted_content=result.extracted_content(),
+            final_result=result.final_result(),
+        )
 
     return browser_use
 
