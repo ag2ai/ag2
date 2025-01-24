@@ -298,9 +298,57 @@ class OpenAIClient:
         return True if pattern.match(message) else False
 
     @staticmethod
+    def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:
+        for msg in messages:
+            if msg["role"] == "system":
+                messages.insert(0, messages.pop(messages.index(msg)))
+                break
+
+    @staticmethod
+    def _patch_messages_for_deepseek_reasoner(**kwargs: Any) -> Any:
+        if (
+            "model" not in kwargs
+            or kwargs["model"] != "deepseek-reasoner"
+            or "messages" not in kwargs
+            or len(kwargs["messages"]) == 0
+        ):
+            return kwargs
+
+        # The system message of deepseek-reasoner must be put on the beginning of the message sequence.
+        OpenAIClient._move_system_message_to_beginning(kwargs["messages"])
+
+        new_messages = []
+        previous_role = None
+        for message in kwargs["messages"]:
+            if "role" in message:
+                current_role = message["role"]
+
+                # This model requires alternating roles
+                if current_role == previous_role:
+                    # Swap the role
+                    if current_role == "user":
+                        message["role"] = "assistant"
+                    elif current_role == "assistant":
+                        message["role"] = "user"
+
+                previous_role = message["role"]
+
+            new_messages.append(message)
+
+        # The last message of deepseek-reasoner must be a user message
+        # , or an assistant message with prefix mode on (but this is supported only for beta api)
+        if new_messages[-1]["role"] != "user":
+            new_messages.append({"role": "user", "content": "continue"})
+
+        kwargs["messages"] = new_messages
+
+        return kwargs
+
+    @staticmethod
     def _handle_openai_bad_request_error(func: Callable[..., Any]) -> Callable[..., Any]:
         def wrapper(*args: Any, **kwargs: Any):
             try:
+                kwargs = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
                 return func(*args, **kwargs)
             except openai.BadRequestError as e:
                 response_json = e.response.json()

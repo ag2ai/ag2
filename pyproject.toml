@@ -118,6 +118,12 @@ graph-rag-falkor-db = [
     "falkordb>=1.0.10"
 ]
 
+rag = [
+    "docling>=2.15.1,<3",
+    "selenium>=4.28.1,<5",
+    "webdriver-manager==4.0.2",
+]
+
 neo4j = [
     "docx2txt==0.8",
     "llama-index==0.12.11",
@@ -348,6 +354,7 @@ files = [
     "autogen/agentchat/realtime_agent",
     "autogen/messages",
     "autogen/import_utils.py",
+    "autogen/agentchat/contrib/rag",
     "website/*.py",
     "test/test_pydantic.py",
     "test/io",
@@ -358,6 +365,7 @@ files = [
     "test/conftest.py",
     "test/test_import_utils.py",
     "test/test_import.py",
+    "test/agentchat/contrib/rag",
     "test/website",
 ]
 

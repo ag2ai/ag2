@@ -140,15 +140,15 @@ def pytest_runtest_makereport(item: Item, call: CallInfo[Any]) -> None:
     if call.excinfo is not None:  # This means the test failed
         exception_value = call.excinfo.value
 
-        original_message = "".join([repr(arg) for arg in exception_value.args])
+        original_message = "".join([repr(arg) for arg in exception_value.args])  # noqa: F841
 
         # Check if this exception is a pytest skip exception
         if isinstance(exception_value, Skipped):
             return  # Don't modify skip exceptions
 
-        if Secrets.needs_sanitizing(original_message):
-            censored_exception = CensoredError(call.excinfo.value)
-            call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
+        # if Secrets.needs_sanitizing(original_message):
+        #     censored_exception = CensoredError(call.excinfo.value)
+        #     call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
 
 
 def get_credentials(
@@ -178,16 +178,25 @@ def get_credentials(
 
 
 def get_config_list_from_env(
-    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+    env_var_name: str,
+    model: str,
+    api_type: str,
+    filter_dict: Optional[dict[str, Any]] = None,
+    temperature: float = 0.0,
 ) -> list[dict[str, Any]]:
     if env_var_name in os.environ:
         api_key = os.environ[env_var_name]
         return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
+
     return []
 
 
 def get_llm_credentials(
-    env_var_name: str, model: str, api_type: str, filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0
+    env_var_name: str,
+    model: str,
+    api_type: str,
+    filter_dict: Optional[dict[str, Any]] = None,
+    temperature: float = 0.0,
 ) -> Credentials:
     credentials = get_credentials(filter_dict, temperature, fail_if_empty=False)
     config_list = credentials.config_list if credentials else []
@@ -301,7 +310,7 @@ def credentials_deepseek_reasoner() -> Credentials:
         "DEEPSEEK_API_KEY",
         model="deepseek-reasoner",
         api_type="deepseek",
-        filter_dict={"tags": ["deepseek-reasoner"]},
+        filter_dict={"tags": ["deepseek-reasoner"], "base_url": "https://api.deepseek.com/v1"},
     )
 
 
