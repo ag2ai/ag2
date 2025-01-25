@@ -203,7 +203,7 @@ class Teachability(AgentCapability):
             input_text, n_results=self.max_num_retrievals, threshold=self.recall_threshold
         )
 
-        if self.verbosity >= 1:
+        if self.verbosity >= 1:  # noqa: SIM102
             # Was anything retrieved?
             if len(memo_list) == 0:
                 # No. Look at the closest memo.

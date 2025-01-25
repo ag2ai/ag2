@@ -131,7 +131,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]
 
     # Make sure tags is a list of strings
     if front_matter["tags"] is not None and not all([isinstance(tag, str) for tag in front_matter["tags"]]):
-            return "tags must be a list of strings"
+        return "tags must be a list of strings"
 
     # Make sure description is a string
     if not isinstance(front_matter["description"], str):
@@ -185,7 +185,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
 
         # If the intermediate_notebook already exists, check if it is newer than the source file
         if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
-                return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
+            return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
 
         if dry_run:
             return colored(f"Would process {src_notebook.name}", "green")
@@ -214,7 +214,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
 
         # If the intermediate_notebook already exists, check if it is newer than the source file
         if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
-                return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
+            return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
 
         if dry_run:
             return colored(f"Would process {src_notebook.name}", "green")

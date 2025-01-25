@@ -335,7 +335,7 @@ class OllamaClient:
                         # Blank the message content
                         response_content = ""
 
-            if ollama_finish == "stop":
+            if ollama_finish == "stop":  # noqa: SIM102
                 # Not a tool call, so let's check if we need to process structured output
                 if self._response_format and response_content:
                     try:

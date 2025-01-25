@@ -351,15 +351,18 @@ class OpenAIClient:
             except openai.BadRequestError as e:
                 response_json = e.response.json()
                 # Check if the error message is related to the agent name. If so, raise a ValueError with a more informative message.
-                if "error" in response_json and "message" in response_json["error"]:
-                    if OpenAIClient._is_agent_name_error_message(response_json["error"]["message"]):
-                        error_message = (
-                            f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.\n"
-                            "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters.\n"
-                            "Check the agent name and try again.\n"
-                            f"Here is the full BadRequestError from openai:\n{e.message}."
-                        )
-                        raise ValueError(error_message)
+                if (
+                    "error" in response_json
+                    and "message" in response_json["error"]
+                    and OpenAIClient._is_agent_name_error_message(response_json["error"]["message"])
+                ):
+                    error_message = (
+                        f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.\n"
+                        "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters.\n"
+                        "Check the agent name and try again.\n"
+                        f"Here is the full BadRequestError from openai:\n{e.message}."
+                    )
+                    raise ValueError(error_message)
 
                 raise e
 

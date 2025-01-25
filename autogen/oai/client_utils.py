@@ -94,7 +94,7 @@ def validate_parameter(
             if allow_None:
                 warning += ", or can be None"
 
-    elif allowed_values:
+    elif allowed_values:  # noqa: SIM102
         # Check if the value matches any allowed values
         if not (allow_None and param_value is None) and param_value not in allowed_values:
             warning = f"must be one of these values [{allowed_values}]{', or can be None' if allow_None else ''}"
