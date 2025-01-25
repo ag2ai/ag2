@@ -157,11 +157,9 @@ def test_nested(
 
 def test_sync_nested_chat():
     def is_termination(msg):
-        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+        return (isinstance(msg, str) and msg == "FINAL_RESULT") or (
             isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
-        ):
-            return True
-        return False
+        )
 
     inner_assistant = autogen.AssistantAgent(
         "Inner-assistant",
@@ -195,12 +193,10 @@ def test_sync_nested_chat():
 
 @pytest.mark.asyncio
 async def test_async_nested_chat():
-    def is_termination(msg):
-        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+    def is_termination(msg) -> bool:
+        return (isinstance(msg, str) and msg == "FINAL_RESULT") or (
             isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
-        ):
-            return True
-        return False
+        )
 
     inner_assistant = autogen.AssistantAgent(
         "Inner-assistant",
@@ -236,12 +232,10 @@ async def test_async_nested_chat():
 
 @pytest.mark.asyncio
 async def test_async_nested_chat_chat_id_validation():
-    def is_termination(msg):
-        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+    def is_termination(msg) -> bool:
+        return (isinstance(msg, str) and msg == "FINAL_RESULT") or (
             isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
-        ):
-            return True
-        return False
+        )
 
     inner_assistant = autogen.AssistantAgent(
         "Inner-assistant",
@@ -273,12 +267,10 @@ async def test_async_nested_chat_chat_id_validation():
 
 
 def test_sync_nested_chat_in_group():
-    def is_termination(msg):
-        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+    def is_termination(msg) -> bool:
+        return (isinstance(msg, str) and msg == "FINAL_RESULT") or (
             isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
-        ):
-            return True
-        return False
+        )
 
     inner_assistant = autogen.AssistantAgent(
         "Inner-assistant",
@@ -320,12 +312,10 @@ def test_sync_nested_chat_in_group():
 
 @pytest.mark.asyncio
 async def test_async_nested_chat_in_group():
-    def is_termination(msg):
-        if (isinstance(msg, str) and msg == "FINAL_RESULT") or (
+    def is_termination(msg) -> bool:
+        return (isinstance(msg, str) and msg == "FINAL_RESULT") or (
             isinstance(msg, dict) and msg.get("content") == "FINAL_RESULT"
-        ):
-            return True
-        return False
+        )
 
     inner_assistant = autogen.AssistantAgent(
         "Inner-assistant",

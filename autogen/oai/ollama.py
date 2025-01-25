@@ -608,7 +608,4 @@ def is_valid_tool_call_item(call_item: dict) -> bool:
     if "name" not in call_item or not isinstance(call_item["name"], str):
         return False
 
-    if set(call_item.keys()) - {"name", "arguments"}:
-        return False
-
-    return True
+    return set(call_item.keys()) - {"name", "arguments"}
