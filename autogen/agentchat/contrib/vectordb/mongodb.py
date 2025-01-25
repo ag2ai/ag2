@@ -329,10 +329,8 @@ class MongoDBAtlasVectorDB(VectorDB):
             if result_ids != input_ids:
                 logger.warning(
                     "Possible data corruption. "
-                    "input_ids not in result_ids: {in_diff}.\n"
-                    "result_ids not in input_ids: {out_diff}".format(
-                        in_diff=input_ids.difference(result_ids), out_diff=result_ids.difference(input_ids)
-                    )
+                    f"input_ids not in result_ids: {input_ids.difference(result_ids)}.\n"
+                    f"result_ids not in input_ids: {result_ids.difference(input_ids)}"
                 )
             if self._wait_until_document_ready and docs:
                 self._wait_for_document(collection, self.index_name, docs[-1])

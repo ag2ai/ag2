@@ -115,7 +115,7 @@ class JupyterKernelClient:
         output: str
         data_items: list[DataItem]
 
-    def __init__(self, websocket: "WebSocket"):
+    def __init__(self, websocket: WebSocket):
         self._session_id: str = uuid.uuid4().hex
         self._websocket: WebSocket = websocket
 

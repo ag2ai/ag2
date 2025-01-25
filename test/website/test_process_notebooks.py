@@ -6,8 +6,9 @@ import json
 import sys
 import tempfile
 import textwrap
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator, Optional, Union
+from typing import Optional, Union
 
 import pytest
 
@@ -93,7 +94,7 @@ class TestAddFrontMatterToMetadataMdx:
 
             assert (metadata_dir / "NotebooksMetadata.mdx").exists()
 
-            with open(metadata_dir / "NotebooksMetadata.mdx", "r") as f:
+            with open(metadata_dir / "NotebooksMetadata.mdx") as f:
                 actual = f.read()
 
             assert (
@@ -164,7 +165,7 @@ export const notebooksMetadata = [
 
             assert (metadata_dir / "NotebooksMetadata.mdx").exists()
 
-            with open(metadata_dir / "NotebooksMetadata.mdx", "r") as f:
+            with open(metadata_dir / "NotebooksMetadata.mdx") as f:
                 actual = f.read()
 
             assert (

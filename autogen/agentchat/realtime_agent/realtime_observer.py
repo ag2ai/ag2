@@ -29,7 +29,7 @@ class RealtimeObserver(ABC):
             logger (Logger): The logger for the observer.
         """
         self._ready_event = Event()
-        self._agent: Optional["RealtimeAgent"] = None
+        self._agent: Optional[RealtimeAgent] = None
         self._logger = logger
 
     @property

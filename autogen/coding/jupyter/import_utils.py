@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 __all__ = ["require_jupyter_kernel_gateway_installed", "skip_on_missing_jupyter_kernel_gateway"]
 
 
-@lru_cache()
+@lru_cache
 def is_jupyter_kernel_gateway_installed() -> bool:
     """Check if jupyter-kernel-gateway is installed."""
     try:

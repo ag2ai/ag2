@@ -7,7 +7,8 @@
 import json
 import sqlite3
 import uuid
-from typing import Any, Generator, Optional
+from collections.abc import Generator
+from typing import Any, Optional
 
 import pytest
 from _pytest.mark import ParameterSet

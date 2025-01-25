@@ -199,7 +199,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         logger.info("Building the knowledge graph...")
         for doc in input_doc:
             if doc.doctype == DocumentType.TEXT:
-                with open(doc.path_or_url, "r") as file:
+                with open(doc.path_or_url) as file:
                     text = file.read()
                 asyncio.run(self.text_kg_builder.run_async(text=text))
             elif doc.doctype == DocumentType.PDF:

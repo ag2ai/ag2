@@ -12,7 +12,7 @@ from jinja2 import Template
 
 
 def get_optional_dependencies(pyproject_path: str) -> dict:
-    with open(pyproject_path, "r") as f:
+    with open(pyproject_path) as f:
         pyproject_data = toml.load(f)
 
     optional_dependencies = pyproject_data.get("project", {}).get("optional-dependencies", {})
