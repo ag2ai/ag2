@@ -137,7 +137,7 @@ def test_config_list_from_json():
             i += 1  # noqa: SIM113
 
         os.environ["CONFIG_LIST_TEST"] = JSON_SAMPLE
-        config_list_2 = autogen.config_list_from_json("config_list_test")
+        config_list_2 = autogen.config_list_from_json("CONFIG_LIST_TEST")
         assert config_list == config_list_2
 
         # Test: the env variable is set to a file path with folder name inside.
@@ -161,7 +161,7 @@ def test_config_list_from_json():
         fd, temp_name = tempfile.mkstemp()
         json.dump(config_list, os.fdopen(fd, "w+"), indent=4)
         os.environ["CONFIG_LIST_TEST"] = temp_name
-        config_list_5 = autogen.config_list_from_json("config_list_test")
+        config_list_5 = autogen.config_list_from_json("CONFIG_LIST_TEST")
         assert config_list_5 == config_list_2
 
         del os.environ["CONFIG_LIST_TEST"]
