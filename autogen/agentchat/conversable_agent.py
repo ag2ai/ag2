@@ -2242,10 +2242,7 @@ class ConversableAgent(LLMAgent):
             if lang in ["bash", "shell", "sh"]:
                 exitcode, logs, image = self.run_code(code, lang=lang, **self._code_execution_config)
             elif lang in PYTHON_VARIANTS:
-                if code.startswith("# filename: "):
-                    filename = code[11 : code.find("\n")].strip()
-                else:
-                    filename = None
+                filename = code[11 : code.find("\n")].strip() if code.startswith("# filename: ") else None
                 exitcode, logs, image = self.run_code(
                     code,
                     lang="python",

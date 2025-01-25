@@ -207,10 +207,7 @@ class GeminiClient:
         n_response = params.get("n", 1)
         system_instruction = params.get("system_instruction")
         response_validation = params.get("response_validation", True)
-        if "tools" in params:
-            tools = self._tools_to_gemini_tools(params["tools"])
-        else:
-            tools = None
+        tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
 
         generation_config = {
             gemini_term: params[autogen_term]

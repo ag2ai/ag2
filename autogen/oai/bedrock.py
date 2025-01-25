@@ -232,11 +232,7 @@ class BedrockClient:
         finish_reason = convert_stop_reason_to_finish_reason(response["stopReason"])
         response_message = response["output"]["message"]
 
-        if finish_reason == "tool_calls":
-            tool_calls = format_tool_calls(response_message["content"])
-            # text = ""
-        else:
-            tool_calls = None
+        tool_calls = format_tool_calls(response_message["content"]) if finish_reason == "tool_calls" else None
 
         text = ""
         for content in response_message["content"]:

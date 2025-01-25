@@ -192,10 +192,7 @@ class ChromaVectorDB(VectorDB):
             embeddings = None
         else:
             embeddings = [doc.get("embedding") for doc in docs]
-        if docs[0].get("metadata") is None:
-            metadatas = None
-        else:
-            metadatas = [doc.get("metadata") for doc in docs]
+        metadatas = None if docs[0].get("metadata") is None else [doc.get("metadata") for doc in docs]
         self._batch_insert(collection, embeddings, ids, metadatas, documents, upsert)
 
     def update_docs(self, docs: list[Document], collection_name: str = None) -> None:

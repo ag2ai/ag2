@@ -92,11 +92,7 @@ class FileLogger(BaseLogger):
     ) -> None:
         """Log a chat completion."""
         thread_id = threading.get_ident()
-        source_name = None
-        if isinstance(source, str):
-            source_name = source
-        else:
-            source_name = source.name
+        source_name = source if isinstance(source, str) else source.name
         try:
             log_data = json.dumps(
                 {

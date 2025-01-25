@@ -1911,10 +1911,8 @@ def test_manager_resume_functions():
 
     # Tests termination message replacement with function
     def termination_func(x: str) -> str:
-        if "APPROVED" in x:
-            x = x.replace("APPROVED", "")
-        else:
-            x = x.replace("TERMINATE", "")
+        old = "APPROVED" if "APPROVED" in x else "TERMINATE"
+        x = x.replace(old, "")
         return x
 
     final_msg1 = "Product_Manager has created 3 new product ideas. APPROVED"

@@ -57,10 +57,8 @@ if sys.platform == "win32":
 else:
     classes_to_test = [EmbeddedIPythonCodeExecutor, LocalJupyterCodeExecutor]
 
-if not is_docker_running() or not decide_use_docker(use_docker=None):
-    skip_docker_test = True
-else:
-    skip_docker_test = False
+skip_docker_test = not (is_docker_running() and decide_use_docker(use_docker=None))
+
 if not skip_docker_test:
     classes_to_test.append(DockerJupyterExecutor)
 

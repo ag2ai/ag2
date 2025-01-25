@@ -75,10 +75,7 @@ def last_boxed_only_string(string: str) -> Optional[str]:
                 break
         i += 1
 
-    if right_brace_idx is None:
-        retval = None
-    else:
-        retval = string[idx : right_brace_idx + 1]
+    retval = None if right_brace_idx is None else string[idx : right_brace_idx + 1]
 
     return retval
 

@@ -354,10 +354,7 @@ def oai_messages_to_cohere_messages(
     for index, message in enumerate(messages):
         if "role" in message and message["role"] == "system":
             # System message
-            if preamble == "":
-                preamble = message["content"]
-            else:
-                preamble = preamble + "\n" + message["content"]
+            preamble = (preamble if preamble == "" else f"{preamble}\n") + message["content"]
         elif "tool_calls" in message:
             # Suggested tool calls, build up the list before we put it into the tool_results
             for tool_call in message["tool_calls"]:
