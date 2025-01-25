@@ -293,7 +293,7 @@ class OpenAIClient:
     @staticmethod
     def _is_agent_name_error_message(message: str) -> bool:
         pattern = re.compile(r"Invalid 'messages\[\d+\]\.name': string does not match pattern.")
-        return True if pattern.match(message) else False
+        return bool(pattern.match(message))
 
     @staticmethod
     def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:
@@ -351,15 +351,18 @@ class OpenAIClient:
             except openai.BadRequestError as e:
                 response_json = e.response.json()
                 # Check if the error message is related to the agent name. If so, raise a ValueError with a more informative message.
-                if "error" in response_json and "message" in response_json["error"]:
-                    if OpenAIClient._is_agent_name_error_message(response_json["error"]["message"]):
-                        error_message = (
-                            f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.\n"
-                            "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters.\n"
-                            "Check the agent name and try again.\n"
-                            f"Here is the full BadRequestError from openai:\n{e.message}."
-                        )
-                        raise ValueError(error_message)
+                if (
+                    "error" in response_json
+                    and "message" in response_json["error"]
+                    and OpenAIClient._is_agent_name_error_message(response_json["error"]["message"])
+                ):
+                    error_message = (
+                        f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.\n"
+                        "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters.\n"
+                        "Check the agent name and try again.\n"
+                        f"Here is the full BadRequestError from openai:\n{e.message}."
+                    )
+                    raise ValueError(error_message)
 
                 raise e
 
@@ -524,8 +527,7 @@ class OpenAIClient:
         return response
 
     def _process_reasoning_model_params(self, params) -> None:
-        """
-        Cater for the reasoning model (o1, o3..) parameters
+        """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
         print(f"{params=}")
@@ -944,7 +946,7 @@ class OpenAIWrapper:
             price = extra_kwargs.get("price", None)
             if isinstance(price, list):
                 price = tuple(price)
-            elif isinstance(price, float) or isinstance(price, int):
+            elif isinstance(price, (float, int)):
                 logger.warning(
                     "Input price is a float/int. Using the same price for prompt and completion tokens. Use a list/tuple if prompt and completion token prices are different."
                 )
@@ -1132,7 +1134,7 @@ class OpenAIWrapper:
         assert isinstance(d, dict), d
         if hasattr(chunk, field) and getattr(chunk, field) is not None:
             new_value = getattr(chunk, field)
-            if isinstance(new_value, list) or isinstance(new_value, dict):
+            if isinstance(new_value, (list, dict)):
                 raise NotImplementedError(
                     f"Field {field} is a list or dict, which is currently not supported. "
                     "Only string and numbers are supported."

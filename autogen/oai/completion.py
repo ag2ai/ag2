@@ -510,7 +510,7 @@ class Completion(OpenAICompletion):
                                 result[key] += value
                     else:
                         result = metrics
-                for key in result.keys():
+                for key in result:
                     if isinstance(result[key], (float, int)):
                         result[key] /= data_limit
                 result["total_cost"] = cls._total_cost
@@ -889,9 +889,8 @@ class Completion(OpenAICompletion):
         messages = config.get("messages") if messages is None else messages
         # either "prompt" should be in config (for being compatible with non-chat models)
         # or "messages" should be in config (for tuning chat models only)
-        if prompt is None and (model in cls.chat_models or issubclass(cls, ChatCompletion)):
-            if messages is None:
-                raise ValueError("Either prompt or messages should be in config for chat models.")
+        if prompt is None and (model in cls.chat_models or issubclass(cls, ChatCompletion)) and messages is None:
+            raise ValueError("Either prompt or messages should be in config for chat models.")
         if prompt is None:
             params["messages"] = (
                 [
@@ -1010,7 +1009,7 @@ class Completion(OpenAICompletion):
                 return
             if not metric_keys:
                 metric_keys = []
-                for k in metrics.keys():
+                for k in metrics:
                     try:
                         _ = float(metrics[k])
                         metric_keys.append(k)

@@ -133,7 +133,7 @@ def _test_selection_method(method: str):
         messages=[],
         max_round=6,
         speaker_selection_method=method,
-        allow_repeat_speaker=False if method == "manual" else True,
+        allow_repeat_speaker=method != "manual",
     )
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 
@@ -1911,10 +1911,8 @@ def test_manager_resume_functions():
 
     # Tests termination message replacement with function
     def termination_func(x: str) -> str:
-        if "APPROVED" in x:
-            x = x.replace("APPROVED", "")
-        else:
-            x = x.replace("TERMINATE", "")
+        old = "APPROVED" if "APPROVED" in x else "TERMINATE"
+        x = x.replace(old, "")
         return x
 
     final_msg1 = "Product_Manager has created 3 new product ideas. APPROVED"

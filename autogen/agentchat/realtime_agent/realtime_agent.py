@@ -107,7 +107,7 @@ class RealtimeAgent:
     async def run(self) -> None:
         """Run the agent."""
         # everything is run in the same task group to enable easy cancellation using self._tg.cancel_scope.cancel()
-        async with create_task_group() as self._tg:
+        async with create_task_group() as self._tg:  # noqa: SIM117
             # connect with the client first (establishes a connection and initializes a session)
             async with self._realtime_client.connect():
                 # start the observers and wait for them to be ready

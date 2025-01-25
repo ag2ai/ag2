@@ -429,9 +429,7 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
             json_data = json.loads(json_str)
             return self._response_format.model_validate(json_data)
         except Exception as e:
-            raise ValueError(
-                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
-            )
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
 
 def _format_json_response(response: Any) -> str:

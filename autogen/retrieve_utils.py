@@ -98,10 +98,7 @@ def split_text_to_chunks(
     lines_tokens = [count_token(line) for line in lines]
     sum_tokens = sum(lines_tokens)
     while sum_tokens > max_tokens:
-        if chunk_mode == "one_line":
-            estimated_line_cut = 2
-        else:
-            estimated_line_cut = max(int(max_tokens / sum_tokens * len(lines)), 2)
+        estimated_line_cut = 2 if chunk_mode == "one_line" else max(int(max_tokens / sum_tokens * len(lines)), 2)
         cnt = 0
         prev = ""
         for cnt in reversed(range(estimated_line_cut)):

@@ -255,15 +255,15 @@ class OllamaClient:
                 ans = ans + (chunk["message"]["content"] or "")
 
                 if "done_reason" in chunk:
-                    prompt_tokens = chunk["prompt_eval_count"] if "prompt_eval_count" in chunk else 0
-                    completion_tokens = chunk["eval_count"] if "eval_count" in chunk else 0
+                    prompt_tokens = chunk.get("prompt_eval_count", 0)
+                    completion_tokens = chunk.get("eval_count", 0)
                     total_tokens = prompt_tokens + completion_tokens
         else:
             # Non-streaming finished
             ans: str = response["message"]["content"]
 
-            prompt_tokens = response["prompt_eval_count"] if "prompt_eval_count" in response else 0
-            completion_tokens = response["eval_count"] if "eval_count" in response else 0
+            prompt_tokens = response.get("prompt_eval_count", 0)
+            completion_tokens = response.get("eval_count", 0)
             total_tokens = prompt_tokens + completion_tokens
 
         if response is not None:
@@ -335,7 +335,7 @@ class OllamaClient:
                         # Blank the message content
                         response_content = ""
 
-            if ollama_finish == "stop":
+            if ollama_finish == "stop":  # noqa: SIM102
                 # Not a tool call, so let's check if we need to process structured output
                 if self._response_format and response_content:
                     try:
@@ -424,20 +424,19 @@ class OllamaClient:
                 ollama_messages[0]["content"] = ollama_messages[0]["content"] + manual_instruction.rstrip()
 
             # If we are still in the function calling or evaluating process, append the steps instruction
-            if not have_tool_calls or tool_result_is_last_msg:
-                if ollama_messages[0]["role"] == "system":
-                    # NOTE: we require a system message to exist for the manual steps texts
-                    # Append the manual step instructions
-                    content_to_append = (
-                        self._manual_tool_call_step1 if not have_tool_results else self._manual_tool_call_step2
-                    )
+            if (not have_tool_calls or tool_result_is_last_msg) and ollama_messages[0]["role"] == "system":
+                # NOTE: we require a system message to exist for the manual steps texts
+                # Append the manual step instructions
+                content_to_append = (
+                    self._manual_tool_call_step1 if not have_tool_results else self._manual_tool_call_step2
+                )
 
-                    if content_to_append != "":
-                        # Append the relevant tool call instruction to the latest user message
-                        if ollama_messages[-1]["role"] == "user":
-                            ollama_messages[-1]["content"] = ollama_messages[-1]["content"] + content_to_append
-                        else:
-                            ollama_messages.append({"role": "user", "content": content_to_append})
+                if content_to_append != "":
+                    # Append the relevant tool call instruction to the latest user message
+                    if ollama_messages[-1]["role"] == "user":
+                        ollama_messages[-1]["content"] = ollama_messages[-1]["content"] + content_to_append
+                    else:
+                        ollama_messages.append({"role": "user", "content": content_to_append})
 
         # Convert tool call and tool result messages to normal text messages for Ollama
         for i, message in enumerate(ollama_messages):
@@ -491,9 +490,7 @@ class OllamaClient:
             # Parse JSON and validate against the Pydantic model
             return self._response_format.model_validate_json(response)
         except Exception as e:
-            raise ValueError(
-                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
-            )
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
 
 def _format_json_response(response: Any, original_answer: str) -> str:
@@ -611,7 +608,7 @@ def is_valid_tool_call_item(call_item: dict) -> bool:
     if "name" not in call_item or not isinstance(call_item["name"], str):
         return False
 
-    if set(call_item.keys()) - {"name", "arguments"}:
+    if set(call_item.keys()) - {"name", "arguments"}:  # noqa: SIM103
         return False
 
     return True

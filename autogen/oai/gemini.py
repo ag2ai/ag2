@@ -207,10 +207,7 @@ class GeminiClient:
         n_response = params.get("n", 1)
         system_instruction = params.get("system_instruction")
         response_validation = params.get("response_validation", True)
-        if "tools" in params:
-            tools = self._tools_to_gemini_tools(params["tools"])
-        else:
-            tools = None
+        tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
 
         generation_config = {
             gemini_term: params[autogen_term]
@@ -563,9 +560,7 @@ class GeminiClient:
             json_data = json.loads(response)
             return self._response_format.model_validate(json_data)
         except Exception as e:
-            raise ValueError(
-                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
-            )
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list["Tool"]:
         """Create Gemini tools (as typically requires Callables)"""

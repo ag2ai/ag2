@@ -28,9 +28,9 @@ def remove_ground_truth(test_case: str):
 
 @pytest.fixture
 def task() -> Task:
-    success_str = open("test/test_files/agenteval-in-out/samples/sample_math_response_successful.txt").read()
+    success_str = open("test/test_files/agenteval-in-out/samples/sample_math_response_successful.txt").read()  # noqa: SIM115
     response_successful = remove_ground_truth(success_str)[0]
-    failed_str = open("test/test_files/agenteval-in-out/samples/sample_math_response_failed.txt").read()
+    failed_str = open("test/test_files/agenteval-in-out/samples/sample_math_response_failed.txt").read()  # noqa: SIM115
     response_failed = remove_ground_truth(failed_str)[0]
     task = Task(
         **{
@@ -56,10 +56,10 @@ def test_generate_criteria(credentials_azure: Credentials, task: Task):
 @pytest.mark.openai
 def test_quantify_criteria(credentials_azure: Credentials, task: Task):
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"
-    criteria = open(criteria_file).read()
+    criteria = open(criteria_file).read()  # noqa: SIM115
     criteria = Criterion.parse_json_str(criteria)
 
-    test_case = open("test/test_files/agenteval-in-out/samples/sample_test_case.json").read()
+    test_case = open("test/test_files/agenteval-in-out/samples/sample_test_case.json").read()  # noqa: SIM115
     test_case, ground_truth = remove_ground_truth(test_case)
 
     quantified = quantify_criteria(

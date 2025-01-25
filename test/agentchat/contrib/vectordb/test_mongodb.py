@@ -7,6 +7,7 @@
 import logging
 import os
 import random
+from contextlib import suppress
 from time import monotonic, sleep
 
 import pytest
@@ -58,11 +59,8 @@ def _delete_search_indexes(collection: "Collection", wait=True):
         collection (pymongo.Collection): MongoDB Collection Abstraction
     """
     for index in collection.list_search_indexes():
-        try:
+        with suppress(OperationFailure):
             collection.drop_search_index(index["name"])
-        except OperationFailure:
-            # Delete already issued
-            pass
     if wait:
         _wait_for_predicate(lambda: not list(collection.list_search_indexes()), "Not all collections deleted")
 

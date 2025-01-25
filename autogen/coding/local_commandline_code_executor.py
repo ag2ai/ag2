@@ -217,10 +217,7 @@ $functions"""
         required_packages = list(set(flattened_packages))
         if len(required_packages) > 0:
             logging.info("Ensuring packages are installed in executor.")
-            if self._virtual_env_context:
-                py_executable = self._virtual_env_context.env_exe
-            else:
-                py_executable = sys.executable
+            py_executable = self._virtual_env_context.env_exe if self._virtual_env_context else sys.executable
             cmd = [py_executable, "-m", "pip", "install"] + required_packages
             try:
                 result = subprocess.run(

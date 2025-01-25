@@ -54,10 +54,7 @@ def start(
     global autogen_logger
     global is_logging
 
-    if logger:
-        autogen_logger = logger
-    else:
-        autogen_logger = LoggerFactory.get_logger(logger_type=logger_type, config=config)
+    autogen_logger = logger or LoggerFactory.get_logger(logger_type=logger_type, config=config)
 
     try:
         session_id = autogen_logger.start()

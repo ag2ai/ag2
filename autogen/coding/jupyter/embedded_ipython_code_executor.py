@@ -181,7 +181,6 @@ class EmbeddedIPythonCodeExecutor(BaseModel):
         for i, line in enumerate(lines):
             # use regex to find lines that start with `! pip install` or `!pip install`.
             match = re.search(r"^! ?pip install", line)
-            if match is not None:
-                if "-qqq" not in line:
-                    lines[i] = line.replace(match.group(0), match.group(0) + " -qqq")
+            if match is not None and "-qqq" not in line:
+                lines[i] = line.replace(match.group(0), match.group(0) + " -qqq")
         return "\n".join(lines)

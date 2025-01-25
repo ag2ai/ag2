@@ -56,9 +56,7 @@ class UndefinedNextAgent(Exception):  # noqa: N818
 
 
 class ModelToolNotSupportedError(Exception):
-    """
-    Exception raised when attempting to use tools with models that do not support them.
-    """
+    """Exception raised when attempting to use tools with models that do not support them."""
 
     def __init__(
         self,

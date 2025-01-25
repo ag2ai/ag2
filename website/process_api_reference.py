@@ -38,7 +38,7 @@ def move_files_excluding_index(api_dir: Path) -> None:
 def run_pdoc3(api_dir: Path) -> None:
     """Run pydoc3 to generate the API documentation."""
     try:
-        print(f"Generating API documentation and saving to {str(api_dir)}...")
+        print(f"Generating API documentation and saving to {api_dir!s}...")
         subprocess.run(
             ["pdoc", "--output-dir", str(api_dir), "--template-dir", "mako_templates", "--force", "autogen"],
             check=True,
