@@ -9,6 +9,7 @@ import mimetypes
 import os
 import re
 import uuid
+from contextlib import suppress
 from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
@@ -278,10 +279,8 @@ class SimpleTextBrowser:
                 elif self.downloads_folder is not None:
                     # Try producing a safe filename
                     fname = None
-                    try:
+                    with suppress(NameError):
                         fname = pathvalidate.sanitize_filename(os.path.basename(urlparse(url).path)).strip()
-                    except NameError:
-                        pass
 
                     # No suitable name, so make one
                     if fname is None:

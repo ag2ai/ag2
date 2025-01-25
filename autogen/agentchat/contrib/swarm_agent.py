@@ -72,7 +72,7 @@ class ON_CONDITION:  # noqa: N801
     def __post_init__(self):
         # Ensure valid types
         if self.target is not None:
-            assert isinstance(self.target, SwarmAgent) or isinstance(self.target, dict), (
+            assert isinstance(self.target, (SwarmAgent, dict)), (
                 "'target' must be a SwarmAgent or a Dict"
             )
 

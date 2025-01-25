@@ -943,7 +943,7 @@ class OpenAIWrapper:
             price = extra_kwargs.get("price", None)
             if isinstance(price, list):
                 price = tuple(price)
-            elif isinstance(price, float) or isinstance(price, int):
+            elif isinstance(price, (float, int)):
                 logger.warning(
                     "Input price is a float/int. Using the same price for prompt and completion tokens. Use a list/tuple if prompt and completion token prices are different."
                 )
@@ -1131,7 +1131,7 @@ class OpenAIWrapper:
         assert isinstance(d, dict), d
         if hasattr(chunk, field) and getattr(chunk, field) is not None:
             new_value = getattr(chunk, field)
-            if isinstance(new_value, list) or isinstance(new_value, dict):
+            if isinstance(new_value, (list, dict)):
                 raise NotImplementedError(
                     f"Field {field} is a list or dict, which is currently not supported. "
                     "Only string and numbers are supported."

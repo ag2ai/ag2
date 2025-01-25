@@ -130,8 +130,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]
         return "description is not in front matter"
 
     # Make sure tags is a list of strings
-    if front_matter["tags"] is not None:
-        if not all([isinstance(tag, str) for tag in front_matter["tags"]]):
+    if front_matter["tags"] is not None and not all([isinstance(tag, str) for tag in front_matter["tags"]]):
             return "tags must be a list of strings"
 
     # Make sure description is a string
@@ -185,8 +184,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
         intermediate_notebook = dest_dir / relative_notebook
 
         # If the intermediate_notebook already exists, check if it is newer than the source file
-        if target_file.exists():
-            if target_file.stat().st_mtime > src_notebook.stat().st_mtime:
+        if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
                 return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
 
         if dry_run:
@@ -215,8 +213,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
         target_file = src_notebook.with_suffix(".mdx")
 
         # If the intermediate_notebook already exists, check if it is newer than the source file
-        if target_file.exists():
-            if target_file.stat().st_mtime > src_notebook.stat().st_mtime:
+        if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
                 return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
 
         if dry_run:

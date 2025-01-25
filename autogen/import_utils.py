@@ -5,7 +5,7 @@
 import inspect
 import sys
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from functools import wraps
 from logging import getLogger
 from typing import Any, Callable, Generator, Generic, Iterable, Optional, Type, TypeVar, Union
@@ -228,10 +228,8 @@ class PatchClass(PatchObject[Type[Any]]):
             patched = patch_object(
                 member, missing_modules=self.missing_modules, dep_target=self.dep_target, fail_if_not_patchable=False
             )
-            try:
+            with suppress(AttributeError):
                 setattr(self.o, name, patched)
-            except AttributeError:
-                pass
 
         return self.o
 
