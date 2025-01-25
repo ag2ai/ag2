@@ -90,8 +90,7 @@ class Tool:
         agent.register_for_execution()(self)
 
     def register_tool(self, agent: "ConversableAgent") -> None:
-        """
-        Register a tool to be both proposed and executed by an agent.
+        """Register a tool to be both proposed and executed by an agent.
 
         Equivalent to calling both `register_for_llm` and `register_for_execution` with the same agent.
 

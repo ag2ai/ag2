@@ -61,7 +61,6 @@ def skip_on_missing_jupyter_kernel_gateway() -> Callable[[T], T]:
         module: Module name
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
-
     if is_jupyter_kernel_gateway_installed():
 
         def decorator(o: T) -> T:

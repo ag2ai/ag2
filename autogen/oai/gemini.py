@@ -563,9 +563,7 @@ class GeminiClient:
             json_data = json.loads(response)
             return self._response_format.model_validate(json_data)
         except Exception as e:
-            raise ValueError(
-                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
-            )
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list["Tool"]:
         """Create Gemini tools (as typically requires Callables)"""

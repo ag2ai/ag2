@@ -272,7 +272,6 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Opti
         module: Module name
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
-
     missing_modules = get_missing_imports(modules)
 
     if not missing_modules:

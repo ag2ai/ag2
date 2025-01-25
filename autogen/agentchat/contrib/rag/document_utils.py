@@ -18,8 +18,7 @@ _logger = logging.getLogger(__name__)
 
 
 def is_url(url: str) -> bool:
-    """
-    Check if the string is a valid URL.
+    """Check if the string is a valid URL.
 
     It checks whether the URL has a valid scheme and network location.
     """
@@ -37,8 +36,7 @@ def is_url(url: str) -> bool:
 
 @require_optional_import(["selenium", "webdriver_manager"], "rag")
 def _download_rendered_html(url: str) -> str:
-    """
-    Downloads a rendered HTML page of a given URL using headless ChromeDriver.
+    """Downloads a rendered HTML page of a given URL using headless ChromeDriver.
 
     Args:
         url (str): URL of the page to download.
@@ -82,7 +80,7 @@ def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Pat
     filename = url_path.name or "downloaded_content.html"
     if len(filename) < 5 or filename[-5:] != ".html":
         filename += ".html"
-    output_dir = Path(output_dir) if output_dir else Path(".")
+    output_dir = Path(output_dir) if output_dir else Path()
     filepath = output_dir / filename
     with filepath.open("w", encoding="utf-8") as f:
         f.write(rendered_html)
@@ -91,8 +89,7 @@ def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Pat
 
 
 def list_files(directory: Union[Path, str]) -> list[Path]:
-    """
-    Recursively list all files in a directory.
+    """Recursively list all files in a directory.
 
     This function will raise an exception if the directory does not exist.
     """

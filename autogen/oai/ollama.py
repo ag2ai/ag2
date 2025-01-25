@@ -491,9 +491,7 @@ class OllamaClient:
             # Parse JSON and validate against the Pydantic model
             return self._response_format.model_validate_json(response)
         except Exception as e:
-            raise ValueError(
-                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
-            )
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
 
 def _format_json_response(response: Any, original_answer: str) -> str:

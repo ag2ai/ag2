@@ -646,7 +646,6 @@ def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[
         input_dir (Path): Directory to process
         group_header (str): Group header
     """
-
     sorted_dir_files = get_sorted_files(input_dir, prefix)
 
     return {"group": group_header, "pages": sorted_dir_files}

@@ -300,7 +300,6 @@ class TestAddBlogsToNavigation:
 class TestUpdateNavigation:
     def setup(self, temp_dir: Path) -> None:
         """Set up test files in the temporary directory."""
-
         # Create directories
         snippets_dir = temp_dir / "snippets" / "data"
         snippets_dir.mkdir(parents=True, exist_ok=True)

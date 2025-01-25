@@ -96,7 +96,6 @@ def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContex
     Returns:
         A list of parameter names that are instances of the specified subclass.
     """
-
     sig = inspect.signature(func)
     return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
 

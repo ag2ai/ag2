@@ -17,8 +17,6 @@ class ToolsCapability:
         self.tools = [tool for tool in tool_list]
 
     def add_to_agent(self, agent: ConversableAgent):
-        """
-        Add tools to the given agent.
-        """
+        """Add tools to the given agent."""
         for tool in self.tools:
             tool.register_tool(agent=agent)

@@ -524,8 +524,7 @@ class OpenAIClient:
         return response
 
     def _process_reasoning_model_params(self, params) -> None:
-        """
-        Cater for the reasoning model (o1, o3..) parameters
+        """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
         print(f"{params=}")
