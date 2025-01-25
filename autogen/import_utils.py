@@ -123,7 +123,6 @@ class PatchObject(ABC, Generic[T]):
 
     @classmethod
     def create(cls, o: T, *, missing_modules: Iterable[str], dep_target: str) -> Optional["PatchObject[T]"]:
-        # print(f"{cls._registry=}")
         for subclass in cls._registry:
             if subclass.accept(o):
                 return subclass(o, missing_modules, dep_target)
@@ -229,7 +228,6 @@ class PatchClass(PatchObject[Type[Any]]):
             patched = patch_object(
                 member, missing_modules=self.missing_modules, dep_target=self.dep_target, fail_if_not_patchable=False
             )
-            print(f"Patching {name=}, {member=}, {patched=}")
             try:
                 setattr(self.o, name, patched)
             except AttributeError:
@@ -239,7 +237,6 @@ class PatchClass(PatchObject[Type[Any]]):
 
 
 def patch_object(o: T, *, missing_modules: Iterable[str], dep_target: str, fail_if_not_patchable: bool = True) -> T:
-    # print(f"Patching object {o=}")
     patcher = PatchObject.create(o, missing_modules=missing_modules, dep_target=dep_target)
     if fail_if_not_patchable and patcher is None:
         raise ValueError(f"Cannot patch object of type {type(o)}")
