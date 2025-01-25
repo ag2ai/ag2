@@ -293,7 +293,7 @@ class OpenAIClient:
     @staticmethod
     def _is_agent_name_error_message(message: str) -> bool:
         pattern = re.compile(r"Invalid 'messages\[\d+\]\.name': string does not match pattern.")
-        return pattern.match(message)
+        return bool(pattern.match(message))
 
     @staticmethod
     def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:

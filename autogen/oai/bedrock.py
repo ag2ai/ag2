@@ -179,10 +179,7 @@ class BedrockClient:
                 )
 
         # Streaming
-        if "stream" in params:
-            self._streaming = params["stream"]
-        else:
-            self._streaming = False
+        self._streaming = params.get("stream", False)
 
         # For this release we will not support streaming as many models do not support streaming with tool use
         if self._streaming:

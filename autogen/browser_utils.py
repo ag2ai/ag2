@@ -191,7 +191,7 @@ class SimpleTextBrowser:
                 for dl in page["deepLinks"]:
                     idx += 1
                     web_snippets.append(
-                        f"{idx}. [{dl['name']}]({dl['url']})\n{dl['snippet'] if 'snippet' in dl else ''}"  # type: ignore[index]
+                        f"{idx}. [{dl['name']}]({dl['url']})\n{dl.get('snippet', '')}"  # type: ignore[index]
                     )
 
         news_snippets = list()
