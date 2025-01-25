@@ -133,7 +133,7 @@ def _test_selection_method(method: str):
         messages=[],
         max_round=6,
         speaker_selection_method=method,
-        allow_repeat_speaker=False if method == "manual" else True,
+        allow_repeat_speaker=method != "manual",
     )
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 

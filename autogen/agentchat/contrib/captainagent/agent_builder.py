@@ -473,7 +473,7 @@ Match roles in the role set to each expert in expert set.
                 .choices[0]
                 .message.content
             )
-            coding = True if resp == "YES" else False
+            coding = resp == "YES"
 
         self.cached_configs.update(
             {
@@ -640,7 +640,7 @@ Match roles in the role set to each expert in expert set.
                 .choices[0]
                 .message.content
             )
-            coding = True if resp == "YES" else False
+            coding = resp == "YES"
 
         self.cached_configs.update(
             {

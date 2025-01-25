@@ -142,7 +142,7 @@ def test_update_tool(credentials_gpt_4o: Credentials):
     user_proxy = autogen.UserProxyAgent(
         name="user_proxy",
         human_input_mode="NEVER",
-        is_termination_msg=lambda x: True if "TERMINATE" in x.get("content") else False,
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content"),
     )
     assistant = autogen.AssistantAgent(name="test", llm_config=llm_config)
 
@@ -216,7 +216,7 @@ def test_multi_tool_call():
     user_proxy = autogen.UserProxyAgent(
         name="user_proxy",
         human_input_mode="NEVER",
-        is_termination_msg=lambda x: True if "TERMINATE" in x.get("content") else False,
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content"),
     )
     user_proxy.register_function({"echo": lambda str: str})
 
@@ -313,7 +313,7 @@ async def test_async_multi_tool_call():
     user_proxy = autogen.UserProxyAgent(
         name="user_proxy",
         human_input_mode="NEVER",
-        is_termination_msg=lambda x: True if "TERMINATE" in x.get("content") else False,
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content"),
     )
 
     def echo(str):

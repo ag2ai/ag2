@@ -227,7 +227,7 @@ class AgentOptimizer:
                 "0",
                 "1",
             ], "The input is invalid. Please input 1 or 0. 1 represents satisfied. 0 represents not satisfied."
-            is_satisfied = True if reply == "1" else False
+            is_satisfied = reply == "1"
         self._trial_conversations_history.append(
             {f"Conversation {len(self._trial_conversations_history)}": conversation_history}
         )
