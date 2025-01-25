@@ -350,9 +350,7 @@ class _DeprecatedClassMeta(type):
 
                 if alias is not None:
                     warnings.warn(
-                        "{} has been renamed to {}, the alias will be removed in the future".format(
-                            cls.__name__, alias.__name__
-                        ),
+                        f"{cls.__name__} has been renamed to {alias.__name__}, the alias will be removed in the future",
                         DeprecationWarning,
                         stacklevel=2,
                     )
@@ -369,9 +367,7 @@ class _DeprecatedClassMeta(type):
 
             if alias is not None:
                 warnings.warn(
-                    "{} has been renamed to {}, the alias will be removed in the future".format(
-                        b.__name__, alias.__name__
-                    ),
+                    f"{b.__name__} has been renamed to {alias.__name__}, the alias will be removed in the future",
                     DeprecationWarning,
                     stacklevel=2,
                 )

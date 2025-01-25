@@ -5,8 +5,9 @@
 import inspect
 import sys
 from abc import ABC
+from collections.abc import Iterable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Union, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject

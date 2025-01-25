@@ -84,7 +84,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
-        chat_response: "AgentChatResponse" = self._llama_index_agent.chat(message=user_message, chat_history=history)
+        chat_response: AgentChatResponse = self._llama_index_agent.chat(message=user_message, chat_history=history)
 
         extracted_response = chat_response.response
 
@@ -99,7 +99,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
-        chat_response: "AgentChatResponse" = await self._llama_index_agent.achat(
+        chat_response: AgentChatResponse = await self._llama_index_agent.achat(
             message=user_message, chat_history=history
         )
 
@@ -120,7 +120,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         message = messages[-1].get("content", "")
 
         history = messages[:-1]
-        history_messages: list["ChatMessage"] = []
+        history_messages: list[ChatMessage] = []
         for history_message in history:
             content = history_message.get("content", "")
             role = history_message.get("role", "user")

@@ -18,7 +18,7 @@ DEVCONTAINER_JSON_TEMPLATE = Path("scripts/devcontainer/templates/devcontainer.j
 def generate_devcontainer_json_file(python_version: str) -> None:
     print(f"Generating devcontainer.json for python {python_version}")
 
-    with open(DEVCONTAINER_JSON_TEMPLATE, "r") as f:
+    with open(DEVCONTAINER_JSON_TEMPLATE) as f:
         content = f.read()
 
     # Replace python_version with the current version using jinja template

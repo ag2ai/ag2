@@ -447,7 +447,7 @@ class GeminiClient:
         else:
             raise Exception("Unable to convert content to Gemini format.")
 
-    def _concat_parts(self, parts: list["Part"]) -> list:
+    def _concat_parts(self, parts: list[Part]) -> list:
         """Concatenate parts with the same type.
         If two adjacent parts both have the "text" attribute, then it will be joined into one part.
         """
@@ -562,7 +562,7 @@ class GeminiClient:
         except Exception as e:
             raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
-    def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list["Tool"]:
+    def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
         functions = []
         for tool in tools:
@@ -582,7 +582,7 @@ class GeminiClient:
             return [Tool(function_declarations=functions)]
 
     @staticmethod
-    def _create_gemini_function_declaration(tool: dict) -> "FunctionDeclaration":
+    def _create_gemini_function_declaration(tool: dict) -> FunctionDeclaration:
         function_declaration = FunctionDeclaration()
         function_declaration.name = tool["function"]["name"]
         function_declaration.description = tool["function"]["description"]
@@ -594,7 +594,7 @@ class GeminiClient:
         return function_declaration
 
     @staticmethod
-    def _create_gemini_function_declaration_schema(json_data) -> "Schema":
+    def _create_gemini_function_declaration_schema(json_data) -> Schema:
         """Recursively creates Schema objects for FunctionDeclaration."""
         param_schema = Schema()
         param_type = json_data["type"]

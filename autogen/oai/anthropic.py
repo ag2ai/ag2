@@ -397,7 +397,7 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
         # Add formatting to last user message
         params["system"] += "\n\n" + format_content
 
-    def _extract_json_response(self, response: "Message") -> Any:
+    def _extract_json_response(self, response: Message) -> Any:
         """Extract and validate JSON response from the output for structured outputs.
 
         Args:

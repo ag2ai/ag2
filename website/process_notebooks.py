@@ -20,12 +20,13 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Any, Collection, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from termcolor import colored
 
