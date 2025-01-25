@@ -36,7 +36,7 @@ class TestDoclingParseDocs:
 
     def test_no_documents_found(self) -> None:
         """Test that ValueError is raised when no documents are found."""
-        with patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[]):
+        with patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[]):  # noqa: SIM117
             with raises(ValueError, match="No documents found."):
                 list(docling_parse_docs("input_file_path", "output_dir_path"))
 

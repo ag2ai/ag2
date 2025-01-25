@@ -138,7 +138,7 @@ def test_save(builder: AgentBuilder):
     # check config file path
     assert os.path.isfile(saved_files)
 
-    saved_configs = json.load(open(saved_files))
+    saved_configs = json.load(open(saved_files))  # noqa: SIM115
 
     _config_check(saved_configs)
 
@@ -146,7 +146,7 @@ def test_save(builder: AgentBuilder):
 @pytest.mark.openai
 def test_load(builder: AgentBuilder):
     config_save_path = f"{here}/example_test_agent_builder_config.json"
-    json.load(open(config_save_path))
+    json.load(open(config_save_path))  # noqa: SIM115
 
     _, loaded_agent_configs = builder.load(
         config_save_path,
