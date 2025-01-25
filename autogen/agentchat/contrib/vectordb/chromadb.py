@@ -17,9 +17,8 @@ with optional_import_block() as result:
     import chromadb.utils.embedding_functions as ef
     from chromadb.api.models.Collection import Collection
 
-if result.is_successful:
-    if chromadb.__version__ < "0.4.15":
-        raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
+if result.is_successful and chromadb.__version__ < "0.4.15":
+    raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
 
 
 CHROMADB_MAX_BATCH_SIZE = os.environ.get("CHROMADB_MAX_BATCH_SIZE", 40000)

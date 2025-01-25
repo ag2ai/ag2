@@ -134,9 +134,8 @@ def _prepare_swarm_agents(
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
     for agent in agents:
-        if agent.after_work is not None:
-            if isinstance(agent.after_work.agent, SwarmAgent):
-                assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
+        if agent.after_work is not None and isinstance(agent.after_work.agent, SwarmAgent):
+            assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
 
     tool_execution = SwarmAgent(
         name=__TOOL_EXECUTOR_NAME__,

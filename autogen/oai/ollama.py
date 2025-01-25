@@ -424,20 +424,19 @@ class OllamaClient:
                 ollama_messages[0]["content"] = ollama_messages[0]["content"] + manual_instruction.rstrip()
 
             # If we are still in the function calling or evaluating process, append the steps instruction
-            if not have_tool_calls or tool_result_is_last_msg:
-                if ollama_messages[0]["role"] == "system":
-                    # NOTE: we require a system message to exist for the manual steps texts
-                    # Append the manual step instructions
-                    content_to_append = (
-                        self._manual_tool_call_step1 if not have_tool_results else self._manual_tool_call_step2
-                    )
+            if (not have_tool_calls or tool_result_is_last_msg) and ollama_messages[0]["role"] == "system":
+                # NOTE: we require a system message to exist for the manual steps texts
+                # Append the manual step instructions
+                content_to_append = (
+                    self._manual_tool_call_step1 if not have_tool_results else self._manual_tool_call_step2
+                )
 
-                    if content_to_append != "":
-                        # Append the relevant tool call instruction to the latest user message
-                        if ollama_messages[-1]["role"] == "user":
-                            ollama_messages[-1]["content"] = ollama_messages[-1]["content"] + content_to_append
-                        else:
-                            ollama_messages.append({"role": "user", "content": content_to_append})
+                if content_to_append != "":
+                    # Append the relevant tool call instruction to the latest user message
+                    if ollama_messages[-1]["role"] == "user":
+                        ollama_messages[-1]["content"] = ollama_messages[-1]["content"] + content_to_append
+                    else:
+                        ollama_messages.append({"role": "user", "content": content_to_append})
 
         # Convert tool call and tool result messages to normal text messages for Ollama
         for i, message in enumerate(ollama_messages):

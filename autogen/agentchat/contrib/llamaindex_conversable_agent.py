@@ -124,7 +124,6 @@ class LLamaIndexConversableAgent(ConversableAgent):
         for history_message in history:
             content = history_message.get("content", "")
             role = history_message.get("role", "user")
-            if role:
-                if role == "user" or role == "assistant":
-                    history_messages.append(ChatMessage(content=content, role=role, additional_kwargs={}))
+            if role and (role == "user" or role == "assistant"):
+                history_messages.append(ChatMessage(content=content, role=role, additional_kwargs={}))
         return message, history_messages

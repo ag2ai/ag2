@@ -111,13 +111,12 @@ class SocietyOfMindAgent(ConversableAgent):
                 del message["tool_calls"]
             if "tool_responses" in message:
                 del message["tool_responses"]
-            if "function_call" in message:
-                if message["content"] == "":
-                    with suppress(KeyError):
-                        message["content"] = (
-                            message["function_call"]["name"] + "(" + message["function_call"]["arguments"] + ")"
-                        )
-                    del message["function_call"]
+            if "function_call" in message and message["content"] == "":
+                with suppress(KeyError):
+                    message["content"] = (
+                        message["function_call"]["name"] + "(" + message["function_call"]["arguments"] + ")"
+                    )
+                del message["function_call"]
 
             # Add the modified message to the transcript
             _messages.append(message)
