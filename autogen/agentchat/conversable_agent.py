@@ -658,7 +658,7 @@ class ConversableAgent(LLMAgent):
                 for conversation in self._oai_messages.values():
                     return conversation[-1]
             raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
-        if agent not in self._oai_messages.keys():
+        if agent not in self._oai_messages:
             raise KeyError(
                 f"The agent '{agent.name}' is not present in any conversation. No history available for this agent."
             )
@@ -2507,7 +2507,7 @@ class ConversableAgent(LLMAgent):
         """
         for name, func in function_map.items():
             self._assert_valid_name(name)
-            if func is None and name not in self._function_map.keys():
+            if func is None and name not in self._function_map:
                 warnings.warn(f"The function {name} to remove doesn't exist", name)
             if name in self._function_map:
                 warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
@@ -2530,7 +2530,7 @@ class ConversableAgent(LLMAgent):
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "functions" not in self.llm_config.keys():
+            if "functions" not in self.llm_config:
                 error_msg = f"The agent config doesn't have function {func_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
@@ -2546,7 +2546,7 @@ class ConversableAgent(LLMAgent):
             if "name" not in func_sig:
                 raise ValueError(f"The function signature must have a 'name' key. Received: {func_sig}")
             self._assert_valid_name(func_sig["name"]), func_sig
-            if "functions" in self.llm_config.keys():
+            if "functions" in self.llm_config:
                 if any(func["name"] == func_sig["name"] for func in self.llm_config["functions"]):
                     warnings.warn(f"Function '{func_sig['name']}' is being overridden.", UserWarning)
 
@@ -2574,7 +2574,7 @@ class ConversableAgent(LLMAgent):
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "tools" not in self.llm_config.keys():
+            if "tools" not in self.llm_config:
                 error_msg = f"The agent config doesn't have tool {tool_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)

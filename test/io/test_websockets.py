@@ -140,7 +140,7 @@ class TestConsoleIOWithWebsockets:
             )
 
             # we will use a temporary directory as the cache path root to ensure fresh completion each time
-            with TemporaryDirectory() as cache_path_root:
+            with TemporaryDirectory() as cache_path_root:  # noqa: SIM117
                 with Cache.disk(cache_path_root=cache_path_root) as cache:
                     print(
                         f" - on_connect(): Initiating chat with agent {agent} using message '{initial_msg}'",

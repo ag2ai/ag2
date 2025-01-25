@@ -321,7 +321,7 @@ class MongoDBAtlasVectorDB(VectorDB):
                     text_batch = []
                     metadata_batch = []
                     size = 0
-                i += 1
+                i += 1  # noqa: SIM113
             if text_batch:
                 result_ids.update(self._insert_batch(collection, text_batch, metadata_batch, id_batch))  # type: ignore
                 input_ids.update(id_batch)

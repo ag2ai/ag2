@@ -510,7 +510,7 @@ class Completion(OpenAICompletion):
                                 result[key] += value
                     else:
                         result = metrics
-                for key in result.keys():
+                for key in result:
                     if isinstance(result[key], (float, int)):
                         result[key] /= data_limit
                 result["total_cost"] = cls._total_cost
@@ -1009,7 +1009,7 @@ class Completion(OpenAICompletion):
                 return
             if not metric_keys:
                 metric_keys = []
-                for k in metrics.keys():
+                for k in metrics:
                     try:
                         _ = float(metrics[k])
                         metric_keys.append(k)

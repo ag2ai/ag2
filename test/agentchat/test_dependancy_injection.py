@@ -193,7 +193,7 @@ class TestDependencyInjection:
         expected_tools[0]["function"]["name"] = func_name
         assert agent.llm_config["tools"] == expected_tools
 
-        assert func_name in agent.function_map.keys()
+        assert func_name in agent.function_map
 
         retval = agent.function_map[func_name](1)
         actual = await retval if is_async else retval

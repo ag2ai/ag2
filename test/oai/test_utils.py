@@ -134,9 +134,9 @@ def test_config_list_from_json():
             for key in config:
                 assert key in json_data[i]
                 assert config[key] == json_data[i][key]
-            i += 1
+            i += 1  # noqa: SIM113
 
-        os.environ["config_list_test"] = JSON_SAMPLE
+        os.environ["CONFIG_LIST_TEST"] = JSON_SAMPLE
         config_list_2 = autogen.config_list_from_json("config_list_test")
         assert config_list == config_list_2
 
@@ -146,7 +146,7 @@ def test_config_list_from_json():
         )
         assert all(config.get("model") in ["gpt-4", "gpt"] for config in config_list_3)
 
-        del os.environ["config_list_test"]
+        del os.environ["CONFIG_LIST_TEST"]
 
         # Test: using the `file_location` parameter.
         config_list_4 = autogen.config_list_from_json(
@@ -160,11 +160,11 @@ def test_config_list_from_json():
         # Test: the env variable is set to a file path.
         fd, temp_name = tempfile.mkstemp()
         json.dump(config_list, os.fdopen(fd, "w+"), indent=4)
-        os.environ["config_list_test"] = temp_name
+        os.environ["CONFIG_LIST_TEST"] = temp_name
         config_list_5 = autogen.config_list_from_json("config_list_test")
         assert config_list_5 == config_list_2
 
-        del os.environ["config_list_test"]
+        del os.environ["CONFIG_LIST_TEST"]
 
     # Test that an error is thrown when the config list is missing
     with pytest.raises(FileNotFoundError):
@@ -312,7 +312,7 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
     invalid_model_api_key_map = {
         "gpt-4": "INVALID_API_KEY",  # Simulate an environment var name that doesn't exist
     }
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.ERROR):  # noqa: SIM117
         # Mocking `config_list_from_json` to return an empty list and raise an exception when called
         with mock.patch("autogen.config_list_from_json", return_value=[], side_effect=Exception("Mock called")):
             # Call the function with the invalid map

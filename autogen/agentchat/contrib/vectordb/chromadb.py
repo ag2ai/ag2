@@ -287,7 +287,7 @@ class ChromaVectorDB(VectorDB):
 
         for i in range(len(data_dict[keys[0]])):
             sub_dict = {}
-            for key in data_dict.keys():
+            for key in data_dict:
                 if data_dict[key] is not None and len(data_dict[key]) > i:
                     sub_dict[key[:-1]] = data_dict[key][i]
             results.append(sub_dict)

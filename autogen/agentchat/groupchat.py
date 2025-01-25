@@ -635,7 +635,7 @@ class GroupChat:
         if not self.select_speaker_auto_llm_config:
             return
 
-        config_format_is_list = "config_list" in self.select_speaker_auto_llm_config.keys()
+        config_format_is_list = "config_list" in self.select_speaker_auto_llm_config
         if config_format_is_list:
             for config in self.select_speaker_auto_llm_config["config_list"]:
                 self._register_client_from_config(agent, config)

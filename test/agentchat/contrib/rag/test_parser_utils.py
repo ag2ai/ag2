@@ -106,13 +106,11 @@ class TestDoclingParseDocs:
                 "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
                 return_value=[mock_conversion_result],
             ),
+            caplog.at_level(logging.INFO),
         ):
-            with caplog.at_level(logging.INFO):
-                docling_parse_docs(input_file_path, output_dir_path)
-                assert "Document converted in" in caplog.text
-                assert (
-                    f"Document input_file_path converted.\nSaved markdown output to: {output_dir_path}" in caplog.text
-                )
+            docling_parse_docs(input_file_path, output_dir_path)
+            assert "Document converted in" in caplog.text
+            assert f"Document input_file_path converted.\nSaved markdown output to: {output_dir_path}" in caplog.text
 
     def test_handles_invalid_input_file_paths_and_output_directory_paths(self, tmp_path: Path) -> None:
         """Test that the function handles invalid input file paths and output directory paths.
