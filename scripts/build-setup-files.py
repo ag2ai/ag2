@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc, AG2AI OSS project maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 

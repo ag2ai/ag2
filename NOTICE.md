@@ -1,6 +1,6 @@
 ## NOTICE
 
-Copyright (c) 2023-2025, Owners of https://github.com/ag2ai
+ Copyright (c) 2023 - 2025, AG2ai, Inc, AG2AI OSS project maintainers and core contributors
 
 This project is a fork of https://github.com/microsoft/autogen.
 
