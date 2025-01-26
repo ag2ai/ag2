@@ -186,6 +186,9 @@ def get_config_list_from_env(
     filter_dict: Optional[dict[str, Any]] = None,
     temperature: float = 0.0,
 ) -> list[dict[str, Any]]:
+    api_key = os.environ.get(env_var_name, None)
+    if api_key is None:
+        raise ValueError(f"{env_var_name} is empty")
     if env_var_name in os.environ:
         api_key = os.environ[env_var_name]
         return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
@@ -200,9 +203,7 @@ def get_llm_credentials(
     filter_dict: Optional[dict[str, Any]] = None,
     temperature: float = 0.0,
 ) -> Credentials:
-    credentials = get_credentials(
-        filter_dict, temperature, fail_if_empty=True
-    )  # ToDo: Experimental change. Revert it @kumaranvpl
+    credentials = get_credentials(filter_dict, temperature, fail_if_empty=False)
     config_list = credentials.config_list if credentials else []
 
     # Filter out non-OpenAI configs
