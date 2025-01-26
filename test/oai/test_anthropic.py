@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
 
 import pytest
 
@@ -53,12 +52,12 @@ def anthropic_client():
 
 
 @skip_on_missing_imports(["anthropic"], "anthropic")
-def test_initialization_missing_api_key():
-    os.environ.pop("ANTHROPIC_API_KEY", None)
-    os.environ.pop("AWS_ACCESS_KEY", None)
-    os.environ.pop("AWS_SECRET_KEY", None)
-    os.environ.pop("AWS_SESSION_TOKEN", None)
-    os.environ.pop("AWS_REGION", None)
+def test_initialization_missing_api_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("AWS_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("AWS_SECRET_KEY", raising=False)
+    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
+    monkeypatch.delenv("AWS_REGION", raising=False)
     with pytest.raises(ValueError, match="credentials are required to use the Anthropic API."):
         AnthropicClient()
 
