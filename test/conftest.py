@@ -369,7 +369,7 @@ credentials_all_llms = [
 T = TypeVar("T", bound=Callable[..., Any])
 
 
-def suppress(exception: type[BaseException], retries: Optional[int] = None, timeout: int = 60) -> Callable[[T], T]:
+def suppress(exception: type[BaseException], *, retries: Optional[int] = None, timeout: int = 60) -> Callable[[T], T]:
     """Suppresses the specified exception and retries the function a specified number of times.
 
     Args:
@@ -413,6 +413,6 @@ def suppress_gemini_resource_exhausted(func: T) -> T:
     with optional_import_block():
         from google.api_core.exceptions import ResourceExhausted
 
-        return suppress(ResourceExhausted)(func)
+        return suppress(ResourceExhausted, retries=2)(func)
 
     return func
