@@ -15,7 +15,7 @@ from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 from autogen.import_utils import skip_on_missing_imports
 
-from ..conftest import Credentials
+from ..conftest import Credentials, suppress_gemini_resource_exhausted
 
 
 @pytest.mark.openai
@@ -80,6 +80,7 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.skip(reason="Currently not working")
 @pytest.mark.gemini
+@suppress_gemini_resource_exhausted
 @pytest.mark.redis
 @skip_on_missing_imports(["openai", "redis"], "redis")
 def test_redis_cache_gemini(credentials_gemini_pro: Credentials):

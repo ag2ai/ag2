@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 
 async def _test_async_get_human_input(credentials: Credentials) -> None:
@@ -41,6 +41,7 @@ async def _test_async_get_human_input(credentials: Credentials) -> None:
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 @pytest.mark.asyncio
 async def test_async_get_human_input(
     credentials_from_test_param: Credentials,
@@ -77,6 +78,7 @@ async def _test_async_max_turn(credentials: Credentials):
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 @pytest.mark.asyncio
 async def test_async_max_turn(
     credentials_from_test_param: Credentials,
