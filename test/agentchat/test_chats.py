@@ -16,7 +16,7 @@ import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 
 @pytest.fixture
@@ -543,6 +543,7 @@ def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 def test_chats_w_func(
     credentials_from_test_param: Credentials,
     tasks_work_dir: str,
