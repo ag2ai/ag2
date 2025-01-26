@@ -200,7 +200,9 @@ def get_llm_credentials(
     filter_dict: Optional[dict[str, Any]] = None,
     temperature: float = 0.0,
 ) -> Credentials:
-    credentials = get_credentials(filter_dict, temperature, fail_if_empty=False)
+    credentials = get_credentials(
+        filter_dict, temperature, fail_if_empty=True
+    )  # ToDo: Experimental change. Revert it @kumaranvpl
     config_list = credentials.config_list if credentials else []
 
     # Filter out non-OpenAI configs
