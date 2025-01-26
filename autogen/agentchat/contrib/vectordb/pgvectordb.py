@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -833,10 +833,7 @@ class PGVectorDB(VectorDB):
             embeddings = None
         else:
             embeddings = [doc.get("embedding") for doc in docs]
-        if docs[0].get("metadata") is None:
-            metadatas = None
-        else:
-            metadatas = [doc.get("metadata") for doc in docs]
+        metadatas = None if docs[0].get("metadata") is None else [doc.get("metadata") for doc in docs]
 
         self._batch_insert(collection, embeddings, ids, metadatas, documents, upsert)
 

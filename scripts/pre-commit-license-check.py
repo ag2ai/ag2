@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
@@ -61,7 +61,7 @@ def should_check_file(file_path: Path) -> bool:
 def check_file_header(file_path: Path) -> List[str]:
     """Check if file has required license headers."""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read(500)
             missing_elements = []
             for pattern in REQUIRED_ELEMENTS:

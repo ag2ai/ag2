@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -107,7 +107,7 @@ class RealtimeAgent:
     async def run(self) -> None:
         """Run the agent."""
         # everything is run in the same task group to enable easy cancellation using self._tg.cancel_scope.cancel()
-        async with create_task_group() as self._tg:
+        async with create_task_group() as self._tg:  # noqa: SIM117
             # connect with the client first (establishes a connection and initializes a session)
             async with self._realtime_client.connect():
                 # start the observers and wait for them to be ready

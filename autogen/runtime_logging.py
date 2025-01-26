@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -54,10 +54,7 @@ def start(
     global autogen_logger
     global is_logging
 
-    if logger:
-        autogen_logger = logger
-    else:
-        autogen_logger = LoggerFactory.get_logger(logger_type=logger_type, config=config)
+    autogen_logger = logger or LoggerFactory.get_logger(logger_type=logger_type, config=config)
 
     try:
         session_id = autogen_logger.start()

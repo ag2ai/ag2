@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -70,7 +70,6 @@ class Neo4jGraphCapability(GraphRagCapability):
         """Retrieves the last message from the conversation history."""
         if isinstance(message, str):
             return message
-        if isinstance(message, dict):
-            if "content" in message:
-                return message["content"]
+        if isinstance(message, dict) and "content" in message:
+            return message["content"]
         return None

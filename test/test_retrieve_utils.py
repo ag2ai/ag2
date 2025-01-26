@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,6 +9,7 @@
 """Unit test for retrieve_utils.py"""
 
 import os
+from contextlib import suppress
 
 import pytest
 
@@ -146,10 +147,8 @@ class TestRetrieveUtils:
                 {"vector": [2.1, 1.3], "id": 5, "documents": "This is a fifth test document spark"},
                 {"vector": [5.1, 8.3], "id": 6, "documents": "This is a sixth test document"},
             ]
-            try:
+            with suppress(OSError):
                 db.create_table("my_table", data)
-            except OSError:
-                pass
 
         class MyRetrieveUserProxyAgent(RetrieveUserProxyAgent):
             def query_vector_db(

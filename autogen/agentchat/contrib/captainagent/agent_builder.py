@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -355,7 +355,7 @@ Match roles in the role set to each expert in expert set.
 
     def clear_all_agents(self, recycle_endpoint: Optional[bool] = True):
         """Clear all cached agents."""
-        for agent_name in [agent_name for agent_name in self.agent_procs_assign.keys()]:
+        for agent_name in [agent_name for agent_name in self.agent_procs_assign]:
             self.clear_agent(agent_name, recycle_endpoint)
         print(colored("All agents have been cleared.", "yellow"), flush=True)
 
@@ -473,7 +473,7 @@ Match roles in the role set to each expert in expert set.
                 .choices[0]
                 .message.content
             )
-            coding = True if resp == "YES" else False
+            coding = resp == "YES"
 
         self.cached_configs.update(
             {
@@ -640,7 +640,7 @@ Match roles in the role set to each expert in expert set.
                 .choices[0]
                 .message.content
             )
-            coding = True if resp == "YES" else False
+            coding = resp == "YES"
 
         self.cached_configs.update(
             {

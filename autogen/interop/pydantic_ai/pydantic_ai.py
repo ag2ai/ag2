@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -123,8 +123,8 @@ class PydanticAIInteroperability:
                 UserWarning,
             )
 
-        if tool.takes_ctx:
-            ctx = RunContext(
+        ctx = (
+            RunContext(
                 deps=deps,
                 retry=0,
                 # All messages send to or returned by a model.
@@ -132,8 +132,9 @@ class PydanticAIInteroperability:
                 messages=[],  # TODO: check in the future if this is needed on Tool level
                 tool_name=pydantic_ai_tool.name,
             )
-        else:
-            ctx = None
+            if tool.takes_ctx
+            else None
+        )
 
         func = PydanticAIInteroperability.inject_params(
             ctx=ctx,

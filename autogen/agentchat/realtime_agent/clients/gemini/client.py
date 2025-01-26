@@ -1,11 +1,12 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
 from ..realtime_client import Role, register_realtime_client
@@ -44,7 +45,7 @@ class GeminiRealtimeClient:
         self._llm_config = llm_config
         self._logger = logger
 
-        self._connection: Optional["ClientConnection"] = None
+        self._connection: Optional[ClientConnection] = None
         config = llm_config["config_list"][0]
 
         self._model: str = config["model"]

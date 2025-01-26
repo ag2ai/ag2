@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -36,7 +36,7 @@ class TestDoclingParseDocs:
 
     def test_no_documents_found(self) -> None:
         """Test that ValueError is raised when no documents are found."""
-        with patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[]):
+        with patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[]):  # noqa: SIM117
             with raises(ValueError, match="No documents found."):
                 list(docling_parse_docs("input_file_path", "output_dir_path"))
 
@@ -56,8 +56,7 @@ class TestDoclingParseDocs:
             assert isinstance(results[0], ConversionResult)
 
     def test_exports_converted_documents(self, tmp_path: Path, mock_conversion_result: MagicMock) -> None:
-        """
-        Test that the function exports converted documents to the specified output directory.
+        """Test that the function exports converted documents to the specified output directory.
 
         This test ensures that the function saves the converted documents in markdown and
         json formats to the specified output directory.
@@ -93,8 +92,7 @@ class TestDoclingParseDocs:
     def test_logs_conversion_time_and_document_conversion_info(
         self, tmp_path: Path, caplog: LogCaptureFixture, mock_conversion_result: MagicMock
     ) -> None:
-        """
-        Test that the function logs conversion time and document conversion info.
+        """Test that the function logs conversion time and document conversion info.
 
         This test ensures that the function logs the conversion time and the document
         conversion information at the INFO level.
@@ -108,17 +106,14 @@ class TestDoclingParseDocs:
                 "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
                 return_value=[mock_conversion_result],
             ),
+            caplog.at_level(logging.INFO),
         ):
-            with caplog.at_level(logging.INFO):
-                docling_parse_docs(input_file_path, output_dir_path)
-                assert "Document converted in" in caplog.text
-                assert (
-                    f"Document input_file_path converted.\nSaved markdown output to: {output_dir_path}" in caplog.text
-                )
+            docling_parse_docs(input_file_path, output_dir_path)
+            assert "Document converted in" in caplog.text
+            assert f"Document input_file_path converted.\nSaved markdown output to: {output_dir_path}" in caplog.text
 
     def test_handles_invalid_input_file_paths_and_output_directory_paths(self, tmp_path: Path) -> None:
-        """
-        Test that the function handles invalid input file paths and output directory paths.
+        """Test that the function handles invalid input file paths and output directory paths.
 
         This test ensures that the function raises a ValueError when the input file path is invalid
         and a FileNotFoundError when the output directory path is invalid.

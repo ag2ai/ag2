@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -220,7 +220,7 @@ def test_vertexai_default_safety_settings_dict(gemini_client):
     expected_safety_settings = {category: VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH for category in safety_settings}
 
     def compare_safety_settings(converted_safety_settings, expected_safety_settings):
-        for expected_setting_key in expected_safety_settings.keys():
+        for expected_setting_key in expected_safety_settings:
             expected_setting = expected_safety_settings[expected_setting_key]
             converted_setting = converted_safety_settings[expected_setting_key]
             yield expected_setting == converted_setting

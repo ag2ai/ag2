@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,9 +17,8 @@ with optional_import_block() as result:
     import chromadb.utils.embedding_functions as ef
     from chromadb.api.models.Collection import Collection
 
-if result.is_successful:
-    if chromadb.__version__ < "0.4.15":
-        raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
+if result.is_successful and chromadb.__version__ < "0.4.15":
+    raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
 
 
 CHROMADB_MAX_BATCH_SIZE = os.environ.get("CHROMADB_MAX_BATCH_SIZE", 40000)
@@ -193,10 +192,7 @@ class ChromaVectorDB(VectorDB):
             embeddings = None
         else:
             embeddings = [doc.get("embedding") for doc in docs]
-        if docs[0].get("metadata") is None:
-            metadatas = None
-        else:
-            metadatas = [doc.get("metadata") for doc in docs]
+        metadatas = None if docs[0].get("metadata") is None else [doc.get("metadata") for doc in docs]
         self._batch_insert(collection, embeddings, ids, metadatas, documents, upsert)
 
     def update_docs(self, docs: list[Document], collection_name: str = None) -> None:
@@ -291,7 +287,7 @@ class ChromaVectorDB(VectorDB):
 
         for i in range(len(data_dict[keys[0]])):
             sub_dict = {}
-            for key in data_dict.keys():
+            for key in data_dict:
                 if data_dict[key] is not None and len(data_dict[key]) > i:
                     sub_dict[key[:-1]] = data_dict[key][i]
             results.append(sub_dict)
