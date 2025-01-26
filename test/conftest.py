@@ -4,7 +4,9 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import asyncio
 import functools
+import inspect
 import os
 import re
 import time
@@ -382,27 +384,52 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
     def decorator(
         func: T, exception: type[BaseException] = exception, retries: Optional[int] = retries, timeout: int = timeout
     ) -> T:
-        @functools.wraps(func)
-        def wrapper(
-            *args: Any,
-            exception: type[BaseException] = exception,
-            retries: Optional[int] = retries,
-            timeout: int = timeout,
-            **kwargs: Any,
-        ) -> Any:
-            if retries is None:
-                try:
-                    return func(*args, **kwargs)
-                except exception:
-                    pytest.xfail(f"Suppressed '{exception}' raised")
-            else:
-                for i in range(retries):
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def wrapper(
+                *args: Any,
+                exception: type[BaseException] = exception,
+                retries: Optional[int] = retries,
+                timeout: int = timeout,
+                **kwargs: Any,
+            ) -> Any:
+                if retries is None:
+                    try:
+                        return await func(*args, **kwargs)
+                    except exception:
+                        pytest.xfail(f"Suppressed '{exception}' raised")
+                else:
+                    for i in range(retries):
+                        try:
+                            return await func(*args, **kwargs)
+                        except exception:
+                            if i >= retries - 1:
+                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            await asyncio.sleep(timeout)
+        else:
+
+            @functools.wraps(func)
+            def wrapper(
+                *args: Any,
+                exception: type[BaseException] = exception,
+                retries: Optional[int] = retries,
+                timeout: int = timeout,
+                **kwargs: Any,
+            ) -> Any:
+                if retries is None:
                     try:
                         return func(*args, **kwargs)
                     except exception:
-                        if i >= retries - 1:
-                            pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
-                        time.sleep(timeout)
+                        pytest.xfail(f"Suppressed '{exception}' raised")
+                else:
+                    for i in range(retries):
+                        try:
+                            return func(*args, **kwargs)
+                        except exception:
+                            if i >= retries - 1:
+                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            time.sleep(timeout)
 
         return wrapper  # type: ignore[return-value]
 

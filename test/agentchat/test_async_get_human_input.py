@@ -67,7 +67,7 @@ async def _test_async_max_turn(credentials: Credentials):
     user_proxy.a_get_human_input = AsyncMock(return_value="Not funny. Try again.")
 
     res = await user_proxy.a_initiate_chat(
-        assistant, clear_history=True, max_turns=3, message="Hello, make a joke about AI."
+        assistant, clear_history=True, max_turns=3, message="Hello, make a non-offensive joke about AI."
     )
     print("Result summary:", res.summary)
     print("Human input:", res.human_input)

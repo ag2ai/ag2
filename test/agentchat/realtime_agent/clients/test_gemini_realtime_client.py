@@ -32,12 +32,12 @@ class TestGeminiRealtimeClient:
 
     @pytest.mark.gemini
     @suppress_gemini_resource_exhausted
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_not_connected(self, client: GeminiRealtimeClient) -> None:
         with pytest.raises(RuntimeError, match=r"Client is not connected, call connect\(\) first."):
             with move_on_after(1) as scope:
                 async for _ in client.read_events():
-                    pass
+                    assert False
 
         assert not scope.cancelled_caught
 
