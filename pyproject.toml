@@ -275,6 +275,7 @@ markers = [
     "redis",
     "docker",
     "browser_use",
+    "crawl4ai",
 ]
 
 [tool.black]

@@ -4,9 +4,13 @@
 
 from typing import Annotated, Any
 
-from crawl4ai import AsyncWebCrawler
-
+from ....import_utils import optional_import_block
 from ... import Tool
+
+with optional_import_block():
+    from crawl4ai import AsyncWebCrawler
+
+__all__ = ["Crawl4AITool"]
 
 
 class Crawl4AITool(Tool):
@@ -18,7 +22,7 @@ class Crawl4AITool(Tool):
                 result = await crawler.arun(
                     url=url,
                 )
-                return result.markdown()
+                return result.markdown
 
         super().__init__(
             name="crawl4ai",
