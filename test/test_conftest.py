@@ -8,10 +8,11 @@
 
 import pytest
 
-from .conftest import Credentials, credentials_all_llms
+from .conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 def test_credentials_from_test_param_fixture(
     credentials_from_test_param: Credentials,
     request: pytest.FixtureRequest,
