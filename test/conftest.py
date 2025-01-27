@@ -4,16 +4,21 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import asyncio
+import functools
+import inspect
 import os
 import re
+import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TypeVar
 
 import pytest
 from _pytest.outcomes import Skipped
 from pytest import CallInfo, Item
 
 import autogen
+from autogen.import_utils import optional_import_block
 
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
@@ -362,3 +367,79 @@ credentials_all_llms = [
         marks=pytest.mark.anthropic,
     ),
 ]
+
+T = TypeVar("T", bound=Callable[..., Any])
+
+
+def suppress(exception: type[BaseException], *, retries: Optional[int] = None, timeout: int = 60) -> Callable[[T], T]:
+    """Suppresses the specified exception and retries the function a specified number of times.
+
+    Args:
+        exception (type[BaseException]): The exception to suppress.
+        retries (Optional[int]): The number of times to retry the function. If None, the function will tried once and just return in case of exception raised. Defaults to None.
+        timeout (int): The time to wait between retries in seconds. Defaults to 60.
+
+    """
+
+    def decorator(
+        func: T, exception: type[BaseException] = exception, retries: Optional[int] = retries, timeout: int = timeout
+    ) -> T:
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def wrapper(
+                *args: Any,
+                exception: type[BaseException] = exception,
+                retries: Optional[int] = retries,
+                timeout: int = timeout,
+                **kwargs: Any,
+            ) -> Any:
+                if retries is None:
+                    try:
+                        return await func(*args, **kwargs)
+                    except exception:
+                        pytest.xfail(f"Suppressed '{exception}' raised")
+                else:
+                    for i in range(retries):
+                        try:
+                            return await func(*args, **kwargs)
+                        except exception:
+                            if i >= retries - 1:
+                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            await asyncio.sleep(timeout)
+        else:
+
+            @functools.wraps(func)
+            def wrapper(
+                *args: Any,
+                exception: type[BaseException] = exception,
+                retries: Optional[int] = retries,
+                timeout: int = timeout,
+                **kwargs: Any,
+            ) -> Any:
+                if retries is None:
+                    try:
+                        return func(*args, **kwargs)
+                    except exception:
+                        pytest.xfail(f"Suppressed '{exception}' raised")
+                else:
+                    for i in range(retries):
+                        try:
+                            return func(*args, **kwargs)
+                        except exception:
+                            if i >= retries - 1:
+                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            time.sleep(timeout)
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
+def suppress_gemini_resource_exhausted(func: T) -> T:
+    with optional_import_block():
+        from google.api_core.exceptions import ResourceExhausted
+
+        return suppress(ResourceExhausted, retries=2)(func)
+
+    return func
