@@ -91,7 +91,7 @@ def generate_markdown(path: Path) -> None:
             file_path = path / module_name.replace(".", "/") / "index.md"
             # print(f"Writing {file_path}...")
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            with file_path.open("w") as f:
+            with file_path.open("w", encoding="utf-8") as f:
                 f.write(text)
 
 
@@ -220,7 +220,7 @@ def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
         mint_config["navigation"].append(reference_section)
 
         # Write back to mint.json with proper formatting
-        with open(mint_json_path, "w") as f:
+        with open(mint_json_path, "w", encoding="utf-8") as f:
             json.dump(mint_config, f, indent=2)
             f.write("\n")
 
