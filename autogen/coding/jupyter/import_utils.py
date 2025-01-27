@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 __all__ = ["require_jupyter_kernel_gateway_installed", "skip_on_missing_jupyter_kernel_gateway"]
 
 
-@lru_cache()
+@lru_cache
 def is_jupyter_kernel_gateway_installed() -> bool:
     """Check if jupyter-kernel-gateway is installed."""
     try:
@@ -61,7 +61,6 @@ def skip_on_missing_jupyter_kernel_gateway() -> Callable[[T], T]:
         module: Module name
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
-
     if is_jupyter_kernel_gateway_installed():
 
         def decorator(o: T) -> T:

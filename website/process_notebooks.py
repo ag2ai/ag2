@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -20,12 +20,13 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Any, Collection, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from termcolor import colored
 
@@ -130,9 +131,8 @@ def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]
         return "description is not in front matter"
 
     # Make sure tags is a list of strings
-    if front_matter["tags"] is not None:
-        if not all([isinstance(tag, str) for tag in front_matter["tags"]]):
-            return "tags must be a list of strings"
+    if front_matter["tags"] is not None and not all([isinstance(tag, str) for tag in front_matter["tags"]]):
+        return "tags must be a list of strings"
 
     # Make sure description is a string
     if not isinstance(front_matter["description"], str):
@@ -185,9 +185,8 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
         intermediate_notebook = dest_dir / relative_notebook
 
         # If the intermediate_notebook already exists, check if it is newer than the source file
-        if target_file.exists():
-            if target_file.stat().st_mtime > src_notebook.stat().st_mtime:
-                return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
+        if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
+            return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
 
         if dry_run:
             return colored(f"Would process {src_notebook.name}", "green")
@@ -215,9 +214,8 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
         target_file = src_notebook.with_suffix(".mdx")
 
         # If the intermediate_notebook already exists, check if it is newer than the source file
-        if target_file.exists():
-            if target_file.stat().st_mtime > src_notebook.stat().st_mtime:
-                return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
+        if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
+            return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
 
         if dry_run:
             return colored(f"Would process {src_notebook.name}", "green")
@@ -646,7 +644,6 @@ def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[
         input_dir (Path): Directory to process
         group_header (str): Group header
     """
-
     sorted_dir_files = get_sorted_files(input_dir, prefix)
 
     return {"group": group_header, "pages": sorted_dir_files}

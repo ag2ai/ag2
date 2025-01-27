@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -203,7 +203,7 @@ class Teachability(AgentCapability):
             input_text, n_results=self.max_num_retrievals, threshold=self.recall_threshold
         )
 
-        if self.verbosity >= 1:
+        if self.verbosity >= 1:  # noqa: SIM102
             # Was anything retrieved?
             if len(memo_list) == 0:
                 # No. Look at the closest memo.
@@ -319,9 +319,7 @@ class MemoStore:
         if self.verbosity >= 1:
             print(
                 colored(
-                    "\nINPUT-OUTPUT PAIR ADDED TO VECTOR DATABASE:\n  ID\n    {}\n  INPUT\n    {}\n  OUTPUT\n    {}\n".format(
-                        self.last_memo_id, input_text, output_text
-                    ),
+                    f"\nINPUT-OUTPUT PAIR ADDED TO VECTOR DATABASE:\n  ID\n    {self.last_memo_id}\n  INPUT\n    {input_text}\n  OUTPUT\n    {output_text}\n",
                     "light_yellow",
                 )
             )
@@ -337,9 +335,7 @@ class MemoStore:
         if self.verbosity >= 1:
             print(
                 colored(
-                    "\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {}\n  OUTPUT\n    {}\n  DISTANCE\n    {}".format(
-                        input_text, output_text, distance
-                    ),
+                    f"\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {input_text}\n  OUTPUT\n    {output_text}\n  DISTANCE\n    {distance}",
                     "light_yellow",
                 )
             )
@@ -360,9 +356,7 @@ class MemoStore:
                 if self.verbosity >= 1:
                     print(
                         colored(
-                            "\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {}\n  OUTPUT\n    {}\n  DISTANCE\n    {}".format(
-                                input_text, output_text, distance
-                            ),
+                            f"\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {input_text}\n  OUTPUT\n    {output_text}\n  DISTANCE\n    {distance}",
                             "light_yellow",
                         )
                     )

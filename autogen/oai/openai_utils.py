@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -549,10 +549,7 @@ def config_list_from_json(
     else:
         # The environment variable does not exist.
         # So, `env_or_file` is a filename. We should use the file location.
-        if file_location is not None:
-            config_list_path = os.path.join(file_location, env_or_file)
-        else:
-            config_list_path = env_or_file
+        config_list_path = os.path.join(file_location, env_or_file) if file_location is not None else env_or_file
 
         with open(config_list_path) as json_file:
             config_list = json.load(json_file)

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -95,7 +95,7 @@ def count_token(input: Union[str, list, dict], model: str = "gpt-3.5-turbo-0613"
     """
     if isinstance(input, str):
         return _num_token_from_text(input, model=model)
-    elif isinstance(input, list) or isinstance(input, dict):
+    elif isinstance(input, (list, dict)):
         return _num_token_from_messages(input, model=model)
     else:
         raise ValueError(f"input must be str, list or dict, but we got {type(input)}")

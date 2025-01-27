@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,6 +7,7 @@
 import logging
 import os
 import random
+from contextlib import suppress
 from time import monotonic, sleep
 
 import pytest
@@ -58,11 +59,8 @@ def _delete_search_indexes(collection: "Collection", wait=True):
         collection (pymongo.Collection): MongoDB Collection Abstraction
     """
     for index in collection.list_search_indexes():
-        try:
+        with suppress(OperationFailure):
             collection.drop_search_index(index["name"])
-        except OperationFailure:
-            # Delete already issued
-            pass
     if wait:
         _wait_for_predicate(lambda: not list(collection.list_search_indexes()), "Not all collections deleted")
 

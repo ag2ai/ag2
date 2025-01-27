@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -63,9 +63,7 @@ class UndefinedNextAgent(Exception):  # noqa: N818
 
 
 class ModelToolNotSupportedError(Exception):
-    """
-    Exception raised when attempting to use tools with models that do not support them.
-    """
+    """Exception raised when attempting to use tools with models that do not support them."""
 
     def __init__(
         self,

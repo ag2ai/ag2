@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -227,7 +227,7 @@ class AgentOptimizer:
                 "0",
                 "1",
             ], "The input is invalid. Please input 1 or 0. 1 represents satisfied. 0 represents not satisfied."
-            is_satisfied = True if reply == "1" else False
+            is_satisfied = reply == "1"
         self._trial_conversations_history.append(
             {f"Conversation {len(self._trial_conversations_history)}": conversation_history}
         )
@@ -284,8 +284,8 @@ class AgentOptimizer:
                 incumbent_functions = self._update_function_call(incumbent_functions, actions)
 
         remove_functions = list(
-            {key for dictionary in self._trial_functions for key in dictionary.keys()}
-            - {key for dictionary in incumbent_functions for key in dictionary.keys()}
+            {key for dictionary in self._trial_functions for key in dictionary}
+            - {key for dictionary in incumbent_functions for key in dictionary}
         )
 
         register_for_llm = []
@@ -408,7 +408,7 @@ class AgentOptimizer:
                 function_args = action.function.arguments
                 try:
                     function_args = json.loads(function_args.strip('"'))
-                    if "arguments" in function_args.keys():
+                    if "arguments" in function_args:
                         json.loads(function_args.get("arguments").strip('"'))
                 except Exception as e:
                     print("JSON is invalid:", e)

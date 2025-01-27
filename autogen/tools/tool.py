@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -92,8 +92,7 @@ class Tool:
         agent.register_for_execution()(self)
 
     def register_tool(self, agent: "ConversableAgent") -> None:
-        """
-        Register a tool to be both proposed and executed by an agent.
+        """Register a tool to be both proposed and executed by an agent.
 
         Equivalent to calling both `register_for_llm` and `register_for_execution` with the same agent.
 

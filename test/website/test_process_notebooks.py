@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,8 +6,9 @@ import json
 import sys
 import tempfile
 import textwrap
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator, Optional, Union
+from typing import Optional, Union
 
 import pytest
 
@@ -93,7 +94,7 @@ class TestAddFrontMatterToMetadataMdx:
 
             assert (metadata_dir / "NotebooksMetadata.mdx").exists()
 
-            with open(metadata_dir / "NotebooksMetadata.mdx", "r") as f:
+            with open(metadata_dir / "NotebooksMetadata.mdx") as f:
                 actual = f.read()
 
             assert (
@@ -164,7 +165,7 @@ export const notebooksMetadata = [
 
             assert (metadata_dir / "NotebooksMetadata.mdx").exists()
 
-            with open(metadata_dir / "NotebooksMetadata.mdx", "r") as f:
+            with open(metadata_dir / "NotebooksMetadata.mdx") as f:
                 actual = f.read()
 
             assert (
@@ -300,7 +301,6 @@ class TestAddBlogsToNavigation:
 class TestUpdateNavigation:
     def setup(self, temp_dir: Path) -> None:
         """Set up test files in the temporary directory."""
-
         # Create directories
         snippets_dir = temp_dir / "snippets" / "data"
         snippets_dir.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -219,10 +219,7 @@ $functions"""
         required_packages = list(set(flattened_packages))
         if len(required_packages) > 0:
             logging.info("Ensuring packages are installed in executor.")
-            if self._virtual_env_context:
-                py_executable = self._virtual_env_context.env_exe
-            else:
-                py_executable = sys.executable
+            py_executable = self._virtual_env_context.env_exe if self._virtual_env_context else sys.executable
             cmd = [py_executable, "-m", "pip", "install"] + required_packages
             try:
                 result = subprocess.run(
@@ -355,9 +352,7 @@ class _DeprecatedClassMeta(type):
 
                 if alias is not None:
                     warnings.warn(
-                        "{} has been renamed to {}, the alias will be removed in the future".format(
-                            cls.__name__, alias.__name__
-                        ),
+                        f"{cls.__name__} has been renamed to {alias.__name__}, the alias will be removed in the future",
                         DeprecationWarning,
                         stacklevel=2,
                     )
@@ -374,9 +369,7 @@ class _DeprecatedClassMeta(type):
 
             if alias is not None:
                 warnings.warn(
-                    "{} has been renamed to {}, the alias will be removed in the future".format(
-                        b.__name__, alias.__name__
-                    ),
+                    f"{b.__name__} has been renamed to {alias.__name__}, the alias will be removed in the future",
                     DeprecationWarning,
                     stacklevel=2,
                 )

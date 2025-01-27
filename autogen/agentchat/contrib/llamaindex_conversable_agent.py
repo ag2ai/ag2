@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -84,7 +84,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
-        chat_response: "AgentChatResponse" = self._llama_index_agent.chat(message=user_message, chat_history=history)
+        chat_response: AgentChatResponse = self._llama_index_agent.chat(message=user_message, chat_history=history)
 
         extracted_response = chat_response.response
 
@@ -99,7 +99,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
-        chat_response: "AgentChatResponse" = await self._llama_index_agent.achat(
+        chat_response: AgentChatResponse = await self._llama_index_agent.achat(
             message=user_message, chat_history=history
         )
 
@@ -120,11 +120,10 @@ class LLamaIndexConversableAgent(ConversableAgent):
         message = messages[-1].get("content", "")
 
         history = messages[:-1]
-        history_messages: list["ChatMessage"] = []
+        history_messages: list[ChatMessage] = []
         for history_message in history:
             content = history_message.get("content", "")
             role = history_message.get("role", "user")
-            if role:
-                if role == "user" or role == "assistant":
-                    history_messages.append(ChatMessage(content=content, role=role, additional_kwargs={}))
+            if role and (role == "user" or role == "assistant"):
+                history_messages.append(ChatMessage(content=content, role=role, additional_kwargs={}))
         return message, history_messages

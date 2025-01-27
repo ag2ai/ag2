@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 import copy
@@ -76,9 +76,7 @@ class ON_CONDITION:  # noqa: N801
     def __post_init__(self):
         # Ensure valid types
         if self.target is not None:
-            assert isinstance(self.target, SwarmAgent) or isinstance(self.target, dict), (
-                "'target' must be a SwarmAgent or a Dict"
-            )
+            assert isinstance(self.target, (SwarmAgent, dict)), "'target' must be a SwarmAgent or a Dict"
 
         # Ensure they have a condition
         assert isinstance(self.condition, str) and self.condition.strip(), "'condition' must be a non-empty string"
@@ -139,9 +137,8 @@ def _prepare_swarm_agents(
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
     for agent in agents:
-        if agent.after_work is not None:
-            if isinstance(agent.after_work.agent, SwarmAgent):
-                assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
+        if agent.after_work is not None and isinstance(agent.after_work.agent, SwarmAgent):
+            assert agent.after_work.agent in agents, "Agent in hand-off must be in the agents list"
 
     tool_execution = SwarmAgent(
         name=__TOOL_EXECUTOR_NAME__,

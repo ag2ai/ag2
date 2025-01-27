@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -26,7 +26,7 @@ TOOL_ENABLED = False
 
 with optional_import_block() as result:
     import openai
-    from openai import OpenAI  # noqa: F401
+    from openai import OpenAI
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
@@ -441,12 +441,12 @@ class TestO1:
     @pytest.fixture
     def o1_mini_client(self, credentials_o1_mini: Credentials) -> Generator[OpenAIWrapper, None, None]:
         config_list = credentials_o1_mini.config_list
-        yield OpenAIWrapper(config_list=config_list, cache_seed=42)
+        return OpenAIWrapper(config_list=config_list, cache_seed=42)
 
     @pytest.fixture
     def o1_client(self, credentials_o1: Credentials) -> Generator[OpenAIWrapper, None, None]:
         config_list = credentials_o1.config_list
-        yield OpenAIWrapper(config_list=config_list, cache_seed=42)
+        return OpenAIWrapper(config_list=config_list, cache_seed=42)
 
     def test_reasoning_remove_unsupported_params(self, mock_oai_client: OpenAIClient) -> None:
         """Test that unsupported parameters are removed with appropriate warnings"""

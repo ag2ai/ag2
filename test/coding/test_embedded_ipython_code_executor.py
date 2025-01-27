@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -57,10 +57,8 @@ if sys.platform == "win32":
 else:
     classes_to_test = [EmbeddedIPythonCodeExecutor, LocalJupyterCodeExecutor]
 
-if not is_docker_running() or not decide_use_docker(use_docker=None):
-    skip_docker_test = True
-else:
-    skip_docker_test = False
+skip_docker_test = not (is_docker_running() and decide_use_docker(use_docker=None))
+
 if not skip_docker_test:
     classes_to_test.append(DockerJupyterExecutor)
 

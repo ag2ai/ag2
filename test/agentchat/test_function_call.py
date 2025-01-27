@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -229,7 +229,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     user_proxy = autogen.UserProxyAgent(
         name="user_proxy",
         human_input_mode="NEVER",
-        is_termination_msg=lambda x: True if "TERMINATE" in x.get("content") else False,
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content"),
     )
     assistant = autogen.AssistantAgent(name="test", llm_config=llm_config)
 

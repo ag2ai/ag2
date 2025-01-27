@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -40,8 +40,7 @@ class Secrets:
 
     @staticmethod
     def sanitize_secrets(data: str, x: int = 5) -> str:
-        """
-        Censors substrings of length `x` or greater derived from any secret in the list.
+        """Censors substrings of length `x` or greater derived from any secret in the list.
 
         Args:
             data (str): The string to be censored.
@@ -67,8 +66,7 @@ class Secrets:
 
     @staticmethod
     def needs_sanitizing(data: str, x: int = 5) -> bool:
-        """
-        Checks if the string contains any substrings of length `x` or greater derived from any secret in the list.
+        """Checks if the string contains any substrings of length `x` or greater derived from any secret in the list.
 
         Args:
             data (str): The string to be checked.
@@ -133,8 +131,7 @@ class CensoredError(Exception):
 
 
 def pytest_runtest_makereport(item: Item, call: CallInfo[Any]) -> None:
-    """
-    Hook to customize the exception output.
+    """Hook to customize the exception output.
     This is called after each test call.
     """
     if call.excinfo is not None:  # This means the test failed

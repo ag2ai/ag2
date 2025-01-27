@@ -309,13 +309,14 @@ select = [
 #    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
     "Q",     # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
 #    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20
-#    "SIM",   # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
+    "SIM",   # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
 #    "PT",    # flake8-pytest-style    https://docs.astral.sh/ruff/rules/#flake8-pytest-style-pt
 #    "PTH",   # flake8-use-pathlib     https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
 #    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
 #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
-     "RUF022", # Sort __all__          https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
+    "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
+#    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
 ]
 
 ignore = ["E501", "F403", "C901",
