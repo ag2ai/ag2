@@ -1,0 +1,87 @@
+---
+sidebarTitle: web_surfer
+title: autogen.agentchat.contrib.web_surfer
+---
+
+    <h2 id="autogen.agentchat.contrib.web_surfer.WebSurferAgent" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">WebSurferAgent</span>
+        <a href="#autogen.agentchat.contrib.web_surfer.WebSurferAgent" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+WebSurferAgent(
+    name: str,
+    system_message: str | list[str] | None = "You are a helpful AI assistant with access to a web browser (via the provided functions). In fact, YOU ARE THE ONLY MEMBER OF YOUR PARTY WITH ACCESS TO A WEB BROWSER, so please help out where you can by performing web searches, navigating pages, and reporting what you find. Today's date is 2025-01-24",
+    description: str | None = 'A helpful assistant with access to a web browser. Ask them to perform web searches, open pages, navigate to Wikipedia, answer questions from pages, and or generate summaries.',
+    is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+    max_consecutive_auto_reply: int | None = None,
+    human_input_mode: Literal['ALWAYS', 'NEVER', 'TERMINATE'] = 'TERMINATE',
+    function_map: dict[str, typing.Callable] | None = None,
+    code_execution_config: dict | Literal[False] = False,
+    llm_config: dict | Literal[False] | None = None,
+    summarizer_llm_config: dict | Literal[False] | None = None,
+    default_auto_reply: dict | str | None = '',
+    browser_config: dict | None = None,
+    **kwargs
+)
+```
+
+    (In preview) An agent that acts as a basic web surfer that can search the web and visit web pages.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `name` | name of the agent.<br/><br/>**Type:** `str` |
+| `system_message` | system message for the ChatCompletion inference.<br/><br/>**Type:** `str \| list[str] \| None`<br/><br/>**Default:** "You are a helpful AI assistant with access to a web browser (via the provided functions). In fact, YOU ARE THE ONLY MEMBER OF YOUR PARTY WITH ACCESS TO A WEB BROWSER, so please help out where you can by performing web searches, navigating pages, and reporting what you find. Today's date is 2025-01-24" |
+| `description` | a short description of the agent.<br/><br/>This description is used by other agents (e.g.<br/><br/>the GroupChatManager) to decide when to call upon this agent.<br/><br/>(Default: system_message)<br/><br/>**Type:** `str \| None`<br/><br/>**Default:** 'A helpful assistant with access to a web browser. Ask them to perform web searches, open pages, navigate to Wikipedia, answer questions from pages, and or generate summaries.' |
+| `is_termination_msg` | a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message.<br/><br/>The dict can contain the following keys: "content", "role", "name", "function_call".<br/><br/>**Type:** `Callable[[dict[str, Any]], bool] \| None`<br/><br/>**Default:** None |
+| `max_consecutive_auto_reply` | the maximum number of consecutive auto replies.<br/><br/>default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).<br/><br/>When set to 0, no auto reply will be generated.<br/><br/>**Type:** `int \| None`<br/><br/>**Default:** None |
+| `human_input_mode` | whether to ask for human inputs every time a message is received.<br/><br/>Possible values are "ALWAYS", "TERMINATE", "NEVER".<br/><br/>(1) When "ALWAYS", the agent prompts for human input every time a message is received.<br/><br/>Under this mode, the conversation stops when the human input is "exit", or when is_termination_msg is True and there is no human input.<br/><br/>(2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or the number of auto reply reaches the max_consecutive_auto_reply.<br/><br/>(3) When "NEVER", the agent will never prompt for human input.<br/><br/>Under this mode, the conversation stops when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.<br/><br/>**Type:** `Literal['ALWAYS', 'NEVER', 'TERMINATE']`<br/><br/>**Default:** 'TERMINATE' |
+| `function_map` | Mapping function names (passed to openai) to callable functions, also used for tool calls.<br/><br/>**Type:** `dict[str, typing.Callable] \| None`<br/><br/>**Default:** None |
+| `code_execution_config` | config for the code execution.<br/><br/>To disable code execution, set to False.<br/><br/>Otherwise, set to a dictionary with the following keys: - work_dir (Optional, str): The working directory for the code execution.<br/><br/>If None, a default working directory will be used.<br/><br/>The default working directory is the "extensions" directory under "path_to_autogen".<br/><br/>- use_docker (Optional, list, str or bool): The docker image to use for code execution.<br/><br/>Default is True, which means the code will be executed in a docker container.<br/><br/>A default list of images will be used.<br/><br/>If a list or a str of image name(s) is provided, the code will be executed in a docker container with the first image successfully pulled.<br/><br/>If False, the code will be executed in the current environment.<br/><br/>We strongly recommend using docker for code execution.<br/><br/>- timeout (Optional, int): The maximum execution time in seconds.<br/><br/>- last_n_messages (Experimental, int or str): The number of messages to look back for code execution.<br/><br/>If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted.<br/><br/>(Default: auto)<br/><br/>**Type:** `dict \| Literal[False]`<br/><br/>**Default:** False |
+| `llm_config` | llm inference configuration.<br/><br/>Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create) for available options.<br/><br/>When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.<br/><br/>To disable llm-based auto reply, set to False.<br/><br/>When set to None, will use self.DEFAULT_CONFIG, which defaults to False.<br/><br/>**Type:** `dict \| Literal[False] \| None`<br/><br/>**Default:** None |
+| `summarizer_llm_config` | **Type:** `dict \| Literal[False] \| None`<br/><br/>**Default:** None |
+| `default_auto_reply` | default auto reply when no code execution or llm-based reply is generated.<br/><br/>**Type:** `dict \| str \| None`<br/><br/>**Default:** '' |
+| `browser_config` | **Type:** `dict \| None`<br/><br/>**Default:** None |
+| `**kwargs` |  |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### DEFAULT_DESCRIPTION
+<a href="#autogen.agentchat.contrib.web_surfer.WebSurferAgent.DEFAULT_DESCRIPTION" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### DEFAULT_PROMPT
+<a href="#autogen.agentchat.contrib.web_surfer.WebSurferAgent.DEFAULT_PROMPT" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### generate_surfer_reply
+<a href="#autogen.agentchat.contrib.web_surfer.WebSurferAgent.generate_surfer_reply" class="headerlink" title="Permanent link"></a>
+
+```python
+generate_surfer_reply(
+    self,
+    messages: list[dict[str, str]] | None = None,
+    sender: autogen.agentchat.agent.Agent | None = None,
+    config: autogen.oai.client.OpenAIWrapper | None = None
+) -> tuple[bool, str | dict[str, str] | None]
+```
+
+    Generate a reply using autogen.oai.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `messages` | **Type:** `list[dict[str, str]] \| None`<br/><br/>**Default:** None |
+| `sender` | **Type:** `autogen.agentchat.agent.Agent \| None`<br/><br/>**Default:** None |
+| `config` | **Type:** `autogen.oai.client.OpenAIWrapper \| None`<br/><br/>**Default:** None |
+
+<br />

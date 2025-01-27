@@ -1,0 +1,535 @@
+---
+sidebarTitle: embedded_ipython_code_executor
+title: autogen.coding.jupyter.embedded_ipython_code_executor
+---
+
+    <h2 id="autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">EmbeddedIPythonCodeExecutor</span>
+        <a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+EmbeddedIPythonCodeExecutor(**kwargs)
+```
+
+    (Experimental) A code executor class that executes code statefully using an embedded
+    IPython kernel managed by this class.
+    
+    **This will execute LLM generated code on the local machine.**
+    
+    Each execution is stateful and can access variables created from previous
+    executions in the same session. The kernel must be installed before using
+    this class. The kernel can be installed using the following command:
+    `python -m ipykernel install --user --name \{kernel_name}`
+    where `kernel_name` is the name of the kernel to install.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### kernel_name
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.kernel_name" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### model_config
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_config" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### output_dir
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.output_dir" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### timeout
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.timeout" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Instance Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### code_extractor
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.code_extractor" class="headerlink" title="Permanent link"></a>
+
+    (Experimental) Export a code extractor that can be used by an agent.
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### model_extra
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_extra" class="headerlink" title="Permanent link"></a>
+
+    Get extra fields set during validation.
+    
+    Returns:
+        A dictionary of extra fields, or `None` if `config.extra` is not set to `"allow"`.
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### model_fields_set
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_fields_set" class="headerlink" title="Permanent link"></a>
+
+    Returns the set of fields that have been explicitly set on this model instance.
+    
+    Returns:
+        A set of strings representing the fields that have been set,
+            i.e. that were not filled from defaults.
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### construct
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.construct" class="headerlink" title="Permanent link"></a>
+
+```python
+construct(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### copy
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.copy" class="headerlink" title="Permanent link"></a>
+
+```python
+copy(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### dict
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.dict" class="headerlink" title="Permanent link"></a>
+
+```python
+dict(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### execute_code_blocks
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.execute_code_blocks" class="headerlink" title="Permanent link"></a>
+
+```python
+execute_code_blocks(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### from_orm
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.from_orm" class="headerlink" title="Permanent link"></a>
+
+```python
+from_orm(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### json
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.json" class="headerlink" title="Permanent link"></a>
+
+```python
+json(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_construct
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_construct" class="headerlink" title="Permanent link"></a>
+
+```python
+model_construct(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_copy
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_copy" class="headerlink" title="Permanent link"></a>
+
+```python
+model_copy(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_dump
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_dump" class="headerlink" title="Permanent link"></a>
+
+```python
+model_dump(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_dump_json
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_dump_json" class="headerlink" title="Permanent link"></a>
+
+```python
+model_dump_json(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_json_schema
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_json_schema" class="headerlink" title="Permanent link"></a>
+
+```python
+model_json_schema(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_parametrized_name
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_parametrized_name" class="headerlink" title="Permanent link"></a>
+
+```python
+model_parametrized_name(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_post_init
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_post_init" class="headerlink" title="Permanent link"></a>
+
+```python
+model_post_init(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_rebuild
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_rebuild" class="headerlink" title="Permanent link"></a>
+
+```python
+model_rebuild(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_validate
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_validate" class="headerlink" title="Permanent link"></a>
+
+```python
+model_validate(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_validate_json
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_validate_json" class="headerlink" title="Permanent link"></a>
+
+```python
+model_validate_json(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### model_validate_strings
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.model_validate_strings" class="headerlink" title="Permanent link"></a>
+
+```python
+model_validate_strings(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### parse_file
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.parse_file" class="headerlink" title="Permanent link"></a>
+
+```python
+parse_file(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### parse_obj
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.parse_obj" class="headerlink" title="Permanent link"></a>
+
+```python
+parse_obj(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### parse_raw
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.parse_raw" class="headerlink" title="Permanent link"></a>
+
+```python
+parse_raw(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### restart
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.restart" class="headerlink" title="Permanent link"></a>
+
+```python
+restart(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### schema
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.schema" class="headerlink" title="Permanent link"></a>
+
+```python
+schema(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### schema_json
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.schema_json" class="headerlink" title="Permanent link"></a>
+
+```python
+schema_json(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### update_forward_refs
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.update_forward_refs" class="headerlink" title="Permanent link"></a>
+
+```python
+update_forward_refs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### validate
+<a href="#autogen.coding.jupyter.embedded_ipython_code_executor.EmbeddedIPythonCodeExecutor.validate" class="headerlink" title="Permanent link"></a>
+
+```python
+validate(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />

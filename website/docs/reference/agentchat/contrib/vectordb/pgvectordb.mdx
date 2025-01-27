@@ -1,0 +1,528 @@
+---
+sidebarTitle: pgvectordb
+title: autogen.agentchat.contrib.vectordb.pgvectordb
+---
+
+    <h2 id="autogen.agentchat.contrib.vectordb.pgvectordb.Collection" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">Collection</span>
+        <a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+Collection(**kwargs)
+```
+
+    A Collection object for PGVector.
+    
+    Attributes:
+        client: The PGVector client.
+        collection_name (str): The name of the collection. Default is "documents".
+        embedding_function (Callable): The embedding function used to generate the vector representation.
+            Default is None. SentenceTransformer("all-MiniLM-L6-v2").encode will be used when None.
+            Models can be chosen from:
+            https://huggingface.co/models?library=sentence-transformers
+        metadata (Optional[dict]): The metadata of the collection.
+        get_or_create (Optional): The flag indicating whether to get or create the collection.
+    
+    Initialize the Collection object.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### add
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.add" class="headerlink" title="Permanent link"></a>
+
+```python
+add(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### convert_string_to_array
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.convert_string_to_array" class="headerlink" title="Permanent link"></a>
+
+```python
+convert_string_to_array(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### cosine_distance
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.cosine_distance" class="headerlink" title="Permanent link"></a>
+
+```python
+cosine_distance(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### count
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.count" class="headerlink" title="Permanent link"></a>
+
+```python
+count(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create_collection
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.create_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+create_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### delete
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.delete" class="headerlink" title="Permanent link"></a>
+
+```python
+delete(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### delete_collection
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.delete_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+delete_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### euclidean_distance
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.euclidean_distance" class="headerlink" title="Permanent link"></a>
+
+```python
+euclidean_distance(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.get" class="headerlink" title="Permanent link"></a>
+
+```python
+get(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### inner_product_distance
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.inner_product_distance" class="headerlink" title="Permanent link"></a>
+
+```python
+inner_product_distance(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### modify
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.modify" class="headerlink" title="Permanent link"></a>
+
+```python
+modify(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### query
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.query" class="headerlink" title="Permanent link"></a>
+
+```python
+query(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### set_collection_name
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.set_collection_name" class="headerlink" title="Permanent link"></a>
+
+```python
+set_collection_name(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### table_exists
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.table_exists" class="headerlink" title="Permanent link"></a>
+
+```python
+table_exists(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### update
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.update" class="headerlink" title="Permanent link"></a>
+
+```python
+update(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### upsert
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.Collection.upsert" class="headerlink" title="Permanent link"></a>
+
+```python
+upsert(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+    <h2 id="autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">PGVectorDB</span>
+        <a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+PGVectorDB(**kwargs)
+```
+
+    A vector database that uses PGVector as the backend.
+    
+    Initialize the vector database.
+    
+    Note: connection_string or host + port + dbname must be specified
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### active_collection
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.active_collection" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### embedding_function
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.embedding_function" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### type
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.type" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create_collection
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.create_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+create_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### delete_collection
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.delete_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+delete_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### delete_docs
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.delete_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+delete_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### establish_connection
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.establish_connection" class="headerlink" title="Permanent link"></a>
+
+```python
+establish_connection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_collection
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.get_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+get_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_docs_by_ids
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.get_docs_by_ids" class="headerlink" title="Permanent link"></a>
+
+```python
+get_docs_by_ids(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### insert_docs
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.insert_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+insert_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### retrieve_docs
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.retrieve_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+retrieve_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### update_docs
+<a href="#autogen.agentchat.contrib.vectordb.pgvectordb.PGVectorDB.update_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+update_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />

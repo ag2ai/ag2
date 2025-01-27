@@ -1,0 +1,439 @@
+---
+sidebarTitle: client
+title: autogen.oai.client
+---
+
+    <h2 id="autogen.oai.client.ModelClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">ModelClient</span>
+        <a href="#autogen.oai.client.ModelClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+ModelClient(*args, **kwargs)
+```
+
+    A client class must implement the following methods:
+    - create must return a response object that implements the ModelClientResponseProtocol
+    - cost must return the cost of the response
+    - get_usage must return a dict with the following keys:
+        - prompt_tokens
+        - completion_tokens
+        - total_tokens
+        - cost
+        - model
+    
+    This class is used to create a client that can be used by OpenAIWrapper.
+    The response returned from create must adhere to the ModelClientResponseProtocol but can be extended however needed.
+    The message_retrieval method must be implemented to return a list of str or a list of messages from the response.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### ModelClientResponseProtocol
+<a href="#autogen.oai.client.ModelClient.ModelClientResponseProtocol" class="headerlink" title="Permanent link"></a>
+
+    Base class for protocol classes.
+    
+    Protocol classes are defined as::
+    
+        class Proto(Protocol):
+            def meth(self) -> int:
+                ...
+    
+    Such classes are primarily used with static type checkers that recognize
+    structural subtyping (static duck-typing).
+    
+    For example::
+    
+        class C:
+            def meth(self) -> int:
+                return 0
+    
+        def func(x: Proto) -> int:
+            return x.meth()
+    
+        func(C())  # Passes static type check
+    
+    See PEP 544 for details. Protocol classes decorated with
+    @typing.runtime_checkable act as simple-minded runtime protocols that check
+    only the presence of given attributes, ignoring their type signatures.
+    Protocol classes can be generic, they are defined as::
+    
+        class GenProto(Protocol[T]):
+            def meth(self) -> T:
+                ...
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### RESPONSE_USAGE_KEYS
+<a href="#autogen.oai.client.ModelClient.RESPONSE_USAGE_KEYS" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Static Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_usage
+<a href="#autogen.oai.client.ModelClient.get_usage" class="headerlink" title="Permanent link"></a>
+
+```python
+get_usage(response: ModelClientResponseProtocol) -> dict
+```
+
+    Return usage summary of the response using RESPONSE_USAGE_KEYS.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | **Type:** `ModelClientResponseProtocol` |
+
+<br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### cost
+<a href="#autogen.oai.client.ModelClient.cost" class="headerlink" title="Permanent link"></a>
+
+```python
+cost(self, response: ModelClientResponseProtocol) -> float
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | **Type:** `ModelClientResponseProtocol` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create
+<a href="#autogen.oai.client.ModelClient.create" class="headerlink" title="Permanent link"></a>
+
+```python
+create(self, params: dict[str, Any]) -> ModelClientResponseProtocol
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `params` | **Type:** `dict[str, Any]` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### message_retrieval
+<a href="#autogen.oai.client.ModelClient.message_retrieval" class="headerlink" title="Permanent link"></a>
+
+```python
+message_retrieval(self, response: ModelClientResponseProtocol) -> Union[list[str], list[ModelClient.ModelClientResponseProtocol.Choice.Message]]
+```
+
+    Retrieve and return a list of strings or a list of Choice.Message from the response.
+    
+    NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
+    since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | **Type:** `ModelClientResponseProtocol` |
+
+<br />
+
+    <h2 id="autogen.oai.client.OpenAIClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">OpenAIClient</span>
+        <a href="#autogen.oai.client.OpenAIClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+OpenAIClient(client: Union[OpenAI, AzureOpenAI], response_format: Optional[BaseModel] = None)
+```
+
+    Follows the Client protocol and wraps the OpenAI client.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `client` | **Type:** `Union[OpenAI, AzureOpenAI]` |
+| `response_format` | **Type:** `Optional[BaseModel]`<br/><br/>**Default:** None |
+
+### Static Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_usage
+<a href="#autogen.oai.client.OpenAIClient.get_usage" class="headerlink" title="Permanent link"></a>
+
+```python
+get_usage(response: Union[ChatCompletion, Completion]) -> dict
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | **Type:** `Union[ChatCompletion, Completion]` |
+
+<br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### cost
+<a href="#autogen.oai.client.OpenAIClient.cost" class="headerlink" title="Permanent link"></a>
+
+```python
+cost(self, response: Union[ChatCompletion, Completion]) -> float
+```
+
+    Calculate the cost of the response.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | **Type:** `Union[ChatCompletion, Completion]` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create
+<a href="#autogen.oai.client.OpenAIClient.create" class="headerlink" title="Permanent link"></a>
+
+```python
+create(self, params: dict[str, Any]) -> openai.types.chat.chat_completion.ChatCompletion
+```
+
+    Create a completion for a given config using openai's client.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `params` | The params for the completion.<br/><br/>**Type:** `dict[str, Any]` |
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `openai.types.chat.chat_completion.ChatCompletion` | The completion. |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### message_retrieval
+<a href="#autogen.oai.client.OpenAIClient.message_retrieval" class="headerlink" title="Permanent link"></a>
+
+```python
+message_retrieval(self, response: Union[ChatCompletion, Completion]) -> list[str] | list[openai.types.chat.chat_completion_message.ChatCompletionMessage]
+```
+
+    Retrieve the messages from the response.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | **Type:** `Union[ChatCompletion, Completion]` |
+
+<br />
+
+    <h2 id="autogen.oai.client.OpenAIWrapper" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">OpenAIWrapper</span>
+        <a href="#autogen.oai.client.OpenAIWrapper" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+OpenAIWrapper(
+    *,
+    config_list: Optional[list[dict[str, Any]]] = None,
+    **base_config: Any
+)
+```
+
+    A wrapper class for openai client.
+    
+    Initialize the OpenAIWrapper.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `config_list` | a list of config dicts to override the base_config.<br/><br/>They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method.<br/><br/>E.g., ```python config_list = [ \\{ "model": "gpt-4", "api_key": os.environ.get("AZURE_OPENAI_API_KEY"), "api_type": "azure", "base_url": os.environ.get("AZURE_OPENAI_API_BASE"), "api_version": "2024-02-01", }, \\{ "model": "gpt-3.5-turbo", "api_key": os.environ.get("OPENAI_API_KEY"), "api_type": "openai", "base_url": "https://api.openai.com/v1", }, \\{ "model": "llama-7B", "base_url": "http://127.0.0.1:8080", }, ] ```<br/><br/>**Type:** `Optional[list[dict[str, Any]]]`<br/><br/>**Default:** None |
+| `**base_config` | **Type:** `Any` |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### actual_usage_summary
+<a href="#autogen.oai.client.OpenAIWrapper.actual_usage_summary" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### aopenai_kwargs
+<a href="#autogen.oai.client.OpenAIWrapper.aopenai_kwargs" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### extra_kwargs
+<a href="#autogen.oai.client.OpenAIWrapper.extra_kwargs" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### openai_kwargs
+<a href="#autogen.oai.client.OpenAIWrapper.openai_kwargs" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### total_usage_summary
+<a href="#autogen.oai.client.OpenAIWrapper.total_usage_summary" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Static Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### extract_text_or_completion_object
+<a href="#autogen.oai.client.OpenAIWrapper.extract_text_or_completion_object" class="headerlink" title="Permanent link"></a>
+
+```python
+extract_text_or_completion_object(response: ModelClient.ModelClientResponseProtocol) -> list[str] | list[autogen.oai.client.ModelClient.ModelClientResponseProtocol.Choice.Message]
+```
+
+    Extract the text or ChatCompletion objects from a completion or chat response.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | The response from openai.<br/><br/>**Type:** `ModelClient.ModelClientResponseProtocol` |
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `list[str] \| list[autogen.oai.client.ModelClient.ModelClientResponseProtocol.Choice.Message]` | A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present. |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### instantiate
+<a href="#autogen.oai.client.OpenAIWrapper.instantiate" class="headerlink" title="Permanent link"></a>
+
+```python
+instantiate(
+    template: Optional[Union[str, Callable[[dict[str, Any]], str]]],
+    context: Optional[dict[str, Any]] = None,
+    allow_format_str_template: Optional[bool] = False
+) -> str | None
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `template` | **Type:** `Optional[Union[str, Callable[[dict[str, Any]], str]]]` |
+| `context` | **Type:** `Optional[dict[str, Any]]`<br/><br/>**Default:** None |
+| `allow_format_str_template` | **Type:** `Optional[bool]`<br/><br/>**Default:** False |
+
+<br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### clear_usage_summary
+<a href="#autogen.oai.client.OpenAIWrapper.clear_usage_summary" class="headerlink" title="Permanent link"></a>
+
+```python
+clear_usage_summary(self) -> None
+```
+
+    Clear the usage summary.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create
+<a href="#autogen.oai.client.OpenAIWrapper.create" class="headerlink" title="Permanent link"></a>
+
+```python
+create(self, **config: Any) -> autogen.oai.client.ModelClient.ModelClientResponseProtocol
+```
+
+    Make a completion for a given config using available clients.
+    Besides the kwargs allowed in openai's [or other] client, we allow the following additional kwargs.
+    The config in each client will be overridden by the config.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**config` | **Type:** `Any` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### print_usage_summary
+<a href="#autogen.oai.client.OpenAIWrapper.print_usage_summary" class="headerlink" title="Permanent link"></a>
+
+```python
+print_usage_summary(self, mode: Union[str, list[str]] = ['actual', 'total']) -> None
+```
+
+    Print the usage summary.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `mode` | **Type:** `Union[str, list[str]]`<br/><br/>**Default:** ['actual', 'total'] |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### register_model_client
+<a href="#autogen.oai.client.OpenAIWrapper.register_model_client" class="headerlink" title="Permanent link"></a>
+
+```python
+register_model_client(
+    self,
+    model_client_cls: ModelClient,
+    **kwargs
+) -> 
+```
+
+    Register a model client.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `model_client_cls` | A custom client class that follows the ModelClient interface<br/><br/>**Type:** `ModelClient` |
+| `**kwargs` | The kwargs for the custom client class to be initialized with<br/><br/> |
+
+<br />
+
+    <h2 id="autogen.oai.client.PlaceHolderClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">PlaceHolderClient</span>
+        <a href="#autogen.oai.client.PlaceHolderClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+PlaceHolderClient(config)
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `config` |  |

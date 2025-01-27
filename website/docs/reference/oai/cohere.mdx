@@ -1,0 +1,213 @@
+---
+sidebarTitle: cohere
+title: autogen.oai.cohere
+---
+
+## Functions
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### calculate_cohere_cost
+<a href="#autogen.oai.cohere..calculate_cohere_cost" class="headerlink" title="Permanent link"></a>
+
+```python
+calculate_cohere_cost(
+    input_tokens: int,
+    output_tokens: int,
+    model: str
+) -> float
+```
+
+    Calculate the cost of the completion using the Cohere pricing.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `input_tokens` | **Type:** `int` |
+| `output_tokens` | **Type:** `int` |
+| `model` | **Type:** `str` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### extract_to_cohere_tool_results
+<a href="#autogen.oai.cohere..extract_to_cohere_tool_results" class="headerlink" title="Permanent link"></a>
+
+```python
+extract_to_cohere_tool_results(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### oai_messages_to_cohere_messages
+<a href="#autogen.oai.cohere..oai_messages_to_cohere_messages" class="headerlink" title="Permanent link"></a>
+
+```python
+oai_messages_to_cohere_messages(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+    <h2 id="autogen.oai.cohere.CohereClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">CohereClient</span>
+        <a href="#autogen.oai.cohere.CohereClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+CohereClient(**kwargs)
+```
+
+    Client for Cohere's API.
+    
+    Requires api_key or environment variable to be set
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Static Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_usage
+<a href="#autogen.oai.cohere.CohereClient.get_usage" class="headerlink" title="Permanent link"></a>
+
+```python
+get_usage(response) -> dict
+```
+
+    Return usage summary of the response using RESPONSE_USAGE_KEYS.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` |  |
+
+<br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### cost
+<a href="#autogen.oai.cohere.CohereClient.cost" class="headerlink" title="Permanent link"></a>
+
+```python
+cost(self, response) -> float
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create
+<a href="#autogen.oai.cohere.CohereClient.create" class="headerlink" title="Permanent link"></a>
+
+```python
+create(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### message_retrieval
+<a href="#autogen.oai.cohere.CohereClient.message_retrieval" class="headerlink" title="Permanent link"></a>
+
+```python
+message_retrieval(self, response) -> list
+```
+
+    Retrieve and return a list of strings or a list of Choice.Message from the response.
+    
+    NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
+    since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### parse_params
+<a href="#autogen.oai.cohere.CohereClient.parse_params" class="headerlink" title="Permanent link"></a>
+
+```python
+parse_params(self, params: dict[str, Any]) -> dict[str, typing.Any]
+```
+
+    Loads the parameters for Cohere API from the passed in parameters and returns a validated set. Checks types, ranges, and sets defaults
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `params` | **Type:** `dict[str, Any]` |
+
+<br />
+
+    <h2 id="autogen.oai.cohere.CohereError" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">CohereError</span>
+        <a href="#autogen.oai.cohere.CohereError" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+CohereError(*args, **kwargs)
+```
+
+    Base class for other Cohere exceptions
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+    <h2 id="autogen.oai.cohere.CohereRateLimitError" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">CohereRateLimitError</span>
+        <a href="#autogen.oai.cohere.CohereRateLimitError" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+CohereRateLimitError(*args, **kwargs)
+```
+
+    Raised when rate limit is exceeded
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |

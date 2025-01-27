@@ -1,0 +1,87 @@
+---
+sidebarTitle: websockets
+title: autogen.agentchat.realtime_agent.websockets
+---
+
+    <h2 id="autogen.agentchat.realtime_agent.websockets.WebSocketProtocol" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">WebSocketProtocol</span>
+        <a href="#autogen.agentchat.realtime_agent.websockets.WebSocketProtocol" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+WebSocketProtocol(*args, **kwargs)
+```
+
+    WebSocket protocol for sending and receiving JSON data modelled after FastAPI's WebSocket.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### iter_text
+<a href="#autogen.agentchat.realtime_agent.websockets.WebSocketProtocol.iter_text" class="headerlink" title="Permanent link"></a>
+
+```python
+iter_text(self) -> AsyncIterator[str]
+```
+
+    
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### receive_json
+<a href="#autogen.agentchat.realtime_agent.websockets.WebSocketProtocol.receive_json" class="headerlink" title="Permanent link"></a>
+
+```python
+receive_json(self, mode: str = 'text') -> Any
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `mode` | **Type:** `str`<br/><br/>**Default:** 'text' |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### receive_text
+<a href="#autogen.agentchat.realtime_agent.websockets.WebSocketProtocol.receive_text" class="headerlink" title="Permanent link"></a>
+
+```python
+receive_text(self) -> str
+```
+
+    
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### send_json
+<a href="#autogen.agentchat.realtime_agent.websockets.WebSocketProtocol.send_json" class="headerlink" title="Permanent link"></a>
+
+```python
+send_json(
+    self,
+    data: Any,
+    mode: str = 'text'
+) -> None
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `data` | **Type:** `Any` |
+| `mode` | **Type:** `str`<br/><br/>**Default:** 'text' |
+
+<br />

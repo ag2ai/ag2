@@ -1,0 +1,156 @@
+---
+sidebarTitle: gemini
+title: autogen.oai.gemini
+---
+
+## Functions
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### calculate_gemini_cost
+<a href="#autogen.oai.gemini..calculate_gemini_cost" class="headerlink" title="Permanent link"></a>
+
+```python
+calculate_gemini_cost(
+    use_vertexai: bool,
+    input_tokens: int,
+    output_tokens: int,
+    model_name: str
+) -> float
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `use_vertexai` | **Type:** `bool` |
+| `input_tokens` | **Type:** `int` |
+| `output_tokens` | **Type:** `int` |
+| `model_name` | **Type:** `str` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### get_image_data
+<a href="#autogen.oai.gemini..get_image_data" class="headerlink" title="Permanent link"></a>
+
+```python
+get_image_data(image_file: str, use_b64=True) -> bytes
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `image_file` | **Type:** `str` |
+| `use_b64=True` |  |
+
+<br />
+
+    <h2 id="autogen.oai.gemini.GeminiClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">GeminiClient</span>
+        <a href="#autogen.oai.gemini.GeminiClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+GeminiClient(**kwargs)
+```
+
+    Client for Google's Gemini API.
+    
+    Uses either either api_key for authentication from the LLM config
+    (specifying the GOOGLE_GEMINI_API_KEY environment variable also works),
+    or follows the Google authentication mechanism for VertexAI in Google Cloud if no api_key is specified,
+    where project_id and location can also be passed as parameters. Previously created credentials object can be provided,
+    or a Service account key file can also be used. If neither a service account key file, nor the api_key are passed,
+    then the default credentials will be used, which could be a personal account if the user is already authenticated in,
+    like in Google Cloud Shell.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### PARAMS_MAPPING
+<a href="#autogen.oai.gemini.GeminiClient.PARAMS_MAPPING" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### cost
+<a href="#autogen.oai.gemini.GeminiClient.cost" class="headerlink" title="Permanent link"></a>
+
+```python
+cost(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create
+<a href="#autogen.oai.gemini.GeminiClient.create" class="headerlink" title="Permanent link"></a>
+
+```python
+create(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_usage
+<a href="#autogen.oai.gemini.GeminiClient.get_usage" class="headerlink" title="Permanent link"></a>
+
+```python
+get_usage(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### message_retrieval
+<a href="#autogen.oai.gemini.GeminiClient.message_retrieval" class="headerlink" title="Permanent link"></a>
+
+```python
+message_retrieval(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />

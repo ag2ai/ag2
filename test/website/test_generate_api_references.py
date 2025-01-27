@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-import sys
 import tempfile
 from pathlib import Path
 from typing import Generator
@@ -11,12 +10,15 @@ from typing import Generator
 import pytest
 
 # Add the ../../website directory to sys.path
-website_path = Path(__file__).resolve().parents[2] / "website"
-assert website_path.exists()
-assert website_path.is_dir()
-sys.path.append(str(website_path))
+from autogen._website.generate_api_references import SplitReferenceFilesBySymbols, generate_mint_json_from_template
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
-from generate_api_references import SplitReferenceFilesBySymbols, generate_mint_json_from_template
+with optional_import_block():
+    import jinja2
+    import pdoc
+
+    assert pdoc
+    assert jinja2
 
 
 @pytest.fixture
@@ -100,6 +102,7 @@ def target_file(temp_dir: Path) -> Path:
     return temp_dir / "mint.json"
 
 
+@skip_on_missing_imports(["jinja2", "pdoc"], "docs")
 def test_generate_mint_json_from_template(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that mint.json is generated correctly from template."""
     # Run the function
@@ -116,6 +119,7 @@ def test_generate_mint_json_from_template(template_file: Path, target_file: Path
     assert actual == expected
 
 
+@skip_on_missing_imports(["jinja2", "pdoc"], "docs")
 def test_generate_mint_json_existing_file(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that function works when mint.json already exists."""
     # Create an existing mint.json with different content
@@ -134,6 +138,7 @@ def test_generate_mint_json_existing_file(template_file: Path, target_file: Path
     assert actual == expected
 
 
+@skip_on_missing_imports(["jinja2", "pdoc"], "docs")
 def test_generate_mint_json_missing_template(target_file: Path) -> None:
     """Test handling of missing template file."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -399,6 +404,7 @@ MyClass(
             "agentchat/overview.md",
         ]
 
+    @skip_on_missing_imports(["jinja2", "pdoc"], "docs")
     def test_split_reference_by_symbols(self, api_dir: Path, expected_files: list[str]) -> None:
         """Test that files are split correctly."""
         all_files_relative_to_api_dir = [str(p.relative_to(api_dir)) for p in api_dir.rglob("*.md")]

@@ -1,0 +1,203 @@
+---
+sidebarTitle: client
+title: autogen.agentchat.realtime_agent.clients.gemini.client
+---
+
+    <h2 id="autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">GeminiRealtimeClient</span>
+        <a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+GeminiRealtimeClient(
+    *,
+    llm_config: dict[str, typing.Any],
+    logger: logging.Logger | None = None
+)
+```
+
+    (Experimental) Client for Gemini Realtime API.
+    
+    (Experimental) Client for Gemini Realtime API.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `llm_config` | The config for the client.<br/><br/>**Type:** `dict[str, typing.Any]` |
+| `logger` | **Type:** `logging.Logger \| None`<br/><br/>**Default:** None |
+
+### Static Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_factory
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.get_factory" class="headerlink" title="Permanent link"></a>
+
+```python
+get_factory(
+    llm_config: dict[str, typing.Any],
+    logger: logging.Logger,
+    **kwargs: Any
+) -> Callable[[], autogen.agentchat.realtime_agent.clients.realtime_client.RealtimeClientProtocol] | None
+```
+
+    Create a Realtime API client.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `llm_config` | **Type:** `dict[str, typing.Any]` |
+| `logger` | The logger for the client.<br/><br/>**Type:** `logging.Logger` |
+| `**kwargs` | **Type:** `Any` |
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `Callable[[], autogen.agentchat.realtime_agent.clients.realtime_client.RealtimeClientProtocol] \| None` | RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern |
+
+<br />
+
+### Instance Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### connection
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.connection" class="headerlink" title="Permanent link"></a>
+
+    Get the Gemini WebSocket connection.
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### logger
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.logger" class="headerlink" title="Permanent link"></a>
+
+    Get the logger for the Gemini Realtime API.
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### connect
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.connect" class="headerlink" title="Permanent link"></a>
+
+```python
+connect(self) -> AsyncGenerator[None, None]
+```
+
+    Connect to the Gemini Realtime API.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### read_events
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.read_events" class="headerlink" title="Permanent link"></a>
+
+```python
+read_events(self) -> AsyncGenerator[autogen.agentchat.realtime_agent.realtime_events.RealtimeEvent, None]
+```
+
+    Read Events from the Gemini Realtime API.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### send_audio
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.send_audio" class="headerlink" title="Permanent link"></a>
+
+```python
+send_audio(self, audio: str) -> None
+```
+
+    Send audio to the Gemini Realtime API.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `audio` | The audio to send.<br/><br/>**Type:** `str` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### send_function_result
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.send_function_result" class="headerlink" title="Permanent link"></a>
+
+```python
+send_function_result(
+    self,
+    call_id: str,
+    result: str
+) -> None
+```
+
+    Send the result of a function call to the Gemini Realtime API.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `call_id` | The ID of the function call.<br/><br/>**Type:** `str` |
+| `result` | The result of the function call.<br/><br/>**Type:** `str` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### send_text
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.send_text" class="headerlink" title="Permanent link"></a>
+
+```python
+send_text(
+    self,
+    *,
+    role: Literal['user', 'assistant', 'system'],
+    text: str,
+    turn_complete: bool = True
+) -> None
+```
+
+    Send a text message to the Gemini Realtime API.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `role` | The role of the message.<br/><br/>**Type:** `Literal['user', 'assistant', 'system']` |
+| `text` | The text of the message.<br/><br/>**Type:** `str` |
+| `turn_complete` | **Type:** `bool`<br/><br/>**Default:** True |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### session_update
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.session_update" class="headerlink" title="Permanent link"></a>
+
+```python
+session_update(self, session_options: dict[str, typing.Any]) -> None
+```
+
+    Record session updates to be applied when the connection is established.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `session_options` | The session options to update.<br/><br/>**Type:** `dict[str, typing.Any]` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### truncate_audio
+<a href="#autogen.agentchat.realtime_agent.clients.gemini.client.GeminiRealtimeClient.truncate_audio" class="headerlink" title="Permanent link"></a>
+
+```python
+truncate_audio(
+    self,
+    audio_end_ms: int,
+    content_index: int,
+    item_id: str
+) -> None
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `audio_end_ms` | **Type:** `int` |
+| `content_index` | **Type:** `int` |
+| `item_id` | **Type:** `str` |
+
+<br />

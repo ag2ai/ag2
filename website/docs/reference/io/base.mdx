@@ -1,0 +1,267 @@
+---
+sidebarTitle: base
+title: autogen.io.base
+---
+
+    <h2 id="autogen.io.base.IOStream" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">IOStream</span>
+        <a href="#autogen.io.base.IOStream" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+IOStream(*args, **kwargs)
+```
+
+    A protocol for input/output streams.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+### Static Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_default
+<a href="#autogen.io.base.IOStream.get_default" class="headerlink" title="Permanent link"></a>
+
+```python
+get_default() -> autogen.io.base.IOStream
+```
+
+    Get the default input/output stream.
+    
+    Returns:
+        IOStream: The default input/output stream.
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `autogen.io.base.IOStream` | IOStream: The default input/output stream. |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_global_default
+<a href="#autogen.io.base.IOStream.get_global_default" class="headerlink" title="Permanent link"></a>
+
+```python
+get_global_default() -> autogen.io.base.IOStream
+```
+
+    Get the default input/output stream.
+    
+    Returns:
+        IOStream: The default input/output stream.
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `autogen.io.base.IOStream` | IOStream: The default input/output stream. |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### set_default
+<a href="#autogen.io.base.IOStream.set_default" class="headerlink" title="Permanent link"></a>
+
+```python
+set_default(stream: ForwardRef('IOStream') | None) -> Iterator[None]
+```
+
+    Set the default input/output stream.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `stream` | The input/output stream to set as the default.<br/><br/>**Type:** `ForwardRef('IOStream') \| None` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### set_global_default
+<a href="#autogen.io.base.IOStream.set_global_default" class="headerlink" title="Permanent link"></a>
+
+```python
+set_global_default(stream: IOStream) -> None
+```
+
+    Set the default input/output stream.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `stream` | The input/output stream to set as the default.<br/><br/>**Type:** `IOStream` |
+
+<br />
+
+    <h2 id="autogen.io.base.InputStream" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">InputStream</span>
+        <a href="#autogen.io.base.InputStream" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+InputStream(*args, **kwargs)
+```
+
+    Base class for protocol classes.
+    
+    Protocol classes are defined as::
+    
+        class Proto(Protocol):
+            def meth(self) -> int:
+                ...
+    
+    Such classes are primarily used with static type checkers that recognize
+    structural subtyping (static duck-typing).
+    
+    For example::
+    
+        class C:
+            def meth(self) -> int:
+                return 0
+    
+        def func(x: Proto) -> int:
+            return x.meth()
+    
+        func(C())  # Passes static type check
+    
+    See PEP 544 for details. Protocol classes decorated with
+    @typing.runtime_checkable act as simple-minded runtime protocols that check
+    only the presence of given attributes, ignoring their type signatures.
+    Protocol classes can be generic, they are defined as::
+    
+        class GenProto(Protocol[T]):
+            def meth(self) -> T:
+                ...
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### input
+<a href="#autogen.io.base.InputStream.input" class="headerlink" title="Permanent link"></a>
+
+```python
+input(
+    self,
+    prompt: str = '',
+    *,
+    password: bool = False
+) -> str
+```
+
+    Read a line from the input stream.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `prompt` | The prompt to display.<br/><br/>Defaults to "".<br/><br/>**Type:** `str`<br/><br/>**Default:** '' |
+| `password` | Whether to read a password.<br/><br/>Defaults to False.<br/><br/>**Type:** `bool`<br/><br/>**Default:** False |
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `str` | str: The line read from the input stream. |
+
+<br />
+
+    <h2 id="autogen.io.base.OutputStream" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">OutputStream</span>
+        <a href="#autogen.io.base.OutputStream" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+OutputStream(*args, **kwargs)
+```
+
+    Base class for protocol classes.
+    
+    Protocol classes are defined as::
+    
+        class Proto(Protocol):
+            def meth(self) -> int:
+                ...
+    
+    Such classes are primarily used with static type checkers that recognize
+    structural subtyping (static duck-typing).
+    
+    For example::
+    
+        class C:
+            def meth(self) -> int:
+                return 0
+    
+        def func(x: Proto) -> int:
+            return x.meth()
+    
+        func(C())  # Passes static type check
+    
+    See PEP 544 for details. Protocol classes decorated with
+    @typing.runtime_checkable act as simple-minded runtime protocols that check
+    only the presence of given attributes, ignoring their type signatures.
+    Protocol classes can be generic, they are defined as::
+    
+        class GenProto(Protocol[T]):
+            def meth(self) -> T:
+                ...
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### print
+<a href="#autogen.io.base.OutputStream.print" class="headerlink" title="Permanent link"></a>
+
+```python
+print(
+    self,
+    *objects: Any,
+    sep: str = ' ',
+    end: str = '\n',
+    flush: bool = False
+) -> None
+```
+
+    Print data to the output stream.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*objects` | **Type:** `Any` |
+| `sep` | The separator between objects.<br/><br/>Defaults to " ".<br/><br/>**Type:** `str`<br/><br/>**Default:** ' ' |
+| `end` | The end of the output.<br/><br/>Defaults to "<br/><br/>**Type:** `str`<br/><br/>**Default:** '\n' |
+| `flush` | Whether to flush the output.<br/><br/>Defaults to False.<br/><br/>**Type:** `bool`<br/><br/>**Default:** False |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### send
+<a href="#autogen.io.base.OutputStream.send" class="headerlink" title="Permanent link"></a>
+
+```python
+send(self, message: autogen.messages.base_message.BaseMessage) -> None
+```
+
+    Send data to the output stream.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `message` | BaseMessage from autogen.messages.base_message<br/><br/>**Type:** `autogen.messages.base_message.BaseMessage` |
+
+<br />

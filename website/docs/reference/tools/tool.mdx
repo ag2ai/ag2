@@ -1,0 +1,147 @@
+---
+sidebarTitle: tool
+title: autogen.tools.tool
+---
+
+    <h2 id="autogen.tools.tool.Tool" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">Tool</span>
+        <a href="#autogen.tools.tool.Tool" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+Tool(
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    func_or_tool: ForwardRef('Tool') | Callable[..., Any]
+)
+```
+
+    A class representing a Tool that can be used by an agent for various tasks.
+    
+    This class encapsulates a tool with a name, description, and an executable function.
+    The tool can be registered with a ConversableAgent for use either with an LLM or for direct execution.
+    
+    Attributes:
+        name (str): The name of the tool.
+        description (str): The description of the tool.
+        func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
+    
+    Create a new Tool object.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `name` | The name of the tool.<br/><br/>**Type:** `str \| None`<br/><br/>**Default:** None |
+| `description` | The description of the tool.<br/><br/>**Type:** `str \| None`<br/><br/>**Default:** None |
+| `func_or_tool` | The function or Tool instance to create a Tool from.<br/><br/>**Type:** `ForwardRef('Tool') \| Callable[..., Any]` |
+
+### Instance Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### description
+<a href="#autogen.tools.tool.Tool.description" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### func
+<a href="#autogen.tools.tool.Tool.func" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### function_schema
+<a href="#autogen.tools.tool.Tool.function_schema" class="headerlink" title="Permanent link"></a>
+
+    Get the schema for the function.
+    
+    This is the old way of handling function calls with OpenAI and compatible frameworks.
+    It is provided for backward compatibility.
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### name
+<a href="#autogen.tools.tool.Tool.name" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### realtime_tool_schema
+<a href="#autogen.tools.tool.Tool.realtime_tool_schema" class="headerlink" title="Permanent link"></a>
+
+    Get the schema for the tool.
+    
+    This is the preferred way of handling function calls with OpeaAI and compatible frameworks.
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### tool_schema
+<a href="#autogen.tools.tool.Tool.tool_schema" class="headerlink" title="Permanent link"></a>
+
+    Get the schema for the tool.
+    
+    This is the preferred way of handling function calls with OpeaAI and compatible frameworks.
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### register_for_execution
+<a href="#autogen.tools.tool.Tool.register_for_execution" class="headerlink" title="Permanent link"></a>
+
+```python
+register_for_execution(self, agent: ConversableAgent) -> 
+```
+
+    Registers the tool for direct execution by a ConversableAgent.
+    
+    This method registers the tool so that it can be executed by the agent,
+    typically outside of the context of an LLM interaction.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `agent` | The agent to which the tool will be registered.<br/><br/>**Type:** `ConversableAgent` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### register_for_llm
+<a href="#autogen.tools.tool.Tool.register_for_llm" class="headerlink" title="Permanent link"></a>
+
+```python
+register_for_llm(self, agent: ConversableAgent) -> 
+```
+
+    Registers the tool for use with a ConversableAgent's language model (LLM).
+    
+    This method registers the tool so that it can be invoked by the agent during
+    interactions with the language model.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `agent` | The agent to which the tool will be registered.<br/><br/>**Type:** `ConversableAgent` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### register_tool
+<a href="#autogen.tools.tool.Tool.register_tool" class="headerlink" title="Permanent link"></a>
+
+```python
+register_tool(self, agent: ConversableAgent) -> 
+```
+
+    Register a tool to be both proposed and executed by an agent.
+    
+    Equivalent to calling both `register_for_llm` and `register_for_execution` with the same agent.
+    
+    Note: This will not make the agent recommend and execute the call in the one step. If the agent
+    recommends the tool, it will need to be the next agent to speak in order to execute the tool.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `agent` | The agent to which the tool will be registered.<br/><br/>**Type:** `ConversableAgent` |
+
+<br />

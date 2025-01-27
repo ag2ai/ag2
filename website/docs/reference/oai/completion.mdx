@@ -1,0 +1,361 @@
+---
+sidebarTitle: completion
+title: autogen.oai.completion
+---
+
+    <h2 id="autogen.oai.completion.ChatCompletion" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">ChatCompletion</span>
+        <a href="#autogen.oai.completion.ChatCompletion" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+ChatCompletion()
+```
+
+    `(openai&lt;1)` A class for OpenAI API ChatCompletion. Share the same API as Completion.
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### default_search_space
+<a href="#autogen.oai.completion.ChatCompletion.default_search_space" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### openai_completion_class
+<a href="#autogen.oai.completion.ChatCompletion.openai_completion_class" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+    <h2 id="autogen.oai.completion.Completion" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">Completion</span>
+        <a href="#autogen.oai.completion.Completion" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+Completion()
+```
+
+    `(openai&lt;1)` A class for OpenAI completion API.
+    
+    It also supports: ChatCompletion, Azure OpenAI API.
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### cache_path
+<a href="#autogen.oai.completion.Completion.cache_path" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### cache_seed
+<a href="#autogen.oai.completion.Completion.cache_seed" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### chat_models
+<a href="#autogen.oai.completion.Completion.chat_models" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### default_search_space
+<a href="#autogen.oai.completion.Completion.default_search_space" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### logged_history
+<a href="#autogen.oai.completion.Completion.logged_history" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### max_retry_period
+<a href="#autogen.oai.completion.Completion.max_retry_period" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### openai_completion_class
+<a href="#autogen.oai.completion.Completion.openai_completion_class" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### optimization_budget
+<a href="#autogen.oai.completion.Completion.optimization_budget" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### price1K
+<a href="#autogen.oai.completion.Completion.price1K" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### request_timeout
+<a href="#autogen.oai.completion.Completion.request_timeout" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### retry_wait_time
+<a href="#autogen.oai.completion.Completion.retry_wait_time" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Static Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### clear_cache
+<a href="#autogen.oai.completion.Completion.clear_cache" class="headerlink" title="Permanent link"></a>
+
+```python
+clear_cache(seed: int | None = None, cache_path_root: str | None = '.cache') -> 
+```
+
+    Clear cache.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `seed` | The integer identifier for the pseudo seed.<br/><br/>If omitted, all caches under cache_path_root will be cleared.<br/><br/>**Type:** `int \| None`<br/><br/>**Default:** None |
+| `cache_path_root` | **Type:** `str \| None`<br/><br/>**Default:** '.cache' |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### cost
+<a href="#autogen.oai.completion.Completion.cost" class="headerlink" title="Permanent link"></a>
+
+```python
+cost(response: dict) -> 
+```
+
+    Compute the cost of an API call.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | The response from OpenAI API.<br/><br/>**Type:** `dict` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create
+<a href="#autogen.oai.completion.Completion.create" class="headerlink" title="Permanent link"></a>
+
+```python
+create(
+    context: dict | None = None,
+    use_cache: bool | None = True,
+    config_list: list[dict] | None = None,
+    filter_func: Callable[[dict, dict], bool] | None = None,
+    raise_on_ratelimit_or_timeout: bool | None = True,
+    allow_format_str_template: bool | None = False,
+    **config
+) -> 
+```
+
+    Make a completion for a given context.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `context` | The context to instantiate the prompt.<br/><br/>It needs to contain keys that are used by the prompt template or the filter function.<br/><br/>E.g., `prompt="Complete the following sentence: \\{prefix}, context=\\{"prefix": "Today I feel"}`.<br/><br/>The actual prompt will be: "Complete the following sentence: Today I feel".<br/><br/>More examples can be found at [templating](https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#templating).<br/><br/>**Type:** `dict \| None`<br/><br/>**Default:** None |
+| `use_cache` | Whether to use cached responses.<br/><br/>**Type:** `bool \| None`<br/><br/>**Default:** True |
+| `config_list` | List of configurations for the completion to try.<br/><br/>The first one that does not raise an error will be used.<br/><br/>Only the differences from the default config need to be provided.<br/><br/>E.g., ```python response = oai.Completion.create( config_list = [ \\{ "model": "gpt-4", "api_key": os.environ.get("AZURE_OPENAI_API_KEY"), "api_type": "azure", "base_url": os.environ.get("AZURE_OPENAI_API_BASE"), "api_version": "2024-02-01", }, \\{ "model": "gpt-3.5-turbo", "api_key": os.environ.get("OPENAI_API_KEY"), "api_type": "openai", "base_url": "https://api.openai.com/v1", }, \\{ "model": "llama-7B", "base_url": "http://127.0.0.1:8080", "api_type": "openai", }, ], prompt="Hi", ) ```<br/><br/>**Type:** `list[dict] \| None`<br/><br/>**Default:** None |
+| `filter_func` | A function that takes in the context and the response and returns a boolean to indicate whether the response is valid.<br/><br/>E.g., ```python def yes_or_no_filter(context, config, response): return context.get("yes_or_no_choice", False) is False or any( text in ["Yes.", "No."] for text in oai.Completion.extract_text(response) ) ```<br/><br/>**Type:** `Callable[[dict, dict], bool] \| None`<br/><br/>**Default:** None |
+| `raise_on_ratelimit_or_timeout` | Whether to raise RateLimitError or Timeout when all configs fail.<br/><br/>When set to False, -1 will be returned when all configs fail.<br/><br/>**Type:** `bool \| None`<br/><br/>**Default:** True |
+| `allow_format_str_template` | Whether to allow format string template in the config.<br/><br/>**Type:** `bool \| None`<br/><br/>**Default:** False |
+| `**config` | Configuration for the openai API call.<br/><br/>This is used as parameters for calling openai API.<br/><br/>The "prompt" or "messages" parameter can contain a template (str or Callable) which will be instantiated with the context.<br/><br/>Besides the parameters for the openai API call, it can also contain: - `max_retry_period` (int): the total time (in seconds) allowed for retrying failed requests.<br/><br/>- `retry_wait_time` (int): the time interval to wait (in seconds) before retrying a failed request.<br/><br/>- `cache_seed` (int) for the cache.<br/><br/>This is useful when implementing "controlled randomness" for the completion.<br/><br/> |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### extract_text
+<a href="#autogen.oai.completion.Completion.extract_text" class="headerlink" title="Permanent link"></a>
+
+```python
+extract_text(response: dict) -> list[str]
+```
+
+    Extract the text from a completion or chat response.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | The response from OpenAI API.<br/><br/>**Type:** `dict` |
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `list[str]` | A list of text in the responses. |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### extract_text_or_function_call
+<a href="#autogen.oai.completion.Completion.extract_text_or_function_call" class="headerlink" title="Permanent link"></a>
+
+```python
+extract_text_or_function_call(response: dict) -> list[str]
+```
+
+    Extract the text or function calls from a completion or chat response.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `response` | The response from OpenAI API.<br/><br/>**Type:** `dict` |
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `list[str]` | A list of text or function calls in the responses. |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### instantiate
+<a href="#autogen.oai.completion.Completion.instantiate" class="headerlink" title="Permanent link"></a>
+
+```python
+instantiate(
+    template: str | None,
+    context: dict | None = None,
+    allow_format_str_template: bool | None = False
+) -> 
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `template` | **Type:** `str \| None` |
+| `context` | **Type:** `dict \| None`<br/><br/>**Default:** None |
+| `allow_format_str_template` | **Type:** `bool \| None`<br/><br/>**Default:** False |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### print_usage_summary
+<a href="#autogen.oai.completion.Completion.print_usage_summary" class="headerlink" title="Permanent link"></a>
+
+```python
+print_usage_summary() -> dict
+```
+
+    Return the usage summary.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### set_cache
+<a href="#autogen.oai.completion.Completion.set_cache" class="headerlink" title="Permanent link"></a>
+
+```python
+set_cache(seed: int | None = 41, cache_path_root: str | None = '.cache') -> 
+```
+
+    Set cache path.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `seed` | The integer identifier for the pseudo seed.<br/><br/>Results corresponding to different seeds will be cached in different places.<br/><br/>**Type:** `int \| None`<br/><br/>**Default:** 41 |
+| `cache_path_root` | **Type:** `str \| None`<br/><br/>**Default:** '.cache' |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### start_logging
+<a href="#autogen.oai.completion.Completion.start_logging" class="headerlink" title="Permanent link"></a>
+
+```python
+start_logging(
+    history_dict: dict | None = None,
+    compact: bool | None = True,
+    reset_counter: bool | None = True
+) -> 
+```
+
+    Start book keeping.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `history_dict` | A dictionary for book keeping.<br/><br/>If no provided, a new one will be created.<br/><br/>**Type:** `dict \| None`<br/><br/>**Default:** None |
+| `compact` | Whether to keep the history dictionary compact.<br/><br/>Compact history contains one key per conversation, and the value is a dictionary like:<br/><br/>**Type:** `bool \| None`<br/><br/>**Default:** True |
+| `reset_counter` | whether to reset the counter of the number of API calls.<br/><br/>**Type:** `bool \| None`<br/><br/>**Default:** True |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### stop_logging
+<a href="#autogen.oai.completion.Completion.stop_logging" class="headerlink" title="Permanent link"></a>
+
+```python
+stop_logging() -> 
+```
+
+    End book keeping.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### test
+<a href="#autogen.oai.completion.Completion.test" class="headerlink" title="Permanent link"></a>
+
+```python
+test(
+    data,
+    eval_func=None,
+    use_cache=True,
+    agg_method='avg',
+    return_responses_and_per_instance_result=False,
+    logging_level=30,
+    **config
+) -> 
+```
+
+    Evaluate the responses created with the config for the OpenAI API call.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `data` | The list of test data points.<br/><br/> |
+| `eval_func=None` |  |
+| `use_cache=True` |  |
+| `agg_method='avg'` |  |
+| `return_responses_and_per_instance_result=False` |  |
+| `logging_level=30` |  |
+| `**config` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### tune
+<a href="#autogen.oai.completion.Completion.tune" class="headerlink" title="Permanent link"></a>
+
+```python
+tune(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />

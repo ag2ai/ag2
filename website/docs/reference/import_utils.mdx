@@ -1,0 +1,90 @@
+---
+sidebarTitle: import_utils
+title: autogen.import_utils
+---
+
+## Functions
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### optional_import_block
+<a href="#autogen.import_utils..optional_import_block" class="headerlink" title="Permanent link"></a>
+
+```python
+optional_import_block() -> Generator[autogen.import_utils.Result, None, None]
+```
+
+    Guard a block of code to suppress ImportErrors
+    
+    A context manager to temporarily suppress ImportErrors.
+    Use this to attempt imports without failing immediately on missing modules.
+    
+    Example:
+    ```python
+    with optional_import_block():
+        import some_module
+        import some_other_module
+    ```
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### patch_object
+<a href="#autogen.import_utils..patch_object" class="headerlink" title="Permanent link"></a>
+
+```python
+patch_object(
+    o: ~T,
+    *,
+    missing_modules: Iterable[str],
+    dep_target: str,
+    fail_if_not_patchable: bool = True
+) -> ~T
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `o` | **Type:** `~T` |
+| `missing_modules` | **Type:** `Iterable[str]` |
+| `dep_target` | **Type:** `str` |
+| `fail_if_not_patchable` | **Type:** `bool`<br/><br/>**Default:** True |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### require_optional_import
+<a href="#autogen.import_utils..require_optional_import" class="headerlink" title="Permanent link"></a>
+
+```python
+require_optional_import(modules: str | Iterable[str], dep_target: str) -> Callable[[~T], ~T]
+```
+
+    Decorator to handle optional module dependencies
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `modules` | Module name or list of module names required<br/><br/>**Type:** `str \| Iterable[str]` |
+| `dep_target` | Target name for pip installation (e.g.<br/><br/>'test' in pip install ag2[test])<br/><br/>**Type:** `str` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>
+#### skip_on_missing_imports
+<a href="#autogen.import_utils..skip_on_missing_imports" class="headerlink" title="Permanent link"></a>
+
+```python
+skip_on_missing_imports(modules: str | Iterable[str], dep_target: str) -> Callable[[~T], ~T]
+```
+
+    Decorator to skip a test if an optional module is missing
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `modules` | **Type:** `str \| Iterable[str]` |
+| `dep_target` | Target name for pip installation (e.g.<br/><br/>'test' in pip install ag2[test])<br/><br/>**Type:** `str` |
+
+<br />

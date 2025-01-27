@@ -1,0 +1,221 @@
+---
+sidebarTitle: qdrant
+title: autogen.agentchat.contrib.vectordb.qdrant
+---
+
+    <h2 id="autogen.agentchat.contrib.vectordb.qdrant.EmbeddingFunction" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">EmbeddingFunction</span>
+        <a href="#autogen.agentchat.contrib.vectordb.qdrant.EmbeddingFunction" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+EmbeddingFunction()
+```
+
+    Helper class that provides a standard way to create an ABC using
+    inheritance.
+
+    <h2 id="autogen.agentchat.contrib.vectordb.qdrant.FastEmbedEmbeddingFunction" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">FastEmbedEmbeddingFunction</span>
+        <a href="#autogen.agentchat.contrib.vectordb.qdrant.FastEmbedEmbeddingFunction" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+FastEmbedEmbeddingFunction(**kwargs)
+```
+
+    Embedding function implementation using FastEmbed - https://qdrant.github.io/fastembed.
+    
+    Initialize fastembed.TextEmbedding.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` | Additional options to pass to fastembed.TextEmbedding<br/><br/> |
+
+    <h2 id="autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">QdrantVectorDB</span>
+        <a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+QdrantVectorDB(**kwargs)
+```
+
+    A vector database implementation that uses Qdrant as the backend.
+    
+    Initialize the vector database.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### active_collection
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.active_collection" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### embedding_function
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.embedding_function" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### type
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.type" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### create_collection
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.create_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+create_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### delete_collection
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.delete_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+delete_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### delete_docs
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.delete_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+delete_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_collection
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.get_collection" class="headerlink" title="Permanent link"></a>
+
+```python
+get_collection(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_docs_by_ids
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.get_docs_by_ids" class="headerlink" title="Permanent link"></a>
+
+```python
+get_docs_by_ids(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### insert_docs
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.insert_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+insert_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### retrieve_docs
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.retrieve_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+retrieve_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### update_docs
+<a href="#autogen.agentchat.contrib.vectordb.qdrant.QdrantVectorDB.update_docs" class="headerlink" title="Permanent link"></a>
+
+```python
+update_docs(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />

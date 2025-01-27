@@ -1,0 +1,202 @@
+---
+sidebarTitle: jupyter_client
+title: autogen.coding.jupyter.jupyter_client
+---
+
+    <h2 id="autogen.coding.jupyter.jupyter_client.JupyterClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">JupyterClient</span>
+        <a href="#autogen.coding.jupyter.jupyter_client.JupyterClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+JupyterClient(connection_info: JupyterConnectionInfo)
+```
+
+    (Experimental) A client for communicating with a Jupyter gateway server.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `connection_info` | Connection information<br/><br/>**Type:** `JupyterConnectionInfo` |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### delete_kernel
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterClient.delete_kernel" class="headerlink" title="Permanent link"></a>
+
+```python
+delete_kernel(self, kernel_id: str) -> None
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `kernel_id` | **Type:** `str` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### get_kernel_client
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterClient.get_kernel_client" class="headerlink" title="Permanent link"></a>
+
+```python
+get_kernel_client(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### list_kernel_specs
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterClient.list_kernel_specs" class="headerlink" title="Permanent link"></a>
+
+```python
+list_kernel_specs(self) -> dict[str, dict[str, str]]
+```
+
+    
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### list_kernels
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterClient.list_kernels" class="headerlink" title="Permanent link"></a>
+
+```python
+list_kernels(self) -> list[dict[str, str]]
+```
+
+    
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### restart_kernel
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterClient.restart_kernel" class="headerlink" title="Permanent link"></a>
+
+```python
+restart_kernel(self, kernel_id: str) -> None
+```
+
+    
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `kernel_id` | **Type:** `str` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### start_kernel
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterClient.start_kernel" class="headerlink" title="Permanent link"></a>
+
+```python
+start_kernel(self, kernel_spec_name: str) -> str
+```
+
+    Start a new kernel.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `kernel_spec_name` | Name of the kernel spec to start<br/><br/>**Type:** `str` |
+
+<b>Returns:</b>
+| Type | Description |
+|--|--|
+| `str` | str: ID of the started kernel |
+
+<br />
+
+    <h2 id="autogen.coding.jupyter.jupyter_client.JupyterKernelClient" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">JupyterKernelClient</span>
+        <a href="#autogen.coding.jupyter.jupyter_client.JupyterKernelClient" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+JupyterKernelClient(**kwargs)
+```
+
+    (Experimental) A client for communicating with a Jupyter kernel.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Class Attributes
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
+#### ExecutionResult
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterKernelClient.ExecutionResult" class="headerlink" title="Permanent link"></a>
+
+    <br />
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### execute
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterKernelClient.execute" class="headerlink" title="Permanent link"></a>
+
+```python
+execute(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### stop
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterKernelClient.stop" class="headerlink" title="Permanent link"></a>
+
+```python
+stop(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### wait_for_ready
+<a href="#autogen.coding.jupyter.jupyter_client.JupyterKernelClient.wait_for_ready" class="headerlink" title="Permanent link"></a>
+
+```python
+wait_for_ready(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />

@@ -1,0 +1,88 @@
+---
+sidebarTitle: text_compressors
+title: autogen.agentchat.contrib.capabilities.text_compressors
+---
+
+    <h2 id="autogen.agentchat.contrib.capabilities.text_compressors.LLMLingua" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">LLMLingua</span>
+        <a href="#autogen.agentchat.contrib.capabilities.text_compressors.LLMLingua" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+LLMLingua(**kwargs)
+```
+
+    Compresses text messages using LLMLingua for improved efficiency in processing and response generation.
+    
+    NOTE: The effectiveness of compression and the resultant token savings can vary based on the content of the messages
+    and the specific configurations used for the PromptCompressor.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `**kwargs` |  |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### compress_text
+<a href="#autogen.agentchat.contrib.capabilities.text_compressors.LLMLingua.compress_text" class="headerlink" title="Permanent link"></a>
+
+```python
+compress_text(*args, **kwargs) -> 
+```
+
+    Call self as a function.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+<br />
+
+    <h2 id="autogen.agentchat.contrib.capabilities.text_compressors.TextCompressor" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">TextCompressor</span>
+        <a href="#autogen.agentchat.contrib.capabilities.text_compressors.TextCompressor" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+TextCompressor(*args, **kwargs)
+```
+
+    Defines a protocol for text compression to optimize agent interactions.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `*args` |  |
+| `**kwargs` |  |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### compress_text
+<a href="#autogen.agentchat.contrib.capabilities.text_compressors.TextCompressor.compress_text" class="headerlink" title="Permanent link"></a>
+
+```python
+compress_text(
+    self,
+    text: str,
+    **compression_params
+) -> dict[str, typing.Any]
+```
+
+    This method takes a string as input and returns a dictionary containing the compressed text and other
+    relevant information. The compressed text should be stored under the 'compressed_text' key in the dictionary.
+    To calculate the number of saved tokens, the dictionary should include 'origin_tokens' and 'compressed_tokens' keys.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `text` | **Type:** `str` |
+| `**compression_params` |  |
+
+<br />

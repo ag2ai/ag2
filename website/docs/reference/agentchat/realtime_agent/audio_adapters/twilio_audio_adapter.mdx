@@ -1,0 +1,95 @@
+---
+sidebarTitle: twilio_audio_adapter
+title: autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter
+---
+
+    <h2 id="autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter.TwilioAudioAdapter" class="doc doc-heading">
+        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+        <span class="doc doc-object-name doc-class-name">TwilioAudioAdapter</span>
+        <a href="#autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter.TwilioAudioAdapter" class="headerlink" title="Permanent link"></a>
+    </h2>
+
+```python
+TwilioAudioAdapter(
+    websocket: WebSocket,
+    *,
+    logger: logging.Logger | None = None
+)
+```
+
+    Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa.
+    
+    Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `websocket` | WebSocket the websocket connection to the Twilio service<br/><br/>**Type:** `WebSocket` |
+| `logger` | **Type:** `logging.Logger \| None`<br/><br/>**Default:** None |
+
+### Instance Methods
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### handle_speech_started_event
+<a href="#autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter.TwilioAudioAdapter.handle_speech_started_event" class="headerlink" title="Permanent link"></a>
+
+```python
+handle_speech_started_event(self) -> None
+```
+
+    Handle interruption when the caller's speech starts.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### initialize_session
+<a href="#autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter.TwilioAudioAdapter.initialize_session" class="headerlink" title="Permanent link"></a>
+
+```python
+initialize_session(self) -> None
+```
+
+    Control initial session with OpenAI.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### on_event
+<a href="#autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter.TwilioAudioAdapter.on_event" class="headerlink" title="Permanent link"></a>
+
+```python
+on_event(self, event: autogen.agentchat.realtime_agent.realtime_events.RealtimeEvent) -> None
+```
+
+    Receive events from the OpenAI Realtime API, send audio back to Twilio.
+
+<b>Parameters:</b>
+| Name | Description |
+|--|--|
+| `event` | **Type:** `autogen.agentchat.realtime_agent.realtime_events.RealtimeEvent` |
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### run_loop
+<a href="#autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter.TwilioAudioAdapter.run_loop" class="headerlink" title="Permanent link"></a>
+
+```python
+run_loop(self) -> None
+```
+
+    Run the adapter loop.
+
+<br />
+
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
+#### send_mark
+<a href="#autogen.agentchat.realtime_agent.audio_adapters.twilio_audio_adapter.TwilioAudioAdapter.send_mark" class="headerlink" title="Permanent link"></a>
+
+```python
+send_mark(self) -> None
+```
+
+    Send a mark of audio interruption to the Twilio websocket.
+
+<br />
