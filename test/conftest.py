@@ -121,6 +121,10 @@ class Credentials:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
     @property
+    def api_type(self) -> str:
+        return self.llm_config["config_list"][0].get("api_type", "openai")  # type: ignore[no-any-return]
+
+    @property
     def model(self) -> str:
         return self.llm_config["config_list"][0]["model"]  # type: ignore[no-any-return]
 
@@ -381,5 +385,25 @@ credentials_all_llms = [
     pytest.param(
         credentials_anthropic_claude_sonnet.__name__,
         marks=pytest.mark.anthropic,
+    ),
+]
+
+credentials_browser_use = [
+    pytest.param(
+        credentials_gpt_4o_mini.__name__,
+        marks=pytest.mark.openai,
+    ),
+    pytest.param(
+        credentials_anthropic_claude_sonnet.__name__,
+        marks=pytest.mark.anthropic,
+    ),
+    pytest.param(
+        credentials_gemini_flash_exp.__name__,
+        marks=pytest.mark.gemini,
+    ),
+    # Deeseek currently does not work too well with the browser-use
+    pytest.param(
+        credentials_deepseek_chat.__name__,
+        marks=pytest.mark.deepseek,
     ),
 ]

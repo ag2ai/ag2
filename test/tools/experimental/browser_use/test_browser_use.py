@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-import sys
 from typing import Callable
 
 import pytest
@@ -12,19 +11,13 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool
 
-from ....conftest import (
-    Credentials,
-    credentials_anthropic_claude_sonnet,
-    credentials_gemini_flash_exp,
-    credentials_gpt_4o_mini,
-)
+from ....conftest import Credentials, credentials_browser_use
 
 with optional_import_block():
     from browser_use import Agent
     from langchain_openai import ChatOpenAI
 
 
-@pytest.mark.skipif(sys.version_info < (3, 11), reason="requires Python 3.11 or higher")
 @pytest.mark.browser_use  # todo: remove me after we merge the PR that ads it automatically
 @skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
 class TestBrowserUseToolOpenai:
@@ -51,30 +44,15 @@ class TestBrowserUseToolOpenai:
 
     @pytest.mark.parametrize(
         "credentials_from_test_param",
-        [
-            pytest.param(
-                credentials_gpt_4o_mini.__name__,
-                marks=pytest.mark.openai,
-            ),
-            pytest.param(
-                credentials_anthropic_claude_sonnet.__name__,
-                marks=pytest.mark.anthropic,
-            ),
-            pytest.param(
-                credentials_gemini_flash_exp.__name__,
-                marks=pytest.mark.gemini,
-            ),
-            # Deeseek currently does not work too well with the browser-use
-            # pytest.param(
-            #     credentials_deepseek_chat.__name__,
-            #     marks=pytest.mark.deepseek,
-            # ),
-        ],
+        credentials_browser_use,
         indirect=True,
     )
     @pytest.mark.asyncio
     async def test_browser_use_tool(self, credentials_from_test_param: Credentials) -> None:
-        api_type = credentials_from_test_param.config_list[0].get("api_type", "openai")
+        api_type = credentials_from_test_param.api_type
+        if api_type == "deepseek":
+            pytest.skip("Deepseek currently does not work too well with the browser-use")
+
         # If we decide to test with deepseek, we need to set use_vision to False
         agent_kwargs = {"use_vision": False} if api_type == "deepseek" else {}
         browser_use_tool = BrowserUseTool(llm_config=credentials_from_test_param.llm_config, agent_kwargs=agent_kwargs)
