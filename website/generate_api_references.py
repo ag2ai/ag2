@@ -25,6 +25,28 @@ import pdoc
 from jinja2 import Template
 
 
+@contextmanager
+def windows_encoding() -> Iterator[None]:
+    """Context manager to handle Windows-specific encoding for pdoc output
+
+    Reference: https://github.com/pdoc3/pdoc/issues/303#issuecomment-763596784
+    """
+    if sys.platform == "win32":
+        original_value = os.environ.get("PYTHONIOENCODING")
+        os.environ["PYTHONIOENCODING"] = "utf16"
+
+        try:
+            yield
+        finally:
+            if original_value is not None:
+                os.environ["PYTHONIOENCODING"] = original_value
+            else:
+                os.environ.pop("PYTHONIOENCODING", None)
+    else:
+        # On non-Windows systems, do nothing
+        yield
+
+
 def import_submodules(module_name: str, *, include_root: bool = True) -> list[str]:
     """List all submodules of a given module.
 
@@ -96,40 +118,17 @@ def generate_markdown(path: Path) -> None:
                 f.write(text)
 
 
-@contextmanager
-def windows_encoding() -> Iterator[None]:
-    """Context manager to handle Windows-specific encoding for pdoc output
-
-    Reference: https://github.com/pdoc3/pdoc/issues/303#issuecomment-763596784
-    """
-    if sys.platform == "win32":
-        original_value = os.environ.get("PYTHONIOENCODING")
-        os.environ["PYTHONIOENCODING"] = "utf16"
-
-        try:
-            yield
-        finally:
-            if original_value is not None:
-                os.environ["PYTHONIOENCODING"] = original_value
-            else:
-                os.environ.pop("PYTHONIOENCODING", None)
-    else:
-        # On non-Windows systems, do nothing
-        yield
-
-
 def generate(target_dir: Path, template_dir: Path) -> None:
-    with windows_encoding():
-        # Pass the custom template directory for rendering the markdown
-        pdoc.tpl_lookup.directories.insert(0, str(template_dir))
+    # Pass the custom template directory for rendering the markdown
+    pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
-        submodules = import_submodules("autogen")
-        print(f"{submodules=}")
+    submodules = import_submodules("autogen")
+    print(f"{submodules=}")
 
-        for submodule in submodules:
-            build_pdoc_dict(submodule)
+    for submodule in submodules:
+        build_pdoc_dict(submodule)
 
-        generate_markdown(target_dir)
+    generate_markdown(target_dir)
 
 
 def read_file_content(file_path: Path) -> str:
@@ -376,48 +375,49 @@ title: Overview
 
 
 def main() -> None:
-    website_dir = Path(__file__).parent.absolute()
+    with windows_encoding():
+        website_dir = Path(__file__).parent.absolute()
 
-    parser = argparse.ArgumentParser(description="Process API reference documentation")
-    parser.add_argument(
-        "--api-dir",
-        type=Path,
-        help="Directory containing API documentation to process",
-        default=website_dir / "reference",
-    )
+        parser = argparse.ArgumentParser(description="Process API reference documentation")
+        parser.add_argument(
+            "--api-dir",
+            type=Path,
+            help="Directory containing API documentation to process",
+            default=website_dir / "reference",
+        )
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    if args.api_dir.exists():
-        # Force delete the directory and its contents
-        shutil.rmtree(args.api_dir, ignore_errors=True)
+        if args.api_dir.exists():
+            # Force delete the directory and its contents
+            shutil.rmtree(args.api_dir, ignore_errors=True)
 
-    target_dir = args.api_dir.resolve().relative_to(website_dir)
-    template_dir = website_dir / "mako_templates"
+        target_dir = args.api_dir.resolve().relative_to(website_dir)
+        template_dir = website_dir / "mako_templates"
 
-    # Generate API reference documentation
-    print("Generating API reference documentation...")
-    generate(target_dir, template_dir)
+        # Generate API reference documentation
+        print("Generating API reference documentation...")
+        generate(target_dir, template_dir)
 
-    # Split the API reference from submodules into separate files for each symbols
-    symbol_files_generator = SplitReferenceFilesBySymbols(target_dir)
-    symbol_files_generator.generate()
+        # Split the API reference from submodules into separate files for each symbols
+        symbol_files_generator = SplitReferenceFilesBySymbols(target_dir)
+        symbol_files_generator.generate()
 
-    # Convert MD to MDX
-    print("Converting MD files to MDX...")
-    convert_md_to_mdx(args.api_dir)
+        # Convert MD to MDX
+        print("Converting MD files to MDX...")
+        convert_md_to_mdx(args.api_dir)
 
-    # Create mint.json from the template file
-    mint_json_template_path = website_dir / "mint-json-template.json.jinja"
-    mint_json_path = website_dir / "mint.json"
+        # Create mint.json from the template file
+        mint_json_template_path = website_dir / "mint-json-template.json.jinja"
+        mint_json_path = website_dir / "mint.json"
 
-    print("Generating mint.json from template...")
-    generate_mint_json_from_template(mint_json_template_path, mint_json_path)
+        print("Generating mint.json from template...")
+        generate_mint_json_from_template(mint_json_template_path, mint_json_path)
 
-    # Update mint.json
-    update_mint_json_with_api_nav(website_dir, args.api_dir)
+        # Update mint.json
+        update_mint_json_with_api_nav(website_dir, args.api_dir)
 
-    print("API reference processing complete!")
+        print("API reference processing complete!")
 
 
 if __name__ == "__main__":
