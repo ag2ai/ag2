@@ -269,6 +269,7 @@ markers = [
     "deepseek",
     "redis",
     "docker",
+    "docs",
     "browser_use",
     # optional deps
     "jupyter_executor",

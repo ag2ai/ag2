@@ -12,6 +12,7 @@ from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel
 
+from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
 from ...tools import get_function_schema
 from ..agent import Agent
@@ -28,6 +29,7 @@ __CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
 __TOOL_EXECUTOR_NAME__ = "Tool_Execution"
 
 
+@export_module("autogen")
 class AfterWorkOption(Enum):
     TERMINATE = "TERMINATE"
     REVERT_TO_USER = "REVERT_TO_USER"
@@ -36,6 +38,7 @@ class AfterWorkOption(Enum):
 
 
 @dataclass
+@export_module("autogen")
 class AFTER_WORK:  # noqa: N801
     """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
 
@@ -53,6 +56,7 @@ class AFTER_WORK:  # noqa: N801
 
 
 @dataclass
+@export_module("autogen")
 class ON_CONDITION:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats
 
@@ -82,6 +86,7 @@ class ON_CONDITION:  # noqa: N801
 
 
 @dataclass
+@export_module("autogen")
 class UPDATE_SYSTEM_MESSAGE:  # noqa: N801
     """Update the agent's system message before they reply
 
@@ -402,6 +407,7 @@ def create_swarm_transition(
     return swarm_transition
 
 
+@export_module("autogen")
 def initiate_swarm_chat(
     initial_agent: "SwarmAgent",
     messages: Union[list[dict[str, Any]], str],
@@ -481,6 +487,7 @@ def initiate_swarm_chat(
     return chat_result, context_variables, manager.last_speaker
 
 
+@export_module("autogen")
 async def a_initiate_swarm_chat(
     initial_agent: "SwarmAgent",
     messages: Union[list[dict[str, Any]], str],
@@ -560,26 +567,7 @@ async def a_initiate_swarm_chat(
     return chat_result, context_variables, manager.last_speaker
 
 
-class SwarmResult(BaseModel):
-    """Encapsulates the possible return values for a swarm agent function.
-
-    Args:
-        values (str): The result values as a string.
-        agent (SwarmAgent): The swarm agent instance, if applicable.
-        context_variables (dict): A dictionary of context variables.
-    """
-
-    values: str = ""
-    agent: Optional[Union["SwarmAgent", str, AfterWorkOption]] = None
-    context_variables: dict[str, Any] = {}
-
-    class Config:  # Add this inner class
-        arbitrary_types_allowed = True
-
-    def __str__(self):
-        return self.values
-
-
+@export_module("autogen")
 class SwarmAgent(ConversableAgent):
     """Swarm agent for participating in a swarm.
 
@@ -1036,6 +1024,27 @@ class SwarmAgent(ConversableAgent):
             chat_queue[0]["message"] = original_chat_queue_message
 
         return True, res[-1].summary
+
+
+@export_module("autogen")
+class SwarmResult(BaseModel):
+    """Encapsulates the possible return values for a swarm agent function.
+
+    Args:
+        values (str): The result values as a string.
+        agent (SwarmAgent): The swarm agent instance, if applicable.
+        context_variables (dict): A dictionary of context variables.
+    """
+
+    values: str = ""
+    agent: Optional[Union["SwarmAgent", str, AfterWorkOption]] = None
+    context_variables: dict[str, Any] = {}
+
+    class Config:  # Add this inner class
+        arbitrary_types_allowed = True
+
+    def __str__(self):
+        return self.values
 
 
 # Forward references for SwarmAgent in SwarmResult

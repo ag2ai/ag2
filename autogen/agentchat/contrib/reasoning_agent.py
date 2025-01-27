@@ -7,6 +7,7 @@ import re
 import warnings
 from typing import Optional
 
+from ...doc_utils import export_module
 from ...import_utils import optional_import_block
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
@@ -43,6 +44,7 @@ Option 4: Perform Y.
 """
 
 
+@export_module("autogen")
 class ThinkNode:
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
         """A node in a tree structure representing a step in the reasoning process.
@@ -164,6 +166,7 @@ class ThinkNode:
         return node
 
 
+@export_module("autogen")
 def visualize_tree(root: ThinkNode) -> None:
     """Visualize the tree of thoughts using graphviz.
 
@@ -298,6 +301,7 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
     return preference_pairs
 
 
+@export_module("autogen")
 class ReasoningAgent(AssistantAgent):
     def __init__(
         self,

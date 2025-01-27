@@ -4,12 +4,14 @@
 
 from typing import Any, Optional, Protocol, runtime_checkable
 
+from ..doc_utils import export_module
 from ..tools import Tool
 
 __all__ = ["Interoperable"]
 
 
 @runtime_checkable
+@export_module("autogen.interop")
 class Interoperable(Protocol):
     """A Protocol defining the interoperability interface for tool conversion.
 

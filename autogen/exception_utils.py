@@ -6,6 +6,8 @@
 # SPDX-License-Identifier: MIT
 from typing import Any
 
+from .doc_utils import export_module
+
 __all__ = [
     "AgentNameConflict",
     "InvalidCarryOverType",
@@ -16,11 +18,13 @@ __all__ = [
 ]
 
 
+@export_module("autogen")
 class AgentNameConflict(Exception):  # noqa: N818
     def __init__(self, msg: str = "Found multiple agents with the same name.", *args: Any, **kwargs: Any):
         super().__init__(msg, *args, **kwargs)
 
 
+@export_module("autogen")
 class NoEligibleSpeaker(Exception):  # noqa: N818
     """Exception raised for early termination of a GroupChat."""
 
@@ -29,6 +33,7 @@ class NoEligibleSpeaker(Exception):  # noqa: N818
         super().__init__(self.message)
 
 
+@export_module("autogen")
 class SenderRequired(Exception):  # noqa: N818
     """Exception raised when the sender is required but not provided."""
 
@@ -37,6 +42,7 @@ class SenderRequired(Exception):  # noqa: N818
         super().__init__(self.message)
 
 
+@export_module("autogen")
 class InvalidCarryOverType(Exception):  # noqa: N818
     """Exception raised when the carryover type is invalid."""
 
@@ -47,6 +53,7 @@ class InvalidCarryOverType(Exception):  # noqa: N818
         super().__init__(self.message)
 
 
+@export_module("autogen")
 class UndefinedNextAgent(Exception):  # noqa: N818
     """Exception raised when the provided next agents list does not overlap with agents in the group."""
 

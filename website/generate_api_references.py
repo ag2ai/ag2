@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from __future__ import annotations
 
-__version__ = "0.7.2"
+from autogen._website.generate_api_references import main
+
+if __name__ == "__main__":
+    main()

@@ -38,6 +38,7 @@ from ..code_utils import (
 )
 from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
+from ..doc_utils import export_module
 from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..io.base import IOStream
 from ..messages.agent_messages import (
@@ -67,6 +68,7 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+@export_module("autogen")
 class ConversableAgent(LLMAgent):
     """(In preview) A class for generic conversable agents which can be configured as assistant or user proxy.
 
@@ -2893,6 +2895,7 @@ class ConversableAgent(LLMAgent):
             return self.client.total_usage_summary
 
 
+@export_module("autogen")
 def register_function(
     f: Callable[..., Any],
     *,
