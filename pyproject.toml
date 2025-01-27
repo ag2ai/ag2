@@ -86,8 +86,8 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==4.25.3",
-    "chromadb==0.5.3",
+    "protobuf==5.29.3",
+    "chromadb==0.6.3",
     "sentence_transformers",
     "pypdf",
     "ipython",
@@ -114,7 +114,7 @@ retrievechat-qdrant = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.3.3",
+    "graphrag_sdk==0.5.0",
     "falkordb>=1.0.10"
 ]
 
@@ -130,10 +130,10 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.11",
-    "llama-index-graph-stores-neo4j==0.4.5",
-    "llama-index-core==0.12.11",
-    "llama-index-readers-web==0.3.4",
+    "llama-index==0.12.14",
+    "llama-index-graph-stores-neo4j==0.4.6",
+    "llama-index-core==0.12.14",
+    "llama-index-readers-web==0.3.5",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -147,10 +147,10 @@ interop-crewai = [
     "crewai[tools]>=0.86,<1; python_version>='3.10' and python_version<'3.13'",
     "weaviate-client==4.10.2; python_version>='3.10' and python_version<'3.13'",
     # crewai uses litellm, litellm introduced uvloop as deps with version 1.57.5 which does not support win32
-    "litellm<1.57.5; sys_platform=='win32'",
+    "litellm<1.59.9; sys_platform=='win32'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.13"]
+interop-pydantic-ai = ["pydantic-ai==0.0.20"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
@@ -159,7 +159,7 @@ interop =[
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
 blendsearch = ["flaml[blendsearch]"]
-mathchat = ["sympy", "pydantic==1.10.9", "wolframalpha"]
+mathchat = ["sympy", "pydantic==2.10.6", "wolframalpha"]
 captainagent = ["pyautogen[autobuild]", "pandas"]
 teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
@@ -197,7 +197,7 @@ test = [
     "pytest-asyncio==0.25.2",
     "pytest==8.3.4",
     "pandas==2.2.3",
-    "fastapi==0.115.6",
+    "fastapi==0.115.7",
 ]
 
 # docs dependencies
@@ -215,8 +215,8 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.2",
-    "codespell==2.3.0",
+    "ruff==0.9.3",
+    "codespell==2.4.0",
     "pyupgrade-directories==0.3.0",
 ]
 
@@ -225,7 +225,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.5.21",
+    "uv==0.5.24",
 ]
 
 
