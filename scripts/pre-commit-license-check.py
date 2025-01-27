@@ -10,7 +10,10 @@ import sys
 from pathlib import Path
 from typing import List
 
-REQUIRED_ELEMENTS = [r"Copyright.*Owners of https://github\.com/ag2ai", r"SPDX-License-Identifier: Apache-2\.0"]
+REQUIRED_ELEMENTS = [
+    r"Copyright \(c\) 2023 - 20.., AG2ai, Inc\., AG2ai open-source projects maintainers and core contributors",
+    r"SPDX-License-Identifier: Apache-2\.0",
+]
 
 
 def get_github_pr_files() -> List[Path]:
