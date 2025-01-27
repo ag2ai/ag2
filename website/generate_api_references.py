@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import logging
 import os
 import pkgutil
 import shutil
@@ -17,6 +18,9 @@ from typing import Any, Iterator, Optional
 
 import pdoc
 from jinja2 import Template
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def import_submodules(module_name: str, *, include_root: bool = True) -> list[str]:
@@ -312,17 +316,7 @@ title: Overview
         return symbols
 
     def _read_file_with_fallback_encodings(self, file_path: Path) -> str:
-        """Read a file trying different encodings.
-
-        Args:
-            file_path: Path to the file
-
-        Returns:
-            str: Content of the file
-
-        Raises:
-            UnicodeError: If none of the encodings work
-        """
+        """Read a file trying different encodings."""
         encodings = [
             "utf-8",
             "utf-8-sig",  # UTF-8 with BOM
@@ -334,17 +328,22 @@ title: Overview
         ]
 
         errors = []
+        logger.info(f"Trying to read file: {file_path}")
+
         for encoding in encodings:
             try:
+                logger.info(f"Attempting to read with encoding: {encoding}")
                 content = file_path.read_text(encoding=encoding)
-                print(f"File encoding format: {encoding}")
+                logger.info(f"SUCCESS: File successfully read with encoding: {encoding}")
                 return content
             except UnicodeError as e:
-                errors.append(f"{encoding}: {str(e)}")
+                error_msg = f"FAILED: {encoding}: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
                 continue
 
         # If we get here, none of the encodings worked
-        raise UnicodeError(f"Failed to read {file_path} with any encoding. Errors:\n" + "\n".join(errors))
+        raise UnicodeError(f"Failed to read {file_path} with any encoding.\nAll attempts:\n" + "\n".join(errors))
 
     def _process_files(self) -> Iterator[tuple[Path, dict[str, str]]]:
         for md_file in self.api_dir.rglob("*.md"):
