@@ -12,35 +12,11 @@ import pkgutil
 import shutil
 import sys
 from collections.abc import Iterable
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
 import pdoc
 from jinja2 import Template
-
-
-@contextmanager
-def windows_encoding() -> Iterator[str]:
-    """Context manager to handle Windows-specific encoding.
-
-    Yields:
-        str: The encoding to use for file operations ('utf-16' on Windows, 'utf-8' otherwise)
-    """
-    encoding = "utf-16" if sys.platform == "win32" else "utf-8"
-    original_value = os.environ.get("PYTHONIOENCODING") if sys.platform == "win32" else None
-
-    if sys.platform == "win32":
-        os.environ["PYTHONIOENCODING"] = "utf16"
-
-    try:
-        yield encoding
-    finally:
-        if sys.platform == "win32":
-            if original_value is not None:
-                os.environ["PYTHONIOENCODING"] = original_value
-            else:
-                os.environ.pop("PYTHONIOENCODING", None)
 
 
 def import_submodules(module_name: str, *, include_root: bool = True) -> list[str]:
@@ -92,7 +68,7 @@ def build_pdoc_dict(module_name: str) -> None:
             module.__pdoc__[name] = False
 
 
-def generate_markdown(path: Path, encoding: str) -> None:
+def generate_markdown(path: Path) -> None:
     modules = ["autogen"]  # Public submodules are auto-imported
     context = pdoc.Context()
 
@@ -110,11 +86,11 @@ def generate_markdown(path: Path, encoding: str) -> None:
             file_path = path / module_name.replace(".", "/") / "index.md"
             # print(f"Writing {file_path}...")
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            with file_path.open("w", encoding=encoding) as f:
+            with file_path.open("w") as f:
                 f.write(text)
 
 
-def generate(target_dir: Path, template_dir: Path, encoding: str) -> None:
+def generate(target_dir: Path, template_dir: Path) -> None:
     # Pass the custom template directory for rendering the markdown
     pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
@@ -124,10 +100,10 @@ def generate(target_dir: Path, template_dir: Path, encoding: str) -> None:
     for submodule in submodules:
         build_pdoc_dict(submodule)
 
-    generate_markdown(target_dir, encoding)
+    generate_markdown(target_dir)
 
 
-def read_file_content(file_path: Path, encoding: str) -> str:
+def read_file_content(file_path: Path) -> str:
     """Read content from a file.
 
     Args:
@@ -136,7 +112,7 @@ def read_file_content(file_path: Path, encoding: str) -> str:
     Returns:
         str: Content of the file
     """
-    with open(file_path, encoding=encoding) as f:
+    with open(file_path, encoding="utf-8") as f:
         return f.read()
 
 
@@ -147,12 +123,11 @@ def write_file_content(file_path: str, content: str) -> None:
         file_path (str): Path to the file
         content (str): Content to write
     """
-    encoding = "utf-16" if sys.platform == "win32" else "utf-8"
-    with open(file_path, "w", encoding=encoding) as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
 
 
-def convert_md_to_mdx(input_dir: Path, encoding: str) -> None:
+def convert_md_to_mdx(input_dir: Path) -> None:
     """Convert all .md files in directory to .mdx while preserving structure.
 
     Args:
@@ -166,10 +141,10 @@ def convert_md_to_mdx(input_dir: Path, encoding: str) -> None:
         mdx_file = md_file.with_suffix(".mdx")
 
         # Read content from .md file
-        content = md_file.read_text(encoding=encoding)
+        content = md_file.read_text(encoding="utf-8")
 
         # Write content to .mdx file
-        mdx_file.write_text(content, encoding=encoding)
+        mdx_file.write_text(content, encoding="utf-8")
 
         # Remove original .md file
         md_file.unlink()
@@ -224,7 +199,7 @@ def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = 
     return sorted_pages + sorted_groups
 
 
-def update_nav(mint_json_path: Path, new_nav_pages: list[Any], encoding: str) -> None:
+def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
     """Update the 'API Reference' section in mint.json navigation with new pages.
 
     Args:
@@ -240,7 +215,7 @@ def update_nav(mint_json_path: Path, new_nav_pages: list[Any], encoding: str) ->
         mint_config["navigation"].append(reference_section)
 
         # Write back to mint.json with proper formatting
-        with open(mint_json_path, "w", encoding=encoding) as f:
+        with open(mint_json_path, "w") as f:
             json.dump(mint_config, f, indent=2)
             f.write("\n")
 
@@ -250,7 +225,7 @@ def update_nav(mint_json_path: Path, new_nav_pages: list[Any], encoding: str) ->
         print(f"Error updating mint.json: {e}")
 
 
-def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path, encoding: str) -> None:
+def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path) -> None:
     """Update mint.json with MDX files in the API directory."""
     mint_json_path = script_dir / "mint.json"
     if not mint_json_path.exists():
@@ -264,23 +239,23 @@ def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path, encoding: str
     nav_structure = create_nav_structure(mdx_files)
 
     # Update mint.json with new navigation
-    update_nav(mint_json_path, nav_structure, encoding)
+    update_nav(mint_json_path, nav_structure)
 
 
-def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_path: Path, encoding: str) -> None:
+def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_path: Path) -> None:
     # if mint.json already exists, delete it
     if mint_json_path.exists():
         os.remove(mint_json_path)
 
     # Copy the template file to mint.json
-    contents = read_file_content(mint_json_template_path, encoding)
+    contents = read_file_content(mint_json_template_path)
     mint_json_template_content = Template(contents).render()
 
     # Parse the rendered template content as JSON
     mint_json_data = json.loads(mint_json_template_content)
 
     # Write content to mint.json
-    with open(mint_json_path, "w", encoding=encoding) as f:
+    with open(mint_json_path, "w") as f:
         json.dump(mint_json_data, f, indent=2)
 
 
@@ -336,12 +311,48 @@ title: Overview
             symbols.update(self._extract_symbol_content(content, output_dir))
         return symbols
 
+    def _read_file_with_fallback_encodings(self, file_path: Path) -> str:
+        """Read a file trying different encodings.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            str: Content of the file
+
+        Raises:
+            UnicodeError: If none of the encodings work
+        """
+        encodings = [
+            "utf-8",
+            "utf-8-sig",  # UTF-8 with BOM
+            "utf-16",
+            "utf-16le",
+            "utf-16be",
+            "cp1252",  # Windows default
+            "iso-8859-1",  # Latin-1
+        ]
+
+        errors = []
+        for encoding in encodings:
+            try:
+                content = file_path.read_text(encoding=encoding)
+                print(f"File encoding format: {encoding}")
+                return content
+            except UnicodeError as e:
+                errors.append(f"{encoding}: {str(e)}")
+                continue
+
+        # If we get here, none of the encodings worked
+        raise UnicodeError(f"Failed to read {file_path} with any encoding. Errors:\n" + "\n".join(errors))
+
     def _process_files(self) -> Iterator[tuple[Path, dict[str, str]]]:
         for md_file in self.api_dir.rglob("*.md"):
             output_dir = self.tmp_dir / md_file.relative_to(self.api_dir).parent
             output_dir.mkdir(parents=True, exist_ok=True)
-            encoding = "utf-16" if sys.platform == "win32" else "utf-8"
-            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding=encoding), output_dir)
+
+            content = self._read_file_with_fallback_encodings(md_file)
+            yield output_dir, self._split_content_by_symbols(content, output_dir)
 
     def _clean_directory(self, directory: Path) -> None:
         for item in directory.iterdir():
@@ -359,13 +370,13 @@ title: Overview
             print(f"Copying {'directory' if item.is_dir() else 'file'} {item} to {dest}")
             copy_func(item, dest)
 
-    def split_ref_file(self, encoding: str) -> None:
+    def generate(self) -> None:
         try:
             self.tmp_dir.mkdir(exist_ok=True)
             for output_dir, symbols in self._process_files():
                 if symbols:
                     for name, content in symbols.items():
-                        (output_dir / f"{name}.md").write_text(content, encoding)
+                        (output_dir / f"{name}.md").write_text(content, encoding="utf-8")
 
             self._move_generated_files_to_api_dir()
         finally:
@@ -373,49 +384,48 @@ title: Overview
 
 
 def main() -> None:
-    with windows_encoding() as encoding:
-        website_dir = Path(__file__).parent.absolute()
+    website_dir = Path(__file__).parent.absolute()
 
-        parser = argparse.ArgumentParser(description="Process API reference documentation")
-        parser.add_argument(
-            "--api-dir",
-            type=Path,
-            help="Directory containing API documentation to process",
-            default=website_dir / "reference",
-        )
+    parser = argparse.ArgumentParser(description="Process API reference documentation")
+    parser.add_argument(
+        "--api-dir",
+        type=Path,
+        help="Directory containing API documentation to process",
+        default=website_dir / "reference",
+    )
 
-        args = parser.parse_args()
+    args = parser.parse_args()
 
-        if args.api_dir.exists():
-            # Force delete the directory and its contents
-            shutil.rmtree(args.api_dir, ignore_errors=True)
+    if args.api_dir.exists():
+        # Force delete the directory and its contents
+        shutil.rmtree(args.api_dir, ignore_errors=True)
 
-        target_dir = args.api_dir.resolve().relative_to(website_dir)
-        template_dir = website_dir / "mako_templates"
+    target_dir = args.api_dir.resolve().relative_to(website_dir)
+    template_dir = website_dir / "mako_templates"
 
-        # Generate API reference documentation
-        print("Generating API reference documentation...")
-        generate(target_dir, template_dir, encoding)
+    # Generate API reference documentation
+    print("Generating API reference documentation...")
+    generate(target_dir, template_dir)
 
-        # Split the API reference from submodules into separate files for each symbols
-        symbol_files_generator = SplitReferenceFilesBySymbols(target_dir)
-        symbol_files_generator.split_ref_file(encoding)
+    # Split the API reference from submodules into separate files for each symbols
+    symbol_files_generator = SplitReferenceFilesBySymbols(target_dir)
+    symbol_files_generator.generate()
 
-        # Convert MD to MDX
-        print("Converting MD files to MDX...")
-        convert_md_to_mdx(args.api_dir, encoding)
+    # Convert MD to MDX
+    print("Converting MD files to MDX...")
+    convert_md_to_mdx(args.api_dir)
 
-        # Create mint.json from the template file
-        mint_json_template_path = website_dir / "mint-json-template.json.jinja"
-        mint_json_path = website_dir / "mint.json"
+    # Create mint.json from the template file
+    mint_json_template_path = website_dir / "mint-json-template.json.jinja"
+    mint_json_path = website_dir / "mint.json"
 
-        print("Generating mint.json from template...")
-        generate_mint_json_from_template(mint_json_template_path, mint_json_path, encoding)
+    print("Generating mint.json from template...")
+    generate_mint_json_from_template(mint_json_template_path, mint_json_path)
 
-        # Update mint.json
-        update_mint_json_with_api_nav(website_dir, args.api_dir, encoding)
+    # Update mint.json
+    update_mint_json_with_api_nav(website_dir, args.api_dir)
 
-        print("API reference processing complete!")
+    print("API reference processing complete!")
 
 
 if __name__ == "__main__":

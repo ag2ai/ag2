@@ -16,7 +16,7 @@ assert website_path.exists()
 assert website_path.is_dir()
 sys.path.append(str(website_path))
 
-from generate_api_references import SplitReferenceFilesBySymbols, generate_mint_json_from_template, windows_encoding
+from generate_api_references import SplitReferenceFilesBySymbols, generate_mint_json_from_template
 
 
 @pytest.fixture
@@ -103,8 +103,7 @@ def target_file(temp_dir: Path) -> Path:
 def test_generate_mint_json_from_template(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that mint.json is generated correctly from template."""
     # Run the function
-    with windows_encoding() as encoding:
-        generate_mint_json_from_template(template_file, target_file, encoding)
+    generate_mint_json_from_template(template_file, target_file)
 
     # Verify the file exists
     assert target_file.exists()
@@ -125,8 +124,7 @@ def test_generate_mint_json_existing_file(template_file: Path, target_file: Path
         json.dump(existing_content, f)
 
     # Run the function
-    with windows_encoding() as encoding:
-        generate_mint_json_from_template(template_file, target_file, encoding)
+    generate_mint_json_from_template(template_file, target_file)
 
     # Verify the contents were overwritten
     with open(target_file) as f:
@@ -140,8 +138,8 @@ def test_generate_mint_json_missing_template(target_file: Path) -> None:
     """Test handling of missing template file."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         nonexistent_template = Path(tmp_dir) / "nonexistent.template"
-        with pytest.raises(FileNotFoundError), windows_encoding() as encoding:
-            generate_mint_json_from_template(nonexistent_template, target_file, encoding)
+        with pytest.raises(FileNotFoundError):
+            generate_mint_json_from_template(nonexistent_template, target_file)
 
 
 class TestSplitReferenceFilesBySymbol:
@@ -407,9 +405,8 @@ MyClass(
         print("*" * 80)
         print(f"{all_files_relative_to_api_dir=}")
 
-        with windows_encoding() as encoding:
-            symbol_files_generator = SplitReferenceFilesBySymbols(api_dir)
-            symbol_files_generator.split_ref_file(encoding)
+        symbol_files_generator = SplitReferenceFilesBySymbols(api_dir)
+        symbol_files_generator.generate()
 
         # Verify the files exist
         actual_files = [str(p.relative_to(api_dir)) for p in api_dir.rglob("*.md")]
