@@ -1,11 +1,6 @@
-#!/usr/bin/env python
-
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-#
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
-# SPDX-License-Identifier: MIT
 
 from __future__ import annotations
 
@@ -26,25 +21,26 @@ from jinja2 import Template
 
 
 @contextmanager
-def windows_encoding() -> Iterator[None]:
-    """Context manager to handle Windows-specific encoding for pdoc output
+def windows_encoding() -> Iterator[str]:
+    """Context manager to handle Windows-specific encoding.
 
-    Reference: https://github.com/pdoc3/pdoc/issues/303#issuecomment-763596784
+    Yields:
+        str: The encoding to use for file operations ('utf-16' on Windows, 'utf-8' otherwise)
     """
+    encoding = "utf-16" if sys.platform == "win32" else "utf-8"
+    original_value = os.environ.get("PYTHONIOENCODING") if sys.platform == "win32" else None
+
     if sys.platform == "win32":
-        original_value = os.environ.get("PYTHONIOENCODING")
         os.environ["PYTHONIOENCODING"] = "utf16"
 
-        try:
-            yield
-        finally:
+    try:
+        yield encoding
+    finally:
+        if sys.platform == "win32":
             if original_value is not None:
                 os.environ["PYTHONIOENCODING"] = original_value
             else:
                 os.environ.pop("PYTHONIOENCODING", None)
-    else:
-        # On non-Windows systems, do nothing
-        yield
 
 
 def import_submodules(module_name: str, *, include_root: bool = True) -> list[str]:
@@ -96,7 +92,7 @@ def build_pdoc_dict(module_name: str) -> None:
             module.__pdoc__[name] = False
 
 
-def generate_markdown(path: Path) -> None:
+def generate_markdown(path: Path, encoding: str) -> None:
     modules = ["autogen"]  # Public submodules are auto-imported
     context = pdoc.Context()
 
@@ -114,11 +110,11 @@ def generate_markdown(path: Path) -> None:
             file_path = path / module_name.replace(".", "/") / "index.md"
             # print(f"Writing {file_path}...")
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            with file_path.open("w", encoding="utf-8") as f:
+            with file_path.open("w", encoding=encoding) as f:
                 f.write(text)
 
 
-def generate(target_dir: Path, template_dir: Path) -> None:
+def generate(target_dir: Path, template_dir: Path, encoding: str) -> None:
     # Pass the custom template directory for rendering the markdown
     pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
@@ -128,10 +124,10 @@ def generate(target_dir: Path, template_dir: Path) -> None:
     for submodule in submodules:
         build_pdoc_dict(submodule)
 
-    generate_markdown(target_dir)
+    generate_markdown(target_dir, encoding)
 
 
-def read_file_content(file_path: Path) -> str:
+def read_file_content(file_path: Path, encoding: str) -> str:
     """Read content from a file.
 
     Args:
@@ -140,7 +136,7 @@ def read_file_content(file_path: Path) -> str:
     Returns:
         str: Content of the file
     """
-    with open(file_path, encoding="utf-8") as f:
+    with open(file_path, encoding=encoding) as f:
         return f.read()
 
 
@@ -151,11 +147,12 @@ def write_file_content(file_path: str, content: str) -> None:
         file_path (str): Path to the file
         content (str): Content to write
     """
-    with open(file_path, "w", encoding="utf-8") as f:
+    encoding = "utf-16" if sys.platform == "win32" else "utf-8"
+    with open(file_path, "w", encoding=encoding) as f:
         f.write(content)
 
 
-def convert_md_to_mdx(input_dir: Path) -> None:
+def convert_md_to_mdx(input_dir: Path, encoding: str) -> None:
     """Convert all .md files in directory to .mdx while preserving structure.
 
     Args:
@@ -169,10 +166,10 @@ def convert_md_to_mdx(input_dir: Path) -> None:
         mdx_file = md_file.with_suffix(".mdx")
 
         # Read content from .md file
-        content = md_file.read_text(encoding="utf-8")
+        content = md_file.read_text(encoding=encoding)
 
         # Write content to .mdx file
-        mdx_file.write_text(content, encoding="utf-8")
+        mdx_file.write_text(content, encoding=encoding)
 
         # Remove original .md file
         md_file.unlink()
@@ -227,7 +224,7 @@ def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = 
     return sorted_pages + sorted_groups
 
 
-def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
+def update_nav(mint_json_path: Path, new_nav_pages: list[Any], encoding: str) -> None:
     """Update the 'API Reference' section in mint.json navigation with new pages.
 
     Args:
@@ -243,7 +240,7 @@ def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
         mint_config["navigation"].append(reference_section)
 
         # Write back to mint.json with proper formatting
-        with open(mint_json_path, "w", encoding="utf-8") as f:
+        with open(mint_json_path, "w", encoding=encoding) as f:
             json.dump(mint_config, f, indent=2)
             f.write("\n")
 
@@ -253,7 +250,7 @@ def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
         print(f"Error updating mint.json: {e}")
 
 
-def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path) -> None:
+def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path, encoding: str) -> None:
     """Update mint.json with MDX files in the API directory."""
     mint_json_path = script_dir / "mint.json"
     if not mint_json_path.exists():
@@ -267,23 +264,23 @@ def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path) -> None:
     nav_structure = create_nav_structure(mdx_files)
 
     # Update mint.json with new navigation
-    update_nav(mint_json_path, nav_structure)
+    update_nav(mint_json_path, nav_structure, encoding)
 
 
-def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_path: Path) -> None:
+def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_path: Path, encoding: str) -> None:
     # if mint.json already exists, delete it
     if mint_json_path.exists():
         os.remove(mint_json_path)
 
     # Copy the template file to mint.json
-    contents = read_file_content(mint_json_template_path)
+    contents = read_file_content(mint_json_template_path, encoding)
     mint_json_template_content = Template(contents).render()
 
     # Parse the rendered template content as JSON
     mint_json_data = json.loads(mint_json_template_content)
 
     # Write content to mint.json
-    with open(mint_json_path, "w") as f:
+    with open(mint_json_path, "w", encoding=encoding) as f:
         json.dump(mint_json_data, f, indent=2)
 
 
@@ -343,7 +340,8 @@ title: Overview
         for md_file in self.api_dir.rglob("*.md"):
             output_dir = self.tmp_dir / md_file.relative_to(self.api_dir).parent
             output_dir.mkdir(parents=True, exist_ok=True)
-            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding="utf-8"), output_dir)
+            encoding = "utf-16" if sys.platform == "win32" else "utf-8"
+            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding=encoding), output_dir)
 
     def _clean_directory(self, directory: Path) -> None:
         for item in directory.iterdir():
@@ -361,13 +359,13 @@ title: Overview
             print(f"Copying {'directory' if item.is_dir() else 'file'} {item} to {dest}")
             copy_func(item, dest)
 
-    def generate(self) -> None:
+    def split_ref_file(self, encoding: str) -> None:
         try:
             self.tmp_dir.mkdir(exist_ok=True)
             for output_dir, symbols in self._process_files():
                 if symbols:
                     for name, content in symbols.items():
-                        (output_dir / f"{name}.md").write_text(content, encoding="utf-8")
+                        (output_dir / f"{name}.md").write_text(content, encoding)
 
             self._move_generated_files_to_api_dir()
         finally:
@@ -375,7 +373,7 @@ title: Overview
 
 
 def main() -> None:
-    with windows_encoding():
+    with windows_encoding() as encoding:
         website_dir = Path(__file__).parent.absolute()
 
         parser = argparse.ArgumentParser(description="Process API reference documentation")
@@ -397,25 +395,25 @@ def main() -> None:
 
         # Generate API reference documentation
         print("Generating API reference documentation...")
-        generate(target_dir, template_dir)
+        generate(target_dir, template_dir, encoding)
 
         # Split the API reference from submodules into separate files for each symbols
         symbol_files_generator = SplitReferenceFilesBySymbols(target_dir)
-        symbol_files_generator.generate()
+        symbol_files_generator.split_ref_file(encoding)
 
         # Convert MD to MDX
         print("Converting MD files to MDX...")
-        convert_md_to_mdx(args.api_dir)
+        convert_md_to_mdx(args.api_dir, encoding)
 
         # Create mint.json from the template file
         mint_json_template_path = website_dir / "mint-json-template.json.jinja"
         mint_json_path = website_dir / "mint.json"
 
         print("Generating mint.json from template...")
-        generate_mint_json_from_template(mint_json_template_path, mint_json_path)
+        generate_mint_json_from_template(mint_json_template_path, mint_json_path, encoding)
 
         # Update mint.json
-        update_mint_json_with_api_nav(website_dir, args.api_dir)
+        update_mint_json_with_api_nav(website_dir, args.api_dir, encoding)
 
         print("API reference processing complete!")
 
