@@ -320,8 +320,7 @@ title: Overview
             output_dir = self.tmp_dir / md_file.relative_to(self.api_dir).parent
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            encoding = "utf-16le" if sys.platform == "win32" else "utf-8"
-            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding=encoding), output_dir)
+            yield output_dir, self._split_content_by_symbols(md_file.read_text(), output_dir)
 
     def _clean_directory(self, directory: Path) -> None:
         for item in directory.iterdir():
