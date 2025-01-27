@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from autogen._website.process_notebooks import main
+from autogen._website.generate_api_references import main
 
 if __name__ == "__main__":
     main()

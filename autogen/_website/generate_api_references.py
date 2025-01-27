@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib
 import json
 import logging
@@ -358,7 +359,8 @@ title: Overview
 
 
 def main() -> None:
-    website_dir = Path(__file__).parent.absolute()
+    root_dir = Path(__file__).resolve().parents[2]
+    website_dir = root_dir / "website"
 
     parser = argparse.ArgumentParser(description="Process API reference documentation")
     parser.add_argument(

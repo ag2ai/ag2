@@ -22,12 +22,7 @@ from autogen._website.process_notebooks import (
     get_sorted_files,
 )
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
-with optional_import_block():
-    assert NotImplementedError
-
-@skip_on_missing_imports(raise NotImplementedError)
 def test_ensure_mint_json() -> None:
     # Test with empty temp directory - should raise SystemExit
     with tempfile.TemporaryDirectory() as tmp_dir:

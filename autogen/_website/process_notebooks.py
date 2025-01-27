@@ -22,27 +22,25 @@ import tempfile
 import threading
 import time
 from collections.abc import Collection, Sequence
-from functools import lru_cache
 from dataclasses import dataclass
 from datetime import datetime
-from multiprocessing import current_process
+from functools import lru_cache
 from pathlib import Path
 from textwrap import dedent, indent
 from typing import Any, Callable, Dict, List, Tuple, TypeVar, Union
 
-from termcolor import colored
-
 from ..import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
+    import nbformat
     import yaml
     from nbclient.client import NotebookClient
     from nbclient.exceptions import (
         CellExecutionError,
         CellTimeoutError,
     )
-    import nbformat
     from nbformat import NotebookNode
+    from termcolor import colored
 
 
 @lru_cache
@@ -56,25 +54,29 @@ def check_quarto_bin(quarto_bin: str = "quarto") -> bool:
     except FileNotFoundError:
         return False
 
+
 C = TypeVar("C", bound=Callable[..., Any])
+
+
 def require_quarto_bin(f: C) -> C:
     """Decorator to skip a function if quarto is not installed."""
 
     if check_quarto_bin():
         return f
     else:
+
         @functools.wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return ImportError("Quarto is not installed")
 
         return wrapper
 
+
 class Result:
     def __init__(self, returncode: int, stdout: str, stderr: str):
         self.returncode = returncode
         self.stdout = stdout
         self.stderr = stderr
-
 
 
 def notebooks_target_dir(website_directory: Path) -> Path:
@@ -160,8 +162,9 @@ def extract_title(notebook: Path) -> str | None:
 
     return None
 
+
 @require_quarto_bin
-@require_optional_import("nbclient", "docs")
+@require_optional_import(["nbclient", "termcolor"], "docs")
 def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, quarto_bin: str, dry_run: bool) -> str:
     """Process a single notebook."""
     in_notebook_dir = "notebook" in src_notebook.parts
@@ -247,8 +250,9 @@ class NotebookSkip:
 
 NB_VERSION = 4
 
-@skip_on_missing_quarto_bin
-@
+
+@require_quarto_bin
+@require_optional_import("nbclient", "docs")
 def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, NotebookError | NotebookSkip | None]:
     nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore
 
@@ -279,6 +283,7 @@ def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Notebo
 
 
 # Find the first code cell which did not complete.
+@require_optional_import("nbclient", "docs")
 def get_timeout_info(
     nb: NotebookNode,
 ) -> NotebookError | None:
@@ -296,6 +301,7 @@ def get_timeout_info(
     return None
 
 
+@require_optional_import("nbclient", "docs")
 def get_error_info(nb: NotebookNode) -> NotebookError | None:
     for cell in nb["cells"]:  # get LAST error
         if cell["cell_type"] != "code":
@@ -492,7 +498,7 @@ def post_process_mdx(
     content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
 
     # Each intermediate path needs to be resolved for this to work reliably
-    repo_root = Path(__file__).parent.resolve().parent.resolve()
+    repo_root = Path(__file__).resolve().parents[2]
     repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
     front_matter["source_notebook"] = f"/{repo_relative_notebook}"
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
@@ -568,14 +574,17 @@ def collect_notebooks(notebook_directory: Path, website_directory: Path) -> list
     return notebooks
 
 
+@require_optional_import("termcolor", "docs")
 def fmt_skip(notebook: Path, reason: str) -> str:
     return f"{colored('[Skip]', 'yellow')} {colored(notebook.name, 'blue')}: {reason}"
 
 
+@require_optional_import("termcolor", "docs")
 def fmt_ok(notebook: Path) -> str:
     return f"{colored('[OK]', 'green')} {colored(notebook.name, 'blue')} ✅"
 
 
+@require_optional_import("termcolor", "docs")
 def fmt_error(notebook: Path, error: NotebookError | str) -> str:
     if isinstance(error, str):
         return f"{colored('[Error]', 'red')} {colored(notebook.name, 'blue')}: {error}"
@@ -926,7 +935,8 @@ def cleanup_tmp_dirs_if_no_metadata(website_dir: Path) -> None:
 
 
 def main() -> None:
-    script_dir = Path(__file__).parent.absolute()
+    root_dir = Path(__file__).resolve().parents[2]
+    website_dir = root_dir / "website"
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="subcommand")
 
@@ -934,9 +944,11 @@ def main() -> None:
         "--notebook-directory",
         type=path,
         help="Directory containing notebooks to process",
-        default=script_dir / "../notebook",
+        default=website_dir / "../notebook",
     )
-    parser.add_argument("--website-directory", type=path, help="Root directory of mintlify website", default=script_dir)
+    parser.add_argument(
+        "--website-directory", type=path, help="Root directory of mintlify website", default=website_dir
+    )
 
     render_parser = subparsers.add_parser("render")
     render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
