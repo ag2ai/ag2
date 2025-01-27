@@ -64,14 +64,24 @@ class TestBrowserUseToolOpenai:
                 credentials_gemini_flash_exp.__name__,
                 marks=pytest.mark.gemini,
             ),
+            # Deeseek currently does not work too well with the browser-use
+            # pytest.param(
+            #     credentials_deepseek_chat.__name__,
+            #     marks=pytest.mark.deepseek,
+            # ),
         ],
         indirect=True,
     )
     @pytest.mark.asyncio
     async def test_browser_use_tool(self, credentials_from_test_param: Credentials) -> None:
-        browser_use_tool = BrowserUseTool(llm_config=credentials_from_test_param.llm_config)
+        api_type = credentials_from_test_param.config_list[0].get("api_type", "openai")
+        # If we decide to test with deepseek, we need to set use_vision to False
+        agent_kwargs = {"use_vision": False} if api_type == "deepseek" else {}
+        browser_use_tool = BrowserUseTool(llm_config=credentials_from_test_param.llm_config, agent_kwargs=agent_kwargs)
+        task = "Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment."
+
         result = await browser_use_tool(
-            task="Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment."
+            task=task,
         )
         assert isinstance(result, BrowserUseResult)
         assert len(result.extracted_content) > 0

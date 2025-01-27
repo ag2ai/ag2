@@ -122,6 +122,8 @@ class BrowserUseTool(Tool):
 
         if api_type == "openai":
             return ChatOpenAI(model=model, api_key=api_key)
+        elif api_type == "deepseek":
+            return ChatOpenAI(model=model, api_key=api_key, base_url=llm_config["config_list"][0].get("base_url"))
         elif api_type == "anthropic":
             return ChatAnthropic(model=model, api_key=api_key)
         elif api_type == "google":

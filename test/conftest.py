@@ -322,6 +322,16 @@ def credentials_deepseek_reasoner() -> Credentials:
     )
 
 
+@pytest.fixture
+def credentials_deepseek_chat() -> Credentials:
+    return get_llm_credentials(
+        "DEEPSEEK_API_KEY",
+        model="deepseek-chat",
+        api_type="deepseek",
+        filter_dict={"tags": ["deepseek-chat"], "base_url": "https://api.deepseek.com/v1"},
+    )
+
+
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
     llm_config = {
         "config_list": [
