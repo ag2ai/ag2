@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -28,11 +28,7 @@ class TestBrowserUseToolOpenai:
         self._Agent = Agent
 
     def test_broser_use_tool_init(self, mock_credentials: Credentials) -> None:
-        config = mock_credentials.config_list[0]
-        model: str = config["model"]  # type: ignore[index]
-        api_key: str = config["api_key"]  # type: ignore[index]
-
-        browser_use_tool = BrowserUseTool(model=model, api_key=api_key)
+        browser_use_tool = BrowserUseTool(llm_config=mock_credentials.llm_config)
         assert browser_use_tool.name == "browser_use"
         assert browser_use_tool.description == "Use the browser to perform a task."
         assert isinstance(browser_use_tool.func, Callable)  # type: ignore[arg-type]
@@ -50,10 +46,7 @@ class TestBrowserUseToolOpenai:
 
     @pytest.fixture()
     def browser_use_tool(self, credentials_gpt_4o_mini: Credentials) -> BrowserUseTool:
-        config = credentials_gpt_4o_mini.config_list[0]
-        model = config["model"]
-        api_key = config["api_key"]
-        return BrowserUseTool(model=model, api_key=api_key)
+        return BrowserUseTool(llm_config=credentials_gpt_4o_mini.llm_config)
 
     @pytest.mark.openai
     @pytest.mark.asyncio
