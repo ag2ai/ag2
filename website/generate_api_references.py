@@ -315,43 +315,13 @@ title: Overview
             symbols.update(self._extract_symbol_content(content, output_dir))
         return symbols
 
-    def _read_file_with_fallback_encodings(self, file_path: Path) -> str:
-        """Read a file trying different encodings."""
-        encodings = [
-            "utf-8",
-            "utf-8-sig",  # UTF-8 with BOM
-            "utf-16",
-            "utf-16le",
-            "utf-16be",
-            "cp1252",  # Windows default
-            "iso-8859-1",  # Latin-1
-        ]
-
-        errors = []
-        logger.info(f"Trying to read file: {file_path}")
-
-        for encoding in encodings:
-            try:
-                logger.info(f"Attempting to read with encoding: {encoding}")
-                content = file_path.read_text(encoding=encoding)
-                logger.info(f"SUCCESS: File successfully read with encoding: {encoding}")
-                return content
-            except UnicodeError as e:
-                error_msg = f"FAILED: {encoding}: {str(e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-                continue
-
-        # If we get here, none of the encodings worked
-        raise UnicodeError(f"Failed to read {file_path} with any encoding.\nAll attempts:\n" + "\n".join(errors))
-
     def _process_files(self) -> Iterator[tuple[Path, dict[str, str]]]:
         for md_file in self.api_dir.rglob("*.md"):
             output_dir = self.tmp_dir / md_file.relative_to(self.api_dir).parent
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            content = self._read_file_with_fallback_encodings(md_file)
-            yield output_dir, self._split_content_by_symbols(content, output_dir)
+            encoding = "utf-16le" if sys.platform == "win32" else "utf-8"
+            yield output_dir, self._split_content_by_symbols(md_file.read_text(encoding=encoding), output_dir)
 
     def _clean_directory(self, directory: Path) -> None:
         for item in directory.iterdir():
