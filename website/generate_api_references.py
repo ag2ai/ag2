@@ -17,6 +17,7 @@ import pkgutil
 import shutil
 import sys
 from collections.abc import Iterable
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
@@ -95,17 +96,40 @@ def generate_markdown(path: Path) -> None:
                 f.write(text)
 
 
+@contextmanager
+def windows_encoding() -> Iterator[None]:
+    """Context manager to handle Windows-specific encoding for pdoc output
+
+    Reference: https://github.com/pdoc3/pdoc/issues/303#issuecomment-763596784
+    """
+    if sys.platform == "win32":
+        original_value = os.environ.get("PYTHONIOENCODING")
+        os.environ["PYTHONIOENCODING"] = "utf16"
+
+        try:
+            yield
+        finally:
+            if original_value is not None:
+                os.environ["PYTHONIOENCODING"] = original_value
+            else:
+                os.environ.pop("PYTHONIOENCODING", None)
+    else:
+        # On non-Windows systems, do nothing
+        yield
+
+
 def generate(target_dir: Path, template_dir: Path) -> None:
-    # Pass the custom template directory for rendering the markdown
-    pdoc.tpl_lookup.directories.insert(0, str(template_dir))
+    with windows_encoding():
+        # Pass the custom template directory for rendering the markdown
+        pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
-    submodules = import_submodules("autogen")
-    print(f"{submodules=}")
+        submodules = import_submodules("autogen")
+        print(f"{submodules=}")
 
-    for submodule in submodules:
-        build_pdoc_dict(submodule)
+        for submodule in submodules:
+            build_pdoc_dict(submodule)
 
-    generate_markdown(target_dir)
+        generate_markdown(target_dir)
 
 
 def read_file_content(file_path: Path) -> str:
