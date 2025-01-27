@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from autogen.tools.crawl4ai import Crawl4AITool
+from autogen.tools.experimental.crawl4ai import Crawl4AITool
 
 
 class TestCrawl4AITool:
-    def test__init__(self):
+    def test__init__(self) -> None:
         tool = Crawl4AITool()
 
         assert isinstance(tool, Crawl4AITool)

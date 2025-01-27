@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from crawl4ai import AsyncWebCrawler
 
-from . import Tool
+from ... import Tool
 
 
 class Crawl4AITool(Tool):
