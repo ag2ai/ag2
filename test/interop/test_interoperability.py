@@ -16,6 +16,7 @@ with optional_import_block():
     from crewai_tools import FileReadTool
 
 
+@pytest.mark.interop
 class TestInteroperability:
     @skip_on_missing_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
     def test_supported_types(self) -> None:

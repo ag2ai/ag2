@@ -61,17 +61,24 @@ def skip_on_missing_jupyter_kernel_gateway() -> Callable[[T], T]:
         module: Module name
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
+    # Add pytest.mark.jupyter_executor decorator
+    mark_name = "jupyter_executor"
+
     if is_jupyter_kernel_gateway_installed():
 
         def decorator(o: T) -> T:
-            return o
+            import pytest
+
+            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            return pytest_mark_o  # type: ignore[no-any-return]
     else:
 
         def decorator(o: T) -> T:
             import pytest
 
-            return pytest.mark.skip(
+            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            return pytest.mark.skip(  # type: ignore[return-value,no-any-return]
                 reason="jupyter-kernel-gateway is required for JupyterCodeExecutor, please install it with `pip install ag2[jupyter-executor]`"
-            )(o)  # type: ignore[return-value]
+            )(pytest_mark_o)
 
     return decorator

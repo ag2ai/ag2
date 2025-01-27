@@ -10,13 +10,16 @@ from pathlib import Path
 
 import pytest
 
-# Add the ../../website directory to sys.path
-website_path = Path(__file__).resolve().parents[2] / "website"
-assert website_path.exists()
-assert website_path.is_dir()
-sys.path.append(str(website_path))
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
-from process_api_reference import generate_mint_json_from_template, move_files_excluding_index
+with optional_import_block():
+    # Add the ../../website directory to sys.path
+    website_path = Path(__file__).resolve().parents[2] / "website"
+    assert website_path.exists()
+    assert website_path.is_dir()
+    sys.path.append(str(website_path))
+
+    from process_api_reference import generate_mint_json_from_template, move_files_excluding_index
 
 
 @pytest.fixture
@@ -54,6 +57,7 @@ def api_dir(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@skip_on_missing_imports("jinja2", "docs")
 def test_move_files_excluding_index(api_dir: Path) -> None:
     """Test that files are moved correctly excluding index.md"""
     # Call the function under test
@@ -127,6 +131,7 @@ def target_file(temp_dir: Path) -> Path:
     return temp_dir / "mint.json"
 
 
+@skip_on_missing_imports("jinja2", "docs")
 def test_generate_mint_json_from_template(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that mint.json is generated correctly from template."""
     # Run the function
@@ -143,6 +148,7 @@ def test_generate_mint_json_from_template(template_file: Path, target_file: Path
     assert actual == expected
 
 
+@skip_on_missing_imports("jinja2", "docs")
 def test_generate_mint_json_existing_file(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that function works when mint.json already exists."""
     # Create an existing mint.json with different content
@@ -161,6 +167,7 @@ def test_generate_mint_json_existing_file(template_file: Path, target_file: Path
     assert actual == expected
 
 
+@skip_on_missing_imports("jinja2", "docs")
 def test_generate_mint_json_missing_template(target_file: Path) -> None:
     """Test handling of missing template file."""
     with tempfile.TemporaryDirectory() as tmp_dir:
