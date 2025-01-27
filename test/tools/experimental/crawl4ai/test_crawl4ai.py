@@ -19,13 +19,13 @@ class TestCrawl4AITool:
     def _use_imports(self) -> None:
         self._AsyncWebCrawler = AsyncWebCrawler
 
-    def test__init__(self) -> None:
-        tool = Crawl4AITool()
-
-        assert isinstance(tool, Crawl4AITool)
-        assert tool.name == "crawl4ai"
-        assert tool.description == "Crawl a website and extract information."
-        assert callable(tool.func)
+    @pytest.mark.asyncio
+    async def test__init__(self) -> None:
+        tool_without_llm = Crawl4AITool()
+        assert isinstance(tool_without_llm, Crawl4AITool)
+        assert tool_without_llm.name == "crawl4ai"
+        assert tool_without_llm.description == "Crawl a website and extract information."
+        assert callable(tool_without_llm.func)
         expected_schema = {
             "function": {
                 "description": "Crawl a website and extract information.",
@@ -40,4 +40,7 @@ class TestCrawl4AITool:
             },
             "type": "function",
         }
-        assert tool.tool_schema == expected_schema
+        assert tool_without_llm.tool_schema == expected_schema
+
+        result = await tool_without_llm(url="https://docs.ag2.ai/docs/Home")
+        assert isinstance(result, str)
