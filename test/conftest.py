@@ -445,6 +445,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         return await func(*args, **kwargs)
                     except exception:
                         pytest.xfail(f"Suppressed '{exception}' raised")
+                        return
                 else:
                     for i in range(retries):
                         try:
@@ -452,6 +453,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         except exception:
                             if i >= retries - 1:
                                 pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                                return
                             await asyncio.sleep(timeout)
         else:
 
@@ -468,6 +470,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         return func(*args, **kwargs)
                     except exception:
                         pytest.xfail(f"Suppressed '{exception}' raised")
+                        return
                 else:
                     for i in range(retries):
                         try:
@@ -475,6 +478,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         except exception:
                             if i >= retries - 1:
                                 pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                                return
                             time.sleep(timeout)
 
         return wrapper  # type: ignore[return-value]
