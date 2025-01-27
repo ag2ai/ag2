@@ -2,26 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Optional
-
-import anyio
-from asyncer import asyncify, create_task_group, syncify
-
-from ..agent import Agent
-from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
-
-if TYPE_CHECKING:
-    from .clients import Role
-    from .realtime_agent import RealtimeAgent
-
 import logging
 import warnings
 from collections import defaultdict
-from typing import (
-    Callable,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
+
+import anyio
+from asyncer import asyncify, create_task_group, syncify
 
 from ... import SwarmAgent
 from ...cache.abstract_cache_base import AbstractCache
@@ -33,9 +20,14 @@ from ...messages.agent_messages import (
     ClearConversableAgentHistoryMessage,
     ClearConversableAgentHistoryWarningMessage,
 )
-from ..agent import LLMAgent
+from ..agent import Agent, LLMAgent
 from ..chat import ChatResult
+from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ..utils import consolidate_chat_info, gather_usage_summary
+
+if TYPE_CHECKING:
+    from .clients import Role
+    from .realtime_agent import RealtimeAgent
 
 __all__ = ["register_swarm"]
 
@@ -131,7 +123,6 @@ class SwarmableAgent(LLMAgent):
         is_termination_msg: Optional[Callable[..., bool]] = None,
         description: Optional[str] = None,
         silent: Optional[bool] = None,
-        context_variables: Optional[dict[str, Any]] = None,
     ):
         self._oai_messages: dict[Agent, Any] = defaultdict(list)
 
@@ -151,8 +142,6 @@ class SwarmableAgent(LLMAgent):
         self.previous_cache = None
 
         self.reply_at_receive: dict[Agent, bool] = defaultdict(bool)
-
-        self._context_variables = context_variables if context_variables is not None else {}
 
     @property
     def system_message(self) -> str:
@@ -381,7 +370,6 @@ class SwarmableRealtimeAgent(SwarmableAgent):
             is_termination_msg=None,
             description=None,
             silent=None,
-            context_variables=None,
         )
 
     def reset_answer(self) -> None:
