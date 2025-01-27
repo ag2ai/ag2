@@ -47,7 +47,9 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Build documentation
-        run: ./scripts/docs_build.sh
+        run: |
+          pip install -e ".[docs]"
+          ./scripts/docs_build.sh
         working-directory: .
 
   mintlify-release:
@@ -76,7 +78,9 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Build documentation
-        run: ./scripts/docs_build.sh
+        run: |
+          pip install -e ".[docs]"
+          ./scripts/docs_build.sh
         working-directory: .
 
       - name: Prepare website content
