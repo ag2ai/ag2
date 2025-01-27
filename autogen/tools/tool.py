@@ -24,8 +24,8 @@ class Tool:
 
     Attributes:
         name (str): The name of the tool.
-        description (str): A brief description of the tool's purpose or function.
-        func (Callable[..., Any]): The function to be executed when the tool is called.
+        description (str): The description of the tool.
+        func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
     """
 
     def __init__(
