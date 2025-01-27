@@ -271,6 +271,16 @@ markers = [
     "docker",
     "docs",
     "browser_use",
+    # optional deps
+    "jupyter_executor",
+    "retrievechat",
+    "retrievechat_pgvector",
+    "retrievechat_mongodb",
+    "retrievechat_qdrant",
+    "graph_rag_falkor_db",
+    "neo4j",
+    "twilio",
+    "interop",
 ]
 
 [tool.black]
