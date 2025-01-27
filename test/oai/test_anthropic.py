@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,21 +10,17 @@ import os
 
 import pytest
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.oai.anthropic import AnthropicClient, _calculate_cost
 
 with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
 
-skip = not result.is_successful
-
 from typing import List
 
 from pydantic import BaseModel
 from typing_extensions import Literal
-
-reason = "Anthropic dependency not installed!"
 
 
 @pytest.fixture
@@ -56,7 +52,7 @@ def anthropic_client():
     return AnthropicClient(api_key="dummy_api_key")
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["anthropic"], "anthropic")
 def test_initialization_missing_api_key():
     os.environ.pop("ANTHROPIC_API_KEY", None)
     os.environ.pop("AWS_ACCESS_KEY", None)
@@ -88,12 +84,12 @@ def anthropic_client_with_vertexai_credentials():
     )
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["anthropic"], "anthropic")
 def test_intialization(anthropic_client):
     assert anthropic_client.api_key == "dummy_api_key", "`api_key` should be correctly set in the config"
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["anthropic"], "anthropic")
 def test_intialization_with_aws_credentials(anthropic_client_with_aws_credentials):
     assert anthropic_client_with_aws_credentials.aws_access_key == "dummy_access_key", (
         "`aws_access_key` should be correctly set in the config"
@@ -109,7 +105,7 @@ def test_intialization_with_aws_credentials(anthropic_client_with_aws_credential
     )
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["anthropic"], "anthropic")
 def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai_credentials):
     assert anthropic_client_with_vertexai_credentials.gcp_project_id == "dummy_project_id", (
         "`gcp_project_id` should be correctly set in the config"
@@ -123,7 +119,7 @@ def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai
 
 
 # Test cost calculation
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["anthropic"], "anthropic")
 def test_cost_calculation(mock_completion):
     completion = mock_completion(
         completion="Hi! My name is Claude.",
@@ -136,7 +132,7 @@ def test_cost_calculation(mock_completion):
     ), "Cost should be $0.002025"
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["anthropic"], "anthropic")
 def test_load_config(anthropic_client):
     params = {
         "model": "claude-3-sonnet-20240229",
@@ -158,7 +154,7 @@ def test_load_config(anthropic_client):
     assert result == expected_params, "Config should be correctly loaded"
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["anthropic"], "anthropic")
 def test_extract_json_response(anthropic_client):
     # Define test Pydantic model
     class Step(BaseModel):

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,7 +17,7 @@ import pytest
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, OpenAIClient
 
 from ..conftest import Credentials
@@ -26,16 +26,14 @@ TOOL_ENABLED = False
 
 with optional_import_block() as result:
     import openai
-    from openai import OpenAI  # noqa: F401
+    from openai import OpenAI
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
 
-skip = not result.is_successful
-
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     config_list = credentials_azure_gpt_35_turbo.config_list
     client = OpenAIWrapper(config_list=config_list)
@@ -54,7 +52,8 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
+@pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
+@skip_on_missing_imports(["openai"])
 def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(
@@ -87,7 +86,7 @@ def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}])
@@ -96,7 +95,7 @@ def test_chat_completion(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=")
@@ -105,7 +104,7 @@ def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 @pytest.mark.parametrize(
     "cache_seed",
     [
@@ -120,7 +119,7 @@ def test_cost(credentials_azure_gpt_35_turbo_instruct: Credentials, cache_seed):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     config_list = credentials_azure_gpt_35_turbo_instruct.config_list
     for config in config_list:
@@ -133,7 +132,7 @@ def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+3=", cache_seed=None)
@@ -165,7 +164,7 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
@@ -229,7 +228,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of artificial intelligence."
@@ -442,12 +441,12 @@ class TestO1:
     @pytest.fixture
     def o1_mini_client(self, credentials_o1_mini: Credentials) -> Generator[OpenAIWrapper, None, None]:
         config_list = credentials_o1_mini.config_list
-        yield OpenAIWrapper(config_list=config_list, cache_seed=42)
+        return OpenAIWrapper(config_list=config_list, cache_seed=42)
 
     @pytest.fixture
     def o1_client(self, credentials_o1: Credentials) -> Generator[OpenAIWrapper, None, None]:
         config_list = credentials_o1.config_list
-        yield OpenAIWrapper(config_list=config_list, cache_seed=42)
+        return OpenAIWrapper(config_list=config_list, cache_seed=42)
 
     def test_reasoning_remove_unsupported_params(self, mock_oai_client: OpenAIClient) -> None:
         """Test that unsupported parameters are removed with appropriate warnings"""

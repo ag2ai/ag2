@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -13,19 +13,14 @@ import sys
 import pytest
 
 import autogen
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 from autogen.math_utils import eval_math_responses
 
 from ..conftest import Credentials, reason
 
-with optional_import_block() as result:
-    from openai import OpenAI  # noqa: F401
-
-skip = not result.is_successful
-
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     functions = [
         {
@@ -220,9 +215,10 @@ async def test_a_execute_function():
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.10"),
+    not sys.version.startswith("3.10"),
     reason=reason,
 )
+@skip_on_missing_imports(["openai"])
 def test_update_function(credentials_gpt_4o_mini: Credentials):
     llm_config = {
         "config_list": credentials_gpt_4o_mini.config_list,
@@ -233,7 +229,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     user_proxy = autogen.UserProxyAgent(
         name="user_proxy",
         human_input_mode="NEVER",
-        is_termination_msg=lambda x: True if "TERMINATE" in x.get("content") else False,
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content"),
     )
     assistant = autogen.AssistantAgent(name="test", llm_config=llm_config)
 

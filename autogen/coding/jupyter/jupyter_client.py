@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -115,7 +115,7 @@ class JupyterKernelClient:
         output: str
         data_items: list[DataItem]
 
-    def __init__(self, websocket: "WebSocket"):
+    def __init__(self, websocket: WebSocket):
         self._session_id: str = uuid.uuid4().hex
         self._websocket: WebSocket = websocket
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -13,22 +13,21 @@ from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import (
     FalkorGraphQueryEngine,
     GraphStoreQueryResult,
 )
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 with optional_import_block() as result:
-    import falkordb  # noqa: F401
     from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
 
-skip = not result.is_successful
 
 reason = "do not run on MacOS or windows OR dependency is not installed"
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip,
+    sys.platform in ["darwin", "win32"],
     reason=reason,
 )
+@skip_on_missing_imports(["falkordb", "graphrag_sdk"], "neo4j")
 def test_falkor_db_query_engine():
     """Test FalkorDB Query Engine.
     1. create a test FalkorDB Query Engine with a schema.

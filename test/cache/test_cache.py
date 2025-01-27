@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,12 +10,10 @@ import unittest
 from unittest.mock import ANY, MagicMock, patch
 
 from autogen.cache.cache import Cache
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 with optional_import_block() as result:
     from azure.cosmos import CosmosClient
-
-skip_azure_cosmos = not result.is_successful
 
 
 class TestCache(unittest.TestCase):
@@ -31,7 +29,7 @@ class TestCache(unittest.TestCase):
                 "database_id": "autogen_cache",
                 "container_id": "TestContainer",
                 "cache_seed": "42",
-                "client": MagicMock(spec=CosmosClient) if not skip_azure_cosmos else MagicMock(),
+                "client": MagicMock(spec=CosmosClient) if result.is_successful else MagicMock(),
             }
         }
 
@@ -42,7 +40,7 @@ class TestCache(unittest.TestCase):
         mock_cache_factory.assert_called()
 
     @patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=MagicMock())
-    @unittest.skipIf(skip_azure_cosmos, "requires azure.cosmos")
+    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmosdb_cache_initialization(self, mock_cache_factory):
         cache = Cache(self.cosmos_config)
         self.assertIsInstance(cache.cache, MagicMock)
@@ -71,7 +69,7 @@ class TestCache(unittest.TestCase):
     def test_redis_context_manager(self):
         self.context_manager_common(self.redis_config)
 
-    @unittest.skipIf(skip_azure_cosmos, "requires azure.cosmos")
+    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmos_context_manager(self):
         self.context_manager_common(self.cosmos_config)
 
@@ -90,7 +88,7 @@ class TestCache(unittest.TestCase):
     def test_redis_get_set(self):
         self.get_set_common(self.redis_config)
 
-    @unittest.skipIf(skip_azure_cosmos, "requires azure.cosmos")
+    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmos_get_set(self):
         self.get_set_common(self.cosmos_config)
 
@@ -104,7 +102,7 @@ class TestCache(unittest.TestCase):
     def test_redis_close(self):
         self.close_common(self.redis_config)
 
-    @unittest.skipIf(skip_azure_cosmos, "requires azure.cosmos")
+    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmos_close(self):
         self.close_common(self.cosmos_config)
 

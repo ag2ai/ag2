@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -38,7 +38,7 @@ def move_files_excluding_index(api_dir: Path) -> None:
 def run_pdoc3(api_dir: Path) -> None:
     """Run pydoc3 to generate the API documentation."""
     try:
-        print(f"Generating API documentation and saving to {str(api_dir)}...")
+        print(f"Generating API documentation and saving to {api_dir!s}...")
         subprocess.run(
             ["pdoc", "--output-dir", str(api_dir), "--template-dir", "mako_templates", "--force", "autogen"],
             check=True,

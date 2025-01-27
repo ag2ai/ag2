@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -27,8 +27,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     input_file_path: Union[Path, str],
     output_dir_path: Union[Path, str],
 ) -> list["ConversionResult"]:
-    """
-    Convert documents into a Deep Search document format using EasyOCR
+    """Convert documents into a Deep Search document format using EasyOCR
     with CPU only, and export the document and its tables to the specified
     output directory.
 
@@ -84,7 +83,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     for res in conv_results:
         out_path = Path(output_dir_path)
         doc_filename = res.input.file.stem
-        _log.info(f"Document {res.input.file.name} converted.\nSaved markdown output to: {str(out_path)}")
+        _log.info(f"Document {res.input.file.name} converted.\nSaved markdown output to: {out_path!s}")
         _log.debug(res.document._export_to_indented_text(max_text_len=16))
         # Export Docling document format to markdowndoc:
         with (out_path / f"{doc_filename}.md").open("w") as fp:

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -193,7 +193,7 @@ class TestDependencyInjection:
         expected_tools[0]["function"]["name"] = func_name
         assert agent.llm_config["tools"] == expected_tools
 
-        assert func_name in agent.function_map.keys()
+        assert func_name in agent.function_map
 
         retval = agent.function_map[func_name](1)
         actual = await retval if is_async else retval
