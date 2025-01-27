@@ -125,6 +125,14 @@ class Credentials:
     def api_key(self) -> str:
         return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
 
+    @property
+    def api_type(self) -> str:
+        return self.llm_config["config_list"][0].get("api_type", "openai")  # type: ignore[no-any-return]
+
+    @property
+    def model(self) -> str:
+        return self.llm_config["config_list"][0]["model"]  # type: ignore[no-any-return]
+
 
 class CensoredError(Exception):
     def __init__(self, exception: BaseException):
@@ -297,6 +305,13 @@ def credentials_gemini_pro() -> Credentials:
 
 
 @pytest.fixture
+def credentials_gemini_flash_exp() -> Credentials:
+    return get_llm_credentials(
+        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash"]}
+    )
+
+
+@pytest.fixture
 def credentials_anthropic_claude_sonnet() -> Credentials:
     return get_llm_credentials(
         "ANTHROPIC_API_KEY",
@@ -313,6 +328,16 @@ def credentials_deepseek_reasoner() -> Credentials:
         model="deepseek-reasoner",
         api_type="deepseek",
         filter_dict={"tags": ["deepseek-reasoner"], "base_url": "https://api.deepseek.com/v1"},
+    )
+
+
+@pytest.fixture
+def credentials_deepseek_chat() -> Credentials:
+    return get_llm_credentials(
+        "DEEPSEEK_API_KEY",
+        model="deepseek-chat",
+        api_type="deepseek",
+        filter_dict={"tags": ["deepseek-chat"], "base_url": "https://api.deepseek.com/v1"},
     )
 
 
@@ -368,6 +393,27 @@ credentials_all_llms = [
     ),
 ]
 
+credentials_browser_use = [
+    pytest.param(
+        credentials_gpt_4o_mini.__name__,
+        marks=pytest.mark.openai,
+    ),
+    pytest.param(
+        credentials_anthropic_claude_sonnet.__name__,
+        marks=pytest.mark.anthropic,
+    ),
+    pytest.param(
+        credentials_gemini_flash_exp.__name__,
+        marks=pytest.mark.gemini,
+    ),
+    # Deeseek currently does not work too well with the browser-use
+    pytest.param(
+        credentials_deepseek_chat.__name__,
+        marks=pytest.mark.deepseek,
+    ),
+]
+
+
 T = TypeVar("T", bound=Callable[..., Any])
 
 
@@ -399,6 +445,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         return await func(*args, **kwargs)
                     except exception:
                         pytest.xfail(f"Suppressed '{exception}' raised")
+                        raise
                 else:
                     for i in range(retries):
                         try:
@@ -406,6 +453,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         except exception:
                             if i >= retries - 1:
                                 pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                                raise
                             await asyncio.sleep(timeout)
         else:
 
@@ -422,6 +470,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         return func(*args, **kwargs)
                     except exception:
                         pytest.xfail(f"Suppressed '{exception}' raised")
+                        raise
                 else:
                     for i in range(retries):
                         try:
@@ -429,6 +478,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
                         except exception:
                             if i >= retries - 1:
                                 pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                                raise
                             time.sleep(timeout)
 
         return wrapper  # type: ignore[return-value]
