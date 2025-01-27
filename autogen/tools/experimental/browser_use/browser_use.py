@@ -19,6 +19,8 @@ with optional_import_block():
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
 
 
+# todo: add export_module decorator
+# @export_module("autogen.tools.experimental.browser_use")
 class BrowserUseResult(BaseModel):
     """The result of using the browser to perform a task.
 
@@ -42,6 +44,8 @@ def on(x: T) -> Callable[[], T]:
 
 
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
+# todo: add export_module decorator
+# @export_module("autogen.tools.experimental")
 class BrowserUseTool(Tool):
     """BrowserUseTool is a tool that uses the browser to perform a task."""
 
@@ -129,4 +133,4 @@ class BrowserUseTool(Tool):
         elif api_type == "google":
             return ChatGoogleGenerativeAI(model=model, api_key=api_key)
         else:
-            raise ValueError(f"Unknown language model type: {api_type}")
+            raise ValueError(f"Currently unsupported language model api type for browser use: {api_type}")
