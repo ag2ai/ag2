@@ -48,7 +48,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          uv pip install -e ".[docs]"
+          uv pip install --system -e ".[docs]"
           ./scripts/docs_build.sh
         working-directory: .
 
@@ -79,7 +79,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          uv pip install -e ".[docs]"
+          uv pip install --system -e ".[docs]"
           ./scripts/docs_build.sh
         working-directory: .
 
