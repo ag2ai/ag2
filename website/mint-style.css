@@ -242,6 +242,16 @@ body.reference-page  p.overview-symbol {
     }
   }
 }
+
+.dark body.reference-page  p.overview-symbol {
+  & a {
+    border-bottom: none;
+    & code {
+      background-color: #79c0ff1a;
+      color: #338fd1;
+    }
+  }
+}
 /* Reference section ends */
 
 a.colab-badge, a.github-badge {
