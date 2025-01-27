@@ -2,16 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import Annotated, Any
 
 from crawl4ai import AsyncWebCrawler
 
 from . import Tool
 
 
-class Crawl4AI(Tool):
+class Crawl4AITool(Tool):
     def __init__(self) -> None:
-        async def crawl4ai(url: str) -> Any:
+        async def crawl4ai(
+            url: Annotated[str, "The url to crawl and extract information from."],
+        ) -> Any:
             async with AsyncWebCrawler() as crawler:
                 result = await crawler.arun(
                     url=url,
