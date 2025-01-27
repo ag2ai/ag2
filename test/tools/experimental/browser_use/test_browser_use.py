@@ -12,7 +12,12 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool
 
-from ....conftest import Credentials
+from ....conftest import (
+    Credentials,
+    credentials_anthropic_claude_sonnet,
+    credentials_gemini_flash_exp,
+    credentials_gpt_4o_mini,
+)
 
 with optional_import_block():
     from browser_use import Agent
@@ -44,18 +49,36 @@ class TestBrowserUseToolOpenai:
         }
         assert browser_use_tool.function_schema == expected_schema
 
-    @pytest.fixture()
-    def browser_use_tool(self, credentials_gpt_4o_mini: Credentials) -> BrowserUseTool:
-        return BrowserUseTool(llm_config=credentials_gpt_4o_mini.llm_config)
-
-    @pytest.mark.openai
+    @pytest.mark.parametrize(
+        "credentials_from_test_param",
+        [
+            pytest.param(
+                credentials_gpt_4o_mini.__name__,
+                marks=pytest.mark.openai,
+            ),
+            pytest.param(
+                credentials_anthropic_claude_sonnet.__name__,
+                marks=pytest.mark.anthropic,
+            ),
+            pytest.param(
+                credentials_gemini_flash_exp.__name__,
+                marks=pytest.mark.gemini,
+            ),
+        ],
+        indirect=True,
+    )
     @pytest.mark.asyncio
-    async def test_browser_use_tool(self, browser_use_tool: BrowserUseTool) -> None:
+    async def test_browser_use_tool(self, credentials_from_test_param: Credentials) -> None:
+        browser_use_tool = BrowserUseTool(llm_config=credentials_from_test_param.llm_config)
         result = await browser_use_tool(
             task="Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment."
         )
         assert isinstance(result, BrowserUseResult)
         assert len(result.extracted_content) > 0
+
+    @pytest.fixture()
+    def browser_use_tool(self, credentials_gpt_4o_mini: Credentials) -> BrowserUseTool:
+        return BrowserUseTool(llm_config=credentials_gpt_4o_mini.llm_config)
 
     @pytest.mark.openai
     def test_end2end(self, browser_use_tool: BrowserUseTool, credentials_gpt_4o: Credentials) -> None:

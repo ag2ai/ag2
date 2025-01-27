@@ -12,6 +12,8 @@ from ... import Depends, Tool
 with optional_import_block():
     from browser_use import Agent
     from browser_use.browser.browser import Browser, BrowserConfig
+    from langchain_anthropic import ChatAnthropic
+    from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_openai import ChatOpenAI
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
@@ -81,19 +83,14 @@ class BrowserUseTool(Tool):
         if "generate_gif" not in agent_kwargs:
             agent_kwargs["generate_gif"] = False
 
-        try:
-            model: str = llm_config["config_list"][0]["model"]  # type: ignore[index]
-            api_key: str = llm_config["config_list"][0]["api_key"]  # type: ignore[index]
-        except (KeyError, TypeError):
-            raise ValueError("llm_config must be a valid config dictionary.")
-
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
-            api_key: Annotated[str, Depends(on(api_key))],
+            llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
             browser: Annotated[Browser, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
         ) -> BrowserUseResult:
-            agent = Agent(task=task, llm=ChatOpenAI(model=model, api_key=api_key), browser=browser, **agent_kwargs)
+            llm = BrowserUseTool._get_llm(llm_config)
+            agent = Agent(task=task, llm=llm, browser=browser, **agent_kwargs)
             result = await agent.run()
 
             return BrowserUseResult(
@@ -106,3 +103,28 @@ class BrowserUseTool(Tool):
             description="Use the browser to perform a task.",
             func_or_tool=browser_use,
         )
+
+    @staticmethod
+    def _get_llm(  # type: ignore[no-any-unimported]
+        llm_config: dict[str, Any],
+    ) -> Any:
+        if "config_list" not in llm_config:
+            if "model" in llm_config:
+                return ChatOpenAI(model=llm_config["model"])
+            raise ValueError("llm_config must be a valid config dictionary.")
+
+        try:
+            model = llm_config["config_list"][0]["model"]
+            api_type = llm_config["config_list"][0].get("api_type", "openai")
+            api_key = llm_config["config_list"][0]["api_key"]
+        except (KeyError, TypeError):
+            raise ValueError("llm_config must be a valid config dictionary.")
+
+        if api_type == "openai":
+            return ChatOpenAI(model=model, api_key=api_key)
+        elif api_type == "anthropic":
+            return ChatAnthropic(model=model, api_key=api_key)
+        elif api_type == "google":
+            return ChatGoogleGenerativeAI(model=model, api_key=api_key)
+        else:
+            raise ValueError(f"Unknown language model type: {api_type}")

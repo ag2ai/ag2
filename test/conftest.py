@@ -296,6 +296,13 @@ def credentials_gemini_pro() -> Credentials:
 
 
 @pytest.fixture
+def credentials_gemini_flash_exp() -> Credentials:
+    return get_llm_credentials(
+        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash"]}
+    )
+
+
+@pytest.fixture
 def credentials_anthropic_claude_sonnet() -> Credentials:
     return get_llm_credentials(
         "ANTHROPIC_API_KEY",
