@@ -14,6 +14,7 @@ from fast_depends import inject
 from fast_depends.dependencies import model
 
 from ..agentchat import Agent
+from ..doc_utils import export_module
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -28,6 +29,7 @@ __all__ = [
 ]
 
 
+@export_module("autogen.tools")
 class BaseContext(ABC):
     """Base class for context classes.
 
@@ -38,6 +40,7 @@ class BaseContext(ABC):
     pass
 
 
+@export_module("autogen.tools")
 class ChatContext(BaseContext):
     """ChatContext class that extends BaseContext.
 
@@ -72,6 +75,7 @@ class ChatContext(BaseContext):
         return self._agent.last_message()
 
 
+@export_module("autogen.tools")
 def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 

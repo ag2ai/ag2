@@ -6,10 +6,12 @@
 # SPDX-License-Identifier: MIT
 from typing import Callable, Literal, Optional, Union
 
+from ..doc_utils import export_module
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
 
+@export_module("autogen")
 class AssistantAgent(ConversableAgent):
     """(In preview) Assistant agent, designed to solve a task with LLM.
 
@@ -52,7 +54,7 @@ Reply "TERMINATE" in the end when everything is done.
         system_message (str): system message for the ChatCompletion inference.
             Please override this attribute if you want to reprogram the agent.
         llm_config (dict or False or None): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create)
             for available options.
         is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.

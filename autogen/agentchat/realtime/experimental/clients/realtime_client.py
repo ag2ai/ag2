@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from logging import Logger
 from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, Type, TypeVar, runtime_checkable
 
+from .....doc_utils import export_module
 from ..realtime_events import RealtimeEvent
 
 __all__ = ["RealtimeClientProtocol", "Role", "get_client", "register_realtime_client"]
@@ -15,6 +16,7 @@ Role = Literal["user", "assistant", "system"]
 
 
 @runtime_checkable
+@export_module("autogen.agentchat.realtime.experimental.clients")
 class RealtimeClientProtocol(Protocol):
     async def send_function_result(self, call_id: str, result: str) -> None:
         """Send the result of a function call to a Realtime API.
@@ -123,6 +125,7 @@ def register_realtime_client() -> Callable[[Type[T]], Type[T]]:
     return decorator
 
 
+@export_module("autogen.agentchat.realtime.experimental.clients")
 def get_client(llm_config: dict[str, Any], logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
     """Get a registered Realtime API client.
 

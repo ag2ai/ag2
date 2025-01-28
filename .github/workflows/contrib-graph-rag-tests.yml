@@ -95,7 +95,7 @@ jobs:
           uv pip install --system pytest
       - name: Install Neo4j and Llama-index when on linux
         run: |
-          uv pip install --system -e .[neo4j_graph_rag]
+          uv pip install --system -e .[neo4j]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -114,3 +114,47 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+
+  # Test-Neo4j-Llmaindex-Ubuntu:
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       python-version: ["3.9", "3.10", "3.13"]
+  #   services:
+  #     neo4j:
+  #       image: neo4j:latest
+  #       ports:
+  #         - 7687:7687
+  #         - 7474:7474
+  #       env:
+  #         NEO4J_AUTH: neo4j/password
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: astral-sh/setup-uv@v5
+  #       with:
+  #         version: "latest"
+  #     - name: Set up Python ${{ matrix.python-version }}
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #     - name: Install Neo4j and Llama-index when on linux
+  #       run: |
+  #         uv pip install --system -e .[neo4j,test]
+  #     - name: Set AUTOGEN_USE_DOCKER based on OS
+  #       shell: bash
+  #       run: |
+  #         echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
+  #     - name: Coverage
+  #       env:
+  #         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  #         AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+  #         AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+  #         OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+  #       run: |
+  #         bash scripts/test.sh -m "neo4j"
+  #     - name: Upload coverage to Codecov
+  #       uses: codecov/codecov-action@v3
+  #       with:
+  #         file: ./coverage.xml
+  #         flags: unittests

@@ -36,7 +36,7 @@ def neo4j_query_engine_with_json():
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
-        host="bolt://172.17.0.3",  # Change
+        host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database
     )
@@ -85,7 +85,7 @@ def neo4j_query_engine():
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
-        host="bolt://172.17.0.3",  # Change
+        host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database
         entities=entities,  # possible entities
@@ -106,7 +106,7 @@ def neo4j_query_engine_auto():
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",
         password="password",
-        host="bolt://172.17.0.3",
+        host="bolt://127.0.0.1",
         port=7687,
         database="neo4j",
     )
@@ -115,6 +115,7 @@ def neo4j_query_engine_auto():
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
@@ -133,6 +134,7 @@ def test_neo4j_query_engine(neo4j_query_engine):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
@@ -156,6 +158,7 @@ def test_neo4j_add_records(neo4j_query_engine):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
@@ -171,6 +174,7 @@ def test_neo4j_auto(neo4j_query_engine_auto):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,

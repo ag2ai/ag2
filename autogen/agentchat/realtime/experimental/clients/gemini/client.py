@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
+from ......doc_utils import export_module
 from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
 from ..realtime_client import Role, register_realtime_client
 
@@ -28,6 +29,7 @@ API_VERSION = "v1alpha"
 
 
 @register_realtime_client()
+@export_module("autogen.agentchat.realtime.experimental.clients")
 class GeminiRealtimeClient:
     """(Experimental) Client for Gemini Realtime API."""
 

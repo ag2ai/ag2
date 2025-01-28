@@ -5,6 +5,7 @@
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
+from ..doc_utils import export_module
 from ..tools.function_utils import get_function_schema
 from .dependency_injection import ChatContext, get_context_params, inject_params
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 __all__ = ["Tool"]
 
 
+@export_module("autogen.tools")
 class Tool:
     """A class representing a Tool that can be used by an agent for various tasks.
 

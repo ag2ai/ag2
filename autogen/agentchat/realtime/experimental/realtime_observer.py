@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Optional
 
 from anyio import Event
 
+from ....doc_utils import export_module
 from .clients.realtime_client import RealtimeClientProtocol
 from .realtime_events import RealtimeEvent
 
@@ -19,6 +20,7 @@ __all__ = ["RealtimeObserver"]
 global_logger = getLogger(__name__)
 
 
+@export_module("autogen.agentchat.realtime.experimental")
 class RealtimeObserver(ABC):
     """Observer for the OpenAI Realtime API."""
 

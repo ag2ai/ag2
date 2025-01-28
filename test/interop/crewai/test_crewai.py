@@ -20,6 +20,7 @@ else:
 
 
 # skip if python version is not in [3.10, 3.11, 3.12]
+@pytest.mark.interop
 @pytest.mark.skipif(
     sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
 )
@@ -91,6 +92,7 @@ class TestCrewAIInteroperability:
         assert CrewAIInteroperability.get_unsupported_reason() is None
 
 
+@pytest.mark.interop
 @pytest.mark.skipif(
     sys.version_info >= (3, 10) or sys.version_info < (3, 13), reason="Crew AI Interoperability is supported"
 )

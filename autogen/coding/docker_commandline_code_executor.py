@@ -20,6 +20,7 @@ import docker
 from docker.errors import ImageNotFound
 
 from ..code_utils import TIMEOUT_MSG, _cmd
+from ..doc_utils import export_module
 from .base import CodeBlock, CodeExecutor, CodeExtractor, CommandLineCodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
 from .utils import _get_file_name_from_content, silence_pip
@@ -44,6 +45,7 @@ def _wait_for_ready(container: Any, timeout: int = 60, stop_time: float = 0.1) -
 __all__ = ("DockerCommandLineCodeExecutor",)
 
 
+@export_module("autogen.coding")
 class DockerCommandLineCodeExecutor(CodeExecutor):
     DEFAULT_EXECUTION_POLICY: ClassVar[dict[str, bool]] = {
         "bash": True,

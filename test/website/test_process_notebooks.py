@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-import sys
 import tempfile
 import textwrap
 from collections.abc import Generator
@@ -12,9 +11,7 @@ from typing import Optional, Union
 
 import pytest
 
-# Add the ../../website directory to sys.path
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
-from process_notebooks import (
+from autogen._website.process_notebooks import (
     add_authors_and_social_img_to_blog_posts,
     add_front_matter_to_metadata_mdx,
     cleanup_tmp_dirs_if_no_metadata,
@@ -315,7 +312,6 @@ class TestUpdateNavigation:
                     "group": "Installation",
                     "pages": [
                         "docs/installation/Installation",
-                        "docs/installation/Docker",
                         "docs/installation/Optional-Dependencies",
                     ],
                 },

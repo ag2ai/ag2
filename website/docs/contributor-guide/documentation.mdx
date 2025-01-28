@@ -8,19 +8,30 @@ See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-t
 
 ## Build documentation locally
 
-1. To build and test documentation locally, first install [Node.js](https://nodejs.org/en/download/). For example,
+Follow these steps to build and serve the documentation on your local machine:
 
-```bash
-nvm install --lts
-```
+1. Install Node.js:
+    - Download and install [Node.js](https://nodejs.org/en/download/)
 
-2. You also need to install quarto. Please click on the `Pre-release` tab from [this website](https://quarto.org/docs/download/) to download the latest version of `quarto` and install it. Ensure that the `quarto` version is `1.5.23` or higher.
+2.  Install Quarto:
+    - Visit the Quarto download [page](https://quarto.org/docs/download/).
+    - Click on the Pre-release tab and download the latest version of Quarto.
+    - Ensure you install version `1.5.23` or higher.
 
-3. Finally, run the following commands to build and serve the documentation:
+3. Install Required Python Packages:
+    - From the project root directory, install the necessary Python packages by running:
 
-```console
-./scripts/docs_serve.sh
-```
+        ```console
+        pip install -e ".[docs]"
+        ```
+
+4. Build and Serve the Documentation:
+
+    - To build and serve the documentation locally, run the following command from the project root directory:
+
+        ```console
+        ./scripts/docs_serve.sh
+        ```
 
 The last command starts a local development server and opens up a browser window.
 Most changes are reflected live without having to restart the server.
@@ -31,9 +42,10 @@ To build and test documentation using devcontainer, open the project using [VSCo
 
 This will open the project in a devcontainer with all the required dependencies installed.
 
-Open a terminal and run the following command to build and serve the documentation:
+Open a terminal and run the following commands to build and serve the documentation:
 
 ```console
+pip install -e ".[docs]"
 ./scripts/docs_serve.sh
 ```
 

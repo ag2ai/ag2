@@ -173,9 +173,20 @@ ${indent(s)}
 %>
 
 <%def name="function(func)" buffered="True">
+
+<%
+    metadata = "" if func.cls else f"""
+---
+sidebarTitle: {func.name}
+title: {func.module.name}.{func.name}
+---
+"""
+%>
+
+${metadata}
+
 <code class="doc-symbol doc-symbol-heading doc-symbol-${func.cls and 'method' or 'function'}"></code>
 ${'####'} ${func.name}
-<a href="#${func.module.name}.${func.cls.name if func.cls else ''}.${func.name}" class="headerlink" title="Permanent link"></a>
 
 <%
         returns = show_type_annotations and func.return_annotation() or ''
@@ -210,9 +221,7 @@ ${format_returns_table(returns, cleaned_docstring)}
 
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
 ${'####'} ${var.name}
-<a href="#${var.module.name}.${var.cls.name if var.cls else ''}.${var.name}" class="headerlink" title="Permanent link"></a>
-
-
+<br />
 <%
         annot = show_type_annotations and var.type_annotation() or ''
         if annot:
@@ -226,11 +235,14 @@ ${cleaned_docstring | deflist}
 </%def>
 
 <%def name="class_(cls)" buffered="True">
-    <h2 id="${cls.module.name}.${cls.name}" class="doc doc-heading">
-        <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
-        <span class="doc doc-object-name doc-class-name">${cls.name}</span>
-        <a href="#${cls.module.name}.${cls.name}" class="headerlink" title="Permanent link"></a>
-    </h2>
+---
+sidebarTitle: ${cls.name}
+title: ${cls.module.name}.${cls.name}
+---
+<h2 id="${cls.module.name}.${cls.name}" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
+    <span class="doc doc-object-name doc-class-name">${cls.name}</span>
+</h2>
 
 <%
    params = cls.params(annotate=show_type_annotations)
@@ -239,10 +251,12 @@ ${cleaned_docstring | deflist}
        signature = f"{cls.name}(\n    {formatted_params}\n)"
    else:
        signature = f"{cls.name}({', '.join(params)})"
+
    signature = signature.replace('{', '\{').replace("<", "&lt;")
 
    cleaned_docstring = cls.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
+
 ```python
 ${signature}
 ```
@@ -299,18 +313,23 @@ ${function(m)}
   submodules = module.submodules()
   heading = 'Namespace' if module.is_namespace else 'Module'
   symbol_name = module.name.split('.')[-1]
+
+  # filter out if module name is not the same
+  classes = [c for c in classes if c.__module__ != "autogen"]
 %>
 
+% if submodules:
+**** SUBMODULE_START ****
 ---
-sidebarTitle: ${symbol_name}
+sidebarTitle: overview
 title: ${module.name}
 ---
 
-% if submodules:
 ${h2('Sub-modules')}
     % for m in submodules:
 * ${m.name}
     % endfor
+**** SUBMODULE_END ****
 % endif
 
 % if variables:
@@ -324,14 +343,18 @@ ${variable(v)}
 % if functions:
 ${h2('Functions')}
     % for f in functions:
+**** SYMBOL_START ****
 ${function(f)}
+**** SYMBOL_END ****
 
     % endfor
 % endif
 
 % if classes:
     % for c in classes:
+**** SYMBOL_START ****
 ${class_(c)}
+**** SYMBOL_END ****
 
     % endfor
 % endif
