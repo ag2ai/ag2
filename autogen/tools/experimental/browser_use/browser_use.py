@@ -6,6 +6,7 @@ from typing import Annotated, Any, Callable, Optional, TypeVar
 
 from pydantic import BaseModel
 
+from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ... import Depends, Tool
 
@@ -19,8 +20,7 @@ with optional_import_block():
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
 
 
-# todo: add export_module decorator
-# @export_module("autogen.tools.experimental.browser_use")
+@export_module("autogen.tools.experimental.browser_use")
 class BrowserUseResult(BaseModel):
     """The result of using the browser to perform a task.
 
@@ -44,8 +44,7 @@ def on(x: T) -> Callable[[], T]:
 
 
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
-# todo: add export_module decorator
-# @export_module("autogen.tools.experimental")
+@export_module("autogen.tools.experimental")
 class BrowserUseTool(Tool):
     """BrowserUseTool is a tool that uses the browser to perform a task."""
 
