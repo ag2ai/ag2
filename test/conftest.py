@@ -10,6 +10,7 @@ import inspect
 import os
 import re
 import time
+from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
@@ -491,5 +492,12 @@ def suppress_gemini_resource_exhausted(func: T) -> T:
         from google.api_core.exceptions import ResourceExhausted
 
         return suppress(ResourceExhausted, retries=2)(func)
+
+    return func
+
+
+def suppress_json_decoder_error(func: T) -> T:
+    with optional_import_block():
+        return suppress(JSONDecodeError)(func)
 
     return func

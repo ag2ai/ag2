@@ -23,7 +23,12 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
+from ..conftest import (
+    Credentials,
+    credentials_all_llms,
+    suppress_gemini_resource_exhausted,
+    suppress_json_decoder_error,
+)
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -1612,6 +1617,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
 
 
 @pytest.mark.deepseek
+@suppress_json_decoder_error
 def test_conversable_agent_with_deepseek_reasoner(
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
