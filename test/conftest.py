@@ -298,16 +298,16 @@ def credentials() -> Credentials:
 
 
 @pytest.fixture
-def credentials_gemini_pro() -> Credentials:
+def credentials_gemini_flash() -> Credentials:
     return get_llm_credentials(
-        "GEMINI_API_KEY", model="gemini-pro", api_type="google", filter_dict={"tags": ["gemini-pro"]}
+        "GEMINI_API_KEY", model="gemini-1.5-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
     )
 
 
 @pytest.fixture
 def credentials_gemini_flash_exp() -> Credentials:
     return get_llm_credentials(
-        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash"]}
+        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash-exp"]}
     )
 
 
@@ -384,7 +384,7 @@ credentials_all_llms = [
         marks=pytest.mark.openai,
     ),
     pytest.param(
-        credentials_gemini_pro.__name__,
+        credentials_gemini_flash.__name__,
         marks=pytest.mark.gemini,
     ),
     pytest.param(

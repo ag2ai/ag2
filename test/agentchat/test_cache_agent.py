@@ -83,8 +83,8 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
 @suppress_gemini_resource_exhausted
 @pytest.mark.redis
 @skip_on_missing_imports(["openai", "redis"], "redis")
-def test_redis_cache_gemini(credentials_gemini_pro: Credentials):
-    _test_redis_cache(credentials_gemini_pro)
+def test_redis_cache_gemini(credentials_gemini_flash: Credentials):
+    _test_redis_cache(credentials_gemini_flash)
 
 
 @pytest.mark.skip(reason="Currently not working")
