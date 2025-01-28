@@ -14,8 +14,8 @@ from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 
 from autogen.agentchat.contrib.swarm_agent import SwarmAgent
-from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
-from autogen.agentchat.realtime_agent.realtime_swarm import register_swarm
+from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
+from autogen.agentchat.realtime.experimental.realtime_swarm import register_swarm
 from autogen.tools.dependency_injection import Field as AG2Field
 
 from ...conftest import Credentials

@@ -9,8 +9,8 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from anyio import lowlevel
 from asyncer import create_task_group
 
-from ...doc_utils import export_module
-from ...tools import Tool
+from ....doc_utils import export_module
+from ....tools import Tool
 from .clients.realtime_client import RealtimeClientProtocol, get_client
 from .function_observer import FunctionObserver
 from .realtime_observer import RealtimeObserver
@@ -28,7 +28,7 @@ class RealtimeAgentCallbacks:
     on_observers_ready: Callable[[], Any] = lambda: lowlevel.checkpoint()
 
 
-@export_module("autogen.agentchat.realtime_agent")
+@export_module("autogen.agentchat.realtime.experimental")
 class RealtimeAgent:
     """(Experimental) Agent for interacting with the Realtime Clients."""
 

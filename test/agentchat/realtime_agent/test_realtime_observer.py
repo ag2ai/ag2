@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 import pytest
 from asyncer import create_task_group
 
-from autogen.agentchat.realtime_agent import RealtimeObserver
-from autogen.agentchat.realtime_agent.realtime_events import RealtimeEvent
+from autogen.agentchat.realtime.experimental import RealtimeObserver
+from autogen.agentchat.realtime.experimental.realtime_events import RealtimeEvent
 
 
 class MyObserver(RealtimeObserver):

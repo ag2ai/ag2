@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 import pytest
 from anyio import move_on_after
 
-from autogen.agentchat.realtime_agent.clients import GeminiRealtimeClient, RealtimeClientProtocol
-from autogen.agentchat.realtime_agent.realtime_events import AudioDelta, SessionCreated
+from autogen.agentchat.realtime.experimental.clients import GeminiRealtimeClient, RealtimeClientProtocol
+from autogen.agentchat.realtime.experimental.realtime_events import AudioDelta, SessionCreated
 
 from ....conftest import Credentials, suppress_gemini_resource_exhausted
 
