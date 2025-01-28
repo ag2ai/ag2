@@ -10,15 +10,12 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
 import anyio
 from asyncer import asyncify, create_task_group, syncify
 
+from autogen.agentchat.conversable_agent import ConversableAgent
+
 from ... import SwarmAgent
 from ...cache.abstract_cache_base import AbstractCache
 from ...code_utils import (
     content_str,
-)
-from ...io.base import IOStream
-from ...messages.agent_messages import (
-    ClearConversableAgentHistoryMessage,
-    ClearConversableAgentHistoryWarningMessage,
 )
 from ..agent import Agent, LLMAgent
 from ..chat import ChatResult
@@ -212,7 +209,7 @@ class SwarmableAgent(LLMAgent):
 
     def initiate_chat(
         self,
-        recipient: "SwarmableAgent",
+        recipient: ConversableAgent,
         message: Union[dict[str, Any], str],
         clear_history: bool = True,
         silent: Optional[bool] = False,
@@ -223,18 +220,16 @@ class SwarmableAgent(LLMAgent):
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
-        for agent in [self, recipient]:
-            agent._raise_exception_on_async_reply_functions()
-            agent.previous_cache = agent.client_cache
-            agent.client_cache = cache  # type: ignore[assignment]
+        recipient._raise_exception_on_async_reply_functions()
+        recipient.previous_cache = recipient.client_cache  # type: ignore[attr-defined]
+        recipient.client_cache = cache  # type: ignore[attr-defined, assignment]
 
         self._prepare_chat(recipient, clear_history)
         self.send(message, recipient, silent=silent)
         summary = self._last_msg_as_summary(self, recipient, summary_args)
 
-        for agent in [self, recipient]:
-            agent.client_cache = agent.previous_cache
-            agent.previous_cache = None
+        recipient.client_cache = recipient.previous_cache  # type: ignore[attr-defined]
+        recipient.previous_cache = None  # type: ignore[attr-defined]
 
         chat_result = ChatResult(
             chat_history=self.chat_messages[recipient],
@@ -268,8 +263,6 @@ class SwarmableAgent(LLMAgent):
     ) -> None:
         raise NotImplementedError
 
-    ################################################
-
     @property
     def chat_messages(self) -> dict[Agent, list[dict[str, Any]]]:
         """A dictionary of conversations from agent to list of messages."""
@@ -292,16 +285,16 @@ class SwarmableAgent(LLMAgent):
 
     def _prepare_chat(
         self,
-        recipient: "SwarmableAgent",
+        recipient: ConversableAgent,
         clear_history: bool,
         prepare_recipient: bool = True,
         reply_at_receive: bool = True,
     ) -> None:
         self.reply_at_receive[recipient] = reply_at_receive
         if clear_history:
-            self.clear_history(recipient)
+            self._oai_messages[recipient].clear()
         if prepare_recipient:
-            recipient._prepare_chat(self, clear_history, False, reply_at_receive)
+            recipient._prepare_chat(self, clear_history, False, reply_at_receive)  # type: ignore[arg-type]
 
     def _raise_exception_on_async_reply_functions(self) -> None:
         pass
@@ -315,40 +308,12 @@ class SwarmableAgent(LLMAgent):
             if isinstance(content, str):
                 summary = content.replace("TERMINATE", "")
             elif isinstance(content, list):
-                # Remove the `TERMINATE` word in the content list.
                 summary = "\n".join(
                     x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
                 )
         except (IndexError, AttributeError) as e:
             warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
         return summary
-
-    def clear_history(self, recipient: Optional[Agent] = None, nr_messages_to_preserve: Optional[int] = None) -> None:
-        iostream = IOStream.get_default()
-        if recipient is None:
-            no_messages_preserved = 0
-            if nr_messages_to_preserve:
-                for key in self._oai_messages:
-                    nr_messages_to_preserve_internal = nr_messages_to_preserve
-                    # if breaking history between function call and function response, save function call message
-                    # additionally, otherwise openai will return error
-                    first_msg_to_save = self._oai_messages[key][-nr_messages_to_preserve_internal]
-                    if "tool_responses" in first_msg_to_save:
-                        nr_messages_to_preserve_internal += 1
-                        # clear_conversable_agent_history.print_preserving_message(iostream.print)
-                        no_messages_preserved += 1
-                    # Remove messages from history except last `nr_messages_to_preserve` messages.
-                    self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
-                iostream.send(
-                    ClearConversableAgentHistoryMessage(agent=self, no_messages_preserved=no_messages_preserved)
-                )
-            else:
-                self._oai_messages.clear()
-        else:
-            self._oai_messages[recipient].clear()
-            # clear_conversable_agent_history.print_warning(iostream.print)
-            if nr_messages_to_preserve:
-                iostream.send(ClearConversableAgentHistoryWarningMessage(recipient=self))
 
 
 class SwarmableRealtimeAgent(SwarmableAgent):
