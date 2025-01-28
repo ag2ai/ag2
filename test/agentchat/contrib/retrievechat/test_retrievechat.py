@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,27 +14,24 @@ from autogen import AssistantAgent
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
     RetrieveUserProxyAgent,
 )
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ....conftest import Credentials, reason
 
 with optional_import_block() as result:
     import chromadb
-    import openai  # noqa: F401
-    from IPython import get_ipython  # noqa: F401
     from chromadb.utils import embedding_functions as ef
 
-
-skip = not result.is_successful
 
 reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip,
+    sys.platform in ["darwin", "win32"],
     reason=reason,
 )
+@skip_on_missing_imports(["chromadb", "IPython", "openai"], "retrievechat")
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)  # deprecated in v0.2
@@ -75,9 +72,10 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip,
+    sys.platform in ["darwin", "win32"],
     reason=reason,
 )
+@skip_on_missing_imports(["chromadb", "IPython", "openai"], "retrievechat")
 def test_retrieve_config():
     # test warning message when no docs_path is provided
     ragproxyagent = RetrieveUserProxyAgent(

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -12,7 +12,7 @@ from jinja2 import Template
 
 
 def get_optional_dependencies(pyproject_path: str) -> dict:
-    with open(pyproject_path, "r") as f:
+    with open(pyproject_path) as f:
         pyproject_data = toml.load(f)
 
     optional_dependencies = pyproject_data.get("project", {}).get("optional-dependencies", {})
@@ -22,7 +22,7 @@ def get_optional_dependencies(pyproject_path: str) -> dict:
 # Example usage
 pyproject_path = Path(__file__).parent.joinpath("../pyproject.toml")
 optional_dependencies = get_optional_dependencies(pyproject_path)
-optional_groups = [group for group in optional_dependencies.keys()]
+optional_groups = [group for group in optional_dependencies]
 
 # for group, dependencies in optional_dependencies.items():
 #     print(f"Group: {group}")

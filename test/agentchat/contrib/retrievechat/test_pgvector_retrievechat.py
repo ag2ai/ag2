@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,32 +9,25 @@
 import os
 
 import pytest
-from sentence_transformers import SentenceTransformer
 
 from autogen import AssistantAgent
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
     RetrieveUserProxyAgent,
 )
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ....conftest import Credentials
 
 with optional_import_block() as result:
-    import chromadb  # noqa: F401
     import pgvector  # noqa: F401
-    from IPython import get_ipython  # noqa: F401
+    from sentence_transformers import SentenceTransformer
 
-
-skip = not result.is_successful
 
 test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip,
-    reason="dependency is not installed OR requested to skip",
-)
+@skip_on_missing_imports(["chromadb", "pgvector", "IPython", "sentence_transformers"], "retrievechat-pgvector")
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     conversations = {}
 

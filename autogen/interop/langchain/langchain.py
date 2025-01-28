@@ -1,10 +1,11 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
 from typing import Any, Optional
 
+from ...doc_utils import export_module
 from ...import_utils import optional_import_block
 from ...tools import Tool
 from ..registry import register_interoperable_class
@@ -13,6 +14,7 @@ __all__ = ["LangChainInteroperability"]
 
 
 @register_interoperable_class("langchain")
+@export_module("autogen.interop")
 class LangChainInteroperability:
     """A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,7 +7,8 @@
 import json
 import sqlite3
 import uuid
-from typing import Any, Generator, Optional
+from collections.abc import Generator
+from typing import Any, Optional
 
 import pytest
 from _pytest.mark import ParameterSet
@@ -15,7 +16,7 @@ from _pytest.mark import ParameterSet
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
@@ -174,6 +175,7 @@ def _test_two_agents_logging(
 
 
 @pytest.mark.parametrize("credentials_fixture", credentials_all_llms)
+@suppress_gemini_resource_exhausted
 def test_two_agents_logging(
     credentials_fixture: ParameterSet,
     request: pytest.FixtureRequest,
@@ -266,6 +268,7 @@ def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials,
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 def test_groupchat_logging(
     credentials_from_test_param: Credentials,
     db_connection: Generator[Optional[sqlite3.Connection], Any, None],

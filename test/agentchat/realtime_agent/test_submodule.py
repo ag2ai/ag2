@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,14 +7,14 @@
 
 
 def test_import() -> None:
-    from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver
+    from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver
 
     assert RealtimeAgent is not None
     assert RealtimeObserver is not None
 
 
 def test_import_clients() -> None:
-    from autogen.agentchat.realtime_agent.clients import (
+    from autogen.agentchat.realtime.experimental.clients import (
         GeminiRealtimeClient,
         OpenAIRealtimeClient,
         RealtimeClientProtocol,

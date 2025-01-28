@@ -1,14 +1,15 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
 import sys
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager, suppress
 from functools import wraps
 from logging import getLogger
-from typing import Any, Callable, Generator, Generic, Iterable, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Generic, Optional, Type, TypeVar, Union
 
 __all__ = ["optional_import_block", "patch_object", "require_optional_import", "skip_on_missing_imports"]
 
@@ -123,7 +124,6 @@ class PatchObject(ABC, Generic[T]):
 
     @classmethod
     def create(cls, o: T, *, missing_modules: Iterable[str], dep_target: str) -> Optional["PatchObject[T]"]:
-        # print(f"{cls._registry=}")
         for subclass in cls._registry:
             if subclass.accept(o):
                 return subclass(o, missing_modules, dep_target)
@@ -229,17 +229,13 @@ class PatchClass(PatchObject[Type[Any]]):
             patched = patch_object(
                 member, missing_modules=self.missing_modules, dep_target=self.dep_target, fail_if_not_patchable=False
             )
-            print(f"Patching {name=}, {member=}, {patched=}")
-            try:
+            with suppress(AttributeError):
                 setattr(self.o, name, patched)
-            except AttributeError:
-                pass
 
         return self.o
 
 
 def patch_object(o: T, *, missing_modules: Iterable[str], dep_target: str, fail_if_not_patchable: bool = True) -> T:
-    # print(f"Patching object {o=}")
     patcher = PatchObject.create(o, missing_modules=missing_modules, dep_target=dep_target)
     if fail_if_not_patchable and patcher is None:
         raise ValueError(f"Cannot patch object of type {type(o)}")
@@ -268,27 +264,34 @@ def require_optional_import(modules: Union[str, Iterable[str]], dep_target: str)
     return decorator
 
 
-def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Optional[str] = None) -> Callable[[T], T]:
     """Decorator to skip a test if an optional module is missing
 
     Args:
         module: Module name
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
-
     missing_modules = get_missing_imports(modules)
+    # Add pytest.mark.dep_target decorator
+    # For example, if dep_target is "jupyter-executor" add pytest.mark.jupyter_executor
+    mark_name = dep_target.replace("-", "_") if dep_target else "openai"
 
     if not missing_modules:
 
         def decorator(o: T) -> T:
-            return o
+            import pytest
+
+            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            return pytest_mark_o  # type: ignore[no-any-return]
     else:
 
         def decorator(o: T) -> T:
             import pytest
 
-            return pytest.mark.skip(  # type: ignore[return-value]
-                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
-            )(o)
+            install_target = "" if dep_target is None else f"[{dep_target}]"
+            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            return pytest.mark.skip(  # type: ignore[return-value,no-any-return]
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2{install_target}'"
+            )(pytest_mark_o)
 
     return decorator

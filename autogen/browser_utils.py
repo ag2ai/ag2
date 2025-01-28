@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,6 +9,7 @@ import mimetypes
 import os
 import re
 import uuid
+from contextlib import suppress
 from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
@@ -190,7 +191,7 @@ class SimpleTextBrowser:
                 for dl in page["deepLinks"]:
                     idx += 1
                     web_snippets.append(
-                        f"{idx}. [{dl['name']}]({dl['url']})\n{dl['snippet'] if 'snippet' in dl else ''}"  # type: ignore[index]
+                        f"{idx}. [{dl['name']}]({dl['url']})\n{dl.get('snippet', '')}"  # type: ignore[index]
                     )
 
         news_snippets = list()
@@ -278,10 +279,8 @@ class SimpleTextBrowser:
                 elif self.downloads_folder is not None:
                     # Try producing a safe filename
                     fname = None
-                    try:
+                    with suppress(NameError):
                         fname = pathvalidate.sanitize_filename(os.path.basename(urlparse(url).path)).strip()
-                    except NameError:
-                        pass
 
                     # No suitable name, so make one
                     if fname is None:

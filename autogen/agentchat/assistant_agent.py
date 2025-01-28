@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,10 +6,12 @@
 # SPDX-License-Identifier: MIT
 from typing import Callable, Literal, Optional, Union
 
+from ..doc_utils import export_module
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
 
+@export_module("autogen")
 class AssistantAgent(ConversableAgent):
     """(In preview) Assistant agent, designed to solve a task with LLM.
 
@@ -78,6 +80,5 @@ Reply "TERMINATE" in the end when everything is done.
 
         # Update the provided description if None, and we are using the default system_message,
         # then use the default description.
-        if description is None:
-            if system_message == self.DEFAULT_SYSTEM_MESSAGE:
-                self.description = self.DEFAULT_DESCRIPTION
+        if description is None and system_message == self.DEFAULT_SYSTEM_MESSAGE:
+            self.description = self.DEFAULT_DESCRIPTION

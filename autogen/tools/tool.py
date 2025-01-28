@@ -1,10 +1,11 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
+from ..doc_utils import export_module
 from ..tools.function_utils import get_function_schema
 from .dependency_injection import ChatContext, get_context_params, inject_params
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 __all__ = ["Tool"]
 
 
+@export_module("autogen.tools")
 class Tool:
     """A class representing a Tool that can be used by an agent for various tasks.
 
@@ -22,8 +24,8 @@ class Tool:
 
     Attributes:
         name (str): The name of the tool.
-        description (str): A brief description of the tool's purpose or function.
-        func (Callable[..., Any]): The function to be executed when the tool is called.
+        description (str): The description of the tool.
+        func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
     """
 
     def __init__(
@@ -90,8 +92,7 @@ class Tool:
         agent.register_for_execution()(self)
 
     def register_tool(self, agent: "ConversableAgent") -> None:
-        """
-        Register a tool to be both proposed and executed by an agent.
+        """Register a tool to be both proposed and executed by an agent.
 
         Equivalent to calling both `register_for_llm` and `register_for_execution` with the same agent.
 

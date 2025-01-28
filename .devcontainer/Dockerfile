@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------------------------------------
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 # SPDX-License-Identifier: Apache-2.0
 # Contributions to this project, i.e., https://github.com/ag2ai/ag2, are licensed under the Apache License, Version 2.0 (Apache-2.0).
 

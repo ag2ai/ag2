@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,6 +10,7 @@ import builtins
 import io
 import json
 import logging
+import tempfile
 from types import SimpleNamespace
 from typing import Any, Optional
 from unittest import mock
@@ -20,6 +21,8 @@ import autogen
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflict, UndefinedNextAgent
+
+from ..conftest import Credentials
 
 
 def test_func_call_groupchat():
@@ -130,7 +133,7 @@ def _test_selection_method(method: str):
         messages=[],
         max_round=6,
         speaker_selection_method=method,
-        allow_repeat_speaker=False if method == "manual" else True,
+        allow_repeat_speaker=method != "manual",
     )
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 
@@ -1908,10 +1911,8 @@ def test_manager_resume_functions():
 
     # Tests termination message replacement with function
     def termination_func(x: str) -> str:
-        if "APPROVED" in x:
-            x = x.replace("APPROVED", "")
-        else:
-            x = x.replace("TERMINATE", "")
+        old = "APPROVED" if "APPROVED" in x else "TERMINATE"
+        x = x.replace(old, "")
         return x
 
     final_msg1 = "Product_Manager has created 3 new product ideas. APPROVED"
@@ -2179,6 +2180,51 @@ def test_manager_resume_message_assignment():
 
     # Compare agent_a's message state to previous messages (excludes last message)
     assert list(agent_a.chat_messages.values())[0] == prev_messages[:-1]
+
+
+@pytest.mark.deepseek
+def test_groupchat_with_deepseek_reasoner(
+    credentials_gpt_4o_mini: Credentials,
+    credentials_deepseek_reasoner: Credentials,
+) -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        user_proxy = autogen.UserProxyAgent(
+            "user_proxy",
+            human_input_mode="NEVER",
+            code_execution_config={"work_dir": tmp_dir, "use_docker": False},
+        )
+
+        supervisor = autogen.AssistantAgent(
+            "supervisor",
+            llm_config={
+                "config_list": credentials_deepseek_reasoner.config_list,
+            },
+        )
+
+        assistant = autogen.AssistantAgent(
+            "assistant",
+            llm_config={
+                "config_list": credentials_deepseek_reasoner.config_list,
+            },
+        )
+
+        groupchat = autogen.GroupChat(
+            agents=[user_proxy, supervisor, assistant],
+            messages=["A group chat"],
+            max_round=5,
+        )
+
+        manager = autogen.GroupChatManager(
+            groupchat=groupchat,
+            llm_config={
+                "config_list": credentials_gpt_4o_mini.config_list,
+            },
+        )
+
+        result = user_proxy.initiate_chat(
+            manager, message="""Give me some info about the stock market""", summary_method="reflection_with_llm"
+        )
+        assert isinstance(result.summary, str)
 
 
 if __name__ == "__main__":

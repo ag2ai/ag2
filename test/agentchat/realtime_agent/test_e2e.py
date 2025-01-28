@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -13,7 +13,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 
-from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
+from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
 from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace

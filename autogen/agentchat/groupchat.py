@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Literal, Optional, Union
 
 from ..code_utils import content_str
+from ..doc_utils import export_module
 from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNextAgent
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+@export_module("autogen")
 class GroupChat:
     """(In preview) A group chat class that contains the following data fields:
     - agents: a list of participating agents.
@@ -635,7 +637,7 @@ class GroupChat:
         if not self.select_speaker_auto_llm_config:
             return
 
-        config_format_is_list = "config_list" in self.select_speaker_auto_llm_config.keys()
+        config_format_is_list = "config_list" in self.select_speaker_auto_llm_config
         if config_format_is_list:
             for config in self.select_speaker_auto_llm_config["config_list"]:
                 self._register_client_from_config(agent, config)
@@ -1009,6 +1011,7 @@ class GroupChat:
         return mentions
 
 
+@export_module("autogen")
 class GroupChatManager(ConversableAgent):
     """(In preview) A chat manager agent that can manage a group chat of multiple agents."""
 
@@ -1500,13 +1503,12 @@ class GroupChatManager(ConversableAgent):
 
         # Check that all agents in the chat messages exist in the group chat
         for message in messages:
-            if message.get("name"):
-                if (
-                    not self._groupchat.agent_by_name(message["name"])
-                    and not message["name"] == self._groupchat.admin_name  # ignore group chat's name
-                    and not message["name"] == self.name  # ignore group chat manager's name
-                ):
-                    raise Exception(f"Agent name in message doesn't exist as agent in group chat: {message['name']}")
+            if message.get("name") and (
+                not self._groupchat.agent_by_name(message["name"])
+                and not message["name"] == self._groupchat.admin_name  # ignore group chat's name
+                and not message["name"] == self.name  # ignore group chat manager's name
+            ):
+                raise Exception(f"Agent name in message doesn't exist as agent in group chat: {message['name']}")
 
     def _process_resume_termination(
         self, remove_termination_string: Union[str, Callable[[str], str]], messages: list[dict]
@@ -1532,14 +1534,12 @@ class GroupChatManager(ConversableAgent):
         else:
             _remove_termination_string = remove_termination_string
 
-        if _remove_termination_string:
-            if messages[-1].get("content"):
-                messages[-1]["content"] = _remove_termination_string(messages[-1]["content"])
+        if _remove_termination_string and messages[-1].get("content"):
+            messages[-1]["content"] = _remove_termination_string(messages[-1]["content"])
 
         # Check if the last message meets termination (if it has one)
-        if self._is_termination_msg:
-            if self._is_termination_msg(last_message):
-                logger.warning("WARNING: Last message meets termination criteria and this may terminate the chat.")
+        if self._is_termination_msg and self._is_termination_msg(last_message):
+            logger.warning("WARNING: Last message meets termination criteria and this may terminate the chat.")
 
     def messages_from_string(self, message_string: str) -> list[dict]:
         """Reads the saved state of messages in Json format for resume and returns as a messages list

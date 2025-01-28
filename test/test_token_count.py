@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,14 +8,7 @@
 
 import pytest
 
-from autogen.import_utils import optional_import_block
-
-with optional_import_block() as result:
-    from PIL import Image  # noqa: F401
-
-img_util_imported = result.is_successful
-
-
+from autogen.import_utils import skip_on_missing_imports
 from autogen.token_count_utils import (
     _num_token_from_messages,
     count_token,
@@ -96,7 +89,7 @@ def test_num_token_from_messages(model: str, expected_count: int) -> None:
     assert _num_token_from_messages(messages=messages, model=model) == expected_count
 
 
-@pytest.mark.skipif(not img_util_imported, reason="img_utils not imported")
+@skip_on_missing_imports("PIL", "unknown")
 def test_num_tokens_from_gpt_image():
     # mock num_tokens_from_gpt_image function
     base64_encoded_image = (

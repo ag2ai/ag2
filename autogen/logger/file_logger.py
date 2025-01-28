@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
 
+from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
 from .logger_utils import get_current_ts, to_dict
 
@@ -48,6 +49,7 @@ def safe_serialize(obj: Any) -> str:
     return json.dumps(obj, default=default)
 
 
+@export_module("autogen.logger")
 class FileLogger(BaseLogger):
     def __init__(self, config: dict[str, Any]):
         self.config = config
@@ -92,11 +94,7 @@ class FileLogger(BaseLogger):
     ) -> None:
         """Log a chat completion."""
         thread_id = threading.get_ident()
-        source_name = None
-        if isinstance(source, str):
-            source_name = source
-        else:
-            source_name = source.name
+        source_name = source if isinstance(source, str) else source.name
         try:
             log_data = json.dumps(
                 {

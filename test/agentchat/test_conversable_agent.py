@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -1056,6 +1056,7 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 @pytest.mark.asyncio
 async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
@@ -1494,6 +1495,7 @@ def test_handle_carryover():
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 def test_conversable_agent_with_whitespaces_in_name_end2end(
     credentials_from_test_param: Credentials,
     request: pytest.FixtureRequest,
@@ -1584,6 +1586,7 @@ def test_context_variables():
 
 @pytest.mark.skip(reason="This test is failing. We need to investigate the issue.")
 @pytest.mark.gemini
+@suppress_gemini_resource_exhausted
 def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value(
     credentials_gemini_pro: Credentials,
 ) -> None:
@@ -1606,6 +1609,26 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
     user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
 
     mock.assert_called_once()
+
+
+@pytest.mark.deepseek
+def test_conversable_agent_with_deepseek_reasoner(
+    credentials_deepseek_reasoner: Credentials,
+) -> None:
+    agent = ConversableAgent(
+        name="agent",
+        llm_config=credentials_deepseek_reasoner.llm_config,
+    )
+
+    user_proxy = UserProxyAgent(
+        name="user_proxy_1",
+        human_input_mode="NEVER",
+    )
+
+    result = user_proxy.initiate_chat(
+        agent, message="Hello, how are you?", summary_method="reflection_with_llm", max_turns=2
+    )
+    assert isinstance(result.summary, str)
 
 
 if __name__ == "__main__":

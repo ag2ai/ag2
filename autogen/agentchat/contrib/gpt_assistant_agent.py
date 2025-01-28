@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -510,15 +510,9 @@ class GPTAssistantAgent(ConversableAgent):
         if llm_config is False:
             raise ValueError("llm_config=False is not supported for GPTAssistantAgent.")
 
-        if llm_config is None:
-            openai_client_cfg = {}
-        else:
-            openai_client_cfg = copy.deepcopy(llm_config)
+        openai_client_cfg = {} if llm_config is None else copy.deepcopy(llm_config)
 
-        if assistant_config is None:
-            openai_assistant_cfg = {}
-        else:
-            openai_assistant_cfg = copy.deepcopy(assistant_config)
+        openai_assistant_cfg = {} if assistant_config is None else copy.deepcopy(assistant_config)
 
         # Move the assistant related configurations to assistant_config
         # It's important to keep forward compatibility

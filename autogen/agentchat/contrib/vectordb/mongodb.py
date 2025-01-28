@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -321,7 +321,7 @@ class MongoDBAtlasVectorDB(VectorDB):
                     text_batch = []
                     metadata_batch = []
                     size = 0
-                i += 1
+                i += 1  # noqa: SIM113
             if text_batch:
                 result_ids.update(self._insert_batch(collection, text_batch, metadata_batch, id_batch))  # type: ignore
                 input_ids.update(id_batch)
@@ -329,10 +329,8 @@ class MongoDBAtlasVectorDB(VectorDB):
             if result_ids != input_ids:
                 logger.warning(
                     "Possible data corruption. "
-                    "input_ids not in result_ids: {in_diff}.\n"
-                    "result_ids not in input_ids: {out_diff}".format(
-                        in_diff=input_ids.difference(result_ids), out_diff=result_ids.difference(input_ids)
-                    )
+                    f"input_ids not in result_ids: {input_ids.difference(result_ids)}.\n"
+                    f"result_ids not in input_ids: {result_ids.difference(input_ids)}"
                 )
             if self._wait_until_document_ready and docs:
                 self._wait_for_document(collection, self.index_name, docs[-1])

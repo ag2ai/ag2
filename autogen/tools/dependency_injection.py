@@ -1,18 +1,20 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
 import sys
 from abc import ABC
+from collections.abc import Iterable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Union, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
 
 from ..agentchat import Agent
+from ..doc_utils import export_module
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -27,6 +29,7 @@ __all__ = [
 ]
 
 
+@export_module("autogen.tools")
 class BaseContext(ABC):
     """Base class for context classes.
 
@@ -37,6 +40,7 @@ class BaseContext(ABC):
     pass
 
 
+@export_module("autogen.tools")
 class ChatContext(BaseContext):
     """ChatContext class that extends BaseContext.
 
@@ -71,6 +75,7 @@ class ChatContext(BaseContext):
         return self._agent.last_message()
 
 
+@export_module("autogen.tools")
 def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 
@@ -96,7 +101,6 @@ def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContex
     Returns:
         A list of parameter names that are instances of the specified subclass.
     """
-
     sig = inspect.signature(func)
     return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
 

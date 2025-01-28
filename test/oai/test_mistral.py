@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,23 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost
-
-with optional_import_block() as result:
-    from mistralai import (
-        AssistantMessage,  # noqa: F401
-        Function,  # noqa: F401
-        FunctionCall,  # noqa: F401
-        Mistral,  # noqa: F401
-        SystemMessage,  # noqa: F401
-        ToolCall,  # noqa: F401
-        ToolMessage,  # noqa: F401
-        UserMessage,  # noqa: F401
-    )
-
-
-skip = not result.is_successful
 
 
 # Fixtures for mock data
@@ -47,7 +32,7 @@ def mistral_client():
 
 
 # Test initialization and configuration
-@pytest.mark.skipif(skip, reason="Mistral.AI dependency is not installed")
+@skip_on_missing_imports(["mistralai"], "mistral")
 def test_initialization():
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
@@ -63,13 +48,13 @@ def test_initialization():
 
 
 # Test standard initialization
-@pytest.mark.skipif(skip, reason="Mistral.AI dependency is not installed")
+@skip_on_missing_imports(["mistralai"], "mistral")
 def test_valid_initialization(mistral_client):
     assert mistral_client.api_key == "fake_api_key", "Config api_key should be correctly set"
 
 
 # Test cost calculation
-@pytest.mark.skipif(skip, reason="Mistral.AI dependency is not installed")
+@skip_on_missing_imports(["mistralai"], "mistral")
 def test_cost_calculation(mock_response):
     response = mock_response(
         text="Example response",
@@ -84,7 +69,7 @@ def test_cost_calculation(mock_response):
 
 
 # Test text generation
-@pytest.mark.skipif(skip, reason="Mistral.AI dependency is not installed")
+@skip_on_missing_imports(["mistralai"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
 def test_create_response(mock_chat, mistral_client):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
@@ -118,7 +103,7 @@ def test_create_response(mock_chat, mistral_client):
 
 
 # Test functions/tools
-@pytest.mark.skipif(skip, reason="Mistral.AI dependency is not installed")
+@skip_on_missing_imports(["mistralai"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
 def test_create_response_with_tool_call(mock_chat, mistral_client):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`

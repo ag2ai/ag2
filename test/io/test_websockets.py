@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,7 +15,7 @@ import pytest
 
 import autogen
 from autogen.cache.cache import Cache
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.io import IOWebsockets
 from autogen.messages.base_message import BaseMessage, wrap_message
 
@@ -25,8 +25,6 @@ from ..conftest import Credentials
 with optional_import_block() as result:
     from websockets.exceptions import ConnectionClosed
     from websockets.sync.client import connect as ws_connect
-
-skip_test = not result.is_successful
 
 
 @wrap_message
@@ -42,7 +40,7 @@ class TestTextMessage(BaseMessage):
         f(self.text)
 
 
-@pytest.mark.skipif(skip_test, reason="websockets module is not available")
+@skip_on_missing_imports(["websockets"], "websockets")
 class TestConsoleIOWithWebsockets:
     def test_input_print(self) -> None:
         print()
@@ -142,7 +140,7 @@ class TestConsoleIOWithWebsockets:
             )
 
             # we will use a temporary directory as the cache path root to ensure fresh completion each time
-            with TemporaryDirectory() as cache_path_root:
+            with TemporaryDirectory() as cache_path_root:  # noqa: SIM117
                 with Cache.disk(cache_path_root=cache_path_root) as cache:
                     print(
                         f" - on_connect(): Initiating chat with agent {agent} using message '{initial_msg}'",

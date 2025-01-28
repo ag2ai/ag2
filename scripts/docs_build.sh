@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 
 set -e
 set -x
 
 docs_generate() {
     cd website && \
-        python ./process_api_reference.py && \
+        python ./generate_api_references.py && \
         python ./process_notebooks.py render
 }
 
-install_packages() {
-    pip install -e ".[docs]"
-}
-
 docs_build() {
-    install_packages && \
     docs_generate
 }
 

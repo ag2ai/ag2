@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,16 +11,9 @@ import pytest
 from autogen import ConversableAgent
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import Credentials
-
-with optional_import_block() as result:
-    import chromadb  # noqa: F401
-
-
-skip = not result.is_successful
-
 
 # Specify the model to use by uncommenting one of the following lines.
 # filter_dict={"model": ["gpt-4-1106-preview"]}
@@ -130,10 +123,7 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip,
-    reason="do not run if dependency is not installed or requested to skip",
-)
+@skip_on_missing_imports(["chromadb"], "teachable")
 def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
     """Runs this file's unit tests."""
     total_num_errors, total_num_tests = 0, 0
@@ -162,10 +152,7 @@ def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip,
-    reason="do not run if dependency is not installed or requested to skip",
-)
+@skip_on_missing_imports(["chromadb"], "teachable")
 def test_teachability_accuracy(credentials_gpt_4o_mini: Credentials):
     """A very cheap and fast test of teachability accuracy."""
     print(colored("\nTEST TEACHABILITY ACCURACY", "light_cyan"))
