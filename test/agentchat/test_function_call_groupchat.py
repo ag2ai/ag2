@@ -66,7 +66,7 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
     )
     observer = autogen.AssistantAgent(
         name="Observer",
-        system_message="You observe the the player's actions and results. Summarize in 1 sentence.",
+        system_message="You observe the player's actions and results. Summarize in 1 sentence.",
         description="An observer.",
         llm_config=llm_config_no_function,
     )
