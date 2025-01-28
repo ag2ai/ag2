@@ -56,9 +56,9 @@ When you call `initiate_chat` the conversation restarts by default. You can use 
 
 ## `max_consecutive_auto_reply` vs `max_turn` vs `max_round`
 
-- [`max_consecutive_auto_reply`](/docs/reference/agentchat/conversable_agent#max-consecutive-auto-reply) the maximum number of consecutive auto replie (a reply from an agent without human input is considered an auto reply). It plays a role when `human_input_mode` is not "ALWAYS".
-- [`max_turns` in `ConversableAgent.initiate_chat`](/docs/reference/agentchat/conversable_agent#initiate-chat) limits the number of conversation turns between two conversable agents (without differentiating auto-reply and reply/input from human)
-- [`max_round` in GroupChat](/docs/reference/agentchat/groupchat#groupchat) specifies the maximum number of rounds in a group chat session.
+- [`max_consecutive_auto_reply`](/reference/autogen/ConversableAgent#max-consecutive-auto-reply-2) the maximum number of consecutive auto replie (a reply from an agent without human input is considered an auto reply). It plays a role when `human_input_mode` is not "ALWAYS".
+- [`max_turns` in `ConversableAgent.initiate_chat`](/reference/autogen/ConversableAgent#initiate-chat) limits the number of conversation turns between two conversable agents (without differentiating auto-reply and reply/input from human)
+- [`max_round` in GroupChat](https://docs.ag2.ai/reference/autogen/GroupChat#groupchat) specifies the maximum number of rounds in a group chat session.
 
 ## How do we decide what LLM is used for each agent? How many agents can be used? How do we decide how many agents in the group?
 
@@ -113,8 +113,8 @@ You can also develop your AG2 application in a docker container.
 For example, when developing in [GitHub codespace](https://codespaces.new/ag2ai/ag2?quickstart=1),
 AG2 runs in a docker container.
 If you are not developing in GitHub Codespaces,
-follow instructions [here](/docs/installation/Docker#step-1-install-docker)
-to install and run AG2 in docker.
+follow instructions [here](/docs/contributor-guide/docker#ag2-devcontainer)
+to install and run AG2 in DevContainer.
 
 ## Agents keep thanking each other when using `gpt-3.5-turbo`
 
@@ -194,7 +194,7 @@ Refer to [here](/docs/reference/agentchat/conversable_agent/#last_message)
 
 ## How to get each agent message ?
 
-Please refer to [here](/docs/reference/agentchat/conversable_agent#chat_messages)
+Please refer to [here](/reference/autogen/ConversableAgent#chat-messages)
 
 ## When using autogen docker, is it always necessary to reinstall modules?
 

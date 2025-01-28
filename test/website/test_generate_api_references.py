@@ -69,7 +69,6 @@ def template_content() -> str:
                 "group": "Installation",
                 "pages": [
                     "docs/installation/Installation",
-                    "docs/installation/Docker",
                     "docs/installation/Optional-Dependencies"
                 ]
             },
