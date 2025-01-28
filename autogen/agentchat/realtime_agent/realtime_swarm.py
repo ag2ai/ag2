@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol
 import anyio
 from asyncer import asyncify, create_task_group, syncify
 
+from ...doc_utils import export_module
 from ..agent import Agent
 from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ..conversable_agent import ConversableAgent
@@ -176,6 +177,7 @@ class SwarmableRealtimeAgent(ConversableAgent):
         self._realtime_agent.callbacks.on_observers_ready = on_observers_ready
 
 
+@export_module("autogen.agentchat.realtime_agent")
 def register_swarm(
     *,
     realtime_agent: "RealtimeAgent",  # type: ignore

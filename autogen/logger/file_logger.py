@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
 
+from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
 from .logger_utils import get_current_ts, to_dict
 
@@ -48,6 +49,7 @@ def safe_serialize(obj: Any) -> str:
     return json.dumps(obj, default=default)
 
 
+@export_module("autogen.logger")
 class FileLogger(BaseLogger):
     def __init__(self, config: dict[str, Any]):
         self.config = config

@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Literal, Optional
 
+from ..doc_utils import export_module
 from .base_logger import BaseLogger
 from .file_logger import FileLogger
 from .sqlite_logger import SqliteLogger
@@ -13,6 +14,7 @@ from .sqlite_logger import SqliteLogger
 __all__ = ("LoggerFactory",)
 
 
+@export_module("autogen.logger")
 class LoggerFactory:
     """Factory class to create logger objects."""
 

@@ -19,6 +19,8 @@ from openai import OpenAI
 from openai.types.beta.assistant import Assistant
 from packaging.version import parse
 
+from ..doc_utils import export_module
+
 NON_CACHE_KEY = [
     "api_key",
     "base_url",
@@ -132,6 +134,7 @@ def is_valid_api_key(api_key: str) -> bool:
     return bool(re.fullmatch(api_key_re, api_key))
 
 
+@export_module("autogen")
 def get_config_list(
     api_keys: list[str],
     base_urls: Optional[list[str]] = None,
@@ -183,6 +186,7 @@ def get_config_list(
     return config_list
 
 
+@export_module("autogen")
 def config_list_openai_aoai(
     key_file_path: Optional[str] = ".",
     openai_api_key_file: Optional[str] = "key_openai.txt",
@@ -312,6 +316,7 @@ def config_list_openai_aoai(
     return config_list
 
 
+@export_module("autogen")
 def config_list_from_models(
     key_file_path: Optional[str] = ".",
     openai_api_key_file: Optional[str] = "key_openai.txt",
@@ -378,6 +383,7 @@ def config_list_from_models(
     return config_list
 
 
+@export_module("autogen")
 def config_list_gpt4_gpt35(
     key_file_path: Optional[str] = ".",
     openai_api_key_file: Optional[str] = "key_openai.txt",
@@ -407,6 +413,7 @@ def config_list_gpt4_gpt35(
     )
 
 
+@export_module("autogen")
 def filter_config(
     config_list: list[dict[str, Any]],
     filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]],
@@ -486,6 +493,7 @@ def _satisfies_criteria(value: Any, criteria_values: Any) -> bool:
         return value in criteria_values
 
 
+@export_module("autogen")
 def config_list_from_json(
     env_or_file: str,
     file_location: Optional[str] = "",
@@ -586,6 +594,7 @@ def get_config(
     return config
 
 
+@export_module("autogen")
 def config_list_from_dotenv(
     dotenv_file_path: Optional[str] = None,
     model_api_key_map: Optional[dict[str, Any]] = None,

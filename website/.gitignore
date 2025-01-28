@@ -7,7 +7,7 @@
 # Generated files
 .docusaurus
 .cache-loader
-docs/reference
+/reference
 /notebooks
 /blog
 mint.json

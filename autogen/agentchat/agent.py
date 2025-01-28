@@ -6,8 +6,11 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
+from ..doc_utils import export_module
+
 
 @runtime_checkable
+@export_module("autogen")
 class Agent(Protocol):
     """(In preview) A protocol for Agent.
 
