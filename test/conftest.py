@@ -497,7 +497,4 @@ def suppress_gemini_resource_exhausted(func: T) -> T:
 
 
 def suppress_json_decoder_error(func: T) -> T:
-    with optional_import_block():
-        return suppress(JSONDecodeError)(func)
-
-    return func
+    return suppress(JSONDecodeError)(func)
