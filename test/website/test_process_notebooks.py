@@ -312,7 +312,6 @@ class TestUpdateNavigation:
                     "group": "Installation",
                     "pages": [
                         "docs/installation/Installation",
-                        "docs/installation/Docker",
                         "docs/installation/Optional-Dependencies",
                     ],
                 },
