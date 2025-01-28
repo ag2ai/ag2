@@ -65,10 +65,18 @@ with optional_import_block():
     import google.generativeai as genai
     import vertexai
     from PIL import Image
-    from google.ai.generativelanguage import Content, FunctionCall, FunctionDeclaration, FunctionResponse, Part, Tool
-    from google.ai.generativelanguage_v1beta.types import Schema
     from google.auth.credentials import Credentials
-    from google.generativeai.types import GenerateContentResponse
+    from google.genai.types import (
+        Content,
+        FunctionCall,
+        FunctionDeclaration,
+        FunctionResponse,
+        GenerateContentResponse,
+        Part,
+        Schema,
+        Tool,
+        Type,
+    )
     from jsonschema import ValidationError
     from vertexai.generative_models import (
         Content as VertexAIContent,
@@ -610,21 +618,21 @@ class GeminiClient:
         """
 
         if param_type == "integer":
-            param_schema.type_ = 2
+            param_schema.type = Type.INTEGER
         elif param_type == "number":
-            param_schema.type_ = 3
+            param_schema.type = Type.NUMBER
         elif param_type == "string":
-            param_schema.type_ = 1
+            param_schema.type = Type.STRING
         elif param_type == "boolean":
-            param_schema.type_ = 6
+            param_schema.type = Type.BOOLEAN
         elif param_type == "array":
-            param_schema.type_ = 5
+            param_schema.type = Type.ARRAY
             if "items" in json_data:
                 param_schema.items = GeminiClient._create_gemini_function_declaration_schema(json_data["items"])
             else:
                 print("Warning: Array schema missing 'items' definition.")
         elif param_type == "object":
-            param_schema.type_ = 4
+            param_schema.type = Type.OBJECT
             param_schema.properties = {}
             if "properties" in json_data:
                 for prop_name, prop_data in json_data["properties"].items():
@@ -635,7 +643,7 @@ class GeminiClient:
                     print("Warning: Object schema missing 'properties' definition.")
 
         elif param_type in ("null", "any"):
-            param_schema.type_ = 1  # Treating these as strings for simplicity
+            param_schema.type = Type.STRING  # Treating these as strings for simplicity
         else:
             print(f"Warning: Unsupported parameter type '{param_type}'.")
 

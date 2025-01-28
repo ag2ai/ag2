@@ -19,7 +19,7 @@ with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.generativeai.types import GenerateContentResponse
+    from google.genai.types import GenerateContentResponse
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
