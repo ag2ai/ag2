@@ -5,7 +5,7 @@ title: LLM Caching
 AutoGen supports caching API requests so that they can be reused when the same request is issued. This is useful when repeating or continuing experiments for reproducibility and cost saving.
 
 Since version `0.2.8`, a configurable context manager allows you to easily
-configure LLM cache, using either [`DiskCache`](/docs/reference/cache/disk_cache#diskcache), [`RedisCache`](/docs/reference/cache/redis_cache#rediscache), or Cosmos DB Cache. All agents inside the context manager will use the same cache.
+configure LLM cache, using either [`DiskCache`](/reference/autogen/cache/disk_cache/DiskCache#diskcache), [`RedisCache`](/reference/autogen/cache/redis_cache/RedisCache#rediscache), or Cosmos DB Cache. All agents inside the context manager will use the same cache.
 
 ```python
 from autogen import Cache
@@ -46,7 +46,7 @@ with Cache.disk(cache_seed=1) as cache:
 
 ## Cache path
 
-By default [`DiskCache`](/docs/reference/cache/disk_cache#diskcache) uses `.cache` for storage. To change the cache directory,
+By default [`DiskCache`](/reference/autogen/cache/disk_cache/DiskCache#diskcache) uses `.cache` for storage. To change the cache directory,
 set `cache_path_root`:
 
 ```python
@@ -56,7 +56,7 @@ with Cache.disk(cache_path_root="/tmp/autogen_cache") as cache:
 
 ## Disabling cache
 
-For backward compatibility, [`DiskCache`](/docs/reference/cache/disk_cache#diskcache) is on by default with `cache_seed` set to 41.
+For backward compatibility, [`DiskCache`](/reference/autogen/cache/disk_cache/DiskCache#diskcache) is on by default with `cache_seed` set to 41.
 To disable caching completely, set `cache_seed` to `None` in the `llm_config` of the agent.
 
 ```python
