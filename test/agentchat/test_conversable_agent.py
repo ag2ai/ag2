@@ -1588,9 +1588,9 @@ def test_context_variables():
 @pytest.mark.gemini
 @suppress_gemini_resource_exhausted
 def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value(
-    credentials_gemini_pro: Credentials,
+    credentials_gemini_flash: Credentials,
 ) -> None:
-    agent = ConversableAgent(name="agent", llm_config=credentials_gemini_pro.llm_config)
+    agent = ConversableAgent(name="agent", llm_config=credentials_gemini_flash.llm_config)
 
     user_proxy = UserProxyAgent(
         name="user_proxy_1",
