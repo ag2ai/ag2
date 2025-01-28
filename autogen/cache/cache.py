@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,10 +9,12 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Any
 
+from ..doc_utils import export_module
 from .abstract_cache_base import AbstractCache
 from .cache_factory import CacheFactory
 
 
+@export_module("autogen")
 class Cache(AbstractCache):
     """A wrapper class for managing cache configuration and instances.
 
@@ -100,7 +102,7 @@ class Cache(AbstractCache):
         self.config["cache_seed"] = str(self.config.get("cache_seed", 42))
 
         # validate config
-        for key in self.config.keys():
+        for key in self.config:
             if key not in self.ALLOWED_CONFIG_KEYS:
                 raise ValueError(f"Invalid config key: {key}")
         # create cache instance

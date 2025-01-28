@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,13 +8,7 @@
 import pytest
 
 from autogen import OpenAIWrapper
-from autogen.import_utils import optional_import_block
-
-with optional_import_block() as result:
-    from openai import OpenAI  # noqa: F401
-
-skip = not result.is_successful
-
+from autogen.import_utils import skip_on_missing_imports
 
 TEST_COST = 20000000
 TEST_CUSTOM_RESPONSE = "This is a custom response."
@@ -24,6 +18,7 @@ TEST_OTHER_PARAMS_VAL = "other_params"
 TEST_MAX_LENGTH = 1000
 
 
+@skip_on_missing_imports(["openai"])
 def test_custom_model_client():
     class CustomModel:
         def __init__(self, config: dict, test_hook):
@@ -92,6 +87,7 @@ def test_custom_model_client():
     assert test_hook["max_length"] == TEST_MAX_LENGTH
 
 
+@skip_on_missing_imports(["openai"])
 def test_registering_with_wrong_class_name_raises_error():
     class CustomModel:
         def __init__(self, config: dict):
@@ -122,6 +118,7 @@ def test_registering_with_wrong_class_name_raises_error():
         client.register_model_client(model_client_cls=CustomModel)
 
 
+@skip_on_missing_imports(["openai"])
 def test_not_all_clients_registered_raises_error():
     class CustomModel:
         def __init__(self, config: dict):
@@ -169,6 +166,7 @@ def test_not_all_clients_registered_raises_error():
         client.create(messages=[{"role": "user", "content": "2+2="}], cache_seed=None)
 
 
+@skip_on_missing_imports(["openai"])
 def test_registering_with_extra_config_args():
     class CustomModel:
         def __init__(self, config: dict, test_hook):

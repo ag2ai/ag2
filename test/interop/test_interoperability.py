@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,10 +15,8 @@ from ..conftest import MOCK_OPEN_AI_API_KEY
 with optional_import_block():
     from crewai_tools import FileReadTool
 
-with optional_import_block():
-    pass  # type: ignore[import]
 
-
+@pytest.mark.interop
 class TestInteroperability:
     @skip_on_missing_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
     def test_supported_types(self) -> None:

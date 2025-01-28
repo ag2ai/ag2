@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,12 +8,14 @@ import re
 from typing import Union
 
 from ..code_utils import CODE_BLOCK_PATTERN, UNKNOWN, content_str, infer_lang
+from ..doc_utils import export_module
 from ..types import UserMessageImageContentPart, UserMessageTextContentPart
 from .base import CodeBlock, CodeExtractor
 
 __all__ = ("MarkdownCodeExtractor",)
 
 
+@export_module("autogen.coding")
 class MarkdownCodeExtractor(CodeExtractor):
     """(Experimental) A class that extracts code blocks from a message using Markdown syntax."""
 

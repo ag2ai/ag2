@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,20 +6,11 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
-import os
 
 import pytest
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 from autogen.oai.cohere import CohereClient, calculate_cohere_cost
-
-with optional_import_block() as result:
-    from cohere import Client as Cohere  # noqa: F401
-
-skip = not result.is_successful
-
-
-reason = "Cohere dependency not installed!"
 
 
 @pytest.fixture
@@ -27,9 +18,9 @@ def cohere_client():
     return CohereClient(api_key="dummy_api_key")
 
 
-@pytest.mark.skipif(skip, reason=reason)
-def test_initialization_missing_api_key():
-    os.environ.pop("COHERE_API_KEY", None)
+@skip_on_missing_imports(["cohere"], "cohere")
+def test_initialization_missing_api_key(monkeypatch):
+    monkeypatch.delenv("COHERE_API_KEY", raising=False)
     with pytest.raises(
         AssertionError,
         match="Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable.",
@@ -39,12 +30,12 @@ def test_initialization_missing_api_key():
     CohereClient(api_key="dummy_api_key")
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["cohere"], "cohere")
 def test_intialization(cohere_client):
     assert cohere_client.api_key == "dummy_api_key", "`api_key` should be correctly set in the config"
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["cohere"], "cohere")
 def test_calculate_cohere_cost():
     assert calculate_cohere_cost(0, 0, model="command-r") == 0.0, (
         "Cost should be 0 for 0 input_tokens and 0 output_tokens"
@@ -52,7 +43,7 @@ def test_calculate_cohere_cost():
     assert calculate_cohere_cost(100, 200, model="command-r-plus") == 0.0033
 
 
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["cohere"], "cohere")
 def test_load_config(cohere_client):
     params = {
         "model": "command-r-plus",

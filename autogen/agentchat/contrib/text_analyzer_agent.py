@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -31,7 +31,7 @@ class TextAnalyzerAgent(ConversableAgent):
         system_message (str): system message for the ChatCompletion inference.
         human_input_mode (str): This agent should NEVER prompt the human for input.
         llm_config (dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create)
             for available options.
             To disable llm-based auto reply, set to False.
         **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).

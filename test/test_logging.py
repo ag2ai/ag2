@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -296,8 +296,8 @@ def test_to_dict():
     assert result["o"] == expected_o_field
     assert len(result["agents"]) == 2
     for agent in result["agents"]:
-        assert "autogen.agentchat.conversable_agent.ConversableAgent" in agent
-    assert "autogen.agentchat.conversable_agent.ConversableAgent" in result["first_agent"]
+        assert "autogen.ConversableAgent" in agent
+    assert "autogen.ConversableAgent" in result["first_agent"]
 
 
 @patch("logging.Logger.error")

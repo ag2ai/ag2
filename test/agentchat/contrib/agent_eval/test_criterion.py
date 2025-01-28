@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,7 +11,7 @@ from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 
 def test_parse_json_str():
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"
-    criteria = open(criteria_file).read()
+    criteria = open(criteria_file).read()  # noqa: SIM115
     criteria = Criterion.parse_json_str(criteria)
     assert criteria
     assert len(criteria) == 6

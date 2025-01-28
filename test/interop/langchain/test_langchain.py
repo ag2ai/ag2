@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -19,6 +19,7 @@ with optional_import_block():
 
 
 # skip if python version is not >= 3.9
+@pytest.mark.interop
 @skip_on_missing_imports("langchain", "interop-langchain")
 class TestLangChainInteroperability:
     @pytest.fixture(autouse=True)

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,28 +17,20 @@ from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
     create_qdrant_from_dir,
     query_qdrant,
 )
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ....conftest import Credentials
 
 with optional_import_block() as result:
-    import fastembed  # noqa: F401
     from qdrant_client import QdrantClient
-
-
-QDRANT_INSTALLED = result.is_successful
-
-with optional_import_block() as result:
-    import openai  # noqa: F401
-
-skip = not result.is_successful
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or not QDRANT_INSTALLED or skip,
+    sys.platform in ["darwin", "win32"],
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
+@skip_on_missing_imports(["qdrant_client", "fastembed", "openai"], "retrievechat-qdrant")
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     conversations = {}
     # ChatCompletion.start_logging(conversations)  # deprecated in v0.2
@@ -73,7 +65,7 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(not QDRANT_INSTALLED, reason="qdrant_client is not installed")
+@skip_on_missing_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
 def test_qdrant_filter():
     client = QdrantClient(":memory:")
     create_qdrant_from_dir(dir_path="./website/docs", client=client, collection_name="autogen-docs")
@@ -89,7 +81,7 @@ def test_qdrant_filter():
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(not QDRANT_INSTALLED, reason="qdrant_client is not installed")
+@skip_on_missing_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
 def test_qdrant_search():
     test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
     client = QdrantClient(":memory:")

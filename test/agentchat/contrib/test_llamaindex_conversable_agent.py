@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,12 +8,10 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from autogen import GroupChat, GroupChatManager
 from autogen.agentchat.contrib.llamaindex_conversable_agent import LLamaIndexConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
@@ -22,14 +20,11 @@ with optional_import_block() as result:
     from llama_index.core.chat_engine.types import AgentChatResponse
     from llama_index.llms.openai import OpenAI
 
-skip_for_dependencies = not result.is_successful
-skip_reason = "" if result.is_successful else "dependency not installed"
-
 
 openai_key = MOCK_OPEN_AI_API_KEY
 
 
-@pytest.mark.skipif(skip_for_dependencies, reason=skip_reason)
+@skip_on_missing_imports(["llama_index"], "neo4j")
 @patch("llama_index.core.agent.ReActAgent.chat")
 def test_group_chat_with_llama_index_conversable_agent(chat_mock: MagicMock) -> None:
     """Tests the group chat functionality with two MultimodalConversable Agents.

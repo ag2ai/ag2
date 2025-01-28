@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional, Protocol, Union
 from pydantic import BaseModel, schema_json_of
 
 from ..cache import Cache
+from ..doc_utils import export_module
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
@@ -192,6 +193,7 @@ LEGACY_CACHE_DIR = ".cache"
 OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
+@export_module("autogen")
 class ModelClient(Protocol):
     """A client class must implement the following methods:
     - create must return a response object that implements the ModelClientResponseProtocol
@@ -293,25 +295,76 @@ class OpenAIClient:
     @staticmethod
     def _is_agent_name_error_message(message: str) -> bool:
         pattern = re.compile(r"Invalid 'messages\[\d+\]\.name': string does not match pattern.")
-        return True if pattern.match(message) else False
+        return bool(pattern.match(message))
+
+    @staticmethod
+    def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:
+        for msg in messages:
+            if msg["role"] == "system":
+                messages.insert(0, messages.pop(messages.index(msg)))
+                break
+
+    @staticmethod
+    def _patch_messages_for_deepseek_reasoner(**kwargs: Any) -> Any:
+        if (
+            "model" not in kwargs
+            or kwargs["model"] != "deepseek-reasoner"
+            or "messages" not in kwargs
+            or len(kwargs["messages"]) == 0
+        ):
+            return kwargs
+
+        # The system message of deepseek-reasoner must be put on the beginning of the message sequence.
+        OpenAIClient._move_system_message_to_beginning(kwargs["messages"])
+
+        new_messages = []
+        previous_role = None
+        for message in kwargs["messages"]:
+            if "role" in message:
+                current_role = message["role"]
+
+                # This model requires alternating roles
+                if current_role == previous_role:
+                    # Swap the role
+                    if current_role == "user":
+                        message["role"] = "assistant"
+                    elif current_role == "assistant":
+                        message["role"] = "user"
+
+                previous_role = message["role"]
+
+            new_messages.append(message)
+
+        # The last message of deepseek-reasoner must be a user message
+        # , or an assistant message with prefix mode on (but this is supported only for beta api)
+        if new_messages[-1]["role"] != "user":
+            new_messages.append({"role": "user", "content": "continue"})
+
+        kwargs["messages"] = new_messages
+
+        return kwargs
 
     @staticmethod
     def _handle_openai_bad_request_error(func: Callable[..., Any]) -> Callable[..., Any]:
         def wrapper(*args: Any, **kwargs: Any):
             try:
+                kwargs = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
                 return func(*args, **kwargs)
             except openai.BadRequestError as e:
                 response_json = e.response.json()
                 # Check if the error message is related to the agent name. If so, raise a ValueError with a more informative message.
-                if "error" in response_json and "message" in response_json["error"]:
-                    if OpenAIClient._is_agent_name_error_message(response_json["error"]["message"]):
-                        error_message = (
-                            f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.\n"
-                            "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters.\n"
-                            "Check the agent name and try again.\n"
-                            f"Here is the full BadRequestError from openai:\n{e.message}."
-                        )
-                        raise ValueError(error_message)
+                if (
+                    "error" in response_json
+                    and "message" in response_json["error"]
+                    and OpenAIClient._is_agent_name_error_message(response_json["error"]["message"])
+                ):
+                    error_message = (
+                        f"This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.\n"
+                        "Please ensure that your agent name follows the correct format and doesn't include any unsupported characters.\n"
+                        "Check the agent name and try again.\n"
+                        f"Here is the full BadRequestError from openai:\n{e.message}."
+                    )
+                    raise ValueError(error_message)
 
                 raise e
 
@@ -476,8 +529,7 @@ class OpenAIClient:
         return response
 
     def _process_reasoning_model_params(self, params) -> None:
-        """
-        Cater for the reasoning model (o1, o3..) parameters
+        """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
         print(f"{params=}")
@@ -545,6 +597,7 @@ class OpenAIClient:
 
 
 @require_optional_import("openai", "openai")
+@export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
 
@@ -577,7 +630,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](/reference/autogen/OpenAIWrapper#create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -896,7 +949,7 @@ class OpenAIWrapper:
             price = extra_kwargs.get("price", None)
             if isinstance(price, list):
                 price = tuple(price)
-            elif isinstance(price, float) or isinstance(price, int):
+            elif isinstance(price, (float, int)):
                 logger.warning(
                     "Input price is a float/int. Using the same price for prompt and completion tokens. Use a list/tuple if prompt and completion token prices are different."
                 )
@@ -1084,7 +1137,7 @@ class OpenAIWrapper:
         assert isinstance(d, dict), d
         if hasattr(chunk, field) and getattr(chunk, field) is not None:
             new_value = getattr(chunk, field)
-            if isinstance(new_value, list) or isinstance(new_value, dict):
+            if isinstance(new_value, (list, dict)):
                 raise NotImplementedError(
                     f"Field {field} is a list or dict, which is currently not supported. "
                     "Only string and numbers are supported."

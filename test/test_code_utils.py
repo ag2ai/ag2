@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -30,16 +30,13 @@ from autogen.code_utils import (
     infer_lang,
     is_docker_running,
 )
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import skip_on_missing_imports
 
 from .conftest import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-if not is_docker_running() or not decide_use_docker(use_docker=None):
-    skip_docker_test = True
-else:
-    skip_docker_test = False
+skip_docker_test = not (is_docker_running() and decide_use_docker(use_docker=None))
 
 
 def test_infer_lang():
@@ -390,11 +387,8 @@ def test_create_virtual_env_with_extra_args():
         assert venv_context.env_name == os.path.split(temp_dir)[1]
 
 
+@skip_on_missing_imports(["openai"])
 def _test_improve(credentials_all: Credentials):
-    with optional_import_block() as result:
-        import openai  # noqa: F401
-    if not result.is_successful:
-        return
     config_list = credentials_all.config_list
     improved, _ = improve_function(
         "autogen/math_utils.py",

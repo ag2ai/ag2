@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 from anyio import move_on_after
 
-from autogen.agentchat.realtime_agent.clients import OpenAIRealtimeClient, RealtimeClientProtocol
-from autogen.agentchat.realtime_agent.realtime_events import AudioDelta, SessionCreated, SessionUpdated
+from autogen.agentchat.realtime.experimental.clients import OpenAIRealtimeClient, RealtimeClientProtocol
+from autogen.agentchat.realtime.experimental.realtime_events import AudioDelta, SessionCreated, SessionUpdated
 
 from ....conftest import Credentials
 

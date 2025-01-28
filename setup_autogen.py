@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -35,6 +35,8 @@ setuptools.setup(
         "retrievechat-mongodb": ["pyautogen[retrievechat-mongodb]==" + __version__],
         "retrievechat-qdrant": ["pyautogen[retrievechat-qdrant]==" + __version__],
         "graph-rag-falkor-db": ["pyautogen[graph-rag-falkor-db]==" + __version__],
+        "rag": ["pyautogen[rag]==" + __version__],
+        "browser-use": ["pyautogen[browser-use]==" + __version__],
         "neo4j": ["pyautogen[neo4j]==" + __version__],
         "twilio": ["pyautogen[twilio]==" + __version__],
         "interop-crewai": ["pyautogen[interop-crewai]==" + __version__],

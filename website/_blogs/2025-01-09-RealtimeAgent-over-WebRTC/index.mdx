@@ -17,7 +17,7 @@ tags: [Realtime API, Voice Agents, AI Tools, WebRTC]
 
 # **Realtime Voice Applications with WebRTC**
 
-In our [previous blog post](/blog/2025-01-08-RealtimeAgent-over-websocket), we introduced the [**`WebSocketAudioAdapter`**](/docs/reference/agentchat/realtime_agent/websocket_audio_adapter#websocketaudioadapter), a simple way to stream real-time audio using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/). While effective, [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) can face challenges with quality and reliability in high-latency or network-variable scenarios. Enter [WebRTC](https://webrtc.org/).
+In our [previous blog post](/blog/2025-01-08-RealtimeAgent-over-websocket), we introduced the [**`WebSocketAudioAdapter`**](/reference/autogen/agentchat/realtime_agent/WebSocketAudioAdapter#websocketaudioadapter), a simple way to stream real-time audio using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/). While effective, [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) can face challenges with quality and reliability in high-latency or network-variable scenarios. Enter [WebRTC](https://webrtc.org/).
 
 Today, we’re excited to showcase the integration with [OpenAI Realtime API with WebRTC](https://platform.openai.com/docs/guides/realtime-webrtc), leveraging WebRTC’s peer-to-peer communication capabilities to provide a robust, low-latency, high-quality audio streaming experience directly from the browser.
 
@@ -133,52 +133,66 @@ The [WebSocket](https://fastapi.tiangolo.com/advanced/websockets/) is responsibl
 ```javascript
 ws = new WebSocket(webSocketUrl);
 
+ws.onopen = event => {
+    console.log("web socket opened")
+}
+
 ws.onmessage = async event => {
-    const message = JSON.parse(event.data);
-    console.info("Received Message from AG2 backend", message);
-    if (message.type === "ag2.init") {
-        await openRTC(message.config); // Starts the WebRTC connection
-        return;
+    const message = JSON.parse(event.data)
+    console.info("Received Message from AG2 backend", message)
+    const type = message.type
+    if (type == "ag2.init") {
+        await openRTC(message, resolve, reject)
+        return
     }
+    const messageJSON = JSON.stringify(message)
     if (dc) {
-        dc.send(JSON.stringify(message)); // Sends data via DataChannel
+        dc.send(messageJSON)
     } else {
-        console.log("DC not ready yet", message);
+        console.log("DC not ready yet, queueing", message)
+        quedMessages.push(messageJSON)
     }
-};
+}
 ```
 
 #### **WebRTC Setup**
 This block configures the [WebRTC](https://webrtc.org/) connection, adds audio tracks, and initializes the `DataChannel`.
 ```javascript
-async function openRTC(data) {
+async function openRTC(init_message, resolve, reject) {
+    const data = init_message.config;
     const EPHEMERAL_KEY = data.client_secret.value;
 
-    // Set up to play remote audio
+    // Set up to play remote audio from the model
     const audioEl = document.createElement("audio");
     audioEl.autoplay = true;
     pc.ontrack = e => audioEl.srcObject = e.streams[0];
 
-    // Add microphone input as local audio track
-    const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
-    pc.addTrack(ms.getTracks()[0]);
+    // Add local audio track for microphone input in the browser
+    const ms = await navigator.mediaDevices.getUserMedia({
+        audio: true
+    });
+    const microphone = ms.getTracks()[0]
+    microphone.enabled = false;
+    pc.addTrack(microphone);
 
-    // Create a DataChannel
-    dc = pc.createDataChannel("oai-events");
-    dc.addEventListener("message", e => {
-        const message = JSON.parse(e.data);
+    // Set up data channel for sending and receiving events
+    const _dc = pc.createDataChannel("oai-events");
+    _dc.addEventListener("message", (e) => {
+        // Realtime server events appear here!
+        const message = JSON.parse(e.data)
         if (message.type.includes("function")) {
-            ws.send(e.data); // Forward function messages to WebSocket
+            console.log("WebRTC function message", message)
+            ws.send(e.data)
         }
     });
 
-    // Create and send an SDP offer
+    // Start the session using the Session Description Protocol (SDP)
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Send the offer to OpenAI
     const baseUrl = "https://api.openai.com/v1/realtime";
-    const sdpResponse = await fetch(`${baseUrl}?model=${data.model}`, {
+    const model = data.model;
+    const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
         method: "POST",
         body: offer.sdp,
         headers: {
@@ -187,10 +201,26 @@ async function openRTC(data) {
         },
     });
 
-    // Set the remote SDP answer
-    const answer = { type: "answer", sdp: await sdpResponse.text() };
+    const answer = {
+        type: "answer",
+        sdp: await sdpResponse.text(),
+    };
     await pc.setRemoteDescription(answer);
-    console.log("Connected to OpenAI WebRTC");
+    console.log("Connected to OpenAI WebRTC")
+    _dc.onopen = e => {
+        console.log("Data connection opened.")
+        for (const init_chunk of init_message.init) {
+            _dc.send(JSON.stringify(init_chunk))
+        }
+        console.log("Sent init chunks to OpenAI WebRTC")
+        for (const qmsg of quedMessages) {
+            _dc.send(qmsg)
+        }
+        console.log("Sent queued messages to OpenAI WebRTC")
+        microphone.enabled = true;
+        dc = _dc
+        resolve()
+    }
 }
 ```
 

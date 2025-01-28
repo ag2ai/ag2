@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -38,6 +38,7 @@ from ..code_utils import (
 )
 from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
+from ..doc_utils import export_module
 from ..exception_utils import InvalidCarryOverType, SenderRequired
 from ..io.base import IOStream
 from ..messages.agent_messages import (
@@ -67,6 +68,7 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+@export_module("autogen")
 class ConversableAgent(LLMAgent):
     """(In preview) A class for generic conversable agents which can be configured as assistant or user proxy.
 
@@ -140,7 +142,7 @@ class ConversableAgent(LLMAgent):
                 - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                     If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
             llm_config (dict or False or None): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+                Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create)
                 for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
                 To disable llm-based auto reply, set to False.
@@ -360,18 +362,18 @@ class ConversableAgent(LLMAgent):
         from both sync and async chats. However, an async reply function will only be triggered from async
         chats (initiated with `ConversableAgent.a_initiate_chat`). If an `async` reply function is registered
         and a chat is initialized with a sync function, `ignore_async_in_sync_chat` determines the behaviour as follows:
-                if `ignore_async_in_sync_chat` is set to `False` (default value), an exception will be raised, and
-                if `ignore_async_in_sync_chat` is set to `True`, the reply function will be ignored.
+            if `ignore_async_in_sync_chat` is set to `False` (default value), an exception will be raised, and
+            if `ignore_async_in_sync_chat` is set to `True`, the reply function will be ignored.
 
         Args:
             trigger (Agent class, str, Agent instance, callable, or list): the trigger.
-                    If a class is provided, the reply function will be called when the sender is an instance of the class.
-                    If a string is provided, the reply function will be called when the sender's name matches the string.
-                    If an agent instance is provided, the reply function will be called when the sender is the agent instance.
-                    If a callable is provided, the reply function will be called when the callable returns True.
-                    If a list is provided, the reply function will be called when any of the triggers in the list is activated.
-                    If None is provided, the reply function will be called only when the sender is None.
-                    Note: Be sure to register `None` as a trigger if you would like to trigger an auto-reply function with non-empty messages and `sender=None`.
+                If a class is provided, the reply function will be called when the sender is an instance of the class.
+                If a string is provided, the reply function will be called when the sender's name matches the string.
+                If an agent instance is provided, the reply function will be called when the sender is the agent instance.
+                If a callable is provided, the reply function will be called when the callable returns True.
+                If a list is provided, the reply function will be called when any of the triggers in the list is activated.
+                If None is provided, the reply function will be called only when the sender is None.
+                Note: Be sure to register `None` as a trigger if you would like to trigger an auto-reply function with non-empty messages and `sender=None`.
             reply_func (Callable): the reply function.
                 The function takes a recipient agent, a list of messages, a sender agent and a config as input and returns a reply message.
 
@@ -424,7 +426,11 @@ class ConversableAgent(LLMAgent):
 
     @staticmethod
     def _get_chats_to_run(
-        chat_queue: list[dict[str, Any]], recipient: Agent, messages: Union[str, Callable], sender: Agent, config: Any
+        chat_queue: list[dict[str, Any]],
+        recipient: Agent,
+        messages: Optional[list[dict[str, Any]]],
+        sender: Agent,
+        config: Any,
     ) -> list[dict[str, Any]]:
         """A simple chat reply function.
         This function initiate one or a sequence of chats between the "recipient" and the agents in the
@@ -456,7 +462,11 @@ class ConversableAgent(LLMAgent):
 
     @staticmethod
     def _summary_from_nested_chats(
-        chat_queue: list[dict[str, Any]], recipient: Agent, messages: Union[str, Callable], sender: Agent, config: Any
+        chat_queue: list[dict[str, Any]],
+        recipient: Agent,
+        messages: Optional[list[dict[str, Any]]],
+        sender: Agent,
+        config: Any,
     ) -> tuple[bool, Union[str, None]]:
         """A simple chat reply function.
         This function initiate one or a sequence of chats between the "recipient" and the agents in the
@@ -475,7 +485,11 @@ class ConversableAgent(LLMAgent):
 
     @staticmethod
     async def _a_summary_from_nested_chats(
-        chat_queue: list[dict[str, Any]], recipient: Agent, messages: Union[str, Callable], sender: Agent, config: Any
+        chat_queue: list[dict[str, Any]],
+        recipient: Agent,
+        messages: Optional[list[dict[str, Any]]],
+        sender: Agent,
+        config: Any,
     ) -> tuple[bool, Union[str, None]]:
         """A simple chat reply function.
         This function initiate one or a sequence of chats between the "recipient" and the agents in the
@@ -659,7 +673,7 @@ class ConversableAgent(LLMAgent):
                 for conversation in self._oai_messages.values():
                     return conversation[-1]
             raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
-        if agent not in self._oai_messages.keys():
+        if agent not in self._oai_messages:
             raise KeyError(
                 f"The agent '{agent.name}' is not present in any conversation. No history available for this agent."
             )
@@ -2243,10 +2257,7 @@ class ConversableAgent(LLMAgent):
             if lang in ["bash", "shell", "sh"]:
                 exitcode, logs, image = self.run_code(code, lang=lang, **self._code_execution_config)
             elif lang in PYTHON_VARIANTS:
-                if code.startswith("# filename: "):
-                    filename = code[11 : code.find("\n")].strip()
-                else:
-                    filename = None
+                filename = code[11 : code.find("\n")].strip() if code.startswith("# filename: ") else None
                 exitcode, logs, image = self.run_code(
                     code,
                     lang="python",
@@ -2511,7 +2522,7 @@ class ConversableAgent(LLMAgent):
         """
         for name, func in function_map.items():
             self._assert_valid_name(name)
-            if func is None and name not in self._function_map.keys():
+            if func is None and name not in self._function_map:
                 warnings.warn(f"The function {name} to remove doesn't exist", name)
             if name in self._function_map:
                 warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
@@ -2534,7 +2545,7 @@ class ConversableAgent(LLMAgent):
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "functions" not in self.llm_config.keys():
+            if "functions" not in self.llm_config:
                 error_msg = f"The agent config doesn't have function {func_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
@@ -2550,7 +2561,7 @@ class ConversableAgent(LLMAgent):
             if "name" not in func_sig:
                 raise ValueError(f"The function signature must have a 'name' key. Received: {func_sig}")
             self._assert_valid_name(func_sig["name"]), func_sig
-            if "functions" in self.llm_config.keys():
+            if "functions" in self.llm_config:
                 if any(func["name"] == func_sig["name"] for func in self.llm_config["functions"]):
                     warnings.warn(f"Function '{func_sig['name']}' is being overridden.", UserWarning)
 
@@ -2578,7 +2589,7 @@ class ConversableAgent(LLMAgent):
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "tools" not in self.llm_config.keys():
+            if "tools" not in self.llm_config:
                 error_msg = f"The agent config doesn't have tool {tool_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
@@ -2897,6 +2908,7 @@ class ConversableAgent(LLMAgent):
             return self.client.total_usage_summary
 
 
+@export_module("autogen")
 def register_function(
     f: Callable[..., Any],
     *,

@@ -37,8 +37,8 @@ pip install ag2
 
 The functionality demonstrated in this guide is located in the [`autogen.tools.dependency_injection`](/docs/reference/tools/dependency_injection) module. This module provides key components for dependency injection:
 
-- [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext): abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
-- [`Depends`](/docs/reference/tools/dependency_injection#depends): a function used to declare and inject dependencies, either from a context (like [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext)) or a function, ensuring sensitive data is provided securely without direct exposure.
+- [`BaseContext`](/reference/autogen/tools/BaseContext#basecontext): abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
+- [`Depends`](/reference/autogen/tools/Depends#depends): a function used to declare and inject dependencies, either from a context (like [`BaseContext`](/reference/autogen/tools/BaseContext#basecontext)) or a function, ensuring sensitive data is provided securely without direct exposure.
 
 ```python
 import os
@@ -52,7 +52,7 @@ from autogen.tools.dependency_injection import BaseContext, Depends
 ```
 
 ## Define a BaseContext Class
-We start by defining a [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext) class for accounts. This will act as the base structure for dependency injection. By using this approach, sensitive information like usernames and passwords is never exposed to the LLM.
+We start by defining a [`BaseContext`](/reference/autogen/tools/BaseContext#basecontext) class for accounts. This will act as the base structure for dependency injection. By using this approach, sensitive information like usernames and passwords is never exposed to the LLM.
 
 ```python
 class Account(BaseContext, BaseModel):
@@ -170,7 +170,7 @@ Your balance is 200 USD.
 
 ## Injecting Parameters Without BaseContext
 
-Sometimes, you might not want to use [`BaseContext`](/docs/reference/tools/dependency_injection#basecontext). Here's how to inject simple parameters directly.
+Sometimes, you might not want to use [`BaseContext`](/reference/autogen/tools/BaseContext#basecontext). Here's how to inject simple parameters directly.
 
 ### Agent Configuration
 

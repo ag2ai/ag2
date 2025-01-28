@@ -43,7 +43,7 @@ Traditionally, conversational AI tasks have focused on asynchronous interactions
 2. RealtimeAgent swarm integration
     - Seamless integration of [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) into Swarm
 
-3. [**`TwilioAudioAdapter`**](/docs/reference/agentchat/realtime_agent/twilio_audio_adapter#twilioaudioadapter)
+3. [**`TwilioAudioAdapter`**](/reference/autogen/agentchat/realtime_agent/TwilioAudioAdapter#twilioaudioadapter)
     - Connects agents to Twilio for telephony support.
     - Simplifies the process of handling voice calls with clear API methods.
 
@@ -256,14 +256,16 @@ async def handle_media_stream(websocket: WebSocket):
    )
 ```
 4. **Registering the Swarm**
-   The [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) is linked to a Swarm of agents responsible for different customer service tasks.
+   The [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) can be patched using `register_swarm` to be integrated into a swarm of agents.
+   - `realtime_agent`: [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) which we want to include in the swarm.
    - `initial_agent`: The first agent to process incoming queries (e.g., a triage agent).
    - `agents`: A list of specialized agents for handling specific tasks like flight modifications, cancellations, or lost baggage.
 ```python
-   realtime_agent.register_swarm(
+   register_swarm(
+        realtime_agent=realtime_agent,
         initial_agent=triage_agent,
         agents=[triage_agent, flight_modification, flight_cancel, flight_change, lost_baggage],
-   )
+    )
 ```
 5. **Running the RealtimeAgent**
    The `run()` method is invoked to start the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent), enabling it to handle real-time voice interactions and delegate tasks to the registered Swarm agents.
@@ -308,7 +310,8 @@ async def handle_media_stream(websocket: WebSocket):
         audio_adapter=audio_adapter,
     )
 
-    realtime_agent.register_swarm(
+    register_swarm(
+        realtime_agent=realtime_agent,
         initial_agent=triage_agent,
         agents=[triage_agent, flight_modification, flight_cancel, flight_change, lost_baggage],
     )

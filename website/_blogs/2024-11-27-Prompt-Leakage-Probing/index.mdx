@@ -83,12 +83,12 @@ The **Prompt Leakage Probing Framework** leverages key agentic design patterns f
    - The chat has a [custom speaker selection](https://docs.ag2.ai/notebooks/agentchat_groupchat_customized) method implemented so that it guarantees the prompt->response->classification chat flow.
 
 2. **ConversableAgents**
-   - The system includes two [ConversableAgents](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent#conversableagent):
+   - The system includes two [ConversableAgents](https://docs.ag2.ai/reference/autogen/ConversableAgent#conversableagent):
      - [`PromptGeneratorAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_black_box/prompt_leakage_black_box.py#L7): Responsible for creating adversarial prompts aimed at probing LLMs.
      - [`PromptLeakageClassifierAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_classifier/prompt_leakage_classifier.py#L7): Evaluates the model's responses to identify prompt leakage.
 
 3. **UserProxyAgent**
-   - A [UserProxyAgent](https://docs.ag2.ai/docs/reference/agentchat/user_proxy_agent#userproxyagent) acts as the intermediary for executing external functions, such as:
+   - A [UserProxyAgent](https://docs.ag2.ai/reference/autogen/UserProxyAgent#userproxyagent) acts as the intermediary for executing external functions, such as:
      - Communicating with the tested chatbot.
      - Logging prompt leakage attempts and their classifications.
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -20,6 +20,7 @@ else:
 
 
 # skip if python version is not in [3.10, 3.11, 3.12]
+@pytest.mark.interop
 @pytest.mark.skipif(
     sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
 )
@@ -91,6 +92,7 @@ class TestCrewAIInteroperability:
         assert CrewAIInteroperability.get_unsupported_reason() is None
 
 
+@pytest.mark.interop
 @pytest.mark.skipif(
     sys.version_info >= (3, 10) or sys.version_info < (3, 13), reason="Crew AI Interoperability is supported"
 )
