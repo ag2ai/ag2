@@ -22,7 +22,7 @@ from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflict, UndefinedNextAgent
 
-from ..conftest import Credentials
+from ..conftest import Credentials, suppress_json_decoder_error
 
 
 def test_func_call_groupchat():
@@ -2183,6 +2183,7 @@ def test_manager_resume_message_assignment():
 
 
 @pytest.mark.deepseek
+@suppress_json_decoder_error
 def test_groupchat_with_deepseek_reasoner(
     credentials_gpt_4o_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,
