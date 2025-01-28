@@ -6,11 +6,13 @@
 import pytest
 
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.tools.experimental.crawl4ai import Crawl4AITool
+
+from ....conftest import Credentials
 
 with optional_import_block():
-    from crawl4ai import AsyncWebCrawler
-
-from autogen.tools.experimental.crawl4ai import Crawl4AITool
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+    from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 
 @pytest.mark.crawl4ai  # todo: remove me after we merge the PR that ads it automatically
@@ -18,9 +20,13 @@ from autogen.tools.experimental.crawl4ai import Crawl4AITool
 class TestCrawl4AITool:
     def _use_imports(self) -> None:
         self._AsyncWebCrawler = AsyncWebCrawler
+        self._BrowserConfig = BrowserConfig
+        self._CrawlerRunConfig = CrawlerRunConfig
+        self._CacheMode = CacheMode
+        self._LLMExtractionStrategy = LLMExtractionStrategy
 
     @pytest.mark.asyncio
-    async def test__init__(self) -> None:
+    async def test_without_llm(self) -> None:
         tool_without_llm = Crawl4AITool()
         assert isinstance(tool_without_llm, Crawl4AITool)
         assert tool_without_llm.name == "crawl4ai"
@@ -44,3 +50,12 @@ class TestCrawl4AITool:
 
         result = await tool_without_llm(url="https://docs.ag2.ai/docs/Home")
         assert isinstance(result, str)
+
+    @pytest.mark.asyncio
+    async def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
+        tool_with_llm = Crawl4AITool(llm_config=credentials_gpt_4o_mini.llm_config)
+        assert isinstance(tool_with_llm, Crawl4AITool)
+
+        result = await tool_with_llm(url="https://docs.ag2.ai/docs/Home")
+        # assert isinstance(result, str)
+        assert result is None, result
