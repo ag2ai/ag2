@@ -20,17 +20,17 @@ designed to solve tasks through inter-agent conversations. Specifically, the age
 The figure below shows the built-in agents in AutoGen.
 ![Agent Chat Example](images/autogen_agents.png)
 
-We have designed a generic [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent)
- class for Agents that are capable of conversing with each other through the exchange of messages to jointly finish a task. An agent can communicate with other agents and perform actions. Different agents can differ in what actions they perform after receiving messages. Two representative subclasses are [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent) and [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent)
+We have designed a generic [`ConversableAgent`](/reference/autogen/ConversableAgent#conversableagent)
+ class for Agents that are capable of conversing with each other through the exchange of messages to jointly finish a task. An agent can communicate with other agents and perform actions. Different agents can differ in what actions they perform after receiving messages. Two representative subclasses are [`AssistantAgent`](/reference/autogen/AssistantAgent#assistantagent) and [`UserProxyAgent`](/reference/autogen/UserProxyAgent#userproxyagent)
 
-- The [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent) is designed to act as an AI assistant, using LLMs by default but not requiring human input or code execution. It could write Python code (in a Python coding block) for a user to execute when a message (typically a description of a task that needs to be solved) is received. Under the hood, the Python code is written by LLM (e.g., GPT-4). It can also receive the execution results and suggest corrections or bug fixes. Its behavior can be altered by passing a new system message. The LLM [inference](/docs/Use-Cases/enhanced_inference) configuration can be configured via [`llm_config`].
+- The [`AssistantAgent`](/reference/autogen/AssistantAgent#assistantagent) is designed to act as an AI assistant, using LLMs by default but not requiring human input or code execution. It could write Python code (in a Python coding block) for a user to execute when a message (typically a description of a task that needs to be solved) is received. Under the hood, the Python code is written by LLM (e.g., GPT-4). It can also receive the execution results and suggest corrections or bug fixes. Its behavior can be altered by passing a new system message. The LLM [inference](/docs/Use-Cases/enhanced_inference) configuration can be configured via [`llm_config`].
 
-- The [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) is conceptually a proxy agent for humans, soliciting human input as the agent's reply at each interaction turn by default and also having the capability to execute code and call functions or tools. The [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) triggers code execution automatically when it detects an executable code block in the received message and no human user input is provided. Code execution can be disabled by setting the `code_execution_config` parameter to False. LLM-based response is disabled by default. It can be enabled by setting `llm_config` to a dict corresponding to the [inference](/docs/Use-Cases/enhanced_inference) configuration. When `llm_config` is set as a dictionary, [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) can generate replies using an LLM when code execution is not performed.
+- The [`UserProxyAgent`](/reference/autogen/UserProxyAgent#userproxyagent) is conceptually a proxy agent for humans, soliciting human input as the agent's reply at each interaction turn by default and also having the capability to execute code and call functions or tools. The [`UserProxyAgent`](/reference/autogen/UserProxyAgent#userproxyagent) triggers code execution automatically when it detects an executable code block in the received message and no human user input is provided. Code execution can be disabled by setting the `code_execution_config` parameter to False. LLM-based response is disabled by default. It can be enabled by setting `llm_config` to a dict corresponding to the [inference](/docs/Use-Cases/enhanced_inference) configuration. When `llm_config` is set as a dictionary, [`UserProxyAgent`](/reference/autogen/UserProxyAgent#userproxyagent) can generate replies using an LLM when code execution is not performed.
 
-The auto-reply capability of [`ConversableAgent`](/docs/reference/agentchat/conversable_agent#conversableagent) allows for more autonomous multi-agent communication while retaining the possibility of human intervention.
-One can also easily extend it by registering reply functions with the [`register_reply()`](/docs/reference/agentchat/conversable_agent#register-reply) method.
+The auto-reply capability of [`ConversableAgent`](/reference/autogen/ConversableAgent#conversableagent) allows for more autonomous multi-agent communication while retaining the possibility of human intervention.
+One can also easily extend it by registering reply functions with the [`register_reply()`](/reference/autogen/ConversableAgent#register-reply) method.
 
-In the following code, we create an [`AssistantAgent`](/docs/reference/agentchat/assistant_agent#assistantagent)  named "assistant" to serve as the assistant and a [`UserProxyAgent`](/docs/reference/agentchat/user_proxy_agent#userproxyagent) named "user_proxy" to serve as a proxy for the human user. We will later employ these two agents to solve a task.
+In the following code, we create an [`AssistantAgent`](/reference/autogen/AssistantAgent#assistantagent)  named "assistant" to serve as the assistant and a [`UserProxyAgent`](/reference/autogen/UserProxyAgent#userproxyagent) named "user_proxy" to serve as a proxy for the human user. We will later employ these two agents to solve a task.
 
 ```python
 import os
@@ -96,7 +96,7 @@ Another approach involves LLM-based function calls, where LLM decides if a speci
 The figure below shows six examples of applications built using AutoGen.
 ![Applications](images/app.png)
 
-Find a list of examples in this page: [Automated Agent Chat Examples](/docs/Examples#automated-multi-agent-chat)
+Find a list of examples in this page: [Automated Agent Chat Examples](/notebooks/Notebooks)
 
 ## For Further Reading
 

@@ -152,7 +152,7 @@ Note that the previous experts will forget everything after you obtain the respo
         system_message (str): system message for the ChatCompletion inference.
             Please override this attribute if you want to reprogram the agent.
         llm_config (dict): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create) for available options.
+            Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create) for available options.
         is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.
             The dict can contain the following keys: "content", "role", "name", "function_call".
@@ -332,7 +332,7 @@ Collect information from the general task, follow the suggestions from manager t
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         llm_config (dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create)
             for available options.
             Default to false, which disables llm-based auto reply.
         system_message (str or List): system message for ChatCompletion inference.
