@@ -4,9 +4,9 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from .agent import Agent
+from .agent import Agent, LLMAgent
 from .assistant_agent import AssistantAgent
-from .chat import ChatResult, initiate_chats
+from .chat import ChatResult, a_initiate_chats, initiate_chats
 from .contrib.reasoning_agent import (
     ReasoningAgent,
     ThinkNode,
@@ -40,11 +40,13 @@ __all__ = [
     "ConversableAgent",
     "GroupChat",
     "GroupChatManager",
+    "LLMAgent",
     "ReasoningAgent",
     "SwarmAgent",
     "SwarmResult",
     "ThinkNode",
     "UserProxyAgent",
+    "a_initiate_chats",
     "a_initiate_swarm_chat",
     "gather_usage_summary",
     "initiate_chats",

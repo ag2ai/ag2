@@ -10,16 +10,10 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
 import anyio
 from asyncer import asyncify, create_task_group, syncify
 
-from autogen.agentchat.conversable_agent import ConversableAgent
-
 from ... import SwarmAgent
-from ...cache.abstract_cache_base import AbstractCache
-from ...code_utils import (
-    content_str,
-)
-from ..agent import Agent, LLMAgent
-from ..chat import ChatResult
-from ..contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
+from ...cache import AbstractCache
+from ...code_utils import content_str
+from .. import AfterWorkOption, Agent, ChatResult, ConversableAgent, LLMAgent, initiate_swarm_chat
 from ..utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:
@@ -110,7 +104,7 @@ def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: 
     return oai_message
 
 
-class SwarmableAgent(LLMAgent):
+class SwarmableAgent:
     """A class for an agent that can participate in a swarm chat."""
 
     def __init__(
@@ -314,6 +308,25 @@ class SwarmableAgent(LLMAgent):
         except (IndexError, AttributeError) as e:
             warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
         return summary
+
+
+# check that the SwarmableAgent class is implementing LLMAgent protocol
+if TYPE_CHECKING:
+
+    def _create_swarmable_agent(
+        name: str,
+        system_message: str,
+        is_termination_msg: Optional[Callable[..., bool]],
+        description: Optional[str],
+        silent: Optional[bool],
+    ) -> LLMAgent:
+        return SwarmableAgent(
+            name=name,
+            system_message=system_message,
+            is_termination_msg=is_termination_msg,
+            description=description,
+            silent=silent,
+        )
 
 
 class SwarmableRealtimeAgent(SwarmableAgent):

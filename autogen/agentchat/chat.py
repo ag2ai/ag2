@@ -20,6 +20,8 @@ from .utils import consolidate_chat_info
 logger = logging.getLogger(__name__)
 Prerequisite = tuple[int, int]
 
+__all__ = ["ChatResult", "a_initiate_chats", "initiate_chats"]
+
 
 @dataclass
 class ChatResult:
