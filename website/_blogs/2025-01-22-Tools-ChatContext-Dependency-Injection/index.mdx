@@ -7,11 +7,11 @@ tags: [tools, tool calling, dependency injection]
 
 ## Introduction
 
-In this post, we’ll build upon the concepts introduced in our previous blog on [Tools with Dependency Injection](/blog/2025-01-07-Tools-Dependency-Injection/index). We’ll take a deeper look at how [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) can be used to manage the flow of conversations in a more structured and secure way.
+In this post, we’ll build upon the concepts introduced in our previous blog on [Tools with Dependency Injection](/blog/2025-01-07-Tools-Dependency-Injection/index). We’ll take a deeper look at how [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext) can be used to manage the flow of conversations in a more structured and secure way.
 
-By using [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext), we can track and control the sequence of function calls during a conversation. This is particularly useful in situations where one task must be completed before another — for example, ensuring that a user logs in before they can check their account balance. This approach helps to prevent errors and enhances the security of the system.
+By using [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext), we can track and control the sequence of function calls during a conversation. This is particularly useful in situations where one task must be completed before another — for example, ensuring that a user logs in before they can check their account balance. This approach helps to prevent errors and enhances the security of the system.
 
-**Benefits of Using [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext)**:
+**Benefits of Using [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext)**:
 - **Flow Control**: Ensures tasks are performed in the correct order, reducing the chance of mistakes.
 - **Enhanced Security**: Prevents unauthorized actions, such as accessing sensitive data before authentication.
 - **Simplified Debugging**: Logs the conversation history, making it easier to trace and resolve issues.
@@ -105,7 +105,7 @@ user_proxy = UserProxyAgent(
 ## Injecting a ChatContext Parameter
 
 Now let’s upgrade the example from the previous post by introducing
-the [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) parameter. This enhancement allows us to enforce
+the [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext) parameter. This enhancement allows us to enforce
 proper execution order in the workflow, ensuring that users log in
 before accessing sensitive data like account balances.
 
@@ -241,11 +241,11 @@ TERMINATE
 
 ## Conclusion
 
-In this post, we introduced [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) as an extension of dependency injection, showing how it simplifies and secures workflows in conversational AI by ensuring tasks like login happen before accessing sensitive data, improving both functionality and security.
+In this post, we introduced [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext) as an extension of dependency injection, showing how it simplifies and secures workflows in conversational AI by ensuring tasks like login happen before accessing sensitive data, improving both functionality and security.
 
 **Highlights:**
-- **Flow Control**: [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) can ensure that functions are executed in the correct sequence, reducing the risk of logical errors.
+- **Flow Control**: [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext) can ensure that functions are executed in the correct sequence, reducing the risk of logical errors.
 - **Enhanced Security**: Sensitive actions like balance retrieval are protected by preconditions like login verification.
-- **Simplified Debugging**: With [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext), developers can trace conversations, making it easier to identify and resolve issues.
+- **Simplified Debugging**: With [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext), developers can trace conversations, making it easier to identify and resolve issues.
 
-By leveraging tools like [`ChatContext`](/docs/reference/tools/dependency_injection#chatcontext) and employing dependency injection principles, you can build robust, secure, and user-friendly conversational workflows.
+By leveraging tools like [`ChatContext`](/reference/autogen/tools/ChatContext#chatcontext) and employing dependency injection principles, you can build robust, secure, and user-friendly conversational workflows.

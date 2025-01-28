@@ -56,7 +56,7 @@ Combining these observations, we can design a solution with two intuitive ideas:
 
 This solution works adaptively without knowing or predicting which task fits which configuration. It simply tries multiple configurations one by one, starting from the cheapest configuration. Note that one configuration can generate multiple responses (by setting the inference parameter n larger than 1). And different configurations can use the same model and different inference parameters such as n and temperature. Only one response is returned and evaluated per task.
 
-An implementation of this solution is provided in [autogen](/docs/reference/code_utils#implement). It uses the following sequence of configurations:
+An implementation of this solution is provided in [autogen](/reference/autogen/code_utils/implement#implement). It uses the following sequence of configurations:
 
 1. GPT-3.5-Turbo, n=1, temperature=0
 1. GPT-3.5-Turbo, n=7, temperature=1, stop=["\nclass", "\ndef", "\nif", "\nprint"]
