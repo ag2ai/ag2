@@ -8,6 +8,8 @@ from typing import Any, Optional, Protocol, Union, runtime_checkable
 
 from ..doc_utils import export_module
 
+__all__ = ["Agent", "LLMAgent"]
+
 
 @runtime_checkable
 @export_module("autogen")
@@ -131,6 +133,7 @@ class Agent(Protocol):
 
 
 @runtime_checkable
+@export_module("autogen")
 class LLMAgent(Agent, Protocol):
     """(In preview) A protocol for an LLM agent."""
 

@@ -7,14 +7,14 @@
 
 
 def test_import() -> None:
-    from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver
+    from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver
 
     assert RealtimeAgent is not None
     assert RealtimeObserver is not None
 
 
 def test_import_clients() -> None:
-    from autogen.agentchat.realtime_agent.clients import (
+    from autogen.agentchat.realtime.experimental.clients import (
         GeminiRealtimeClient,
         OpenAIRealtimeClient,
         RealtimeClientProtocol,

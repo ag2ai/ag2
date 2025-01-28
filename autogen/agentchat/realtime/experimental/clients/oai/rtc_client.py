@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 import httpx
 
-from .....doc_utils import export_module
+from ......doc_utils import export_module
 from ...realtime_events import RealtimeEvent
 from ..realtime_client import Role, register_realtime_client
 from .utils import parse_oai_message
@@ -25,7 +25,7 @@ global_logger = getLogger(__name__)
 
 
 @register_realtime_client()
-@export_module("autogen.agentchat.realtime_agent.clients.oai")
+@export_module("autogen.agentchat.realtime.experimental.clients.oai")
 class OpenAIRealtimeWebRTCClient:
     """(Experimental) Client for OpenAI Realtime API that uses WebRTC protocol."""
 
