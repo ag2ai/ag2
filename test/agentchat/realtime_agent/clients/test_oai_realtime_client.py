@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 from anyio import move_on_after
 
-from autogen.agentchat.realtime_agent.clients import OpenAIRealtimeClient, RealtimeClientProtocol
-from autogen.agentchat.realtime_agent.realtime_events import AudioDelta, SessionCreated, SessionUpdated
+from autogen.agentchat.realtime.experimental.clients import OpenAIRealtimeClient, RealtimeClientProtocol
+from autogen.agentchat.realtime.experimental.realtime_events import AudioDelta, SessionCreated, SessionUpdated
 
 from ....conftest import Credentials
 
