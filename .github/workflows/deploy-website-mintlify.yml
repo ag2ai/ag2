@@ -92,7 +92,7 @@ jobs:
           find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -path "./temp_website/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
 
       - name: Deploy to Mintlify
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: mintlify-pages

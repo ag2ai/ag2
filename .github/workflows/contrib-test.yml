@@ -63,7 +63,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -133,7 +133,7 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -164,7 +164,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/agent_eval/
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -201,7 +201,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_gpt_assistant.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -238,7 +238,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -275,7 +275,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -318,7 +318,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -360,7 +360,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_gemini.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -397,7 +397,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_transform_messages.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittest
@@ -429,7 +429,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_llamaindex_conversable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -472,7 +472,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_anthropic.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -514,7 +514,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cerebras.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -556,7 +556,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_mistral.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -598,7 +598,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_together.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -640,7 +640,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_groq.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -678,7 +678,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cohere.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -720,7 +720,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_ollama.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -762,7 +762,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_bedrock.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -804,7 +804,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_swarm.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -857,7 +857,7 @@ jobs:
           run: |
             bash scripts/test-skip-llm.sh test/agentchat/contrib/test_reasoning_agent.py
         - name: Upload coverage to Codecov
-          uses: codecov/codecov-action@v3
+          uses: codecov/codecov-action@v5
           with:
             file: ./coverage.xml
             flags: unittests
