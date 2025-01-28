@@ -187,7 +187,6 @@ ${metadata}
 
 <code class="doc-symbol doc-symbol-heading doc-symbol-${func.cls and 'method' or 'function'}"></code>
 ${'####'} ${func.name}
-<a href="#${func.module.name}.${func.cls.name if func.cls else ''}.${func.name}" class="headerlink" title="Permanent link"></a>
 
 <%
         returns = show_type_annotations and func.return_annotation() or ''
@@ -222,9 +221,7 @@ ${format_returns_table(returns, cleaned_docstring)}
 
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
 ${'####'} ${var.name}
-<a href="#${var.module.name}.${var.cls.name if var.cls else ''}.${var.name}" class="headerlink" title="Permanent link"></a>
-
-
+<br />
 <%
         annot = show_type_annotations and var.type_annotation() or ''
         if annot:
@@ -245,7 +242,6 @@ title: ${cls.module.name}.${cls.name}
 <h2 id="${cls.module.name}.${cls.name}" class="doc doc-heading">
     <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>
     <span class="doc doc-object-name doc-class-name">${cls.name}</span>
-    <a href="#${cls.module.name}.${cls.name}" class="headerlink" title="Permanent link"></a>
 </h2>
 
 <%
