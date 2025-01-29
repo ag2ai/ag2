@@ -2,6 +2,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .experimental import WebSurfer
-
-__all__ = ["WebSurfer"]
+# from autogen.agents.experimental import WebSurfer
