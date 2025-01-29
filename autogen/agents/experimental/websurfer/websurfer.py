@@ -16,12 +16,12 @@ class WebSurfer(ConversableAgent):
         self,
         llm_config: dict[str, Any],
         *args,
-        web_tool: Literal["browser-use", "crawl4ai"] = "browser-use",
+        web_tool: Literal["browser_use", "crawl4ai"] = "browser_use",
         web_tool_kwargs: dict[str, Any] = None,
         **kwargs,
     ) -> None:
         web_tool_kwargs = web_tool_kwargs if web_tool_kwargs else {}
-        if web_tool == "browser-use":
+        if web_tool == "browser_use":
             self.tool: Tool = BrowserUseTool(llm_config=llm_config, **web_tool_kwargs)
         elif web_tool == "crawl4ai":
             self.tool = Crawl4AITool(llm_config=llm_config, **web_tool_kwargs)

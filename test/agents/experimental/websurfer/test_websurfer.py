@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+
 import pytest
 
 from autogen.agentchat import UserProxyAgent
@@ -12,18 +14,39 @@ from autogen.import_utils import skip_on_missing_imports
 from ....conftest import Credentials
 
 
-def _check_tool_called(result: ChatResult, tool_name: str) -> bool:
-    for message in result.chat_history:
-        if "tool_calls" in message and message["tool_calls"][0]["function"]["name"] == tool_name:
-            return True
+class WebSurferTestHelper:
+    @staticmethod
+    def _check_tool_called(result: ChatResult, tool_name: str) -> bool:
+        for message in result.chat_history:
+            if "tool_calls" in message and message["tool_calls"][0]["function"]["name"] == tool_name:
+                return True
 
-    return False
+        return False
+
+    def test_init(self, credentials: Credentials, web_tool: str, expected: list[dict[str, Any]]) -> None:
+        websurfer = WebSurfer(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
+        assert websurfer.llm_config["tools"] == expected
+
+    def test_end2end(self, credentials: Credentials, web_tool: str) -> None:
+        websurfer = WebSurfer(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
+        user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+
+        websurfer_tools = websurfer.tools
+        for tool in websurfer_tools:
+            tool.register_for_execution(user_proxy)
+
+        result = user_proxy.initiate_chat(
+            recipient=websurfer,
+            message="Get info from https://docs.ag2.ai/docs/Home",
+            max_turns=2,
+        )
+
+        assert self._check_tool_called(result, web_tool)
 
 
 @skip_on_missing_imports(["crawl4ai"], "crawl4ai")
-class TestCrawl4AIWebSurfer:
+class TestCrawl4AIWebSurfer(WebSurferTestHelper):
     def test_init(self, mock_credentials: Credentials) -> None:
-        websurfer = WebSurfer(name="WebSurfer", llm_config=mock_credentials.llm_config, web_tool="crawl4ai")
         expected = [
             {
                 "function": {
@@ -44,30 +67,16 @@ class TestCrawl4AIWebSurfer:
                 "type": "function",
             }
         ]
-        assert websurfer.llm_config["tools"] == expected
+        super().test_init(mock_credentials, "crawl4ai", expected)
 
     @pytest.mark.openai
     def test_end2end(self, credentials_gpt_4o_mini: Credentials) -> None:
-        websurfer = WebSurfer(name="WebSurfer", llm_config=credentials_gpt_4o_mini.llm_config, web_tool="crawl4ai")
-        user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-
-        websurfer_tools = websurfer.tools
-        for tool in websurfer_tools:
-            tool.register_for_execution(user_proxy)
-
-        result = user_proxy.initiate_chat(
-            recipient=websurfer,
-            message="Get info from https://docs.ag2.ai/docs/Home",
-            max_turns=2,
-        )
-
-        assert _check_tool_called(result, "crawl4ai")
+        super().test_end2end(credentials_gpt_4o_mini, "crawl4ai")
 
 
 @skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
-class TestBrowserUseWebSurfer:
+class TestBrowserUseWebSurfer(WebSurferTestHelper):
     def test_init(self, mock_credentials: Credentials) -> None:
-        websurfer = WebSurfer(name="WebSurfer", llm_config=mock_credentials.llm_config, web_tool="browser-use")
         expected = [
             {
                 "function": {
@@ -82,21 +91,8 @@ class TestBrowserUseWebSurfer:
                 "type": "function",
             }
         ]
-        assert websurfer.llm_config["tools"] == expected, websurfer.llm_config["tools"]
+        super().test_init(mock_credentials, "browser_use", expected)
 
     @pytest.mark.openai
     def test_end2end(self, credentials_gpt_4o_mini: Credentials) -> None:
-        websurfer = WebSurfer(name="WebSurfer", llm_config=credentials_gpt_4o_mini.llm_config, web_tool="browser-use")
-        user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-
-        websurfer_tools = websurfer.tools
-        for tool in websurfer_tools:
-            tool.register_for_execution(user_proxy)
-
-        result = user_proxy.initiate_chat(
-            recipient=websurfer,
-            message="Get info from https://docs.ag2.ai/docs/Home",
-            max_turns=2,
-        )
-
-        assert _check_tool_called(result, "browser_use")
+        super().test_end2end(credentials_gpt_4o_mini, "browser_use")
