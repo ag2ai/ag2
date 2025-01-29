@@ -7,6 +7,7 @@ from typing import Annotated, Any, Optional, Type
 
 from pydantic import BaseModel
 
+from ....doc_utils import export_module
 from ....import_utils import optional_import_block
 from ... import Tool
 from ...dependency_injection import Depends, on
@@ -18,6 +19,7 @@ with optional_import_block():
 __all__ = ["Crawl4AITool"]
 
 
+@export_module("autogen.tools.experimental")
 class Crawl4AITool(Tool):
     """
     Crawl a website and extract information using the crawl4ai library.
