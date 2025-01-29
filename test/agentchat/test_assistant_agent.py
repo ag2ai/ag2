@@ -11,6 +11,7 @@ import os
 import pytest
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
+from autogen.tools import tool
 
 from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
@@ -187,6 +188,45 @@ def test_tsp(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max
     # autogen.ChatCompletion.stop_logging()
     # print(chat_res.summary)
     print(chat_res.cost)
+
+
+@pytest.mark.openai
+def test_standalone(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
+
+    x_assistant = AssistantAgent(name="x_assistant", llm_config={"temperature": 0, "config_list": config_list})
+
+    @tool()
+    def get_twitter_hot_topic() -> str:
+        return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
+
+    hot_topic_res = x_assistant.run(
+        "Find out today's hot topic and an influencer who is talking about it on X",
+        tools=get_twitter_hot_topic,
+    )
+
+    assert "AI" in hot_topic_res
+    assert "elonmusk" in hot_topic_res
+
+
+@pytest.mark.openai
+@pytest.mark.asyncio
+async def test_standalone_async(credentials_gpt_4o_mini: Credentials):
+    config_list = credentials_gpt_4o_mini.config_list
+
+    x_assistant = AssistantAgent(name="x_assistant", llm_config={"temperature": 0, "config_list": config_list})
+
+    @tool()
+    def get_twitter_hot_topic() -> str:
+        return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
+
+    hot_topic_res = await x_assistant.a_run(
+        "Find out today's hot topic and an influencer who is talking about it on X",
+        tools=get_twitter_hot_topic,
+    )
+
+    assert "AI" in hot_topic_res
+    assert "elonmusk" in hot_topic_res
 
 
 if __name__ == "__main__":

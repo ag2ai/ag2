@@ -13,9 +13,12 @@ import logging
 import re
 import warnings
 from collections import defaultdict
+from contextlib import contextmanager
 from typing import (
     Any,
     Callable,
+    Generator,
+    Iterable,
     Literal,
     Optional,
     TypeVar,
@@ -2906,6 +2909,77 @@ class ConversableAgent(LLMAgent):
             return None
         else:
             return self.client.total_usage_summary
+
+    @contextmanager
+    def _create_executor(
+        self, executor_kwargs: Optional[dict[str, Any]] = None, tools: Optional[Union[Tool, Iterable[Tool]]] = None
+    ) -> Generator["ConversableAgent", None, None]:
+        if executor_kwargs is None:
+            executor_kwargs = {}
+        if "is_termination_msg" not in executor_kwargs:
+            executor_kwargs["is_termination_msg"] = lambda x: (x["content"] is not None) and x["content"].endswith(
+                "TERMINATE"
+            )
+
+        executor = ConversableAgent(
+            name="executor",
+            human_input_mode="NEVER",
+            code_execution_config={
+                "work_dir": "coding",
+                "use_docker": True,
+            },
+            **executor_kwargs,
+        )
+
+        try:
+            tools = [] if tools is None else tools
+            tools = [tools] if isinstance(tools, Tool) else tools
+            for tool in tools:
+                tool.register_for_execution(executor)
+                tool.register_for_llm(self)
+            yield executor
+        finally:
+            if tools is not None:
+                for tool in tools:
+                    self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
+
+    def run(
+        self,
+        message: str,
+        *,
+        clear_history: bool = False,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+    ) -> ChatResult:
+        """Run the agent with the given message.
+
+        Args:
+            message: the message to be processed.
+            clear_history: whether to clear the chat history.
+            executor_kwargs: the keyword arguments for the executor.
+            tools: the tools to be used by the agent.
+        """
+        with self._create_executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
+            return executor.initiate_chat(self, message=message, clear_history=clear_history).summary
+
+    async def a_run(
+        self,
+        message: str,
+        *,
+        clear_history=False,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+    ) -> ChatResult:
+        """Run the agent with the given message.
+
+        Args:
+            message: the message to be processed.
+            clear_history: whether to clear the chat history.
+            executor_kwargs: the keyword arguments for the executor.
+            tools: the tools to be used by the agent.
+        """
+        with self._create_executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
+            return (await executor.a_initiate_chat(self, message=message, clear_history=clear_history)).summary
 
 
 @export_module("autogen")
