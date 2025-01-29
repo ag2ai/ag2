@@ -12,7 +12,7 @@ from .dependency_injection import ChatContext, get_context_params, inject_params
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
 
-__all__ = ["Tool"]
+__all__ = ["Tool", "tool"]
 
 
 @export_module("autogen.tools")
@@ -148,3 +148,20 @@ class Tool:
         schema = {"type": schema["type"], **schema["function"]}
 
         return schema
+
+
+def tool(name: Optional[str] = None, description: Optional[str] = None) -> Callable[[Callable[..., Any]], Tool]:
+    """Decorator to create a Tool from a function.
+
+    Args:
+        name (str): The name of the tool.
+        description (str): The description of the tool.
+
+    Returns:
+        Callable[[Callable[..., Any]], Tool]: A decorator that creates a Tool from a function.
+    """
+
+    def decorator(func: Callable[..., Any]) -> Tool:
+        return Tool(name=name, description=description, func_or_tool=func)
+
+    return decorator

@@ -13,9 +13,11 @@ import logging
 import re
 import warnings
 from collections import defaultdict
+from contextlib import contextmanager
 from typing import (
     Any,
     Callable,
+    Generator,
     Iterable,
     Literal,
     Optional,
@@ -215,7 +217,6 @@ class ConversableAgent(LLMAgent):
         self._default_auto_reply = default_auto_reply
         self._reply_func_list = []
         self._human_input = []
-        self.registered_tools = []
         self.reply_at_receive = defaultdict(bool)
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
@@ -2730,7 +2731,6 @@ class ConversableAgent(LLMAgent):
             tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
 
             self._register_for_llm(tool, api_style)
-            self.registered_tools.append(tool)
 
             return tool
 
@@ -2910,7 +2910,16 @@ class ConversableAgent(LLMAgent):
         else:
             return self.client.total_usage_summary
 
-    def _create_user_proxy(self, **kwargs: Any) -> "ConversableAgent":
+    def _create_user_proxy(
+        self, user_proxy_kwargs: Optional[dict[str, Any]], tools: Optional[Union[Tool, Iterable[Tool]]]
+    ) -> "ConversableAgent":
+        if user_proxy_kwargs is None:
+            user_proxy_kwargs = {}
+        if "is_termination_msg" not in user_proxy_kwargs:
+            user_proxy_kwargs["is_termination_msg"] = lambda x: (x["content"] is not None) and x["content"].endswith(
+                "TERMINATE"
+            )
+
         user_proxy = ConversableAgent(
             name="User_Proxy",
             human_input_mode="NEVER",
@@ -2918,18 +2927,62 @@ class ConversableAgent(LLMAgent):
                 "work_dir": "coding",
                 "use_docker": True,
             },
-            **kwargs,
+            **user_proxy_kwargs,
         )
-        for tool in self.registered_tools:
-            tool.register_for_execution(user_proxy)
+
+        if tools is not None:
+            if isinstance(tools, Tool):
+                tools = [tools]
+            for tool in tools:
+                tool.register_for_execution(user_proxy)
+                tool.register_for_llm(self)
 
         return user_proxy
 
+    @contextmanager
+    def executor(
+        self, executor_kwargs: Optional[dict[str, Any]] = None, tools: Optional[Union[Tool, Iterable[Tool]]] = None
+    ) -> Generator["ConversableAgent", None, None]:
+        if executor_kwargs is None:
+            executor_kwargs = {}
+        if "is_termination_msg" not in executor_kwargs:
+            executor_kwargs["is_termination_msg"] = lambda x: (x["content"] is not None) and x["content"].endswith(
+                "TERMINATE"
+            )
+
+        executor = ConversableAgent(
+            name="executor",
+            human_input_mode="NEVER",
+            code_execution_config={
+                "work_dir": "coding",
+                "use_docker": True,
+            },
+            **executor_kwargs,
+        )
+
+        try:
+            if tools is not None:
+                if isinstance(tools, Tool):
+                    tools = [tools]
+                for tool in tools:
+                    tool.register_for_execution(executor)
+                    tool.register_for_llm(self)
+            yield executor
+        finally:
+            if tools is not None:
+                for tool in tools:
+                    self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
+
     def run(
-        self, message: str, *, clear_history=False, user_proxy_kwargs: Optional[dict[str, Any]] = None
+        self,
+        message: str,
+        *,
+        clear_history=False,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
     ) -> ChatResult:
-        user_proxy = self._create_user_proxy(**(user_proxy_kwargs if user_proxy_kwargs else {}))
-        return user_proxy.initiate_chat(self, message=message, clear_history=clear_history).summary
+        with self.executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
+            return executor.initiate_chat(self, message=message, clear_history=clear_history).summary
 
     async def a_run(
         self,
@@ -2937,10 +2990,10 @@ class ConversableAgent(LLMAgent):
         *,
         clear_history=False,
         tools: Optional[Union[Tool, Iterable[Tool]]] = None,
-        user_proxy_kwargs: Optional[dict[str, Any]] = None,
+        executor_kwargs: Optional[dict[str, Any]] = None,
     ) -> ChatResult:
-        user_proxy = self._create_user_proxy(tools=tools, **(user_proxy_kwargs if user_proxy_kwargs else {}))
-        return (await user_proxy.a_initiate_chat(self, message=message, clear_history=clear_history)).summary
+        with self.executor(executor_proxy_kwargs=executor_kwargs, tools=tools) as executor:
+            return (await executor.a_initiate_chat(self, message=message, clear_history=clear_history)).summary
 
 
 @export_module("autogen")
