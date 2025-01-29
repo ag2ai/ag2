@@ -28,9 +28,9 @@ class WebSurfer(ConversableAgent):
         else:
             raise ValueError(f"Unsupported {web_tool=}.")
 
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, llm_config=llm_config, **kwargs)
 
-        self.register_for_llm(self.tool)
+        self.register_for_llm()(self.tool)
 
     @property
     def tools(self) -> list[Tool]:
