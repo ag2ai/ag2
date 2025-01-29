@@ -275,19 +275,6 @@ class GeminiClient:
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
             response = chat.send_message(message=gemini_messages[-1].parts)
 
-            # model = genai.GenerativeModel(
-            #     model_name,
-            #     generation_config=generation_config,
-            #     safety_settings=safety_settings,
-            #     system_instruction=system_instruction,
-            #     tools=tools,
-            # )
-
-            # genai.configure(api_key=self.api_key)
-            # chat = model.start_chat(history=gemini_messages[:-1])
-
-            # response = chat.send_message(gemini_messages[-1].parts, stream=stream, safety_settings=safety_settings)
-
         # Extract text and tools from response
         ans = ""
         random_id = random.randint(0, 10000)
