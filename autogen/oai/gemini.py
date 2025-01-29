@@ -224,9 +224,9 @@ class GeminiClient:
             if autogen_term in params
         }
         if self.use_vertexai:
-            safety_settings = GeminiClient._to_vertexai_safety_settings(params.get("safety_settings", {}))
+            safety_settings = GeminiClient._to_vertexai_safety_settings(params.get("safety_settings", []))
         else:
-            safety_settings = params.get("safety_settings", {})
+            safety_settings = params.get("safety_settings", [])
 
         if stream:
             warnings.warn(
@@ -281,7 +281,11 @@ class GeminiClient:
         prev_function_calls = []
 
         if isinstance(response, GenerateContentResponse):
-            parts = response.parts
+            if len(response.candidates) != 1:
+                raise ValueError(
+                    f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
+                )
+            parts = response.candidates[0].content.parts
         elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
             # google.generativeai also raises an error len(candidates) != 1:
             if len(response.candidates) != 1:
