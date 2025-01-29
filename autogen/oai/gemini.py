@@ -658,7 +658,7 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
-        function_parameter["type_"] = function_parameter["type"].upper()
+        function_parameter["type"] = function_parameter["type"].upper()
 
         # Parameter properties and items
         if "properties" in function_parameter:
@@ -671,7 +671,7 @@ class GeminiClient:
             function_parameter["items"] = GeminiClient._create_gemini_function_parameters(function_parameter["items"])
 
         # Remove any attributes not needed
-        for attr in ["type", "default"]:
+        for attr in ["default"]:
             if attr in function_parameter:
                 del function_parameter[attr]
 
