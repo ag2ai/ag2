@@ -11,44 +11,26 @@ tags: [Realtime API, Voice Agents, Gemini]
 
 ![Realtime agent communication with Gemini live API](img/RealtimeAgent_gemini.png)
 
-Here’s an expanded draft with additional ideas and sections:
-
----
-
 **TL;DR:**
 
 - RealtimeAgent now supports [Gemini Multimodal Live API](https://ai.google.dev/api/multimodal-live)
-
----
 
 **Why is this important?**
 
 We previously supported a Realtime Agent powered by OpenAI. In December 2024, Google rolled out [Gemini 2.0](https://blog.google/technology/google-deepmind/google-gemini-ai-update-december-2024/), which includes the multi-modal live APIs. These APIs enable advanced capabilities such as real-time processing of multimodal inputs (text, images, and audio) in live conversational settings. To ensure developers can fully leverage the capabilities of the latest LLMs, we now also support a Realtime Agent powered by Gemini.
 
----
-
 **How to Use?**
 
 To ensure a seamless experience for developers, we aim to minimize the required changes. The key step is to properly configure your LLM settings, including credentials, LLM setup, and tags. Once this is done, switching between different LLMs becomes straightforward.
 
-For a practical walkthrough, refer to this [Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_realtime_gemini_websocket.ipynb), which demonstrates how to instantiate a Gemini client and configure it within AG2. This includes an overview of WebSocket integration, a key feature for live-streaming scenarios.
+For a practical walkthrough, refer to this [Example project](https://github.com/ag2ai/realtime-agent-over-websockets), which demonstrates how to instantiate a Gemini client and configure it within AG2. This includes an overview of WebSocket integration, a key feature for live-streaming scenarios.
 
 For the highlights and demos of Gemini 2.0, check out their [official tech blog](https://developers.googleblog.com/en/the-next-chapter-of-the-gemini-era-for-developers/).
 
----
-
 **Key Features of Gemini Integration**
 
-1. **Live Multimodal Capabilities**
-   Gemini’s multimodal live API allows developers to integrate text, image, and audio processing in real time. This means your Realtime Agent can now dynamically process and respond to a mix of input types, enhancing applications like virtual assistants, customer support bots, and interactive learning systems.
-
-2. **Improved Context Awareness**
-   Gemini 2.0 brings state-of-the-art improvements in contextual understanding, allowing for smoother, more accurate interactions. For example, the API can interpret complex user intents expressed through a combination of text and images.
-
-3. **Optimized for Realtime**
+1. **Optimized for Realtime**
    Low-latency processing makes Gemini a strong choice for live applications. Combined with AG2's orchestration capabilities, developers can build robust systems that respond in near real time.
-
----
 
 **Considerations**
 
@@ -58,16 +40,11 @@ This limitation highlights an important consideration for applications that rely
 
 However, the APIs and models are evolving rapidly, and things could change very fast. With AG2, switching between models is streamlined, making it easier to adapt to different use cases and overcome such challenges.
 
----
-
 **Future Potential**
 
 Our decision to support Gemini opens up exciting possibilities for developers:
 
-1. **Advanced Multimodal Applications**
-   The ability to process and generate responses from multiple input types in real time is a game-changer for industries like e-learning, telemedicine, and AR/VR environments.
-
-2. **Customizable LLM Pipelines**
+1. **Customizable LLM Pipelines**
    AG2’s architecture allows developers to orchestrate workflows involving Gemini and other LLMs (e.g., OpenAI or Cohere), enabling the creation of highly tailored solutions.
 
 3. **Expanding Model Ecosystem**
