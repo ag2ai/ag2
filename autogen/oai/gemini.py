@@ -62,7 +62,7 @@ from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol
 
 with optional_import_block():
-    import google.generativeai as genai
+    import google.genai as genai
     import vertexai
     from PIL import Image
     from google.auth.credentials import Credentials
@@ -71,6 +71,7 @@ with optional_import_block():
         FunctionCall,
         FunctionDeclaration,
         FunctionResponse,
+        GenerateContentConfig,
         GenerateContentResponse,
         Part,
         Schema,
@@ -262,19 +263,30 @@ class GeminiClient:
             )
 
             chat = model.start_chat(history=gemini_messages[:-1], response_validation=response_validation)
+            response = chat.send_message(gemini_messages[-1].parts, stream=stream, safety_settings=safety_settings)
         else:
-            model = genai.GenerativeModel(
-                model_name,
-                generation_config=generation_config,
+            client = genai.Client(api_key=self.api_key)
+            generate_content_config = GenerateContentConfig(
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
                 tools=tools,
+                **generation_config,
             )
+            chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
+            response = chat.send_message(message=gemini_messages[-1].parts)
 
-            genai.configure(api_key=self.api_key)
-            chat = model.start_chat(history=gemini_messages[:-1])
+            # model = genai.GenerativeModel(
+            #     model_name,
+            #     generation_config=generation_config,
+            #     safety_settings=safety_settings,
+            #     system_instruction=system_instruction,
+            #     tools=tools,
+            # )
 
-        response = chat.send_message(gemini_messages[-1].parts, stream=stream, safety_settings=safety_settings)
+            # genai.configure(api_key=self.api_key)
+            # chat = model.start_chat(history=gemini_messages[:-1])
+
+            # response = chat.send_message(gemini_messages[-1].parts, stream=stream, safety_settings=safety_settings)
 
         # Extract text and tools from response
         ans = ""
