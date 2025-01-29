@@ -134,14 +134,14 @@ def test_cost_calculation(mock_completion):
 @skip_on_missing_imports(["anthropic"], "anthropic")
 def test_load_config(anthropic_client):
     params = {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-3-5-sonnet-latest",
         "stream": False,
         "temperature": 1,
         "top_p": 0.8,
         "max_tokens": 100,
     }
     expected_params = {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-3-5-sonnet-latest",
         "stream": False,
         "temperature": 1,
         "top_p": 0.8,
