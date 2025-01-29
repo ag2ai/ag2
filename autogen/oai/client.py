@@ -82,7 +82,7 @@ if gemini_result.is_successful:
     gemini_import_exception: Optional[ImportError] = None
 else:
     gemini_InternalServerError = gemini_ResourceExhausted = Exception  # noqa: N816
-    gemini_import_exception = ImportError("google-generativeai not found")
+    gemini_import_exception = ImportError("google-genai not found")
 
 with optional_import_block() as anthropic_result:
     from anthropic import (  # noqa
@@ -756,7 +756,7 @@ class OpenAIWrapper:
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("google"):
                 if gemini_import_exception:
-                    raise ImportError("Please install `google-generativeai` and 'vertexai' to use Google's API.")
+                    raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
                 client = GeminiClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("anthropic"):
