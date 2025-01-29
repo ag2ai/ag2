@@ -150,6 +150,7 @@ class Tool:
         return schema
 
 
+@export_module("autogen.tools")
 def tool(name: Optional[str] = None, description: Optional[str] = None) -> Callable[[Callable[..., Any]], Tool]:
     """Decorator to create a Tool from a function.
 

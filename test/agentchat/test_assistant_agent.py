@@ -11,7 +11,7 @@ import os
 import pytest
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
-from autogen.tools.tool import tool
+from autogen.tools import tool
 
 from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
