@@ -6,7 +6,7 @@ title: GroupChat
 
 | Method | Agent selection|
 | --- | --- |
-| `auto` (default) | Automatic, chosen by the `GroupChatManager` using an LLM |
+| `auto` <em>(default)</em> | Automatic, chosen by the `GroupChatManager` using an LLM |
 | `round_robin` | Sequentially in their added order |
 | `random` | Randomly |
 | `manual` | Selected by you at each turn |
@@ -14,7 +14,13 @@ title: GroupChat
 
 Coordinating the `GroupChat` is the `GroupChatManager`, an agent that provides a way to start and resume multi-agent chats.
 
-Let's enhance our lesson planner example to include a lesson reviewer and a teacher agent.
+Let's continue our lesson planner example to include a lesson reviewer and a teacher agent.
+
+Before jumping into the code, here's a quick run down of what you need to do:
+- If using `auto` speaker selection, add specific descriptions to agents for GroupChatManager to use
+- Create a `GroupChat` and a `GroupChatManager`
+- Start the chat with the `GroupChatManager`
+
 
 <Tip>
 You can start any multi-agent chats using the `initiate_chat` method
@@ -136,3 +142,5 @@ import Example from "/snippets/python-examples/groupchat.mdx";
 
     --------------------------------------------------------------------------------
     ```
+
+Now, let's look at how this is done in a Swarm.

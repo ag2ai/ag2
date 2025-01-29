@@ -65,5 +65,9 @@ manager = GroupChatManager(
     llm_config=llm_config,
 )
 
-teacher.initiate_chat(recipient=manager, message="Today, let's introduce our kids to the solar system.")
+# 6. Initiate the chat with the GroupChatManager as the recipient
+teacher.initiate_chat(
+    recipient=manager,
+    message="Today, let's introduce our kids to the solar system."
+)
 ```
