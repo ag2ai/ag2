@@ -63,5 +63,4 @@ class TestCrawl4AITool:
         assert isinstance(tool_with_llm, Crawl4AITool)
 
         result = await tool_with_llm(url="https://docs.ag2.ai/docs/Home")
-        # assert isinstance(result, str)
-        assert result is None, result
+        assert isinstance(result, str)

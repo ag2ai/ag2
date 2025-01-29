@@ -21,26 +21,35 @@ class Crawl4AITool(Tool):
         self,
         llm_config: Optional[dict[str, Any]] = None,
     ) -> None:
-        async def crawl4ai(
-            url: Annotated[str, "The url to crawl and extract information from."],
-            llm_config: Annotated[Optional[dict[str, Any]], Depends(on(llm_config))],
+        async def crawl4ai_helper(  # type: ignore[no-any-unimported]
+            url: str,
+            browser_cfg: Optional[BrowserConfig] = None,
+            crawl_config: Optional[CrawlerRunConfig] = None,
         ) -> Any:
-            if llm_config is not None:
-                browser_cfg = BrowserConfig(headless=True)
-                crawl_config = Crawl4AITool._get_crawl_config(llm_config)
-            else:
-                browser_cfg = None
-                crawl_config = None
-
             async with AsyncWebCrawler(config=browser_cfg) as crawler:
                 result = await crawler.arun(
                     url=url,
                     config=crawl_config,
                 )
-                if result.success:
-                    return result.extracted_content
 
-                return result.error_message
+            if crawl_config is None:
+                response = result.markdown
+            else:
+                response = result.extracted_content if result.success else result.error_message
+
+            return response
+
+        async def crawl4ai(
+            url: Annotated[str, "The url to crawl and extract information from."],
+            llm_config: Annotated[Optional[dict[str, Any]], Depends(on(llm_config))],
+        ) -> Any:
+            if llm_config is None:
+                return await crawl4ai_helper(url=url)
+            else:
+                browser_cfg = BrowserConfig(headless=True)
+                crawl_config = Crawl4AITool._get_crawl_config(llm_config)
+
+                return await crawl4ai_helper(url=url, browser_cfg=browser_cfg, crawl_config=crawl_config)
 
         super().__init__(
             name="crawl4ai",
