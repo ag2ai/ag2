@@ -2981,6 +2981,14 @@ class ConversableAgent(LLMAgent):
         executor_kwargs: Optional[dict[str, Any]] = None,
         tools: Optional[Union[Tool, Iterable[Tool]]] = None,
     ) -> ChatResult:
+        """Run the agent with the given message.
+
+        Args:
+            message: the message to be processed.
+            clear_history: whether to clear the chat history.
+            executor_kwargs: the keyword arguments for the executor.
+            tools: the tools to be used by the agent.
+        """
         with self.executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
             return executor.initiate_chat(self, message=message, clear_history=clear_history).summary
 
@@ -2992,7 +3000,15 @@ class ConversableAgent(LLMAgent):
         tools: Optional[Union[Tool, Iterable[Tool]]] = None,
         executor_kwargs: Optional[dict[str, Any]] = None,
     ) -> ChatResult:
-        with self.executor(executor_proxy_kwargs=executor_kwargs, tools=tools) as executor:
+        """Run the agent with the given message.
+
+        Args:
+            message: the message to be processed.
+            clear_history: whether to clear the chat history.
+            executor_kwargs: the keyword arguments for the executor.
+            tools: the tools to be used by the agent.
+        """
+        with self.executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
             return (await executor.a_initiate_chat(self, message=message, clear_history=clear_history)).summary
 
 
