@@ -2910,35 +2910,6 @@ class ConversableAgent(LLMAgent):
         else:
             return self.client.total_usage_summary
 
-    def _create_user_proxy(
-        self, user_proxy_kwargs: Optional[dict[str, Any]], tools: Optional[Union[Tool, Iterable[Tool]]]
-    ) -> "ConversableAgent":
-        if user_proxy_kwargs is None:
-            user_proxy_kwargs = {}
-        if "is_termination_msg" not in user_proxy_kwargs:
-            user_proxy_kwargs["is_termination_msg"] = lambda x: (x["content"] is not None) and x["content"].endswith(
-                "TERMINATE"
-            )
-
-        user_proxy = ConversableAgent(
-            name="User_Proxy",
-            human_input_mode="NEVER",
-            code_execution_config={
-                "work_dir": "coding",
-                "use_docker": True,
-            },
-            **user_proxy_kwargs,
-        )
-
-        if tools is not None:
-            if isinstance(tools, Tool):
-                tools = [tools]
-            for tool in tools:
-                tool.register_for_execution(user_proxy)
-                tool.register_for_llm(self)
-
-        return user_proxy
-
     @contextmanager
     def executor(
         self, executor_kwargs: Optional[dict[str, Any]] = None, tools: Optional[Union[Tool, Iterable[Tool]]] = None
