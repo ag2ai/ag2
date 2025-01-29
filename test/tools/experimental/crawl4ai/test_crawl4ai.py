@@ -13,19 +13,11 @@ from autogen.tools.experimental.crawl4ai import Crawl4AITool
 from ....conftest import Credentials
 
 with optional_import_block():
-    from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
-    from crawl4ai.extraction_strategy import LLMExtractionStrategy
+    from crawl4ai import CrawlerRunConfig
 
 
 @skip_on_missing_imports(["crawl4ai"], "crawl4ai")
 class TestCrawl4AITool:
-    def _use_imports(self) -> None:
-        self._AsyncWebCrawler = AsyncWebCrawler
-        self._BrowserConfig = BrowserConfig
-        self._CrawlerRunConfig = CrawlerRunConfig
-        self._CacheMode = CacheMode
-        self._LLMExtractionStrategy = LLMExtractionStrategy
-
     @pytest.mark.asyncio
     async def test_without_llm(self) -> None:
         tool_without_llm = Crawl4AITool()

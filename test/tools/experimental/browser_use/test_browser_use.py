@@ -8,23 +8,14 @@ from typing import Callable
 import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool
 
 from ....conftest import Credentials, credentials_browser_use
 
-with optional_import_block():
-    from browser_use import Agent
-    from langchain_openai import ChatOpenAI
 
-
-@pytest.mark.browser_use  # todo: remove me after we merge the PR that ads it automatically
 @skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
 class TestBrowserUseToolOpenai:
-    def _use_imports(self) -> None:
-        self._ChatOpenAI = ChatOpenAI
-        self._Agent = Agent
-
     def test_broser_use_tool_init(self, mock_credentials: Credentials) -> None:
         browser_use_tool = BrowserUseTool(llm_config=mock_credentials.llm_config)
         assert browser_use_tool.name == "browser_use"

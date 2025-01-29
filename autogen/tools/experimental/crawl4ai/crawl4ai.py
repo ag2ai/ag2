@@ -8,7 +8,7 @@ from typing import Annotated, Any, Optional, Type
 from pydantic import BaseModel
 
 from ....doc_utils import export_module
-from ....import_utils import optional_import_block
+from ....import_utils import optional_import_block, require_optional_import
 from ... import Tool
 from ...dependency_injection import Depends, on
 
@@ -19,6 +19,7 @@ with optional_import_block():
 __all__ = ["Crawl4AITool"]
 
 
+@require_optional_import(["crawl4ai"], "crawl4ai")
 @export_module("autogen.tools.experimental")
 class Crawl4AITool(Tool):
     """
