@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Type
+
+from pydantic import BaseModel
 
 from ....import_utils import optional_import_block
 from ... import Tool
@@ -20,6 +22,7 @@ class Crawl4AITool(Tool):
     def __init__(
         self,
         llm_config: Optional[dict[str, Any]] = None,
+        extraction_model: Optional[Type[BaseModel]] = None,
     ) -> None:
         async def crawl4ai_helper(  # type: ignore[no-any-unimported]
             url: str,
@@ -39,26 +42,36 @@ class Crawl4AITool(Tool):
 
             return response
 
-        async def crawl4ai(
+        async def crawl4ai_without_llm(
             url: Annotated[str, "The url to crawl and extract information from."],
-            llm_config: Annotated[Optional[dict[str, Any]], Depends(on(llm_config))],
         ) -> Any:
-            if llm_config is None:
-                return await crawl4ai_helper(url=url)
-            else:
-                browser_cfg = BrowserConfig(headless=True)
-                crawl_config = Crawl4AITool._get_crawl_config(llm_config)
+            return await crawl4ai_helper(url=url)
 
-                return await crawl4ai_helper(url=url, browser_cfg=browser_cfg, crawl_config=crawl_config)
+        async def crawl4ai_with_llm(
+            url: Annotated[str, "The url to crawl and extract information from."],
+            instruction: Annotated[str, "The instruction to provide on how and what to extract."],
+            llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+            extraction_model: Annotated[Optional[Type[BaseModel]], Depends(on(extraction_model))],
+        ) -> Any:
+            browser_cfg = BrowserConfig(headless=True)
+            crawl_config = Crawl4AITool._get_crawl_config(
+                llm_config=llm_config, instruction=instruction, extraction_model=extraction_model
+            )
+
+            return await crawl4ai_helper(url=url, browser_cfg=browser_cfg, crawl_config=crawl_config)
 
         super().__init__(
             name="crawl4ai",
             description="Crawl a website and extract information.",
-            func_or_tool=crawl4ai,
+            func_or_tool=crawl4ai_without_llm if llm_config is None else crawl4ai_with_llm,
         )
 
     @staticmethod
-    def _get_crawl_config(llm_config: dict[str, Any]) -> CrawlerRunConfig:  # type: ignore[no-any-unimported]
+    def _get_crawl_config(  # type: ignore[no-any-unimported]
+        llm_config: dict[str, Any],
+        instruction: str,
+        extraction_model: Optional[Type[BaseModel]] = None,
+    ) -> CrawlerRunConfig:
         if "config_list" not in llm_config:
             if "model" in llm_config:
                 model = llm_config["model"]
@@ -76,13 +89,18 @@ class Crawl4AITool(Tool):
 
         provider = f"{api_type}/{model}"
 
+        schema = (
+            extraction_model.model_json_schema()
+            if (extraction_model and issubclass(extraction_model, BaseModel))
+            else None
+        )
         # 1. Define the LLM extraction strategy
         llm_strategy = LLMExtractionStrategy(
             provider=provider,
             api_token=api_key,
-            # schema=Product.schema_json(),            # Or use model_json_schema()
-            # extraction_type="schema",
-            instruction="Get the most relevant information from the page.",
+            schema=schema,
+            extraction_type="schema" if schema else "block",
+            instruction=instruction,
             chunk_token_threshold=1000,
             overlap_rate=0.0,
             apply_chunking=True,

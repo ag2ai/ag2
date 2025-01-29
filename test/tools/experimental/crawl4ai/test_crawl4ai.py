@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-
 import pytest
+from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.experimental.crawl4ai import Crawl4AITool
@@ -15,7 +15,6 @@ with optional_import_block():
     from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 
-@pytest.mark.crawl4ai  # todo: remove me after we merge the PR that ads it automatically
 @skip_on_missing_imports(["crawl4ai"], "crawl4ai")
 class TestCrawl4AITool:
     def _use_imports(self) -> None:
@@ -52,7 +51,7 @@ class TestCrawl4AITool:
         assert isinstance(result, str)
 
     def test_get_crawl_config(self, mock_credentials: Credentials) -> None:
-        config = Crawl4AITool._get_crawl_config(mock_credentials.llm_config)
+        config = Crawl4AITool._get_crawl_config(mock_credentials.llm_config, instruction="dummy")
         assert isinstance(config, CrawlerRunConfig)
         assert config.extraction_strategy.provider == f"openai/{mock_credentials.model}"
 
@@ -62,5 +61,26 @@ class TestCrawl4AITool:
         tool_with_llm = Crawl4AITool(llm_config=credentials_gpt_4o_mini.llm_config)
         assert isinstance(tool_with_llm, Crawl4AITool)
 
-        result = await tool_with_llm(url="https://docs.ag2.ai/docs/Home")
+        result = await tool_with_llm(
+            url="https://docs.ag2.ai/docs/Home", instruction="Get the most relevant information from the page."
+        )
+        assert isinstance(result, str)
+
+    @pytest.mark.openai
+    @pytest.mark.asyncio
+    async def test_with_llm_and_extraction_schema(self, credentials_gpt_4o_mini: Credentials) -> None:
+        class Product(BaseModel):
+            name: str
+            price: str
+
+        tool_with_llm = Crawl4AITool(
+            llm_config=credentials_gpt_4o_mini.llm_config,
+            extraction_model=Product,
+        )
+        assert isinstance(tool_with_llm, Crawl4AITool)
+
+        result = await tool_with_llm(
+            url="https://www.ikea.com/gb/en/",
+            instruction="Extract all product objects with 'name' and 'price' from the content.",
+        )
         assert isinstance(result, str)
