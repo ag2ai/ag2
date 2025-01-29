@@ -16,6 +16,7 @@ from collections import defaultdict
 from typing import (
     Any,
     Callable,
+    Iterable,
     Literal,
     Optional,
     TypeVar,
@@ -214,6 +215,7 @@ class ConversableAgent(LLMAgent):
         self._default_auto_reply = default_auto_reply
         self._reply_func_list = []
         self._human_input = []
+        self.registered_tools = []
         self.reply_at_receive = defaultdict(bool)
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
@@ -2728,6 +2730,7 @@ class ConversableAgent(LLMAgent):
             tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
 
             self._register_for_llm(tool, api_style)
+            self.registered_tools.append(tool)
 
             return tool
 
@@ -2906,6 +2909,38 @@ class ConversableAgent(LLMAgent):
             return None
         else:
             return self.client.total_usage_summary
+
+    def _create_user_proxy(self, **kwargs: Any) -> "ConversableAgent":
+        user_proxy = ConversableAgent(
+            name="User_Proxy",
+            human_input_mode="NEVER",
+            code_execution_config={
+                "work_dir": "coding",
+                "use_docker": True,
+            },
+            **kwargs,
+        )
+        for tool in self.registered_tools:
+            tool.register_for_execution(user_proxy)
+
+        return user_proxy
+
+    def run(
+        self, message: str, *, clear_history=False, user_proxy_kwargs: Optional[dict[str, Any]] = None
+    ) -> ChatResult:
+        user_proxy = self._create_user_proxy(**(user_proxy_kwargs if user_proxy_kwargs else {}))
+        return user_proxy.initiate_chat(self, message=message, clear_history=clear_history).summary
+
+    async def a_run(
+        self,
+        message: str,
+        *,
+        clear_history=False,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        user_proxy_kwargs: Optional[dict[str, Any]] = None,
+    ) -> ChatResult:
+        user_proxy = self._create_user_proxy(tools=tools, **(user_proxy_kwargs if user_proxy_kwargs else {}))
+        return (await user_proxy.a_initiate_chat(self, message=message, clear_history=clear_history)).summary
 
 
 @export_module("autogen")
