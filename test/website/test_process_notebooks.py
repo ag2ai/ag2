@@ -613,7 +613,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         add_authors_and_social_img_to_blog_posts(test_dir)
 
         # Get directory paths
-        generated_blog_dir = test_dir / "blog"
+        generated_blog_dir = test_dir / "docs" / "blog"
         blog_dir = test_dir / "_blogs"
 
         # Verify directory structure matches

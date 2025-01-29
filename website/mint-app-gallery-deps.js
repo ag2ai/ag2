@@ -86,7 +86,7 @@ const debouncedInitialize = debounce(initializeGallerySelect, 100);
 
 // Watch for URL changes using MutationObserver
 const observer = new MutationObserver((mutations) => {
-  if (window.location.pathname.includes("/notebooks")) {
+  if (window.location.pathname.includes("/use-cases")) {
     debouncedInitialize();
   }
 });

@@ -610,22 +610,6 @@ def start_thread_to_terminate_when_parent_process_dies(ppid: int) -> None:
     thread.start()
 
 
-# def copy_examples_mdx_files(website_dir: str) -> None:
-#     # The mdx files to copy to the notebooks directory
-#     example_section_mdx_files = ["Gallery", "Notebooks"]
-
-#     # Create notebooks directory if it doesn't exist
-#     website_dir_path = Path(website_dir)
-#     notebooks_dir = website_dir_path / "notebooks"
-#     notebooks_dir.mkdir(parents=True, exist_ok=True)
-
-#     for mdx_file in example_section_mdx_files:
-#         src_mdx_file_path = (website_dir_path / "docs" / f"{mdx_file}.mdx").resolve()
-#         dest_mdx_file_path = (notebooks_dir / f"{mdx_file}.mdx").resolve()
-#         # Copy mdx file to notebooks directory
-#         shutil.copy(src_mdx_file_path, dest_mdx_file_path)
-
-
 def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
     """Get sorted list of files with prefix prepended."""
     if not input_dir.exists():
@@ -712,8 +696,8 @@ def update_group_pages(
     return nav_copy
 
 
-def update_navigation_with_notebooks(website_dir: Path) -> None:
-    """Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
+def add_mdx_generated_from_notebooks_to_nav(website_dir: Path) -> None:
+    """Updates mint.json navigation to include mdx files generated from the notebook entries
 
     Args:
         website_dir (Path): Root directory of the website
@@ -734,21 +718,21 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
         mint_config = json.load(f)
 
     # add talks to navigation
-    talks_dir = website_dir / "talks"
-    talks_section = generate_nav_group(talks_dir, "Talks", "talks")
-    talks_section_pages = (
-        [talks_section["pages"]] if isinstance(talks_section["pages"], str) else talks_section["pages"]
-    )
+    # talks_dir = website_dir / "talks"
+    # talks_section = generate_nav_group(talks_dir, "Talks", "talks")
+    # talks_section_pages = (
+    #     [talks_section["pages"]] if isinstance(talks_section["pages"], str) else talks_section["pages"]
+    # )
 
     # Add "talks/future_talks/index" item at the beginning of the list
-    future_talks_index = talks_section_pages.pop()
-    talks_section_pages.insert(0, future_talks_index)
+    # future_talks_index = talks_section_pages.pop()
+    # talks_section_pages.insert(0, future_talks_index)
     # mint_config["navigation"].append(talks_section)
 
     # add blogs to navigation
-    # blogs_dir = website_dir / "_blogs"
-    # blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "blog")]}
-    # mint_config["navigation"].append(blog_section)
+    blogs_dir = website_dir / "_blogs"
+    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "docs/blog")]}
+    mint_config["navigation"].append(blog_section)
 
     # Add examples to navigation
     example_group = extract_example_group(metadata_path)
@@ -875,7 +859,7 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
     """
     blog_dir = website_dir / "_blogs"
     authors_yml = blog_dir / "authors.yml"
-    generated_blog_dir = website_dir / "blog"
+    generated_blog_dir = website_dir / "docs" / "blog"
 
     # Remove existing generated directory if it exists
     if generated_blog_dir.exists():
@@ -1051,8 +1035,7 @@ def main() -> None:
 
         # Post-processing steps after all notebooks are handled
         if not args.dry_run:
-            # copy_examples_mdx_files(args.website_directory)
-            update_navigation_with_notebooks(args.website_directory)
+            add_mdx_generated_from_notebooks_to_nav(args.website_directory)
             fix_internal_references_in_mdx_files(args.website_directory)
             add_authors_and_social_img_to_blog_posts(args.website_directory)
 
