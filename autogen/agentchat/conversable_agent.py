@@ -2972,12 +2972,12 @@ class ConversableAgent(LLMAgent):
 
         Args:
             message: the message to be processed.
-            clear_history: whether to clear the chat history.
-            executor_kwargs: the keyword arguments for the executor.
             tools: the tools to be used by the agent.
-            msg_to: which agent is receiving the message and will be the first to reply, defaults to the agent.
-            user_input: the user will be asked for input at their turn.
+            executor_kwargs: the keyword arguments for the executor.
             max_turns: maximum number of turns (a turn is equivalent to both agents having replied), defaults no None which means unlimited. The original message is included.
+            msg_to: which agent is receiving the message and will be the first to reply, defaults to the agent.
+            clear_history: whether to clear the chat history.
+            user_input: the user will be asked for input at their turn.
         """
         with self._create_executor(
             executor_kwargs=executor_kwargs,
@@ -3009,12 +3009,12 @@ class ConversableAgent(LLMAgent):
 
         Args:
             message: the message to be processed.
-            clear_history: whether to clear the chat history.
-            executor_kwargs: the keyword arguments for the executor.
             tools: the tools to be used by the agent.
-            msg_to: which agent ('agent' or 'user') is receiving the message and will be the first to reply, defaults to the 'agent'.
-            user_input: the user will be asked for input at their turn.
+            executor_kwargs: the keyword arguments for the executor.
             max_turns: maximum number of turns (a turn is equivalent to both agents having replied), defaults no None which means unlimited. The original message is included.
+            msg_to: which agent is receiving the message and will be the first to reply, defaults to the agent.
+            clear_history: whether to clear the chat history.
+            user_input: the user will be asked for input at their turn.
         """
         with self._create_executor(
             executor_kwargs=executor_kwargs,
