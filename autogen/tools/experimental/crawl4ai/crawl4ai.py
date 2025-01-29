@@ -27,7 +27,7 @@ class Crawl4AITool(Tool):
         ) -> Any:
             if llm_config is not None:
                 browser_cfg = BrowserConfig(headless=True)
-                crawl_config = Crawl4AITool._get_llm_strategy(llm_config)
+                crawl_config = Crawl4AITool._get_crawl_config(llm_config)
             else:
                 browser_cfg = None
                 crawl_config = None
@@ -49,7 +49,7 @@ class Crawl4AITool(Tool):
         )
 
     @staticmethod
-    def _get_llm_strategy(llm_config: dict[str, Any]) -> CrawlerRunConfig:  # type: ignore[no-any-unimported]
+    def _get_crawl_config(llm_config: dict[str, Any]) -> CrawlerRunConfig:  # type: ignore[no-any-unimported]
         if "config_list" not in llm_config:
             if "model" in llm_config:
                 model = llm_config["model"]
