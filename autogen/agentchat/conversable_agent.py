@@ -2911,7 +2911,7 @@ class ConversableAgent(LLMAgent):
             return self.client.total_usage_summary
 
     @contextmanager
-    def _executor(
+    def _create_executor(
         self, executor_kwargs: Optional[dict[str, Any]] = None, tools: Optional[Union[Tool, Iterable[Tool]]] = None
     ) -> Generator["ConversableAgent", None, None]:
         if executor_kwargs is None:
@@ -2960,7 +2960,7 @@ class ConversableAgent(LLMAgent):
             executor_kwargs: the keyword arguments for the executor.
             tools: the tools to be used by the agent.
         """
-        with self._executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
+        with self._create_executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
             return executor.initiate_chat(self, message=message, clear_history=clear_history).summary
 
     async def a_run(
@@ -2979,7 +2979,7 @@ class ConversableAgent(LLMAgent):
             executor_kwargs: the keyword arguments for the executor.
             tools: the tools to be used by the agent.
         """
-        with self.executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
+        with self._create_executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
             return (await executor.a_initiate_chat(self, message=message, clear_history=clear_history)).summary
 
 
