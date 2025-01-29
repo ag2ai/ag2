@@ -169,7 +169,6 @@ gemini = [
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
-    "pydantic",
     "jsonschema",
 ]
 together = ["together>=1.2"]
