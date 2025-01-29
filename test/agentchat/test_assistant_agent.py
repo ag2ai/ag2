@@ -205,8 +205,8 @@ def test_standalone(credentials_gpt_4o_mini: Credentials):
         tools=get_twitter_hot_topic,
     )
 
-    assert "AI" in hot_topic_res
-    assert "elonmusk" in hot_topic_res
+    assert "AI" in hot_topic_res.summary
+    assert "elonmusk" in hot_topic_res.summary
 
 
 @pytest.mark.openai

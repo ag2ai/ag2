@@ -2950,6 +2950,7 @@ class ConversableAgent(LLMAgent):
         clear_history: bool = False,
         executor_kwargs: Optional[dict[str, Any]] = None,
         tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        msg_to: Literal["agent", "user"] = "agent",
     ) -> ChatResult:
         """Run the agent with the given message.
 
@@ -2960,7 +2961,10 @@ class ConversableAgent(LLMAgent):
             tools: the tools to be used by the agent.
         """
         with self._create_executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
-            return executor.initiate_chat(self, message=message, clear_history=clear_history).summary
+            if msg_to == "agent":
+                return executor.initiate_chat(self, message=message, clear_history=clear_history)
+            else:
+                return self.initiate_chat(executor, message=message, clear_history=clear_history)
 
     async def a_run(
         self,
@@ -2969,6 +2973,7 @@ class ConversableAgent(LLMAgent):
         clear_history=False,
         tools: Optional[Union[Tool, Iterable[Tool]]] = None,
         executor_kwargs: Optional[dict[str, Any]] = None,
+        msg_to: Literal["agent", "user"] = "agent",
     ) -> ChatResult:
         """Run the agent with the given message.
 
@@ -2979,7 +2984,10 @@ class ConversableAgent(LLMAgent):
             tools: the tools to be used by the agent.
         """
         with self._create_executor(executor_kwargs=executor_kwargs, tools=tools) as executor:
-            return (await executor.a_initiate_chat(self, message=message, clear_history=clear_history)).summary
+            if msg_to == "agent":
+                return await executor.a_initiate_chat(self, message=message, clear_history=clear_history)
+            else:
+                return await self.a_initiate_chat(executor, message=message, clear_history=clear_history)
 
 
 @export_module("autogen")
