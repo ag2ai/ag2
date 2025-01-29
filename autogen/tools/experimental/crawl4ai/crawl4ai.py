@@ -43,8 +43,8 @@ class Crawl4AITool(Tool):
 
         async def crawl4ai_helper(  # type: ignore[no-any-unimported]
             url: str,
-            browser_cfg: Optional[BrowserConfig] = None,
-            crawl_config: Optional[CrawlerRunConfig] = None,
+            browser_cfg: Optional["BrowserConfig"] = None,
+            crawl_config: Optional["CrawlerRunConfig"] = None,
         ) -> Any:
             async with AsyncWebCrawler(config=browser_cfg) as crawler:
                 result = await crawler.arun(
@@ -142,7 +142,7 @@ class Crawl4AITool(Tool):
         instruction: str,
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
         extraction_model: Optional[Type[BaseModel]] = None,
-    ) -> CrawlerRunConfig:
+    ) -> "CrawlerRunConfig":
         provider, api_key = Crawl4AITool._get_provider_and_api_key(llm_config)
 
         if llm_strategy_kwargs is None:
