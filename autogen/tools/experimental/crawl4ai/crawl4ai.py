@@ -115,12 +115,7 @@ class Crawl4AITool(Tool):
             raise ValueError(check_parameters_error_msg)
 
     @staticmethod
-    def _get_crawl_config(  # type: ignore[no-any-unimported]
-        llm_config: dict[str, Any],
-        instruction: str,
-        llm_strategy_kwargs: Optional[dict[str, Any]] = None,
-        extraction_model: Optional[Type[BaseModel]] = None,
-    ) -> CrawlerRunConfig:
+    def _get_provider_and_api_key(llm_config: dict[str, Any]) -> tuple[str, str]:
         if "config_list" not in llm_config:
             if "model" in llm_config:
                 model = llm_config["model"]
@@ -137,6 +132,16 @@ class Crawl4AITool(Tool):
                 raise ValueError("llm_config must be a valid config dictionary.")
 
         provider = f"{api_type}/{model}"
+        return provider, api_key  # type: ignore[return-value]
+
+    @staticmethod
+    def _get_crawl_config(  # type: ignore[no-any-unimported]
+        llm_config: dict[str, Any],
+        instruction: str,
+        llm_strategy_kwargs: Optional[dict[str, Any]] = None,
+        extraction_model: Optional[Type[BaseModel]] = None,
+    ) -> CrawlerRunConfig:
+        provider, api_key = Crawl4AITool._get_provider_and_api_key(llm_config)
 
         if llm_strategy_kwargs is None:
             llm_strategy_kwargs = {}

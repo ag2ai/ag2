@@ -52,10 +52,35 @@ class TestCrawl4AITool:
         result = await tool_without_llm(url="https://docs.ag2.ai/docs/Home")
         assert isinstance(result, str)
 
-    def test_get_crawl_config(self, mock_credentials: Credentials) -> None:
-        config = Crawl4AITool._get_crawl_config(mock_credentials.llm_config, instruction="dummy")
+    def test_get_provider_and_api_key(self, mock_credentials: Credentials) -> None:
+        provider, api_key = Crawl4AITool._get_provider_and_api_key(mock_credentials.llm_config)
+        assert provider == "openai/gpt-4o", provider
+        assert isinstance(api_key, str)
+
+    @pytest.mark.parametrize(
+        "use_extraction_model",
+        [
+            False,
+            True,
+        ],
+    )
+    def test_get_crawl_config(self, mock_credentials: Credentials, use_extraction_model: bool) -> None:
+        class Product(BaseModel):
+            name: str
+            price: str
+
+        extraction_model = Product if use_extraction_model else None
+
+        config = Crawl4AITool._get_crawl_config(
+            mock_credentials.llm_config, instruction="dummy", extraction_model=extraction_model
+        )
         assert isinstance(config, CrawlerRunConfig)
         assert config.extraction_strategy.provider == f"openai/{mock_credentials.model}"
+
+        if use_extraction_model:
+            assert config.extraction_strategy.schema == Product.model_json_schema()
+        else:
+            assert config.extraction_strategy.schema is None
 
     @pytest.mark.openai
     @pytest.mark.asyncio
