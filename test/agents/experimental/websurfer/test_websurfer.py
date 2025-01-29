@@ -8,7 +8,7 @@ import pytest
 
 from autogen.agentchat import UserProxyAgent
 from autogen.agentchat.chat import ChatResult
-from autogen.agents.experimental import WebSurfer
+from autogen.agents import WebSurfer
 from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import Credentials
