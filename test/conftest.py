@@ -10,6 +10,7 @@ import inspect
 import os
 import re
 import time
+from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
@@ -315,7 +316,7 @@ def credentials_gemini_flash_exp() -> Credentials:
 def credentials_anthropic_claude_sonnet() -> Credentials:
     return get_llm_credentials(
         "ANTHROPIC_API_KEY",
-        model="claude-3-sonnet-20240229",
+        model="claude-3-5-sonnet-latest",
         api_type="anthropic",
         filter_dict={"tags": ["anthropic-claude-sonnet"]},
     )
@@ -417,7 +418,7 @@ credentials_browser_use = [
 T = TypeVar("T", bound=Callable[..., Any])
 
 
-def suppress(exception: type[BaseException], *, retries: Optional[int] = None, timeout: int = 60) -> Callable[[T], T]:
+def suppress(exception: type[BaseException], *, retries: int = 0, timeout: int = 60) -> Callable[[T], T]:
     """Suppresses the specified exception and retries the function a specified number of times.
 
     Args:
@@ -428,7 +429,7 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
     """
 
     def decorator(
-        func: T, exception: type[BaseException] = exception, retries: Optional[int] = retries, timeout: int = timeout
+        func: T, exception: type[BaseException] = exception, retries: int = retries, timeout: int = timeout
     ) -> T:
         if inspect.iscoroutinefunction(func):
 
@@ -436,50 +437,36 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
             async def wrapper(
                 *args: Any,
                 exception: type[BaseException] = exception,
-                retries: Optional[int] = retries,
+                retries: int = retries,
                 timeout: int = timeout,
                 **kwargs: Any,
             ) -> Any:
-                if retries is None:
+                for i in range(retries + 1):
                     try:
                         return await func(*args, **kwargs)
                     except exception:
-                        pytest.xfail(f"Suppressed '{exception}' raised")
-                        raise
-                else:
-                    for i in range(retries):
-                        try:
-                            return await func(*args, **kwargs)
-                        except exception:
-                            if i >= retries - 1:
-                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
-                                raise
-                            await asyncio.sleep(timeout)
+                        if i >= retries - 1:
+                            pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            raise
+                        await asyncio.sleep(timeout)
         else:
 
             @functools.wraps(func)
             def wrapper(
                 *args: Any,
                 exception: type[BaseException] = exception,
-                retries: Optional[int] = retries,
+                retries: int = retries,
                 timeout: int = timeout,
                 **kwargs: Any,
             ) -> Any:
-                if retries is None:
+                for i in range(retries + 1):
                     try:
                         return func(*args, **kwargs)
                     except exception:
-                        pytest.xfail(f"Suppressed '{exception}' raised")
-                        raise
-                else:
-                    for i in range(retries):
-                        try:
-                            return func(*args, **kwargs)
-                        except exception:
-                            if i >= retries - 1:
-                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
-                                raise
-                            time.sleep(timeout)
+                        if i >= retries - 1:
+                            pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            raise
+                        time.sleep(timeout)
 
         return wrapper  # type: ignore[return-value]
 
@@ -493,3 +480,7 @@ def suppress_gemini_resource_exhausted(func: T) -> T:
         return suppress(ResourceExhausted, retries=2)(func)
 
     return func
+
+
+def suppress_json_decoder_error(func: T) -> T:
+    return suppress(JSONDecodeError)(func)
