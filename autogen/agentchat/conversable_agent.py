@@ -2932,12 +2932,11 @@ class ConversableAgent(LLMAgent):
         )
 
         try:
-            if tools is not None:
-                if isinstance(tools, Tool):
-                    tools = [tools]
-                for tool in tools:
-                    tool.register_for_execution(executor)
-                    tool.register_for_llm(self)
+            tools = [] if tools is None else tools
+            tools = [tools] if isinstance(tools, Tool) else tools
+            for tool in tools:
+                tool.register_for_execution(executor)
+                tool.register_for_llm(self)
             yield executor
         finally:
             if tools is not None:
@@ -2948,7 +2947,7 @@ class ConversableAgent(LLMAgent):
         self,
         message: str,
         *,
-        clear_history=False,
+        clear_history: bool = False,
         executor_kwargs: Optional[dict[str, Any]] = None,
         tools: Optional[Union[Tool, Iterable[Tool]]] = None,
     ) -> ChatResult:
