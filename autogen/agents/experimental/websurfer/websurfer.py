@@ -8,10 +8,10 @@ from .... import ConversableAgent
 from ....tools import Tool
 from ....tools.experimental import BrowserUseTool, Crawl4AITool
 
-__all__ = ["WebSurfer"]
+__all__ = ["WebSurferAgent"]
 
 
-class WebSurfer(ConversableAgent):
+class WebSurferAgent(ConversableAgent):
     def __init__(
         self,
         llm_config: dict[str, Any],

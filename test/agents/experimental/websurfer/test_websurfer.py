@@ -8,7 +8,7 @@ import pytest
 
 from autogen.agentchat import UserProxyAgent
 from autogen.agentchat.chat import ChatResult
-from autogen.agents import WebSurfer
+from autogen.agents import WebSurferAgent
 from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import Credentials
@@ -24,11 +24,11 @@ class WebSurferTestHelper:
         return False
 
     def test_init(self, credentials: Credentials, web_tool: str, expected: list[dict[str, Any]]) -> None:
-        websurfer = WebSurfer(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
+        websurfer = WebSurferAgent(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
         assert websurfer.llm_config["tools"] == expected
 
     def test_end2end(self, credentials: Credentials, web_tool: str) -> None:
-        websurfer = WebSurfer(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
+        websurfer = WebSurferAgent(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
 
         websurfer_tools = websurfer.tools
