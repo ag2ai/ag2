@@ -7,7 +7,7 @@ import sys
 from abc import ABC
 from collections.abc import Iterable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
@@ -26,6 +26,7 @@ __all__ = [
     "Field",
     "get_context_params",
     "inject_params",
+    "on",
 ]
 
 
@@ -73,6 +74,16 @@ class ChatContext(BaseContext):
             The last message in the chat.
         """
         return self._agent.last_message()
+
+
+T = TypeVar("T")
+
+
+def on(x: T) -> Callable[[], T]:
+    def inner(_x: T = x) -> T:
+        return _x
+
+    return inner
 
 
 @export_module("autogen.tools")
