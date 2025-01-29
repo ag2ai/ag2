@@ -19,11 +19,26 @@ __all__ = ["Crawl4AITool"]
 
 
 class Crawl4AITool(Tool):
+    """
+    Crawl a website and extract information using the crawl4ai library.
+    """
+
     def __init__(
         self,
         llm_config: Optional[dict[str, Any]] = None,
         extraction_model: Optional[Type[BaseModel]] = None,
+        llm_strategy_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
+        """
+        Initialize the Crawl4AITool.
+
+        Args:
+            llm_config: The config dictionary for the LLM model. If None, the tool will run without LLM.
+            extraction_model: The Pydantic model to use for extraction. If None, the tool will use the default schema.
+            llm_strategy_kwargs: The keyword arguments to pass to the LLM extraction strategy.
+        """
+        Crawl4AITool._validate_llm_strategy_kwargs(llm_strategy_kwargs, llm_config_provided=(llm_config is not None))
+
         async def crawl4ai_helper(  # type: ignore[no-any-unimported]
             url: str,
             browser_cfg: Optional[BrowserConfig] = None,
@@ -51,11 +66,15 @@ class Crawl4AITool(Tool):
             url: Annotated[str, "The url to crawl and extract information from."],
             instruction: Annotated[str, "The instruction to provide on how and what to extract."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+            llm_strategy_kwargs: Annotated[Optional[dict[str, Any]], Depends(on(llm_strategy_kwargs))],
             extraction_model: Annotated[Optional[Type[BaseModel]], Depends(on(extraction_model))],
         ) -> Any:
             browser_cfg = BrowserConfig(headless=True)
             crawl_config = Crawl4AITool._get_crawl_config(
-                llm_config=llm_config, instruction=instruction, extraction_model=extraction_model
+                llm_config=llm_config,
+                instruction=instruction,
+                extraction_model=extraction_model,
+                llm_strategy_kwargs=llm_strategy_kwargs,
             )
 
             return await crawl4ai_helper(url=url, browser_cfg=browser_cfg, crawl_config=crawl_config)
@@ -67,9 +86,39 @@ class Crawl4AITool(Tool):
         )
 
     @staticmethod
+    def _validate_llm_strategy_kwargs(llm_strategy_kwargs: Optional[dict[str, Any]], llm_config_provided: bool) -> None:
+        if not llm_strategy_kwargs:
+            return
+
+        if not llm_config_provided:
+            raise ValueError("llm_strategy_kwargs can only be provided if llm_config is also provided.")
+
+        check_parameters_error_msg = "".join(
+            f"'{key}' should not be provided in llm_strategy_kwargs. It is automatically set based on llm_config.\n"
+            for key in ["provider", "api_token"]
+            if key in llm_strategy_kwargs
+        )
+
+        check_parameters_error_msg += "".join(
+            "'schema' should not be provided in llm_strategy_kwargs. It is automatically set based on extraction_model type.\n"
+            if "schema" in llm_strategy_kwargs
+            else ""
+        )
+
+        check_parameters_error_msg += "".join(
+            "'instruction' should not be provided in llm_strategy_kwargs. It is provided at the time of calling the tool.\n"
+            if "instruction" in llm_strategy_kwargs
+            else ""
+        )
+
+        if check_parameters_error_msg:
+            raise ValueError(check_parameters_error_msg)
+
+    @staticmethod
     def _get_crawl_config(  # type: ignore[no-any-unimported]
         llm_config: dict[str, Any],
         instruction: str,
+        llm_strategy_kwargs: Optional[dict[str, Any]] = None,
         extraction_model: Optional[Type[BaseModel]] = None,
     ) -> CrawlerRunConfig:
         if "config_list" not in llm_config:
@@ -89,23 +138,25 @@ class Crawl4AITool(Tool):
 
         provider = f"{api_type}/{model}"
 
+        if llm_strategy_kwargs is None:
+            llm_strategy_kwargs = {}
+
         schema = (
             extraction_model.model_json_schema()
             if (extraction_model and issubclass(extraction_model, BaseModel))
             else None
         )
+
+        extraction_type = llm_strategy_kwargs.pop("extraction_type", "schema" if schema else "block")
+
         # 1. Define the LLM extraction strategy
         llm_strategy = LLMExtractionStrategy(
             provider=provider,
             api_token=api_key,
             schema=schema,
-            extraction_type="schema" if schema else "block",
+            extraction_type=extraction_type,
             instruction=instruction,
-            chunk_token_threshold=1000,
-            overlap_rate=0.0,
-            apply_chunking=True,
-            input_format="markdown",  # or "html", "fit_markdown"
-            extra_args={"temperature": 0.0, "max_tokens": 800},
+            **llm_strategy_kwargs,
         )
 
         # 2. Build the crawler config

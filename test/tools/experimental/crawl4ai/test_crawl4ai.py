@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any, Optional
+
 import pytest
 from pydantic import BaseModel
 
@@ -84,3 +86,42 @@ class TestCrawl4AITool:
             instruction="Extract all product objects with 'name' and 'price' from the content.",
         )
         assert isinstance(result, str)
+
+    @pytest.mark.parametrize(
+        ("llm_strategy_kwargs", "llm_config_provided", "expected_error"),
+        [
+            (None, True, None),
+            ({"some_param": "dummy_value"}, True, None),
+            (
+                {"provider": "openai/gpt-4o", "api_token": "dummy_token"},
+                False,
+                "llm_strategy_kwargs can only be provided if llm_config is also provided.",
+            ),
+            (
+                {"schema": "dummy_schema"},
+                True,
+                "'schema' should not be provided in llm_strategy_kwargs.",
+            ),
+            (
+                {"instruction": "dummy_instruction"},
+                True,
+                "'instruction' should not be provided in llm_strategy_kwargs.",
+            ),
+        ],
+    )
+    def test_validate_llm_strategy_kwargs(
+        self, llm_strategy_kwargs: Optional[dict[str, Any]], llm_config_provided: bool, expected_error: Optional[str]
+    ) -> None:
+        if expected_error is None:
+            Crawl4AITool._validate_llm_strategy_kwargs(
+                llm_strategy_kwargs=llm_strategy_kwargs, llm_config_provided=llm_config_provided
+            )
+            return
+
+        with pytest.raises(
+            ValueError,
+            match=expected_error,
+        ):
+            Crawl4AITool._validate_llm_strategy_kwargs(
+                llm_strategy_kwargs=llm_strategy_kwargs, llm_config_provided=llm_config_provided
+            )
