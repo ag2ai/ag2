@@ -19,7 +19,7 @@ with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.generativeai.types import GenerateContentResponse
+    from google.genai.types import GenerateContentResponse
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -64,7 +64,7 @@ def gemini_client_with_credentials():
 
 # Test compute location initialization and configuration
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_compute_location_initialization():
     with pytest.raises(AssertionError):
@@ -75,7 +75,7 @@ def test_compute_location_initialization():
 
 # Test project initialization and configuration
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_project_initialization():
     with pytest.raises(AssertionError):
@@ -85,14 +85,14 @@ def test_project_initialization():
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_valid_initialization(gemini_client):
     assert gemini_client.api_key == "fake_api_key", "API Key should be correctly set"
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_google_application_credentials_initialization():
     GeminiClient(google_application_credentials="credentials.json", project_id="fake-project-id")
@@ -102,7 +102,7 @@ def test_google_application_credentials_initialization():
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_vertexai_initialization():
     mock_credentials = MagicMock(Credentials)
@@ -113,7 +113,7 @@ def test_vertexai_initialization():
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_gemini_message_handling(gemini_client):
     messages = [
@@ -152,7 +152,7 @@ def test_gemini_message_handling(gemini_client):
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_gemini_empty_message_handling(gemini_client):
     messages = [
@@ -172,7 +172,7 @@ def test_gemini_empty_message_handling(gemini_client):
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_vertexai_safety_setting_conversion(gemini_client):
     safety_settings = [
@@ -206,7 +206,7 @@ def test_vertexai_safety_setting_conversion(gemini_client):
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_vertexai_default_safety_settings_dict(gemini_client):
     safety_settings = {
@@ -233,7 +233,7 @@ def test_vertexai_default_safety_settings_dict(gemini_client):
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_vertexai_safety_setting_list(gemini_client):
     harm_categories = [
@@ -267,7 +267,7 @@ def test_vertexai_safety_setting_list(gemini_client):
 # Test error handling
 @patch("autogen.oai.gemini.genai")
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_internal_server_error_retry(mock_genai, gemini_client):
     mock_genai.GenerativeModel.side_effect = [InternalServerError("Test Error"), None]  # First call fails
@@ -283,7 +283,7 @@ def test_internal_server_error_retry(mock_genai, gemini_client):
 
 # Test cost calculation
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_cost_calculation(gemini_client, mock_response):
     response = mock_response(
@@ -297,7 +297,7 @@ def test_cost_calculation(gemini_client, mock_response):
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 @patch("autogen.oai.gemini.genai.GenerativeModel")
 # @patch("autogen.oai.gemini.genai.configure")
@@ -350,7 +350,7 @@ def test_create_response_with_text(mock_calculate_cost, mock_generative_model, g
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 @patch("autogen.oai.gemini.GenerativeModel")
 @patch("autogen.oai.gemini.vertexai.init")
@@ -404,7 +404,7 @@ def test_vertexai_create_response(
 
 
 @skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.generativeai"], "gemini"
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
 )
 def test_extract_json_response(gemini_client):
     # Define test Pydantic model

@@ -418,7 +418,13 @@ credentials_browser_use = [
 T = TypeVar("T", bound=Callable[..., Any])
 
 
-def suppress(exception: type[BaseException], *, retries: int = 0, timeout: int = 60) -> Callable[[T], T]:
+def suppress(
+    exception: type[BaseException],
+    *,
+    retries: int = 0,
+    timeout: int = 60,
+    error_filter: Optional[Callable[[BaseException], bool]] = None,
+) -> Callable[[T], T]:
     """Suppresses the specified exception and retries the function a specified number of times.
 
     Args:
@@ -429,7 +435,11 @@ def suppress(exception: type[BaseException], *, retries: int = 0, timeout: int =
     """
 
     def decorator(
-        func: T, exception: type[BaseException] = exception, retries: int = retries, timeout: int = timeout
+        func: T,
+        exception: type[BaseException] = exception,
+        retries: int = retries,
+        timeout: int = timeout,
+        error_filter: Optional[Callable[[BaseException], bool]] = error_filter,
     ) -> T:
         if inspect.iscoroutinefunction(func):
 
@@ -444,7 +454,9 @@ def suppress(exception: type[BaseException], *, retries: int = 0, timeout: int =
                 for i in range(retries + 1):
                     try:
                         return await func(*args, **kwargs)
-                    except exception:
+                    except exception as e:
+                        if error_filter and not error_filter(e):  # type: ignore [arg-type]
+                            raise
                         if i >= retries - 1:
                             pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
                             raise
@@ -462,7 +474,9 @@ def suppress(exception: type[BaseException], *, retries: int = 0, timeout: int =
                 for i in range(retries + 1):
                     try:
                         return func(*args, **kwargs)
-                    except exception:
+                    except exception as e:
+                        if error_filter and not error_filter(e):  # type: ignore [arg-type]
+                            raise
                         if i >= retries - 1:
                             pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
                             raise
@@ -475,9 +489,13 @@ def suppress(exception: type[BaseException], *, retries: int = 0, timeout: int =
 
 def suppress_gemini_resource_exhausted(func: T) -> T:
     with optional_import_block():
-        from google.api_core.exceptions import ResourceExhausted
+        from google.genai.errors import ClientError
 
-        return suppress(ResourceExhausted, retries=2)(func)
+        # Catch only code 429 which is RESOURCE_EXHAUSTED error instead of catching all the client errors
+        def is_resource_exhausted_error(e: BaseException) -> bool:
+            return isinstance(e, ClientError) and getattr(e, "code", None) == 429
+
+        return suppress(ClientError, retries=2, error_filter=is_resource_exhausted_error)(func)
 
     return func
 

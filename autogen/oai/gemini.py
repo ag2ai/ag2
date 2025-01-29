@@ -62,13 +62,22 @@ from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol
 
 with optional_import_block():
-    import google.generativeai as genai
+    import google.genai as genai
     import vertexai
     from PIL import Image
-    from google.ai.generativelanguage import Content, FunctionCall, FunctionDeclaration, FunctionResponse, Part, Tool
-    from google.ai.generativelanguage_v1beta.types import Schema
     from google.auth.credentials import Credentials
-    from google.generativeai.types import GenerateContentResponse
+    from google.genai.types import (
+        Content,
+        FunctionCall,
+        FunctionDeclaration,
+        FunctionResponse,
+        GenerateContentConfig,
+        GenerateContentResponse,
+        Part,
+        Schema,
+        Tool,
+        Type,
+    )
     from jsonschema import ValidationError
     from vertexai.generative_models import (
         Content as VertexAIContent,
@@ -215,9 +224,9 @@ class GeminiClient:
             if autogen_term in params
         }
         if self.use_vertexai:
-            safety_settings = GeminiClient._to_vertexai_safety_settings(params.get("safety_settings", {}))
+            safety_settings = GeminiClient._to_vertexai_safety_settings(params.get("safety_settings", []))
         else:
-            safety_settings = params.get("safety_settings", {})
+            safety_settings = params.get("safety_settings", [])
 
         if stream:
             warnings.warn(
@@ -254,19 +263,17 @@ class GeminiClient:
             )
 
             chat = model.start_chat(history=gemini_messages[:-1], response_validation=response_validation)
+            response = chat.send_message(gemini_messages[-1].parts, stream=stream, safety_settings=safety_settings)
         else:
-            model = genai.GenerativeModel(
-                model_name,
-                generation_config=generation_config,
+            client = genai.Client(api_key=self.api_key)
+            generate_content_config = GenerateContentConfig(
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
                 tools=tools,
+                **generation_config,
             )
-
-            genai.configure(api_key=self.api_key)
-            chat = model.start_chat(history=gemini_messages[:-1])
-
-        response = chat.send_message(gemini_messages[-1].parts, stream=stream, safety_settings=safety_settings)
+            chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
+            response = chat.send_message(message=gemini_messages[-1].parts)
 
         # Extract text and tools from response
         ans = ""
@@ -274,7 +281,11 @@ class GeminiClient:
         prev_function_calls = []
 
         if isinstance(response, GenerateContentResponse):
-            parts = response.parts
+            if len(response.candidates) != 1:
+                raise ValueError(
+                    f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
+                )
+            parts = response.candidates[0].content.parts
         elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
             # google.generativeai also raises an error len(candidates) != 1:
             if len(response.candidates) != 1:
@@ -610,21 +621,21 @@ class GeminiClient:
         """
 
         if param_type == "integer":
-            param_schema.type_ = 2
+            param_schema.type = Type.INTEGER
         elif param_type == "number":
-            param_schema.type_ = 3
+            param_schema.type = Type.NUMBER
         elif param_type == "string":
-            param_schema.type_ = 1
+            param_schema.type = Type.STRING
         elif param_type == "boolean":
-            param_schema.type_ = 6
+            param_schema.type = Type.BOOLEAN
         elif param_type == "array":
-            param_schema.type_ = 5
+            param_schema.type = Type.ARRAY
             if "items" in json_data:
                 param_schema.items = GeminiClient._create_gemini_function_declaration_schema(json_data["items"])
             else:
                 print("Warning: Array schema missing 'items' definition.")
         elif param_type == "object":
-            param_schema.type_ = 4
+            param_schema.type = Type.OBJECT
             param_schema.properties = {}
             if "properties" in json_data:
                 for prop_name, prop_data in json_data["properties"].items():
@@ -635,7 +646,7 @@ class GeminiClient:
                     print("Warning: Object schema missing 'properties' definition.")
 
         elif param_type in ("null", "any"):
-            param_schema.type_ = 1  # Treating these as strings for simplicity
+            param_schema.type = Type.STRING  # Treating these as strings for simplicity
         else:
             print(f"Warning: Unsupported parameter type '{param_type}'.")
 
@@ -647,7 +658,7 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
-        function_parameter["type_"] = function_parameter["type"].upper()
+        function_parameter["type"] = function_parameter["type"].upper()
 
         # Parameter properties and items
         if "properties" in function_parameter:
@@ -660,7 +671,7 @@ class GeminiClient:
             function_parameter["items"] = GeminiClient._create_gemini_function_parameters(function_parameter["items"])
 
         # Remove any attributes not needed
-        for attr in ["type", "default"]:
+        for attr in ["default"]:
             if attr in function_parameter:
                 del function_parameter[attr]
 
