@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 import autogen
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
-from autogen.exception_utils import InvalidCarryOverType, SenderRequired
+from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 
 from ..conftest import (
     Credentials,
@@ -488,7 +488,7 @@ def test_generate_reply():
     )
 
     dummy_agent_2.register_reply(["str", None], ConversableAgent.generate_oai_reply)
-    with pytest.raises(SenderRequired):
+    with pytest.raises(SenderRequiredError):
         dummy_agent_2.generate_reply(messages=messages, sender=None)
 
 
@@ -1249,7 +1249,7 @@ def test_messages_with_carryover():
     assert isinstance(generated_message, str)
 
     context = dict(message="hello", carryover=3)
-    with pytest.raises(InvalidCarryOverType):
+    with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
     # Test multimodal messages
@@ -1276,7 +1276,7 @@ def test_messages_with_carryover():
     assert len(generated_message["content"]) == 4
 
     context = dict(message=mm_message, carryover=3)
-    with pytest.raises(InvalidCarryOverType):
+    with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
     # Test without carryover
