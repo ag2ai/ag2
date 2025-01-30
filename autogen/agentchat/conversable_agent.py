@@ -59,7 +59,8 @@ from ..messages.agent_messages import (
 )
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
+from ..tools import ChatContext, Tool, load_basemodels_if_needed
+from ..tools.dependency_injection import SerializableResult
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -2648,18 +2649,18 @@ class ConversableAgent(LLMAgent):
         @load_basemodels_if_needed
         @functools.wraps(func)
         def _wrapped_func(*args, **kwargs):
-            retval = func(*args, **kwargs, **inject_params)
+            retval: SerializableResult = func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
-            return serialize_to_str(retval)
+            return retval.model_dump()["result"]
 
         @load_basemodels_if_needed
         @functools.wraps(func)
         async def _a_wrapped_func(*args, **kwargs):
-            retval = await func(*args, **kwargs, **inject_params)
+            retval: SerializableResult = await func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
-            return serialize_to_str(retval)
+            return retval.model_dump()["result"]
 
         wrapped_func = _a_wrapped_func if inspect.iscoroutinefunction(func) else _wrapped_func
 
