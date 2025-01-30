@@ -286,6 +286,7 @@ markers = [
     "interop",
     "browser_use",
     "crawl4ai",
+    "run_in_separate_process",
 ]
 
 [tool.black]
