@@ -1,28 +1,66 @@
 ---
-title: Docker for Development
+title: Setting up the Development Environment
 ---
 
-For developers contributing to the AG2 project, we offer a specialized devcontainer environment. This setup is designed to streamline the development process, ensuring that all contributors work within a consistent and well-equipped environment.
+## Setting up LLM Keys
 
-## AG2 Devcontainer
+If you are contributing to the AG2 project, you will need an LLM key depending on the submodule you are working on.
 
-- **Purpose**: The devcontainer is tailored for contributors to the AG2 project. It includes a suite of tools and configurations that aid in the development and testing of new features or fixes.
-- **Usage**: This image is recommended for developers who intend to contribute code or documentation to AG2.
-- **Forking the Project**: It's advisable to fork the AG2 GitHub project to your own repository. This allows you to make changes in a separate environment without affecting the main project.
-- **Submitting Pull Requests**: Once your changes are ready, submit a pull request from your branch to the upstream AG2 GitHub project for review and integration. For more details on contributing, see the [AG2 Contributing](/docs/contributor-guide/contributing) page.
+If you are working on OpenAI related code, you need to setup an environment variable called `OAI_CONFIG_LIST` in JSON format. Following is an example of the `OAI_CONFIG_LIST` environment variable:
 
-## Developing with Devcontainers
+```bash
+export OAI_CONFIG_LIST='[{"model": "gpt-4o","api_key": "<your_api_key>","tags": ["gpt-4o", "tool", "vision"]},{"model": "gpt-4o-mini","api_key": "<your_api_key>","tags": ["gpt-4o-mini", "tool", "vision"]}]'
+```
 
-1. Open the project in Visual Studio Code.
-2. Press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
-3. Select the desired python environment and wait for the container to build.
-4. Once the container is built, you can start developing AG2.
+You need to add a separate entry for each OpenAI model you are using.
 
-## Developing with Codespaces
+If you are working on other LLMs such as Gemini, Anthropic, Together, etc., you need to setup an environment variable for the respective LLM's key. Following is an example of the environment variable for Gemini:
 
-Provided devcontainer files can be used with GitHub Codespaces. To use the devcontainer with GitHub Codespaces, follow the steps below:
+```bash
+export GEMINI_API_KEY="<your_api_key>"
+```
 
-1. Open the AG2 repository in GitHub.
-2. Click on the `Code` button and select `Open with Codespaces`.
-3. Select the desired python environment and wait for the container to build.
-4. Once the container is built, you can start developing AG2.
+## Setting up the Development Environment
+
+To contribute to the AG2 project, AG2 provides three different method to setup the development environment:
+
+### Developing with Devcontainers
+
+1. Setup the necessary LLM keys as mentioned above in your terminal.
+2. Clone the AG2 repository and cd into the repository.
+3. Open the project in Visual Studio Code by running the following command from the root of the repository:
+    ```bash
+    code .
+    ```
+4. Press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
+5. Select the desired python environment and wait for the container to build.
+6. Once the container is built, you can start developing AG2.
+
+### Developing with Codespaces
+
+The provided devcontainer files can be used with GitHub Codespaces. To use the devcontainer with GitHub Codespaces, follow the steps below:
+
+1. Open the AG2 repository on GitHub and fork the repository.
+2. Navigate to Settings -> Secrets and variables -> Codespaces.
+3. Add the necessary LLM keys as mentioned above by clicking on the `New repository secret` button.
+4. Navigate back to the forked repository.
+5. Click on the `Code` button and select `Open with Codespaces`.
+6. Once the container is built, you can start developing AG2.
+
+### Developing with Virtual Environment
+
+1. Setup the necessary LLM keys as mentioned above in your terminal.
+2. Fork the AG2 repository and clone the forked repository.
+3. Create a virtual environment by running the following command from the root of the repository:
+    ```bash
+    python3 -m venv venv
+    ```
+4. Activate the virtual environment by running the following command:
+    ```bash
+    source venv/bin/activate
+    ```
+5. Install the required dependencies by running the following command:
+    ```bash
+    pip install -e ".[dev]"
+    ```
+6. Once the dependencies are installed, you can start developing AG2.
