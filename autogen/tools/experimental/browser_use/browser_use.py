@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Callable, Optional, TypeVar
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel
 
+from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ... import Depends, Tool
+from ...dependency_injection import on
 
 with optional_import_block():
     from browser_use import Agent
@@ -19,8 +21,7 @@ with optional_import_block():
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
 
 
-# todo: add export_module decorator
-# @export_module("autogen.tools.experimental.browser_use")
+@export_module("autogen.tools.experimental.browser_use")
 class BrowserUseResult(BaseModel):
     """The result of using the browser to perform a task.
 
@@ -33,19 +34,8 @@ class BrowserUseResult(BaseModel):
     final_result: Optional[str]
 
 
-T = TypeVar("T")
-
-
-def on(x: T) -> Callable[[], T]:
-    def inner(_x: T = x) -> T:
-        return _x
-
-    return inner
-
-
 @require_optional_import(["langchain_openai", "browser_use"], "browser-use")
-# todo: add export_module decorator
-# @export_module("autogen.tools.experimental")
+@export_module("autogen.tools.experimental")
 class BrowserUseTool(Tool):
     """BrowserUseTool is a tool that uses the browser to perform a task."""
 
