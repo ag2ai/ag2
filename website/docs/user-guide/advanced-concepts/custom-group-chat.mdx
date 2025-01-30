@@ -4,21 +4,21 @@ sidebarTitle: Custom Group Chat
 ---
 
 <Tip>
-If you haven't had a chance to read about or use AG2's GroupChat orchestration, see the [Getting Started](TODO) introduction to GroupChat.
+If you haven't had a chance to read about or use AG2's GroupChat orchestration, see the [Basic Concepts](/docs/user-guide/basic-concepts/groupchat) section on GroupChat.
 </Tip>
 
-`GroupChat`'s four built-in conversation patterns, automatic, round robin, random, and manual provide a good degree of flexibility to orchestrate agents in a group chat setting.
+`GroupChat`'s four built-in conversation patterns, `automatic`, `round robin`, `random`, and `manual` provide a good degree of flexibility to orchestrate agents in a group chat setting.
 
 However, there are two additional methods to control the flow in a GroupChat:
 
-1. Use a Callable as a speaker selection method
+1. Use a `Callable` as a speaker selection method
 
 2. Define a graph specifying valid transitions
 
 Here's a walk-through of each of these methods.
 
 ## 1. Callable speaker selection method
-By specifying the a Callable as the speaker selection method for a GroupChat, a function is called after each agent replies and the agent it returns will be the next agent.
+By specifying a `Callable` as the speaker selection method for a GroupChat, a function is called after each agent replies and the agent it returns will be the next agent.
 
 #### Setting up
 
@@ -713,5 +713,5 @@ DONE!
 - [Implementing Swarm with a GroupChat](https://docs.ag2.ai/notebooks/agentchat_swarm_w_groupchat_legacy)
 
 ### API
-[GroupChat](TODO)
-[GroupChatManager]
+[GroupChat](/docs/api-reference/autogen/overview)
+[GroupChatManager](/docs/api-reference/autogen/overview)
