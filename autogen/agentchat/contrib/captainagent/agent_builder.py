@@ -523,7 +523,7 @@ Match roles in the role set to each expert in expert set.
         """
         import sqlite3
 
-        # Some system will have an unexcepted sqlite3 version.
+        # Some system will have an unexpected sqlite3 version.
         # Check if the user has installed pysqlite3.
         if int(sqlite3.version.split(".")[0]) < 3:
             try:
