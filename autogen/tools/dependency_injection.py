@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, get_t
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
-from pydantic import BaseModel
 
 from ..agentchat import Agent
 from ..doc_utils import export_module
@@ -203,20 +202,11 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
     return f
 
 
-class SerializableResult(BaseModel):
-    result: Any
-
-
 def _change_return_value_and_annotation(f: Callable[..., Any]) -> Callable[..., Any]:
-    def wrapper(*args: Any, **kwargs: Any) -> SerializableResult:
-        result = f(*args, **kwargs)
-        return SerializableResult(result=result)
-
     sig = inspect.signature(f)
-
     # Change only the return_annotation to SerializableResult
-    wrapper.__signature__ = sig.replace(return_annotation=SerializableResult)  # type: ignore[attr-defined]
-    return wrapper
+    f.__signature__ = sig.replace(return_annotation=Any)  # type: ignore[attr-defined]
+    return f
 
 
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:

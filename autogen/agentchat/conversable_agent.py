@@ -26,6 +26,7 @@ from typing import (
 )
 
 from openai import BadRequestError
+from pydantic import BaseModel
 
 from .._pydantic import model_dump
 from ..cache.cache import AbstractCache
@@ -60,7 +61,6 @@ from ..messages.agent_messages import (
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed
-from ..tools.dependency_injection import SerializableResult
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -2646,21 +2646,26 @@ class ConversableAgent(LLMAgent):
             The wrapped function.
         """
 
+        class SerializableResult(BaseModel):
+            result: Any
+
         @load_basemodels_if_needed
         @functools.wraps(func)
         def _wrapped_func(*args, **kwargs):
-            retval: SerializableResult = func(*args, **kwargs, **inject_params)
+            retval = func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
-            return retval.model_dump()["result"]
+            retval_model = SerializableResult(result=retval)
+            return retval_model.model_dump()["result"]
 
         @load_basemodels_if_needed
         @functools.wraps(func)
         async def _a_wrapped_func(*args, **kwargs):
-            retval: SerializableResult = await func(*args, **kwargs, **inject_params)
+            retval = await func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
-            return retval.model_dump()["result"]
+            retval_model = SerializableResult(result=retval)
+            return retval_model.model_dump()["result"]
 
         wrapped_func = _a_wrapped_func if inspect.iscoroutinefunction(func) else _wrapped_func
 
