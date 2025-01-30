@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 import inspect
 import sys
 from abc import ABC
@@ -203,12 +204,28 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _change_return_annotation(f: Callable[..., Any]) -> Callable[..., Any]:
-    # Check if f is a bound method or an unbound function
-    f_func = f.__func__ if inspect.ismethod(f) else f
+    if inspect.iscoroutinefunction(f):
 
-    sig = inspect.signature(f_func)
-    f_func.__signature__ = sig.replace(return_annotation=Any)  # type: ignore[attr-defined]
-    return f
+        @functools.wraps(f)
+        async def _a_wrapped_func(*args: Any, **kwargs: Any) -> Any:
+            return await f(*args, **kwargs)
+
+        wrapped_func = _a_wrapped_func
+
+    else:
+
+        @functools.wraps(f)
+        def _wrapped_func(*args: Any, **kwargs: Any) -> Any:
+            return f(*args, **kwargs)
+
+        wrapped_func = _wrapped_func
+
+    sig = inspect.signature(f)
+
+    # Change the return annotation directly on the signature of the wrapper
+    wrapped_func.__signature__ = sig.replace(return_annotation=Any)  # type: ignore[attr-defined]
+
+    return wrapped_func
 
 
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
