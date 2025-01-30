@@ -42,7 +42,7 @@ from ..code_utils import (
 from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
-from ..exception_utils import InvalidCarryOverType, SenderRequired
+from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
 from ..messages.agent_messages import (
     ClearConversableAgentHistoryMessage,
@@ -2180,7 +2180,7 @@ class ConversableAgent(LLMAgent):
             return sender is None
         elif isinstance(trigger, str):
             if sender is None:
-                raise SenderRequired()
+                raise SenderRequiredError()
             return trigger == sender.name
         elif isinstance(trigger, type):
             return isinstance(sender, trigger)
@@ -2474,7 +2474,7 @@ class ConversableAgent(LLMAgent):
                 message = message.copy()
                 message["content"] = self._process_multimodal_carryover(message["content"], kwargs)
         else:
-            raise InvalidCarryOverType("Carryover should be a string or a list of strings.")
+            raise InvalidCarryOverTypeError("Carryover should be a string or a list of strings.")
 
         return message
 
@@ -2489,7 +2489,7 @@ class ConversableAgent(LLMAgent):
         elif isinstance(kwargs["carryover"], list):
             content += "\nContext: \n" + ("\n").join([_post_process_carryover_item(t) for t in kwargs["carryover"]])
         else:
-            raise InvalidCarryOverType(
+            raise InvalidCarryOverTypeError(
                 "Carryover should be a string or a list of strings. Not adding carryover to the message."
             )
         return content

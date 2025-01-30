@@ -15,7 +15,7 @@ from typing import Callable, Literal, Optional, Union
 
 from ..code_utils import content_str
 from ..doc_utils import export_module
-from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNextAgent
+from ..exception_utils import AgentNameConflictError, NoEligibleSpeakerError, UndefinedNextAgentError
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages.agent_messages import (
@@ -319,7 +319,7 @@ class GroupChat:
         filtered_agents = [agent for agent in agents if agent.name == name]
 
         if raise_on_name_conflict and len(filtered_agents) > 1:
-            raise AgentNameConflict()
+            raise AgentNameConflictError()
 
         return filtered_agents[0] if filtered_agents else None
 
@@ -339,7 +339,7 @@ class GroupChat:
 
         # Ensure the provided list of agents is a subset of self.agents
         if not set(agents).issubset(set(self.agents)):
-            raise UndefinedNextAgent()
+            raise UndefinedNextAgentError()
 
         # What index is the agent? (-1 if not present)
         idx = self.agent_names.index(agent.name) if agent.name in self.agent_names else -1
@@ -354,7 +354,7 @@ class GroupChat:
                     return self.agents[(offset + i) % len(self.agents)]
 
         # Explicitly handle cases where no valid next agent exists in the provided subset.
-        raise UndefinedNextAgent()
+        raise UndefinedNextAgentError()
 
     def select_speaker_msg(self, agents: Optional[list[Agent]] = None) -> str:
         """Return the system message for selecting the next speaker. This is always the *first* message in the context."""
@@ -441,7 +441,9 @@ class GroupChat:
         if isinstance(self.speaker_selection_method, Callable):
             selected_agent = self.speaker_selection_method(last_speaker, self)
             if selected_agent is None:
-                raise NoEligibleSpeaker("Custom speaker selection function returned None. Terminating conversation.")
+                raise NoEligibleSpeakerError(
+                    "Custom speaker selection function returned None. Terminating conversation."
+                )
             elif isinstance(selected_agent, Agent):
                 if selected_agent in self.agents:
                     return selected_agent, self.agents, None
@@ -522,7 +524,9 @@ class GroupChat:
 
         # this condition means last_speaker is a sink in the graph, then no agents are eligible
         if last_speaker not in self.allowed_speaker_transitions_dict and is_last_speaker_in_group:
-            raise NoEligibleSpeaker(f"Last speaker {last_speaker.name} is not in the allowed_speaker_transitions_dict.")
+            raise NoEligibleSpeakerError(
+                f"Last speaker {last_speaker.name} is not in the allowed_speaker_transitions_dict."
+            )
         # last_speaker is not in the group, so all agents are eligible
         elif last_speaker not in self.allowed_speaker_transitions_dict and not is_last_speaker_in_group:
             graph_eligible_agents = []
@@ -1184,7 +1188,7 @@ class GroupChatManager(ConversableAgent):
                 else:
                     # admin agent is not found in the participants
                     raise
-            except NoEligibleSpeaker:
+            except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
                 break
 
@@ -1265,7 +1269,7 @@ class GroupChatManager(ConversableAgent):
                 else:
                     # admin agent is not found in the participants
                     raise
-            except NoEligibleSpeaker:
+            except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
                 break
 
