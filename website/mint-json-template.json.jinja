@@ -40,170 +40,162 @@
   },
   "tabs": [
     {
-      "name": "Documentation",
-      "url": "docs"
+      "name": "Home",
+      "url": "docs/home"
     },
     {
-      "name": "Examples",
-      "url": "notebooks"
+      "name": "User Guide",
+      "url": "docs/user-guide"
+    },
+    {
+      "name": "API References",
+      "url": "docs/api-reference"
+    },
+    {
+      "name": "Use Cases",
+      "url": "docs/use-cases"
+    },
+    {
+      "name": "Contribute",
+      "url": "contributor-guide"
+    },
+    {
+      "name": "FAQs",
+      "url": "faq"
+    },
+    {
+      "name": "Ecosystem",
+      "url": "ecosystem"
     },
     {
       "name": "Blog",
-      "url": "blog"
+      "url": "docs/blog"
     },
     {
       "name": "Community Talks",
-      "url": "talks"
-    },
-    {
-      "name": "API Reference",
-      "url": "reference"
+      "url": "docs/talks"
     }
   ],
   "anchors": [],
   "navigation": [
     {
-      "group": "",
+      "group": "Home",
       "pages": [
-        "docs/Home",
-        "docs/Getting-Started"
-      ]
-    },
-    {
-      "group": "Installation",
-      "pages": [
-        "docs/installation/Installation",
-        "docs/installation/Optional-Dependencies"
-      ]
-    },
-    {
-      "group": "Tutorials",
-      "pages": [
-        "docs/tutorial/introduction",
-        "docs/tutorial/chat-termination",
-        "docs/tutorial/human-in-the-loop",
-        "docs/tutorial/code-executors",
-        "docs/tutorial/tool-use",
-        "docs/tutorial/conversation-patterns",
-        "docs/tutorial/what-next"
-      ]
-    },
-    {
-      "group": "Use Cases",
-      "pages": [
-        "docs/Use-Cases/agent_chat",
-        "docs/Use-Cases/enhanced_inference"
+        "docs/home/Home"
       ]
     },
     {
       "group": "User Guide",
       "pages": [
+        "docs/user-guide/quick-start",
         {
-          "group": "Code Execution",
+          "group": "Basic Concepts",
           "pages": [
-            "docs/topics/code-execution/cli-code-executor",
-            "docs/topics/code-execution/custom-executor",
-            "docs/topics/code-execution/jupyter-code-executor",
-            "docs/topics/code-execution/user-defined-functions"
+            "docs/user-guide/basic-concepts/installing-ag2",
+            "docs/user-guide/basic-concepts/llm-configuration",
+            "docs/user-guide/basic-concepts/conversable-agent",
+            "docs/user-guide/basic-concepts/human-in-the-loop",
+            "docs/user-guide/basic-concepts/orchestrations",
+            "docs/user-guide/basic-concepts/groupchat",
+            "docs/user-guide/basic-concepts/swarm",
+            "docs/user-guide/basic-concepts/tools",
+            "docs/user-guide/basic-concepts/structured-outputs",
+            "docs/user-guide/basic-concepts/ending-a-chat"
           ]
         },
         {
-          "group": "OpenAI Assistant",
+          "group": "Advanced Concepts",
           "pages": [
-            "docs/topics/openai-assistant/gpt_assistant_agent"
+            "docs/user-guide/advanced-concepts/rag",
+            "docs/user-guide/advanced-concepts/custom-group-chat",
+            "docs/user-guide/advanced-concepts/enhanced-swarm",
+            "docs/user-guide/advanced-concepts/tools-with-secrets",
+            "docs/user-guide/advanced-concepts/code-execution"
           ]
         },
         {
-          "group": "GroupChat",
+          "group": "Model Providers",
           "pages": [
-            "docs/topics/groupchat/customized_speaker_selection",
-            "docs/topics/groupchat/resuming_groupchat",
-            "docs/topics/groupchat/transform_messages_speaker_selection",
-            "docs/topics/groupchat/using_custom_model_client_classes"
+            "docs/user-guide/models/openai",
+            "docs/user-guide/models/amazon-bedrock",
+            "docs/user-guide/models/anthropic",
+            "docs/user-guide/models/cerebras",
+            "docs/user-guide/models/cohere",
+            "docs/user-guide/models/deepseek-v3",
+            "docs/user-guide/models/google-gemini",
+            "docs/user-guide/models/google-vertexai",
+            "docs/user-guide/models/groq",
+            "docs/user-guide/models/litellm-with-watsonx",
+            "docs/user-guide/models/lm-studio",
+            "docs/user-guide/models/mistralai",
+            "docs/user-guide/models/ollama",
+            "docs/user-guide/models/togetherai",
+            "docs/user-guide/models/vLLM"
           ]
-        },
-        {
-          "group": "Using Non-OpenAI Models",
-          "pages": [
-            "docs/topics/non-openai-models/about-using-nonopenai-models",
-            "docs/topics/non-openai-models/best-tips-for-nonopenai-models",
-            "docs/topics/non-openai-models/cloud-anthropic",
-            "docs/topics/non-openai-models/cloud-bedrock",
-            "docs/topics/non-openai-models/cloud-cerebras",
-            "docs/topics/non-openai-models/cloud-cohere",
-            "docs/topics/non-openai-models/cloud-gemini",
-            "docs/topics/non-openai-models/cloud-gemini_vertexai",
-            "docs/topics/non-openai-models/cloud-groq",
-            "docs/topics/non-openai-models/cloud-litellm-watsonx",
-            "docs/topics/non-openai-models/cloud-mistralai",
-            "docs/topics/non-openai-models/cloud-togetherai",
-            "docs/topics/non-openai-models/cloud-deepseek-v3",
-            "docs/topics/non-openai-models/local-litellm-ollama",
-            "docs/topics/non-openai-models/local-lm-studio",
-            "docs/topics/non-openai-models/local-ollama",
-            "docs/topics/non-openai-models/local-vllm"
-          ]
-        },
-        {
-          "group": "CaptainAgent",
-          "pages": [
-            "docs/topics/captainagent/agent_library",
-            "docs/topics/captainagent/configurations",
-            "docs/topics/captainagent/tool_library"
-          ]
-        },
-        {
-          "group": "Handling Long Contexts",
-          "pages": [
-            "docs/topics/handling_long_contexts/compressing_text_w_llmligua",
-            "docs/topics/handling_long_contexts/intro_to_transform_messages"
-          ]
-        },
-        "docs/topics/llm-caching",
-        "docs/topics/llm-observability",
-        "docs/topics/llm_configuration",
-        {
-          "group": "Prompting and Reasoning",
-          "pages": [
-            "docs/topics/prompting-and-reasoning/react",
-            "docs/topics/prompting-and-reasoning/reflection"
-          ]
-        },
-        "docs/topics/retrieval_augmentation",
-        "docs/topics/swarm",
-        "docs/topics/task_decomposition",
-        "docs/FAQ"
+        }
       ]
     },
     {
-      "group": "Ecosystem",
+      "group": "Use Cases",
       "pages": [
-        "docs/ecosystem/agentops",
-        "docs/ecosystem/azure_cosmos_db",
-        "docs/ecosystem/composio",
-        "docs/ecosystem/databricks",
-        "docs/ecosystem/llamaindex",
-        "docs/ecosystem/mem0",
-        "docs/ecosystem/memgpt",
-        "docs/ecosystem/microsoft-fabric",
-        "docs/ecosystem/ollama",
-        "docs/ecosystem/pgvector",
-        "docs/ecosystem/portkey",
-        "docs/ecosystem/promptflow"
+        {
+          "group": "Use cases",
+          "pages": [
+            "docs/use-cases/use-cases/customer-service",
+            "docs/use-cases/use-cases/game-design",
+            "docs/use-cases/use-cases/travel-planning"
+          ]
+        },
+        {
+          "group": "Reference Agents",
+          "pages": [
+            "docs/use-cases/reference-agents/index",
+            "docs/use-cases/reference-agents/captainagent",
+            "docs/use-cases/reference-agents/reasoningagent",
+            "docs/use-cases/reference-agents/websurferagent"
+          ]
+        },
+        {
+          "group": "Notebooks",
+          "pages": ["docs/use-cases/notebooks/notebooks"]
+        },
+        "docs/use-cases/sample-apps/sample-apps",
+        "docs/use-cases/community-gallery/community-gallery"
       ]
     },
     {
       "group": "Contributor Guide",
       "pages": [
-        "docs/contributor-guide/contributing",
-        "docs/contributor-guide/docker",
-        "docs/contributor-guide/documentation",
-        "docs/contributor-guide/file-bug-report",
-        "docs/contributor-guide/maintainer",
-        "docs/contributor-guide/pre-commit",
-        "docs/contributor-guide/tests",
-        "docs/Research",
-        "docs/Migration-Guide"
+        "contributor-guide/contributing",
+        "contributor-guide/setup-development-environment",
+        "contributor-guide/documentation",
+        "contributor-guide/file-bug-report",
+        "contributor-guide/maintainer",
+        "contributor-guide/pre-commit",
+        "contributor-guide/tests",
+        "contributor-guide/Research",
+        "contributor-guide/Migration-Guide"
+      ]
+    },
+    {
+      "group": "FAQs",
+      "pages": ["faq/FAQ"]
+    },
+    {
+      "group": "Ecosystem",
+      "pages": [
+        "ecosystem/agentops",
+        "ecosystem/azure_cosmos_db",
+        "ecosystem/composio",
+        "ecosystem/databricks",
+        "ecosystem/llamaindex",
+        "ecosystem/mem0",
+        "ecosystem/memgpt",
+        "ecosystem/microsoft-fabric",
+        "ecosystem/ollama",
+        "ecosystem/pgvector",
+        "ecosystem/portkey",
+        "ecosystem/promptflow"
       ]
     }
   ],

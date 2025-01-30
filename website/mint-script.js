@@ -1,7 +1,7 @@
 (function () {
   function updateClass() {
     document.body.classList.remove("reference-page");
-    if (window.location.pathname.includes("/reference/")) {
+    if (window.location.pathname.includes("/docs/api-reference/")) {
       document.body.classList.add("reference-page");
     }
   }

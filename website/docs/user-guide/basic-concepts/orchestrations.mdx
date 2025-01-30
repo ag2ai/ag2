@@ -1,0 +1,17 @@
+---
+title: Orchestrating many agents
+---
+
+Many hands make for light work, so it's time to move on from our simple two-agent conversations and think about orchestrating workflows containing many agents, a strength of the AG2 framework.
+
+There are two mechanisms for building multi-agent workflows, <b>GroupChat</b> and <b>Swarm</b>.
+
+1. GroupChat contains a number of built-in conversation patterns to determine the next agent. You can also define your own.
+
+2. Swarm is a conversation pattern based on agents with handoffs. There's a shared context and each agent has tools and the ability to transfer control to other agents. The [original swarm concept](https://github.com/openai/swarm) was created by OpenAI.
+
+Continue on to explore these.
+
+<Note>
+We'll refer to *[conversation patterns](https://docs.ag2.ai/docs/tutorial/conversation-patterns)* throughout the documentation - they are simply a structured way of organizing the flow between agents.
+</Note>

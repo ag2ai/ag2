@@ -21,7 +21,8 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
@@ -81,7 +82,7 @@ class Result:
 
 def notebooks_target_dir(website_directory: Path) -> Path:
     """Return the target directory for notebooks."""
-    return website_directory / "notebooks"
+    return website_directory / "docs" / "use-cases" / "notebooks" / "notebooks"
 
 
 def load_metadata(notebook: Path) -> dict[str, dict[str, Union[str, list[str], None]]]:
@@ -347,7 +348,7 @@ def add_front_matter_to_metadata_mdx(
     # Create new entry for current notebook
     entry = {
         "title": front_matter.get("title", ""),
-        "link": f"/notebooks/{rendered_mdx.stem}",
+        "link": f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}",
         "description": front_matter.get("description", ""),
         "image": front_matter.get("image"),
         "tags": front_matter.get("tags", []),
@@ -609,22 +610,6 @@ def start_thread_to_terminate_when_parent_process_dies(ppid: int) -> None:
     thread.start()
 
 
-def copy_examples_mdx_files(website_dir: str) -> None:
-    # The mdx files to copy to the notebooks directory
-    example_section_mdx_files = ["Gallery", "Notebooks"]
-
-    # Create notebooks directory if it doesn't exist
-    website_dir_path = Path(website_dir)
-    notebooks_dir = website_dir_path / "notebooks"
-    notebooks_dir.mkdir(parents=True, exist_ok=True)
-
-    for mdx_file in example_section_mdx_files:
-        src_mdx_file_path = (website_dir_path / "docs" / f"{mdx_file}.mdx").resolve()
-        dest_mdx_file_path = (notebooks_dir / f"{mdx_file}.mdx").resolve()
-        # Copy mdx file to notebooks directory
-        shutil.copy(src_mdx_file_path, dest_mdx_file_path)
-
-
 def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
     """Get sorted list of files with prefix prepended."""
     if not input_dir.exists():
@@ -659,7 +644,7 @@ def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[
     return {"group": group_header, "pages": sorted_dir_files}
 
 
-def extract_example_group(metadata_path: Path) -> dict[str, Sequence[Collection[str]]]:
+def extract_example_group(metadata_path: Path) -> list[str]:
     # Read NotebooksMetadata.mdx and extract metadata links
     with open(metadata_path, encoding="utf-8") as f:
         content = f.read()
@@ -673,27 +658,46 @@ def extract_example_group(metadata_path: Path) -> dict[str, Sequence[Collection[
         notebooks_metadata = json.loads(metadata_str)
 
     # Create notebooks entry
-    notebooks_entry = {
-        "group": "Examples by Notebook",
-        "pages": ["notebooks/Notebooks"]
-        + [
-            Path(item["source"])
-            .with_suffix("")
-            .as_posix()
-            .replace("/website/", "/")
-            .replace("/notebook/", "notebooks/")
-            for item in notebooks_metadata
-            if not item["source"].startswith("/website/docs/")
-        ],
-    }
+    notebooks = ["docs/use-cases/notebooks/Notebooks"] + [
+        Path(item["source"])
+        .with_suffix("")
+        .as_posix()
+        .replace("/website/", "/")
+        .replace("/notebook/", "docs/use-cases/notebooks/notebooks/")
+        for item in notebooks_metadata
+        if not item["source"].startswith("/website/docs/")
+    ]
 
-    example_group = {"group": "Examples", "pages": [notebooks_entry, "notebooks/Gallery"]}
-
-    return example_group
+    return notebooks
 
 
-def update_navigation_with_notebooks(website_dir: Path) -> None:
-    """Updates mint.json navigation to include notebook entries from NotebooksMetadata.mdx.
+def update_group_pages(
+    mint_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]],
+    target_group: str,
+    new_value: Sequence[Union[str, dict[str, Union[str, Sequence[str]]]]],
+) -> list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]:
+    """Update mint.json navigation group with new pages."""
+    nav_copy = deepcopy(mint_navigation)
+
+    def update_recursively(
+        items: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]],
+    ) -> None:
+        for item in items:
+            if isinstance(item, dict):
+                if item.get("group") == target_group:
+                    item["pages"] = new_value.copy()
+                    return
+                if isinstance(item.get("pages"), list):
+                    update_recursively(item["pages"])
+            elif isinstance(item, list):
+                update_recursively(item)
+
+    update_recursively(nav_copy)
+    return nav_copy
+
+
+def add_mdx_generated_from_notebooks_to_nav(website_dir: Path) -> None:
+    """Updates mint.json navigation to include mdx files generated from the notebook entries
 
     Args:
         website_dir (Path): Root directory of the website
@@ -714,25 +718,26 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
         mint_config = json.load(f)
 
     # add talks to navigation
-    talks_dir = website_dir / "talks"
-    talks_section = generate_nav_group(talks_dir, "Talks", "talks")
-    talks_section_pages = (
-        [talks_section["pages"]] if isinstance(talks_section["pages"], str) else talks_section["pages"]
-    )
+    # talks_dir = website_dir / "talks"
+    # talks_section = generate_nav_group(talks_dir, "Talks", "talks")
+    # talks_section_pages = (
+    #     [talks_section["pages"]] if isinstance(talks_section["pages"], str) else talks_section["pages"]
+    # )
 
     # Add "talks/future_talks/index" item at the beginning of the list
-    future_talks_index = talks_section_pages.pop()
-    talks_section_pages.insert(0, future_talks_index)
-    mint_config["navigation"].append(talks_section)
+    # future_talks_index = talks_section_pages.pop()
+    # talks_section_pages.insert(0, future_talks_index)
+    # mint_config["navigation"].append(talks_section)
 
     # add blogs to navigation
     blogs_dir = website_dir / "_blogs"
-    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "blog")]}
+    blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "docs/blog")]}
     mint_config["navigation"].append(blog_section)
 
     # Add examples to navigation
     example_group = extract_example_group(metadata_path)
-    mint_config["navigation"].append(example_group)
+    updated_navigation = update_group_pages(mint_config["navigation"], "Notebooks", example_group)
+    mint_config["navigation"] = updated_navigation
 
     # Write back to mint.json
     with open(mint_json_path, "w", encoding="utf-8") as f:
@@ -854,7 +859,7 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
     """
     blog_dir = website_dir / "_blogs"
     authors_yml = blog_dir / "authors.yml"
-    generated_blog_dir = website_dir / "blog"
+    generated_blog_dir = website_dir / "docs" / "blog"
 
     # Remove existing generated directory if it exists
     if generated_blog_dir.exists():
@@ -902,7 +907,7 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
 
             file_path.write_text(f"{new_content}\n", encoding="utf-8")
-            print(f"Authors info and social share image checked in {file_path}")
+            # print(f"Authors info and social share image checked in {file_path}")
 
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
@@ -929,7 +934,7 @@ def cleanup_tmp_dirs_if_no_metadata(website_dir: Path) -> None:
     if not metadata_mdx.exists():
         print(f"NotebooksMetadata.mdx not found at {metadata_mdx}")
 
-        notebooks_dir = website_dir / "notebooks"
+        notebooks_dir = notebooks_target_dir(website_dir)
         print(f"Removing the {notebooks_dir} and to ensure a clean build.")
         shutil.rmtree(notebooks_dir, ignore_errors=True)
 
@@ -1030,8 +1035,7 @@ def main() -> None:
 
         # Post-processing steps after all notebooks are handled
         if not args.dry_run:
-            copy_examples_mdx_files(args.website_directory)
-            update_navigation_with_notebooks(args.website_directory)
+            add_mdx_generated_from_notebooks_to_nav(args.website_directory)
             fix_internal_references_in_mdx_files(args.website_directory)
             add_authors_and_social_img_to_blog_posts(args.website_directory)
 

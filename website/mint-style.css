@@ -28,6 +28,13 @@ h4 {
   }
 }
 
+.prose :where(h3):not(:where([class~=not-prose],[class~=not-prose] *)) {
+  margin-top: 1em;
+}
+.prose :where(h2):not(:where([class~=not-prose],[class~=not-prose] *)) {
+  margin-top: 0.8em;
+}
+
 .card h2 {
   font-size: 2rem !important;
 
