@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 
+import os
 import subprocess
 
 import pytest
@@ -44,7 +45,10 @@ class TestSecrets:
         sanitized = Secrets.sanitize_secrets(data)
         assert sanitized == "This contains ***** and ***** and some*****and should be sanitized."
 
-    @pytest.mark.run_in_separate_process
+    @pytest.mark.skipif(
+        not os.getenv("RUN_SANITIZATION_TEST"),
+        reason="Skipping sensitive tests. Set RUN_SANITIZATION_TEST=1 to run.",
+    )
     def test_raise_exception_with_secret(self):
         Secrets.add_secret("mysecret")
         raise Exception("This is a test exception. mysecret exposed!!!")
@@ -54,11 +58,10 @@ class TestSecrets:
         result = subprocess.run(
             [
                 "pytest",
-                "-m",
-                "run_in_separate_process",
                 "-s",
                 "test/test_conftest.py::TestSecrets::test_raise_exception_with_secret",
-            ],  # Run tests with the 'run_in_separate_process' marker
+            ],
+            env={**os.environ, "RUN_SANITIZATION_TEST": "1"},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
