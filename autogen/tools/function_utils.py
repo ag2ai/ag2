@@ -362,6 +362,10 @@ def load_basemodels_if_needed(func: Callable[..., Any]) -> Callable[..., Any]:
         return _load_parameters_if_needed
 
 
+class SerializableResult(BaseModel):
+    result: Any
+
+
 @export_module("autogen.tools")
 def serialize_to_str(x: Any) -> str:
     if isinstance(x, str):
@@ -369,4 +373,8 @@ def serialize_to_str(x: Any) -> str:
     elif isinstance(x, BaseModel):
         return model_dump_json(x)
     else:
-        return json.dumps(x, ensure_ascii=False)
+        try:
+            return json.dumps(x, ensure_ascii=False)
+        except TypeError:
+            retval_model = SerializableResult(result=x)
+            return str(retval_model.model_dump()["result"])

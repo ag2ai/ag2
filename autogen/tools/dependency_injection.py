@@ -202,10 +202,12 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
     return f
 
 
-def _change_return_value_and_annotation(f: Callable[..., Any]) -> Callable[..., Any]:
-    sig = inspect.signature(f)
-    # Change only the return_annotation to SerializableResult
-    f.__signature__ = sig.replace(return_annotation=Any)  # type: ignore[attr-defined]
+def _change_return_annotation(f: Callable[..., Any]) -> Callable[..., Any]:
+    # Check if f is a bound method or an unbound function
+    f_func = f.__func__ if inspect.ismethod(f) else f
+
+    sig = inspect.signature(f_func)
+    f_func.__signature__ = sig.replace(return_annotation=Any)  # type: ignore[attr-defined]
     return f
 
 
@@ -226,7 +228,7 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
         f = _fix_staticmethod(f)
 
     f = _string_metadata_to_description_field(f)
-    f = _change_return_value_and_annotation(f)
+    f = _change_return_annotation(f)
     f = inject(f)
     f = _remove_injected_params_from_signature(f)
 
