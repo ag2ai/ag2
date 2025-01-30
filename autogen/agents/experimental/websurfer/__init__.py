@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from .websurfer import WebSurferAgent
 
-__version__ = "0.7.3"
+__all__ = ["WebSurferAgent"]

@@ -19,6 +19,9 @@
         "ANTHROPIC_API_KEY": {
             "description": "This key is optional and only needed if you are working with Anthropic API-related code. Leave it blank if not required. You can always set it later as an environment variable in the codespace terminal."
         },
+        "GEMINI_API_KEY": {
+            "description": "This key is optional and only needed if you are working with Gemini API-related code. Leave it blank if not required. You can always set it later as an environment variable in the codespace terminal."
+        },
         "AZURE_OPENAI_API_KEY": {
             "description": "This key is optional and only needed if you are using Azure's OpenAI services. For it to work, you must also set the related environment variables: AZURE_API_ENDPOINT, AZURE_API_VERSION. Leave it blank if not required. You can always set these variables later in the codespace terminal."
         },
@@ -33,11 +36,18 @@
     "workspaceFolder": "/workspaces/ag2",
     "runArgs": [
         "--name",
-        "python-3.12-ag2",
-        "--env-file",
-        "${localWorkspaceFolder}/.devcontainer/devcontainer.env"
+        "python-3.12-ag2"
     ],
-    "remoteEnv": {},
+    "remoteEnv": {
+        "OAI_CONFIG_LIST": "${localEnv:OAI_CONFIG_LIST}",
+        "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+        "AZURE_OPENAI_API_KEY": "${localEnv:AZURE_OPENAI_API_KEY}",
+        "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
+        "TOGETHER_API_KEY": "${localEnv:TOGETHER_API_KEY}",
+        "GEMINI_API_KEY": "${localEnv:GEMINI_API_KEY}",
+        "AZURE_API_ENDPOINT": "${localEnv:AZURE_API_ENDPOINT}",
+        "AZURE_API_VERSION": "${localEnv:AZURE_API_VERSION}",
+    },
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
             "installZsh": true,

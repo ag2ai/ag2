@@ -55,10 +55,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        # Run tests only for py versions 3.9, 3.10, 3.13
-        python-version: ["3.9", "3.10", "3.13"]
-        # add more if needed
         optional-dependencies:
           - "jupyter-executor"
           - "retrievechat"
@@ -69,7 +65,15 @@ jobs:
           # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
           - "twilio"
           - "interop"
+          - "docs"
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Run tests only for py versions 3.9, 3.10, 3.13
+        python-version: ["3.9", "3.10", "3.13"]
+        # add more if needed
         exclude:
+          # pdoc3 is failing in python 3.9 for some reason, we build docs with Python 3.10
+          - python-version: "3.9"
+            optional-dependencies: "docs"
           # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
           - python-version: "3.9"
             optional-dependencies: "graph-rag-falkor-db"
@@ -126,7 +130,7 @@ jobs:
         run: |
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
-          bash scripts/test.sh -m "$MARKER and not openai"
+          bash scripts/test-skip-llm.sh -m "$MARKER"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

@@ -13,9 +13,12 @@ import logging
 import re
 import warnings
 from collections import defaultdict
+from contextlib import contextmanager
 from typing import (
     Any,
     Callable,
+    Generator,
+    Iterable,
     Literal,
     Optional,
     TypeVar,
@@ -2906,6 +2909,127 @@ class ConversableAgent(LLMAgent):
             return None
         else:
             return self.client.total_usage_summary
+
+    @contextmanager
+    def _create_executor(
+        self,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        agent_name: str = "executor",
+        agent_human_input_mode: str = "NEVER",
+    ) -> Generator["ConversableAgent", None, None]:
+        """Creates a user proxy / tool executor agent.
+
+        Args:
+            executor_kwargs: agent's arguments.
+            tools: tools to register for execution with the agent.
+            agent_name: agent's name, defaults to 'executor'.
+            agent_human_input_mode: agent's human input mode, defaults to 'NEVER'.
+        """
+        if executor_kwargs is None:
+            executor_kwargs = {}
+        if "is_termination_msg" not in executor_kwargs:
+            executor_kwargs["is_termination_msg"] = lambda x: (x["content"] is not None) and "TERMINATE" in x["content"]
+
+        executor = ConversableAgent(
+            name=agent_name,
+            human_input_mode=agent_human_input_mode,
+            code_execution_config={
+                "work_dir": "coding",
+                "use_docker": True,
+            },
+            **executor_kwargs,
+        )
+
+        try:
+            tools = [] if tools is None else tools
+            tools = [tools] if isinstance(tools, Tool) else tools
+            for tool in tools:
+                tool.register_for_execution(executor)
+                tool.register_for_llm(self)
+            yield executor
+        finally:
+            if tools is not None:
+                for tool in tools:
+                    self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
+
+    def run(
+        self,
+        message: str,
+        *,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+        max_turns: Optional[int] = None,
+        msg_to: Literal["agent", "user"] = "agent",
+        clear_history: bool = False,
+        user_input: bool = True,
+    ) -> ChatResult:
+        """Run a chat with the agent using the given message.
+
+        A second agent will be created to represent the user, this agent will by known by the name 'user'.
+
+        The user can terminate the conversation when prompted or, if agent's reply contains 'TERMINATE', it will terminate.
+
+        Args:
+            message: the message to be processed.
+            tools: the tools to be used by the agent.
+            executor_kwargs: the keyword arguments for the executor.
+            max_turns: maximum number of turns (a turn is equivalent to both agents having replied), defaults no None which means unlimited. The original message is included.
+            msg_to: which agent is receiving the message and will be the first to reply, defaults to the agent.
+            clear_history: whether to clear the chat history.
+            user_input: the user will be asked for input at their turn.
+        """
+        with self._create_executor(
+            executor_kwargs=executor_kwargs,
+            tools=tools,
+            agent_name="user",
+            agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+        ) as executor:
+            if msg_to == "agent":
+                return executor.initiate_chat(self, message=message, clear_history=clear_history, max_turns=max_turns)
+            else:
+                return self.initiate_chat(executor, message=message, clear_history=clear_history, max_turns=max_turns)
+
+    async def a_run(
+        self,
+        message: str,
+        *,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+        max_turns: Optional[int] = None,
+        msg_to: Literal["agent", "user"] = "agent",
+        clear_history: bool = False,
+        user_input: bool = True,
+    ) -> ChatResult:
+        """Run a chat asynchronously with the agent using the given message.
+
+        A second agent will be created to represent the user, this agent will by known by the name 'user'.
+
+        The user can terminate the conversation when prompted or, if agent's reply contains 'TERMINATE', it will terminate.
+
+        Args:
+            message: the message to be processed.
+            tools: the tools to be used by the agent.
+            executor_kwargs: the keyword arguments for the executor.
+            max_turns: maximum number of turns (a turn is equivalent to both agents having replied), defaults no None which means unlimited. The original message is included.
+            msg_to: which agent is receiving the message and will be the first to reply, defaults to the agent.
+            clear_history: whether to clear the chat history.
+            user_input: the user will be asked for input at their turn.
+        """
+        with self._create_executor(
+            executor_kwargs=executor_kwargs,
+            tools=tools,
+            agent_name="user",
+            agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+        ) as executor:
+            if msg_to == "agent":
+                return await executor.a_initiate_chat(
+                    self, message=message, clear_history=clear_history, max_turns=max_turns
+                )
+            else:
+                return await self.a_initiate_chat(
+                    executor, message=message, clear_history=clear_history, max_turns=max_turns
+                )
 
 
 @export_module("autogen")

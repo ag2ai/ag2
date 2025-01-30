@@ -124,6 +124,11 @@ rag = [
     "webdriver-manager==4.0.2",
 ]
 
+
+crawl4ai = [
+    "crawl4ai>=0.4.247,<0.5",
+]
+
 browser-use = [
     "browser-use>=0.1.27,<0.2",
 ]
@@ -165,11 +170,10 @@ teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
 gemini = [
-    "google-generativeai>=0.5,<1",
+    "google-genai>=0.6,<0.7",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
-    "pydantic",
     "jsonschema",
 ]
 together = ["together>=1.2"]
@@ -270,7 +274,6 @@ markers = [
     "redis",
     "docker",
     "docs",
-    "browser_use",
     # optional deps
     "jupyter_executor",
     "retrievechat",
@@ -281,6 +284,8 @@ markers = [
     "neo4j",
     "twilio",
     "interop",
+    "browser_use",
+    "crawl4ai",
 ]
 
 [tool.black]

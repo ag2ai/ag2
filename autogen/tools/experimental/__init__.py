@@ -3,5 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .browser_use import BrowserUseTool
+from .crawl4ai import Crawl4AITool
 
-__all__ = ["BrowserUseTool"]
+__all__ = ["BrowserUseTool", "Crawl4AITool"]
