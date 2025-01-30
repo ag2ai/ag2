@@ -20,7 +20,7 @@ import pytest
 import autogen
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
-from autogen.exception_utils import AgentNameConflict, UndefinedNextAgent
+from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentError
 
 from ..conftest import Credentials, suppress_json_decoder_error
 
@@ -446,7 +446,7 @@ def test_next_agent():
     assert groupchat.next_agent(agent4, [agent1, agent3]) == agent1
     assert groupchat.next_agent(agent4, [agent1, agent2, agent3]) == agent1
 
-    with pytest.raises(UndefinedNextAgent):
+    with pytest.raises(UndefinedNextAgentError):
         groupchat.next_agent(agent4, [agent5, agent6])
 
 
@@ -919,11 +919,11 @@ def test_get_agent_by_name():
     assert gc.agent_by_name("team2", recursive=True, raise_on_name_conflict=True) is None
 
     # Testing naming conflict
-    with pytest.raises(AgentNameConflict):
+    with pytest.raises(AgentNameConflictError):
         gc.agent_by_name("team1", raise_on_name_conflict=True)
 
     # Testing name conflict with recursive search
-    with pytest.raises(AgentNameConflict):
+    with pytest.raises(AgentNameConflictError):
         gc.agent_by_name("team1_member1", recursive=True, raise_on_name_conflict=True)
 
 
