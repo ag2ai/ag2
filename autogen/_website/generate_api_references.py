@@ -105,7 +105,7 @@ def generate(target_dir: Path, template_dir: Path) -> None:
     # Pass the custom template directory for rendering the markdown
     pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
-    submodules = import_submodules("autogen", include_root=False)
+    submodules = import_submodules("autogen")
     # print(f"{submodules=}")
 
     for submodule in submodules:
