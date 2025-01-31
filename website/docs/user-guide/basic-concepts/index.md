@@ -54,7 +54,7 @@ export OPENAI_API_KEY="your_api_key_here"
 setx OPENAI_API_KEY "your_api_key_here"
  ```
 
-If you would like to use a different provider, [see how here](https://docs.ag2.ai/docs/topics/non-openai-models/about-using-nonopenai-models).
+If you would like to use a different provider, [see the model providers list](/docs/user-guide/models/).
 
 
 # Say hello to ConversableAgent
@@ -720,7 +720,7 @@ print(json.dumps(lesson_plan_json, indent=2))
 }
 ```
 ::tip
-Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](https://docs.ag2.ai/notebooks/agentchat_structured_outputs#define-the-reasoning-model-2).
+Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs#define-the-reasoning-model-2).
 ::
 
 # Ending a chat
