@@ -18,28 +18,13 @@ After installation of any of them, you can import `autogen` using the same impor
 import autogen
 ```
 
-## Set your API endpoints
-
-This documentation has been moved [here](/docs/topics/llm_configuration).
-
-### Use the constructed configuration list in agents
-
-This documentation has been moved [here](/docs/topics/llm_configuration).
-
-### How does an agent decide which model to pick out of the list?
-
-This documentation has been moved [here](/docs/topics/llm_configuration#how-does-an-agent-decide-which-model-to-pick-out-of-the-list).
-
 ### Unexpected keyword argument 'base_url'
 
 In version >=1, OpenAI renamed their `api_base` parameter to `base_url`. So for older versions, use `api_base` but for newer versions use `base_url`.
 
 ### Can I use non-OpenAI models?
 
-Yes. You currently have two options:
-
-- `autogen` can work with any API endpoint which complies with OpenAI-compatible RESTful APIs - e.g. serving local LLM via FastChat or LM Studio. Please check [here](/blog/2023-07-14-Local-LLMs) for an example.
-- You can supply your own custom model implementation and use it with `autogen`. Please check [here](/blog/2024-01-26-Custom-Models) for more information.
+Yes, see the [model providers list](/docs/user-guide/models/).
 
 ## Handle Rate Limit Error and Timeout Error
 
