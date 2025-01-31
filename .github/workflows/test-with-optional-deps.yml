@@ -158,13 +158,13 @@ jobs:
       - name: Fail workflow if build failed
         id: check_build_failed
         if: contains(join(needs.*.result, ','), 'failure')
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: core.setFailed('Build Failed!')
 
       - name: Fail workflow if build cancelled
         id: check_build_cancelled
         if: contains(join(needs.*.result, ','), 'cancelled')
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: core.setFailed('Build Cancelled!')
