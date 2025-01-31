@@ -424,7 +424,7 @@ def test_serialize_to_json() -> None:
     assert serialize_to_str("abc") == "abc"
     assert serialize_to_str(123) == "123"
     assert serialize_to_str([123, 456]) == "[123, 456]"
-    assert serialize_to_str({"a": 1, "b": 2.3}) == '{"a": 1, "b": 2.3}'
+    assert serialize_to_str({"a": 1, "b": 2.3}) == '{"a": 1, "b": 2.3}'.replace('"', "'")
 
     class A(BaseModel):
         a: int

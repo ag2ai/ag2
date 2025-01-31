@@ -362,7 +362,7 @@ def load_basemodels_if_needed(func: Callable[..., Any]) -> Callable[..., Any]:
         return _load_parameters_if_needed
 
 
-class SerializableResult(BaseModel):
+class _SerializableResult(BaseModel):
     result: Any
 
 
@@ -370,11 +370,17 @@ class SerializableResult(BaseModel):
 def serialize_to_str(x: Any) -> str:
     if isinstance(x, str):
         return x
-    elif isinstance(x, BaseModel):
+    if isinstance(x, BaseModel):
         return model_dump_json(x)
-    else:
-        try:
-            return json.dumps(x, ensure_ascii=False)
-        except TypeError:
-            retval_model = SerializableResult(result=x)
-            return str(retval_model.model_dump()["result"])
+
+    retval_model = _SerializableResult(result=x)
+    try:
+        return str(retval_model.model_dump()["result"])
+    except Exception:
+        pass
+
+    # try json.dumps() and then just return str(x) if that fails too
+    try:
+        return json.dumps(x, ensure_ascii=False)
+    except Exception:
+        return str(x)
