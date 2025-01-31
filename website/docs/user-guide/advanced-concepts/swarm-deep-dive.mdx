@@ -45,7 +45,7 @@ agent_1 = SwarmAgent(..., functions=[transfer_to_agent_2, transfer_to_agent_3])
 ### Registering Handoffs to a nested chat
 In addition to transferring to an agent, you can also trigger a nested chat by doing a handoff and using `ON_CONDITION`. This is a useful way to perform sub-tasks without that work becoming part of the broader swarm's messages.
 
-Configuring the nested chat is similar to [establishing a nested chat for an agent](https://docs.ag2.ai/docs/tutorial/conversation-patterns#nested-chats).
+Configuring the nested chat is similar to [establishing a nested chat for an agent](/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#nested-chats).
 
 Nested chats are a set of sequential chats and these are defined like so:
 ```python
@@ -121,7 +121,7 @@ agent_1.handoff(
     )
 ```
 
-See the documentation on [registering a nested chat](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent#register-nested-chats) for further information on the parameters `reply_func_from_nested_chats`, `use_async`, and `config`.
+See the documentation on [registering a nested chat](/docs/api-reference/autogen/ConversableAgent#register-nested-chats) for further information on the parameters `reply_func_from_nested_chats`, `use_async`, and `config`.
 
 Once a nested chat is complete, the resulting output from the last chat in the nested chats will be returned as the agent that triggered the nested chat's response.
 
@@ -240,7 +240,7 @@ How we handle messages:
 - Case 1: If you pass in one single message
     - If there is a name in that message, we will assume this message is from that agent. (It will be error if that name doesn't match any agent you passed in.)
     - If there is no name, 1. User agent passed in: we assume this message is from the user agent. 2. No user agent passed in: we will create a temporary user agent just to start the chat.
-- Case 2: We will use the [Resume GroupChat](https://docs.ag2.ai/docs/topics/groupchat/resuming_groupchat) feature to resume the chat. The `name` fields in these messages must be one of the names of the agents you passed in, otherwise, it will be an error.
+- Case 2: We will use the [Resume GroupChat](/docs/user-guide/advanced-concepts/resuming-group-chat) feature to resume the chat. The `name` fields in these messages must be one of the names of the agents you passed in, otherwise, it will be an error.
 
 ## Q&As
 
