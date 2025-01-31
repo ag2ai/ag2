@@ -136,7 +136,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
-
+          token: ${{ secrets.CODECOV_TOKEN }}
   test-with_optional-dependencies-check:
     if: always()
     runs-on: ubuntu-latest

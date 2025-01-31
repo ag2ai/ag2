@@ -16,10 +16,7 @@ from autogen.agentchat.contrib.web_surfer import WebSurferAgent
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
-
-BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
-BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
-BING_QUERY = "Microsoft"
+from ...test_browser_utils import BING_QUERY, BLOG_POST_TITLE, BLOG_POST_URL
 
 with optional_import_block() as result:
     import markdownify  # noqa: F401

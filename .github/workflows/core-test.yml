@@ -110,7 +110,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, ${{ matrix.os }}, ${{ matrix.python-version }}
-
+          token: ${{ secrets.CODECOV_TOKEN }}
   build-check:
     if: always()
     runs-on: ubuntu-latest

@@ -424,7 +424,7 @@ def test_serialize_to_json() -> None:
     assert serialize_to_str("abc") == "abc"
     assert serialize_to_str(123) == "123"
     assert serialize_to_str([123, 456]) == "[123, 456]"
-    assert serialize_to_str({"a": 1, "b": 2.3}) == '{"a": 1, "b": 2.3}'
+    assert serialize_to_str({"a": 1, "b": 2.3}) == '{"a": 1, "b": 2.3}'.replace('"', "'")
 
     class A(BaseModel):
         a: int
@@ -432,3 +432,15 @@ def test_serialize_to_json() -> None:
         c: str
 
     assert serialize_to_str(A(a=1, b=2.3, c="abc")) == '{"a":1,"b":2.3,"c":"abc"}'
+
+
+def test_serilize_to_str_list_pydantic() -> None:
+    class A(BaseModel):
+        a: int
+        b: float
+        c: str
+
+    assert (
+        serialize_to_str([A(a=1, b=2.3, c="abc"), A(a=4, b=5.6, c="def")])
+        == "[{'a': 1, 'b': 2.3, 'c': 'abc'}, {'a': 4, 'b': 5.6, 'c': 'def'}]"
+    )

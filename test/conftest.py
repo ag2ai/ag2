@@ -467,7 +467,7 @@ def suppress_gemini_resource_exhausted(func: T) -> T:
 
         # Catch only code 429 which is RESOURCE_EXHAUSTED error instead of catching all the client errors
         def is_resource_exhausted_error(e: BaseException) -> bool:
-            return isinstance(e, ClientError) and getattr(e, "code", None) == 429
+            return isinstance(e, ClientError) and getattr(e, "code", None) in [429, 503]
 
         return suppress(ClientError, retries=2, error_filter=is_resource_exhausted_error)(func)
 

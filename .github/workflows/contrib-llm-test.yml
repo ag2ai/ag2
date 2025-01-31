@@ -52,6 +52,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
+          token: ${{ secrets.CODECOV_TOKEN }}
   AgentBuilder:
     strategy:
       matrix:
@@ -94,6 +95,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, autobuild, ${{ matrix.python-version }}, ${{ matrix.os }}
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   ImageGen:
     strategy:
@@ -130,6 +132,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, lmm, ${{ matrix.python-version }}, ${{ matrix.os }}
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # https://github.com/marketplace/actions/alls-green#why
   check-contrib-test-llm: # This job does nothing and is only used for the branch protection

@@ -61,7 +61,7 @@ This section is used to configure the building process of autobuild. `autobuild_
 Configures the default parameters for the builder during the autobuild process. Defaults to `{"temperature": 1, "top_p": 0.95, "max_tokens": 2048}`. `config_list` is **not** needed here.
 
 ### `code_execution_config`
-Configures how the user proxy executes code within the nested chat. Defaults to `{"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1, "use_docker": False}`. Full configuration docs [here](/docs/reference/agentchat/user_proxy_agent).
+Configures how the user proxy executes code within the nested chat. Defaults to `{"timeout": 300, "work_dir": "groupchat", "last_n_messages": 1, "use_docker": False}`. Full configuration docs [here](/docs/api-reference/autogen/UserProxyAgent).
 
 ### `coding`
 Enables or disables whether to add the user proxy in the nested chat. Defaults to `True`.
