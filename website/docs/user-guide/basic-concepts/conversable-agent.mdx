@@ -1,0 +1,37 @@
+---
+title: ConversableAgent
+---
+
+ConversableAgent is at the heart of all AG2 agents while also being a fully functioning agent.
+
+Let's *converse* with ConversableAgent in just 4 simple steps.
+
+import Example from "/snippets/python-examples/conversableagentchat.mdx";
+
+<Example/>
+
+Let's break it down:
+
+1. Import `ConversableAgent`, you'll find the most popular classes available directly from `autogen`.
+
+2. Create our LLM configuration to define the LLM that our agent will use.
+
+3. Create our ConversableAgent give them a unique name, and use `system_message` to define their purpose.
+
+4. Ask the agent a question using their `run` method, passing in our starting message.
+
+    ```console
+    user (to helpful_agent):
+
+    In one sentence, what's the big deal about AI?
+
+    --------------------------------------------------------------------------------
+
+    >>>>>>>> USING AUTO REPLY...
+    helpful_agent (to user):
+
+    AI transforms our world with endless potential, enhancing lives and knowledge, truly essential.
+
+    --------------------------------------------------------------------------------
+    Replying as user. Provide feedback to helpful_agent. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
+    ```

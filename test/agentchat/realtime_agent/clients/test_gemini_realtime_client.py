@@ -86,6 +86,6 @@ class TestGeminiRealtimeClient:
 
         # check that we received the expected SessionCreated and AudioDelta events
         calls_args = [arg_list.args for arg_list in mock.call_args_list]
-        assert isinstance(calls_args[0][0], SessionCreated)
+        assert isinstance(calls_args[0][0], SessionCreated), f"Type of calls_args[0][0] is {type(calls_args[0][0])}"
 
-        assert isinstance(calls_args[-1][0], AudioDelta)
+        assert isinstance(calls_args[-1][0], AudioDelta), f"Type of calls_args[-1][0] is {type(calls_args[-1][0])}"

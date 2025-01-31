@@ -16,19 +16,12 @@ mint.json
 docs/tutorial/*.mdx
 docs/tutorial/**/*.png
 !docs/tutorial/assets/*.png
-docs/topics/swarm.mdx
-docs/topics/llm_configuration.mdx
-docs/topics/code-execution/*.mdx
-docs/topics/task_decomposition.mdx
-docs/topics/prompting-and-reasoning/*.mdx
-docs/topics/non-openai-models/*.mdx
-docs/topics/non-openai-models/**/*.py
-docs/topics/non-openai-models/**/*.svg
-docs/topics/code-execution/*.mdx
-docs/topics/groupchat/customized_speaker_selection.mdx
-docs/topics/groupchat/resuming_groupchat.mdx
-docs/topics/groupchat/transform_messages_speaker_selection.mdx
-docs/topics/groupchat/using_custom_model_client_classes.mdx
+user-guide/llm_configuration.mdx
+user-guide/task_decomposition.mdx
+user-guide/prompting-and-reasoning/*.mdx
+user-guide/non-openai-models/*.mdx
+user-guide/non-openai-models/**/*.py
+user-guide/non-openai-models/**/*.svg
 cell-*-output-*.png
 
 # Misc
