@@ -827,3 +827,13 @@ class ConversableAgentUsageSummaryMessage(BaseMessage):
         f = f or print
 
         f(f"Agent '{self.recipient_name}':")
+
+
+class WaitingForTaskMessage(BaseMessage):
+    """Indicates the agent is waiting for a task to complete."""
+
+    task_details: str
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+        f(colored(f"\n>>> Agent waiting ({self.task_details})", "dark_grey"), flush=True)
