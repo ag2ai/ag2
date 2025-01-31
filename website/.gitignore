@@ -18,7 +18,6 @@ docs/tutorial/**/*.png
 !docs/tutorial/assets/*.png
 docs/user-guide/advanced-concepts/swarm.mdx
 user-guide/llm_configuration.mdx
-docs/user-guide/advanced-concepts/code-execution/*.mdx
 user-guide/task_decomposition.mdx
 user-guide/prompting-and-reasoning/*.mdx
 user-guide/non-openai-models/*.mdx
