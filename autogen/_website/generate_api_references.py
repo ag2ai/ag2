@@ -7,7 +7,6 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
-import logging
 import os
 import pkgutil
 import shutil
@@ -21,9 +20,6 @@ from ..import_utils import optional_import_block, require_optional_import
 with optional_import_block():
     import pdoc
     from jinja2 import Template
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def import_submodules(module_name: str, *, include_root: bool = True) -> list[str]:
@@ -77,7 +73,7 @@ def build_pdoc_dict(module_name: str) -> None:
             continue
 
         if hasattr(obj, "__module__") and obj.__module__ != module_name:
-            print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
+            # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
             module.__pdoc__[name] = False
 
 
@@ -109,8 +105,8 @@ def generate(target_dir: Path, template_dir: Path) -> None:
     # Pass the custom template directory for rendering the markdown
     pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
-    submodules = import_submodules("autogen")
-    print(f"{submodules=}")
+    submodules = import_submodules("autogen", include_root=False)
+    # print(f"{submodules=}")
 
     for submodule in submodules:
         build_pdoc_dict(submodule)
