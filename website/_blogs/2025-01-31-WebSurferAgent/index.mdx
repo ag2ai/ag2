@@ -31,17 +31,17 @@ tags: [tools, tool calling, web surfing, browser use, crawl4ai, WebSurferAgent]
 </div>
 
 ## Introduction
-In our [Adding Browsing Capabilities to AG2](/blog/2025-01-31-Websurfing-Tools) guide, we explored how to build agents with basic web surfing capabilities. Now, let's take it to the next level with `WebSurferAgent`—a powerful agent that comes with built-in web browsing tools right out of the box!
+In our [Adding Browsing Capabilities to AG2](/blog/2025-01-31-Websurfing-Tools) guide, we explored how to build agents with basic web surfing capabilities. Now, let's take it to the next level with [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent)—a powerful agent that comes with built-in web browsing tools right out of the box!
 
-With `WebSurferAgent`, your agents can seamlessly browse the web, retrieve real-time information, and interact with web pages—all with minimal setup.
+With [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent), your agents can seamlessly browse the web, retrieve real-time information, and interact with web pages—all with minimal setup.
 
 ![WebSurferAgent Example](/docs/use-cases/reference-agents/assets/websurferagent_animated.gif)
 
-## WebSurferAgent with `Browser Use` tool
+## WebSurferAgent with BrowserUseTool
 
 ### Installation
 
-To get started with the `Browser Use` integration in AG2, follow these steps:
+To get started with the [`Browser Use`](https://github.com/browser-use/browser-use) integration in AG2, follow these steps:
 
 1. Install AG2 with the `browser-use` extra:
    ```bash
@@ -74,11 +74,11 @@ nest_asyncio.apply()
 ```
 
 ### Configure WebSurferAgent with Browser Use
-`WebSurferAgent` is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the `BrowserUseTool` to surf the web.
+[`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
 
-After creating the `WebSurferAgent`, its tools (such as the `BrowserUseTool`) are registered with the `UserProxyAgent` so they can be used during the interaction.
+After creating the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent), its tools (such as the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool)) are registered with the [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) so they can be used during the interaction.
 
-The user can ask the `WebSurferAgent` to fetch information from a specific webpage, in this case, the AG2 documentation home page.
+The user can ask the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) to fetch information from a specific webpage, in this case, the AG2 documentation home page.
 
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -317,11 +317,11 @@ Here's the information extracted from the AG2 home page:
 --------------------------------------------------------------------------------
 ```
 
-## WebSurferAgent with `Crawl4AI` tool
+## WebSurferAgent with Crawl4AITool
 
 ### Installation
 
-To integrate `Crawl4AI` with AG2, follow these steps:
+To integrate [`Crawl4AI`](https://github.com/unclecode/crawl4ai) with AG2, follow these steps:
 
 1. Install AG2 with the `crawl4ai` extra:
    ```bash
@@ -353,7 +353,7 @@ nest_asyncio.apply()
 ```
 
 ### Configure WebSurferAgent with Crawl4AI
-The ONLY difference is between the `Browser Use` example is that the the `web_tool` parameter needs to be set to `crawl4ai`
+The only difference from the previous example is that the `web_tool` parameter must be set to `crawl4ai` in order for the [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) to be used.
 
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -524,4 +524,4 @@ This summary covers the main sections, key features, links to further exploratio
 
 ## Conclusion
 
-In this guide, we've shown how to boost your agents with web browsing abilities using `WebSurferAgent` in AG2. By adding tools like `Browser Use` and `Crawl4AI`, your agents can easily fetch real-time information from the web. This makes your agents more useful and flexible, whether you're getting data from specific pages or gathering info across different topics. With these tools, AG2 helps you create smarter agents that can navigate the web and bring back the details you need with minimal effort.
+In this post, we've shown how to boost your agents with web browsing abilities using the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent). By using tools like [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) and [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool), your agents can easily fetch real-time information from the web. This makes your agents more useful and flexible, whether you're getting data from specific pages or gathering info across different topics. With these tools, AG2 helps you create smarter agents that can navigate the web and bring back the details you need with minimal effort.
