@@ -72,8 +72,15 @@ def build_pdoc_dict(module_name: str) -> None:
         if not hasattr(obj, "__name__") or name.startswith("_"):
             continue
 
-        if hasattr(obj, "__exported_module__") and obj.__exported_module__ != module_name:
-            # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
+        # Check if __exported_module__ is directly defined on this class (not inherited).
+        # This ensures we only process classes that were explicitly decorated with @export_module,
+        # ignoring classes that might inherit this attribute from their parent classes.
+        if (
+            hasattr(obj, "__dict__")
+            and "__exported_module__" in obj.__dict__
+            and obj.__exported_module__ != module_name
+        ):
+            print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
             module.__pdoc__[name] = False
 
 
