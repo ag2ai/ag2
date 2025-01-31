@@ -52,7 +52,9 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
   AgentBuilder:
     strategy:
       matrix:
@@ -95,6 +97,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, autobuild, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   ImageGen:
@@ -132,6 +135,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, lmm, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # https://github.com/marketplace/actions/alls-green#why

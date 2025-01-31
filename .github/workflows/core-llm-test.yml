@@ -72,4 +72,5 @@ jobs:
         with:
           files: ./coverage.xml
           flags: unittests, ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
