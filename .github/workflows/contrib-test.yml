@@ -66,7 +66,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, retrievechat, retrievechat-qdrant, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   RetrieveChatTest-Ubuntu:
     runs-on: ubuntu-latest
@@ -136,7 +136,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, retrievechat, retrievechat-qdrant, retrievechat-pgvector, retrievechat-mongodb, ${{ matrix.python-version }}
 
   AgentEvalTest:
     strategy:
@@ -167,7 +167,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, ${{ matrix.python-version }}, ${{ matrix.os }}
 
   GPTAssistantAgent:
     runs-on: ${{ matrix.os }}
@@ -204,7 +204,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   TeachableAgent:
     runs-on: ${{ matrix.os }}
@@ -241,7 +241,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, teachable, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   WebSurfer:
     runs-on: ${{ matrix.os }}
@@ -278,7 +278,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, websurfer, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   LMMTest:
     runs-on: ${{ matrix.os }}
@@ -321,7 +321,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, lmm, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   GeminiTest:
     runs-on: ${{ matrix.os }}
@@ -363,7 +363,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, gemini, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   TransformMessages:
     runs-on: ${{ matrix.os }}
@@ -400,7 +400,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, long-context, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   LlamaIndexAgent:
     runs-on: ${{ matrix.os }}
@@ -432,7 +432,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   AnthropicTest:
     runs-on: ${{ matrix.os }}
@@ -475,7 +475,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, anthropic, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   CerebrasTest:
     runs-on: ${{ matrix.os }}
@@ -517,7 +517,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, cerebras, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   MistralTest:
     runs-on: ${{ matrix.os }}
@@ -559,7 +559,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, mistral, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   TogetherTest:
     runs-on: ${{ matrix.os }}
@@ -601,7 +601,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, together, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   GroqTest:
     runs-on: ${{ matrix.os }}
@@ -643,7 +643,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, groq, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   CohereTest:
     runs-on: ${{ matrix.os }}
@@ -681,7 +681,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, cohere, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   OllamaTest:
     runs-on: ${{ matrix.os }}
@@ -723,7 +723,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, ollama, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   BedrockTest:
     runs-on: ${{ matrix.os }}
@@ -765,7 +765,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, bedrock, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   SwarmTest:
     runs-on: ${{ matrix.os }}
@@ -807,7 +807,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, ${{ matrix.os }}, ${{ matrix.python-version }}
 
   ReasoningTest:
       runs-on: ${{ matrix.os }}
@@ -860,4 +860,4 @@ jobs:
           uses: codecov/codecov-action@v5
           with:
             files: ./coverage.xml
-            flags: unittests
+            flags: unittests, ${{ matrix.os }}, ${{ matrix.python-version }}

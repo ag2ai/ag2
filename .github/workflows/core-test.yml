@@ -109,7 +109,8 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, ${{ matrix.os }}, ${{ matrix.python-version }}
+
   build-check:
     if: always()
     runs-on: ubuntu-latest

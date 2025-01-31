@@ -135,7 +135,8 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+
   test-with_optional-dependencies-check:
     if: always()
     runs-on: ubuntu-latest

@@ -65,7 +65,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, falkordb, ubuntu, ${{ matrix.python-version }}
 
   GraphRagIntegrationTest-Neo4j-Llmaindex-Ubuntu:
     runs-on: ubuntu-latest
@@ -113,7 +113,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests
+          flags: unittests, neo4j, ubuntu, ${{ matrix.python-version }}
 
   # Test-Neo4j-Llmaindex-Ubuntu:
   #   runs-on: ubuntu-latest
@@ -157,4 +157,4 @@ jobs:
   #       uses: codecov/codecov-action@v5
   #       with:
   #         files: ./coverage.xml
-  #         flags: unittests
+  #         flags: unittests, neo4j, ubuntu, ${{ matrix.python-version }}
