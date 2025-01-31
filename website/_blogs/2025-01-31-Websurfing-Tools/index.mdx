@@ -94,7 +94,7 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 ### Web Browsing with Browser Use
 
 
-The [`BrowserUseTool`](/docs/reference/tools/experimental/BrowserUseTool) llows agents to interact with web pages—navigating, searching, and extracting information.
+The [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) llows agents to interact with web pages—navigating, searching, and extracting information.
 
 To see the agent's activity in real-time, set `headless` to `False` in the `browser_config`. If `True`, the browser runs in the background.
 
@@ -264,7 +264,7 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 ### Web Browsing with `Crawl4AI`
 
-[`Crawl4AITool`](/docs/reference/tools/experimental/Crawl4AITool) offers three integration modes:
+[`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) offers three integration modes:
 1. **Basic Web Scraping (No LLM):**
 ```python
 crawlai_tool = Crawl4AITool()
