@@ -400,7 +400,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittest
+          flags: unittests
 
   LlamaIndexAgent:
     runs-on: ${{ matrix.os }}
