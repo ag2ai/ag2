@@ -424,7 +424,6 @@ a.colab-badge > img, a.github-badge  > img {
   text-align: center;
 }
 .popular-resources .youtube-video a {
-  color: #000;
   display: block;
   --font-family-headings-custom: "Jersey 10" !important;
   font-family: var(
