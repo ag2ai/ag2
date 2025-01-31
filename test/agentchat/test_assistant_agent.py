@@ -203,6 +203,7 @@ def test_standalone(credentials_gpt_4o_mini: Credentials):
     hot_topic_res = x_assistant.run(
         "Find out today's hot topic and an influencer who is talking about it on X",
         tools=get_twitter_hot_topic,
+        user_input=False,
     )
 
     assert "AI" in hot_topic_res.summary
@@ -223,10 +224,11 @@ async def test_standalone_async(credentials_gpt_4o_mini: Credentials):
     hot_topic_res = await x_assistant.a_run(
         "Find out today's hot topic and an influencer who is talking about it on X",
         tools=get_twitter_hot_topic,
+        user_input=False,
     )
 
-    assert "AI" in hot_topic_res
-    assert "elonmusk" in hot_topic_res
+    assert "AI" in hot_topic_res.summary
+    assert "elonmusk" in hot_topic_res.summary
 
 
 if __name__ == "__main__":

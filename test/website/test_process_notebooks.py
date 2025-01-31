@@ -20,7 +20,93 @@ from autogen._website.process_notebooks import (
     extract_example_group,
     generate_nav_group,
     get_sorted_files,
+    update_group_pages,
 )
+
+
+class TestUpdateGroupPages:
+    @pytest.fixture
+    def sample_navigation(self) -> list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]:
+        return [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {
+                        "group": "Use cases",
+                        "pages": [
+                            "docs/use-cases/use-cases/customer-service",
+                        ],
+                    },
+                    {
+                        "group": "Reference Agents",
+                        "pages": [
+                            "docs/use-cases/reference-agents/index",
+                        ],
+                    },
+                    {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
+                    {
+                        "group": "Community Gallery",
+                        "pages": ["docs/use-cases/community-gallery/community-gallery"],
+                    },
+                ],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+    def test_update_top_level_group(
+        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+    ) -> None:
+        updated_pages = ["docs/use-cases/use-cases/customer-service"]
+        target_grp = "Use Cases"
+        updated_navigation = update_group_pages(sample_navigation, target_grp, updated_pages)
+        expected_navigation = [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": ["docs/use-cases/use-cases/customer-service"],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+        assert updated_navigation == expected_navigation, updated_navigation
+        assert sample_navigation != updated_navigation
+
+    def test_update_nested_group(
+        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+    ) -> None:
+        updated_pages = ["docs/use-cases/updated-notebook/index"]
+        target_grp = "Notebooks"
+        updated_navigation = update_group_pages(sample_navigation, target_grp, updated_pages)
+        expected_navigation = [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {
+                        "group": "Use cases",
+                        "pages": [
+                            "docs/use-cases/use-cases/customer-service",
+                        ],
+                    },
+                    {
+                        "group": "Reference Agents",
+                        "pages": [
+                            "docs/use-cases/reference-agents/index",
+                        ],
+                    },
+                    {"group": "Notebooks", "pages": ["docs/use-cases/updated-notebook/index"]},
+                    {
+                        "group": "Community Gallery",
+                        "pages": ["docs/use-cases/community-gallery/community-gallery"],
+                    },
+                ],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+        assert updated_navigation == expected_navigation, updated_navigation
+        assert sample_navigation != updated_navigation
 
 
 def test_ensure_mint_json() -> None:
@@ -40,7 +126,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
     # the tmp_dir / "notebooks" should be removed.
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        notebooks_dir = tmp_path / "notebooks"
+        notebooks_dir = tmp_path / "docs" / "use-cases" / "notebooks" / "notebooks"
         notebooks_dir.mkdir(parents=True, exist_ok=True)
         (notebooks_dir / "example-1.mdx").touch()
         (notebooks_dir / "example-2.mdx").touch()
@@ -104,7 +190,7 @@ Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.p
 export const notebooksMetadata = [
     {
         "title": "some title",
-        "link": "/notebooks/source",
+        "link": "/docs/use-cases/notebooks/notebooks/source",
         "description": "some description",
         "image": "some image",
         "tags": [
@@ -115,7 +201,7 @@ export const notebooksMetadata = [
     }
 ];
 """
-            )
+            ), actual
 
     def test_with_metadata_mdx(self) -> None:
         front_matter_dict: dict[str, Optional[Union[str, Union[list[str]]]]] = {
@@ -186,7 +272,7 @@ export const notebooksMetadata = [
     },
     {
         "title": "some title",
-        "link": "/notebooks/source",
+        "link": "/docs/use-cases/notebooks/notebooks/source",
         "description": "some description",
         "image": "some image",
         "tags": [
@@ -380,20 +466,11 @@ class TestUpdateNavigation:
             metadata_path = tmp_path / "snippets" / "data" / "NotebooksMetadata.mdx"
             actual = extract_example_group(metadata_path)
 
-            expected = {
-                "group": "Examples",
-                "pages": [
-                    {
-                        "group": "Examples by Notebook",
-                        "pages": [
-                            "notebooks/Notebooks",
-                            "notebooks/agentchat_RetrieveChat_mongodb",
-                            "notebooks/JSON_mode_example",
-                        ],
-                    },
-                    "notebooks/Gallery",
-                ],
-            }
+            expected = [
+                "docs/use-cases/notebooks/Notebooks",
+                "docs/use-cases/notebooks/notebooks/agentchat_RetrieveChat_mongodb",
+                "docs/use-cases/notebooks/notebooks/JSON_mode_example",
+            ]
 
             assert actual == expected, actual
 
@@ -536,7 +613,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         add_authors_and_social_img_to_blog_posts(test_dir)
 
         # Get directory paths
-        generated_blog_dir = test_dir / "blog"
+        generated_blog_dir = test_dir / "docs" / "blog"
         blog_dir = test_dir / "_blogs"
 
         # Verify directory structure matches

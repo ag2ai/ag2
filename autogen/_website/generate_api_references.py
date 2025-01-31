@@ -67,7 +67,12 @@ def build_pdoc_dict(module_name: str) -> None:
     if not hasattr(module, "__pdoc__"):
         setattr(module, "__pdoc__", {})
 
+    all = module.__all__ if hasattr(module, "__all__") else None
+
     for name, obj in module.__dict__.items():
+        if all and name not in all:
+            continue
+
         if not hasattr(obj, "__name__") or name.startswith("_"):
             continue
 
@@ -158,7 +163,7 @@ def convert_md_to_mdx(input_dir: Path) -> None:
 
         # Remove original .md file
         md_file.unlink()
-        print(f"Converted: {md_file} -> {mdx_file}")
+        # print(f"Converted: {md_file} -> {mdx_file}")
 
 
 def get_mdx_files(directory: Path) -> list[str]:
@@ -169,7 +174,7 @@ def get_mdx_files(directory: Path) -> list[str]:
 def add_prefix(path: str, parent_groups: Optional[list[str]] = None) -> str:
     """Create full path with prefix and parent groups."""
     groups = parent_groups or []
-    return f"reference/{'/'.join(groups + [path])}"
+    return f"docs/api-reference/{'/'.join(groups + [path])}"
 
 
 def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = None) -> list[Any]:
@@ -285,14 +290,14 @@ title: Overview
             overview += "\n\n## Classes\n"
             for symbol in sorted(classes):
                 href = output_dir / symbol
-                overview += f"""<p class="overview-symbol"><a href="/{str(href).replace("tmp/", "reference/")}"><code>class {symbol}</code></a></p>"""
+                overview += f"""<p class="overview-symbol"><a href="/{str(href).replace("tmp/", "docs/api-reference/")}"><code>class {symbol}</code></a></p>"""
             overview += "\n"
 
         if functions:
             overview += "\n\n## Functions\n"
             for symbol in sorted(functions):
                 href = output_dir / symbol
-                overview += f"""<p class="overview-symbol"><a href="/{str(href).replace("tmp/", "reference/")}"><code>{symbol}</code></a></p>"""
+                overview += f"""<p class="overview-symbol"><a href="/{str(href).replace("tmp/", "docs/api-reference/")}"><code>{symbol}</code></a></p>"""
             overview += "\n"
 
         return overview
@@ -367,7 +372,7 @@ def main() -> None:
         "--api-dir",
         type=Path,
         help="Directory containing API documentation to process",
-        default=website_dir / "reference",
+        default=website_dir / "docs" / "api-reference",
     )
 
     args = parser.parse_args()
