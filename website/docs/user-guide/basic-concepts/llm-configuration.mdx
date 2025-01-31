@@ -38,6 +38,10 @@ my_agent = ConversableAgent(
 
 The default LLM provider is OpenAI but if you would like to use a different provider, [see the available providers](/docs/user-guide/models/).
 
+<Tip>
+AG2's LLM configuration allows you to specify many LLMs for fallback support and the ability to filter them for an agent, see the [LLM Configuration deep-dive](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
+</Tip>
+
 ### Environment variables
 
 The examples in these guides include an LLM configuration for OpenAI's `GPT-4o mini` model and will need the `OPENAI_API_KEY` environment variable set with your OpenAI API key.
