@@ -8,8 +8,12 @@ from unittest.mock import MagicMock, patch
 
 from pytest import LogCaptureFixture, fixture, raises
 
+from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.rag.parser_utils import docling_parse_docs
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.tools.tool import Tool
+
+from ....conftest import Credentials
 
 with optional_import_block():
     from docling.datamodel.document import ConversionResult, InputDocument
@@ -123,3 +127,61 @@ class TestDoclingParseDocs:
 
         with raises(ValueError, match="The input provided is neither a URL, directory, nor a file path."):
             docling_parse_docs(invalid_input_file_path, output_dir_path)
+
+    def test_register_docling_parse_docs_as_a_tool(self, tmp_path: Path, mock_credentials: Credentials) -> None:
+        input_file_path = tmp_path / "input_file_path.md"
+        output_dir_path = tmp_path / "output"
+
+        input_file_path.write_text("# Mock Markdown")
+
+        parser_tool = Tool(
+            name="docling_parse_docs",
+            description="Use this tool to parse and understand text.",
+            func_or_tool=docling_parse_docs,
+        )
+
+        user_agent = UserProxyAgent(
+            name="UserAgent",
+            human_input_mode="ALWAYS",
+        )
+
+        parser_tool.register_for_execution(user_agent)
+
+        results = user_agent.function_map["docling_parse_docs"](
+            input_file_path=str(input_file_path), output_dir_path=str(output_dir_path)
+        )
+
+        assert isinstance(results, str)
+        assert "'text': 'Mock Markdown'" in results
+
+        assistant = AssistantAgent(
+            name="AssistantAgent",
+            llm_config=mock_credentials.llm_config,
+        )
+        parser_tool.register_for_llm(assistant)
+
+        expected_tools = [
+            {
+                "function": {
+                    "description": "Use this tool to parse and understand text.",
+                    "name": "docling_parse_docs",
+                    "parameters": {
+                        "properties": {
+                            "input_file_path": {
+                                "anyOf": [{"format": "path", "type": "string"}, {"type": "string"}],
+                                "description": "input_file_path",
+                            },
+                            "output_dir_path": {
+                                "anyOf": [{"format": "path", "type": "string"}, {"type": "string"}],
+                                "description": "output_dir_path",
+                            },
+                        },
+                        "required": ["input_file_path", "output_dir_path"],
+                        "type": "object",
+                    },
+                },
+                "type": "function",
+            }
+        ]
+        assert assistant.llm_config and "tools" in assistant.llm_config
+        assert assistant.llm_config["tools"] == expected_tools
