@@ -503,7 +503,7 @@ jobs:
           uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Cerebras
         run: |
-          uv pip install --system -e .[cerebras_cloud_sdk,test]
+          uv pip install --system -e .[cerebras,test]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -751,7 +751,7 @@ jobs:
           uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Amazon Bedrock
         run: |
-          uv pip install --system -e .[boto3,test]
+          uv pip install --system -e .[bedrock,test]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
