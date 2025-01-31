@@ -11,7 +11,7 @@ T = TypeVar("T")
 
 def export_module(module: str) -> Callable[[T], T]:
     def decorator(cls: T) -> T:
-        setattr(cls, "__module__", module)
+        setattr(cls, "__exported_module__", module)
         return cls
 
     return decorator

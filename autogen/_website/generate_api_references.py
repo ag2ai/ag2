@@ -72,7 +72,7 @@ def build_pdoc_dict(module_name: str) -> None:
         if not hasattr(obj, "__name__") or name.startswith("_"):
             continue
 
-        if hasattr(obj, "__module__") and obj.__module__ != module_name:
+        if hasattr(obj, "__exported_module__") and obj.__exported_module__ != module_name:
             # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
             module.__pdoc__[name] = False
 
