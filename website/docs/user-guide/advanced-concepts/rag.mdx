@@ -31,15 +31,15 @@ See the notebooks associated with the capabilities below for walk-throughs.
 #### RAG Capability: Neo4j GraphRAG
 Based on AG2's base GraphRAG capability, this Neo4j GraphRAG capability allows the embedding and querying of information with a Neo4j graph database.
 
-See the [Using Neo4j's graph database with AG2 agents for Q&A notebook](https://docs.ag2.ai/notebooks/agentchat_graph_rag_neo4j_native).
+See the [Using Neo4j's graph database with AG2 agents for Q&A notebook](/docs/use-cases/notebooks/notebooks/agentchat_graph_rag_neo4j).
 
 #### RAG Capability: FalkorDB GraphRAG
 Also based on AG2's base GraphRAG capability, this capability uses a FalkorDB GraphRAG database.
 
-See the [Using FalkorGraphRagCapability with agents for GraphRAG Q&A notebook](https://docs.ag2.ai/notebooks/agentchat_graph_rag_falkordb)
+See the [Trip planning with a FalkorDB GraphRAG agent using a Swarm notebook](/docs/use-cases/notebooks/notebooks/agentchat_swarm_graphrag_trip_planner).
 
 <Tip>
-If you need a capability for a different GraphRAG database, consider building a capability similar to these using our [GraphRagCapability](https://docs.ag2.ai/docs/reference/agentchat/contrib/graph_rag/graph_rag_capability) base class.
+If you need a capability for a different GraphRAG database, consider building a capability similar to these using our [GraphRagCapability](/docs/api-reference/autogen/agentchat/contrib/graph_rag/graph_rag_capability/) base class.
 </Tip>
 
 ## 3. Add RAG tools to an agent
@@ -50,7 +50,7 @@ Together with our upcoming DocumentAgent, will be the ability to add RAG tools d
 
 ConversableAgent has a number of hooks that get run before an agent replies. You can utilise the `update_agent_state` hook to run a function that updates your agent's system message with some context before it goes to the LLM.
 
-Within the function use the [ConversableAgent.update_system_message](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent#update-system-message) method to update the system message.
+Within the function use the [ConversableAgent.update_system_message](/docs/api-reference/autogen/ConversableAgent#update-system-message) method to update the system message.
 
 Let's walk-through a simple example that puts a listing of the files in the current directory into an agent's system message and asks an LLM to explain them.
 

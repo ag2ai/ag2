@@ -2,7 +2,7 @@
 title: Structured outputs
 ---
 
-Working with freefrom text from LLMs isn't optimal when you know how you want the reply formatted.
+Working with freeform text from LLMs isn't optimal when you know how you want the reply formatted.
 
 Using structured outputs, you define a class, based on Pydantic's `BaseModel`, for the reply format you want and attach it to the LLM configuration. Replies from agent using that configuration will be in a matching JSON format.
 
@@ -34,5 +34,5 @@ import Example from "/snippets/python-examples/structured_output.mdx";
 }
 ```
 <Tip>
-Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](https://docs.ag2.ai/notebooks/agentchat_structured_outputs#define-the-reasoning-model-2).
+Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs).
 </Tip>

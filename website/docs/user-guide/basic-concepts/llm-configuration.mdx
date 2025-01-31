@@ -2,7 +2,7 @@
 title: LLM configuration
 ---
 
-Your AG2 agents are likely to an LLM and you can configure one, or more, for each agent.
+Your AG2 agents are likely to need an LLM and you can configure one, or more, for each agent.
 
 AG2's agents can use LLMs through OpenAI, Anthropic, Google, Amazon, Mistral AI, Cerebras, Together AI, and Groq. Locally hosted models can also be used through Ollama, LiteLLM, and LM Studio.
 
@@ -26,7 +26,7 @@ llm_config = {
 It is important to never hard-code secrets into your code, therefore we read the OpenAI API key from an environment variable.
 </Warning>
 
-Then, we create your agents you'll set your LLM configuration:
+Then, when you create your agents you'll set your LLM configuration:
 
 ```python
 my_agent = ConversableAgent(
@@ -36,11 +36,11 @@ my_agent = ConversableAgent(
 )
 ```
 
-The default LLM provider is OpenAI but if you would like to use a different provider, [see how here](https://docs.ag2.ai/docs/topics/non-openai-models/about-using-nonopenai-models).
+The default LLM provider is OpenAI but if you would like to use a different provider, [see the available providers](/docs/user-guide/models/).
 
 ### Environment variables
 
-The examples in the Getting Started guide include an LLM configuration for OpenAI's `GPT-4o mini` model and will need the `OPENAI_API_KEY` environment variable set to your OpenAI API key.
+The examples in these guides include an LLM configuration for OpenAI's `GPT-4o mini` model and will need the `OPENAI_API_KEY` environment variable set with your OpenAI API key.
 
 Set it in your terminal/command prompt:
 

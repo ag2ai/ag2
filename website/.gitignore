@@ -18,13 +18,11 @@ docs/tutorial/**/*.png
 !docs/tutorial/assets/*.png
 docs/user-guide/advanced-concepts/swarm.mdx
 user-guide/llm_configuration.mdx
-docs/user-guide/advanced-concepts/code-execution/*.mdx
 user-guide/task_decomposition.mdx
 user-guide/prompting-and-reasoning/*.mdx
 user-guide/non-openai-models/*.mdx
 user-guide/non-openai-models/**/*.py
 user-guide/non-openai-models/**/*.svg
-docs/user-guide/advanced-concepts/code-execution/*.mdx
 docs/user-guide/advanced-concepts/groupchat/customized_speaker_selection.mdx
 docs/user-guide/advanced-concepts/groupchat/resuming_groupchat.mdx
 docs/user-guide/advanced-concepts/groupchat/transform_messages_speaker_selection.mdx

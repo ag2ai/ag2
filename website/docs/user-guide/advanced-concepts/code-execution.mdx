@@ -2,22 +2,22 @@
 title: Code Execution
 ---
 
-AG2 agents can execute in a message passed to them (e.g., those containing code blocks) and output a message with the results of the execution for the following agent to interpret.
+AG2 agents can execute code from a message passed to them (e.g., those containing code blocks) and output a message with the results of the execution for the following agent to interpret.
 
-There are two types of built-in code executors, one is command line code executor, which runs code in a command line environment such as a MacOS or Linux shell, and the other is a Jupyter executor, which runs code in an interactive Jupyter kernel.
+There are two types of built-in code executors, one is the command line code executor, which runs code in a command line environment such as a MacOS or Linux shell, and the other is a Jupyter executor, which runs code in an interactive Jupyter kernel.
 
 For each type of executor, AG2 provides two ways to execute code: locally and in a Docker container. For development and testing, not recommended for production, you can run it on the same host platform where AG2 is running, i.e., the local operating system. For better The other way is to execute code in a Docker container. The table below shows the combinations of code executors and execution environments.
 
 | Code Executor (`autogen.coding`) | Environment | Platform |
 | ---------------------------- | ----------- | -------- |
-| [`LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)  | Shell       | Local  |
-| [`DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor) | Shell       | Docker |
-| [`jupyter.JupyterCodeExecutor`](/docs/reference/coding/jupyter/jupyter_code_executor#jupytercodeexecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
+| [`LocalCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)  | Shell       | Local  |
+| [`DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor) | Shell       | Docker |
+| [`jupyter.JupyterCodeExecutor`](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
 
 # Local Execution
 
 The figure below shows the architecture of the local command line code executor
-([`autogen.coding.LocalCommandLineCodeExecutor`](/docs/reference/coding/local_commandline_code_executor#localcommandlinecodeexecutor)).
+([`autogen.coding.LocalCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)).
 
 :::danger
 Executing LLM-generated code poses a security risk to your host environment.
@@ -114,7 +114,7 @@ temp_dir.cleanup()
 ```
 
 # Docker Execution
-To mitigate the security risk of running LLM-generated code locally, we can use the docker command line code executor ([`autogen.coding.DockerCommandLineCodeExecutor`](/docs/reference/coding/docker_commandline_code_executor#dockercommandlinecodeexecutor)) to execute code in a docker container.
+To mitigate the security risk of running LLM-generated code locally, we can use the docker command line code executor ([`autogen.coding.DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)) to execute code in a docker container.
 
 This way, the generated code can only access resources that are explicitly given to it.
 
@@ -400,16 +400,16 @@ executor.stop()
 
 The command line code executor does not keep any state in memory between executions of different code blocks it receives, as it writes each code block to a separate file and executes the code block in a new process.
 
-Contrast to the command line code executor, the Jupyter code executor runs all code blocks in the same Jupyter kernel, which keeps the state in memory between executions. See the topic page for [Jupyter Code Executor](/docs/topics/code-execution/jupyter-code-executor).
+Contrast to the command line code executor, the Jupyter code executor runs all code blocks in the same Jupyter kernel, which keeps the state in memory between executions.
 
 The choice between command line and Jupyter code executor depends on the nature of the code blocks in agents' conversation. If each code block is a "script" that does not use variables from previous code blocks, the command line code executor is a good choice. If some code blocks contain expensive computations (e.g., training a machine learning model and loading a large amount of data), and you want to keep the state in memory to avoid repeated computations, the Jupyter code executor is a better choice.
 
 ### More Code Execution examples
-- [Task Solving with Code Generation, Execution, and Debugging](https://docs.ag2.ai/notebooks/agentchat_auto_feedback_from_code_execution)
-- [Auto-Generated Agent Chat: Task Solving with Code Gen, Execution, Debugging & Human Feedback](https://docs.ag2.ai/notebooks/agentchat_human_feedback)
+- [Task Solving with Code Generation, Execution, and Debugging](/docs/use-cases/notebooks/notebooks/agentchat_auto_feedback_from_code_execution)
+- [Auto-Generated Agent Chat: Task Solving with Code Gen, Execution, Debugging & Human Feedback](/docs/use-cases/notebooks/notebooks/agentchat_human_feedback)
 
 ### API
-- [ConversableAgent.code_execution_config](/docs/api-reference/autogen/overview)
-- [LocalCommandLineCodeExecutor](/docs/api-reference/autogen/overview)
-- [DockerCommandLineCodeExecutor](/docs/api-reference/autogen/overview)
-- [jupyter.JupyterCodeExecutor](/docs/api-reference/autogen/overview)
+- [ConversableAgent.code_execution_config](/docs/api-reference/autogen/ConversableAgent#conversableagent)
+- [LocalCommandLineCodeExecutor](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)
+- [DockerCommandLineCodeExecutor](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)
+- [jupyter.JupyterCodeExecutor](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)
