@@ -4,3 +4,9 @@ source = autogen
 omit =
   *test*
   *samples*
+  autogen/agentchat/contrib/*
+[report]
+omit =
+  *test*
+  *samples*
+  autogen/agentchat/contrib/*
