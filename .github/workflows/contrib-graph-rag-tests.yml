@@ -62,7 +62,7 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -110,7 +110,7 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.xml
           flags: unittests
@@ -154,7 +154,7 @@ jobs:
   #       run: |
   #         bash scripts/test.sh -m "neo4j"
   #     - name: Upload coverage to Codecov
-  #       uses: codecov/codecov-action@v3
+  #       uses: codecov/codecov-action@v5
   #       with:
   #         file: ./coverage.xml
   #         flags: unittests
