@@ -720,7 +720,7 @@ print(json.dumps(lesson_plan_json, indent=2))
 }
 ```
 ::tip
-Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](https://docs.ag2.ai/notebooks/agentchat_structured_outputs#define-the-reasoning-model-2).
+Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs#define-the-reasoning-model-2).
 ::
 
 # Ending a chat
