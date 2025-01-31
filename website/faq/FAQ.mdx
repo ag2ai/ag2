@@ -41,8 +41,8 @@ When you call `initiate_chat` the conversation restarts by default. You can use 
 
 ## `max_consecutive_auto_reply` vs `max_turn` vs `max_round`
 
-- [`max_consecutive_auto_reply`](/reference/autogen/ConversableAgent#max-consecutive-auto-reply-2) the maximum number of consecutive auto replie (a reply from an agent without human input is considered an auto reply). It plays a role when `human_input_mode` is not "ALWAYS".
-- [`max_turns` in `ConversableAgent.initiate_chat`](/reference/autogen/ConversableAgent#initiate-chat) limits the number of conversation turns between two conversable agents (without differentiating auto-reply and reply/input from human)
+- [`max_consecutive_auto_reply`](/docs/api-reference/autogen/ConversableAgent#max-consecutive-auto-reply-2) the maximum number of consecutive auto replie (a reply from an agent without human input is considered an auto reply). It plays a role when `human_input_mode` is not "ALWAYS".
+- [`max_turns` in `ConversableAgent.initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) limits the number of conversation turns between two conversable agents (without differentiating auto-reply and reply/input from human)
 - [`max_round` in GroupChat](https://docs.ag2.ai/reference/autogen/GroupChat#groupchat) specifies the maximum number of rounds in a group chat session.
 
 ## How do we decide what LLM is used for each agent? How many agents can be used? How do we decide how many agents in the group?
@@ -99,7 +99,7 @@ For example, when developing in [GitHub codespace](https://codespaces.new/ag2ai/
 AG2 runs in a docker container.
 If you are not developing in GitHub Codespaces,
 follow instructions [here](/docs/contributor-guide/setup-development-environment)
-to install and run AG2 in DevContainer.
+to install and run AG2 in a Dev Container.
 
 ## Agents keep thanking each other when using `gpt-3.5-turbo`
 
@@ -179,7 +179,7 @@ Refer to [here](/docs/reference/agentchat/conversable_agent/#last_message)
 
 ## How to get each agent message ?
 
-Please refer to [here](/reference/autogen/ConversableAgent#chat-messages)
+Please refer to [here](/docs/api-reference/autogen/ConversableAgent#chat-messages)
 
 ## When using autogen docker, is it always necessary to reinstall modules?
 
@@ -255,7 +255,7 @@ To resolve this issue, you need to upgrade your `pyautogen` package to version 0
 pip install --upgrade pyautogen
 ```
 
-## None of the devcontainers are building due to "Hash sum mismatch", what should I do?
+## None of the Dev Containers are building due to "Hash sum mismatch", what should I do?
 
 This is an intermittent issue that appears to be caused by some combination of mirror and proxy issues.
 If it arises, try to replace the `apt-get update` step with the following:
@@ -269,7 +269,7 @@ RUN apt-get clean && \
     rm -r /var/lib/apt/lists/* && \
     apt-get update -o Acquire::CompressionTypes::Order::=gz && \
     apt-get -y update && \
-    apt-get install sudo git npm # and whatever packages need to be installed in this specific version of the devcontainer
+    apt-get install sudo git npm # and whatever packages need to be installed in this specific version of the Dev Container
 ```
 
 This is a combination of StackOverflow suggestions [here](https://stackoverflow.com/a/48777773/2114580) and [here](https://stackoverflow.com/a/76092743/2114580).

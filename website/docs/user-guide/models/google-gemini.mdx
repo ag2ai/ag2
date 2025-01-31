@@ -25,13 +25,13 @@ There's no need to handle OpenAI or Google's GenAI packages separately; AG2 mana
 
 Support features:
 - Function/tool calling
-- Structured Outputs ([Notebook example](https://docs.ag2.ai/notebooks/agentchat_structured_outputs))
+- Structured Outputs ([Notebook example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs))
 - Token usage and cost correctly as per Google's API costs (as of December 2024)
 
 
 ## Main Distinctions
 
-- Currently, Gemini does not include a "system_message" field. However, you can incorporate this instruction into the first message of your interaction.
+- Currently, Gemini doesn't include a "system_message" field. However, you can incorporate this instruction into the first message of your interaction.
 - If no API key is specified for Gemini, then authentication will happen using the default google auth mechanism for Google Cloud. Service accounts are also supported, where the JSON key file has to be provided.
 
 Sample OAI_CONFIG_LIST

@@ -36,11 +36,11 @@ To build and serve the documentation locally, run the following command from the
 The last command starts a local development server and opens up a browser window.
 Most changes are reflected live without having to restart the server.
 
-## Build with devcontainer
+## Build with Dev Containers
 
-To build and test documentation using devcontainer, open the project using [VSCode](https://code.visualstudio.com/), press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
+To build and test documentation using Dev Containers, open the project using [VSCode](https://code.visualstudio.com/), press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
 
-This will open the project in a devcontainer with all the required dependencies installed.
+This will open the project in a Dev Container with all the required dependencies installed.
 
 Open a terminal and run the following commands from the project root directory to build and serve the documentation:
 
