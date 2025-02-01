@@ -66,9 +66,19 @@ class DiscordSendTool(Tool):
                         channel = discord.utils.get(guild.text_channels, name=channel_name)
                         if channel:
                             # Send the message
-                            sent = await channel.send(message)
-
-                            result_future.set_result(f"Message sent successfully (ID: {sent.id}):\n{message}")
+                            if len(message) > 2000:
+                                chunks = [message[i : i + 1999] for i in range(0, len(message), 1999)]
+                                for i, chunk in enumerate(chunks):
+                                    sent = await channel.send(chunk)
+                                    # Store ID for the first chunk
+                                    if i == 0:
+                                        sent_message_id = str(sent.id)
+                                result_future.set_result(
+                                    f"Message sent successfully ({len(chunks)} chunks, first ID: {sent_message_id}):\n{message}"
+                                )
+                            else:
+                                sent = await channel.send(message)
+                                result_future.set_result(f"Message sent successfully (ID: {sent.id}):\n{message}")
                         else:
                             result_future.set_result(f"Message send failed, could not find channel: {channel_name}")
                     else:
