@@ -4,6 +4,6 @@
 
 from .browser_use import BrowserUseTool
 from .crawl4ai import Crawl4AITool
-from .messageplatform import DiscordSendTool, SlackSendTool
+from .messageplatform import DiscordSendTool, SlackSendTool, TelegramSendTool
 
-__all__ = ["BrowserUseTool", "Crawl4AITool", "DiscordSendTool", "SlackSendTool"]
+__all__ = ["BrowserUseTool", "Crawl4AITool", "DiscordSendTool", "SlackSendTool", "TelegramSendTool"]

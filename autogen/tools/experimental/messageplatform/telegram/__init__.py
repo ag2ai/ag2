@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .discord import DiscordSendTool
-from .slack import SlackSendTool
 from .telegram import TelegramSendTool
 
-__all__ = ["DiscordSendTool", "SlackSendTool", "TelegramSendTool"]
+__all__ = ["TelegramSendTool"]
