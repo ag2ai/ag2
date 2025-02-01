@@ -66,6 +66,7 @@ setuptools.setup(
         "ollama": ["pyautogen[ollama]==" + __version__],
         "bedrock": ["pyautogen[bedrock]==" + __version__],
         "commsagent-discord": ["pyautogen[commsagent-discord]==" + __version__],
+        "commsagent-slack": ["pyautogen[commsagent-slack]==" + __version__],
         "test": ["pyautogen[test]==" + __version__],
         "docs": ["pyautogen[docs]==" + __version__],
         "types": ["pyautogen[types]==" + __version__],

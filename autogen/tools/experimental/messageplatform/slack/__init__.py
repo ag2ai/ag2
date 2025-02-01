@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .discord import DiscordSendTool
 from .slack import SlackSendTool
 
-__all__ = ["DiscordSendTool", "SlackSendTool"]
+__all__ = ["SlackSendTool"]

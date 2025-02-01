@@ -30,12 +30,8 @@ class DiscordSendTool(Tool):
             channel_name: The name of the channel to send messages to.
             guild_name: The name of the guild to send messages to.
         """
-        self.bot_token = bot_token
-        self.channel_name = channel_name
-        self.guild_name = guild_name
 
-        # Function for the LLM that sends the message, uses dependency injection for bot token / channel / guild
-
+        # Function that sends the message, uses dependency injection for bot token / channel / guild
         async def discord_send_message(
             message: Annotated[str, "Message to send to the channel"],
             bot_token: Annotated[str, Depends(on(bot_token))],
