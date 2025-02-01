@@ -15,6 +15,8 @@ with optional_import_block():
     from slack_sdk import WebClient
     from slack_sdk.errors import SlackApiError
 
+MAX_MESSAGE_LENGTH = 40000
+
 
 @require_optional_import(["slack_sdk"], "commsagent-slack")
 @export_module("autogen.tools.experimental")
@@ -46,12 +48,31 @@ class SlackSendTool(Tool):
             """
             try:
                 web_client = WebClient(token=bot_token)
-                response = web_client.chat_postMessage(channel=channel_id, text=message)
 
-                if not response["ok"]:
-                    return f"Message send failed, Slack response error: {response['error']}"
+                # Send the message
+                if len(message) > MAX_MESSAGE_LENGTH:
+                    chunks = [
+                        message[i : i + (MAX_MESSAGE_LENGTH - 1)]
+                        for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
+                    ]
+                    for i, chunk in enumerate(chunks):
+                        response = web_client.chat_postMessage(channel=channel_id, text=chunk)
 
-                return f"Message sent successfully (ID: {response['ts']}):\n{message}"
+                        if not response["ok"]:
+                            return f"Message send failed on chunk {i + 1}, Slack response error: {response['error']}"
+
+                        # Store ID for the first chunk
+                        if i == 0:
+                            sent_message_id = response["ts"]
+
+                    return f"Message sent successfully ({len(chunks)} chunks, first ID: {sent_message_id}):\n{message}"
+                else:
+                    response = web_client.chat_postMessage(channel=channel_id, text=message)
+
+                    if not response["ok"]:
+                        return f"Message send failed, Slack response error: {response['error']}"
+
+                    return f"Message sent successfully (ID: {response['ts']}):\n{message}"
             except SlackApiError as e:
                 return f"Message send failed, Slack API exception: {e.response['error']} (See https://api.slack.com/automation/cli/errors#{e.response['error']})"
             except Exception as e:
