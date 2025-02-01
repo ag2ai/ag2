@@ -15,6 +15,8 @@ __all__ = ["DiscordSendTool"]
 with optional_import_block():
     import discord
 
+MAX_MESSAGE_LENGTH = 2000
+
 
 @require_optional_import(["discord"], "commsagent-discord")
 @export_module("autogen.tools.experimental")
@@ -66,10 +68,14 @@ class DiscordSendTool(Tool):
                         channel = discord.utils.get(guild.text_channels, name=channel_name)
                         if channel:
                             # Send the message
-                            if len(message) > 2000:
-                                chunks = [message[i : i + 1999] for i in range(0, len(message), 1999)]
+                            if len(message) > MAX_MESSAGE_LENGTH:
+                                chunks = [
+                                    message[i : i + (MAX_MESSAGE_LENGTH - 1)]
+                                    for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
+                                ]
                                 for i, chunk in enumerate(chunks):
                                     sent = await channel.send(chunk)
+
                                     # Store ID for the first chunk
                                     if i == 0:
                                         sent_message_id = str(sent.id)
