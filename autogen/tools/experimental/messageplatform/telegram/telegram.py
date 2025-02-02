@@ -19,9 +19,68 @@ with optional_import_block():
 MAX_MESSAGE_LENGTH = 4096
 
 
+class BaseTelegramTool:
+    """Base class for Telegram tools containing shared functionality."""
+
+    def __init__(self, api_id: str, api_hash: str, session_name: str) -> None:
+        self._client = TelegramClient(session_name, api_id, api_hash)
+
+    @staticmethod
+    def _get_peer_from_id(chat_id: str) -> Union[PeerChannel, PeerChat, PeerUser]:  # type: ignore[no-any-unimported]
+        """Convert a chat ID string to appropriate Peer type."""
+        try:
+            # Convert string to integer
+            id_int = int(chat_id)
+
+            # Channel/Supergroup: -100 prefix
+            if str(chat_id).startswith("-100"):
+                channel_id = int(str(chat_id)[4:])  # Remove -100 prefix
+                return PeerChannel(channel_id)
+
+            # Group: negative number without -100 prefix
+            elif id_int < 0:
+                group_id = -id_int  # Remove the negative sign
+                return PeerChat(group_id)
+
+            # User/Bot: positive number
+            else:
+                return PeerUser(id_int)
+
+        except ValueError as e:
+            raise ValueError(f"Invalid chat_id format: {chat_id}. Error: {str(e)}")
+
+    async def _initialize_entity(self, chat_id: str) -> Any:
+        """Initialize and cache the entity by trying different methods."""
+        peer = self._get_peer_from_id(chat_id)
+
+        try:
+            # Try direct entity resolution first
+            entity = await self._client.get_entity(peer)
+            return entity
+        except ValueError:
+            try:
+                # Get all dialogs (conversations)
+                async for dialog in self._client.iter_dialogs():
+                    # For users/bots, we need to find the dialog with the user
+                    if (
+                        isinstance(peer, PeerUser)
+                        and dialog.entity.id == peer.user_id
+                        or dialog.entity.id == getattr(peer, "channel_id", getattr(peer, "chat_id", None))
+                    ):
+                        return dialog.entity
+
+                # If we get here, we didn't find the entity in dialogs
+                raise ValueError(f"Could not find entity {chat_id} in dialogs")
+            except Exception as e:
+                raise ValueError(
+                    f"Could not initialize entity for {chat_id}. "
+                    f"Make sure you have access to this chat. Error: {str(e)}"
+                )
+
+
 @require_optional_import(["telethon"], "commsagent-telegram")
 @export_module("autogen.tools.experimental")
-class TelegramSendTool(Tool):
+class TelegramSendTool(BaseTelegramTool, Tool):
     """Sends a message to a Telegram channel, group, or user."""
 
     def __init__(self, *, api_id: str, api_hash: str, chat_id: str) -> None:
@@ -33,7 +92,7 @@ class TelegramSendTool(Tool):
             api_hash: Telegram API hash from https://my.telegram.org/apps.
             chat_id: The ID of the destination (Channel, Group, or User ID).
         """
-        self._client = TelegramClient("telegram_send_session", api_id, api_hash)
+        BaseTelegramTool.__init__(self, api_id, api_hash, "telegram_send_session")
 
         async def telegram_send_message(
             message: Annotated[str, "Message to send to the chat."],
@@ -81,68 +140,17 @@ class TelegramSendTool(Tool):
             except Exception as e:
                 return f"Message send failed, exception: {str(e)}"
 
-        super().__init__(
+        Tool.__init__(
+            self,
             name="telegram_send",
             description="Sends a message to a Telegram chat.",
             func_or_tool=telegram_send_message,
         )
 
-    @staticmethod
-    def _get_peer_from_id(chat_id: str) -> PeerChannel | PeerChat | PeerUser:  # type: ignore[no-any-unimported]
-        """Convert a chat ID string to appropriate Peer type."""
-        try:
-            # Convert string to integer
-            id_int = int(chat_id)
-
-            # Channel/Supergroup: -100 prefix
-            if str(chat_id).startswith("-100"):
-                channel_id = int(str(chat_id)[4:])  # Remove -100 prefix
-                return PeerChannel(channel_id)
-
-            # Group: negative number without -100 prefix
-            elif id_int < 0:
-                group_id = -id_int  # Remove the negative sign
-                return PeerChat(group_id)
-
-            # User/Bot: positive number
-            else:
-                return PeerUser(id_int)
-
-        except ValueError as e:
-            raise ValueError(f"Invalid chat_id format: {chat_id}. Error: {str(e)}")
-
-    async def _initialize_entity(self, chat_id: str) -> Any:
-        """Initialize and cache the entity by trying different methods."""
-        peer = self._get_peer_from_id(chat_id)
-
-        try:
-            # Try direct entity resolution first
-            entity = await self._client.get_entity(peer)
-            return entity
-        except ValueError:
-            try:
-                # Get all dialogs (conversations)
-                async for dialog in self._client.iter_dialogs():
-                    # For users, we need to find the dialog with the user
-                    if (
-                        isinstance(peer, PeerUser)
-                        and dialog.entity.id == peer.user_id
-                        or dialog.entity.id == getattr(peer, "channel_id", getattr(peer, "chat_id", None))
-                    ):
-                        return dialog.entity
-
-                # If we get here, we didn't find the entity in dialogs
-                raise ValueError(f"Could not find entity {chat_id} in dialogs")
-            except Exception as e:
-                raise ValueError(
-                    f"Could not initialize entity for {chat_id}. "
-                    f"Make sure you have access to this chat. Error: {str(e)}"
-                )
-
 
 @require_optional_import(["telethon"], "commsagent-telegram")
 @export_module("autogen.tools.experimental")
-class TelegramRetrieveTool(Tool):
+class TelegramRetrieveTool(BaseTelegramTool, Tool):
     """Retrieves messages from a Telegram channel."""
 
     def __init__(self, *, api_id: str, api_hash: str, chat_id: str) -> None:
@@ -154,7 +162,7 @@ class TelegramRetrieveTool(Tool):
             api_hash: Telegram API hash from https://my.telegram.org/apps.
             chat_id: The ID of the chat to retrieve messages from (Channel, Group, Bot Chat ID).
         """
-        self._client = TelegramClient("telegram_retrieve_session", api_id, api_hash)
+        BaseTelegramTool.__init__(self, api_id, api_hash, "telegram_retrieve_session")
         self._chat_id = chat_id
 
         async def telegram_retrieve_messages(
@@ -251,60 +259,9 @@ class TelegramRetrieveTool(Tool):
             except Exception as e:
                 return f"Message retrieval failed, exception: {str(e)}"
 
-        super().__init__(
+        Tool.__init__(
+            self,
             name="telegram_retrieve",
             description="Retrieves messages from a Telegram chat based on datetime/message ID and/or number of latest messages.",
             func_or_tool=telegram_retrieve_messages,
         )
-
-    @staticmethod
-    def _get_peer_from_id(chat_id: str) -> Union[PeerChannel, PeerChat, PeerUser]:  # type: ignore[no-any-unimported]
-        """Convert a chat ID string to appropriate Peer type."""
-        try:
-            # Convert string to integer
-            id_int = int(chat_id)
-
-            # Channel/Supergroup: -100 prefix
-            if str(chat_id).startswith("-100"):
-                channel_id = int(str(chat_id)[4:])  # Remove -100 prefix
-                return PeerChannel(channel_id)
-
-            # Group: negative number without -100 prefix
-            elif id_int < 0:
-                group_id = -id_int  # Remove the negative sign
-                return PeerChat(group_id)
-
-            # User/Bot: positive number
-            else:
-                return PeerUser(id_int)
-
-        except ValueError as e:
-            raise ValueError(f"Invalid chat_id format: {chat_id}. Error: {str(e)}")
-
-    async def _initialize_entity(self, chat_id: str) -> Any:
-        """Initialize and cache the entity by trying different methods."""
-        peer = self._get_peer_from_id(chat_id)
-
-        try:
-            # Try direct entity resolution first
-            entity = await self._client.get_entity(peer)
-            return entity
-        except ValueError:
-            try:
-                # Get all dialogs (conversations)
-                async for dialog in self._client.iter_dialogs():
-                    # For bot users, we need to find the dialog with the bot
-                    if (
-                        isinstance(peer, PeerUser)
-                        and dialog.entity.id == peer.user_id
-                        or dialog.entity.id == getattr(peer, "channel_id", getattr(peer, "chat_id", None))
-                    ):
-                        return dialog.entity
-
-                # If we get here, we didn't find the entity in dialogs
-                raise ValueError(f"Could not find entity {chat_id} in dialogs")
-            except Exception as e:
-                raise ValueError(
-                    f"Could not initialize entity for {chat_id}. "
-                    f"Make sure you have access to this chat. Error: {str(e)}"
-                )
