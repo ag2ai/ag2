@@ -192,7 +192,7 @@ bedrock = ["boto3>=1.34.149"]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.5"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
-commsagent-telegram = ["python-telegram-bot>=21.8,<22", "telethon>=1.38.1, <2"]
+commsagent-telegram = ["telethon>=1.38.1, <2"]
 
 ## dev dependencies
 

@@ -11,7 +11,7 @@ from autogen.tools.experimental.messageplatform import TelegramSendTool
 @skip_on_missing_imports(["telegram"], "commsagent-telegram")
 class TestTelegramSendTool:
     def test_telegram_send_tool_init(self) -> None:
-        telegram_send_tool = TelegramSendTool(bot_token="my_bot_token", chat_id="my_chat")
+        telegram_send_tool = TelegramSendTool(api_id="my_api_id", api_hash="my_api_hash", chat_id="my_chat")
         assert telegram_send_tool.name == "telegram_send"
         assert telegram_send_tool.description == "Sends a message to a Telegram bot, group, or channel."
         assert isinstance(telegram_send_tool.func, Callable)  # type: ignore[arg-type]

@@ -13,79 +13,131 @@ from ....dependency_injection import Depends, on
 __all__ = ["TelegramRetrieveTool", "TelegramSendTool"]
 
 with optional_import_block():
-    from telegram import Bot
-    from telegram.error import TelegramError
     from telethon import TelegramClient
-    from telethon.errors import TelegramError as TelethonError
-    from telethon.tl.types import InputMessagesFilterEmpty, PeerChannel, PeerChat, PeerUser
+    from telethon.tl.types import InputMessagesFilterEmpty, Message, PeerChannel, PeerChat, PeerUser
 
 MAX_MESSAGE_LENGTH = 4096
 
 
-@require_optional_import(["telegram"], "commsagent-telegram")
+@require_optional_import(["telethon"], "commsagent-telegram")
 @export_module("autogen.tools.experimental")
 class TelegramSendTool(Tool):
-    """Sends a message to a Telegram channel."""
+    """Sends a message to a Telegram channel, group, or user."""
 
-    def __init__(self, *, bot_token: str, chat_id: str) -> None:
+    def __init__(self, *, api_id: str, api_hash: str, chat_id: str) -> None:
         """
         Initialize the TelegramSendTool.
 
         Args:
-            bot_token: Bot token from BotFather (starts with numbers:ABC...).
-            chat_id: Bot's channel Id, Group Id with bot in it, or Channel with bot in it
+            api_id: Telegram API ID from https://my.telegram.org/apps.
+            api_hash: Telegram API hash from https://my.telegram.org/apps.
+            chat_id: The ID of the destination (Channel, Group, or User ID).
         """
-        self._bot = Bot(token=bot_token)
+        self._client = TelegramClient("telegram_send_session", api_id, api_hash)
 
         async def telegram_send_message(
-            message: Annotated[str, "Message to send to the bot's channel, group, or channel."],
+            message: Annotated[str, "Message to send to the chat."],
             chat_id: Annotated[str, Depends(on(chat_id))],
         ) -> Any:
             """
-            Sends a message to a Telegram Bot, Group, or Channel (based on the destination_id).
+            Sends a message to a Telegram chat.
 
             Args:
-                message: The message to send to the channel.
-                bot_token: The bot token to use for Telegram. (uses dependency injection)
+                message: The message to send.
                 chat_id: The ID of the destination. (uses dependency injection)
             """
             try:
-                # Send the message
-                if len(message) > MAX_MESSAGE_LENGTH:
-                    chunks = [
-                        message[i : i + (MAX_MESSAGE_LENGTH - 1)]
-                        for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
-                    ]
-                    first_message = None
+                async with self._client:
+                    # Initialize and cache the entity
+                    entity = await self._initialize_entity(chat_id)
 
-                    for i, chunk in enumerate(chunks):
-                        sent = await self._bot.send_message(
-                            chat_id=chat_id,
-                            text=chunk,
-                            parse_mode="HTML",
-                            reply_to_message_id=first_message.message_id if first_message else None,  # type: ignore
+                    if len(message) > MAX_MESSAGE_LENGTH:
+                        chunks = [
+                            message[i : i + (MAX_MESSAGE_LENGTH - 1)]
+                            for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
+                        ]
+                        first_message: Union[Message, None] = None  # type: ignore[no-any-unimported]
+
+                        for i, chunk in enumerate(chunks):
+                            sent = await self._client.send_message(
+                                entity=entity,
+                                message=chunk,
+                                parse_mode="html",
+                                reply_to=first_message.id if first_message else None,
+                            )
+
+                            # Store the first message to chain replies
+                            if i == 0:
+                                first_message = sent
+                                sent_message_id = str(sent.id)
+
+                        return (
+                            f"Message sent successfully ({len(chunks)} chunks, first ID: {sent_message_id}):\n{message}"
                         )
+                    else:
+                        sent = await self._client.send_message(entity=entity, message=message, parse_mode="html")
+                        return f"Message sent successfully (ID: {sent.id}):\n{message}"
 
-                        # Store the first message to chain replies
-                        if i == 0:
-                            first_message = sent
-                            sent_message_id = str(sent.message_id)
-
-                    return f"Message sent successfully ({len(chunks)} chunks, first ID: {sent_message_id}):\n{message}"
-                else:
-                    sent = await self._bot.send_message(chat_id=chat_id, text=message, parse_mode="HTML")
-                    return f"Message sent successfully (ID: {sent.message_id}):\n{message}"
-
-            except TelegramError as e:
-                return f"Message send failed, Telegram API error: {str(e)}"
             except Exception as e:
                 return f"Message send failed, exception: {str(e)}"
 
         super().__init__(
             name="telegram_send",
-            description="Sends a message to a Telegram bot, group, or channel.",
+            description="Sends a message to a Telegram chat.",
             func_or_tool=telegram_send_message,
         )
+
+    @staticmethod
+    def _get_peer_from_id(chat_id: str) -> PeerChannel | PeerChat | PeerUser:  # type: ignore[no-any-unimported]
+        """Convert a chat ID string to appropriate Peer type."""
+        try:
+            # Convert string to integer
+            id_int = int(chat_id)
+
+            # Channel/Supergroup: -100 prefix
+            if str(chat_id).startswith("-100"):
+                channel_id = int(str(chat_id)[4:])  # Remove -100 prefix
+                return PeerChannel(channel_id)
+
+            # Group: negative number without -100 prefix
+            elif id_int < 0:
+                group_id = -id_int  # Remove the negative sign
+                return PeerChat(group_id)
+
+            # User/Bot: positive number
+            else:
+                return PeerUser(id_int)
+
+        except ValueError as e:
+            raise ValueError(f"Invalid chat_id format: {chat_id}. Error: {str(e)}")
+
+    async def _initialize_entity(self, chat_id: str) -> Any:
+        """Initialize and cache the entity by trying different methods."""
+        peer = self._get_peer_from_id(chat_id)
+
+        try:
+            # Try direct entity resolution first
+            entity = await self._client.get_entity(peer)
+            return entity
+        except ValueError:
+            try:
+                # Get all dialogs (conversations)
+                async for dialog in self._client.iter_dialogs():
+                    # For users, we need to find the dialog with the user
+                    if (
+                        isinstance(peer, PeerUser)
+                        and dialog.entity.id == peer.user_id
+                        or dialog.entity.id == getattr(peer, "channel_id", getattr(peer, "chat_id", None))
+                    ):
+                        return dialog.entity
+
+                # If we get here, we didn't find the entity in dialogs
+                raise ValueError(f"Could not find entity {chat_id} in dialogs")
+            except Exception as e:
+                raise ValueError(
+                    f"Could not initialize entity for {chat_id}. "
+                    f"Make sure you have access to this chat. Error: {str(e)}"
+                )
 
 
 @require_optional_import(["telethon"], "commsagent-telegram")
@@ -196,8 +248,6 @@ class TelegramRetrieveTool(Tool):
                         "start_time": messages_since or "latest",
                     }
 
-            except TelethonError as e:
-                return f"Message retrieval failed, Telegram API error: {str(e)}"
             except Exception as e:
                 return f"Message retrieval failed, exception: {str(e)}"
 
