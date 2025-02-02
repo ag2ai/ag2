@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .telegram import TelegramSendTool
+from .telegram import TelegramRetrieveTool, TelegramSendTool
 
-__all__ = ["TelegramSendTool"]
+__all__ = ["TelegramRetrieveTool", "TelegramSendTool"]

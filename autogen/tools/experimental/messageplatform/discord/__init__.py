@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .discord import DiscordSendTool
+from .discord import DiscordRetrieveTool, DiscordSendTool
 
-__all__ = ["DiscordSendTool"]
+__all__ = ["DiscordRetrieveTool", "DiscordSendTool"]
