@@ -143,7 +143,7 @@ class TelegramSendTool(BaseTelegramTool, Tool):
         Tool.__init__(
             self,
             name="telegram_send",
-            description="Sends a message to a Telegram chat.",
+            description="Sends a message to a personal channel, bot channel, group, or channel.",
             func_or_tool=telegram_send_message,
         )
 
