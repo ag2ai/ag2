@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+import copy
 import math
 import random
 import re
@@ -391,6 +392,7 @@ class ReasoningAgent(AssistantAgent):
             name="tot_thinker", system_message=TreeofThought_message, llm_config=self._llm_config
         )
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
+        self._prompt_rewriter = AssistantAgent(name="prompt_rewriter", llm_config=self._llm_config)
 
     def generate_forest_response(
         self, messages: list[dict], sender: Agent, config: Optional[dict] = None
@@ -515,9 +517,9 @@ Please provide your rating along with a brief explanation of your assessment.
     def _process_prompt(self, messages: list[dict], sender: Agent) -> tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
-        This method checks if the provided messages are None and retrieves the last message's content.
-        It also looks for a specific keyword "GROUND_TRUTH" in the prompt to separate the main prompt
-        from the ground truth for evaluation purposes.
+        This method checks if the provided messages are None and identifies the prompt.
+        If there is only one message, it uses that as the prompt. Otherwise, it asks the question in the messages including also the important information from the previous messages.
+        It also looks for a specific keyword "GROUND_TRUTH" in any of the messages to separate the ground truth for evaluation purposes.
 
         Args:
             messages (List[Dict[str, Any]]): A list of message dictionaries containing the content to process.
@@ -528,17 +530,48 @@ Please provide your rating along with a brief explanation of your assessment.
             If the prompt is empty, returns (None, None).
         """
         messages = self._oai_messages[sender] if messages is None else messages
-        prompt = messages[-1]["content"].strip()
-        if not prompt:
-            return None, None
+        messages_copy = copy.deepcopy(messages)
 
         # Extract the ground truth for more accurate evaluation.
         # TODO: in the future, allow user to pass a callable (func) to calculate reward.
-        if "GROUND_TRUTH" in prompt:
-            idx = prompt.find("GROUND_TRUTH")
-            prompt, ground_truth = prompt[:idx].rstrip(), prompt[idx:]
+        ground_truth = None
+        for i, message in enumerate(messages_copy):
+            if "GROUND_TRUTH" in message["content"]:
+                idx = message["content"].find("GROUND_TRUTH")
+                messages_copy[i]["content"], ground_truth = message["content"][:idx].rstrip(), message["content"][idx:]
+                break
+
+        if len(messages) == 1:
+            # First message, no previous context
+            prompt = messages_copy[0]["content"]
         else:
-            ground_truth = None
+            rewriter_message = f"""
+Task: Given a list of messages including a previous discussion, write a prompt that summarizes the discussion, including all the useful information, and asks a question.
+
+**Messages:**
+{messages_copy}
+
+**Format of Output:**
+QUESTION: *Write the initial question asked by the user here.*
+
+STEPS ALREADY EXECUTED:
+- *Step 1*
+- *Step 2*
+- ...
+- Only in case the task has been completed, write: "The task has now been completed, write the final response and terminate the task."
+"""
+            self._prompt_rewriter.clear_history()
+            self.send(
+                message=rewriter_message,
+                recipient=self._prompt_rewriter,
+                request_reply=True,
+                silent=not self._verbose,
+            )
+            prompt = self._prompt_rewriter.last_message()["content"].strip()
+
+        if not prompt:
+            return None, None
+
         return prompt, ground_truth
 
     def _beam_reply(self, prompt: str, ground_truth: str = "") -> str:
