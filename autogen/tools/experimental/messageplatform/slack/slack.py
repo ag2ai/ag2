@@ -34,7 +34,7 @@ class SlackSendTool(Tool):
 
         # Function that sends the message, uses dependency injection for bot token / channel / guild
         async def slack_send_message(
-            message: Annotated[str, "Message to send to the channel"],
+            message: Annotated[str, "Message to send to the channel."],
             bot_token: Annotated[str, Depends(on(bot_token))],
             channel_id: Annotated[str, Depends(on(channel_id))],
         ) -> Any:

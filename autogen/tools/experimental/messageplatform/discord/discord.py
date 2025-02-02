@@ -13,7 +13,7 @@ from ....dependency_injection import Depends, on
 __all__ = ["DiscordSendTool"]
 
 with optional_import_block():
-    import discord
+    from discord import Client, Intents, utils
 
 MAX_MESSAGE_LENGTH = 2000
 
@@ -35,7 +35,7 @@ class DiscordSendTool(Tool):
 
         # Function that sends the message, uses dependency injection for bot token / channel / guild
         async def discord_send_message(
-            message: Annotated[str, "Message to send to the channel"],
+            message: Annotated[str, "Message to send to the channel."],
             bot_token: Annotated[str, Depends(on(bot_token))],
             guild_name: Annotated[str, Depends(on(guild_name))],
             channel_name: Annotated[str, Depends(on(channel_name))],
@@ -49,12 +49,12 @@ class DiscordSendTool(Tool):
                 guild_name: The name of the server. (uses dependency injection)
                 channel_name: The name of the channel. (uses dependency injection)
             """
-            intents = discord.Intents.default()
+            intents = Intents.default()
             intents.message_content = True
             intents.guilds = True
             intents.guild_messages = True
 
-            client = discord.Client(intents=intents)
+            client = Client(intents=intents)
             result_future: asyncio.Future[str] = asyncio.Future()  # Stores the result of the send
 
             # When the client is ready, we'll send the message
@@ -62,10 +62,10 @@ class DiscordSendTool(Tool):
             async def on_ready() -> None:
                 try:
                     # Server
-                    guild = discord.utils.get(client.guilds, name=guild_name)
+                    guild = utils.get(client.guilds, name=guild_name)
                     if guild:
                         # Channel
-                        channel = discord.utils.get(guild.text_channels, name=channel_name)
+                        channel = utils.get(guild.text_channels, name=channel_name)
                         if channel:
                             # Send the message
                             if len(message) > MAX_MESSAGE_LENGTH:

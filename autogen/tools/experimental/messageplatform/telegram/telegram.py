@@ -35,7 +35,7 @@ class TelegramSendTool(Tool):
         self._bot = Bot(token=bot_token)
 
         async def telegram_send_message(
-            message: Annotated[str, "Message to send to the channel"],
+            message: Annotated[str, "Message to send to the bot's channel, group, or channel."],
             chat_id: Annotated[str, Depends(on(chat_id))],
         ) -> Any:
             """
