@@ -18,6 +18,12 @@ Role = Literal["user", "assistant", "system"]
 @runtime_checkable
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class RealtimeClientProtocol(Protocol):
+    @classmethod
+    def _get__exported_module__(cls) -> str: ...
+
+    @classmethod
+    def _set__exported_module__(cls, value: str) -> None: ...
+
     async def send_function_result(self, call_id: str, result: str) -> None:
         """Send the result of a function call to a Realtime API.
 
