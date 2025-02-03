@@ -71,6 +71,6 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: unittests, ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          flags: ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
