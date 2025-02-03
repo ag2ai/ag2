@@ -330,7 +330,7 @@ class AgentOptimizer:
 
     def _update_function_call(self, incumbent_functions, actions):
         """Update function call."""
-        formated_actions = []
+        formatted_actions = []
         for action in actions:
             func = json.loads(action.function.arguments.strip('"'))
             func["action_name"] = action.function.name
@@ -349,8 +349,8 @@ class AgentOptimizer:
                     "packages": func.get("packages"),
                     "code": func.get("code"),
                 }
-            formated_actions.append(item)
-        actions = formated_actions
+            formatted_actions.append(item)
+        actions = formatted_actions
 
         for action in actions:
             name, description, arguments, packages, code, action_name = (

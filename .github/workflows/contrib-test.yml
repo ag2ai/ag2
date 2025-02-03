@@ -67,6 +67,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   RetrieveChatTest-Ubuntu:
     runs-on: ubuntu-latest
@@ -137,6 +138,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   AgentEvalTest:
     strategy:
@@ -168,6 +170,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   GPTAssistantAgent:
     runs-on: ${{ matrix.os }}
@@ -205,6 +208,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   TeachableAgent:
     runs-on: ${{ matrix.os }}
@@ -242,6 +246,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   WebSurfer:
     runs-on: ${{ matrix.os }}
@@ -279,6 +284,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   LMMTest:
     runs-on: ${{ matrix.os }}
@@ -322,6 +328,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   GeminiTest:
     runs-on: ${{ matrix.os }}
@@ -364,6 +371,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   TransformMessages:
     runs-on: ${{ matrix.os }}
@@ -401,6 +409,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittest
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   LlamaIndexAgent:
     runs-on: ${{ matrix.os }}
@@ -433,6 +442,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   AnthropicTest:
     runs-on: ${{ matrix.os }}
@@ -476,6 +486,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   CerebrasTest:
     runs-on: ${{ matrix.os }}
@@ -518,6 +529,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   MistralTest:
     runs-on: ${{ matrix.os }}
@@ -560,6 +572,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   TogetherTest:
     runs-on: ${{ matrix.os }}
@@ -602,6 +615,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   GroqTest:
     runs-on: ${{ matrix.os }}
@@ -644,6 +658,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   CohereTest:
     runs-on: ${{ matrix.os }}
@@ -682,6 +697,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   OllamaTest:
     runs-on: ${{ matrix.os }}
@@ -724,6 +740,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   BedrockTest:
     runs-on: ${{ matrix.os }}
@@ -766,6 +783,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   SwarmTest:
     runs-on: ${{ matrix.os }}
@@ -808,6 +826,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   ReasoningTest:
       runs-on: ${{ matrix.os }}
@@ -861,3 +880,4 @@ jobs:
           with:
             file: ./coverage.xml
             flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -52,6 +52,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
   AgentBuilder:
     strategy:
       matrix:
@@ -94,6 +95,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   ImageGen:
     strategy:
@@ -130,6 +132,7 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # https://github.com/marketplace/actions/alls-green#why
   check-contrib-test-llm: # This job does nothing and is only used for the branch protection
