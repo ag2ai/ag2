@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import re
 import sys
@@ -14,7 +15,8 @@ import uuid
 import warnings
 from typing import Any, Callable, Optional, Protocol, Union
 
-from pydantic import BaseModel, schema_json_of
+from pydantic import BaseModel
+from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
 from ..doc_utils import export_module
@@ -970,7 +972,10 @@ class OpenAIWrapper:
                 with cache_client as cache:
                     # Try to get the response from cache
                     key = get_key(
-                        {**params, **{"response_format": schema_json_of(params["response_format"])}}
+                        {
+                            **params,
+                            **{"response_format": json.dumps(TypeAdapter(params["response_format"]).json_schema())},
+                        }
                         if "response_format" in params
                         else params
                     )
