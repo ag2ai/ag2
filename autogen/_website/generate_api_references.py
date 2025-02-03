@@ -80,7 +80,7 @@ def build_pdoc_dict(module_name: str) -> None:
             and "__exported_module__" in obj.__dict__
             and obj.__exported_module__ != module_name
         ):
-            print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
+            # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
             module.__pdoc__[name] = False
 
 
