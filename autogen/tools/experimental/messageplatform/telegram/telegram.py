@@ -16,6 +16,8 @@ with optional_import_block():
     from telethon import TelegramClient
     from telethon.tl.types import InputMessagesFilterEmpty, Message, PeerChannel, PeerChat, PeerUser
 
+    PeerType = Union[PeerChat, PeerChannel, PeerUser]  # type: ignore[no-any-unimported]
+
 MAX_MESSAGE_LENGTH = 4096
 
 
@@ -28,7 +30,7 @@ class BaseTelegramTool:
         self._client = TelegramClient(session_name, api_id, api_hash)
 
     @staticmethod
-    def _get_peer_from_id(chat_id: str) -> Union[PeerChat, PeerChannel, PeerUser]:  # type: ignore[no-any-unimported]
+    def _get_peer_from_id(chat_id: str) -> PeerType:  # type: ignore[no-any-unimported]
         """Convert a chat ID string to appropriate Peer type."""
         try:
             # Convert string to integer
