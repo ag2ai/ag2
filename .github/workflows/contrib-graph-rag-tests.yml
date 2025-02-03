@@ -62,10 +62,11 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: falkordb, ubuntu-latest, ${{ matrix.python-version }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   GraphRagIntegrationTest-Neo4j-Llmaindex-Ubuntu:
@@ -111,10 +112,11 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # Test-Neo4j-Llmaindex-Ubuntu:
@@ -156,8 +158,9 @@ jobs:
   #       run: |
   #         bash scripts/test.sh -m "neo4j"
   #     - name: Upload coverage to Codecov
-  #       uses: codecov/codecov-action@v3
+  #       uses: codecov/codecov-action@v5
   #       with:
-  #         file: ./coverage.xml
-  #         flags: unittests
+  #         files: ./coverage.xml
+  #         flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
+  #         fail_ci_if_error: true
   #         token: ${{ secrets.CODECOV_TOKEN }}

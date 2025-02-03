@@ -29,7 +29,7 @@ def mock_response():
 @pytest.fixture
 def bedrock_client():
     # Set Bedrock client with some default values
-    client = BedrockClient()
+    client = BedrockClient(aws_region="us-east-1")
 
     client._supports_system_prompts = True
 
@@ -40,7 +40,7 @@ def bedrock_client():
 @skip_on_missing_imports(["boto3", "botocore"], "bedrock")
 def test_initialization():
     # Creation works without an api_key as it's handled in the parameter parsing
-    BedrockClient()
+    BedrockClient(aws_region="us-east-1")
 
 
 # Test parameters
