@@ -4,7 +4,11 @@
 
 from typing import Callable
 
+from autogen.import_utils import optional_import_block
 from autogen.tools.experimental.messageplatform import DiscordRetrieveTool, DiscordSendTool
+
+with optional_import_block():
+    pass
 
 
 class TestDiscordSendTool:
