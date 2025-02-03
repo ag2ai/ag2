@@ -7,7 +7,7 @@
 from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
-from pydantic._internal._typing_extra import eval_type_lenient as evaluate_forwardref
+from pydantic._internal._typing_extra import try_eval_type as evaluate_forwardref
 from pydantic.json_schema import JsonSchemaValue
 
 __all__ = ("JsonSchemaValue", "evaluate_forwardref", "model_dump", "model_dump_json", "type2schema")

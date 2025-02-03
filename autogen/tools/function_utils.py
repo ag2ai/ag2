@@ -38,7 +38,7 @@ def get_typed_annotation(annotation: Any, globalns: dict[str, Any]) -> Any:
         annotation = annotation.description
     if isinstance(annotation, str):
         annotation = ForwardRef(annotation)
-        annotation = evaluate_forwardref(annotation, globalns, globalns)
+        annotation, _ = evaluate_forwardref(annotation, globalns, globalns)
     return annotation
 
 
