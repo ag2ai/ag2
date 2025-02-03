@@ -9,9 +9,8 @@ import re
 from time import sleep
 from typing import Any, Callable, Literal, Optional, Union
 
-from pydantic import BaseModel, Extra, root_validator
+from pydantic import BaseModel, root_validator
 
-from ..._pydantic import PYDANTIC_V1
 from ...code_utils import UNKNOWN, execute_code, extract_code, infer_lang
 from ...import_utils import optional_import_block, require_optional_import
 from ...math_utils import get_answer
@@ -397,12 +396,6 @@ class WolframAlphaAPIWrapper(BaseModel):
 
     wolfram_client: Any  #: :meta private:
     wolfram_alpha_appid: Optional[str] = None
-
-    class Config:
-        """Configuration for this pydantic object."""
-
-        if PYDANTIC_V1:
-            extra = Extra.forbid
 
     @root_validator(skip_on_failure=True)
     @classmethod
