@@ -43,3 +43,5 @@ https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/Gallery#
 https://docs.ag2.ai/_sites/docs.ag2.ai/docs/topics/non-openai-models/cloud-gemini_vertexai#
 https://investor.nvidia.com
 https://github.com/neo4j/neo4j-graphrag-python
+https://platform.deepseek.com/sign_in
+https://github.com/ag2ai/build-with-ag2/tree/main/samples/apps/auto-anny

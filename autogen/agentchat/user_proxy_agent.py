@@ -79,7 +79,7 @@ class UserProxyAgent(ConversableAgent):
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         llm_config (dict or False or None): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create)
+            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create)
             for available options.
             Default to False, which disables llm-based auto reply.
             When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
@@ -88,7 +88,7 @@ class UserProxyAgent(ConversableAgent):
         description (str): a short description of the agent. This description is used by other agents
             (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name=name,

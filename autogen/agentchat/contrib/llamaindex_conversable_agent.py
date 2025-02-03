@@ -54,7 +54,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         description (str): a short description of the agent. This description is used by other agents
             (e.g. the GroupChatManager) to decide when to call upon this agent.
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](../conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         if llama_index_agent is None:
             raise ValueError("llama_index_agent must be provided")
