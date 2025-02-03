@@ -2,15 +2,13 @@
 branch = True
 source = autogen
 omit =
-  *test*
-  *samples*
+  test/*
   autogen/agentchat/contrib/*
   setup_ag2.py
   setup_autogen.py
 [report]
 omit =
-  *test*
-  *samples*
+  test/*
   autogen/agentchat/contrib/*
   setup_ag2.py
   setup_autogen.py
