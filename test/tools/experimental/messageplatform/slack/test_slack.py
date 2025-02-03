@@ -142,6 +142,31 @@ class TestSlackSendTool:
 
 
 class TestSlackRetrieveTool:
+    @pytest.fixture(autouse=True)
+    def mock_webclient(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+        """Create a mock for the WebClient constructor."""
+        # Create the mock instance with the desired return value
+        mock_instance = Mock()
+        mock_instance.conversations_history.return_value = {
+            "ok": True,
+            "messages": [{"text": "Test message", "ts": "1234567890.123456"}],
+            "has_more": False,
+            "response_metadata": {"next_cursor": None},
+        }
+
+        # Create the mock class
+        mock_webclient_cls = Mock(return_value=mock_instance)
+
+        # Patch at both the original import location and where it might be cached
+        monkeypatch.setattr("slack_sdk.WebClient", mock_webclient_cls)
+        monkeypatch.setattr("autogen.tools.experimental.messageplatform.slack.slack.WebClient", mock_webclient_cls)
+
+        return mock_webclient_cls
+
+    @pytest.fixture
+    def tool(self) -> SlackRetrieveTool:
+        return SlackRetrieveTool(bot_token="xoxb-test-token", channel_id="test-channel")
+
     def test_slack_retrieve_tool_init(self) -> None:
         slack_retrieve_tool = SlackRetrieveTool(bot_token="my_bot_token", channel_id="my_channel")
         assert slack_retrieve_tool.name == "slack_retrieve"
@@ -173,3 +198,125 @@ class TestSlackRetrieveTool:
         }
 
         assert slack_retrieve_tool.function_schema == expected_schema
+
+    @pytest.mark.asyncio
+    async def test_successful_message_retrieval(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test successful message retrieval without any filters."""
+        mock_instance = mock_webclient.return_value
+
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+
+        # Verify the call and result
+        mock_instance.conversations_history.assert_called_once_with(channel="test-channel", limit=1000)
+        assert isinstance(result, dict)
+        assert result["message_count"] == 1
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["text"] == "Test message"
+
+    @pytest.mark.asyncio
+    async def test_message_retrieval_with_date(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test message retrieval with ISO date filter."""
+        mock_instance = mock_webclient.return_value
+
+        _ = await tool.func(
+            bot_token="xoxb-test-token", channel_id="test-channel", messages_since="2025-01-25T00:00:00Z"
+        )
+
+        # Verify timestamp conversion and API call
+        mock_instance.conversations_history.assert_called_once()
+        call_args = mock_instance.conversations_history.call_args[1]
+        assert "oldest" in call_args
+        assert float(call_args["oldest"]) > 0  # Verify timestamp conversion
+
+    @pytest.mark.asyncio
+    async def test_message_retrieval_with_message_id(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test message retrieval with Slack message ID filter."""
+        mock_instance = mock_webclient.return_value
+
+        _ = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", messages_since="1234567890.123456")
+
+        # Verify direct message ID usage
+        mock_instance.conversations_history.assert_called_once_with(
+            channel="test-channel", limit=1000, oldest="1234567890.123456"
+        )
+
+    @pytest.mark.asyncio
+    async def test_message_retrieval_with_pagination(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test message retrieval with pagination."""
+        mock_instance = mock_webclient.return_value
+
+        # Set up mock to return multiple pages
+        mock_instance.conversations_history.side_effect = [
+            {
+                "ok": True,
+                "messages": [{"text": "Message 1", "ts": "1234567890.123456"}],
+                "has_more": True,
+                "response_metadata": {"next_cursor": "cursor123"},
+            },
+            {
+                "ok": True,
+                "messages": [{"text": "Message 2", "ts": "1234567890.123457"}],
+                "has_more": False,
+                "response_metadata": {"next_cursor": None},
+            },
+        ]
+
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+
+        # Verify pagination handling
+        assert mock_instance.conversations_history.call_count == 2
+        assert result["message_count"] == 2
+        assert len(result["messages"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_message_retrieval_with_maximum(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test message retrieval with maximum messages limit."""
+        mock_instance = mock_webclient.return_value
+
+        await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", maximum_messages=500)
+
+        # Verify limit parameter
+        mock_instance.conversations_history.assert_called_once_with(channel="test-channel", limit=500)
+
+    @pytest.mark.asyncio
+    async def test_invalid_date_format(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test handling of invalid date format."""
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", messages_since="invalid-date")
+
+        assert "Invalid date format" in result
+        assert mock_webclient.return_value.conversations_history.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_slack_api_error(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test handling of SlackApiError."""
+        mock_instance = mock_webclient.return_value
+        mock_instance.conversations_history.side_effect = SlackApiError(
+            message="", response={"ok": False, "error": "channel_not_found"}
+        )
+
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+
+        assert "Message retrieval failed" in result
+        assert "channel_not_found" in result
+
+    @pytest.mark.asyncio
+    async def test_general_exception(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test handling of general exceptions."""
+        mock_instance = mock_webclient.return_value
+        mock_instance.conversations_history.side_effect = Exception("Unexpected error")
+
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+
+        assert "Message retrieval failed" in result
+        assert "Unexpected error" in result
+
+    @pytest.mark.asyncio
+    async def test_failed_message_response(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
+        """Test handling of failed message response from Slack."""
+        mock_instance = mock_webclient.return_value
+        mock_instance.conversations_history.return_value = {"ok": False, "error": "invalid_auth"}
+
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+
+        assert "Message retrieval failed" in result
+        assert "invalid_auth" in result
