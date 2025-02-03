@@ -164,7 +164,7 @@ class WebSurferAgent(ConversableAgent):
         @self._assistant.register_for_llm(
             name="visit_page", description="Visit a webpage at a given URL and return its text."
         )
-        def _visit_page(url: Annotated[str, "The relative or absolute url of the webapge to visit."]) -> str:
+        def _visit_page(url: Annotated[str, "The relative or absolute url of the webpage to visit."]) -> str:
             self.browser.visit_page(url)
             header, content = _browser_state()
             return header.strip() + "\n=======================\n" + content
