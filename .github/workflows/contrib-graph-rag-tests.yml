@@ -65,7 +65,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: falkordb, ubuntu, ${{ matrix.python-version }}
+          flags: falkordb, ubuntu-latest, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -115,7 +115,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: neo4j, ubuntu, ${{ matrix.python-version }}
+          flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -161,6 +161,6 @@ jobs:
   #       uses: codecov/codecov-action@v5
   #       with:
   #         files: ./coverage.xml
-  #         flags: neo4j, ubuntu, ${{ matrix.python-version }}
+  #         flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
   #         fail_ci_if_error: true
   #         token: ${{ secrets.CODECOV_TOKEN }}

@@ -138,7 +138,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: retrievechat, retrievechat-qdrant, retrievechat-pgvector, retrievechat-mongodb, ${{ matrix.python-version }}
+          flags: retrievechat, retrievechat-qdrant, retrievechat-pgvector, retrievechat-mongodb, ubuntu-latest, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
