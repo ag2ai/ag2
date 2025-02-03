@@ -21,7 +21,7 @@ with optional_import_block():
 MAX_MESSAGE_LENGTH = 4096
 
 
-@require_optional_import(["telethon"], "commsagent-telegram")
+@require_optional_import(["telethon", "telethon.tl.types"], "commsagent-telegram")
 @export_module("autogen.tools.experimental")
 class BaseTelegramTool:
     """Base class for Telegram tools containing shared functionality."""
