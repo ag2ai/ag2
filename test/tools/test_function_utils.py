@@ -12,7 +12,6 @@ from typing import Annotated, Any, Literal, Optional
 import pytest
 from pydantic import BaseModel, Field
 
-from autogen._pydantic import model_dump
 from autogen.tools.dependency_injection import Field as AG2Field
 from autogen.tools.function_utils import (
     get_default_values,
@@ -176,7 +175,7 @@ def test_get_parameters() -> None:
         "required": ["a"],
     }
 
-    actual = model_dump(get_parameters(required, param_annotations, default_values))
+    actual = (get_parameters(required, param_annotations, default_values)).model_dump()
 
     assert actual == expected, actual
 

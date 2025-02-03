@@ -8,7 +8,6 @@ import copy
 from typing import Optional, Union
 
 from ... import OpenAIWrapper
-from ..._pydantic import model_dump
 from ...code_utils import content_str
 from .. import Agent, ConversableAgent
 from ..contrib.img_utils import (
@@ -122,5 +121,5 @@ class MultimodalConversableAgent(ConversableAgent):
         # TODO: line 301, line 271 is converting messages to dict. Can be removed after ChatCompletionMessage_to_dict is merged.
         extracted_response = client.extract_text_or_completion_object(response)[0]
         if not isinstance(extracted_response, str):
-            extracted_response = model_dump(extracted_response)
+            extracted_response = extracted_response.model_dump()
         return True, extracted_response
