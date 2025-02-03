@@ -140,7 +140,7 @@ def test_cost_calculation(mock_response):
 
     # Convert cost per milliion to cost per token.
     expected_cost = (
-        response.usage["prompt_tokens"] * 0.6 / 1000000 + response.usage["completion_tokens"] * 0.6 / 1000000
+        response.usage["prompt_tokens"] * 0.85 / 1000000 + response.usage["completion_tokens"] * 1.20 / 1000000
     )
 
     assert calculated_cost == expected_cost, f"Cost for this should be ${expected_cost} but got ${calculated_cost}"
