@@ -21,7 +21,11 @@ def test_import_clients() -> None:
         Role,
     )
 
+    llm_config = {"config_list": [{"model": "gpt-4o", "api_key": "some_key", "base_url": "some url"}]}
+    gemini_client = GeminiRealtimeClient(llm_config=llm_config)
+    openai_client = OpenAIRealtimeClient(llm_config=llm_config)
+
     assert RealtimeClientProtocol is not None
     assert Role is not None
-    assert issubclass(GeminiRealtimeClient, RealtimeClientProtocol)
-    assert issubclass(OpenAIRealtimeClient, RealtimeClientProtocol)
+    assert isinstance(gemini_client, RealtimeClientProtocol)
+    assert isinstance(openai_client, RealtimeClientProtocol)
