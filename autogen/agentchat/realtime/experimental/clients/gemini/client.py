@@ -33,6 +33,8 @@ API_VERSION = "v1alpha"
 class GeminiRealtimeClient:
     """(Experimental) Client for Gemini Realtime API."""
 
+    __exported_module__: str = ""
+
     def __init__(
         self,
         *,

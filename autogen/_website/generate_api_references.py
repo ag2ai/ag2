@@ -15,6 +15,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
+from ..doc_utils import _PDOC_PLACEHOLDER
 from ..import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -82,6 +83,16 @@ def build_pdoc_dict(module_name: str) -> None:
         ):
             # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
             module.__pdoc__[name] = False
+
+        if (
+            hasattr(obj, "__module__")
+            and obj.__module__.startswith(_PDOC_PLACEHOLDER)
+            and obj.__module__.replace(_PDOC_PLACEHOLDER, "") == module_name
+        ):
+            module.__pdoc__[name] = False
+
+            module_without_placeholder = obj.__module__.replace(_PDOC_PLACEHOLDER, "")
+            setattr(obj, "__module__", module_without_placeholder)
 
 
 @require_optional_import("pdoc", "docs")
