@@ -9,7 +9,7 @@ on:
     paths:
       - "autogen/**"
       - "test/agentchat/contrib/**"
-      - ".github/workflows/contrib-openai.yml"
+      - ".github/workflows/contrib-llm-test.yml"
       - "pyproject.toml"
 permissions:
   {}
