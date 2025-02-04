@@ -16,7 +16,8 @@ with optional_import_block():
     from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_anthropic import ChatAnthropic
     from langchain_google_genai import ChatGoogleGenerativeAI
-    from langchain_openai import ChatOpenAI
+    from langchain_openai import AzureChatOpenAI, ChatOpenAI
+
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
 
@@ -113,7 +114,12 @@ class BrowserUseTool(Tool):
             api_key = llm_config["config_list"][0]["api_key"]
             if api_type == "deepseek" or api_type == "azure" or api_type == "azure":
                 base_url = llm_config["config_list"][0].get("base_url")
-                # api_version = llm_config["config_list"][0].get("api_version")
+                if not base_url:
+                    raise ValueError(f"base_url is required for {api_type} api type.")
+            if api_type == "azure":
+                api_version = llm_config["config_list"][0].get("api_version")
+                if not api_version:
+                    raise ValueError(f"api_version is required for {api_type} api type.")
 
         except (KeyError, TypeError):
             raise ValueError("llm_config must be a valid config dictionary.")
@@ -121,7 +127,12 @@ class BrowserUseTool(Tool):
         if api_type == "openai":
             return ChatOpenAI(model=model, api_key=api_key)
         elif api_type == "azure":
-            raise NotImplementedError("Azure API is not yet supported for browser use.")
+            return AzureChatOpenAI(
+                model=model,
+                api_key=api_key,
+                azure_endpoint=base_url,
+                api_version=api_version,
+            )
         elif api_type == "deepseek":
             return ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
         elif api_type == "anthropic":
