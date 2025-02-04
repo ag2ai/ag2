@@ -7,13 +7,14 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.experimental.messageplatform import SlackRetrieveTool, SlackSendTool
 
 with optional_import_block():
     from slack_sdk.errors import SlackApiError
 
 
+@skip_on_missing_imports("slack_sdk", "commsagent-slack")
 class TestSlackSendTool:
     @pytest.fixture(autouse=True)
     def mock_webclient(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
@@ -141,6 +142,7 @@ class TestSlackSendTool:
         assert "rate_limited" in result
 
 
+@skip_on_missing_imports("slack_sdk", "commsagent-slack")
 class TestSlackRetrieveTool:
     @pytest.fixture(autouse=True)
     def mock_webclient(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:

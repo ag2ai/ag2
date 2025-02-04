@@ -7,19 +7,20 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.experimental.messageplatform import DiscordRetrieveTool, DiscordSendTool
 
 with optional_import_block():
-    from discord import Client
+    pass
 
 
+@skip_on_missing_imports("discord", "commsagent-discord")
 class TestDiscordSendTool:
     @pytest.fixture(autouse=True)
     def mock_discord_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
         """Create a mock for the Discord Client."""
         # Create mock instance with required attributes
-        mock_instance = AsyncMock(spec=Client)
+        mock_instance = AsyncMock(spec="Client")
 
         # Mock start to trigger on_ready event immediately
         async def mock_start(token: str) -> None:
@@ -265,12 +266,13 @@ class TestDiscordSendTool:
         assert len(mock_discord_client.guilds) == 0  # More explicit check
 
 
+@skip_on_missing_imports("discord", "commsagent-discord")
 class TestDiscordRetrieveTool:
     @pytest.fixture(autouse=True)
     def mock_discord_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
         """Create a mock for the Discord Client."""
         # Create mock instance with required attributes
-        mock_instance = AsyncMock(spec=Client)
+        mock_instance = AsyncMock(spec="Client")
 
         # Mock start to trigger on_ready event immediately
         async def mock_start(token: str) -> None:
