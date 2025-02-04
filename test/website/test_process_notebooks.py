@@ -12,10 +12,12 @@ from typing import Optional, Union
 import pytest
 
 from autogen._website.process_notebooks import (
+    EDIT_URL_HTML,
     add_authors_and_social_img_to_blog_posts,
     add_front_matter_to_metadata_mdx,
     cleanup_tmp_dirs_if_no_metadata,
     convert_callout_blocks,
+    ensure_edit_url,
     ensure_mint_json_exists,
     extract_example_group,
     generate_nav_group,
@@ -758,4 +760,20 @@ class TestConvertCalloutBlocks:
 
     def test_convert_callout_blocks(self, content: str, expected: str) -> None:
         actual = convert_callout_blocks(content)
+        assert actual == expected, actual
+
+
+class TestEnsureEditUrl:
+    def test_without_placeholder_html(self) -> None:
+        content = """some content"""
+        file_path = Path("/tmp/file.mdx")
+        actual = ensure_edit_url(content, file_path)
+        expected = content + EDIT_URL_HTML.format(file_path=file_path)
+        assert actual == expected, actual
+
+    def test_with_placeholder_html(self) -> None:
+        file_path = Path("/tmp/file.mdx")
+        content = f"""some content\n{EDIT_URL_HTML.format(file_path=str(file_path))}"""
+        actual = ensure_edit_url(content, file_path)
+        expected = content
         assert actual == expected, actual
