@@ -9,7 +9,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: 00:00
+      time: "00:00"
     groups:
       github-actions:
         patterns:
@@ -20,7 +20,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: 00:00
+      time: "00:00"
     groups:
       pip:
         patterns:
