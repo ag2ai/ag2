@@ -45,9 +45,10 @@ class TestCrawl4AITool:
         assert isinstance(result, str)
 
     def test_get_provider_and_api_key(self, mock_credentials: Credentials) -> None:
-        provider, api_key = Crawl4AITool._get_provider_and_api_key(mock_credentials.llm_config)
-        assert provider == "openai/gpt-4o", provider
-        assert isinstance(api_key, str)
+        lite_llm_config = Crawl4AITool._get_lite_llm_config(mock_credentials.llm_config)
+        assert lite_llm_config.keys() == dict(provider="openai/gpt-4o", api_key="dummy").keys()
+        assert lite_llm_config["provider"] == "openai/gpt-4o"
+        assert isinstance(lite_llm_config["api_key"], str)
 
     @pytest.mark.parametrize(
         "use_extraction_model",

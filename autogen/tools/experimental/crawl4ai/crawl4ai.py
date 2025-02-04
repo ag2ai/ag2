@@ -117,25 +117,27 @@ class Crawl4AITool(Tool):
         if check_parameters_error_msg:
             raise ValueError(check_parameters_error_msg)
 
+    # crawl4ai uses LiteLLM under the hood.
     @staticmethod
-    def _get_provider_and_api_key(llm_config: dict[str, Any]) -> tuple[str, str]:
+    def _get_lite_llm_config(llm_config: dict[str, Any]) -> dict[str, Any]:
         if "config_list" not in llm_config:
             if "model" in llm_config:
+                lite_llm_config = {}
                 model = llm_config["model"]
                 api_type = "openai"
-                api_key = os.getenv("OPENAI_API_KEY")
+                lite_llm_config["api_key"] = os.getenv("OPENAI_API_KEY")
             raise ValueError("llm_config must be a valid config dictionary.")
         else:
             try:
-                model = llm_config["config_list"][0]["model"]
-                api_type = llm_config["config_list"][0].get("api_type", "openai")
-                api_key = llm_config["config_list"][0]["api_key"]
+                lite_llm_config = llm_config["config_list"][0].copy()
+                model = lite_llm_config.pop("model")
+                api_type = lite_llm_config.pop("api_type", "openai")  # type: ignore[assignment]
 
             except (KeyError, TypeError):
                 raise ValueError("llm_config must be a valid config dictionary.")
 
-        provider = f"{api_type}/{model}"
-        return provider, api_key  # type: ignore[return-value]
+        lite_llm_config["provider"] = f"{api_type}/{model}"
+        return lite_llm_config
 
     @staticmethod
     def _get_crawl_config(  # type: ignore[no-any-unimported]
@@ -144,9 +146,7 @@ class Crawl4AITool(Tool):
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
         extraction_model: Optional[Type[BaseModel]] = None,
     ) -> "CrawlerRunConfig":
-        provider, api_key = Crawl4AITool._get_provider_and_api_key(llm_config)
-        # base_url = llm_config["config_list"][0].get("base_url")
-        # api_version = llm_config["config_list"][0].get("api_version")
+        lite_llm_config = Crawl4AITool._get_lite_llm_config(llm_config)
 
         if llm_strategy_kwargs is None:
             llm_strategy_kwargs = {}
@@ -161,10 +161,7 @@ class Crawl4AITool(Tool):
 
         # 1. Define the LLM extraction strategy
         llm_strategy = LLMExtractionStrategy(
-            provider=provider,
-            api_token=api_key,
-            # base_url=base_url,
-            # api_version=api_version,
+            **lite_llm_config,
             schema=schema,
             extraction_type=extraction_type,
             instruction=instruction,
