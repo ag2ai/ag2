@@ -6,8 +6,18 @@ name: Core tests without LLMs
 on:
   push:
     branches: ["main"]
+    paths:
+      - 'autogen/**'
+      - 'test/**'
+      - '.github/workflows/**'
+      - 'pyproject.toml'
   pull_request:
     branches: ["main"]
+    paths:
+      - 'autogen/**'
+      - 'test/**'
+      - '.github/workflows/**'
+      - 'pyproject.toml'
   merge_group:
     types: [checks_requested]
 
