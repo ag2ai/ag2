@@ -145,7 +145,7 @@ class ConversableAgent(LLMAgent):
                 - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                     If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
             llm_config (dict or False or None): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create)
+                Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create)
                 for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
                 To disable llm-based auto reply, set to False.
@@ -1365,7 +1365,7 @@ class ConversableAgent(LLMAgent):
 
         Args:
             chat_queue (List[Dict]): a list of dictionaries containing the information of the chats.
-                Each dictionary should contain the input arguments for [`initiate_chat`](conversable_agent#initiate-chat)
+                Each dictionary should contain the input arguments for [`initiate_chat`](#initiate-chat)
 
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """

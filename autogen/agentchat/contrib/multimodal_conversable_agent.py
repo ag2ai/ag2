@@ -38,7 +38,7 @@ class MultimodalConversableAgent(ConversableAgent):
         system_message (str): system message for the OpenAIWrapper inference.
             Please override this attribute if you want to reprogram the agent.
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](../conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name,
