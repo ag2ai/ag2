@@ -27,7 +27,6 @@ from typing import (
 
 from openai import BadRequestError
 
-from .._pydantic import model_dump
 from ..cache.cache import AbstractCache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -1489,7 +1488,7 @@ class ConversableAgent(LLMAgent):
             return None
         # ensure function and tool calls will be accepted when sent back to the LLM
         if not isinstance(extracted_response, str) and hasattr(extracted_response, "model_dump"):
-            extracted_response = model_dump(extracted_response)
+            extracted_response = extracted_response.model_dump()
         if isinstance(extracted_response, dict):
             if extracted_response.get("function_call"):
                 extracted_response["function_call"]["name"] = self._normalize_name(
