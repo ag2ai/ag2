@@ -167,6 +167,7 @@ def test_update_tool(credentials_gpt_4o: Credentials):
         message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
     )
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
+    print("Message:", messages1)
     print("Summary:", res.summary)
     assert messages1.replace("TERMINATE", "") == res.summary, (
         "Message (removing TERMINATE) and summary should be the same"
@@ -179,6 +180,7 @@ def test_update_tool(credentials_gpt_4o: Credentials):
         summary_method="reflection_with_llm",
     )
     messages2 = assistant.chat_messages[user_proxy][-1]["content"]
+    print("Message:", messages2)
     # The model should know about the function in the context of the conversation
     assert "greet_user" in messages1
     assert "greet_user" not in messages2

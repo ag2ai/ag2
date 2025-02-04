@@ -252,6 +252,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
         summary_method="reflection_with_llm",
     )
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
+    print(messages1)
     print("Chat summary and cost", res1.summary, res1.cost)
 
     assistant.update_function_signature("greet_user", is_remove=True)
@@ -261,6 +262,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
         summary_method="reflection_with_llm",
     )
     messages2 = assistant.chat_messages[user_proxy][-1]["content"]
+    print(messages2)
     # The model should know about the function in the context of the conversation
     assert "greet_user" in messages1
     assert "greet_user" not in messages2
