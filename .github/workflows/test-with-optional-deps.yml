@@ -65,6 +65,7 @@ jobs:
           # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
           - "twilio"
           - "interop"
+          - "browser_use"
           - "docs"
         os: [ubuntu-latest, macos-latest, windows-latest]
         # Run tests only for py versions 3.9, 3.10, 3.13
