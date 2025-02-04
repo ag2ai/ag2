@@ -10,10 +10,11 @@ import json
 from logging import getLogger
 from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter
+from pydantic._internal._typing_extra import try_eval_type
+from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Literal, get_args, get_origin
 
-from .._pydantic import JsonSchemaValue, evaluate_forwardref, model_dump, model_dump_json, type2schema
 from ..doc_utils import export_module
 from .dependency_injection import Field as AG2Field
 
@@ -38,7 +39,7 @@ def get_typed_annotation(annotation: Any, globalns: dict[str, Any]) -> Any:
         annotation = annotation.description
     if isinstance(annotation, str):
         annotation = ForwardRef(annotation)
-        annotation = evaluate_forwardref(annotation, globalns, globalns)
+        annotation, _ = try_eval_type(annotation, globalns, globalns)
     return annotation
 
 
@@ -145,7 +146,7 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
         else:
             raise ValueError(f"Invalid {retval} for parameter {k}, should be a DescriptionField, got {type(retval)}")
 
-    schema = type2schema(v)
+    schema = TypeAdapter(v).json_schema()
     if k in default_values:
         dv = default_values[k]
         schema["default"] = dv
@@ -294,7 +295,7 @@ def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, de
         )
     )
 
-    return model_dump(function)
+    return function.model_dump()
 
 
 def get_load_param_if_needed_function(t: Any) -> Optional[Callable[[dict[str, Any], type[BaseModel]], BaseModel]]:
@@ -371,7 +372,7 @@ def serialize_to_str(x: Any) -> str:
     if isinstance(x, str):
         return x
     if isinstance(x, BaseModel):
-        return model_dump_json(x)
+        return x.model_dump_json()
 
     retval_model = _SerializableResult(result=x)
     try:

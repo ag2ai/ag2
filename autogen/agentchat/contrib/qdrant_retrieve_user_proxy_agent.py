@@ -95,7 +95,7 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
             - payload_indexing: Whether to create a payload index for the document field. Default is False.
               You can find more info about the payload indexing options at https://qdrant.tech/documentation/concepts/indexing/#payload-index
               API Reference: https://qdrant.github.io/qdrant/redoc/index.html#tag/collections/operation/create_field_index
-         **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
+         **kwargs (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
 
         """
         warnings.warn(

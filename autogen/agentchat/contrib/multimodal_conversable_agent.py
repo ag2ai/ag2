@@ -8,7 +8,6 @@ import copy
 from typing import Optional, Union
 
 from ... import OpenAIWrapper
-from ..._pydantic import model_dump
 from ...code_utils import content_str
 from .. import Agent, ConversableAgent
 from ..contrib.img_utils import (
@@ -38,7 +37,7 @@ class MultimodalConversableAgent(ConversableAgent):
         system_message (str): system message for the OpenAIWrapper inference.
             Please override this attribute if you want to reprogram the agent.
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](../conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name,
@@ -122,5 +121,5 @@ class MultimodalConversableAgent(ConversableAgent):
         # TODO: line 301, line 271 is converting messages to dict. Can be removed after ChatCompletionMessage_to_dict is merged.
         extracted_response = client.extract_text_or_completion_object(response)[0]
         if not isinstance(extracted_response, str):
-            extracted_response = model_dump(extracted_response)
+            extracted_response = extracted_response.model_dump()
         return True, extracted_response
