@@ -94,7 +94,13 @@ class FileLogger(BaseLogger):
     ) -> None:
         """Log a chat completion."""
         thread_id = threading.get_ident()
-        source_name = source if isinstance(source, str) else source.name
+        source_name = (
+            source
+            if isinstance(source, str)
+            else source.name
+            if hasattr(source, "name") and source.name is not None
+            else ""
+        )
         try:
             log_data = json.dumps(
                 {
