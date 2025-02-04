@@ -1538,7 +1538,7 @@ def test_context_variables():
 
 
 def test_invalid_functions_parameter():
-    """Test initialization with valid and invali    d parameters"""
+    """Test initialization with valid and invalid parameters"""
 
     # Invalid functions parameter
     with pytest.raises(TypeError):
