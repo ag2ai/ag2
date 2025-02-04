@@ -4,7 +4,6 @@
 # alternative api: https://rapidapi.com/omarmhaimdat/api/youtube-v2
 
 
-
 def get_youtube_caption(video_id: str) -> str:
     """Retrieves the captions for a YouTube video.
 
