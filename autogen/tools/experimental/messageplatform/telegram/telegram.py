@@ -25,7 +25,13 @@ class BaseTelegramTool:
     """Base class for Telegram tools containing shared functionality."""
 
     def __init__(self, api_id: str, api_hash: str, session_name: str) -> None:
-        self._client = TelegramClient(session_name, api_id, api_hash)
+        self._api_id = api_id
+        self._api_hash = api_hash
+        self._session_name = session_name
+
+    def _get_client(self) -> "TelegramClient":  # type: ignore[no-any-unimported]
+        """Get a fresh TelegramClient instance."""
+        return TelegramClient(self._session_name, self._api_id, self._api_hash)
 
     @staticmethod
     def _get_peer_from_id(chat_id: str) -> Union["PeerChat", "PeerChannel", "PeerUser"]:  # type: ignore[no-any-unimported]
@@ -51,18 +57,18 @@ class BaseTelegramTool:
         except ValueError as e:
             raise ValueError(f"Invalid chat_id format: {chat_id}. Error: {str(e)}")
 
-    async def _initialize_entity(self, chat_id: str) -> Any:
+    async def _initialize_entity(self, client: "TelegramClient", chat_id: str) -> Any:  # type: ignore[no-any-unimported]
         """Initialize and cache the entity by trying different methods."""
         peer = self._get_peer_from_id(chat_id)
 
         try:
             # Try direct entity resolution first
-            entity = await self._client.get_entity(peer)
+            entity = await client.get_entity(peer)
             return entity
         except ValueError:
             try:
                 # Get all dialogs (conversations)
-                async for dialog in self._client.iter_dialogs():
+                async for dialog in client.iter_dialogs():
                     # For users/bots, we need to find the dialog with the user
                     if (
                         isinstance(peer, PeerUser)
@@ -108,9 +114,10 @@ class TelegramSendTool(BaseTelegramTool, Tool):
                 chat_id: The ID of the destination. (uses dependency injection)
             """
             try:
-                async with self._client:
+                client = self._get_client()
+                async with client:
                     # Initialize and cache the entity
-                    entity = await self._initialize_entity(chat_id)
+                    entity = await self._initialize_entity(client, chat_id)
 
                     if len(message) > MAX_MESSAGE_LENGTH:
                         chunks = [
@@ -120,7 +127,7 @@ class TelegramSendTool(BaseTelegramTool, Tool):
                         first_message: Union[Message, None] = None  # type: ignore[no-any-unimported]
 
                         for i, chunk in enumerate(chunks):
-                            sent = await self._client.send_message(
+                            sent = await client.send_message(
                                 entity=entity,
                                 message=chunk,
                                 parse_mode="html",
@@ -136,7 +143,7 @@ class TelegramSendTool(BaseTelegramTool, Tool):
                             f"Message sent successfully ({len(chunks)} chunks, first ID: {sent_message_id}):\n{message}"
                         )
                     else:
-                        sent = await self._client.send_message(entity=entity, message=message, parse_mode="html")
+                        sent = await client.send_message(entity=entity, message=message, parse_mode="html")
                         return f"Message sent successfully (ID: {sent.id}):\n{message}"
 
             except Exception as e:
@@ -188,9 +195,10 @@ class TelegramRetrieveTool(BaseTelegramTool, Tool):
                 search: Optional string to search for in messages.
             """
             try:
-                async with self._client:
+                client = self._get_client()
+                async with client:
                     # Initialize and cache the entity
-                    entity = await self._initialize_entity(chat_id)
+                    entity = await self._initialize_entity(client, chat_id)
 
                     # Setup retrieval parameters
                     params = {
@@ -227,7 +235,7 @@ class TelegramRetrieveTool(BaseTelegramTool, Tool):
                     if isinstance(self._get_peer_from_id(chat_id), PeerUser):
                         print(f"Retrieving messages for bot chat {chat_id}")
 
-                    async for message in self._client.iter_messages(**params):
+                    async for message in client.iter_messages(**params):
                         count += 1
                         messages.append(
                             {

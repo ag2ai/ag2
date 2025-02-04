@@ -22,7 +22,7 @@ jobs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -56,6 +56,10 @@ jobs:
       fail-fast: false
       matrix:
         optional-dependencies:
+          - "browser-use"
+          - "commsagent-discord"
+          - "commsagent-slack"
+          - "commsagent-telegram"
           - "jupyter-executor"
           - "retrievechat"
           - "retrievechat-pgvector"
@@ -132,11 +136,13 @@ jobs:
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
           bash scripts/test-skip-llm.sh -m "$MARKER"
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
   test-with_optional-dependencies-check:
     if: always()
     runs-on: ubuntu-latest
@@ -156,13 +162,13 @@ jobs:
       - name: Fail workflow if build failed
         id: check_build_failed
         if: contains(join(needs.*.result, ','), 'failure')
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: core.setFailed('Build Failed!')
 
       - name: Fail workflow if build cancelled
         id: check_build_cancelled
         if: contains(join(needs.*.result, ','), 'cancelled')
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: core.setFailed('Build Cancelled!')

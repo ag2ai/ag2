@@ -164,7 +164,7 @@ interop =[
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
 blendsearch = ["flaml[blendsearch]"]
-mathchat = ["sympy", "pydantic==1.10.9", "wolframalpha"]
+mathchat = ["sympy", "wolframalpha"]
 captainagent = ["pyautogen[autobuild]", "pandas"]
 teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
@@ -373,7 +373,6 @@ files = [
     "autogen/exception_utils.py",
     "autogen/coding",
     "autogen/oai/openai_utils.py",
-    "autogen/_pydantic.py",
     "autogen/io",
     "autogen/tools",
     "autogen/interop",
@@ -382,7 +381,6 @@ files = [
     "autogen/import_utils.py",
     "autogen/agentchat/contrib/rag",
     "website/*.py",
-    "test/test_pydantic.py",
     "test/io",
     "test/tools",
     "test/interop",
