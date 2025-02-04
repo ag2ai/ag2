@@ -87,7 +87,9 @@ class TestBrowserUseToolOpenai:
     def test_get_llm(  # type: ignore[no-any-unimported]
         self,
         config_list: list[dict[str, str]],
-        llm_class: Union[type[ChatOpenAI], type[ChatAnthropic], type[ChatGoogleGenerativeAI], type[AzureChatOpenAI]],
+        llm_class: Union[
+            type["ChatOpenAI"], type["ChatAnthropic"], type["ChatGoogleGenerativeAI"], type["AzureChatOpenAI"]
+        ],
     ) -> None:
         llm = BrowserUseTool._get_llm(llm_config={"config_list": config_list})
         assert isinstance(llm, llm_class)
