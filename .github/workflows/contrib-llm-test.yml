@@ -48,11 +48,13 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
   AgentBuilder:
     strategy:
       matrix:
@@ -91,10 +93,11 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: autobuild, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   ImageGen:
@@ -128,10 +131,11 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: lmm, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # https://github.com/marketplace/actions/alls-green#why

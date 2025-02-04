@@ -24,6 +24,7 @@ Resources:
 from __future__ import annotations
 
 import copy
+import math
 import os
 import time
 import warnings
@@ -263,9 +264,9 @@ def calculate_cerebras_cost(input_tokens: int, output_tokens: int, model: str) -
 
     if model in CEREBRAS_PRICING_1K:
         input_cost_per_k, output_cost_per_k = CEREBRAS_PRICING_1K[model]
-        input_cost = (input_tokens / 1000) * input_cost_per_k
-        output_cost = (output_tokens / 1000) * output_cost_per_k
-        total = input_cost + output_cost
+        input_cost = math.ceil((input_tokens / 1000) * input_cost_per_k * 1e6) / 1e6
+        output_cost = math.ceil((output_tokens / 1000) * output_cost_per_k * 1e6) / 1e6
+        total = math.ceil((input_cost + output_cost) * 1e6) / 1e6
     else:
         warnings.warn(f"Cost calculation not available for model {model}", UserWarning)
 

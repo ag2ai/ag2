@@ -23,5 +23,6 @@ def test_import_clients() -> None:
 
     assert RealtimeClientProtocol is not None
     assert Role is not None
+
     assert issubclass(GeminiRealtimeClient, RealtimeClientProtocol)
     assert issubclass(OpenAIRealtimeClient, RealtimeClientProtocol)
