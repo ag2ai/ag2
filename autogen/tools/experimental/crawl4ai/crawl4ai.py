@@ -145,6 +145,8 @@ class Crawl4AITool(Tool):
         extraction_model: Optional[Type[BaseModel]] = None,
     ) -> "CrawlerRunConfig":
         provider, api_key = Crawl4AITool._get_provider_and_api_key(llm_config)
+        # base_url = llm_config["config_list"][0].get("base_url")
+        # api_version = llm_config["config_list"][0].get("api_version")
 
         if llm_strategy_kwargs is None:
             llm_strategy_kwargs = {}
@@ -161,6 +163,8 @@ class Crawl4AITool(Tool):
         llm_strategy = LLMExtractionStrategy(
             provider=provider,
             api_token=api_key,
+            # base_url=base_url,
+            # api_version=api_version,
             schema=schema,
             extraction_type=extraction_type,
             instruction=instruction,
