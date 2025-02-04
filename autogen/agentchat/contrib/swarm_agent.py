@@ -481,9 +481,9 @@ def _determine_next_agent(
         after_work_next_agent_selection_msg = after_work_condition.next_agent_selection_msg
         after_work_condition = after_work_condition.agent
 
-        # Evaluate callable after_work
-        if isinstance(after_work_condition, Callable):
-            after_work_condition = after_work_condition(last_swarm_speaker, groupchat.messages, groupchat)
+    # Evaluate callable after_work
+    if isinstance(after_work_condition, Callable):
+        after_work_condition = after_work_condition(last_swarm_speaker, groupchat.messages, groupchat)
 
     if isinstance(after_work_condition, str):  # Agent name in a string
         if after_work_condition in swarm_agent_names:

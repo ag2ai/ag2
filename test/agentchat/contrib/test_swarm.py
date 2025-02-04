@@ -11,9 +11,9 @@ from autogen.agentchat.contrib.swarm_agent import (
     __TOOL_EXECUTOR_NAME__,
     AfterWork,
     AfterWorkOption,
+    ContextStr,
     OnCondition,
     SwarmResult,
-    UpdateCondition,
     _cleanup_temp_user_messages,
     _create_nested_chats,
     _determine_next_agent,
@@ -999,17 +999,18 @@ def test_swarmresult_afterworkoption():
         next_agent_afterworkoption: AfterWorkOption, swarm_afterworkoption: AfterWorkOption
     ) -> Optional[Agent]:
         last_speaker_agent = ConversableAgent("dummy_1")
-        tool_executor = ConversableAgent(__TOOL_EXECUTOR_NAME__)
+        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent])
         user = UserProxyAgent("User")
         groupchat = GroupChat(
             agents=[last_speaker_agent],
             messages=[
                 {"tool_calls": "", "role": "tool", "content": "Test message"},
                 {"role": "tool", "content": "Test message 2", "name": "dummy_1"},
+                {"role": "assistant", "content": "Test message 3", "name": "dummy_1"},
             ],
         )
 
-        tool_executor._next_agent = next_agent_afterworkoption
+        last_speaker_agent._swarm_after_work = next_agent_afterworkoption
 
         return _determine_next_agent(
             last_speaker=last_speaker_agent,
@@ -1060,9 +1061,7 @@ def test_update_on_condition_str():
     # Test with string template
     register_hand_off(
         agent1,
-        hand_to=OnCondition(
-            target=agent2, condition=UpdateCondition(update_function="Transfer when {test_var} is active")
-        ),
+        hand_to=OnCondition(target=agent2, condition=ContextStr(template="Transfer when {test_var} is active")),
     )
 
     # Mock LLM responses
@@ -1092,13 +1091,9 @@ def test_update_on_condition_str():
 
     assert condition_container.captured_condition == "Transfer when condition1 is active"
 
-    # Test with callable function
-    def custom_update_function(agent: ConversableAgent, messages: list[dict]) -> str:
-        return f"Transfer based on {agent.get_context('test_var')} with {len(messages)} messages"
-
     agent3 = ConversableAgent("agent3", llm_config=testing_llm_config)
     register_hand_off(
-        agent2, hand_to=OnCondition(target=agent3, condition=UpdateCondition(update_function=custom_update_function))
+        agent2, hand_to=OnCondition(target=agent3, condition=ContextStr(template="Transfer based on {test_var}"))
     )
 
     # Reset condition container
@@ -1128,18 +1123,7 @@ def test_update_on_condition_str():
         max_rounds=3,
     )
 
-    assert condition_container.captured_condition == "Transfer based on condition2 with 1 messages"
-
-    # Test invalid update function
-    with pytest.raises(ValueError, match="Update function must be either a string or a callable"):
-        UpdateCondition(update_function=123)
-
-    # Test invalid callable signature
-    def invalid_update_function(x: int) -> str:
-        return "test"
-
-    with pytest.raises(ValueError, match="Update function must accept two parameters"):
-        UpdateCondition(update_function=invalid_update_function)
+    assert condition_container.captured_condition == "Transfer based on condition2"
 
 
 if __name__ == "__main__":
