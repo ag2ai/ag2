@@ -265,17 +265,17 @@ class TestTelegramRetrieveTool:
                 "type": "object",
                 "properties": {
                     "messages_since": {
-                        "type": "string",
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
                         "default": None,
                         "description": "Date to retrieve messages from (ISO format) OR message ID. If None, retrieves latest messages.",
                     },
                     "maximum_messages": {
-                        "type": "integer",
+                        "anyOf": [{"type": "integer"}, {"type": "null"}],
                         "default": None,
                         "description": "Maximum number of messages to retrieve. If None, retrieves all messages since date.",
                     },
                     "search": {
-                        "type": "string",
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
                         "default": None,
                         "description": "Optional string to search for in messages.",
                     },
