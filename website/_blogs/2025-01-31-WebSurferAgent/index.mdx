@@ -51,6 +51,7 @@ To get started with the [`Browser Use`](https://github.com/browser-use/browser-u
 
    ```bash
    playwright install
+   playwright install-deps
    ```
 
 3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
@@ -74,11 +75,6 @@ nest_asyncio.apply()
 ```
 
 ### Configure WebSurferAgent with Browser Use
-[`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
-
-After creating the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent), its tools (such as the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool)) are registered with the [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) so they can be used during the interaction.
-
-The user can ask the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) to fetch information from a specific webpage, in this case, the AG2 documentation home page.
 
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -86,14 +82,41 @@ config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
 llm_config = {
     "config_list": config_list,
 }
+````
 
-user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+[`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
+
+After creating the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) there are two ways to start the chat session:
+
+#### **Recommended:** Using the [`run`](/docs/api-reference/autogen/ConversableAgent#run) Method
+
+The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplifies the process by eliminating the need for manual [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) creation.
+
+- ✅ **Easier setup** – No need to manually register tools
+
+```python
 websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="browser_use")
 
-websurfer_tools = websurfer.tools
+websurfer.run(
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    tools=websurfer.tools,
+    max_turns=2,
+    user_input=False,
+)
+```
+
+#### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method
+This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) and registering tools for execution.
+
+- ⚠️ **More setup required**
+- ⚠️ **Must manually register tools**
+
+```python
+websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="browser_use")
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
 # WebSurferAgent has a list of tools which are registered for LLM
 # We need to register the tools for execution with the UserProxyAgent
-for tool in websurfer_tools:
+for tool in websurfer.tools:
     tool.register_for_execution(user_proxy)
 
 user_proxy.initiate_chat(
@@ -103,6 +126,7 @@ user_proxy.initiate_chat(
 )
 ```
 
+### Output
 ```console
 user_proxy (to WebSurfer):
 
@@ -331,6 +355,7 @@ To integrate [`Crawl4AI`](https://github.com/unclecode/crawl4ai) with AG2, follo
 
    ```bash
    playwright install
+   playwright install-deps
    ```
 3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
     ```bash
@@ -353,7 +378,6 @@ nest_asyncio.apply()
 ```
 
 ### Configure WebSurferAgent with Crawl4AI
-The only difference from the previous example is that the `web_tool` parameter must be set to `crawl4ai` in order for the [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) to be used.
 
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -361,7 +385,38 @@ config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
 llm_config = {
     "config_list": config_list,
 }
+```
 
+The only difference from the previous example is that the `web_tool` parameter must be set to `crawl4ai` in order for the [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) to be used.
+
+
+As in previous example, there are two ways to start the chat session:
+
+#### **Recommended:** Using the [`run`](/docs/api-reference/autogen/ConversableAgent#run) Method
+
+The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplifies the process by eliminating the need for manual [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) creation.
+
+- ✅ **Easier setup** – No need to manually register tools
+
+```python
+# `web_tool` parameter must be set to `crawl4ai` in order for the `Crawl4AITool` to be used.
+websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="crawl4ai")
+
+websurfer.run(
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    tools=websurfer.tools,
+    max_turns=2,
+    user_input=False,
+)
+```
+
+#### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method
+This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) and registering tools for execution.
+
+- ⚠️ **More setup required**
+- ⚠️ **Must manually register tools**
+
+```python
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
 websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="crawl4ai")
 
@@ -378,6 +433,7 @@ user_proxy.initiate_chat(
 )
 ```
 
+### Output
 ```console
 user_proxy (to WebSurfer):
 
