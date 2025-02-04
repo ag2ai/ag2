@@ -111,13 +111,19 @@ class BrowserUseTool(Tool):
             model = llm_config["config_list"][0]["model"]
             api_type = llm_config["config_list"][0].get("api_type", "openai")
             api_key = llm_config["config_list"][0]["api_key"]
+            if api_type == "deepseek" or api_type == "azure" or api_type == "azure":
+                base_url = llm_config["config_list"][0].get("base_url")
+                # api_version = llm_config["config_list"][0].get("api_version")
+
         except (KeyError, TypeError):
             raise ValueError("llm_config must be a valid config dictionary.")
 
         if api_type == "openai":
             return ChatOpenAI(model=model, api_key=api_key)
+        elif api_type == "azure":
+            raise NotImplementedError("Azure API is not yet supported for browser use.")
         elif api_type == "deepseek":
-            return ChatOpenAI(model=model, api_key=api_key, base_url=llm_config["config_list"][0].get("base_url"))
+            return ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
         elif api_type == "anthropic":
             return ChatAnthropic(model=model, api_key=api_key)
         elif api_type == "google":
