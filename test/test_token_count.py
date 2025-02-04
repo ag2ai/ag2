@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,15 +8,9 @@
 
 import pytest
 
-try:
-    from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image  # noqa: F401
-
-    img_util_imported = True
-except ImportError:
-    img_util_imported = False
-
-
+from autogen.import_utils import skip_on_missing_imports
 from autogen.token_count_utils import (
+    _num_token_from_messages,
     count_token,
     get_max_token_limit,
     num_tokens_from_functions,
@@ -69,7 +63,33 @@ def test_num_tokens_from_functions(input_functions, expected_count):
     assert num_tokens_from_functions(input_functions) == expected_count
 
 
-@pytest.mark.skipif(not img_util_imported, reason="img_utils not imported")
+@pytest.mark.parametrize(
+    "model, expected_count",
+    [
+        ("mistral-", 524),
+        ("deepseek-chat", 524),
+        ("claude", 524),
+        ("gemini", 524),
+    ],
+)
+def test_num_token_from_messages(model: str, expected_count: int) -> None:
+    messages = [
+        {
+            "content": "You are a helpful AI assistant.\nSolve tasks using your coding and language skills.\nIn the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.\n    1. When you need to collect info, use the code to output the info you need, for example, browse or search the web, download/read a file, print the content of a webpage or a file, get the current date/time, check the operating system. After sufficient info is printed and the task is ready to be solved based on your language skill, you can solve the task by yourself.\n    2. When you need to perform some task with code, use the code to perform the task and output the result. Finish the task smartly.\nSolve the task step by step if you need to. If a plan is not provided, explain your plan first. Be clear which step uses code, and which step uses your language skill.\nWhen using code, you must indicate the script type in the code block. The user cannot provide any other feedback or perform any other action beyond executing the code you suggest. The user can't modify your code. So do not suggest incomplete code which requires users to modify. Don't use a code block if it's not intended to be executed by the user.\nIf you want the user to save the code in a file before executing it, put # filename: <filename> inside the code block as the first line. Don't include multiple code blocks in one response. Do not ask users to copy and paste the result. Instead, use 'print' function for the output when relevant. Check the execution result returned by the user.\nIf the result indicates there is an error, fix the error and output the code again. Suggest the full code instead of partial code or code changes. If the error can't be fixed or if the task is not solved even after the code is executed successfully, analyze the problem, revisit your assumption, collect additional info you need, and think of a different approach to try.\nWhen you find an answer, verify the answer carefully. Include verifiable evidence in your response if possible.\nReply \"TERMINATE\" in the end when everything is done.\n    ",
+            "role": "system",
+        },
+        {"content": "Hi", "role": "user", "name": "user_proxy"},
+        {
+            "content": "Hello! How can I assist you today? If you have a specific task or question, feel free to share it, and I'll do my best to help.",
+            "role": "assistant",
+            "name": "assistant",
+        },
+        {"content": "okkk", "role": "user", "name": "user_proxy"},
+    ]
+    assert _num_token_from_messages(messages=messages, model=model) == expected_count
+
+
+@skip_on_missing_imports("PIL", "unknown")
 def test_num_tokens_from_gpt_image():
     # mock num_tokens_from_gpt_image function
     base64_encoded_image = (

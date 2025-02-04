@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 import math
@@ -7,6 +7,8 @@ import re
 import warnings
 from typing import Optional
 
+from ...doc_utils import export_module
+from ...import_utils import optional_import_block
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
 
@@ -42,6 +44,7 @@ Option 4: Perform Y.
 """
 
 
+@export_module("autogen")
 class ThinkNode:
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
         """A node in a tree structure representing a step in the reasoning process.
@@ -163,15 +166,17 @@ class ThinkNode:
         return node
 
 
+@export_module("autogen")
 def visualize_tree(root: ThinkNode) -> None:
     """Visualize the tree of thoughts using graphviz.
 
     Args:
         root (ThinkNode): The root node of the tree.
     """
-    try:
+    with optional_import_block() as result:
         from graphviz import Digraph
-    except ImportError:
+
+    if not result.is_successful:
         print("Please install graphviz: pip install graphviz")
         return
 
@@ -296,6 +301,7 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
     return preference_pairs
 
 
+@export_module("autogen")
 class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
@@ -341,9 +347,9 @@ class ReasoningAgent(AssistantAgent):
                     exploration_constant (float): UCT exploration parameter (default: 1.41)
 
                 Example configs:
-                    {"method": "beam_search", "beam_size": 5, "max_depth": 4}
-                    {"method": "mcts", "nsim": 10, "exploration_constant": 2.0}
-                    {"method": "lats", "nsim": 5, "forest_size": 3}
+                    `{"method": "beam_search", "beam_size": 5, "max_depth": 4}`
+                    `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
+                    `{"method": "lats", "nsim": 5, "forest_size": 3}`
         """
         super().__init__(name=name, llm_config=llm_config, **kwargs)
         self._verbose = verbose

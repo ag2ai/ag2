@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,6 +17,7 @@ from autogen.agentchat.contrib.capabilities.transforms import (
     TextMessageContentName,
 )
 from autogen.agentchat.contrib.capabilities.transforms_util import count_text_tokens
+from autogen.import_utils import optional_import_block
 
 
 class _MockTextCompressor:
@@ -104,12 +105,13 @@ def get_messages_with_names_post_filtered() -> list[dict]:
 
 def get_text_compressors() -> list[TextCompressor]:
     compressors: list[TextCompressor] = [_MockTextCompressor()]
-    try:
+    with optional_import_block() as result:
+        import llmlingua  # noqa: F401
+
+    if result.is_successful:
         from autogen.agentchat.contrib.capabilities.text_compressors import LLMLingua
 
         compressors.append(LLMLingua())
-    except ImportError:
-        pass
 
     return compressors
 

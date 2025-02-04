@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -24,17 +24,21 @@ Resources:
 from __future__ import annotations
 
 import copy
+import math
 import os
 import time
 import warnings
 from typing import Any
 
-from cerebras.cloud.sdk import Cerebras, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 
-from autogen.oai.client_utils import should_hide_tools, validate_parameter
+from ..import_utils import optional_import_block, require_optional_import
+from .client_utils import should_hide_tools, validate_parameter
+
+with optional_import_block():
+    from cerebras.cloud.sdk import Cerebras, Stream
 
 CEREBRAS_PRICING_1K = {
     # Convert pricing per million to per thousand tokens.
@@ -111,6 +115,7 @@ class CerebrasClient:
 
         return cerebras_params
 
+    @require_optional_import("cerebras", "cerebras")
     def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
@@ -259,9 +264,9 @@ def calculate_cerebras_cost(input_tokens: int, output_tokens: int, model: str) -
 
     if model in CEREBRAS_PRICING_1K:
         input_cost_per_k, output_cost_per_k = CEREBRAS_PRICING_1K[model]
-        input_cost = (input_tokens / 1000) * input_cost_per_k
-        output_cost = (output_tokens / 1000) * output_cost_per_k
-        total = input_cost + output_cost
+        input_cost = math.ceil((input_tokens / 1000) * input_cost_per_k * 1e6) / 1e6
+        output_cost = math.ceil((output_tokens / 1000) * output_cost_per_k * 1e6) / 1e6
+        total = math.ceil((input_cost + output_cost) * 1e6) / 1e6
     else:
         warnings.warn(f"Cost calculation not available for model {model}", UserWarning)
 

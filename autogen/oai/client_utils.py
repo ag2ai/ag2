@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,7 +8,14 @@
 
 import logging
 import warnings
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
+
+
+@runtime_checkable
+class FormatterProtocol(Protocol):
+    """Structured Output classes with a format method"""
+
+    def format(self) -> str: ...
 
 
 def validate_parameter(
@@ -87,11 +94,10 @@ def validate_parameter(
             if allow_None:
                 warning += ", or can be None"
 
-    elif allowed_values:
+    elif allowed_values:  # noqa: SIM102
         # Check if the value matches any allowed values
-        if not (allow_None and param_value is None):
-            if param_value not in allowed_values:
-                warning = f"must be one of these values [{allowed_values}]{', or can be None' if allow_None else ''}"
+        if not (allow_None and param_value is None) and param_value not in allowed_values:
+            warning = f"must be one of these values [{allowed_values}]{', or can be None' if allow_None else ''}"
 
     # If we failed any checks, warn and set to default value
     if warning:

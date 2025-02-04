@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,34 +6,34 @@
 # SPDX-License-Identifier: MIT
 #!/usr/bin/env python3 -m pytest
 
+import copy
 import os
 import shutil
 import time
+from collections.abc import Generator
+from unittest.mock import MagicMock
 
 import pytest
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
-from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, OpenAIClient
 
 from ..conftest import Credentials
 
 TOOL_ENABLED = False
-try:
+
+with optional_import_block() as result:
     import openai
-    from openai import OpenAI  # noqa: F401
+    from openai import OpenAI
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
-    from openai.types.chat.chat_completion import ChatCompletionMessage  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     config_list = credentials_azure_gpt_35_turbo.config_list
     client = OpenAIWrapper(config_list=config_list)
@@ -52,7 +52,8 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip or not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
+@pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
+@skip_on_missing_imports(["openai"])
 def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(
@@ -85,7 +86,7 @@ def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}])
@@ -94,7 +95,7 @@ def test_chat_completion(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=")
@@ -103,7 +104,7 @@ def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 @pytest.mark.parametrize(
     "cache_seed",
     [
@@ -118,7 +119,7 @@ def test_cost(credentials_azure_gpt_35_turbo_instruct: Credentials, cache_seed):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     config_list = credentials_azure_gpt_35_turbo_instruct.config_list
     for config in config_list:
@@ -131,7 +132,7 @@ def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+3=", cache_seed=None)
@@ -163,7 +164,7 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
@@ -227,7 +228,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason="openai>=1 not installed")
+@skip_on_missing_imports(["openai"])
 def test_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of artificial intelligence."
@@ -290,12 +291,289 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
+class TestOpenAIClientBadRequestsError:
+    def test_is_agent_name_error_message(self) -> None:
+        assert OpenAIClient._is_agent_name_error_message("Invalid 'messages[0].something") is False
+        for i in range(5):
+            error_message = f"Invalid 'messages[{i}].name': string does not match pattern. Expected a string that matches the pattern ..."
+            assert OpenAIClient._is_agent_name_error_message(error_message) is True
+
+    @pytest.mark.parametrize(
+        "error_message, raise_new_error",
+        [
+            (
+                "Invalid 'messages[0].name': string does not match pattern. Expected a string that matches the pattern ...",
+                True,
+            ),
+            (
+                "Invalid 'messages[1].name': string does not match pattern. Expected a string that matches the pattern ...",
+                True,
+            ),
+            (
+                "Invalid 'messages[0].something': string does not match pattern. Expected a string that matches the pattern ...",
+                False,
+            ),
+        ],
+    )
+    def test_handle_openai_bad_request_error(self, error_message: str, raise_new_error: bool) -> None:
+        def raise_bad_request_error(error_message: str) -> None:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {
+                "error": {
+                    "message": error_message,
+                }
+            }
+            body = {"error": {"message": "Bad Request error occurred"}}
+            raise openai.BadRequestError("Bad Request", response=mock_response, body=body)
+
+        # Function raises BadRequestError
+        with pytest.raises(openai.BadRequestError):
+            raise_bad_request_error(error_message=error_message)
+
+        wrapped_raise_bad_request_error = OpenAIClient._handle_openai_bad_request_error(raise_bad_request_error)
+        if raise_new_error:
+            with pytest.raises(
+                ValueError,
+                match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
+            ):
+                wrapped_raise_bad_request_error(error_message=error_message)
+        else:
+            with pytest.raises(openai.BadRequestError):
+                wrapped_raise_bad_request_error(error_message=error_message)
+
+
+class TestDeepSeekPatch:
+    @pytest.mark.parametrize(
+        "messages, expected_messages",
+        [
+            (
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                ],
+            ),
+            (
+                [
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+                [
+                    {"role": "system", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "user", "content": "Help me with my problem."},
+                ],
+            ),
+        ],
+    )
+    def test_move_system_message_to_beginning(
+        self, messages: list[dict[str, str]], expected_messages: list[dict[str, str]]
+    ) -> None:
+        OpenAIClient._move_system_message_to_beginning(messages)
+        assert messages == expected_messages
+
+    @pytest.mark.parametrize(
+        "model, should_patch",
+        [
+            ("deepseek-reasoner", True),
+            ("deepseek", False),
+            ("something-else", False),
+        ],
+    )
+    def test_patch_messages_for_deepseek_reasoner(self, model: str, should_patch: bool) -> None:
+        kwargs = {
+            "messages": [
+                {"role": "user", "content": "You are an AG2 Agent."},
+                {"role": "system", "content": "You are an AG2 Agent System."},
+                {"role": "user", "content": "Help me with my problem."},
+            ],
+            "model": model,
+        }
+
+        if should_patch:
+            expected_kwargs = {
+                "messages": [
+                    {"role": "system", "content": "You are an AG2 Agent System."},
+                    {"role": "user", "content": "You are an AG2 Agent."},
+                    {"role": "assistant", "content": "Help me with my problem."},
+                    {"role": "user", "content": "continue"},
+                ],
+                "model": "deepseek-reasoner",
+            }
+        else:
+            expected_kwargs = copy.deepcopy(kwargs)
+
+        kwargs = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
+        assert kwargs == expected_kwargs
+
+
+class TestO1:
+    @pytest.fixture
+    def mock_oai_client(self, mock_credentials: Credentials) -> OpenAIClient:
+        config = mock_credentials.config_list[0]
+        api_key = config["api_key"]
+        return OpenAIClient(OpenAI(api_key=api_key), None)
+
+    @pytest.fixture
+    def o1_mini_client(self, credentials_o1_mini: Credentials) -> Generator[OpenAIWrapper, None, None]:
+        config_list = credentials_o1_mini.config_list
+        return OpenAIWrapper(config_list=config_list, cache_seed=42)
+
+    @pytest.fixture
+    def o1_client(self, credentials_o1: Credentials) -> Generator[OpenAIWrapper, None, None]:
+        config_list = credentials_o1.config_list
+        return OpenAIWrapper(config_list=config_list, cache_seed=42)
+
+    def test_reasoning_remove_unsupported_params(self, mock_oai_client: OpenAIClient) -> None:
+        """Test that unsupported parameters are removed with appropriate warnings"""
+        test_params = {
+            "model": "o1-mini",
+            "temperature": 0.7,
+            "frequency_penalty": 1.0,
+            "presence_penalty": 0.5,
+            "top_p": 0.9,
+            "logprobs": 5,
+            "top_logprobs": 3,
+            "logit_bias": {1: 2},
+            "valid_param": "keep_me",
+        }
+
+        with pytest.warns(UserWarning) as warning_records:
+            mock_oai_client._process_reasoning_model_params(test_params)
+
+        # Verify all unsupported params were removed
+        assert all(
+            param not in test_params
+            for param in [
+                "temperature",
+                "frequency_penalty",
+                "presence_penalty",
+                "top_p",
+                "logprobs",
+                "top_logprobs",
+                "logit_bias",
+            ]
+        )
+
+        # Verify valid params were kept
+        assert "valid_param" in test_params
+        assert test_params["valid_param"] == "keep_me"
+
+        # Verify appropriate warnings were raised
+        assert len(warning_records) == 7  # One for each unsupported param
+
+    def test_oai_reasoning_max_tokens_replacement(self, mock_oai_client: OpenAIClient) -> None:
+        """Test that max_tokens is replaced with max_completion_tokens"""
+        test_params = {"model": "o1-mini", "max_tokens": 100}
+
+        mock_oai_client._process_reasoning_model_params(test_params)
+
+        assert "max_tokens" not in test_params
+        assert "max_completion_tokens" in test_params
+        assert test_params["max_completion_tokens"] == 100
+
+    @pytest.mark.parametrize(
+        ["model_name", "should_merge"],
+        [
+            ("o1-mini", True),  # TODO: Change to False when o1-mini points to a newer model, e.g. 2024-12-...
+            ("o1-preview", True),  # TODO: Change to False when o1-preview points to a newer model, e.g. 2024-12-...
+            ("o1-mini-2024-09-12", True),
+            ("o1-preview-2024-09-12", True),
+            ("o1", False),
+            ("o1-2024-12-17", False),
+        ],
+    )
+    def test_oai_reasoning_system_message_handling(
+        self, model_name: str, should_merge: str, mock_oai_client: OpenAIClient
+    ) -> None:
+        """Test system message handling for different model types"""
+        system_msg = "You are an AG2 Agent."
+        user_msg = "Help me with my problem."
+        test_params = {
+            "model": model_name,
+            "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": user_msg}],
+        }
+
+        mock_oai_client._process_reasoning_model_params(test_params)
+
+        assert len(test_params["messages"]) == 2
+        if should_merge:
+            # Check system message was merged into user message
+            assert test_params["messages"][0]["content"] == f"System message: {system_msg}"
+            assert test_params["messages"][0]["role"] == "user"
+        else:
+            # Check messages remained unchanged
+            assert test_params["messages"][0]["content"] == system_msg
+            assert test_params["messages"][0]["role"] == "system"
+
+    def _test_completition(self, client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        assert isinstance(client, OpenAIWrapper)
+        response = client.create(messages=messages, cache_seed=123)
+
+        assert response
+        print(f"{response=}")
+
+        text_or_completion_object = client.extract_text_or_completion_object(response)
+        print(f"{text_or_completion_object=}")
+        assert text_or_completion_object
+        assert isinstance(text_or_completion_object[0], str)
+        assert "4" in text_or_completion_object[0]
+
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            [{"role": "system", "content": "You are an assistant"}, {"role": "user", "content": "2+2="}],
+            [{"role": "user", "content": "2+2="}],
+        ],
+    )
+    @pytest.mark.openai
+    def test_completition_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completition(o1_mini_client, messages)
+
+    @pytest.mark.parametrize(
+        "messages",
+        [
+            [{"role": "system", "content": "You are an assistant"}, {"role": "user", "content": "2+2="}],
+            [{"role": "user", "content": "2+2="}],
+        ],
+    )
+    @pytest.mark.openai
+    @pytest.mark.skip(reason="Wait for o1 to be available in CI")
+    def test_completition_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completition(o1_client, messages)
+
+
 if __name__ == "__main__":
+    pass
     # test_aoai_chat_completion()
     # test_oai_tool_calling_extraction()
     # test_chat_completion()
-    test_completion()
-    # # test_cost()
+    # test_completion()
+    # test_cost()
     # test_usage_summary()
     # test_legacy_cache()
     # test_cache()

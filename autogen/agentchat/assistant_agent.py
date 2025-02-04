@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,11 +6,12 @@
 # SPDX-License-Identifier: MIT
 from typing import Callable, Literal, Optional, Union
 
-from autogen.runtime_logging import log_new_agent, logging_enabled
-
+from ..doc_utils import export_module
+from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
 
+@export_module("autogen")
 class AssistantAgent(ConversableAgent):
     """(In preview) Assistant agent, designed to solve a task with LLM.
 
@@ -53,7 +54,7 @@ Reply "TERMINATE" in the end when everything is done.
         system_message (str): system message for the ChatCompletion inference.
             Please override this attribute if you want to reprogram the agent.
         llm_config (dict or False or None): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create)
             for available options.
         is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.
@@ -62,7 +63,7 @@ Reply "TERMINATE" in the end when everything is done.
             default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
             The limit only plays a role when human_input_mode is not "ALWAYS".
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name,
@@ -79,6 +80,5 @@ Reply "TERMINATE" in the end when everything is done.
 
         # Update the provided description if None, and we are using the default system_message,
         # then use the default description.
-        if description is None:
-            if system_message == self.DEFAULT_SYSTEM_MESSAGE:
-                self.description = self.DEFAULT_DESCRIPTION
+        if description is None and system_message == self.DEFAULT_SYSTEM_MESSAGE:
+            self.description = self.DEFAULT_DESCRIPTION

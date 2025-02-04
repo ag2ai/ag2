@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,7 +15,10 @@ from tempfile import TemporaryDirectory
 import pytest
 import requests
 
-BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
+from autogen.browser_utils import SimpleTextBrowser
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+
+BLOG_POST_URL = "https://docs.ag2.ai/docs/blog/2023-04-21-LLM-tuning-math"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
 BLOG_POST_STRING = "Large language models (LLMs) are powerful tools that can generate natural language texts for various applications, such as chatbots, summarization, translation, and more. GPT-4 is currently the state of the art LLM in the world. Is model selection irrelevant? What about inference parameters?"
 
@@ -33,12 +36,10 @@ BING_QUERY = "Microsoft"
 BING_TITLE = f"{BING_QUERY} - Search"
 BING_STRING = f"A Bing search for '{BING_QUERY}' found"
 
-try:
-    from autogen.browser_utils import SimpleTextBrowser
-except ImportError:
-    skip_all = True
-else:
-    skip_all = False
+
+with optional_import_block() as result:
+    import requests
+
 
 try:
     BING_API_KEY = os.environ["BING_API_KEY"]
@@ -63,10 +64,7 @@ def downloads_folder():
         yield downloads_folder
 
 
-@pytest.mark.skipif(
-    skip_all,
-    reason="do not run if dependency is not installed",
-)
+@skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_simple_text_browser(downloads_folder: str):
     # Instantiate the browser
     user_agent = "python-requests/" + requests.__version__
@@ -152,9 +150,10 @@ def test_simple_text_browser(downloads_folder: str):
 
 
 @pytest.mark.skipif(
-    skip_all or skip_bing,
+    skip_bing,
     reason="do not run bing tests if key is missing",
 )
+@skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_bing_search():
     # Instantiate the browser
     user_agent = "python-requests/" + requests.__version__

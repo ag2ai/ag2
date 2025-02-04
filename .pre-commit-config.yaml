@@ -8,7 +8,7 @@ ci:
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
     - id: check-added-large-files
     - id: check-ast
@@ -27,6 +27,17 @@ repos:
     - id: trailing-whitespace
     - id: end-of-file-fixer
     - id: no-commit-to-branch
+  - repo: local
+    hooks:
+      - id: build-setup-scripts
+        name: build setup scripts
+        entry: "scripts/pre-commit-build-setup-files.sh"
+        language: python
+        #        language_version: python3.9
+        types: [python]
+        require_serial: true
+        verbose: true
+        additional_dependencies: ['jinja2', 'toml', 'ruff']
   - repo: local
     hooks:
       - id: lint
@@ -49,12 +60,13 @@ repos:
               website/static/img/ag2.svg |
               website/yarn.lock |
               website/docs/tutorial/code-executors.ipynb |
-              website/docs/topics/code-execution/custom-executor.ipynb |
-              website/docs/topics/non-openai-models/cloud-gemini.ipynb |
+              website/user-guide/code-execution/custom-executor.ipynb |
+              website/user-guide/non-openai-models/cloud-gemini.ipynb |
               notebook/.* |
               test/agentchat/contrib/graph_rag/trip_planner_data/.* |
               test/agentchat/contrib/graph_rag/paul_graham_essay.txt |
-              website/package-lock.json
+              website/package-lock.json |
+              website/docs/use-cases/reference-agents/captainagent.mdx |
 
             )$
   # See https://jaredkhan.com/blog/mypy-pre-commit
@@ -65,7 +77,7 @@ repos:
       entry: "./scripts/pre-commit-mypy-run.sh"
       language: python
       # use your preferred Python version
-      # language_version: python3.8
+      # language_version: python3.9
       additional_dependencies: []
       types: [python]
       # use require_serial so that script

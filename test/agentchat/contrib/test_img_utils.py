@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,27 +11,27 @@ import os
 import unittest
 from unittest.mock import patch
 
-import pytest
+import numpy as np
 import requests
 
-try:
-    import numpy as np
+from autogen.agentchat.contrib.img_utils import (
+    convert_base64_to_data_uri,
+    extract_img_paths,
+    get_image_data,
+    get_pil_image,
+    gpt4v_formatter,
+    llava_formatter,
+    message_formatter_pil_to_b64,
+    num_tokens_from_gpt_image,
+)
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+
+with optional_import_block() as result:
     from PIL import Image
 
-    from autogen.agentchat.contrib.img_utils import (
-        convert_base64_to_data_uri,
-        extract_img_paths,
-        get_image_data,
-        get_pil_image,
-        gpt4v_formatter,
-        llava_formatter,
-        message_formatter_pil_to_b64,
-        num_tokens_from_gpt_image,
-    )
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+if result.is_successful:
+    raw_pil_image = Image.new("RGB", (10, 10), color="red")
 
 
 base64_encoded_image = (
@@ -45,13 +45,8 @@ raw_encoded_image = (
     "//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
 )
 
-if skip:
-    raw_pil_image = None
-else:
-    raw_pil_image = Image.new("RGB", (10, 10), color="red")
 
-
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 class TestGetPilImage(unittest.TestCase):
     def test_read_local_file(self):
         # Create a small red image for testing
@@ -73,7 +68,7 @@ def are_b64_images_equal(x: str, y: str):
     return (np.array(img1) == np.array(img2)).all()
 
 
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 class TestGetImageData(unittest.TestCase):
     def test_http_image(self):
         with patch("requests.get") as mock_get:
@@ -105,7 +100,7 @@ class TestGetImageData(unittest.TestCase):
         os.remove(temp_file)
 
 
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 class TestLlavaFormater(unittest.TestCase):
     def test_no_images(self):
         """Test the llava_formatter function with a prompt containing no images."""
@@ -137,7 +132,7 @@ class TestLlavaFormater(unittest.TestCase):
         self.assertEqual(result, expected_output)
 
 
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 class TestGpt4vFormatter(unittest.TestCase):
     def test_no_images(self):
         """Test the gpt4v_formatter function with a prompt containing no images."""
@@ -207,7 +202,7 @@ class TestGpt4vFormatter(unittest.TestCase):
         self.assertEqual(result, expected_output)
 
 
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 class TestExtractImgPaths(unittest.TestCase):
     def test_no_images(self):
         """Test the extract_img_paths function with a paragraph containing no images."""
@@ -240,7 +235,7 @@ class TestExtractImgPaths(unittest.TestCase):
         self.assertEqual(result, expected_output)
 
 
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["PIL"], "unknown")
 class MessageFormatterPILtoB64Test(unittest.TestCase):
     def test_formatting(self):
         messages = [

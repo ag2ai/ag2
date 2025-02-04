@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,26 +10,22 @@ import urllib.parse
 from typing import Callable, Optional, Union
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
+from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
-try:
+with optional_import_block():
     import pgvector  # noqa: F401
-    from pgvector.psycopg import register_vector
-except ImportError:
-    raise ImportError("Please install pgvector: `pip install pgvector`")
-
-try:
     import psycopg
-except ImportError:
-    raise ImportError("Please install pgvector: `pip install psycopg`")
+    from pgvector.psycopg import register_vector
+    from sentence_transformers import SentenceTransformer
 
 PGVECTOR_MAX_BATCH_SIZE = os.environ.get("PGVECTOR_MAX_BATCH_SIZE", 40000)
 logger = get_logger(__name__)
 
 
+@require_optional_import(["psycopg", "sentence_transformers"], "retrievechat-pgvector")
 class Collection:
     """A Collection object for PGVector.
 
@@ -543,13 +539,14 @@ class Collection:
         cursor.close()
 
 
+@require_optional_import(["pgvector", "psycopg", "sentence_transformers"], "retrievechat-pgvector")
 class PGVectorDB(VectorDB):
     """A vector database that uses PGVector as the backend."""
 
     def __init__(
         self,
         *,
-        conn: Optional[psycopg.Connection] = None,
+        conn: Optional["psycopg.Connection"] = None,
         connection_string: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[Union[int, str]] = None,
@@ -606,7 +603,7 @@ class PGVectorDB(VectorDB):
 
     def establish_connection(
         self,
-        conn: Optional[psycopg.Connection] = None,
+        conn: Optional["psycopg.Connection"] = None,
         connection_string: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[Union[int, str]] = None,
@@ -614,7 +611,7 @@ class PGVectorDB(VectorDB):
         username: Optional[str] = None,
         password: Optional[str] = None,
         connect_timeout: Optional[int] = 10,
-    ) -> psycopg.Connection:
+    ) -> "psycopg.Connection":
         """Establishes a connection to a PostgreSQL database using psycopg.
 
         Args:
@@ -836,10 +833,7 @@ class PGVectorDB(VectorDB):
             embeddings = None
         else:
             embeddings = [doc.get("embedding") for doc in docs]
-        if docs[0].get("metadata") is None:
-            metadatas = None
-        else:
-            metadatas = [doc.get("metadata") for doc in docs]
+        metadatas = None if docs[0].get("metadata") is None else [doc.get("metadata") for doc in docs]
 
         self._batch_insert(collection, embeddings, ids, metadatas, documents, upsert)
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,21 +9,18 @@ import sys
 
 import pytest
 
+from autogen.agentchat.contrib.vectordb.chromadb import ChromaVectorDB
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-try:
+with optional_import_block() as result:
     import chromadb
     import chromadb.errors
     import sentence_transformers  # noqa: F401
 
-    from autogen.agentchat.contrib.vectordb.chromadb import ChromaVectorDB
-except ImportError:
-    skip = True
-else:
-    skip = False
 
-
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["chromadb", "sentence_transformers"], "retrievechat")
 def test_chromadb():
     # test create collection
     db = ChromaVectorDB(path=".db")

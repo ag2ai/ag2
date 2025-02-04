@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,20 +11,14 @@ import sys
 
 import pytest
 
-try:
-    import openai  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
-
+from autogen.import_utils import skip_on_missing_imports
 
 here = os.path.abspath(os.path.dirname(__file__))
 
 
 def run_notebook(input_nb, output_nb="executed_openai_notebook.ipynb", save=False):
     import nbformat
-    from nbconvert.preprocessors import CellExecutionError, ExecutePreprocessor
+    from nbconvert.preprocessors import ExecutePreprocessor
 
     try:
         nb_loc = os.path.join(here, os.pardir, "notebook")
@@ -44,8 +38,6 @@ def run_notebook(input_nb, output_nb="executed_openai_notebook.ipynb", save=Fals
                             nb_output_file.write(output["text"].strip() + "\n")
                         elif "data" in output and "text/plain" in output["data"]:
                             nb_output_file.write(output["data"]["text/plain"].strip() + "\n")
-    except CellExecutionError:
-        raise
     finally:
         if save:
             with open(os.path.join(here, output_nb), "w", encoding="utf-8") as nb_executed_file:
@@ -54,90 +46,100 @@ def run_notebook(input_nb, output_nb="executed_openai_notebook.ipynb", save=Fals
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.13"),
-    reason="do not run if openai is not installed or py!=3.13",
+    not sys.version.startswith("3.13"),
+    reason="do not run if py!=3.13",
 )
+@skip_on_missing_imports(["openai"])
 def test_agentchat_auto_feedback_from_code(save=False):
     run_notebook("agentchat_auto_feedback_from_code_execution.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.11"),
-    reason="do not run if openai is not installed or py!=3.11",
+    not sys.version.startswith("3.11"),
+    reason="do not run if py!=3.11",
 )
+@skip_on_missing_imports(["openai"])
 def _test_oai_completion(save=False):
     run_notebook("oai_completion.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.12"),
-    reason="do not run if openai is not installed or py!=3.12",
+    not sys.version.startswith("3.12"),
+    reason="do not run if py!=3.12",
 )
+@skip_on_missing_imports(["openai"])
 def test_agentchat_function_call(save=False):
     run_notebook("agentchat_function_call.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.10"),
-    reason="do not run if openai is not installed or py!=3.10",
+    not sys.version.startswith("3.10"),
+    reason="do not run if py!=3.10",
 )
+@skip_on_missing_imports(["openai"])
 def test_agentchat_function_call_currency_calculator(save=False):
     run_notebook("agentchat_function_call_currency_calculator.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.13"),
-    reason="do not run if openai is not installed or py!=3.13",
+    not sys.version.startswith("3.13"),
+    reason="do not run if py!=3.13",
 )
+@skip_on_missing_imports(["openai"])
 def test_agentchat_function_call_async(save=False):
     run_notebook("agentchat_function_call_async.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.12"),
-    reason="do not run if openai is not installed or py!=3.12",
+    not sys.version.startswith("3.12"),
+    reason="do not run if py!=3.12",
 )
+@skip_on_missing_imports(["openai"])
 def _test_agentchat_MathChat(save=False):  # noqa: N802
     run_notebook("agentchat_MathChat.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.10"),
-    reason="do not run if openai is not installed or py!=3.10",
+    not sys.version.startswith("3.10"),
+    reason="do not run if py!=3.10",
 )
+@skip_on_missing_imports(["openai"])
 def _test_oai_chatgpt_gpt4(save=False):
     run_notebook("oai_chatgpt_gpt4.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.12"),
-    reason="do not run if openai is not installed or py!=3.12",
+    not sys.version.startswith("3.12"),
+    reason="do not run if py!=3.12",
 )
+@skip_on_missing_imports(["openai"])
 def test_agentchat_groupchat_finite_state_machine(save=False):
     run_notebook("agentchat_groupchat_finite_state_machine.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.11"),
-    reason="do not run if openai is not installed or py!=3.11",
+    not sys.version.startswith("3.11"),
+    reason="do not run if py!=3.11",
 )
+@skip_on_missing_imports(["openai"])
 def test_agentchat_cost_token_tracking(save=False):
     run_notebook("agentchat_cost_token_tracking.ipynb", save=save)
 
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    skip or not sys.version.startswith("3.11"),
-    reason="do not run if openai is not installed or py!=3.11",
+    not sys.version.startswith("3.11"),
+    reason="do not run if py!=3.11",
 )
+@skip_on_missing_imports(["openai"])
 def test_agentchat_groupchat_stateflow(save=False):
     run_notebook("agentchat_groupchat_stateflow.ipynb", save=save)
 

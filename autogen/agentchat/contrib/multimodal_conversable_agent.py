@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,15 +7,13 @@
 import copy
 from typing import Optional, Union
 
-from autogen import OpenAIWrapper
-from autogen.agentchat import Agent, ConversableAgent
-from autogen.agentchat.contrib.img_utils import (
+from ... import OpenAIWrapper
+from ...code_utils import content_str
+from .. import Agent, ConversableAgent
+from ..contrib.img_utils import (
     gpt4v_formatter,
     message_formatter_pil_to_b64,
 )
-from autogen.code_utils import content_str
-
-from ..._pydantic import model_dump
 
 DEFAULT_LMM_SYS_MSG = """You are a helpful AI assistant."""
 DEFAULT_MODEL = "gpt-4-vision-preview"
@@ -39,7 +37,7 @@ class MultimodalConversableAgent(ConversableAgent):
         system_message (str): system message for the OpenAIWrapper inference.
             Please override this attribute if you want to reprogram the agent.
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](../conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name,
@@ -123,5 +121,5 @@ class MultimodalConversableAgent(ConversableAgent):
         # TODO: line 301, line 271 is converting messages to dict. Can be removed after ChatCompletionMessage_to_dict is merged.
         extracted_response = client.extract_text_or_completion_object(response)[0]
         if not isinstance(extracted_response, str):
-            extracted_response = model_dump(extracted_response)
+            extracted_response = extracted_response.model_dump()
         return True, extracted_response

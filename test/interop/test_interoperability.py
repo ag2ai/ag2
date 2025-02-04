@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,12 +7,18 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.interop import Interoperability
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
+with optional_import_block():
+    from crewai_tools import FileReadTool
 
+
+@pytest.mark.interop
 class TestInteroperability:
+    @skip_on_missing_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
 
@@ -28,12 +34,9 @@ class TestInteroperability:
         if sys.version_info >= (3, 13):
             assert actual == ["langchain", "pydanticai"]
 
-    @pytest.mark.skipif(
-        sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
-    )
+    @skip_on_missing_imports("crewai_tools", "interop-crewai")
     def test_crewai(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
-        from crewai_tools import FileReadTool
 
         crewai_tool = FileReadTool()
 
@@ -47,7 +50,7 @@ class TestInteroperability:
             assert tool.name == "Read_a_file_s_content"
             assert (
                 tool.description
-                == "A tool that can be used to read None's content. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+                == "A tool that reads the content of a file. To use this tool, provide a 'file_path' parameter with the path to the file you want to read. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
             model_type = crewai_tool.args_schema
@@ -56,9 +59,7 @@ class TestInteroperability:
 
             assert tool.func(args=args) == "Hello, World!"
 
-    @pytest.mark.skipif(
-        sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
-    )
-    @pytest.mark.skip(reason="This test is not yet implemented")
+    @pytest.mark.skip("This test is not yet implemented")
+    @skip_on_missing_imports("langchain", "interop-langchain")
     def test_langchain(self) -> None:
         raise NotImplementedError("This test is not yet implemented")

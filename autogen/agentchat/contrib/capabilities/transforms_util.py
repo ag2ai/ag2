@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,10 +7,10 @@
 from collections.abc import Hashable
 from typing import Any, Optional
 
-from autogen import token_count_utils
-from autogen.cache.abstract_cache_base import AbstractCache
-from autogen.oai.openai_utils import filter_config
-from autogen.types import MessageContentType
+from .... import token_count_utils
+from ....cache.abstract_cache_base import AbstractCache
+from ....oai.openai_utils import filter_config
+from ....types import MessageContentType
 
 
 def cache_key(content: MessageContentType, *args: Hashable) -> str:

@@ -1,15 +1,15 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from asyncio import sleep
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from asyncer import create_task_group
 
-from autogen.agentchat.realtime_agent import RealtimeObserver
+from autogen.agentchat.realtime.experimental import RealtimeObserver
+from autogen.agentchat.realtime.experimental.realtime_events import RealtimeEvent
 
 
 class MyObserver(RealtimeObserver):
@@ -32,7 +32,7 @@ class MyObserver(RealtimeObserver):
             print("stopped", flush=True)
             self.mock("stopped")
 
-    async def on_event(self, event: dict[str, Any]) -> None:
+    async def on_event(self, event: RealtimeEvent) -> None:
         pass
 
 

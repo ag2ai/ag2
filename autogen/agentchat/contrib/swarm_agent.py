@@ -1,9 +1,8 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 import copy
 import json
-import re
 import warnings
 from dataclasses import dataclass
 from enum import Enum
@@ -13,8 +12,8 @@ from typing import Any, Callable, Optional, Union
 
 from pydantic import BaseModel
 
-from autogen.oai import OpenAIWrapper
-
+from ...doc_utils import export_module
+from ...oai import OpenAIWrapper
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
@@ -58,6 +57,7 @@ class ContextStr:
 __TOOL_EXECUTOR_NAME__ = "_Swarm_Tool_Executor"
 
 
+@export_module("autogen")
 class AfterWorkOption(Enum):
     TERMINATE = "TERMINATE"
     REVERT_TO_USER = "REVERT_TO_USER"
@@ -66,7 +66,8 @@ class AfterWorkOption(Enum):
 
 
 @dataclass
-class AfterWork:
+@export_module("autogen")
+class AfterWork:  # noqa: N801
     """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
 
     Args:
@@ -88,7 +89,6 @@ class AfterWork:
 
         # next_agent_selection_msg is only valid for when agent is AfterWorkOption.SWARM_MANAGER, but isn't mandatory
         if self.next_agent_selection_msg is not None:
-
             if not isinstance(self.next_agent_selection_msg, (str, ContextStr, Callable)):
                 raise ValueError("next_agent_selection_msg must be a string, ContextStr, or a Callable")
 
@@ -113,13 +113,14 @@ class AFTER_WORK(AfterWork):  # noqa: N801
 
 
 @dataclass
-class OnCondition:
+@export_module("autogen")
+class OnCondition:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats
 
     Args:
         target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
-            Swarm Nested chat documentation: https://docs.ag2.ai/docs/topics/swarm#registering-handoffs-to-a-nested-chat
+            Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
         condition (Union[str, ContextStr, Callable]): The condition for transitioning to the target agent, evaluated by the LLM.
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
@@ -139,17 +140,15 @@ class OnCondition:
     def __post_init__(self):
         # Ensure valid types
         if self.target is not None:
-            assert isinstance(self.target, ConversableAgent) or isinstance(self.target, dict), (
-                "'target' must be a ConversableAgent or a dict"
-            )
+            assert isinstance(self.target, (ConversableAgent, dict)), "'target' must be a ConversableAgent or a dict"
 
         # Ensure they have a condition
         if isinstance(self.condition, str):
             assert self.condition.strip(), "'condition' must be a non-empty string"
         else:
-            assert isinstance(
-                self.condition, (ContextStr, Callable)
-            ), "'condition' must be a string, ContextStr, or callable"
+            assert isinstance(self.condition, (ContextStr, Callable)), (
+                "'condition' must be a string, ContextStr, or callable"
+            )
 
         if self.available is not None:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
@@ -221,9 +220,8 @@ def _prepare_swarm_agents(
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
     for agent in agents:
-        if agent._swarm_after_work is not None:
-            if isinstance(agent._swarm_after_work.agent, ConversableAgent):
-                assert agent._swarm_after_work.agent in agents, "Agent in hand-off must be in the agents list"
+        if agent._swarm_after_work is not None and isinstance(agent._swarm_after_work.agent, ConversableAgent):
+            assert agent._swarm_after_work.agent in agents, "Agent in hand-off must be in the agents list"
 
     tool_execution = ConversableAgent(
         name=__TOOL_EXECUTOR_NAME__,
@@ -309,7 +307,7 @@ def _process_initial_messages(
     temp_user_proxy = None
     temp_user_list = []
     if len(messages) == 1 and "name" not in messages[0] and not user_agent:
-        temp_user_proxy = UserProxyAgent(name="_User")
+        temp_user_proxy = UserProxyAgent(name="_User", code_execution_config=False)
         last_agent = temp_user_proxy
         temp_user_list.append(temp_user_proxy)
     else:
@@ -435,24 +433,31 @@ def _determine_next_agent(
     if "tool_calls" in groupchat.messages[-1]:
         return tool_execution
 
+    after_work_condition = None
+
     if tool_execution._swarm_next_agent is not None:
         next_agent = tool_execution._swarm_next_agent
         tool_execution._swarm_next_agent = None
 
-        # Check for string, access agent from group chat.
+        if not isinstance(next_agent, AfterWorkOption):
+            # Check for string, access agent from group chat.
 
-        if isinstance(next_agent, str):
-            if next_agent in swarm_agent_names:
-                next_agent = groupchat.agent_by_name(name=next_agent)
-            else:
-                raise ValueError(f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm.")
+            if isinstance(next_agent, str):
+                if next_agent in swarm_agent_names:
+                    next_agent = groupchat.agent_by_name(name=next_agent)
+                else:
+                    raise ValueError(
+                        f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm."
+                    )
 
-        return next_agent
+            return next_agent
+        else:
+            after_work_condition = next_agent
 
     # get the last swarm agent
     last_swarm_speaker = None
     for message in reversed(groupchat.messages):
-        if "name" in message and message["name"] in swarm_agent_names:
+        if "name" in message and message["name"] in swarm_agent_names and message["name"] != __TOOL_EXECUTOR_NAME__:
             agent = groupchat.agent_by_name(name=message["name"])
             if isinstance(agent, ConversableAgent):
                 last_swarm_speaker = agent
@@ -461,7 +466,9 @@ def _determine_next_agent(
         raise ValueError("No swarm agent found in the message history")
 
     # If the user last spoke, return to the agent prior
-    if (user_agent and last_speaker == user_agent) or groupchat.messages[-1]["role"] == "tool":
+    if after_work_condition is None and (
+        (user_agent and last_speaker == user_agent) or groupchat.messages[-1]["role"] == "tool"
+    ):
         return last_swarm_speaker
 
     after_work_next_agent_selection_msg = None
@@ -474,9 +481,9 @@ def _determine_next_agent(
         after_work_next_agent_selection_msg = after_work_condition.next_agent_selection_msg
         after_work_condition = after_work_condition.agent
 
-    # Evaluate callable after_work
-    if isinstance(after_work_condition, Callable):
-        after_work_condition = after_work_condition(last_speaker, groupchat.messages, groupchat)
+        # Evaluate callable after_work
+        if isinstance(after_work_condition, Callable):
+            after_work_condition = after_work_condition(last_swarm_speaker, groupchat.messages, groupchat)
 
     if isinstance(after_work_condition, str):  # Agent name in a string
         if after_work_condition in swarm_agent_names:
@@ -491,7 +498,7 @@ def _determine_next_agent(
         elif after_work_condition == AfterWorkOption.REVERT_TO_USER:
             return None if user_agent is None else user_agent
         elif after_work_condition == AfterWorkOption.STAY:
-            return last_speaker
+            return last_swarm_speaker
         elif after_work_condition == AfterWorkOption.SWARM_MANAGER:
             _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_next_agent_selection_msg)
             return "auto"
@@ -571,6 +578,7 @@ def _create_swarm_manager(
     return manager
 
 
+@export_module("autogen")
 def initiate_swarm_chat(
     initial_agent: ConversableAgent,
     messages: Union[list[dict[str, Any]], str],
@@ -652,6 +660,7 @@ def initiate_swarm_chat(
     return chat_result, context_variables, manager.last_speaker
 
 
+@export_module("autogen")
 async def a_initiate_swarm_chat(
     initial_agent: ConversableAgent,
     messages: Union[list[dict[str, Any]], str],
@@ -738,7 +747,7 @@ class SwarmResult(BaseModel):
 
     Args:
         values (str): The result values as a string.
-        agent (ConversableAgent): The agent instance, if applicable.
+        agent (ConversableAgent, str): The agent instance or agent name as a string, if applicable.
         context_variables (dict): A dictionary of context variables.
     """
 

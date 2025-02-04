@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,11 +11,13 @@ from typing import Any, Literal, Optional, Protocol, TypedDict, Union, runtime_c
 
 from pydantic import BaseModel, Field
 
+from ..doc_utils import export_module
 from ..types import UserMessageImageContentPart, UserMessageTextContentPart
 
 __all__ = ("CodeBlock", "CodeExecutionConfig", "CodeExecutor", "CodeExtractor", "CodeResult")
 
 
+@export_module("autogen.coding")
 class CodeBlock(BaseModel):
     """(Experimental) A class that represents a code block."""
 
@@ -24,6 +26,7 @@ class CodeBlock(BaseModel):
     language: str = Field(description="The language of the code.")
 
 
+@export_module("autogen.coding")
 class CodeResult(BaseModel):
     """(Experimental) A class that represents the result of a code execution."""
 
@@ -32,6 +35,7 @@ class CodeResult(BaseModel):
     output: str = Field(description="The output of the code execution.")
 
 
+@export_module("autogen.coding")
 class CodeExtractor(Protocol):
     """(Experimental) A code extractor class that extracts code blocks from a message."""
 
@@ -50,6 +54,7 @@ class CodeExtractor(Protocol):
 
 
 @runtime_checkable
+@export_module("autogen.coding")
 class CodeExecutor(Protocol):
     """(Experimental) A code executor class that executes code blocks and returns the result."""
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -73,22 +73,27 @@ from __future__ import annotations
 import inspect
 import json
 import os
+import re
 import time
 import warnings
-from typing import Any
+from typing import Any, Optional, Type
 
-from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
-from anthropic import __version__ as anthropic_version
-from anthropic.types import TextBlock, ToolUseBlock
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
-from autogen.oai.client_utils import validate_parameter
+from ..import_utils import optional_import_block, require_optional_import
+from .client_utils import FormatterProtocol, validate_parameter
 
-TOOL_ENABLED = anthropic_version >= "0.23.1"
-if TOOL_ENABLED:
-    pass
+with optional_import_block():
+    from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
+    from anthropic import __version__ as anthropic_version
+    from anthropic.types import Message, TextBlock, ToolUseBlock
+
+    TOOL_ENABLED = anthropic_version >= "0.23.1"
+    if TOOL_ENABLED:
+        pass
 
 
 ANTHROPIC_PRICING_1k = {
@@ -104,6 +109,7 @@ ANTHROPIC_PRICING_1k = {
 }
 
 
+@require_optional_import("anthropic", "anthropic")
 class AnthropicClient:
     def __init__(self, **kwargs: Any):
         """Initialize the Anthropic API client.
@@ -145,9 +151,6 @@ class AnthropicClient:
             else:
                 raise ValueError("API key or AWS credentials or GCP credentials are required to use the Anthropic API.")
 
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Anthropic, it will be ignored.", UserWarning)
-
         if self._api_key is not None:
             self._client = Anthropic(api_key=self._api_key)
         elif self._gcp_region is not None:
@@ -165,6 +168,9 @@ class AnthropicClient:
             )
 
         self._last_tooluse_status = {}
+
+        # Store the response format, if provided (for structured outputs)
+        self._response_format: Optional[Type[BaseModel]] = None
 
     def load_config(self, params: dict[str, Any]):
         """Load the configuration for the Anthropic API client."""
@@ -228,13 +234,21 @@ class AnthropicClient:
         return self._gcp_auth_token
 
     def create(self, params: dict[str, Any]) -> ChatCompletion:
+        """Creates a completion using the Anthropic API."""
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions
 
-        # Convert AutoGen messages to Anthropic messages
+        # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
         anthropic_params = self.load_config(params)
+
+        # If response_format exists, we want structured outputs
+        # Anthropic doesn't support response_format, so using Anthropic's "JSON Mode":
+        # https://github.com/anthropics/anthropic-cookbook/blob/main/misc/how_to_enable_json_mode.ipynb
+        if params.get("response_format"):
+            self._response_format = params["response_format"]
+            self._add_response_format_to_system(params)
 
         # TODO: support stream
         params = params.copy()
@@ -260,36 +274,46 @@ class AnthropicClient:
 
         response = self._client.messages.create(**anthropic_params)
 
+        tool_calls = []
+        message_text = ""
+
+        if self._response_format:
+            try:
+                parsed_response = self._extract_json_response(response)
+                message_text = _format_json_response(parsed_response)
+            except ValueError as e:
+                message_text = str(e)
+
+            anthropic_finish = "stop"
+        else:
+            if response is not None:
+                # If we have tool use as the response, populate completed tool calls for our return OAI response
+                if response.stop_reason == "tool_use":
+                    anthropic_finish = "tool_calls"
+                    for content in response.content:
+                        if type(content) == ToolUseBlock:
+                            tool_calls.append(
+                                ChatCompletionMessageToolCall(
+                                    id=content.id,
+                                    function={"name": content.name, "arguments": json.dumps(content.input)},
+                                    type="function",
+                                )
+                            )
+                else:
+                    anthropic_finish = "stop"
+                    tool_calls = None
+
+                # Retrieve any text content from the response
+                for content in response.content:
+                    if type(content) == TextBlock:
+                        message_text = content.text
+                        break
+
         # Calculate and save the cost onto the response
         prompt_tokens = response.usage.input_tokens
         completion_tokens = response.usage.output_tokens
 
-        message_text = ""
-        if response is not None:
-            # If we have tool use as the response, populate completed tool calls for our return OAI response
-            if response.stop_reason == "tool_use":
-                anthropic_finish = "tool_calls"
-                tool_calls = []
-                for content in response.content:
-                    if type(content) == ToolUseBlock:
-                        tool_calls.append(
-                            ChatCompletionMessageToolCall(
-                                id=content.id,
-                                function={"name": content.name, "arguments": json.dumps(content.input)},
-                                type="function",
-                            )
-                        )
-            else:
-                anthropic_finish = "stop"
-                tool_calls = None
-
-            # Retrieve any text content from the response
-            for content in response.content:
-                if type(content) == TextBlock:
-                    message_text = content.text
-                    break
-
-        # Convert output back to AutoGen response format
+        # Convert output back to AG2 response format
         message = ChatCompletionMessage(
             role="assistant",
             content=message_text,
@@ -348,7 +372,72 @@ class AnthropicClient:
 
         return functions
 
+    def _add_response_format_to_system(self, params: dict[str, Any]):
+        """Add prompt that will generate properly formatted JSON for structured outputs to system parameter.
 
+        Based on Anthropic's JSON Mode cookbook, we ask the LLM to put the JSON within <json_response> tags.
+
+        Args:
+            params (dict): The client parameters
+        """
+        if not params.get("system"):
+            return
+
+        # Get the schema of the Pydantic model
+        schema = self._response_format.model_json_schema()
+
+        # Add instructions for JSON formatting
+        format_content = f"""Please provide your response as a JSON object that matches the following schema:
+{json.dumps(schema, indent=2)}
+
+Format your response as valid JSON within <json_response> tags.
+Do not include any text before or after the tags.
+Ensure the JSON is properly formatted and matches the schema exactly."""
+
+        # Add formatting to last user message
+        params["system"] += "\n\n" + format_content
+
+    def _extract_json_response(self, response: Message) -> Any:
+        """Extract and validate JSON response from the output for structured outputs.
+
+        Args:
+            response (Message): The response from the API.
+
+        Returns:
+            Any: The parsed JSON response.
+        """
+        if not self._response_format:
+            return response
+
+        # Extract content from response
+        content = response.content[0].text if response.content else ""
+
+        # Try to extract JSON from tags first
+        json_match = re.search(r"<json_response>(.*?)</json_response>", content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1).strip()
+        else:
+            # Fallback to finding first JSON object
+            json_start = content.find("{")
+            json_end = content.rfind("}")
+            if json_start == -1 or json_end == -1:
+                raise ValueError("No valid JSON found in response for Structured Output.")
+            json_str = content[json_start : json_end + 1]
+
+        try:
+            # Parse JSON and validate against the Pydantic model
+            json_data = json.loads(json_str)
+            return self._response_format.model_validate(json_data)
+        except Exception as e:
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
+
+
+def _format_json_response(response: Any) -> str:
+    """Formats the JSON response for structured outputs using the format method if it exists."""
+    return response.format() if isinstance(response, FormatterProtocol) else response
+
+
+@require_optional_import("anthropic", "anthropic")
 def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Anthropic format.
     We correct for any specific role orders and types, etc.

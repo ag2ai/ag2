@@ -1,0 +1,164 @@
+# This workflow will install Python dependencies and run tests
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Contrib tests with LLMs
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "autogen/**"
+      - "test/agentchat/contrib/**"
+      - ".github/workflows/contrib-openai.yml"
+      - "pyproject.toml"
+permissions:
+  {}
+jobs:
+  TeachableAgent:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    steps:
+      # checkout to pr branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies
+        run: |
+          docker --version
+          uv pip install --system -e .[teachable,test]
+          python -c "import autogen"
+      - name: Coverage
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+        run: |
+          bash scripts/test.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  AgentBuilder:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    steps:
+      # checkout to pr branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies
+        run: |
+          docker --version
+          uv pip install --system -e ".[test]"
+          python -c "import autogen"
+          uv pip install --system pytest-cov>=5 pytest-asyncio
+      - name: Install packages for test when needed
+        run: |
+          uv pip install --system -e .[autobuild]
+      - name: Coverage
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+        run: |
+          bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: autobuild, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  ImageGen:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.13"]
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    steps:
+      # checkout to pr branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies
+        run: |
+          docker --version
+          uv pip install --system -e .[lmm,test]
+          python -c "import autogen"
+      - name: Coverage
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          bash scripts/test.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: lmm, ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # https://github.com/marketplace/actions/alls-green#why
+  check-contrib-test-llm: # This job does nothing and is only used for the branch protection
+    # from: https://github.com/re-actors/alls-green
+    # Important: For this to work properly, it is a must to have the job always
+    # run, otherwise GitHub will make it skipped when any of the dependencies
+    # fail. In some contexts, skipped is interpreted as success which may lead
+    # to undersired, unobvious and even dangerous (as in security breach
+    # "dangerous") side-effects.
+    if: always()
+
+    needs:
+      - TeachableAgent
+      - AgentBuilder
+      - ImageGen
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1 # nosemgrep
+        with:
+          # allowed-failures: docs, linters
+          # allowed-skips: non-voting-flaky-job
+          jobs: ${{ toJSON(needs) }}

@@ -1,11 +1,10 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any, Optional, Union
 
-from autogen import Agent, ConversableAgent
-
+from .... import Agent, ConversableAgent
 from .graph_query_engine import GraphStoreQueryResult
 from .graph_rag_capability import GraphRagCapability
 from .neo4j_native_graph_query_engine import Neo4jNativeGraphQueryEngine

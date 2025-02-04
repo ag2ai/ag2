@@ -1,12 +1,12 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from .agent import Agent
+from .agent import Agent, LLMAgent
 from .assistant_agent import AssistantAgent
-from .chat import ChatResult, initiate_chats
+from .chat import ChatResult, a_initiate_chats, initiate_chats
 from .contrib.reasoning_agent import (
     ReasoningAgent,
     ThinkNode,
@@ -41,17 +41,19 @@ __all__ = [
     "Agent",
     "AssistantAgent",
     "ChatResult",
+    "ContextStr",
     "ConversableAgent",
     "GroupChat",
     "GroupChatManager",
+    "LLMAgent",
     "OnCondition",
     "ReasoningAgent",
     "SwarmAgent",
     "SwarmResult",
     "ThinkNode",
-    "ContextStr",
     "UpdateSystemMessage",
     "UserProxyAgent",
+    "a_initiate_chats",
     "a_initiate_swarm_chat",
     "gather_usage_summary",
     "initiate_chats",

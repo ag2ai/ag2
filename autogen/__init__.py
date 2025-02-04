@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -35,11 +35,11 @@ from .agentchat import (
 )
 from .code_utils import DEFAULT_MODEL, FAST_MODEL
 from .exception_utils import (
-    AgentNameConflict,
-    InvalidCarryOverType,
-    NoEligibleSpeaker,
-    SenderRequired,
-    UndefinedNextAgent,
+    AgentNameConflictError,
+    InvalidCarryOverTypeError,
+    NoEligibleSpeakerError,
+    SenderRequiredError,
+    UndefinedNextAgentError,
 )
 from .oai import (
     Cache,
@@ -71,7 +71,7 @@ __all__ = [
     "AfterWork",
     "AfterWorkOption",
     "Agent",
-    "AgentNameConflict",
+    "AgentNameConflictError",
     "AssistantAgent",
     "Cache",
     "ChatCompletion",
@@ -80,17 +80,17 @@ __all__ = [
     "ConversableAgent",
     "GroupChat",
     "GroupChatManager",
-    "InvalidCarryOverType",
+    "InvalidCarryOverTypeError",
     "ModelClient",
-    "NoEligibleSpeaker",
+    "NoEligibleSpeakerError",
     "OnCondition",
     "OpenAIWrapper",
     "ReasoningAgent",
-    "SenderRequired",
+    "SenderRequiredError",
     "SwarmAgent",
     "SwarmResult",
     "ThinkNode",
-    "UndefinedNextAgent",
+    "UndefinedNextAgentError",
     "UpdateSystemMessage",
     "UserProxyAgent",
     "__version__",

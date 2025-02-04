@@ -1,7 +1,7 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+#!/usr/bin/env bash
+
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-
-#!/usr/bin/env bash
 
 pytest --ff -vv --durations=10 --durations-min=1.0 "$@"

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,27 +12,23 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
-    from autogen.cache.redis_cache import RedisCache
-
-    skip_redis_tests = False
-except ImportError:
-    skip_redis_tests = True
+from autogen.cache.redis_cache import RedisCache
+from autogen.import_utils import skip_on_missing_imports
 
 
+@pytest.mark.redis
+@skip_on_missing_imports(["redis"], "redis")
 class TestRedisCache(unittest.TestCase):
     def setUp(self):
         self.seed = "test_seed"
         self.redis_url = "redis://localhost:6379/0"
 
-    @pytest.mark.skipif(skip_redis_tests, reason="redis not installed")
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_init(self, mock_redis_from_url):
         cache = RedisCache(self.seed, self.redis_url)
         self.assertEqual(cache.seed, self.seed)
         mock_redis_from_url.assert_called_with(self.redis_url)
 
-    @pytest.mark.skipif(skip_redis_tests, reason="redis not installed")
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_prefixed_key(self, mock_redis_from_url):
         cache = RedisCache(self.seed, self.redis_url)
@@ -40,7 +36,6 @@ class TestRedisCache(unittest.TestCase):
         expected_prefixed_key = f"autogen:{self.seed}:{key}"
         self.assertEqual(cache._prefixed_key(key), expected_prefixed_key)
 
-    @pytest.mark.skipif(skip_redis_tests, reason="redis not installed")
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_get(self, mock_redis_from_url):
         key = "key"
@@ -54,7 +49,6 @@ class TestRedisCache(unittest.TestCase):
         cache.cache.get.return_value = None
         self.assertIsNone(cache.get(key))
 
-    @pytest.mark.skipif(skip_redis_tests, reason="redis not installed")
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_set(self, mock_redis_from_url):
         key = "key"
@@ -64,7 +58,6 @@ class TestRedisCache(unittest.TestCase):
         cache.set(key, value)
         cache.cache.set.assert_called_with(f"autogen:{self.seed}:{key}", serialized_value)
 
-    @pytest.mark.skipif(skip_redis_tests, reason="redis not installed")
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_context_manager(self, mock_redis_from_url):
         with RedisCache(self.seed, self.redis_url) as cache:

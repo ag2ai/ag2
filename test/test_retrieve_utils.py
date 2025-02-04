@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,34 +8,26 @@
 
 """Unit test for retrieve_utils.py"""
 
+import os
+from contextlib import suppress
+
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.retrieve_utils import (
+    create_vector_db_from_dir,
+    extract_text_from_pdf,
+    get_files_from_dir,
+    is_url,
+    parse_html_to_markdown,
+    query_vector_db,
+    split_files_to_chunks,
+    split_text_to_chunks,
+)
+from autogen.token_count_utils import count_token
+
+with optional_import_block():
     import chromadb
-
-    from autogen.retrieve_utils import (
-        create_vector_db_from_dir,
-        extract_text_from_pdf,
-        get_files_from_dir,
-        is_url,
-        parse_html_to_markdown,
-        query_vector_db,
-        split_files_to_chunks,
-        split_text_to_chunks,
-    )
-    from autogen.token_count_utils import count_token
-except ImportError:
-    skip = True
-else:
-    skip = False
-import os
-
-try:
-    from unstructured.partition.auto import partition  # noqa: F401
-
-    HAS_UNSTRUCTURED = True
-except ImportError:
-    HAS_UNSTRUCTURED = False
 
 test_dir = os.path.join(os.path.dirname(__file__), "test_files")
 expected_text = """AutoGen is an advanced tool designed to assist developers in harnessing the capabilities
@@ -44,7 +36,7 @@ simplify the process of building applications that leverage the power of LLMs, a
 integration, testing, and deployment."""
 
 
-@pytest.mark.skipif(skip, reason="dependency is not installed")
+@skip_on_missing_imports(["bs4", "chromadb", "markdownify", "pypdf"], "retrievechat")
 class TestRetrieveUtils:
     def test_split_text_to_chunks(self):
         long_text = "A" * 10000
@@ -135,10 +127,11 @@ class TestRetrieveUtils:
         results = query_vector_db(["autogen"], client=client)
         assert isinstance(results, dict) and any("autogen" in res[0].lower() for res in results.get("documents", []))
 
+    @skip_on_missing_imports(["lancedb"], "unknown")
     def test_custom_vector_db(self):
-        try:
+        with optional_import_block() as result:
             import lancedb
-        except ImportError:
+        if not result.is_successful:
             return
         from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 
@@ -154,10 +147,8 @@ class TestRetrieveUtils:
                 {"vector": [2.1, 1.3], "id": 5, "documents": "This is a fifth test document spark"},
                 {"vector": [5.1, 8.3], "id": 6, "documents": "This is a sixth test document"},
             ]
-            try:
+            with suppress(OSError):
                 db.create_table("my_table", data)
-            except OSError:
-                pass
 
         class MyRetrieveUserProxyAgent(RetrieveUserProxyAgent):
             def query_vector_db(
@@ -240,10 +231,7 @@ class TestRetrieveUtils:
         print(results["ids"][0])
         assert len(results["ids"][0]) == 4
 
-    @pytest.mark.skipif(
-        not HAS_UNSTRUCTURED,
-        reason="do not run if unstructured is not installed",
-    )
+    @skip_on_missing_imports(["unstructured"], "unknown")
     def test_unstructured(self):
         pdf_file_path = os.path.join(test_dir, "example.pdf")
         txt_file_path = os.path.join(test_dir, "example.txt")

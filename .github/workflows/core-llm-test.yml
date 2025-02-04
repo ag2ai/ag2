@@ -1,0 +1,76 @@
+# This workflow will install Python dependencies and run tests with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Core tests with LLMs
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "autogen/**"
+      - "test/**"
+      - "notebook/agentchat_auto_feedback_from_code_execution.ipynb"
+      - "notebook/agentchat_function_call.ipynb"
+      - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
+      - ".github/workflows/core-llm-test.yml"
+permissions:
+  {}
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        llm: ["openai", "gemini", "anthropic", "deepseek"]
+        python-version: ["3.9"]
+        os: [ubuntu-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
+    steps:
+      # checkout to pr branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies
+        if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
+        run: |
+          docker --version
+          uv pip install --system -e ".[test,redis,interop]"
+          python -c "import autogen"
+      - name: Install packages for ${{ matrix.llm }}
+        if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
+        run: |
+          docker --version
+          uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
+          python -c "import autogen"
+      - name: LLM tests using ${{ matrix.llm }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+        run: bash scripts/test-core-llm.sh -m "${{ matrix.llm }}"
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,10 +10,12 @@ import json
 from logging import getLogger
 from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter
+from pydantic._internal._typing_extra import try_eval_type
+from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Literal, get_args, get_origin
 
-from .._pydantic import JsonSchemaValue, evaluate_forwardref, model_dump, model_dump_json, type2schema
+from ..doc_utils import export_module
 from .dependency_injection import Field as AG2Field
 
 __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str"]
@@ -37,7 +39,7 @@ def get_typed_annotation(annotation: Any, globalns: dict[str, Any]) -> Any:
         annotation = annotation.description
     if isinstance(annotation, str):
         annotation = ForwardRef(annotation)
-        annotation = evaluate_forwardref(annotation, globalns, globalns)
+        annotation, _ = try_eval_type(annotation, globalns, globalns)
     return annotation
 
 
@@ -134,19 +136,17 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
     """
 
     def type2description(k: str, v: Union[Annotated[type[Any], str], type[Any]]) -> str:
-        # handles Annotated
-        if hasattr(v, "__metadata__"):
-            retval = v.__metadata__[0]
-            if isinstance(retval, AG2Field):
-                return retval.description  # type: ignore[return-value]
-            else:
-                raise ValueError(
-                    f"Invalid {retval} for parameter {k}, should be a DescriptionField, got {type(retval)}"
-                )
-        else:
+        if not hasattr(v, "__metadata__"):
             return k
 
-    schema = type2schema(v)
+        # handles Annotated
+        retval = v.__metadata__[0]
+        if isinstance(retval, AG2Field):
+            return retval.description  # type: ignore[return-value]
+        else:
+            raise ValueError(f"Invalid {retval} for parameter {k}, should be a DescriptionField, got {type(retval)}")
+
+    schema = TypeAdapter(v).json_schema()
     if k in default_values:
         dv = default_values[k]
         schema["default"] = dv
@@ -222,6 +222,7 @@ def get_missing_annotations(typed_signature: inspect.Signature, required: list[s
     return missing, unannotated_with_default
 
 
+@export_module("autogen.tools")
 def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, description: str) -> dict[str, Any]:
     """Get a JSON schema for a function as defined by the OpenAI API
 
@@ -294,7 +295,7 @@ def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, de
         )
     )
 
-    return model_dump(function)
+    return function.model_dump()
 
 
 def get_load_param_if_needed_function(t: Any) -> Optional[Callable[[dict[str, Any], type[BaseModel]], BaseModel]]:
@@ -316,6 +317,7 @@ def get_load_param_if_needed_function(t: Any) -> Optional[Callable[[dict[str, An
     return load_base_model if isinstance(t, type) and issubclass(t, BaseModel) else None
 
 
+@export_module("autogen.tools")
 def load_basemodels_if_needed(func: Callable[..., Any]) -> Callable[..., Any]:
     """A decorator to load the parameters of a function if they are Pydantic models
 
@@ -361,10 +363,25 @@ def load_basemodels_if_needed(func: Callable[..., Any]) -> Callable[..., Any]:
         return _load_parameters_if_needed
 
 
+class _SerializableResult(BaseModel):
+    result: Any
+
+
+@export_module("autogen.tools")
 def serialize_to_str(x: Any) -> str:
     if isinstance(x, str):
         return x
-    elif isinstance(x, BaseModel):
-        return model_dump_json(x)
-    else:
+    if isinstance(x, BaseModel):
+        return x.model_dump_json()
+
+    retval_model = _SerializableResult(result=x)
+    try:
+        return str(retval_model.model_dump()["result"])
+    except Exception:
+        pass
+
+    # try json.dumps() and then just return str(x) if that fails too
+    try:
         return json.dumps(x, ensure_ascii=False)
+    except Exception:
+        return str(x)

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,28 +6,34 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+import datetime
+import json
 import sys
+import uuid
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, cast
+
+from ...doc_utils import export_module
 
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
 
-import datetime
-import json
-import uuid
 
 import requests
-import websocket
 from requests.adapters import HTTPAdapter, Retry
-from websocket import WebSocket
 
+from ...import_utils import optional_import_block, require_optional_import
 from .base import JupyterConnectionInfo
 
+with optional_import_block():
+    import websocket
+    from websocket import WebSocket
 
+
+@export_module("autogen.coding.jupyter")
 class JupyterClient:
     def __init__(self, connection_info: JupyterConnectionInfo):
         """(Experimental) A client for communicating with a Jupyter gateway server.
@@ -90,12 +96,14 @@ class JupyterClient:
         )
         response.raise_for_status()
 
+    @require_optional_import("websocket", "jupyter-executor")
     def get_kernel_client(self, kernel_id: str) -> JupyterKernelClient:
         ws_url = f"{self._get_ws_base_url()}/api/kernels/{kernel_id}/channels"
         ws = websocket.create_connection(ws_url, header=self._get_headers())
         return JupyterKernelClient(ws)
 
 
+@require_optional_import("websocket", "jupyter-executor")
 class JupyterKernelClient:
     """(Experimental) A client for communicating with a Jupyter kernel."""
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -28,16 +28,20 @@ import random
 import re
 import time
 import warnings
-from typing import Any
+from typing import Any, Optional, Type
 
-import ollama
-from fix_busted_json import repair_json
-from ollama import Client
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
 
-from autogen.oai.client_utils import should_hide_tools, validate_parameter
+from ..import_utils import optional_import_block, require_optional_import
+from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
+
+with optional_import_block():
+    import ollama
+    from fix_busted_json import repair_json
+    from ollama import Client
 
 
 class OllamaClient:
@@ -81,8 +85,8 @@ class OllamaClient:
         Args:
             None
         """
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Ollama, it will be ignored.", UserWarning)
+        # Store the response format, if provided (for structured outputs)
+        self._response_format: Optional[Type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -175,6 +179,7 @@ class OllamaClient:
 
         return ollama_params
 
+    @require_optional_import(["ollama", "fix_busted_json"], "ollama")
     def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
@@ -208,7 +213,7 @@ class OllamaClient:
                 params, "manual_tool_call_step2", str, False, self.TOOL_CALL_MANUAL_STEP2, None, None
             )
 
-        # Convert AutoGen messages to Ollama messages
+        # Convert AG2 messages to Ollama messages
         ollama_messages = self.oai_messages_to_ollama_messages(
             messages,
             (
@@ -222,6 +227,13 @@ class OllamaClient:
         ollama_params = self.parse_params(params)
 
         ollama_params["messages"] = ollama_messages
+
+        # If response_format exists, we want structured outputs
+        # Based on:
+        # https://ollama.com/blog/structured-outputs
+        if params.get("response_format"):
+            self._response_format = params["response_format"]
+            ollama_params["format"] = params.get("response_format").model_json_schema()
 
         # Token counts will be returned
         prompt_tokens = 0
@@ -243,15 +255,15 @@ class OllamaClient:
                 ans = ans + (chunk["message"]["content"] or "")
 
                 if "done_reason" in chunk:
-                    prompt_tokens = chunk["prompt_eval_count"] if "prompt_eval_count" in chunk else 0
-                    completion_tokens = chunk["eval_count"] if "eval_count" in chunk else 0
+                    prompt_tokens = chunk.get("prompt_eval_count", 0)
+                    completion_tokens = chunk.get("eval_count", 0)
                     total_tokens = prompt_tokens + completion_tokens
         else:
             # Non-streaming finished
             ans: str = response["message"]["content"]
 
-            prompt_tokens = response["prompt_eval_count"] if "prompt_eval_count" in response else 0
-            completion_tokens = response["eval_count"] if "eval_count" in response else 0
+            prompt_tokens = response.get("prompt_eval_count", 0)
+            completion_tokens = response.get("eval_count", 0)
             total_tokens = prompt_tokens + completion_tokens
 
         if response is not None:
@@ -323,10 +335,18 @@ class OllamaClient:
                         # Blank the message content
                         response_content = ""
 
+            if ollama_finish == "stop":  # noqa: SIM102
+                # Not a tool call, so let's check if we need to process structured output
+                if self._response_format and response_content:
+                    try:
+                        parsed_response = self._convert_json_response(response_content)
+                        response_content = _format_json_response(parsed_response, response_content)
+                    except ValueError as e:
+                        response_content = str(e)
         else:
             raise RuntimeError("Failed to get response from Ollama.")
 
-        # Convert response to AutoGen response
+        # Convert response to AG2 response
         message = ChatCompletionMessage(
             role="assistant",
             content=response_content,
@@ -404,20 +424,19 @@ class OllamaClient:
                 ollama_messages[0]["content"] = ollama_messages[0]["content"] + manual_instruction.rstrip()
 
             # If we are still in the function calling or evaluating process, append the steps instruction
-            if not have_tool_calls or tool_result_is_last_msg:
-                if ollama_messages[0]["role"] == "system":
-                    # NOTE: we require a system message to exist for the manual steps texts
-                    # Append the manual step instructions
-                    content_to_append = (
-                        self._manual_tool_call_step1 if not have_tool_results else self._manual_tool_call_step2
-                    )
+            if (not have_tool_calls or tool_result_is_last_msg) and ollama_messages[0]["role"] == "system":
+                # NOTE: we require a system message to exist for the manual steps texts
+                # Append the manual step instructions
+                content_to_append = (
+                    self._manual_tool_call_step1 if not have_tool_results else self._manual_tool_call_step2
+                )
 
-                    if content_to_append != "":
-                        # Append the relevant tool call instruction to the latest user message
-                        if ollama_messages[-1]["role"] == "user":
-                            ollama_messages[-1]["content"] = ollama_messages[-1]["content"] + content_to_append
-                        else:
-                            ollama_messages.append({"role": "user", "content": content_to_append})
+                if content_to_append != "":
+                    # Append the relevant tool call instruction to the latest user message
+                    if ollama_messages[-1]["role"] == "user":
+                        ollama_messages[-1]["content"] = ollama_messages[-1]["content"] + content_to_append
+                    else:
+                        ollama_messages.append({"role": "user", "content": content_to_append})
 
         # Convert tool call and tool result messages to normal text messages for Ollama
         for i, message in enumerate(ollama_messages):
@@ -455,7 +474,31 @@ class OllamaClient:
 
         return ollama_messages
 
+    def _convert_json_response(self, response: str) -> Any:
+        """Extract and validate JSON response from the output for structured outputs.
 
+        Args:
+            response (str): The response from the API.
+
+        Returns:
+            Any: The parsed JSON response.
+        """
+        if not self._response_format:
+            return response
+
+        try:
+            # Parse JSON and validate against the Pydantic model
+            return self._response_format.model_validate_json(response)
+        except Exception as e:
+            raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
+
+
+def _format_json_response(response: Any, original_answer: str) -> str:
+    """Formats the JSON response for structured outputs using the format method if it exists."""
+    return response.format() if isinstance(response, FormatterProtocol) else original_answer
+
+
+@require_optional_import("fix_busted_json", "ollama")
 def response_to_tool_call(response_string: str) -> Any:
     """Attempts to convert the response to an object, aimed to align with function format `[{},{}]`"""
     # We try and detect the list[dict] format:
@@ -565,7 +608,7 @@ def is_valid_tool_call_item(call_item: dict) -> bool:
     if "name" not in call_item or not isinstance(call_item["name"], str):
         return False
 
-    if set(call_item.keys()) - {"name", "arguments"}:
+    if set(call_item.keys()) - {"name", "arguments"}:  # noqa: SIM103
         return False
 
     return True

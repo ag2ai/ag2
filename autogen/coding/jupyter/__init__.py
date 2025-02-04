@@ -1,16 +1,9 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/autogen-ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 # Original portions of this file are derived from https://github.com/microsoft/autogen under the MIT License.
 # SPDX-License-Identifier: MIT
-from .helpers import is_jupyter_kernel_gateway_installed
-
-if not is_jupyter_kernel_gateway_installed():
-    raise ImportError(
-        "jupyter-kernel-gateway is required for JupyterCodeExecutor, please install it with `pip install ag2[jupyter-executor]`"
-    )
-
 
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .docker_jupyter_server import DockerJupyterServer

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,22 +17,21 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
 
-from autogen.logger.base_logger import BaseLogger
-from autogen.logger.logger_utils import get_current_ts, to_dict
-
-from .base_logger import LLMConfig
+from ..doc_utils import export_module
+from .base_logger import BaseLogger, LLMConfig
+from .logger_utils import get_current_ts, to_dict
 
 if TYPE_CHECKING:
-    from autogen import Agent, ConversableAgent, OpenAIWrapper
-    from autogen.oai.anthropic import AnthropicClient
-    from autogen.oai.bedrock import BedrockClient
-    from autogen.oai.cerebras import CerebrasClient
-    from autogen.oai.cohere import CohereClient
-    from autogen.oai.gemini import GeminiClient
-    from autogen.oai.groq import GroqClient
-    from autogen.oai.mistral import MistralAIClient
-    from autogen.oai.ollama import OllamaClient
-    from autogen.oai.together import TogetherClient
+    from .. import Agent, ConversableAgent, OpenAIWrapper
+    from ..oai.anthropic import AnthropicClient
+    from ..oai.bedrock import BedrockClient
+    from ..oai.cerebras import CerebrasClient
+    from ..oai.cohere import CohereClient
+    from ..oai.gemini import GeminiClient
+    from ..oai.groq import GroqClient
+    from ..oai.mistral import MistralAIClient
+    from ..oai.ollama import OllamaClient
+    from ..oai.together import TogetherClient
 
 logger = logging.getLogger(__name__)
 lock = threading.Lock()
@@ -61,6 +60,7 @@ def safe_serialize(obj: Any) -> str:
     return json.dumps(obj, default=default)
 
 
+@export_module("autogen.logger")
 class SqliteLogger(BaseLogger):
     """Sqlite logger class."""
 
@@ -275,11 +275,7 @@ class SqliteLogger(BaseLogger):
         else:
             response_messages = json.dumps(to_dict(response), indent=4)
 
-        source_name = None
-        if isinstance(source, str):
-            source_name = source
-        else:
-            source_name = source.name
+        source_name = source if isinstance(source, str) else source.name
 
         query = """
             INSERT INTO chat_completions (
@@ -309,7 +305,7 @@ class SqliteLogger(BaseLogger):
             agent (ConversableAgent): Agent to log.
             init_args (dict[str, Any]): Initialization arguments of the agent
         """
-        from autogen import Agent
+        from .. import Agent
 
         if self.con is None:
             return

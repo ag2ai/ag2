@@ -1,0 +1,144 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Core tests without LLMs
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  merge_group:
+    types: [checks_requested]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions: {}
+jobs:
+  paths-filter:
+    runs-on: ubuntu-latest
+    outputs:
+      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            autogen:
+              - "autogen/**"
+            test:
+              - "test/**"
+            workflows:
+              - ".github/workflows/**"
+            setup:
+              - "pyproject.toml"
+      - name: autogen has changes
+        run: echo "autogen has changes"
+        if: steps.filter.outputs.autogen == 'true'
+      - name: test has changes
+        run: echo "test has changes"
+        if: steps.filter.outputs.test == 'true'
+      - name: workflows has changes
+        run: echo "workflows has changes"
+        if: steps.filter.outputs.workflows == 'true'
+      - name: setup has changes
+        run: echo "setup has changes"
+        if: steps.filter.outputs.setup == 'true'
+  test:
+    needs: paths-filter
+    if: needs.paths-filter.outputs.hasChanges == 'true'
+    runs-on: ${{ matrix.os }}
+    env:
+      AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        exclude:
+          - os: macos-latest
+            python-version: "3.9"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies
+        run: |
+          uv pip install --system -e .[test,cosmosdb,interop]
+          python -c "import autogen"
+          uv pip install --system pytest-cov>=5 mock
+      - name: Install optional dependencies for code executors
+        # code executors and udfs auto skip without deps, so only run for python 3.11
+        if: matrix.python-version == '3.11'
+        run: |
+          uv pip install --system -e ".[jupyter-executor]"
+          python -m ipykernel install --user --name python3
+      - name: Set AUTOGEN_USE_DOCKER based on OS
+        shell: bash
+        run: |
+          if [[ ${{ matrix.os }} != ubuntu-latest ]]; then
+            echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
+          fi
+      - name: Test with pytest skipping openai tests
+        if: matrix.python-version != '3.10' && matrix.os == 'ubuntu-latest'
+        # Remove the line below once https://github.com/docker/docker-py/issues/3256 is merged
+        run: |
+          uv pip install --system "requests<2.32.0"
+          bash scripts/test-core-skip-llm.sh
+      - name: Test with pytest skipping openai and docker tests
+        if: matrix.python-version != '3.10' && matrix.os != 'ubuntu-latest'
+        run: |
+          bash scripts/test-core-skip-llm.sh -m "not docker"
+      - name: Coverage with Redis
+        if: matrix.python-version == '3.10'
+        run: |
+          uv pip install --system -e .[redis,websockets]
+          bash scripts/test-core-skip-llm.sh
+      - name: Test with Cosmos DB
+        run: |
+          bash scripts/test-skip-llm.sh test/cache/test_cosmos_db_cache.py
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.10'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  build-check:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - name: Get Date
+        shell: bash
+        run: |
+          echo "date=$(date +'%m/%d/%Y %H:%M:%S')" >> "$GITHUB_ENV"
+
+      - name: Run Type is ${{ github.event_name }}
+        if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'}}
+        shell: bash
+        run: |
+          echo "run_type=${{ github.event_name }}" >> "$GITHUB_ENV"
+
+      - name: Fail workflow if build failed
+        id: check_build_failed
+        if: contains(join(needs.*.result, ','), 'failure')
+        uses: actions/github-script@v7
+        with:
+          script: core.setFailed('Build Failed!')
+
+      - name: Fail workflow if build cancelled
+        id: check_build_cancelled
+        if: contains(join(needs.*.result, ','), 'cancelled')
+        uses: actions/github-script@v7
+        with:
+          script: core.setFailed('Build Cancelled!')

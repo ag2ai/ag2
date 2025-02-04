@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -38,16 +38,20 @@ import time
 import warnings
 from typing import Any, Literal
 
-import boto3
 import requests
-from botocore.config import Config
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 
-from autogen.oai.client_utils import validate_parameter
+from ..import_utils import optional_import_block, require_optional_import
+from .client_utils import validate_parameter
+
+with optional_import_block():
+    import boto3
+    from botocore.config import Config
 
 
+@require_optional_import("boto3", "bedrock")
 class BedrockClient:
     """Client for Amazon's Bedrock Converse API."""
 
@@ -175,10 +179,7 @@ class BedrockClient:
                 )
 
         # Streaming
-        if "stream" in params:
-            self._streaming = params["stream"]
-        else:
-            self._streaming = False
+        self._streaming = params.get("stream", False)
 
         # For this release we will not support streaming as many models do not support streaming with tool use
         if self._streaming:
@@ -228,11 +229,7 @@ class BedrockClient:
         finish_reason = convert_stop_reason_to_finish_reason(response["stopReason"])
         response_message = response["output"]["message"]
 
-        if finish_reason == "tool_calls":
-            tool_calls = format_tool_calls(response_message["content"])
-            # text = ""
-        else:
-            tool_calls = None
+        tool_calls = format_tool_calls(response_message["content"]) if finish_reason == "tool_calls" else None
 
         text = ""
         for content in response_message["content"]:

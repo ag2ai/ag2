@@ -1,21 +1,17 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
-try:
-    from autogen.oai.ollama import OllamaClient, response_to_tool_call
-
-    skip = False
-except ImportError:
-    OllamaClient = object
-    InternalServerError = object
-    skip = True
+from autogen.import_utils import skip_on_missing_imports
+from autogen.oai.ollama import OllamaClient, response_to_tool_call
 
 
 # Fixtures for mock data
@@ -43,18 +39,15 @@ def ollama_client():
     return client
 
 
-skip_reason = "Ollama dependency is not installed"
-
-
 # Test initialization and configuration
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_initialization():
     # Creation works without an api_key
     OllamaClient()
 
 
 # Test parameters
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_parsing_params(ollama_client):
     # All parameters (with default values)
     params = {
@@ -118,7 +111,7 @@ def test_parsing_params(ollama_client):
 
 
 # Test text generation
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 @patch("autogen.oai.ollama.OllamaClient.create")
 def test_create_response(mock_chat, ollama_client):
     # Mock OllamaClient.chat response
@@ -152,7 +145,7 @@ def test_create_response(mock_chat, ollama_client):
 
 
 # Test functions/tools
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 @patch("autogen.oai.ollama.OllamaClient.create")
 def test_create_response_with_tool_call(mock_chat, ollama_client):
     # Mock OllamaClient.chat response
@@ -214,7 +207,7 @@ def test_create_response_with_tool_call(mock_chat, ollama_client):
 
 
 # Test function parsing with manual tool calling
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_manual_tool_calling_parsing(ollama_client):
     # Test the parsing of a tool call within the response content (fully correct)
     response_content = """[{"name": "weather_forecast", "arguments":{"location": "New York"}},{"name": "currency_calculator", "arguments":{"base_amount": 123.45, "quote_currency": "EUR", "base_currency": "USD"}}]"""
@@ -262,7 +255,7 @@ def test_manual_tool_calling_parsing(ollama_client):
 
 
 # Test message conversion from OpenAI to Ollama format
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_oai_messages_to_ollama_messages(ollama_client):
     # Test that the "name" key is removed
     test_messages = [
@@ -304,3 +297,56 @@ def test_oai_messages_to_ollama_messages(ollama_client):
     ]
 
     assert messages == expected_messages, "'Please continue' message was not appended."
+
+
+# Test message conversion from OpenAI to Ollama format
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
+def test_extract_json_response(ollama_client):
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: List[Step]
+        final_answer: str
+
+    # Set up the response format
+    ollama_client._response_format = MathReasoning
+
+    # Test case 1: JSON within tags - CORRECT
+    tagged_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }"""
+
+    result = ollama_client._convert_json_response(tagged_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
+
+    # Test case 2: Invalid JSON - RAISE ERROR
+    invalid_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Missing closing brace"
+                ],
+                "final_answer": "x = -3.75"
+            """
+
+    with pytest.raises(
+        ValueError, match="Failed to parse response as valid JSON matching the schema for Structured Output: "
+    ):
+        ollama_client._convert_json_response(invalid_response)
+
+    # Test case 3: No JSON content - RAISE ERROR
+    no_json_response = "This response contains no JSON at all."
+
+    with pytest.raises(
+        ValueError,
+        match="Failed to parse response as valid JSON matching the schema for Structured Output:",
+    ):
+        ollama_client._convert_json_response(no_json_response)

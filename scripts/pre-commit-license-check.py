@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
@@ -10,7 +10,15 @@ import sys
 from pathlib import Path
 from typing import List
 
-REQUIRED_ELEMENTS = [r"Copyright.*Owners of https://github\.com/ag2ai", r"SPDX-License-Identifier: Apache-2\.0"]
+LICENCE = """# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+"""
+
+REQUIRED_ELEMENTS = [
+    r"Copyright \(c\) 2023 - 20.., AG2ai, Inc\., AG2ai open-source projects maintainers and core contributors",
+    r"SPDX-License-Identifier: Apache-2\.0",
+]
 
 
 def get_github_pr_files() -> List[Path]:
@@ -55,19 +63,37 @@ def get_staged_files() -> List[Path]:
 
 def should_check_file(file_path: Path) -> bool:
     """Skip __init__.py files and check if file exists."""
-    return file_path.name != "__init__.py" and file_path.exists()
+    # return file_path.name != "__init__.py" and file_path.exists()
+    return file_path.exists()
 
 
 def check_file_header(file_path: Path) -> List[str]:
     """Check if file has required license headers."""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read(500)
-            missing_elements = []
-            for pattern in REQUIRED_ELEMENTS:
-                if not re.search(pattern, content[:500], re.IGNORECASE):
-                    missing_elements.append(pattern)
-            return missing_elements
+
+        # if the file is empty, write the license header
+        # if not(content):
+        #     with open(file_path, encoding="utf-8", mode="w") as f:
+        #         f.write(LICENCE)
+        #         if f.name.endswith("__init__.py"):
+        #             f.write("\n__all__: list[str] = []\n")
+        #     with open(file_path, encoding="utf-8") as f:
+        #         content = f.read(500)
+
+        missing_elements = []
+        for pattern in REQUIRED_ELEMENTS:
+            if not re.search(pattern, content[:500], re.IGNORECASE):
+                missing_elements.append(pattern)
+
+        # if missing_elements:
+        #     with open(file_path, encoding="utf-8") as f:
+        #         content = f.read()
+        #         content = LICENCE + "\n" + content
+        #     with open(file_path, encoding="utf-8", mode="w") as f:
+        #         f.write(content)
+        return missing_elements
     except Exception as e:
         print(f"Error processing file {file_path}: {e}")
         return []
@@ -75,17 +101,18 @@ def check_file_header(file_path: Path) -> List[str]:
 
 def get_files_to_check() -> List[Path]:
     """Determine which files to check based on environment."""
-    try:
-        if "--all-files" in sys.argv:
-            return list(Path().rglob("*.py"))
+    return list(Path("autogen").rglob("*.py")) + list(Path("test").rglob("*.py"))
+    # try:
+    #     if "--all-files" in sys.argv:
+    #         return list(Path().rglob("*.py"))
 
-        if os.getenv("GITHUB_ACTIONS") == "true":
-            return get_github_pr_files()
+    #     if os.getenv("GITHUB_ACTIONS") == "true":
+    #         return get_github_pr_files()
 
-        return get_staged_files()
-    except Exception as e:
-        print(f"Error getting files to check: {e}")
-        return []
+    #     return get_staged_files()
+    # except Exception as e:
+    #     print(f"Error getting files to check: {e}")
+    #     return []
 
 
 def main() -> None:

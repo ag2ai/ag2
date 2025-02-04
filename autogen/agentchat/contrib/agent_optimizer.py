@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,8 +8,8 @@ import copy
 import json
 from typing import Optional
 
-import autogen
-from autogen.code_utils import execute_code
+from ... import OpenAIWrapper, filter_config
+from ...code_utils import execute_code
 
 ADD_FUNC = {
     "type": "function",
@@ -183,7 +183,7 @@ class AgentOptimizer:
         Args:
             max_actions_per_step (int): the maximum number of actions that the optimizer can take in one step.
             llm_config (dict): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create) for available options.
+                Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create) for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
             optimizer_model: the model used for the optimizer.
         """
@@ -209,10 +209,8 @@ class AgentOptimizer:
             raise ValueError(
                 "When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'."
             )
-        self.llm_config["config_list"] = autogen.filter_config(
-            llm_config["config_list"], {"model": [self.optimizer_model]}
-        )
-        self._client = autogen.OpenAIWrapper(**self.llm_config)
+        self.llm_config["config_list"] = filter_config(llm_config["config_list"], {"model": [self.optimizer_model]})
+        self._client = OpenAIWrapper(**self.llm_config)
 
     def record_one_conversation(self, conversation_history: list[dict], is_satisfied: bool = None):
         """Record one conversation history.
@@ -229,7 +227,7 @@ class AgentOptimizer:
                 "0",
                 "1",
             ], "The input is invalid. Please input 1 or 0. 1 represents satisfied. 0 represents not satisfied."
-            is_satisfied = True if reply == "1" else False
+            is_satisfied = reply == "1"
         self._trial_conversations_history.append(
             {f"Conversation {len(self._trial_conversations_history)}": conversation_history}
         )
@@ -286,8 +284,8 @@ class AgentOptimizer:
                 incumbent_functions = self._update_function_call(incumbent_functions, actions)
 
         remove_functions = list(
-            {key for dictionary in self._trial_functions for key in dictionary.keys()}
-            - {key for dictionary in incumbent_functions for key in dictionary.keys()}
+            {key for dictionary in self._trial_functions for key in dictionary}
+            - {key for dictionary in incumbent_functions for key in dictionary}
         )
 
         register_for_llm = []
@@ -332,7 +330,7 @@ class AgentOptimizer:
 
     def _update_function_call(self, incumbent_functions, actions):
         """Update function call."""
-        formated_actions = []
+        formatted_actions = []
         for action in actions:
             func = json.loads(action.function.arguments.strip('"'))
             func["action_name"] = action.function.name
@@ -351,8 +349,8 @@ class AgentOptimizer:
                     "packages": func.get("packages"),
                     "code": func.get("code"),
                 }
-            formated_actions.append(item)
-        actions = formated_actions
+            formatted_actions.append(item)
+        actions = formatted_actions
 
         for action in actions:
             name, description, arguments, packages, code, action_name = (
@@ -410,7 +408,7 @@ class AgentOptimizer:
                 function_args = action.function.arguments
                 try:
                     function_args = json.loads(function_args.strip('"'))
-                    if "arguments" in function_args.keys():
+                    if "arguments" in function_args:
                         json.loads(function_args.get("arguments").strip('"'))
                 except Exception as e:
                     print("JSON is invalid:", e)

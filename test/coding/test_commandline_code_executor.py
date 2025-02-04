@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -22,9 +22,9 @@ from autogen.coding.factory import CodeExecutorFactory
 from autogen.coding.local_commandline_code_executor import LocalCommandLineCodeExecutor
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from conftest import MOCK_OPEN_AI_API_KEY, skip_docker
+from ..conftest import MOCK_OPEN_AI_API_KEY
 
-if skip_docker or not is_docker_running() or not decide_use_docker(use_docker=None):
+if not is_docker_running() or not decide_use_docker(use_docker=None):
     skip_docker_test = True
     classes_to_test = [LocalCommandLineCodeExecutor]
 else:
@@ -79,6 +79,7 @@ def test_create_local() -> None:
     assert executor is config["executor"]
 
 
+@pytest.mark.docker
 @pytest.mark.skipif(
     skip_docker_test,
     reason="docker is not running or requested to skip docker tests",
@@ -252,6 +253,7 @@ def test_local_commandline_code_executor_restart() -> None:
 
 
 # This is kind of hard to test because each exec is a new env
+@pytest.mark.docker
 @pytest.mark.skipif(
     skip_docker_test,
     reason="docker is not running or requested to skip docker tests",
@@ -265,6 +267,7 @@ def test_docker_commandline_code_executor_restart() -> None:
         assert result.exit_code == 0
 
 
+@pytest.mark.docker
 @pytest.mark.skipif(
     skip_docker_test,
     reason="docker is not running or requested to skip docker tests",

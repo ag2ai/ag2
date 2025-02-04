@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,16 +11,19 @@ from typing import Union
 
 import tiktoken
 
-try:
-    from autogen.agentchat.contrib.img_utils import num_tokens_from_gpt_image
+from .agentchat.contrib.img_utils import num_tokens_from_gpt_image
+from .import_utils import optional_import_block
 
-    img_util_imported = True
-except ImportError:
+# if PIL is not imported, we will redefine num_tokens_from_gpt_image to return 0 tokens for images
+# Otherwise, it would raise an ImportError
+with optional_import_block() as result:
+    import PIL  # noqa: F401
+
+pil_imported = result.is_successful
+if not pil_imported:
 
     def num_tokens_from_gpt_image(*args, **kwargs):
         return 0
-
-    img_util_imported = False
 
 
 logger = logging.getLogger(__name__)
@@ -92,7 +95,7 @@ def count_token(input: Union[str, list, dict], model: str = "gpt-3.5-turbo-0613"
     """
     if isinstance(input, str):
         return _num_token_from_text(input, model=model)
-    elif isinstance(input, list) or isinstance(input, dict):
+    elif isinstance(input, (list, dict)):
         return _num_token_from_messages(input, model=model)
     else:
         raise ValueError(f"input must be str, list or dict, but we got {type(input)}")
@@ -157,6 +160,9 @@ def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0
     elif "mistral-" in model or "mixtral-" in model:
         logger.info("Mistral.AI models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "deepseek" in model:
+        logger.info("Deepseek models are not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
     else:
         raise NotImplementedError(
             f"""_num_token_from_messages() is not implemented for model {model}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens."""
@@ -177,7 +183,7 @@ def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0
                         num_tokens += len(encoding.encode(part["text"]))
                     if "image_url" in part:
                         assert "url" in part["image_url"]
-                        if not img_util_imported and not logger.img_dependency_warned:
+                        if not pil_imported and not logger.img_dependency_warned:
                             logger.warning(
                                 "img_utils or PIL not imported. Skipping image token count."
                                 "Please install autogen with [lmm] option.",

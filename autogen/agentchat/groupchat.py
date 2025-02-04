@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 from typing import Callable, Literal, Optional, Union
 
 from ..code_utils import content_str
-from ..exception_utils import AgentNameConflict, NoEligibleSpeaker, UndefinedNextAgent
+from ..doc_utils import export_module
+from ..exception_utils import AgentNameConflictError, NoEligibleSpeakerError, UndefinedNextAgentError
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..messages.agent_messages import (
@@ -42,6 +43,7 @@ SELECT_SPEAKER_PROMPT_TEMPLATE = (
 
 
 @dataclass
+@export_module("autogen")
 class GroupChat:
     """(In preview) A group chat class that contains the following data fields:
     - agents: a list of participating agents.
@@ -319,7 +321,7 @@ class GroupChat:
         filtered_agents = [agent for agent in agents if agent.name == name]
 
         if raise_on_name_conflict and len(filtered_agents) > 1:
-            raise AgentNameConflict()
+            raise AgentNameConflictError()
 
         return filtered_agents[0] if filtered_agents else None
 
@@ -339,7 +341,7 @@ class GroupChat:
 
         # Ensure the provided list of agents is a subset of self.agents
         if not set(agents).issubset(set(self.agents)):
-            raise UndefinedNextAgent()
+            raise UndefinedNextAgentError()
 
         # What index is the agent? (-1 if not present)
         idx = self.agent_names.index(agent.name) if agent.name in self.agent_names else -1
@@ -354,7 +356,7 @@ class GroupChat:
                     return self.agents[(offset + i) % len(self.agents)]
 
         # Explicitly handle cases where no valid next agent exists in the provided subset.
-        raise UndefinedNextAgent()
+        raise UndefinedNextAgentError()
 
     def select_speaker_msg(self, agents: Optional[list[Agent]] = None) -> str:
         """Return the system message for selecting the next speaker. This is always the *first* message in the context."""
@@ -441,7 +443,9 @@ class GroupChat:
         if isinstance(self.speaker_selection_method, Callable):
             selected_agent = self.speaker_selection_method(last_speaker, self)
             if selected_agent is None:
-                raise NoEligibleSpeaker("Custom speaker selection function returned None. Terminating conversation.")
+                raise NoEligibleSpeakerError(
+                    "Custom speaker selection function returned None. Terminating conversation."
+                )
             elif isinstance(selected_agent, Agent):
                 if selected_agent in self.agents:
                     return selected_agent, self.agents, None
@@ -522,7 +526,9 @@ class GroupChat:
 
         # this condition means last_speaker is a sink in the graph, then no agents are eligible
         if last_speaker not in self.allowed_speaker_transitions_dict and is_last_speaker_in_group:
-            raise NoEligibleSpeaker(f"Last speaker {last_speaker.name} is not in the allowed_speaker_transitions_dict.")
+            raise NoEligibleSpeakerError(
+                f"Last speaker {last_speaker.name} is not in the allowed_speaker_transitions_dict."
+            )
         # last_speaker is not in the group, so all agents are eligible
         elif last_speaker not in self.allowed_speaker_transitions_dict and not is_last_speaker_in_group:
             graph_eligible_agents = []
@@ -637,7 +643,7 @@ class GroupChat:
         if not self.select_speaker_auto_llm_config:
             return
 
-        config_format_is_list = "config_list" in self.select_speaker_auto_llm_config.keys()
+        config_format_is_list = "config_list" in self.select_speaker_auto_llm_config
         if config_format_is_list:
             for config in self.select_speaker_auto_llm_config["config_list"]:
                 self._register_client_from_config(agent, config)
@@ -1011,6 +1017,7 @@ class GroupChat:
         return mentions
 
 
+@export_module("autogen")
 class GroupChatManager(ConversableAgent):
     """(In preview) A chat manager agent that can manage a group chat of multiple agents."""
 
@@ -1183,7 +1190,7 @@ class GroupChatManager(ConversableAgent):
                 else:
                     # admin agent is not found in the participants
                     raise
-            except NoEligibleSpeaker:
+            except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
                 break
 
@@ -1264,7 +1271,7 @@ class GroupChatManager(ConversableAgent):
                 else:
                     # admin agent is not found in the participants
                     raise
-            except NoEligibleSpeaker:
+            except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
                 break
 
@@ -1502,13 +1509,12 @@ class GroupChatManager(ConversableAgent):
 
         # Check that all agents in the chat messages exist in the group chat
         for message in messages:
-            if message.get("name"):
-                if (
-                    not self._groupchat.agent_by_name(message["name"])
-                    and not message["name"] == self._groupchat.admin_name  # ignore group chat's name
-                    and not message["name"] == self.name  # ignore group chat manager's name
-                ):
-                    raise Exception(f"Agent name in message doesn't exist as agent in group chat: {message['name']}")
+            if message.get("name") and (
+                not self._groupchat.agent_by_name(message["name"])
+                and not message["name"] == self._groupchat.admin_name  # ignore group chat's name
+                and not message["name"] == self.name  # ignore group chat manager's name
+            ):
+                raise Exception(f"Agent name in message doesn't exist as agent in group chat: {message['name']}")
 
     def _process_resume_termination(
         self, remove_termination_string: Union[str, Callable[[str], str]], messages: list[dict]
@@ -1534,14 +1540,12 @@ class GroupChatManager(ConversableAgent):
         else:
             _remove_termination_string = remove_termination_string
 
-        if _remove_termination_string:
-            if messages[-1].get("content"):
-                messages[-1]["content"] = _remove_termination_string(messages[-1]["content"])
+        if _remove_termination_string and messages[-1].get("content"):
+            messages[-1]["content"] = _remove_termination_string(messages[-1]["content"])
 
         # Check if the last message meets termination (if it has one)
-        if self._is_termination_msg:
-            if self._is_termination_msg(last_message):
-                logger.warning("WARNING: Last message meets termination criteria and this may terminate the chat.")
+        if self._is_termination_msg and self._is_termination_msg(last_message):
+            logger.warning("WARNING: Last message meets termination criteria and this may terminate the chat.")
 
     def messages_from_string(self, message_string: str) -> list[dict]:
         """Reads the saved state of messages in Json format for resume and returns as a messages list

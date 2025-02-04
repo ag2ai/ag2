@@ -4,12 +4,12 @@ title: Tests
 
 Tests are automatically run via GitHub actions. There are two workflows:
 
-1. [build.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/build.yml)
-1. [openai.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/openai.yml)
+1. [core-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-test.yml)
+1. [core-llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-llm-test.yml)
 
-The first workflow is required to pass for all PRs (and it doesn't do any OpenAI calls). The second workflow is required for changes that affect the OpenAI tests (and does actually call LLM). The second workflow requires approval to run. When writing tests that require OpenAI calls, please use [`pytest.mark.skipif`](https://github.com/ag2ai/ag2/blob/b1adac515931bf236ac59224269eeec683a162ba/test/oai/test_client.py#L19) to make them run in only when `openai` package is installed. If additional dependency for this test is required, install the dependency in the corresponding python version in [openai.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/openai.yml).
+The first workflow is required to pass for all PRs (and it doesn't do any OpenAI calls). The second workflow is required for changes that affect the OpenAI tests (and does actually call LLM). The second workflow requires approval to run. When writing tests that require OpenAI calls, please use [`pytest.mark.skipif`](https://github.com/ag2ai/ag2/blob/b1adac515931bf236ac59224269eeec683a162ba/test/oai/test_client.py#L19) to make them run in only when `openai` package is installed. If additional dependency for this test is required, install the dependency in the corresponding python version in [core-llm-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-llm-test.yml).
 
-Make sure all tests pass, this is required for [build.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/build.yml) checks to pass
+Make sure all tests pass, this is required for [core-test.yml](https://github.com/ag2ai/ag2/blob/main/.github/workflows/core-test.yml) checks to pass
 
 ## Running tests locally
 
@@ -33,15 +33,26 @@ See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#testi
 
 ## Skip flags for tests
 
-- `-m "not openai"` for skipping tests that require access to OpenAI services.
-- `--skip-docker` for skipping tests that explicitly use docker
-- `--skip-redis` for skipping tests that require a Redis server
+- `-m`: Used to select or deselect specific groups of tests marked with pytest markers, such as tests for LLM services like OpenAI, Gemini etc. For example, you can mark tests with `@pytest.mark.openai` and then use `-m openai` to run only those tests.
+- `-m "not docker"`: Skips tests that explicitly require Docker.
+- `-m "not redis"`: Skips tests that require a Redis server.
 
-For example, the following command will skip tests that require access to
-OpenAI and docker services:
 
+**Examples:**
+
+To skip tests that require access to LLM services and Docker, run:
 ```bash
-bash scripts/test.sh test -m "not openai" --skip-docker
+bash scripts/test-core-skip-llm.sh -m "not docker"
+```
+
+To run tests for all LLM services (OpenAI, Gemini, etc.), use:
+```bash
+bash scripts/test-core-llm.sh
+```
+
+To run tests specifically for the OpenAI LLM service, use:
+```bash
+bash scripts/test-core-llm.sh -m "openai"
 ```
 
 ## Coverage

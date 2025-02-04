@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,16 +12,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen import OpenAIWrapper
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
-from ..conftest import Credentials, reason
+from ..conftest import Credentials
 
-try:
-    from openai import OpenAI  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
-
+with optional_import_block() as result:
     # raises exception if openai>=1 is installed and something is wrong with imports
     # otherwise the test will be skipped
     from openai.types.chat.chat_completion import ChatCompletionMessage  # type: ignore [attr-defined]
@@ -33,7 +28,7 @@ else:
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "2+2="}], stream=True)
@@ -42,7 +37,7 @@ def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> No
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}], stream=True)
@@ -85,7 +80,7 @@ def test__update_dict_from_chunk() -> None:
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test__update_function_call_from_chunk() -> None:
     function_call_chunks = [
         ChoiceDeltaFunctionCall(arguments=None, name="get_current_weather"),
@@ -118,7 +113,7 @@ def test__update_function_call_from_chunk() -> None:
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test__update_tool_calls_from_chunk() -> None:
     tool_calls_chunks = [
         ChoiceDeltaToolCall(
@@ -191,8 +186,10 @@ def test__update_tool_calls_from_chunk() -> None:
 
 
 # todo: remove when OpenAI removes functions from the API
+
+
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
     functions = [
         {
@@ -221,8 +218,10 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 # test for tool support instead of the deprecated function calls
+
+
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
     tools = [
         {
@@ -264,7 +263,7 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(skip, reason=reason)
+@skip_on_missing_imports(["openai"])
 def test_completion_stream(credentials_azure_gpt_35_turbo_instruct: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=", stream=True)
