@@ -28,6 +28,8 @@ global_logger = getLogger(__name__)
 class OpenAIRealtimeClient:
     """(Experimental) Client for OpenAI Realtime API."""
 
+    __exported_module__: str = ""
+
     def __init__(
         self,
         *,
