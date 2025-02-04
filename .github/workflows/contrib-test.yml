@@ -63,7 +63,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: retrievechat, retrievechat-qdrant, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -135,7 +135,7 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: retrievechat, retrievechat-qdrant, retrievechat-pgvector, retrievechat-mongodb, ubuntu-latest, ${{ matrix.python-version }}
@@ -168,7 +168,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/agent_eval/
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -207,7 +207,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_gpt_assistant.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -246,7 +246,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: teachable, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -285,7 +285,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: websurfer, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -330,7 +330,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: lmm, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -374,7 +374,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_gemini.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: gemini, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -413,7 +413,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_transform_messages.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: long-context, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -447,7 +447,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_llamaindex_conversable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -492,7 +492,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_anthropic.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: anthropic, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -536,7 +536,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cerebras.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: cerebras, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -580,7 +580,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_mistral.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: mistral, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -624,7 +624,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_together.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: together, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -668,7 +668,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_groq.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: groq, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -708,7 +708,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cohere.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: cohere, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -752,7 +752,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_ollama.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: ollama, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -796,7 +796,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_bedrock.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: bedrock, ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -840,7 +840,7 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_swarm.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: ${{ matrix.os }}, ${{ matrix.python-version }}
@@ -895,7 +895,7 @@ jobs:
           run: |
             bash scripts/test-skip-llm.sh test/agentchat/contrib/test_reasoning_agent.py
         - name: Upload coverage to Codecov
-          uses: codecov/codecov-action@v5
+          uses: codecov/codecov-action@v5.3.1
           with:
             files: ./coverage.xml
             flags: ${{ matrix.os }}, ${{ matrix.python-version }}

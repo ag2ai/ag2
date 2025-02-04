@@ -48,7 +48,7 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: teachable, ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -93,7 +93,7 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: autobuild, ${{ matrix.python-version }}, ${{ matrix.os }}
@@ -131,7 +131,7 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: lmm, ${{ matrix.python-version }}, ${{ matrix.os }}

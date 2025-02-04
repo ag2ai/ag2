@@ -62,7 +62,7 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: falkordb, ubuntu-latest, ${{ matrix.python-version }}
@@ -112,7 +112,7 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
@@ -158,7 +158,7 @@ jobs:
   #       run: |
   #         bash scripts/test.sh -m "neo4j"
   #     - name: Upload coverage to Codecov
-  #       uses: codecov/codecov-action@v5
+  #       uses: codecov/codecov-action@v5.3.1
   #       with:
   #         files: ./coverage.xml
   #         flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
