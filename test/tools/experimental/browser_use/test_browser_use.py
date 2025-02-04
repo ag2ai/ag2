@@ -16,6 +16,7 @@ from ....conftest import Credentials, credentials_browser_use
 with optional_import_block():
     from langchain_anthropic import ChatAnthropic
     from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_ollama import ChatOllama
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 
@@ -76,6 +77,10 @@ class TestBrowserUseToolOpenai:
                     {"api_type": "anthropic", "model": "sonnet", "api_key": "test"},
                 ],
                 ChatAnthropic,
+            ),
+            (
+                [{"api_type": "ollama", "model": "mistral:7b-instruct-v0.3-q6_K"}],
+                ChatOllama,
             ),
         ],
     )

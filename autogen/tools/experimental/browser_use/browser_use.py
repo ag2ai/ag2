@@ -16,6 +16,7 @@ with optional_import_block():
     from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_anthropic import ChatAnthropic
     from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_ollama import ChatOllama
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 
@@ -100,7 +101,7 @@ class BrowserUseTool(Tool):
         )
 
     @staticmethod
-    def _get_llm(  # type: ignore[no-any-unimported]
+    def _get_llm(
         llm_config: dict[str, Any],
     ) -> Any:
         if "config_list" not in llm_config:
@@ -111,7 +112,10 @@ class BrowserUseTool(Tool):
         try:
             model = llm_config["config_list"][0]["model"]
             api_type = llm_config["config_list"][0].get("api_type", "openai")
-            api_key = llm_config["config_list"][0]["api_key"]
+
+            # Ollama does not require an api_key
+            api_key = None if api_type == "ollama" else llm_config["config_list"][0]["api_key"]
+
             if api_type == "deepseek" or api_type == "azure" or api_type == "azure":
                 base_url = llm_config["config_list"][0].get("base_url")
                 if not base_url:
@@ -121,8 +125,8 @@ class BrowserUseTool(Tool):
                 if not api_version:
                     raise ValueError(f"api_version is required for {api_type} api type.")
 
-        except (KeyError, TypeError):
-            raise ValueError("llm_config must be a valid config dictionary.")
+        except (KeyError, TypeError) as e:
+            raise ValueError(f"llm_config must be a valid config dictionary: {e}")
 
         if api_type == "openai":
             return ChatOpenAI(model=model, api_key=api_key)
@@ -139,5 +143,7 @@ class BrowserUseTool(Tool):
             return ChatAnthropic(model=model, api_key=api_key)
         elif api_type == "google":
             return ChatGoogleGenerativeAI(model=model, api_key=api_key)
+        elif api_type == "ollama":
+            return ChatOllama(model=model, num_ctx=32000)
         else:
             raise ValueError(f"Currently unsupported language model api type for browser use: {api_type}")
