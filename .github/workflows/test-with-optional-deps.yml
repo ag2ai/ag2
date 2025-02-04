@@ -56,6 +56,10 @@ jobs:
       fail-fast: false
       matrix:
         optional-dependencies:
+          - "browser-use"
+          - "commsagent-discord"
+          - "commsagent-slack"
+          - "commsagent-telegram"
           - "jupyter-executor"
           - "retrievechat"
           - "retrievechat-pgvector"
