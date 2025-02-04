@@ -13,7 +13,7 @@ from .vectordb.utils import get_logger
 
 logger = get_logger(__name__)
 
-with optional_import_block() as result:
+with optional_import_block():
     from llama_index.core.agent.runner.base import AgentRunner
     from llama_index.core.base.llms.types import ChatMessage
     from llama_index.core.chat_engine.types import AgentChatResponse
