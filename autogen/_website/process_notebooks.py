@@ -44,6 +44,13 @@ with optional_import_block():
     from termcolor import colored
 
 
+EDIT_URL_HTML = """
+<div className="edit-url-container">
+    <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/{file_path}" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>
+</div>
+"""
+
+
 @lru_cache
 def check_quarto_bin(quarto_bin: str = "quarto") -> bool:
     """Check if quarto is installed."""

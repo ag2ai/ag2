@@ -98,6 +98,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-edit-url-in-mdx-files
+        name: ensure editUrl exists for mdx files in website/docs directory
+        entry: python ./scripts/pre-commit-edit-url-check.py
+        language: python
+        require_serial: true
+        files: ^(website/(_blogs|docs)/.*\.mdx)$
+
+  - repo: local
+    hooks:
       - id: generate-devcontainer-files
         name: Generate devcontainer files
         entry: "scripts/devcontainer/generate-devcontainers.sh"
