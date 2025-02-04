@@ -561,6 +561,9 @@ def post_process_mdx(
     # Convert mdx image syntax to mintly image syntax
     content = convert_mdx_image_blocks(content, rendered_mdx, website_dir)
 
+    # ensure editUrl is present
+    content = ensure_edit_url(content, repo_relative_notebook)
+
     # Rewrite the content as
     # ---
     # front_matter_str
