@@ -4,10 +4,12 @@ on: # Trigger the workflow on pull request or merge
   pull_request:
   merge_group:
     types: [checks_requested]
+
 defaults:
   run:
     shell: bash
 permissions: {}
+
 jobs:
   type-check:
     strategy:
