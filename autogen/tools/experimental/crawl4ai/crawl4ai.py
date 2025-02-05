@@ -68,7 +68,7 @@ class Crawl4AITool(Tool):
         async def crawl4ai_with_llm(
             url: Annotated[str, "The url to crawl and extract information from."],
             instruction: Annotated[str, "The instruction to provide on how and what to extract."],
-            llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+            llm_config: Annotated[Any, Depends(on(llm_config))],
             llm_strategy_kwargs: Annotated[Optional[dict[str, Any]], Depends(on(llm_strategy_kwargs))],
             extraction_model: Annotated[Optional[Type[BaseModel]], Depends(on(extraction_model))],
         ) -> Any:
