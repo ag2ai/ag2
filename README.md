@@ -90,7 +90,7 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 ## What is AG2
 
-AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. Think of it as the "PyTorch for AI Agents" - providing the fundamental building blocks needed to create, deploy, and manage AI agent systems.
+AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 provides fundamental building blocks needed to create, deploy, and manage AI agent systems that can work together to solve complex problems.
 
 ### Core Concepts
 - **Agents**: Autonomous entities powered by LLMs that can reason, plan, and execute tasks
