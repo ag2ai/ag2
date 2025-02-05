@@ -41,17 +41,35 @@ Now, we’re taking AG2 even further by integrating [`Browser Use`](https://gith
 
 ### Installation
 
+<Warning>
+[`Browser Use`](https://github.com/browser-use/browser-use) requires **Python 3.11 or higher**.
+</Warning>
+
 To get started with the `Browser Use` integration in AG2, follow these steps:
 
 1. Install AG2 with the `browser-use` extra:
-   ```bash
-   pip install ag2[browser-use]
-   ````
+    ```bash
+    pip install ag2[browser-use]
+    ```
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[browser-use]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[browser-use]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
 2. Set up Playwright:
 
-   ```bash
-   playwright install
-   ```
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
 
 3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
     ```bash
@@ -214,14 +232,28 @@ The integration process follows a straightforward approach.
 To integrate `Crawl4AI` with AG2, follow these steps:
 
 1. Install AG2 with the `crawl4ai` extra:
-   ```bash
-   pip install ag2[crawl4ai]
-   ````
+    ```bash
+    pip install ag2[crawl4ai]
+    ```
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[crawl4ai]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[crawl4ai]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
 2. Set up Playwright:
 
-   ```bash
-   playwright install
-   ```
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
 3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
     ```bash
     pip install nest_asyncio
