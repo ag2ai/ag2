@@ -65,6 +65,7 @@ setuptools.setup(
         "cohere": ["pyautogen[cohere]==" + __version__],
         "ollama": ["pyautogen[ollama]==" + __version__],
         "bedrock": ["pyautogen[bedrock]==" + __version__],
+        "agent-occam": ["pyautogen[agent-occam]==" + __version__],
         "test": ["pyautogen[test]==" + __version__],
         "docs": ["pyautogen[docs]==" + __version__],
         "types": ["pyautogen[types]==" + __version__],
