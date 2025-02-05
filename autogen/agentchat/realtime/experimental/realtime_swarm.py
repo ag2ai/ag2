@@ -13,7 +13,7 @@ from asyncer import asyncify, create_task_group, syncify
 from ....cache import AbstractCache
 from ....code_utils import content_str
 from ....doc_utils import export_module
-from ... import AfterWorkOption, Agent, ChatResult, ConversableAgent, LLMAgent, SwarmAgent, initiate_swarm_chat
+from ... import AfterWorkOption, Agent, ChatResult, ConversableAgent, LLMAgent, initiate_swarm_chat
 from ...utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:
@@ -335,8 +335,8 @@ class SwarmableRealtimeAgent(SwarmableAgent):
     def __init__(
         self,
         realtime_agent: "RealtimeAgent",
-        initial_agent: SwarmAgent,
-        agents: list[SwarmAgent],
+        initial_agent: ConversableAgent,
+        agents: list[ConversableAgent],
     ) -> None:
         self._initial_agent = initial_agent
         self._agents = agents
@@ -454,16 +454,16 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 def register_swarm(
     *,
     realtime_agent: "RealtimeAgent",  # type: ignore
-    initial_agent: SwarmAgent,
-    agents: list[SwarmAgent],
+    initial_agent: ConversableAgent,
+    agents: list[ConversableAgent],
     system_message: Optional[str] = None,
 ) -> None:
     """Create a SwarmableRealtimeAgent.
 
     Args:
         realtime_agent (RealtimeAgent): The RealtimeAgent to create the SwarmableRealtimeAgent from.
-        initial_agent (SwarmAgent): The initial agent.
-        agents (list[SwarmAgent]): The agents in the swarm.
+        initial_agent (ConversableAgent): The initial agent.
+        agents (list[ConversableAgent]): The agents in the swarm.
         system_message (Optional[str]): The system message to set for the agent. If None, the default system message is used.
     """
     swarmable_agent = SwarmableRealtimeAgent(realtime_agent=realtime_agent, initial_agent=initial_agent, agents=agents)
