@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,28 +10,21 @@ import pickle
 import unittest
 from unittest.mock import MagicMock, patch
 
-try:
+from autogen.cache.cosmos_db_cache import CosmosDBCache
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+
+with optional_import_block() as result:
     from azure.cosmos.exceptions import CosmosResourceNotFoundError
 
-    from autogen.cache.cosmos_db_cache import CosmosDBCache
 
-    skip_test = False
-except ImportError:
-    CosmosResourceNotFoundError = Exception
-    CosmosDBCache = object
-    skip_test = True
-
-
+@skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
 class TestCosmosDBCache(unittest.TestCase):
     def setUp(self):
-        if skip_test:
-            self.skipTest("requires azure.cosmos")
-        else:
-            self.seed = "42"
-            self.connection_string = "AccountEndpoint=https://example.documents.azure.com:443/;"
-            self.database_id = "autogen_cache"
-            self.container_id = "TestContainer"
-            self.client = MagicMock()
+        self.seed = "42"
+        self.connection_string = "AccountEndpoint=https://example.documents.azure.com:443/;"
+        self.database_id = "autogen_cache"
+        self.container_id = "TestContainer"
+        self.client = MagicMock()
 
     @patch("autogen.cache.cosmos_db_cache.CosmosClient.from_connection_string", return_value=MagicMock())
     def test_init(self, mock_from_connection_string):

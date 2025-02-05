@@ -11,7 +11,7 @@ on:
       - "test/agentchat/contrib/**"
       - "test/test_browser_utils.py"
       - "test/test_retrieve_utils.py"
-      - ".github/workflows/contrib-tests.yml"
+      - ".github/workflows/contrib-test.yml"
       - "pyproject.toml"
 
 concurrency:
@@ -63,10 +63,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: retrievechat, retrievechat-qdrant, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   RetrieveChatTest-Ubuntu:
     runs-on: ubuntu-latest
@@ -133,10 +135,12 @@ jobs:
           uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: retrievechat, retrievechat-qdrant, retrievechat-pgvector, retrievechat-mongodb, ubuntu-latest, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   AgentEvalTest:
     strategy:
@@ -164,10 +168,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/agent_eval/
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: ${{ matrix.python-version }}, ${{ matrix.os }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   GPTAssistantAgent:
     runs-on: ${{ matrix.os }}
@@ -201,10 +207,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_gpt_assistant.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   TeachableAgent:
     runs-on: ${{ matrix.os }}
@@ -238,10 +246,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: teachable, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   WebSurfer:
     runs-on: ${{ matrix.os }}
@@ -249,7 +259,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -275,10 +285,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: websurfer, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   LMMTest:
     runs-on: ${{ matrix.os }}
@@ -318,10 +330,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: lmm, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   GeminiTest:
     runs-on: ${{ matrix.os }}
@@ -360,10 +374,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_gemini.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: gemini, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   TransformMessages:
     runs-on: ${{ matrix.os }}
@@ -397,10 +413,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_transform_messages.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittest
+          files: ./coverage.xml
+          flags: long-context, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   LlamaIndexAgent:
     runs-on: ${{ matrix.os }}
@@ -429,10 +447,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_llamaindex_conversable_agent.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   AnthropicTest:
     runs-on: ${{ matrix.os }}
@@ -472,10 +492,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_anthropic.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: anthropic, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   CerebrasTest:
     runs-on: ${{ matrix.os }}
@@ -503,7 +525,7 @@ jobs:
           uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Cerebras
         run: |
-          uv pip install --system -e .[cerebras_cloud_sdk,test]
+          uv pip install --system -e .[cerebras,test]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -514,10 +536,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cerebras.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: cerebras, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   MistralTest:
     runs-on: ${{ matrix.os }}
@@ -556,10 +580,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_mistral.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: mistral, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   TogetherTest:
     runs-on: ${{ matrix.os }}
@@ -598,10 +624,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_together.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: together, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   GroqTest:
     runs-on: ${{ matrix.os }}
@@ -640,10 +668,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_groq.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: groq, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   CohereTest:
     runs-on: ${{ matrix.os }}
@@ -678,10 +708,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cohere.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: cohere, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   OllamaTest:
     runs-on: ${{ matrix.os }}
@@ -720,10 +752,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_ollama.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: ollama, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   BedrockTest:
     runs-on: ${{ matrix.os }}
@@ -751,7 +785,7 @@ jobs:
           uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Amazon Bedrock
         run: |
-          uv pip install --system -e .[boto3,test]
+          uv pip install --system -e .[bedrock,test]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -762,10 +796,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_bedrock.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: bedrock, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   SwarmTest:
     runs-on: ${{ matrix.os }}
@@ -804,10 +840,12 @@ jobs:
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_swarm.py
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   ReasoningTest:
       runs-on: ${{ matrix.os }}
@@ -857,7 +895,9 @@ jobs:
           run: |
             bash scripts/test-skip-llm.sh test/agentchat/contrib/test_reasoning_agent.py
         - name: Upload coverage to Codecov
-          uses: codecov/codecov-action@v3
+          uses: codecov/codecov-action@v5
           with:
-            file: ./coverage.xml
-            flags: unittests
+            files: ./coverage.xml
+            flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+            fail_ci_if_error: true
+            token: ${{ secrets.CODECOV_TOKEN }}

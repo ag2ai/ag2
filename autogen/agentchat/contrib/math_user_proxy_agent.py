@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,12 +9,15 @@ import re
 from time import sleep
 from typing import Any, Callable, Literal, Optional, Union
 
-from pydantic import BaseModel, Extra, root_validator
+from pydantic import BaseModel, root_validator
 
-from autogen._pydantic import PYDANTIC_V1
-from autogen.agentchat import Agent, UserProxyAgent
-from autogen.code_utils import UNKNOWN, execute_code, extract_code, infer_lang
-from autogen.math_utils import get_answer
+from ...code_utils import UNKNOWN, execute_code, extract_code, infer_lang
+from ...import_utils import optional_import_block, require_optional_import
+from ...math_utils import get_answer
+from .. import Agent, UserProxyAgent
+
+with optional_import_block() as result:
+    import wolframalpha
 
 PROMPTS = {
     # default
@@ -162,7 +165,7 @@ class MathUserProxyAgent(UserProxyAgent):
                 when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
-        **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
+        **kwargs (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
         """
         super().__init__(
             name=name,
@@ -394,24 +397,14 @@ class WolframAlphaAPIWrapper(BaseModel):
     wolfram_client: Any  #: :meta private:
     wolfram_alpha_appid: Optional[str] = None
 
-    class Config:
-        """Configuration for this pydantic object."""
-
-        if PYDANTIC_V1:
-            extra = Extra.forbid
-
     @root_validator(skip_on_failure=True)
     @classmethod
+    @require_optional_import("wolframalpha", "mathchat")
     def validate_environment(cls, values: dict) -> dict:
         """Validate that api key and python package exists in environment."""
         wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
         values["wolfram_alpha_appid"] = wolfram_alpha_appid
 
-        try:
-            import wolframalpha
-
-        except ImportError as e:
-            raise ImportError("wolframalpha is not installed. Please install it with `pip install wolframalpha`") from e
         client = wolframalpha.Client(wolfram_alpha_appid)
         values["wolfram_client"] = client
 

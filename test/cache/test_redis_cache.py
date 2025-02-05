@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,16 +12,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
-    from autogen.cache.redis_cache import RedisCache
-
-    skip_redis_tests = False
-except ImportError:
-    skip_redis_tests = True
+from autogen.cache.redis_cache import RedisCache
+from autogen.import_utils import skip_on_missing_imports
 
 
 @pytest.mark.redis
-@pytest.mark.skipif(skip_redis_tests, reason="redis not installed")
+@skip_on_missing_imports(["redis"], "redis")
 class TestRedisCache(unittest.TestCase):
     def setUp(self):
         self.seed = "test_seed"

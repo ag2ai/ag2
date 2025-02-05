@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,13 +10,14 @@ import json
 import logging
 import os
 import tempfile
+from datetime import datetime, timezone
 from unittest import mock
 from unittest.mock import patch
 
 import pytest
 
 import autogen
-from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, filter_config, is_valid_api_key
+from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, OAI_PRICE1K, filter_config, is_valid_api_key
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
@@ -133,10 +134,10 @@ def test_config_list_from_json():
             for key in config:
                 assert key in json_data[i]
                 assert config[key] == json_data[i][key]
-            i += 1
+            i += 1  # noqa: SIM113
 
-        os.environ["config_list_test"] = JSON_SAMPLE
-        config_list_2 = autogen.config_list_from_json("config_list_test")
+        os.environ["CONFIG_LIST_TEST"] = JSON_SAMPLE
+        config_list_2 = autogen.config_list_from_json("CONFIG_LIST_TEST")
         assert config_list == config_list_2
 
         # Test: the env variable is set to a file path with folder name inside.
@@ -145,7 +146,7 @@ def test_config_list_from_json():
         )
         assert all(config.get("model") in ["gpt-4", "gpt"] for config in config_list_3)
 
-        del os.environ["config_list_test"]
+        del os.environ["CONFIG_LIST_TEST"]
 
         # Test: using the `file_location` parameter.
         config_list_4 = autogen.config_list_from_json(
@@ -159,11 +160,11 @@ def test_config_list_from_json():
         # Test: the env variable is set to a file path.
         fd, temp_name = tempfile.mkstemp()
         json.dump(config_list, os.fdopen(fd, "w+"), indent=4)
-        os.environ["config_list_test"] = temp_name
-        config_list_5 = autogen.config_list_from_json("config_list_test")
+        os.environ["CONFIG_LIST_TEST"] = temp_name
+        config_list_5 = autogen.config_list_from_json("CONFIG_LIST_TEST")
         assert config_list_5 == config_list_2
 
-        del os.environ["config_list_test"]
+        del os.environ["CONFIG_LIST_TEST"]
 
     # Test that an error is thrown when the config list is missing
     with pytest.raises(FileNotFoundError):
@@ -311,7 +312,7 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
     invalid_model_api_key_map = {
         "gpt-4": "INVALID_API_KEY",  # Simulate an environment var name that doesn't exist
     }
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.ERROR):  # noqa: SIM117
         # Mocking `config_list_from_json` to return an empty list and raise an exception when called
         with mock.patch("autogen.config_list_from_json", return_value=[], side_effect=Exception("Mock called")):
             # Call the function with the invalid map
@@ -444,6 +445,24 @@ def test_is_valid_api_key():
     assert is_valid_api_key("sk-aut0-gen--asajsdjsd22372X23kjdfdfdf2329ffUUDSDS12121212212")
     assert is_valid_api_key("sk--aut0-gen-asajsdjsd22372X23kjdfdfdf2329ffUUDSDS12121212212")
     assert is_valid_api_key(MOCK_OPEN_AI_API_KEY)
+
+
+def test_reminder_to_update_deepseek_pricing_after_promotion():
+    # Reference: https://api-docs.deepseek.com/quick_start/pricing
+    # Define the promotion end date - February 8th, 2025 at 16:00 UTC
+    promo_end_date = datetime(2025, 2, 8, 16, 0, tzinfo=timezone.utc)
+    current_time = datetime.now(timezone.utc)
+
+    # Get the pricing tuple for deepseek-chat
+    input_price, output_price = OAI_PRICE1K["deepseek-chat"]
+
+    # After promo end date: Assert promotional pricing has been updated
+    if current_time > promo_end_date:
+        assert (input_price, output_price) != (0.00014, 0.00028), (
+            f"DeepSeek promotional period ended on {promo_end_date.strftime('%B %d, %Y at %H:%M %Z')}. "
+            "Please update OAI_PRICE1K['deepseek-chat'] to standard pricing."
+            "Check https://api-docs.deepseek.com/quick_start/pricing for more details."
+        )
 
 
 if __name__ == "__main__":

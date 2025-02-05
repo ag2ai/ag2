@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,17 +8,10 @@ from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-try:
-    from autogen.oai.ollama import OllamaClient, response_to_tool_call
-
-    skip = False
-except ImportError:
-    OllamaClient = object
-    InternalServerError = object
-    skip = True
-
 from pydantic import BaseModel
+
+from autogen.import_utils import skip_on_missing_imports
+from autogen.oai.ollama import OllamaClient, response_to_tool_call
 
 
 # Fixtures for mock data
@@ -46,18 +39,15 @@ def ollama_client():
     return client
 
 
-skip_reason = "Ollama dependency is not installed"
-
-
 # Test initialization and configuration
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_initialization():
     # Creation works without an api_key
     OllamaClient()
 
 
 # Test parameters
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_parsing_params(ollama_client):
     # All parameters (with default values)
     params = {
@@ -121,7 +111,7 @@ def test_parsing_params(ollama_client):
 
 
 # Test text generation
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 @patch("autogen.oai.ollama.OllamaClient.create")
 def test_create_response(mock_chat, ollama_client):
     # Mock OllamaClient.chat response
@@ -155,7 +145,7 @@ def test_create_response(mock_chat, ollama_client):
 
 
 # Test functions/tools
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 @patch("autogen.oai.ollama.OllamaClient.create")
 def test_create_response_with_tool_call(mock_chat, ollama_client):
     # Mock OllamaClient.chat response
@@ -217,7 +207,7 @@ def test_create_response_with_tool_call(mock_chat, ollama_client):
 
 
 # Test function parsing with manual tool calling
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_manual_tool_calling_parsing(ollama_client):
     # Test the parsing of a tool call within the response content (fully correct)
     response_content = """[{"name": "weather_forecast", "arguments":{"location": "New York"}},{"name": "currency_calculator", "arguments":{"base_amount": 123.45, "quote_currency": "EUR", "base_currency": "USD"}}]"""
@@ -265,7 +255,7 @@ def test_manual_tool_calling_parsing(ollama_client):
 
 
 # Test message conversion from OpenAI to Ollama format
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_oai_messages_to_ollama_messages(ollama_client):
     # Test that the "name" key is removed
     test_messages = [
@@ -310,7 +300,7 @@ def test_oai_messages_to_ollama_messages(ollama_client):
 
 
 # Test message conversion from OpenAI to Ollama format
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["ollama", "fix_busted_json"], "ollama")
 def test_extract_json_response(ollama_client):
     # Define test Pydantic model
     class Step(BaseModel):

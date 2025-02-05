@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -189,7 +189,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
 
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
-    content: Optional[Union[str, int, float, bool, list[dict[str, str]]]] = None  # type: ignore [assignment]
+    content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print

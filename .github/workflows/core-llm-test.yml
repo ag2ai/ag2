@@ -20,7 +20,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai", "gemini", "anthropic"]
+        llm: ["openai", "gemini", "anthropic", "deepseek"]
         python-version: ["3.9"]
         os: [ubuntu-latest]
       fail-fast: false
@@ -46,13 +46,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
-        if: matrix.llm == 'openai'
+        if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm != 'openai'
+        if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
@@ -62,12 +62,15 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: bash scripts/test-core-llm.sh -m "${{ matrix.llm }}"
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

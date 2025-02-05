@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -318,6 +318,19 @@ class TestTextMessage:
                     ]
                 },
                 "Please extract table from the following image and convert it to Markdown.",
+            ),
+            (
+                {
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png"
+                            },
+                        }
+                    ]
+                },
+                "<image>",
             ),
         ],
     )

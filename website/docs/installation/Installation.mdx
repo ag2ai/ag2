@@ -71,6 +71,18 @@ AG2 requires **Python version >= 3.9, < 3.14**. It can be installed from pip:
 pip install ag2
 ```
 
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen
+```
+or
+```bash
+pip install -U pyautogen
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 <div class="info">
   <Info> `openai>=1` is required. </Info>
 </div>
@@ -100,4 +112,4 @@ with DockerCommandLineCodeExecutor(work_dir=work_dir) as code_executor:
 To learn more about code executors, see the [code executors tutorial](/docs/tutorial/code-executors).
 
 You might have seen a different way of defining the executors without creating the
-executor object, please refer to FAQ for this [legacy code executor](/docs/FAQ#legacy-code-executor).
+executor object, please refer to FAQ for this [legacy code executor](/docs/faq/FAQ#legacy-code-executor).

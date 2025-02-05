@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,8 +6,13 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Optional, Protocol, Union, runtime_checkable
 
+from ..doc_utils import export_module
+
+__all__ = ["Agent", "LLMAgent"]
+
 
 @runtime_checkable
+@export_module("autogen")
 class Agent(Protocol):
     """(In preview) A protocol for Agent.
 
@@ -128,6 +133,7 @@ class Agent(Protocol):
 
 
 @runtime_checkable
+@export_module("autogen")
 class LLMAgent(Agent, Protocol):
     """(In preview) A protocol for an LLM agent."""
 

@@ -1,10 +1,12 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
 from typing import Any, Optional
 
+from ...doc_utils import export_module
+from ...import_utils import optional_import_block
 from ...tools import Tool
 from ..registry import register_interoperable_class
 
@@ -12,6 +14,7 @@ __all__ = ["LangChainInteroperability"]
 
 
 @register_interoperable_class("langchain")
+@export_module("autogen.interop")
 class LangChainInteroperability:
     """A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.
@@ -64,9 +67,10 @@ class LangChainInteroperability:
         if sys.version_info < (3, 9):
             return "This submodule is only supported for Python versions 3.9 and above"
 
-        try:
+        with optional_import_block() as result:
             import langchain_core.tools  # noqa: F401
-        except ImportError:
+
+        if not result.is_successful:
             return (
                 "Please install `interop-langchain` extra to use this module:\n\n\tpip install ag2[interop-langchain]"
             )

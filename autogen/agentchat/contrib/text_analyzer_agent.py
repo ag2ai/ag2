@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,8 +6,8 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Literal, Optional, Union
 
-from autogen.agentchat.agent import Agent
-from autogen.agentchat.assistant_agent import ConversableAgent
+from ..agent import Agent
+from ..assistant_agent import ConversableAgent
 
 system_message = """You are an expert in text analysis.
 The user will give you TEXT to analyze.
@@ -31,10 +31,10 @@ class TextAnalyzerAgent(ConversableAgent):
         system_message (str): system message for the ChatCompletion inference.
         human_input_mode (str): This agent should NEVER prompt the human for input.
         llm_config (dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create)
             for available options.
             To disable llm-based auto reply, set to False.
-        **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).
+        **kwargs (dict): other kwargs in [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name=name,

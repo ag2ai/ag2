@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -6,17 +6,19 @@
 # SPDX-License-Identifier: MIT
 from typing import Callable, Literal, Optional, Union
 
+from ..doc_utils import export_module
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
 
+@export_module("autogen")
 class UserProxyAgent(ConversableAgent):
     """(In preview) A proxy agent for the user, that can execute code and provide feedback to the other agents.
 
     UserProxyAgent is a subclass of ConversableAgent configured with `human_input_mode` to ALWAYS
     and `llm_config` to False. By default, the agent will prompt for human input every time a message is received.
     Code execution is enabled by default. LLM-based auto reply is disabled by default.
-    To modify auto reply, register a method with [`register_reply`](conversable_agent#register-reply).
+    To modify auto reply, register a method with [`register_reply`](/docs/api-reference/autogen/ConversableAgent#register-reply).
     To modify the way to get human input, override `get_human_input` method.
     To modify the way to execute code blocks, single code block, or function call, override `execute_code_blocks`,
     `run_code`, and `execute_function` methods respectively.
@@ -77,7 +79,7 @@ class UserProxyAgent(ConversableAgent):
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         llm_config (dict or False or None): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create)
             for available options.
             Default to False, which disables llm-based auto reply.
             When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
@@ -86,7 +88,7 @@ class UserProxyAgent(ConversableAgent):
         description (str): a short description of the agent. This description is used by other agents
             (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name=name,

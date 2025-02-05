@@ -1,8 +1,9 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 from typing import Any
 
+from ..doc_utils import export_module
 from ..tools import Tool
 from .interoperable import Interoperable
 from .registry import InteroperableRegistry
@@ -10,6 +11,7 @@ from .registry import InteroperableRegistry
 __all__ = ["Interoperable"]
 
 
+@export_module("autogen.interop")
 class Interoperability:
     """A class to handle interoperability between different tool types.
 
@@ -52,9 +54,9 @@ class Interoperability:
         """
         supported_types = cls.registry.get_supported_types()
         if type not in supported_types:
-            supported_types_formated = ", ".join(["'t'" for t in supported_types])
+            supported_types_formatted = ", ".join(["'t'" for t in supported_types])
             raise ValueError(
-                f"Interoperability class {type} is not supported, supported types: {supported_types_formated}"
+                f"Interoperability class {type} is not supported, supported types: {supported_types_formatted}"
             )
 
         return cls.registry.get_class(type)

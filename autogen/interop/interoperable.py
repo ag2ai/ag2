@@ -1,15 +1,17 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any, Optional, Protocol, runtime_checkable
 
+from ..doc_utils import export_module
 from ..tools import Tool
 
 __all__ = ["Interoperable"]
 
 
 @runtime_checkable
+@export_module("autogen.interop")
 class Interoperable(Protocol):
     """A Protocol defining the interoperability interface for tool conversion.
 

@@ -1,9 +1,10 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Callable, TypeVar
 
+from ..doc_utils import export_module
 from .interoperable import Interoperable
 
 __all__ = ["InteroperableRegistry", "register_interoperable_class"]
@@ -44,6 +45,7 @@ _register = InteroperableRegistry()
 
 
 # register decorator
+@export_module("autogen.interop")
 def register_interoperable_class(short_name: str) -> Callable[[InteroperableClass], InteroperableClass]:
     """Register an Interoperable class in the global registry.
 

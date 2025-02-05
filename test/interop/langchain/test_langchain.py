@@ -1,25 +1,26 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
 from unittest.mock import MagicMock
 
 import pytest
-from langchain.tools import tool as langchain_tool
 from pydantic import BaseModel, Field
 
 from autogen import AssistantAgent, UserProxyAgent
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.interop import Interoperable
 from autogen.interop.langchain import LangChainInteroperability
 
 from ...conftest import Credentials
 
+with optional_import_block():
+    from langchain.tools import tool as langchain_tool
+
 
 # skip if python version is not >= 3.9
-@pytest.mark.skipif(
-    sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
-)
+@pytest.mark.interop
+@skip_on_missing_imports("langchain", "interop-langchain")
 class TestLangChainInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -76,10 +77,7 @@ class TestLangChainInteroperability:
         assert LangChainInteroperability.get_unsupported_reason() is None
 
 
-# skip if python version is not >= 3.9
-@pytest.mark.skipif(
-    sys.version_info < (3, 9), reason="Only Python 3.9 and above are supported for LangchainInteroperability"
-)
+@skip_on_missing_imports("langchain", "interop-langchain")
 class TestLangChainInteroperabilityWithoutPydanticInput:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -129,12 +127,3 @@ When using the search tool, input should be:
         user_proxy.initiate_chat(recipient=chatbot, message="search for LangChain, Use max 100 characters", max_turns=5)
 
         self.mock.assert_called()
-
-
-@pytest.mark.skipif(sys.version_info >= (3, 9), reason="LangChain Interoperability is supported")
-class TestLangChainInteroperabilityIfNotSupported:
-    def test_get_unsupported_reason(self) -> None:
-        assert (
-            LangChainInteroperability.get_unsupported_reason()
-            == "This submodule is only supported for Python versions 3.9 and above"
-        )

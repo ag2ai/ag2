@@ -1,18 +1,21 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 import inspect
 import sys
 from abc import ABC
+from collections.abc import Iterable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Union, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
 
-from autogen.agentchat import Agent
+from ..agentchat import Agent
+from ..doc_utils import export_module
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -24,9 +27,11 @@ __all__ = [
     "Field",
     "get_context_params",
     "inject_params",
+    "on",
 ]
 
 
+@export_module("autogen.tools")
 class BaseContext(ABC):
     """Base class for context classes.
 
@@ -37,6 +42,7 @@ class BaseContext(ABC):
     pass
 
 
+@export_module("autogen.tools")
 class ChatContext(BaseContext):
     """ChatContext class that extends BaseContext.
 
@@ -71,6 +77,17 @@ class ChatContext(BaseContext):
         return self._agent.last_message()
 
 
+T = TypeVar("T")
+
+
+def on(x: T) -> Callable[[], T]:
+    def inner(_x: T = x) -> T:
+        return _x
+
+    return inner
+
+
+@export_module("autogen.tools")
 def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 
@@ -96,7 +113,6 @@ def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContex
     Returns:
         A list of parameter names that are instances of the specified subclass.
     """
-
     sig = inspect.signature(func)
     return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
 
@@ -157,11 +173,19 @@ def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[
     type_hints = get_type_hints(func, include_extras=True)
 
     for _, annotation in type_hints.items():
+        # Check if the annotation itself has metadata (using __metadata__)
         if hasattr(annotation, "__metadata__"):
             metadata = annotation.__metadata__
             if metadata and isinstance(metadata[0], str):
-                # Replace string metadata with DescriptionField
+                # Replace string metadata with Field
                 annotation.__metadata__ = (Field(description=metadata[0]),)
+        # For Python < 3.11, annotations like `Optional` are stored as `Union`, so metadata
+        # would be in the first element of __args__ (e.g., `__args__[0]` for `int` in `Optional[int]`)
+        elif hasattr(annotation, "__args__") and hasattr(annotation.__args__[0], "__metadata__"):
+            metadata = annotation.__args__[0].__metadata__
+            if metadata and isinstance(metadata[0], str):
+                # Replace string metadata with Field
+                annotation.__args__[0].__metadata__ = (Field(description=metadata[0]),)
     return func
 
 
@@ -177,6 +201,31 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
         f = wrapper
     return f
+
+
+def _set_return_annotation_to_any(f: Callable[..., Any]) -> Callable[..., Any]:
+    if inspect.iscoroutinefunction(f):
+
+        @functools.wraps(f)
+        async def _a_wrapped_func(*args: Any, **kwargs: Any) -> Any:
+            return await f(*args, **kwargs)
+
+        wrapped_func = _a_wrapped_func
+
+    else:
+
+        @functools.wraps(f)
+        def _wrapped_func(*args: Any, **kwargs: Any) -> Any:
+            return f(*args, **kwargs)
+
+        wrapped_func = _wrapped_func
+
+    sig = inspect.signature(f)
+
+    # Change the return annotation directly on the signature of the wrapper
+    wrapped_func.__signature__ = sig.replace(return_annotation=Any)  # type: ignore[attr-defined]
+
+    return wrapped_func
 
 
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -196,6 +245,7 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
         f = _fix_staticmethod(f)
 
     f = _string_metadata_to_description_field(f)
+    f = _set_return_annotation_to_any(f)
     f = inject(f)
     f = _remove_injected_params_from_signature(f)
 

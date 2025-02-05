@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,31 +10,20 @@ from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
-try:
-    import google.auth  # noqa: F401
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.oai.gemini import GeminiClient
+
+with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.generativeai.types import GenerateContentResponse
+    from google.genai.types import GenerateContentResponse
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
     from vertexai.generative_models import SafetySetting as VertexAISafetySetting
-
-    from autogen.oai.gemini import GeminiClient
-
-    skip = False
-except ImportError:
-    GeminiClient = object
-    VertexAIHarmBlockThreshold = object
-    VertexAIHarmCategory = object
-    VertexAISafetySetting = object
-    vertexai_global_config = object
-    InternalServerError = object
-    skip = True
-
-from pydantic import BaseModel
 
 
 # Fixtures for mock data
@@ -74,7 +63,9 @@ def gemini_client_with_credentials():
 
 
 # Test compute location initialization and configuration
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_compute_location_initialization():
     with pytest.raises(AssertionError):
         GeminiClient(
@@ -83,7 +74,9 @@ def test_compute_location_initialization():
 
 
 # Test project initialization and configuration
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_project_initialization():
     with pytest.raises(AssertionError):
         GeminiClient(
@@ -91,12 +84,16 @@ def test_project_initialization():
         )  # Should raise an AssertionError due to specifying API key and compute location
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_valid_initialization(gemini_client):
     assert gemini_client.api_key == "fake_api_key", "API Key should be correctly set"
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_google_application_credentials_initialization():
     GeminiClient(google_application_credentials="credentials.json", project_id="fake-project-id")
     assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "credentials.json", (
@@ -104,7 +101,9 @@ def test_google_application_credentials_initialization():
     )
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_vertexai_initialization():
     mock_credentials = MagicMock(Credentials)
     GeminiClient(credentials=mock_credentials, project_id="fake-project-id", location="us-west1")
@@ -113,7 +112,9 @@ def test_vertexai_initialization():
     assert vertexai_global_config.credentials == mock_credentials, "Incorrect VertexAI credentials initialization"
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_gemini_message_handling(gemini_client):
     messages = [
         {"role": "system", "content": "You are my personal assistant."},
@@ -150,7 +151,9 @@ def test_gemini_message_handling(gemini_client):
             assert converted_messages[i].parts[j].text == part, "Incorrect mapped message text"
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_gemini_empty_message_handling(gemini_client):
     messages = [
         {"role": "system", "content": "You are my personal assistant."},
@@ -168,7 +171,9 @@ def test_gemini_empty_message_handling(gemini_client):
     assert converted_messages[-1].parts[0].text == "empty", "Empty message is not converted to 'empty' correctly"
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_vertexai_safety_setting_conversion(gemini_client):
     safety_settings = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
@@ -200,7 +205,9 @@ def test_vertexai_safety_setting_conversion(gemini_client):
     assert all(settings_comparison), "Converted safety settings are incorrect"
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_vertexai_default_safety_settings_dict(gemini_client):
     safety_settings = {
         VertexAIHarmCategory.HARM_CATEGORY_HARASSMENT: VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH,
@@ -213,7 +220,7 @@ def test_vertexai_default_safety_settings_dict(gemini_client):
     expected_safety_settings = {category: VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH for category in safety_settings}
 
     def compare_safety_settings(converted_safety_settings, expected_safety_settings):
-        for expected_setting_key in expected_safety_settings.keys():
+        for expected_setting_key in expected_safety_settings:
             expected_setting = expected_safety_settings[expected_setting_key]
             converted_setting = converted_safety_settings[expected_setting_key]
             yield expected_setting == converted_setting
@@ -225,7 +232,9 @@ def test_vertexai_default_safety_settings_dict(gemini_client):
     assert all(settings_comparison), "Converted safety settings are incorrect"
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_vertexai_safety_setting_list(gemini_client):
     harm_categories = [
         VertexAIHarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -257,7 +266,9 @@ def test_vertexai_safety_setting_list(gemini_client):
 
 # Test error handling
 @patch("autogen.oai.gemini.genai")
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_internal_server_error_retry(mock_genai, gemini_client):
     mock_genai.GenerativeModel.side_effect = [InternalServerError("Test Error"), None]  # First call fails
     # Mock successful response
@@ -271,7 +282,9 @@ def test_internal_server_error_retry(mock_genai, gemini_client):
 
 
 # Test cost calculation
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_cost_calculation(gemini_client, mock_response):
     response = mock_response(
         text="Example response",
@@ -283,7 +296,9 @@ def test_cost_calculation(gemini_client, mock_response):
     assert gemini_client.cost(response) > 0, "Cost should be correctly calculated as zero"
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 @patch("autogen.oai.gemini.genai.GenerativeModel")
 # @patch("autogen.oai.gemini.genai.configure")
 @patch("autogen.oai.gemini.calculate_gemini_cost")
@@ -334,7 +349,9 @@ def test_create_response_with_text(mock_calculate_cost, mock_generative_model, g
     mock_calculate_cost.assert_called_once_with(False, 100, 50, "gemini-pro")
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 @patch("autogen.oai.gemini.GenerativeModel")
 @patch("autogen.oai.gemini.vertexai.init")
 @patch("autogen.oai.gemini.calculate_gemini_cost")
@@ -386,7 +403,9 @@ def test_vertexai_create_response(
     mock_calculate_cost.assert_called_once_with(True, 100, 50, "gemini-pro")
 
 
-@pytest.mark.skipif(skip, reason="Google GenAI dependency is not installed")
+@skip_on_missing_imports(
+    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
+)
 def test_extract_json_response(gemini_client):
     # Define test Pydantic model
     class Step(BaseModel):

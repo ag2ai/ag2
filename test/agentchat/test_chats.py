@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -16,7 +16,7 @@ import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 
 @pytest.fixture
@@ -542,12 +542,13 @@ def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
     print(res.summary, res.cost, res.chat_history)
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 def test_chats_w_func(
-    credentials: Credentials,
+    credentials_from_test_param: Credentials,
     tasks_work_dir: str,
 ) -> None:
-    _test_chats_w_func(credentials, tasks_work_dir)
+    _test_chats_w_func(credentials_from_test_param, tasks_work_dir)
 
 
 @pytest.mark.openai

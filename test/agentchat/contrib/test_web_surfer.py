@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,19 +12,19 @@ import re
 import pytest
 
 from autogen import UserProxyAgent
+from autogen.agentchat.contrib.web_surfer import WebSurferAgent
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
+from ...test_browser_utils import BING_QUERY, BLOG_POST_TITLE, BLOG_POST_URL
 
-BLOG_POST_URL = "https://docs.ag2.ai/blog/2023-04-21-LLM-tuning-math"
-BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
-BING_QUERY = "Microsoft"
+with optional_import_block() as result:
+    import markdownify  # noqa: F401
+    import pathvalidate  # noqa: F401
+    import pdfminer  # noqa: F401
+    import requests  # noqa: F401
+    from bs4 import BeautifulSoup  # noqa: F401
 
-try:
-    from autogen.agentchat.contrib.web_surfer import WebSurferAgent
-except ImportError:
-    skip_all = True
-else:
-    skip_all = False
 
 try:
     BING_API_KEY = os.environ["BING_API_KEY"]
@@ -34,10 +34,7 @@ else:
     skip_bing = False
 
 
-@pytest.mark.skipif(
-    skip_all,
-    reason="do not run if dependency is not installed",
-)
+@skip_on_missing_imports(["markdownify", "pathvalidate", "pdfminer", "requests", "bs4"], "websurfer")
 def test_web_surfer() -> None:
     with pytest.MonkeyPatch.context() as mp:
         # we mock the API key so we can register functions (llm_config must be present for this to work)
@@ -94,10 +91,7 @@ def test_web_surfer() -> None:
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip_all,
-    reason="dependency is not installed",
-)
+@skip_on_missing_imports(["markdownify", "pathvalidate", "pdfminer", "requests", "bs4"], "websurfer")
 def test_web_surfer_oai(credentials_gpt_4o_mini: Credentials, credentials_gpt_4o: Credentials) -> None:
     llm_config = {"config_list": credentials_gpt_4o.config_list, "timeout": 180, "cache_seed": 42}
 

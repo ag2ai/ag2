@@ -55,12 +55,9 @@ dependencies = [
     "openai>=1.58",
     "diskcache",
     "termcolor",
-    "flaml",
-    # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
-    "numpy>=2.1; python_version>='3.13'",  # numpy 2.1+ required for Python 3.13
-    "numpy>=1.24.0,<2.0.0; python_version<'3.13'",  # numpy 1.24+ for older Python versions
     "python-dotenv",
     "tiktoken",
+    "numpy",
     # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
     "pydantic>=2.6.1,<3",
     "docker",
@@ -71,6 +68,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+
+flaml = [
+    "flaml",
+    # numpy is installed by flaml, but we want to pin the version to below 2.x (see https://github.com/microsoft/autogen/issues/1960)
+    "numpy>=2.1; python_version>='3.13'",  # numpy 2.1+ required for Python 3.13
+    "numpy>=1.24.0,<2.0.0; python_version<'3.13'",  # numpy 1.24+ for older Python versions
+]
 
 # public distributions
 jupyter-executor = [
@@ -114,12 +118,27 @@ graph-rag-falkor-db = [
     "falkordb>=1.0.10"
 ]
 
+rag = [
+    "docling>=2.15.1,<3",
+    "selenium>=4.28.1,<5",
+    "webdriver-manager==4.0.2",
+]
+
+
+crawl4ai = [
+    "crawl4ai>=0.4.247,<0.5",
+]
+
+browser-use = [
+    "browser-use>=0.1.27,<0.2",
+]
+
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.5",
-    "llama-index-graph-stores-neo4j==0.4.2",
-    "llama-index-core==0.12.5",
-    "llama-index-readers-web==0.3.3",
+    "llama-index==0.12.11",
+    "llama-index-graph-stores-neo4j==0.4.5",
+    "llama-index-core==0.12.11",
+    "llama-index-readers-web==0.3.4",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -145,17 +164,16 @@ interop =[
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
 
 blendsearch = ["flaml[blendsearch]"]
-mathchat = ["sympy", "pydantic==1.10.9", "wolframalpha"]
+mathchat = ["sympy", "wolframalpha"]
 captainagent = ["pyautogen[autobuild]", "pandas"]
 teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
 gemini = [
-    "google-generativeai>=0.5,<1",
+    "google-genai>=0.6,<0.7",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
-    "pydantic",
     "jsonschema",
 ]
 together = ["together>=1.2"]
@@ -176,40 +194,42 @@ bedrock = ["boto3>=1.34.149"]
 
 # test dependencies
 test = [
-    "ipykernel",
-    "nbconvert",
-    "nbformat",
-    "pre-commit",
-    "pytest-cov>=5",
-    "pytest-asyncio",
-    "pytest>=8,<9",
-    "pandas",
-    "fastapi>=0.115.0,<1",
+    "ipykernel==6.29.5",
+    "nbconvert==7.16.5",
+    "nbformat==5.10.4",
+    "pytest-cov==6.0.0",
+    "pytest-asyncio==0.25.2",
+    "pytest==8.3.4",
+    "pandas==2.2.3",
+    "fastapi==0.115.6",
 ]
 
+# docs dependencies
 docs = [
-    "pydoc-markdown",
+    "pdoc3==0.11.5",
+    "jinja2==3.1.5",
     "pyyaml==6.0.2",
-    "termcolor",
-    "nbclient",
+    "termcolor==2.5.0",
+    "nbclient==0.10.2",
 ]
 
 types = [
-    "mypy==1.9.0",
+    "mypy==1.14.1",
     "pyautogen[test, jupyter-executor, interop]",
 ]
 
 lint = [
-    "ruff==0.9.1",
+    "ruff==0.9.2",
     "codespell==2.3.0",
     "pyupgrade-directories==0.3.0",
 ]
 
 dev = [
+    "toml==0.10.2",
     "pyautogen[lint,test,types,docs]",
-    "pre-commit==4.0.1",
+    "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.5.16",
+    "uv==0.5.21",
 ]
 
 
@@ -250,8 +270,22 @@ markers = [
     "openai",
     "gemini",
     "anthropic",
+    "deepseek",
     "redis",
     "docker",
+    "docs",
+    # optional deps
+    "jupyter_executor",
+    "retrievechat",
+    "retrievechat_pgvector",
+    "retrievechat_mongodb",
+    "retrievechat_qdrant",
+    "graph_rag_falkor_db",
+    "neo4j",
+    "twilio",
+    "interop",
+    "browser_use",
+    "crawl4ai",
 ]
 
 [tool.black]
@@ -264,8 +298,22 @@ exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
 fix = true
 line-length = 120
 target-version = 'py39'
-#include = ["autogen", "test", "docs"]
-#exclude = []
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".eggs",
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    "__pypackages__",
+    "_build",
+    "build",
+    "dist",
+    "docs",
+    # This file needs to be either upgraded or removed and therefore should be
+    # ignore from type checking for now
+    "math_utils\\.py$",
+    "setup_*.py",
+]
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
@@ -282,13 +330,14 @@ select = [
 #    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
     "Q",     # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
 #    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20
-#    "SIM",   # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
+    "SIM",   # flake8-simplify        https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
 #    "PT",    # flake8-pytest-style    https://docs.astral.sh/ruff/rules/#flake8-pytest-style-pt
 #    "PTH",   # flake8-use-pathlib     https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
 #    "TCH",   # flake8-type-checking   https://docs.astral.sh/ruff/rules/#flake8-type-checking-tch
 #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
-     "RUF022", # Sort __all__          https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
+    "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
+#    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
 ]
 
 ignore = ["E501", "F403", "C901",
@@ -298,21 +347,6 @@ ignore = ["E501", "F403", "C901",
     "E501",  # line too long, handled by formatter later
     "D100", "D101", "D102", "D103", "D104",
     "C901",  # too complex
-]
-# Exclude a variety of commonly ignored directories.
-exclude = [
-    ".eggs",
-    ".git",
-    ".mypy_cache",
-    ".ruff_cache",
-    "__pypackages__",
-    "_build",
-    "build",
-    "dist",
-    "docs",
-    # This file needs to be either upgraded or removed and therefore should be
-    # ignore from type checking for now
-    "math_utils\\.py$",
 ]
 
 [tool.ruff.lint.mccabe]
@@ -335,19 +369,24 @@ files = [
     "autogen/exception_utils.py",
     "autogen/coding",
     "autogen/oai/openai_utils.py",
-    "autogen/_pydantic.py",
     "autogen/io",
     "autogen/tools",
     "autogen/interop",
     "autogen/agentchat/realtime_agent",
     "autogen/messages",
-    "test/test_pydantic.py",
+    "autogen/import_utils.py",
+    "autogen/agentchat/contrib/rag",
+    "website/*.py",
     "test/io",
     "test/tools",
     "test/interop",
     "test/agentchat/realtime_agent",
     "test/messages",
     "test/conftest.py",
+    "test/test_import_utils.py",
+    "test/test_import.py",
+    "test/agentchat/contrib/rag",
+    "test/website",
 ]
 
 exclude = [

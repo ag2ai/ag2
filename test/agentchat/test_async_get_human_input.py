@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 
 async def _test_async_get_human_input(credentials: Credentials) -> None:
@@ -40,11 +40,13 @@ async def _test_async_get_human_input(credentials: Credentials) -> None:
     print("Human input:", res.human_input)
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
-def test_async_get_human_input(
-    credentials: Credentials,
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
+@pytest.mark.asyncio
+async def test_async_get_human_input(
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_async_get_human_input(credentials)
+    await _test_async_get_human_input(credentials_from_test_param)
 
 
 async def _test_async_max_turn(credentials: Credentials):
@@ -65,7 +67,7 @@ async def _test_async_max_turn(credentials: Credentials):
     user_proxy.a_get_human_input = AsyncMock(return_value="Not funny. Try again.")
 
     res = await user_proxy.a_initiate_chat(
-        assistant, clear_history=True, max_turns=3, message="Hello, make a joke about AI."
+        assistant, clear_history=True, max_turns=3, message="Hello, make a non-offensive joke about AI."
     )
     print("Result summary:", res.summary)
     print("Human input:", res.human_input)
@@ -75,8 +77,10 @@ async def _test_async_max_turn(credentials: Credentials):
     )
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
-def test_async_max_turn(
-    credentials: Credentials,
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
+@pytest.mark.asyncio
+async def test_async_max_turn(
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_async_max_turn(credentials)
+    await _test_async_max_turn(credentials_from_test_param)

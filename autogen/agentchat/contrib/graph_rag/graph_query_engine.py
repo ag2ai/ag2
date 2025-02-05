@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -28,7 +28,7 @@ class GraphQueryEngine(Protocol):
     This interface defines the basic methods for graph-based RAG.
     """
 
-    def init_db(self, input_doc: list[Document] | None = None):
+    def init_db(self, input_doc: Optional[list[Document]] = None):
         """This method initializes graph database with the input documents or records.
         Usually, it takes the following steps,
         1. connecting to a graph database.

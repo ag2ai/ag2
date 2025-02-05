@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,14 +7,15 @@
 import getpass
 from typing import Any
 
-from autogen.messages.base_message import BaseMessage
-from autogen.messages.print_message import PrintMessage
-
+from ..doc_utils import export_module
+from ..messages.base_message import BaseMessage
+from ..messages.print_message import PrintMessage
 from .base import IOStream
 
 __all__ = ("IOConsole",)
 
 
+@export_module("autogen.io")
 class IOConsole(IOStream):
     """A console input/output stream."""
 

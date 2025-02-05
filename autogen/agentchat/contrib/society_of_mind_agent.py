@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -7,9 +7,10 @@
 # ruff: noqa: E722
 import copy
 import traceback
+from contextlib import suppress
 from typing import Callable, Literal, Optional, Union
 
-from autogen import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
+from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
 
 
 class SocietyOfMindAgent(ConversableAgent):
@@ -110,15 +111,12 @@ class SocietyOfMindAgent(ConversableAgent):
                 del message["tool_calls"]
             if "tool_responses" in message:
                 del message["tool_responses"]
-            if "function_call" in message:
-                if message["content"] == "":
-                    try:
-                        message["content"] = (
-                            message["function_call"]["name"] + "(" + message["function_call"]["arguments"] + ")"
-                        )
-                    except KeyError:
-                        pass
-                    del message["function_call"]
+            if "function_call" in message and message["content"] == "":
+                with suppress(KeyError):
+                    message["content"] = (
+                        message["function_call"]["name"] + "(" + message["function_call"]["arguments"] + ")"
+                    )
+                del message["function_call"]
 
             # Add the modified message to the transcript
             _messages.append(message)

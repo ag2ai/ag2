@@ -1,27 +1,115 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-import sys
 import tempfile
 import textwrap
+from collections.abc import Generator
 from pathlib import Path
+from typing import Optional, Union
 
 import pytest
 
-# Add the ../../website directory to sys.path
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
-from process_notebooks import (
+from autogen._website.process_notebooks import (
     add_authors_and_social_img_to_blog_posts,
+    add_front_matter_to_metadata_mdx,
+    cleanup_tmp_dirs_if_no_metadata,
+    convert_callout_blocks,
     ensure_mint_json_exists,
     extract_example_group,
     generate_nav_group,
     get_sorted_files,
+    update_group_pages,
 )
 
 
-def test_ensure_mint_json():
+class TestUpdateGroupPages:
+    @pytest.fixture
+    def sample_navigation(self) -> list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]:
+        return [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {
+                        "group": "Use cases",
+                        "pages": [
+                            "docs/use-cases/use-cases/customer-service",
+                        ],
+                    },
+                    {
+                        "group": "Reference Agents",
+                        "pages": [
+                            "docs/use-cases/reference-agents/index",
+                        ],
+                    },
+                    {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
+                    {
+                        "group": "Community Gallery",
+                        "pages": ["docs/use-cases/community-gallery/community-gallery"],
+                    },
+                ],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+    def test_update_top_level_group(
+        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+    ) -> None:
+        updated_pages = ["docs/use-cases/use-cases/customer-service"]
+        target_grp = "Use Cases"
+        updated_navigation = update_group_pages(sample_navigation, target_grp, updated_pages)
+        expected_navigation = [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": ["docs/use-cases/use-cases/customer-service"],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+        assert updated_navigation == expected_navigation, updated_navigation
+        assert sample_navigation != updated_navigation
+
+    def test_update_nested_group(
+        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+    ) -> None:
+        updated_pages = ["docs/use-cases/updated-notebook/index"]
+        target_grp = "Notebooks"
+        updated_navigation = update_group_pages(sample_navigation, target_grp, updated_pages)
+        expected_navigation = [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {
+                        "group": "Use cases",
+                        "pages": [
+                            "docs/use-cases/use-cases/customer-service",
+                        ],
+                    },
+                    {
+                        "group": "Reference Agents",
+                        "pages": [
+                            "docs/use-cases/reference-agents/index",
+                        ],
+                    },
+                    {"group": "Notebooks", "pages": ["docs/use-cases/updated-notebook/index"]},
+                    {
+                        "group": "Community Gallery",
+                        "pages": ["docs/use-cases/community-gallery/community-gallery"],
+                    },
+                ],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+        assert updated_navigation == expected_navigation, updated_navigation
+        assert sample_navigation != updated_navigation
+
+
+def test_ensure_mint_json() -> None:
     # Test with empty temp directory - should raise SystemExit
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -33,9 +121,174 @@ def test_ensure_mint_json():
         ensure_mint_json_exists(tmp_path)  # Should not raise any exception
 
 
+def test_cleanup_tmp_dirs_if_no_metadata() -> None:
+    # Test without the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+    # the tmp_dir / "notebooks" should be removed.
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        notebooks_dir = tmp_path / "docs" / "use-cases" / "notebooks" / "notebooks"
+        notebooks_dir.mkdir(parents=True, exist_ok=True)
+        (notebooks_dir / "example-1.mdx").touch()
+        (notebooks_dir / "example-2.mdx").touch()
+
+        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        assert not notebooks_dir.exists()
+
+    # Test with the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+    # the tmp_dir / "notebooks" should not be removed.
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+
+        notebooks_dir = tmp_path / "notebooks"
+        notebooks_dir.mkdir(parents=True, exist_ok=True)
+        (notebooks_dir / "example-1.mdx").touch()
+        (notebooks_dir / "example-2.mdx").touch()
+
+        metadata_dir = tmp_path / "snippets" / "data"
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        (metadata_dir / "NotebooksMetadata.mdx").touch()
+
+        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        assert notebooks_dir.exists()
+
+
+class TestAddFrontMatterToMetadataMdx:
+    def test_without_metadata_mdx(self) -> None:
+        front_matter_dict: dict[str, Union[str, Optional[Union[list[str]]]]] = {
+            "title": "some title",
+            "link": "/notebooks/some-title",
+            "description": "some description",
+            "image": "some image",
+            "tags": ["tag1", "tag2"],
+            "source_notebook": "/notebook/some-title.ipynb",
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            metadata_dir = tmp_path / "snippets" / "data"
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+
+            rendered_mdx = tmp_path / "source"
+            rendered_mdx.mkdir(parents=True, exist_ok=True)
+            (rendered_mdx / "some-title.mdx").touch()
+
+            # when the metadata file is not present, the file should be created and the front matter should be added
+            add_front_matter_to_metadata_mdx(front_matter_dict, tmp_path, rendered_mdx)
+
+            assert (metadata_dir / "NotebooksMetadata.mdx").exists()
+
+            with open(metadata_dir / "NotebooksMetadata.mdx") as f:
+                actual = f.read()
+
+            assert (
+                actual
+                == """{/*
+Auto-generated file - DO NOT EDIT
+Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.py
+*/}
+
+export const notebooksMetadata = [
+    {
+        "title": "some title",
+        "link": "/docs/use-cases/notebooks/notebooks/source",
+        "description": "some description",
+        "image": "some image",
+        "tags": [
+            "tag1",
+            "tag2"
+        ],
+        "source": "/notebook/some-title.ipynb"
+    }
+];
+"""
+            ), actual
+
+    def test_with_metadata_mdx(self) -> None:
+        front_matter_dict: dict[str, Optional[Union[str, Union[list[str]]]]] = {
+            "title": "some title",
+            "link": "/notebooks/some-title",
+            "description": "some description",
+            "image": "some image",
+            "tags": ["tag1", "tag2"],
+            "source_notebook": "/notebook/some-title.ipynb",
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            metadata_dir = tmp_path / "snippets" / "data"
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+            metadata_content = """{/*
+Auto-generated file - DO NOT EDIT
+Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.py
+*/}
+
+export const notebooksMetadata = [
+    {
+        "title": "some other title",
+        "link": "/notebooks/some-other-title",
+        "description": "some other description",
+        "image": "some other image",
+        "tags": [
+            "tag3",
+            "tag4"
+        ],
+        "source": "/notebook/some-other-title.ipynb"
+    }
+];
+"""
+            with open(metadata_dir / "NotebooksMetadata.mdx", "w") as f:
+                f.write(metadata_content)
+
+            rendered_mdx = tmp_path / "source"
+            rendered_mdx.mkdir(parents=True, exist_ok=True)
+            (rendered_mdx / "some-title.mdx").touch()
+
+            # when the metadata file is present, the front matter should be added to the existing metadata
+            add_front_matter_to_metadata_mdx(front_matter_dict, tmp_path, rendered_mdx)
+
+            assert (metadata_dir / "NotebooksMetadata.mdx").exists()
+
+            with open(metadata_dir / "NotebooksMetadata.mdx") as f:
+                actual = f.read()
+
+            assert (
+                actual
+                == """{/*
+Auto-generated file - DO NOT EDIT
+Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.py
+*/}
+
+export const notebooksMetadata = [
+    {
+        "title": "some other title",
+        "link": "/notebooks/some-other-title",
+        "description": "some other description",
+        "image": "some other image",
+        "tags": [
+            "tag3",
+            "tag4"
+        ],
+        "source": "/notebook/some-other-title.ipynb"
+    },
+    {
+        "title": "some title",
+        "link": "/docs/use-cases/notebooks/notebooks/source",
+        "description": "some description",
+        "image": "some image",
+        "tags": [
+            "tag1",
+            "tag2"
+        ],
+        "source": "/notebook/some-title.ipynb"
+    }
+];
+"""
+            )
+
+
 class TestAddBlogsToNavigation:
     @pytest.fixture
-    def test_dir(self):
+    def test_dir(self) -> Generator[Path, None, None]:
         """Create a temporary directory with test files."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -63,7 +316,7 @@ class TestAddBlogsToNavigation:
             yield tmp_path
 
     @pytest.fixture
-    def expected(self):
+    def expected(self) -> list[str]:
         return [
             "blog/2024-12-20-Tools-interoperability/index",
             "blog/2024-12-20-RetrieveChat/index",
@@ -78,11 +331,11 @@ class TestAddBlogsToNavigation:
             "blog/2023-04-21-LLM-tuning-math/index",
         ]
 
-    def test_get_sorted_files(self, test_dir, expected):
+    def test_get_sorted_files(self, test_dir: Path, expected: list[str]) -> None:
         actual = get_sorted_files(test_dir, "blog")
         assert actual == expected, actual
 
-    def test_add_blogs_to_navigation(self):
+    def test_add_blogs_to_navigation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             website_dir = Path(tmp_dir)
             blog_dir = website_dir / "blog"
@@ -131,7 +384,6 @@ class TestAddBlogsToNavigation:
 class TestUpdateNavigation:
     def setup(self, temp_dir: Path) -> None:
         """Set up test files in the temporary directory."""
-
         # Create directories
         snippets_dir = temp_dir / "snippets" / "data"
         snippets_dir.mkdir(parents=True, exist_ok=True)
@@ -146,7 +398,6 @@ class TestUpdateNavigation:
                     "group": "Installation",
                     "pages": [
                         "docs/installation/Installation",
-                        "docs/installation/Docker",
                         "docs/installation/Optional-Dependencies",
                     ],
                 },
@@ -206,7 +457,7 @@ class TestUpdateNavigation:
         with open(metadata_path, "w", encoding="utf-8") as f:
             f.write(notebooks_metadata_content)
 
-    def test_extract_example_group(self):
+    def test_extract_example_group(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
             self.setup(tmp_path)
@@ -215,28 +466,18 @@ class TestUpdateNavigation:
             metadata_path = tmp_path / "snippets" / "data" / "NotebooksMetadata.mdx"
             actual = extract_example_group(metadata_path)
 
-            expected = {
-                "group": "Examples",
-                "pages": [
-                    "notebooks/Examples",
-                    {
-                        "group": "Examples by Notebook",
-                        "pages": [
-                            "notebooks/Notebooks",
-                            "notebooks/agentchat_RetrieveChat_mongodb",
-                            "notebooks/JSON_mode_example",
-                        ],
-                    },
-                    "notebooks/Gallery",
-                ],
-            }
+            expected = [
+                "docs/use-cases/notebooks/Notebooks",
+                "docs/use-cases/notebooks/notebooks/agentchat_RetrieveChat_mongodb",
+                "docs/use-cases/notebooks/notebooks/JSON_mode_example",
+            ]
 
             assert actual == expected, actual
 
 
 class TestAddAuthorsAndSocialImgToBlogPosts:
     @pytest.fixture
-    def test_dir(self):
+    def test_dir(self) -> Generator[Path, None, None]:
         """Create temporary test directory with blog posts and authors file."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             website_dir = Path(tmp_dir)
@@ -269,6 +510,64 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                     - davorinrusevljan
                 tags: [Realtime API, Voice Agents, Swarm Teams, Twilio, AI Tools]
                 ---
+
+                <div>
+                    <img noZoom className="social-share-img"
+                    src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+                    alt="social preview"
+                    style={{ position: 'absolute', left: '-9999px' }}
+                    />
+                </div>
+
+                <div class="blog-authors">
+                    <p class="authors">Authors:</p>
+                    <CardGroup cols={2}>
+                        <Card href="https://github.com/marklysze">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/marklysze.png" />
+                            </div>
+                            <div>
+                                <p class="name">Mark Sze</p>
+                                <p>Software Engineer at AG2.ai</p>
+                            </div>
+                            </div>
+                        </Card>
+                        <Card href="https://github.com/sternakt">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/sternakt.png" />
+                            </div>
+                            <div>
+                                <p class="name">Tvrtko Sternak</p>
+                                <p>Machine Learning Engineer at Airt</p>
+                            </div>
+                            </div>
+                        </Card>
+                        <Card href="https://github.com/davorrunje">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/davorrunje.png" />
+                            </div>
+                            <div>
+                                <p class="name">Davor Runje</p>
+                                <p>CTO at Airt</p>
+                            </div>
+                            </div>
+                        </Card>
+                        <Card href="https://github.com/davorinrusevljan">
+                            <div class="col card">
+                            <div class="img-placeholder">
+                                <img noZoom src="https://github.com/davorinrusevljan.png" />
+                            </div>
+                            <div>
+                                <p class="name">Davorin</p>
+                                <p>Developer</p>
+                            </div>
+                            </div>
+                        </Card>
+                    </CardGroup>
+                </div>
 
                 lorem ipsum""").lstrip()
             (post2_dir / "index.mdx").write_text(post2_content)
@@ -309,12 +608,12 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
 
             yield website_dir
 
-    def test_add_authors_and_social_img(self, test_dir):
+    def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
         add_authors_and_social_img_to_blog_posts(test_dir)
 
         # Get directory paths
-        generated_blog_dir = test_dir / "blog"
+        generated_blog_dir = test_dir / "docs" / "blog"
         blog_dir = test_dir / "_blogs"
 
         # Verify directory structure matches
@@ -332,6 +631,9 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         assert '<p class="name">Chi Wang</p>' in actual
         assert '<p class="name">Davor Runje</p>' not in actual
 
+        assert actual.count('<div class="blog-authors">') == 1
+        assert actual.count('<p class="name">Chi Wang</p>') == 1
+
         # Verify content of second blog post
         post2_path = generated_blog_dir / "2023-06-28-MathChat" / "index.mdx"
         actual = post2_path.read_text()
@@ -342,3 +644,118 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         assert '<p class="name">Davor Runje</p>' in actual
         assert '<p class="name">Davorin</p>' in actual
         assert '<p class="name">Chi Wang</p>' not in actual
+
+        assert actual.count('<div class="blog-authors">') == 1
+        assert actual.count('<p class="name">Mark Sze</p>') == 1
+
+
+class TestConvertCalloutBlocks:
+    @pytest.fixture
+    def content(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Callout
+
+            :::note
+            This is a note.
+            :::
+
+            :::warning
+            This is a warning.
+            :::
+
+            :::tip
+            This is a tip.
+            :::
+
+            :::info
+            This is an info.
+            :::
+
+            ````{=mdx}
+            :::tabs
+            <Tab title="OpenAI">
+                - `model` (str, required): The identifier of the model to be used, such as 'gpt-4', 'gpt-3.5-turbo'.
+            </Tab>
+            <Tab title="Azure OpenAI">
+                - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
+            </Tab>
+            <Tab title="Other OpenAI compatible">
+                - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
+            </Tab>
+            :::
+            ````
+
+            ## Conclusion
+
+            This is a conclusion.
+            """)
+
+    @pytest.fixture
+    def expected(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Callout
+
+
+            <div class="note">
+            <Note>
+            This is a note.
+            </Note>
+            </div>
+
+
+            <div class="warning">
+            <Warning>
+            This is a warning.
+            </Warning>
+            </div>
+
+
+            <div class="tip">
+            <Tip>
+            This is a tip.
+            </Tip>
+            </div>
+
+
+            <div class="info">
+            <Info>
+            This is an info.
+            </Info>
+            </div>
+
+
+            <div class="tabs">
+            <Tabs>
+            <Tab title="OpenAI">
+                - `model` (str, required): The identifier of the model to be used, such as 'gpt-4', 'gpt-3.5-turbo'.
+            </Tab>
+            <Tab title="Azure OpenAI">
+                - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
+            </Tab>
+            <Tab title="Other OpenAI compatible">
+                - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
+            </Tab>
+            </Tabs>
+            </div>
+
+
+            ## Conclusion
+
+            This is a conclusion.
+            """)
+
+    def test_convert_callout_blocks(self, content: str, expected: str) -> None:
+        actual = convert_callout_blocks(content)
+        assert actual == expected, actual

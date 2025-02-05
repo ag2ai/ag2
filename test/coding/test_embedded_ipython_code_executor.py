@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -20,224 +20,213 @@ from autogen.code_utils import (
 )
 from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
+from autogen.coding.jupyter import (
+    DockerJupyterServer,
+    EmbeddedIPythonCodeExecutor,
+    JupyterCodeExecutor,
+    LocalJupyterServer,
+)
+from autogen.coding.jupyter.import_utils import skip_on_missing_jupyter_kernel_gateway
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
-if not is_docker_running() or not decide_use_docker(use_docker=None):
-    skip_docker_test = True
+# needed for skip_on_missing_imports to work
+with optional_import_block():
+    import ipykernel  # noqa: F401
+    import jupyter_client  # noqa: F401
+    import requests  # noqa: F401
+    import websocket  # noqa: F401
+
+
+class DockerJupyterExecutor(JupyterCodeExecutor):
+    def __init__(self, **kwargs):
+        jupyter_server = DockerJupyterServer()
+        super().__init__(jupyter_server=jupyter_server, **kwargs)
+
+
+class LocalJupyterCodeExecutor(JupyterCodeExecutor):
+    def __init__(self, **kwargs):
+        jupyter_server = LocalJupyterServer()
+        super().__init__(jupyter_server=jupyter_server, **kwargs)
+
+
+# Skip on windows due to kernelgateway bug https://github.com/jupyter-server/kernel_gateway/issues/398
+if sys.platform == "win32":
+    classes_to_test = [EmbeddedIPythonCodeExecutor]
 else:
-    skip_docker_test = False
+    classes_to_test = [EmbeddedIPythonCodeExecutor, LocalJupyterCodeExecutor]
 
-try:
-    from autogen.coding.jupyter import (
-        DockerJupyterServer,
-        EmbeddedIPythonCodeExecutor,
-        JupyterCodeExecutor,
-        LocalJupyterServer,
-    )
+skip_docker_test = not (is_docker_running() and decide_use_docker(use_docker=None))
 
-    class DockerJupyterExecutor(JupyterCodeExecutor):
-        def __init__(self, **kwargs):
-            jupyter_server = DockerJupyterServer()
-            super().__init__(jupyter_server=jupyter_server, **kwargs)
-
-    class LocalJupyterCodeExecutor(JupyterCodeExecutor):
-        def __init__(self, **kwargs):
-            jupyter_server = LocalJupyterServer()
-            super().__init__(jupyter_server=jupyter_server, **kwargs)
-
-    # Skip on windows due to kernelgateway bug https://github.com/jupyter-server/kernel_gateway/issues/398
-    if sys.platform == "win32":
-        classes_to_test = [EmbeddedIPythonCodeExecutor]
-    else:
-        classes_to_test = [EmbeddedIPythonCodeExecutor, LocalJupyterCodeExecutor]
-
-    if not skip_docker_test:
-        classes_to_test.append(DockerJupyterExecutor)
-
-    skip = False
-    skip_reason = ""
-except ImportError as e:
-    skip = True
-    skip_reason = "Dependencies for EmbeddedIPythonCodeExecutor or LocalJupyterCodeExecutor not installed. " + e.msg
-    classes_to_test = []
+if not skip_docker_test:
+    classes_to_test.append(DockerJupyterExecutor)
 
 
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_is_code_executor(cls) -> None:
-    assert isinstance(cls, CodeExecutor)
+@skip_on_missing_imports(
+    [
+        "websocket",
+        "requests",
+        "jupyter_client",
+        "ipykernel",
+    ],
+    "jupyter-executor",
+)
+@skip_on_missing_jupyter_kernel_gateway()
+@pytest.mark.jupyter_executor
+class TestCodeExecutor:
+    def test_import_utils(self) -> None:
+        pass
 
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_is_code_executor(self, cls) -> None:
+        assert isinstance(cls, CodeExecutor)
 
-@pytest.mark.skipif(skip, reason=skip_reason)
-def test_create_dict() -> None:
-    config: dict[str, Union[str, CodeExecutor]] = {"executor": "ipython-embedded"}
-    executor = CodeExecutorFactory.create(config)
-    assert isinstance(executor, EmbeddedIPythonCodeExecutor)
+    def test_create_dict(self) -> None:
+        config: dict[str, Union[str, CodeExecutor]] = {"executor": "ipython-embedded"}
+        executor = CodeExecutorFactory.create(config)
+        assert isinstance(executor, EmbeddedIPythonCodeExecutor)
 
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_create(self, cls) -> None:
+        config = {"executor": cls()}
+        executor = CodeExecutorFactory.create(config)
+        assert executor is config["executor"]
 
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_create(cls) -> None:
-    config = {"executor": cls()}
-    executor = CodeExecutorFactory.create(config)
-    assert executor is config["executor"]
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_init(self, cls) -> None:
+        executor = cls(timeout=10, kernel_name="python3", output_dir=".")
+        assert executor._timeout == 10 and executor._kernel_name == "python3" and executor._output_dir == Path()
 
+        # Try invalid output directory.
+        with pytest.raises(ValueError, match="Output directory .* does not exist."):
+            executor = cls(timeout=111, kernel_name="python3", output_dir="/invalid/directory")
 
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_init(cls) -> None:
-    executor = cls(timeout=10, kernel_name="python3", output_dir=".")
-    assert executor._timeout == 10 and executor._kernel_name == "python3" and executor._output_dir == Path()
+        # Try invalid kernel name.
+        with pytest.raises(ValueError, match="Kernel .* is not installed."):
+            executor = cls(timeout=111, kernel_name="invalid_kernel_name", output_dir=".")
 
-    # Try invalid output directory.
-    with pytest.raises(ValueError, match="Output directory .* does not exist."):
-        executor = cls(timeout=111, kernel_name="python3", output_dir="/invalid/directory")
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_execute_code_single_code_block(self, cls) -> None:
+        executor = cls()
+        code_blocks = [CodeBlock(code="import sys\nprint('hello world!')", language="python")]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code == 0 and "hello world!" in code_result.output
 
-    # Try invalid kernel name.
-    with pytest.raises(ValueError, match="Kernel .* is not installed."):
-        executor = cls(timeout=111, kernel_name="invalid_kernel_name", output_dir=".")
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_execute_code_multiple_code_blocks(self, cls) -> None:
+        executor = cls()
+        code_blocks = [
+            CodeBlock(code="import sys\na = 123 + 123\n", language="python"),
+            CodeBlock(code="print(a)", language="python"),
+        ]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code == 0 and "246" in code_result.output
 
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_execute_code_single_code_block(cls) -> None:
-    executor = cls()
-    code_blocks = [CodeBlock(code="import sys\nprint('hello world!')", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and "hello world!" in code_result.output
-
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_execute_code_multiple_code_blocks(cls) -> None:
-    executor = cls()
-    code_blocks = [
-        CodeBlock(code="import sys\na = 123 + 123\n", language="python"),
-        CodeBlock(code="print(a)", language="python"),
-    ]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and "246" in code_result.output
-
-    msg = """
+        msg = """
 def test_function(a, b):
     return a + b
 """
-    code_blocks = [
-        CodeBlock(code=msg, language="python"),
-        CodeBlock(code="test_function(431, 423)", language="python"),
-    ]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and "854" in code_result.output
+        code_blocks = [
+            CodeBlock(code=msg, language="python"),
+            CodeBlock(code="test_function(431, 423)", language="python"),
+        ]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code == 0 and "854" in code_result.output
 
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_execute_code_bash_script(self, cls) -> None:
+        executor = cls()
+        # Test bash script.
+        code_blocks = [CodeBlock(code='!echo "hello world!"', language="bash")]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code == 0 and "hello world!" in code_result.output
 
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_execute_code_bash_script(cls) -> None:
-    executor = cls()
-    # Test bash script.
-    code_blocks = [CodeBlock(code='!echo "hello world!"', language="bash")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and "hello world!" in code_result.output
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_timeout(self, cls) -> None:
+        executor = cls(timeout=1)
+        code_blocks = [CodeBlock(code="import time; time.sleep(10); print('hello world!')", language="python")]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code and "Timeout" in code_result.output
 
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_timeout(cls) -> None:
-    executor = cls(timeout=1)
-    code_blocks = [CodeBlock(code="import time; time.sleep(10); print('hello world!')", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code and "Timeout" in code_result.output
-
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_silent_pip_install(cls) -> None:
-    executor = cls(timeout=600)
-    code_blocks = [CodeBlock(code="!pip install matplotlib numpy", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and code_result.output.strip() == ""
-
-    none_existing_package = uuid.uuid4().hex
-    code_blocks = [CodeBlock(code=f"!pip install matplotlib_{none_existing_package}", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and "ERROR: " in code_result.output
-
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_restart(cls) -> None:
-    executor = cls()
-    code_blocks = [CodeBlock(code="x = 123", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and code_result.output.strip() == ""
-
-    executor.restart()
-    code_blocks = [CodeBlock(code="print(x)", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code and "NameError" in code_result.output
-
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_save_image(cls) -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        executor = cls(output_dir=temp_dir)
-        # Install matplotlib.
-        code_blocks = [CodeBlock(code="!pip install matplotlib", language="python")]
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_silent_pip_install(self, cls) -> None:
+        executor = cls(timeout=600)
+        code_blocks = [CodeBlock(code="!pip install matplotlib numpy", language="python")]
         code_result = executor.execute_code_blocks(code_blocks)
         assert code_result.exit_code == 0 and code_result.output.strip() == ""
 
-        # Test saving image.
-        code_blocks = [
-            CodeBlock(code="import matplotlib.pyplot as plt\nplt.plot([1, 2, 3, 4])\nplt.show()", language="python")
-        ]
+        none_existing_package = uuid.uuid4().hex
+        code_blocks = [CodeBlock(code=f"!pip install matplotlib_{none_existing_package}", language="python")]
         code_result = executor.execute_code_blocks(code_blocks)
-        assert code_result.exit_code == 0
-        assert os.path.exists(code_result.output_files[0])
-        assert f"Image data saved to {code_result.output_files[0]}" in code_result.output
+        assert code_result.exit_code == 0 and "ERROR: " in code_result.output
 
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_timeout_preserves_kernel_state(cls: type[CodeExecutor]) -> None:
-    executor = cls(timeout=1)
-    code_blocks = [CodeBlock(code="x = 123", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and code_result.output.strip() == ""
-
-    code_blocks = [CodeBlock(code="import time; time.sleep(10)", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code != 0 and "Timeout" in code_result.output
-
-    code_blocks = [CodeBlock(code="print(x)", language="python")]
-    code_result = executor.execute_code_blocks(code_blocks)
-    assert code_result.exit_code == 0 and "123" in code_result.output
-
-
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_save_html(cls) -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-        executor = cls(output_dir=temp_dir)
-        # Test saving html.
-        code_blocks = [
-            CodeBlock(code="from IPython.display import HTML\nHTML('<h1>Hello, world!</h1>')", language="python")
-        ]
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_restart(self, cls) -> None:
+        executor = cls()
+        code_blocks = [CodeBlock(code="x = 123", language="python")]
         code_result = executor.execute_code_blocks(code_blocks)
-        assert code_result.exit_code == 0
-        assert os.path.exists(code_result.output_files[0])
-        assert f"HTML data saved to {code_result.output_files[0]}" in code_result.output
+        assert code_result.exit_code == 0 and code_result.output.strip() == ""
 
+        executor.restart()
+        code_blocks = [CodeBlock(code="print(x)", language="python")]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code and "NameError" in code_result.output
 
-@pytest.mark.skipif(skip, reason=skip_reason)
-@pytest.mark.parametrize("cls", classes_to_test)
-def test_conversable_agent_code_execution(cls) -> None:
-    agent = ConversableAgent(
-        "user_proxy",
-        llm_config=False,
-        code_execution_config={"executor": cls()},
-    )
-    msg = """
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_save_image(self, cls) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            executor = cls(output_dir=temp_dir)
+            # Install matplotlib.
+            code_blocks = [CodeBlock(code="!pip install matplotlib", language="python")]
+            code_result = executor.execute_code_blocks(code_blocks)
+            assert code_result.exit_code == 0 and code_result.output.strip() == ""
+
+            # Test saving image.
+            code_blocks = [
+                CodeBlock(code="import matplotlib.pyplot as plt\nplt.plot([1, 2, 3, 4])\nplt.show()", language="python")
+            ]
+            code_result = executor.execute_code_blocks(code_blocks)
+            assert code_result.exit_code == 0
+            assert os.path.exists(code_result.output_files[0])
+            assert f"Image data saved to {code_result.output_files[0]}" in code_result.output
+
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_timeout_preserves_kernel_state(self, cls: type[CodeExecutor]) -> None:
+        executor = cls(timeout=1)
+        code_blocks = [CodeBlock(code="x = 123", language="python")]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code == 0 and code_result.output.strip() == ""
+
+        code_blocks = [CodeBlock(code="import time; time.sleep(10)", language="python")]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code != 0 and "Timeout" in code_result.output
+
+        code_blocks = [CodeBlock(code="print(x)", language="python")]
+        code_result = executor.execute_code_blocks(code_blocks)
+        assert code_result.exit_code == 0 and "123" in code_result.output
+
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_save_html(self, cls) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            executor = cls(output_dir=temp_dir)
+            # Test saving html.
+            code_blocks = [
+                CodeBlock(code="from IPython.display import HTML\nHTML('<h1>Hello, world!</h1>')", language="python")
+            ]
+            code_result = executor.execute_code_blocks(code_blocks)
+            assert code_result.exit_code == 0
+            assert os.path.exists(code_result.output_files[0])
+            assert f"HTML data saved to {code_result.output_files[0]}" in code_result.output
+
+    @pytest.mark.parametrize("cls", classes_to_test)
+    def test_conversable_agent_code_execution(self, cls) -> None:
+        agent = ConversableAgent(
+            "user_proxy",
+            llm_config=False,
+            code_execution_config={"executor": cls()},
+        )
+        msg = """
 Run this code:
 ```python
 def test_function(a, b):
@@ -248,10 +237,10 @@ And then this:
 print(test_function(123, 4))
 ```
 """
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
-        reply = agent.generate_reply(
-            [{"role": "user", "content": msg}],
-            sender=ConversableAgent("user", llm_config=False, code_execution_config=False),
-        )
-        assert "492" in reply  # type: ignore[operator]
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
+            reply = agent.generate_reply(
+                [{"role": "user", "content": msg}],
+                sender=ConversableAgent("user", llm_config=False, code_execution_config=False),
+            )
+            assert "492" in reply  # type: ignore[operator]

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,14 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
-    from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
-
-    skip = False
-except ImportError:
-    BedrockClient = object
-    InternalServerError = object
-    skip = True
+from autogen.import_utils import skip_on_missing_imports
+from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
 
 
 # Fixtures for mock data
@@ -35,25 +29,22 @@ def mock_response():
 @pytest.fixture
 def bedrock_client():
     # Set Bedrock client with some default values
-    client = BedrockClient()
+    client = BedrockClient(aws_region="us-east-1")
 
     client._supports_system_prompts = True
 
     return client
 
 
-skip_reason = "Amazon Bedrock dependency is not installed"
-
-
 # Test initialization and configuration
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
 def test_initialization():
     # Creation works without an api_key as it's handled in the parameter parsing
-    BedrockClient()
+    BedrockClient(aws_region="us-east-1")
 
 
 # Test parameters
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
 def test_parsing_params(bedrock_client):
     # All parameters (with default values)
     params = {
@@ -124,7 +115,7 @@ def test_parsing_params(bedrock_client):
 
 
 # Test text generation
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
 @patch("autogen.oai.bedrock.BedrockClient.create")
 def test_create_response(mock_chat, bedrock_client):
     # Mock BedrockClient.chat response
@@ -160,7 +151,7 @@ def test_create_response(mock_chat, bedrock_client):
 
 
 # Test functions/tools
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
 @patch("autogen.oai.bedrock.BedrockClient.create")
 def test_create_response_with_tool_call(mock_chat, bedrock_client):
     # Mock BedrockClient.chat response
@@ -224,7 +215,7 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client):
 
 
 # Test message conversion from OpenAI to Bedrock format
-@pytest.mark.skipif(skip, reason=skip_reason)
+@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
 def test_oai_messages_to_bedrock_messages(bedrock_client):
     # Test that the "name" key is removed and system messages converted to user message
     test_messages = [

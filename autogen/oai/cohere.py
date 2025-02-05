@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -37,13 +37,17 @@ import time
 import warnings
 from typing import Any
 
-from cohere import Client as Cohere
-from cohere.types import ToolParameterDefinitionsValue, ToolResult
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
 
-from autogen.oai.client_utils import logging_formatter, validate_parameter
+from ..import_utils import optional_import_block, require_optional_import
+from .client_utils import logging_formatter, validate_parameter
+
+with optional_import_block():
+    from cohere import Client as Cohere
+    from cohere.types import ToolParameterDefinitionsValue, ToolResult
+
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -151,6 +155,7 @@ class CohereClient:
 
         return cohere_params
 
+    @require_optional_import("cohere", "cohere")
     def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
         client_name = params.get("client_name") or "autogen-cohere"
@@ -173,7 +178,7 @@ class CohereClient:
         total_tokens = 0
 
         # Stream if in parameters
-        streaming = True if params.get("stream") else False
+        streaming = params.get("stream")
         cohere_finish = "stop"
         tool_calls = None
         ans = None
@@ -262,6 +267,7 @@ class CohereClient:
         return response_oai
 
 
+@require_optional_import("cohere", "cohere")
 def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_tool_calls) -> list[dict[str, Any]]:
     temp_tool_results = []
 
@@ -278,6 +284,7 @@ def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_t
     return temp_tool_results
 
 
+@require_optional_import("cohere", "cohere")
 def oai_messages_to_cohere_messages(
     messages: list[dict[str, Any]], params: dict[str, Any], cohere_params: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], str, str]:
@@ -347,10 +354,7 @@ def oai_messages_to_cohere_messages(
     for index, message in enumerate(messages):
         if "role" in message and message["role"] == "system":
             # System message
-            if preamble == "":
-                preamble = message["content"]
-            else:
-                preamble = preamble + "\n" + message["content"]
+            preamble = (preamble if preamble == "" else f"{preamble}\n") + message["content"]
         elif "tool_calls" in message:
             # Suggested tool calls, build up the list before we put it into the tool_results
             for tool_call in message["tool_calls"]:

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,11 +11,11 @@ import time
 from collections import defaultdict
 from typing import Any, Optional, Union
 
-from autogen import OpenAIWrapper
-from autogen.agentchat.agent import Agent
-from autogen.agentchat.assistant_agent import AssistantAgent, ConversableAgent
-from autogen.oai.openai_utils import create_gpt_assistant, retrieve_assistants_by_name, update_gpt_assistant
-from autogen.runtime_logging import log_new_agent, logging_enabled
+from ... import OpenAIWrapper
+from ...oai.openai_utils import create_gpt_assistant, retrieve_assistants_by_name, update_gpt_assistant
+from ...runtime_logging import log_new_agent, logging_enabled
+from ..agent import Agent
+from ..assistant_agent import AssistantAgent, ConversableAgent
 
 logger = logging.getLogger(__name__)
 
@@ -510,15 +510,9 @@ class GPTAssistantAgent(ConversableAgent):
         if llm_config is False:
             raise ValueError("llm_config=False is not supported for GPTAssistantAgent.")
 
-        if llm_config is None:
-            openai_client_cfg = {}
-        else:
-            openai_client_cfg = copy.deepcopy(llm_config)
+        openai_client_cfg = {} if llm_config is None else copy.deepcopy(llm_config)
 
-        if assistant_config is None:
-            openai_assistant_cfg = {}
-        else:
-            openai_assistant_cfg = copy.deepcopy(assistant_config)
+        openai_assistant_cfg = {} if assistant_config is None else copy.deepcopy(assistant_config)
 
         # Move the assistant related configurations to assistant_config
         # It's important to keep forward compatibility

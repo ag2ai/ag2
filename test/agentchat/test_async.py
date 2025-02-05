@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 
 def get_market_news(ind, ind_upper):
@@ -88,11 +88,13 @@ async def _test_async_groupchat(credentials: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
-def test_async_groupchat(
-    credentials: Credentials,
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
+@pytest.mark.asyncio
+async def test_async_groupchat(
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_async_groupchat(credentials)
+    await _test_async_groupchat(credentials_from_test_param)
 
 
 async def _test_stream(credentials: Credentials):
@@ -161,8 +163,10 @@ async def _test_stream(credentials: Credentials):
             # print("Chat summary and cost:", res.summary, res.cost)
 
 
-@pytest.mark.parametrize("credentials", credentials_all_llms, indirect=True)
-def test_stream(
-    credentials: Credentials,
+@pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
+@pytest.mark.asyncio
+async def test_stream(
+    credentials_from_test_param: Credentials,
 ) -> None:
-    _test_stream(credentials)
+    await _test_stream(credentials_from_test_param)

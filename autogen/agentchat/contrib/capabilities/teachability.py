@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -8,14 +8,15 @@ import os
 import pickle
 from typing import Optional, Union
 
-import chromadb
-from chromadb.config import Settings
-
-from autogen.agentchat.assistant_agent import ConversableAgent
-from autogen.agentchat.contrib.capabilities.agent_capability import AgentCapability
-from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
-
 from ....formatting_utils import colored
+from ....import_utils import optional_import_block, require_optional_import
+from ...assistant_agent import ConversableAgent
+from ..text_analyzer_agent import TextAnalyzerAgent
+from .agent_capability import AgentCapability
+
+with optional_import_block():
+    import chromadb
+    from chromadb.config import Settings
 
 
 class Teachability(AgentCapability):
@@ -202,7 +203,7 @@ class Teachability(AgentCapability):
             input_text, n_results=self.max_num_retrievals, threshold=self.recall_threshold
         )
 
-        if self.verbosity >= 1:
+        if self.verbosity >= 1:  # noqa: SIM102
             # Was anything retrieved?
             if len(memo_list) == 0:
                 # No. Look at the closest memo.
@@ -238,6 +239,7 @@ class Teachability(AgentCapability):
         return self.teachable_agent.last_message(self.analyzer)["content"]
 
 
+@require_optional_import("chromadb", "teachable")
 class MemoStore:
     """Provides memory storage and retrieval for a teachable agent, using a vector database.
     Each DB entry (called a memo) is a pair of strings: an input text and an output text.
@@ -317,9 +319,7 @@ class MemoStore:
         if self.verbosity >= 1:
             print(
                 colored(
-                    "\nINPUT-OUTPUT PAIR ADDED TO VECTOR DATABASE:\n  ID\n    {}\n  INPUT\n    {}\n  OUTPUT\n    {}\n".format(
-                        self.last_memo_id, input_text, output_text
-                    ),
+                    f"\nINPUT-OUTPUT PAIR ADDED TO VECTOR DATABASE:\n  ID\n    {self.last_memo_id}\n  INPUT\n    {input_text}\n  OUTPUT\n    {output_text}\n",
                     "light_yellow",
                 )
             )
@@ -335,9 +335,7 @@ class MemoStore:
         if self.verbosity >= 1:
             print(
                 colored(
-                    "\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {}\n  OUTPUT\n    {}\n  DISTANCE\n    {}".format(
-                        input_text, output_text, distance
-                    ),
+                    f"\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {input_text}\n  OUTPUT\n    {output_text}\n  DISTANCE\n    {distance}",
                     "light_yellow",
                 )
             )
@@ -358,9 +356,7 @@ class MemoStore:
                 if self.verbosity >= 1:
                     print(
                         colored(
-                            "\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {}\n  OUTPUT\n    {}\n  DISTANCE\n    {}".format(
-                                input_text, output_text, distance
-                            ),
+                            f"\nINPUT-OUTPUT PAIR RETRIEVED FROM VECTOR DATABASE:\n  INPUT1\n    {input_text}\n  OUTPUT\n    {output_text}\n  DISTANCE\n    {distance}",
                             "light_yellow",
                         )
                     )

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,18 +15,13 @@ from autogen.agentchat.contrib.math_user_proxy_agent import (
     _add_print_to_last_line,
     _remove_print,
 )
+from autogen.import_utils import skip_on_missing_imports
 
 from ..conftest import Credentials
 
-try:
-    from openai import OpenAI  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
-
 
 @pytest.mark.openai
+@skip_on_missing_imports(["openai"])
 def test_math_user_proxy_agent(
     credentials_gpt_4o_mini: Credentials,
 ):

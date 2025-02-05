@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
-base_filter="not (openai or gemini or anthropic)"
+base_filter="not (openai or gemini or anthropic or deepseek)"
 args=()
 while [[ $# -gt 0 ]]; do
 	if [[ "$1" == "-m" ]]; then

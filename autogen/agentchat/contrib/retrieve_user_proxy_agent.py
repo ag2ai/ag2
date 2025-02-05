@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2024, Owners of https://github.com/ag2ai
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,31 +10,29 @@ import re
 import uuid
 from typing import Any, Callable, Literal, Optional, Union
 
-from IPython import get_ipython
-
-try:
-    import chromadb
-except ImportError as e:
-    raise ImportError(f"{e}. You can try `pip install autogen[retrievechat]`, or install `chromadb` manually.")
-from autogen.agentchat import UserProxyAgent
-from autogen.agentchat.agent import Agent
-from autogen.agentchat.contrib.vectordb.base import Document, QueryResults, VectorDB, VectorDBFactory
-from autogen.agentchat.contrib.vectordb.utils import (
-    chroma_results_to_query_results,
-    filter_results_by_distance,
-    get_logger,
-)
-from autogen.code_utils import extract_code
-from autogen.retrieve_utils import (
+from ...code_utils import extract_code
+from ...formatting_utils import colored
+from ...import_utils import optional_import_block, require_optional_import
+from ...retrieve_utils import (
     TEXT_FORMATS,
     create_vector_db_from_dir,
     get_files_from_dir,
     query_vector_db,
     split_files_to_chunks,
 )
-from autogen.token_count_utils import count_token
+from ...token_count_utils import count_token
+from .. import UserProxyAgent
+from ..agent import Agent
+from ..contrib.vectordb.base import Document, QueryResults, VectorDB, VectorDBFactory
+from ..contrib.vectordb.utils import (
+    chroma_results_to_query_results,
+    filter_results_by_distance,
+    get_logger,
+)
 
-from ...formatting_utils import colored
+with optional_import_block():
+    import chromadb
+    from IPython import get_ipython
 
 logger = get_logger(__name__)
 
@@ -91,6 +89,7 @@ HASH_LENGTH = int(os.environ.get("HASH_LENGTH", 8))
 UPDATE_CONTEXT_IN_PROMPT = "you should reply exactly `UPDATE CONTEXT`"
 
 
+@require_optional_import(["chromadb", "IPython"], "retrievechat")
 class RetrieveUserProxyAgent(UserProxyAgent):
     """(In preview) The Retrieval-Augmented User Proxy retrieves document chunks based on the embedding
     similarity, and sends them along with the question to the Retrieval-Augmented Assistant
@@ -219,7 +218,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 - `distance_threshold` (Optional, float) - the threshold for the distance score, only
                     distance smaller than it will be returned. Will be ignored if < 0. Default is -1.
 
-            `**kwargs` (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
+            `**kwargs` (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
 
         Example:
         Example of overriding retrieve_docs - If you have set up a customized vector db, and it's
@@ -286,7 +285,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self._custom_text_types = self._retrieve_config.get("custom_text_types", TEXT_FORMATS)
         self._recursive = self._retrieve_config.get("recursive", True)
         self._context_max_tokens = self._retrieve_config.get("context_max_tokens", self._max_tokens * 0.8)
-        self._collection = True if self._docs_path is None else False  # whether the collection is created
+        self._collection = self._docs_path is None  # whether the collection is created
         self._ipython = get_ipython()
         self._doc_idx = -1  # the index of the current used doc
         self._results = []  # the results of the current query
