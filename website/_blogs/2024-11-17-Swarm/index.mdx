@@ -23,6 +23,12 @@ Besides these core features, AG2 provides:
 
 This feature builds on GroupChat, offering a simpler interface to use swarm orchestration. For comparison, see two implementations of the same example: one [using swarm orchestration](/docs/use-cases/notebooks/notebooks/agentchat_swarm) and another [naive implementation with GroupChat (Legacy)](/docs/use-cases/notebooks/notebooks/agentchat_swarm_w_groupchat_legacy).
 
+````mdx-code-block
+:::note
+This blog has been updated as swarms can now accommodate any ConversableAgent.
+:::
+````
+
 ## Handoffs
 
 Before we dive into a swarm example, an important concept in swarm orchestration is when and how an agent hands off to another agent.
@@ -32,19 +38,21 @@ Providing additional flexibility, we introduce the capability to define an after
 The following are the prioritized handoffs for each iteration of the swarm.
 
 1. **Agent-level: Calls a tool that returns a swarm agent**: A swarm agent's tool call returns the next agent to hand off to.
-2. **Agent-level: Calls a pre-defined conditional handoff**: A swarm agent has an `ON_CONDITION` handoff that is chosen by the LLM (behaves like a tool call).
+2. **Agent-level: Calls a pre-defined conditional handoff**: A swarm agent has an `OnCondition` handoff that is chosen by the LLM (behaves like a tool call).
 3. **Agent-level: After work hand off**: When no tool calls are made it can use an, optional, `AFTER_WORK` handoff that is a preset option or a nominated swarm agent.
 4. **Swarm-level: After work handoff**: If the agent does not have an `AFTER_WORK` handoff, the swarm's `AFTER_WORK` handoff will be used.
 
-In the following code sample a `SwarmAgent` named `responder` has:
-- Two conditional handoffs registered (`ON_CONDITION`), specifying the agent to hand off to and the condition to trigger the handoff.
+In the following code sample a `ConversableAgent` named `responder` has:
+- Two conditional handoffs registered (`OnCondition`), specifying the agent to hand off to and the condition to trigger the handoff.
 - An after-work handoff (`AFTER_WORK`) nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This could also be a swarm agent.
 
 ```python
-responder.register_hand_off(
+from autogen import register_hand_off, OnCondition, AfterWorkOption
+register_hand_off(
+    agent=responder,
     hand_to=[
- ON_CONDITION(weather, "If you need weather data, hand off to the Weather_Agent"),
- ON_CONDITION(travel_advisor, "If you have weather data but need formatted recommendations, hand off to the Travel_Advisor_Agent"),
+ OnCondition(weather, "If you need weather data, hand off to the Weather_Agent"),
+ OnCondition(travel_advisor, "If you have weather data but need formatted recommendations, hand off to the Travel_Advisor_Agent"),
  AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
  ]
 )
@@ -63,8 +71,8 @@ history, context, last_agent = initiate_swarm_chat(
 
 ## Creating a swarm
 
-1. Define the functions that can be used by your `SwarmAgent`s.
-2. Create your `SwarmAgent`s (which derives from `ConversableAgent`).
+1. Define the functions that can be used by your `ConversableAgent`s.
+2. Create your `ConversableAgent`s.
 3. For each swarm agent, specify the handoffs (transitions to another agent) and what to do when they have finished their work (termed *After Work*).
 4. Optionally, create your context dictionary.
 5. Call `initiate_swarm_chat`.
@@ -74,7 +82,7 @@ history, context, last_agent = initiate_swarm_chat(
 This example of managing refunds demonstrates the context handling, swarm and agent-level conditional and after work hand offs, and the human-in-the-loop feature.
 
 ```python
-from autogen import initiate_swarm_chat, SwarmAgent, SwarmResult, ON_CONDITION, AFTER_WORK, AfterWorkOption
+from autogen import initiate_swarm_chat, ConversableAgent, SwarmResult, OnCondition, AFTER_WORK, AfterWorkOption
 from autogen import UserProxyAgent
 import os
 
@@ -90,7 +98,7 @@ context_variables = {
 }
 
 # Functions that our swarm agents will be assigned
-# They can return a SwarmResult, a SwarmAgent, or a string
+# They can return a SwarmResult, a ConversableAgent, or a string
 # SwarmResult allows you to update context_variables and/or hand off to another agent
 def verify_customer_identity(passport_number: str, context_variables: dict) -> str:
     context_variables["passport_number"] = passport_number
@@ -106,7 +114,7 @@ def process_refund_payment(context_variables: dict) -> str:
     return SwarmResult(values="Payment processed successfully", context_variables=context_variables)
 
 # Swarm Agents, similar to ConversableAgent, but with functions and hand offs (specified later)
-customer_service = SwarmAgent(
+customer_service = ConversableAgent(
     name="CustomerServiceRep",
     system_message="""You are a customer service representative.
       First verify the customer's identity by asking for the customer's passport number,
@@ -116,7 +124,7 @@ customer_service = SwarmAgent(
     functions=[verify_customer_identity],
 )
 
-refund_specialist = SwarmAgent(
+refund_specialist = ConversableAgent(
     name="RefundSpecialist",
     system_message="""You are a refund specialist.
     Review the case and approve the refund, then transfer to the payment processor.""",
@@ -124,7 +132,7 @@ refund_specialist = SwarmAgent(
     functions=[approve_refund_and_transfer],
 )
 
-payment_processor = SwarmAgent(
+payment_processor = ConversableAgent(
     name="PaymentProcessor",
     system_message="""You are a payment processor.
     Process the refund payment and provide a confirmation message to the customer.""",
@@ -132,7 +140,7 @@ payment_processor = SwarmAgent(
     functions=[process_refund_payment],
 )
 
-satisfaction_surveyor = SwarmAgent(
+satisfaction_surveyor = ConversableAgent(
     name="SatisfactionSurveyor",
     system_message="""You are a customer satisfaction specialist.
     Ask the customer to rate their experience with the refund process.""",
@@ -141,14 +149,16 @@ satisfaction_surveyor = SwarmAgent(
 
 # Conditional and After work hand offs
 
-customer_service.register_hand_off(
+register_hand_off(
+    agent=customer_service,
     hand_to=[
-        ON_CONDITION(refund_specialist, "After customer verification, transfer to refund specialist"),
+        OnCondition(refund_specialist, "After customer verification, transfer to refund specialist"),
         AFTER_WORK(AfterWorkOption.REVERT_TO_USER)
     ]
 )
 
-payment_processor.register_hand_off(
+register_hand_off(
+    agent=payment_processor,
     hand_to=[
         AFTER_WORK(satisfaction_surveyor),
     ]
@@ -245,7 +255,7 @@ Next speaker: Tool_Execution
 Tool_Execution (to chat_manager):
 
 ***** Response from calling tool (call_Jz1viRLeJuOltPRcKfYZ8bgH) *****
-SwarmAgent --> RefundSpecialist
+Swarm agent --> RefundSpecialist
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -330,7 +340,6 @@ Context Variables:
 ### Notes
 
 - Behind-the-scenes, swarm agents are supported by a tool execution agent, that executes tools on their behalf. Hence, the appearance of `Tool Execution` in the output.
-- Currently only swarm agents can be added to a swarm. This is to maintain their ability to manage context variables, auto-execute functions, and support hand offs. Eventually, we may allow ConversableAgent to have the same capability and make "SwarmAgent" a simpler subclass with certain defaults changed (like AssistantAgent and UserProxyAgent).
 - Would you like to enhance the swarm feature or have found a bug? Please let us know by creating an issue on the [AG2 GitHub](https://github.com/ag2ai/ag2/issues).
 
 ## For Further Reading
