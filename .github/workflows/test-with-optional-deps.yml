@@ -66,6 +66,7 @@ jobs:
           - "twilio"
           - "interop"
           - "browser_use"
+          - "crawl4ai"
           - "docs"
         os: [ubuntu-latest, macos-latest, windows-latest]
         # Run tests only for py versions 3.9, 3.10, 3.13
