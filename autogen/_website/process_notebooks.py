@@ -44,6 +44,13 @@ with optional_import_block():
     from termcolor import colored
 
 
+EDIT_URL_HTML = """
+<div className="edit-url-container">
+    <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/{file_path}" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>
+</div>
+"""
+
+
 @lru_cache
 def check_quarto_bin(quarto_bin: str = "quarto") -> bool:
     """Check if quarto is installed."""
@@ -554,6 +561,9 @@ def post_process_mdx(
     # Convert mdx image syntax to mintly image syntax
     content = convert_mdx_image_blocks(content, rendered_mdx, website_dir)
 
+    # ensure editUrl is present
+    content = ensure_edit_url(content, repo_relative_notebook)
+
     # Rewrite the content as
     # ---
     # front_matter_str
@@ -851,6 +861,20 @@ def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
     return "", content
 
 
+def ensure_edit_url(content: str, file_path: Path) -> str:
+    """Ensure editUrl is present in the content.
+
+    Args:
+        content (str): Content of the file
+        file_path (Path): Path to the file
+    """
+    html_placeholder = [line for line in EDIT_URL_HTML.splitlines() if line.strip() != ""][0]
+    if html_placeholder in content:
+        return content
+
+    return content + EDIT_URL_HTML.format(file_path=file_path)
+
+
 def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
     """Add authors info to blog posts.
 
@@ -906,7 +930,13 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
             # Combine content
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
 
-            file_path.write_text(f"{new_content}\n", encoding="utf-8")
+            # ensure editUrl is present
+            rel_file_path = str(file_path.relative_to(website_dir.parent)).replace(
+                "website/docs/blog/", "website/_blogs/"
+            )
+            content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
+
+            file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
             # print(f"Authors info and social share image checked in {file_path}")
 
         except Exception as e:

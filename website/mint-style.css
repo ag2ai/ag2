@@ -82,6 +82,20 @@ body.reference-page h4 {
   text-transform: none !important;
 }
 
+.edit-url-container {
+  margin-top: 1rem;
+  & > a {
+    color: #4b9cd6;
+    & > p.icon {
+      display: inline-block;
+      margin-right: 0.25rem;
+      & > svg {
+        vertical-align: baseline;
+      }
+    }
+  }
+}
+
 /* Reference section starts */
 
 body.reference-page h1,
@@ -433,6 +447,7 @@ a.colab-badge > img, a.github-badge  > img {
   font-size: 1.125rem;
   text-align: left;
   margin-top: 6px;
+  margin-left: 0.15rem;
 }
 
 .popular-resources .youtube-video iframe {
