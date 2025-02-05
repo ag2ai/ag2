@@ -14,6 +14,8 @@ import re
 import warnings
 from collections import defaultdict
 from contextlib import contextmanager
+from dataclasses import dataclass
+from inspect import signature
 from typing import (
     Any,
     Callable,
@@ -58,7 +60,7 @@ from ..messages.agent_messages import (
 )
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
+from ..tools import ChatContext, Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -68,6 +70,55 @@ __all__ = ("ConversableAgent",)
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+# Parameter name for context variables
+# Use the value in functions and they will be substituted with the context variables:
+# e.g. def my_function(context_variables: Dict[str, Any], my_other_parameters: Any) -> Any:
+__CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
+
+
+@dataclass
+class UpdateSystemMessage:
+    """Update the agent's system message before they reply
+
+    Args:
+        content_updater: The format string or function to update the agent's system message. Can be a format string or a Callable.
+            If a string, it will be used as a template and substitute the context variables.
+            If a Callable, it should have the signature:
+                def my_content_updater(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+    """
+
+    content_updater: Union[Callable, str]
+
+    def __post_init__(self):
+        if isinstance(self.content_updater, str):
+            # find all {var} in the string
+            vars = re.findall(r"\{(\w+)\}", self.content_updater)
+            if len(vars) == 0:
+                warnings.warn("Update function string contains no variables. This is probably unintended.")
+
+        elif isinstance(self.content_updater, Callable):
+            sig = signature(self.content_updater)
+            if len(sig.parameters) != 2:
+                raise ValueError(
+                    "The update function must accept two parameters of type ConversableAgent and List[Dict[str, Any]], respectively"
+                )
+            if sig.return_annotation != str:
+                raise ValueError("The update function must return a string")
+        else:
+            raise ValueError("The update function must be either a string or a callable")
+
+
+class UPDATE_SYSTEM_MESSAGE(UpdateSystemMessage):  # noqa: N801
+    """Deprecated: Use UpdateSystemMessage instead. This class will be removed in a future version (TBD)."""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "UPDATE_SYSTEM_MESSAGE is deprecated and will be removed in a future version (TBD). Use UpdateSystemMessage instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
 
 @export_module("autogen")
@@ -107,6 +158,10 @@ class ConversableAgent(LLMAgent):
         chat_messages: Optional[dict[Agent, list[dict]]] = None,
         silent: Optional[bool] = None,
         context_variables: Optional[dict[str, Any]] = None,
+        functions: Union[list[Callable], Callable] = None,
+        update_agent_state_before_reply: Optional[
+            Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
+        ] = None,
     ):
         """
         Args:
@@ -161,6 +216,11 @@ class ConversableAgent(LLMAgent):
                 Note: Will maintain a reference to the passed in context variables (enabling a shared context)
                 Only used in Swarms at this stage:
                 https://docs.ag2.ai/docs/reference/agentchat/contrib/swarm_agent
+        functions (List[Callable]): A list of functions to register with the agent.
+            These functions will be provided to the LLM, however they won't, by default, be executed by the agent.
+            If the agent is in a swarm, the swarm's tool executor will execute the function.
+            When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
+        update_agent_state_before_reply (List[Callable]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -182,6 +242,7 @@ class ConversableAgent(LLMAgent):
             else (lambda x: content_str(x.get("content")) == "TERMINATE")
         )
         self.silent = silent
+
         # Take a copy to avoid modifying the given dict
         if isinstance(llm_config, dict):
             try:
@@ -221,6 +282,16 @@ class ConversableAgent(LLMAgent):
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
 
         self._context_variables = context_variables if context_variables is not None else {}
+
+        # Register functions to the agent
+        if isinstance(functions, list):
+            if not all(isinstance(func, Callable) for func in functions):
+                raise TypeError("All elements in the functions list must be callable")
+            self._add_functions(functions)
+        elif isinstance(functions, Callable):
+            self._add_single_function(functions)
+        elif functions is not None:
+            raise TypeError("Functions must be a callable or a list of callables")
 
         # Setting up code execution.
         # Do not register code execution reply if code execution is disabled.
@@ -289,6 +360,9 @@ class ConversableAgent(LLMAgent):
             "update_agent_state": [],
         }
 
+        # Associate agent update state hooks
+        self._register_update_agent_state_before_reply(update_agent_state_before_reply)
+
     def _validate_name(self, name: str) -> None:
         if not self.llm_config or "config_list" not in self.llm_config or len(self.llm_config["config_list"]) == 0:
             return
@@ -302,6 +376,111 @@ class ConversableAgent(LLMAgent):
         # Validation for name using regex to detect any whitespace
         if re.search(r"\s", name):
             raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")
+
+    def _get_display_name(self):
+        """Get the string representation of the agent.
+
+        If you would like to change the standard string representation for an
+        instance of ConversableAgent, you can point it to another function.
+        In this example a function called _swarm_agent_str that returns a string:
+        agent._get_display_name = MethodType(_swarm_agent_str, agent)
+        """
+        return self.name
+
+    def __str__(self):
+        return self._get_display_name()
+
+    def _add_functions(self, func_list: list[Callable]):
+        """Add (Register) a list of functions to the agent
+
+        Args:
+            func_list (list[Callable]): A list of functions to register with the agent."""
+        for func in func_list:
+            self._add_single_function(func)
+
+    def _add_single_function(self, func: Callable, name: Optional[str] = None, description: Optional[str] = ""):
+        """Add a single function to the agent, removing context variables for LLM use.
+
+        Args:
+            func (Callable): The function to register.
+            name (str): The name of the function. If not provided, the function's name will be used.
+            description (str): The description of the function, used by the LLM. If not provided, the function's docstring will be used.
+        """
+        if name:
+            func._name = name
+        else:
+            func._name = func.__name__
+
+        if description:
+            func._description = description
+        else:
+            # Use function's docstring, strip whitespace, fall back to empty string
+            func._description = (func.__doc__ or "").strip()
+
+        f = get_function_schema(func, name=func._name, description=func._description)
+
+        # Remove context_variables parameter from function schema
+        f_no_context = f.copy()
+        if __CONTEXT_VARIABLES_PARAM_NAME__ in f_no_context["function"]["parameters"]["properties"]:
+            del f_no_context["function"]["parameters"]["properties"][__CONTEXT_VARIABLES_PARAM_NAME__]
+        if "required" in f_no_context["function"]["parameters"]:
+            required = f_no_context["function"]["parameters"]["required"]
+            f_no_context["function"]["parameters"]["required"] = [
+                param for param in required if param != __CONTEXT_VARIABLES_PARAM_NAME__
+            ]
+            # If required list is empty, remove it
+            if not f_no_context["function"]["parameters"]["required"]:
+                del f_no_context["function"]["parameters"]["required"]
+
+        self.update_tool_signature(f_no_context, is_remove=False)
+        self.register_function({func._name: func})
+
+    def _register_update_agent_state_before_reply(self, functions: Optional[Union[list[Callable], Callable]]):
+        """
+        Register functions that will be called when the agent is selected and before it speaks.
+        You can add your own validation or precondition functions here.
+
+        Args:
+            functions (List[Callable[[], None]]): A list of functions to be registered. Each function
+                is called when the agent is selected and before it speaks.
+        """
+        if functions is None:
+            return
+        if not isinstance(functions, list) and type(functions) not in [UpdateSystemMessage, Callable]:
+            raise ValueError("functions must be a list of callables")
+
+        if not isinstance(functions, list):
+            functions = [functions]
+
+        for func in functions:
+            if isinstance(func, UpdateSystemMessage):
+                # Wrapper function that allows this to be used in the update_agent_state hook
+                # Its primary purpose, however, is just to update the agent's system message
+                # Outer function to create a closure with the update function
+                def create_wrapper(update_func: UpdateSystemMessage):
+                    def update_system_message_wrapper(
+                        agent: ConversableAgent, messages: list[dict[str, Any]]
+                    ) -> list[dict[str, Any]]:
+                        if isinstance(update_func.content_updater, str):
+                            # Templates like "My context variable passport is {passport}" will
+                            # use the context_variables for substitution
+                            sys_message = OpenAIWrapper.instantiate(
+                                template=update_func.content_updater,
+                                context=agent._context_variables,
+                                allow_format_str_template=True,
+                            )
+                        else:
+                            sys_message = update_func.content_updater(agent, messages)
+
+                        agent.update_system_message(sys_message)
+                        return messages
+
+                    return update_system_message_wrapper
+
+                self.register_hook(hookable_method="update_agent_state", hook=create_wrapper(func))
+
+            else:
+                self.register_hook(hookable_method="update_agent_state", hook=func)
 
     def _validate_llm_config(self, llm_config):
         assert llm_config in (None, False) or isinstance(llm_config, dict), (
@@ -463,6 +642,148 @@ class ConversableAgent(LLMAgent):
         return chat_to_run
 
     @staticmethod
+    def _process_nested_chat_carryover(
+        chat: dict[str, Any],
+        recipient: Agent,
+        messages: list[dict[str, Any]],
+        sender: Agent,
+        config: Any,
+        trim_n_messages: int = 0,
+    ) -> None:
+        """Process carryover messages for a nested chat (typically for the first chat of a swarm)
+
+        The carryover_config key is a dictionary containing:
+            "summary_method": The method to use to summarise the messages, can be "all", "last_msg", "reflection_with_llm" or a Callable
+            "summary_args": Optional arguments for the summary method
+
+        Supported carryover 'summary_methods' are:
+            "all" - all messages will be incorporated
+            "last_msg" - the last message will be incorporated
+            "reflection_with_llm" - an llm will summarise all the messages and the summary will be incorporated as a single message
+            Callable - a callable with the signature: my_method(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+
+        Args:
+            chat: The chat dictionary containing the carryover configuration
+            recipient: The recipient agent
+            messages: The messages from the parent chat
+            sender: The sender agent
+            trim_n_messages: The number of latest messages to trim from the messages list
+        """
+
+        def concat_carryover(chat_message: str, carryover_message: Union[str, list[dict[str, Any]]]) -> str:
+            """Concatenate the carryover message to the chat message."""
+            prefix = f"{chat_message}\n" if chat_message else ""
+
+            if isinstance(carryover_message, str):
+                content = carryover_message
+            elif isinstance(carryover_message, list):
+                content = "\n".join(
+                    msg["content"] for msg in carryover_message if "content" in msg and msg["content"] is not None
+                )
+            else:
+                raise ValueError("Carryover message must be a string or a list of dictionaries")
+
+            return f"{prefix}Context:\n{content}"
+
+        carryover_config = chat["carryover_config"]
+
+        if "summary_method" not in carryover_config:
+            raise ValueError("Carryover configuration must contain a 'summary_method' key")
+
+        carryover_summary_method = carryover_config["summary_method"]
+        carryover_summary_args = carryover_config.get("summary_args") or {}
+
+        chat_message = ""
+        message = chat.get("message")
+
+        # If the message is a callable, run it and get the result
+        if message:
+            chat_message = message(recipient, messages, sender, config) if callable(message) else message
+
+        # deep copy and trim the latest messages
+        content_messages = copy.deepcopy(messages)
+        content_messages = content_messages[:-trim_n_messages]
+
+        if carryover_summary_method == "all":
+            # Put a string concatenated value of all parent messages into the first message
+            # (e.g. message = <first nested chat message>\nContext: \n<chat message 1>\n<chat message 2>\n...)
+            carry_over_message = concat_carryover(chat_message, content_messages)
+
+        elif carryover_summary_method == "last_msg":
+            # (e.g. message = <first nested chat message>\nContext: \n<last chat message>)
+            carry_over_message = concat_carryover(chat_message, content_messages[-1]["content"])
+
+        elif carryover_summary_method == "reflection_with_llm":
+            # (e.g. message = <first nested chat message>\nContext: \n<llm summary>)
+
+            # Add the messages to the nested chat agent for reflection (we'll clear after reflection)
+            chat["recipient"]._oai_messages[sender] = content_messages
+
+            carry_over_message_llm = ConversableAgent._reflection_with_llm_as_summary(
+                sender=sender,
+                recipient=chat["recipient"],  # Chat recipient LLM config will be used for the reflection
+                summary_args=carryover_summary_args,
+            )
+
+            recipient._oai_messages[sender] = []
+
+            carry_over_message = concat_carryover(chat_message, carry_over_message_llm)
+
+        elif isinstance(carryover_summary_method, Callable):
+            # (e.g. message = <first nested chat message>\nContext: \n<function's return string>)
+            carry_over_message_result = carryover_summary_method(recipient, content_messages, carryover_summary_args)
+
+            carry_over_message = concat_carryover(chat_message, carry_over_message_result)
+
+        chat["message"] = carry_over_message
+
+    @staticmethod
+    def _process_chat_queue_carryover(
+        chat_queue: list[dict[str, Any]],
+        recipient: Agent,
+        messages: Union[str, Callable],
+        sender: Agent,
+        config: Any,
+        trim_messages: int = 2,
+    ) -> tuple[bool, Optional[str]]:
+        """Process carryover configuration for the first chat in the queue.
+
+        Args:
+            chat_queue: List of chat configurations
+            recipient: Receiving agent
+            messages: Chat messages
+            sender: Sending agent
+            config: LLM configuration
+            trim_messages: Number of messages to trim for nested chat carryover (default 2 for swarm chats)
+
+        Returns:
+            Tuple containing:
+                - restore_flag: Whether the original message needs to be restored
+                - original_message: The original message to restore (if any)
+        """
+        restore_chat_queue_message = False
+        original_chat_queue_message = None
+
+        # Carryover configuration allowed on the first chat in the queue only, trim the last two messages specifically for swarm nested chat carryover as these are the messages for the transition to the nested chat agent
+        if len(chat_queue) > 0 and "carryover_config" in chat_queue[0]:
+            if "message" in chat_queue[0]:
+                # As we're updating the message in the nested chat queue, we need to restore it after finishing this nested chat.
+                restore_chat_queue_message = True
+                original_chat_queue_message = chat_queue[0]["message"]
+
+            # TODO Check the trimming required if not a swarm chat, it may not be 2 because other chats don't have the swarm transition messages. We may need to add as a carryover_config parameter.
+            ConversableAgent._process_nested_chat_carryover(
+                chat=chat_queue[0],
+                recipient=recipient,
+                messages=messages,
+                sender=sender,
+                config=config,
+                trim_n_messages=trim_messages,
+            )
+
+        return restore_chat_queue_message, original_chat_queue_message
+
+    @staticmethod
     def _summary_from_nested_chats(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
@@ -476,13 +797,29 @@ class ConversableAgent(LLMAgent):
 
         It extracts and returns a summary from the nested chat based on the "summary_method" in each chat in chat_queue.
 
+        The first chat in the queue can contain a 'carryover_config' which is a dictionary that denotes how to carryover messages from the parent chat into the first chat of the nested chats). Only applies to the first chat.
+            e.g.: carryover_summarize_chat_config = {"summary_method": "reflection_with_llm", "summary_args": None}
+            summary_method can be "last_msg", "all", "reflection_with_llm", Callable
+            The Callable signature: my_method(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+            The summary will be concatenated to the message of the first chat in the queue.
+
         Returns:
             Tuple[bool, str]: A tuple where the first element indicates the completion of the chat, and the second element contains the summary of the last chat if any chats were initiated.
         """
+        # Process carryover configuration
+        restore_chat_queue_message, original_chat_queue_message = ConversableAgent._process_chat_queue_carryover(
+            chat_queue, recipient, messages, sender, config
+        )
+
         chat_to_run = ConversableAgent._get_chats_to_run(chat_queue, recipient, messages, sender, config)
         if not chat_to_run:
             return True, None
         res = initiate_chats(chat_to_run)
+
+        # We need to restore the chat queue message if it has been modified so that it will be the original message for subsequent uses
+        if restore_chat_queue_message:
+            chat_queue[0]["message"] = original_chat_queue_message
+
         return True, res[-1].summary
 
     @staticmethod
@@ -499,14 +836,30 @@ class ConversableAgent(LLMAgent):
 
         It extracts and returns a summary from the nested chat based on the "summary_method" in each chat in chat_queue.
 
+        The first chat in the queue can contain a 'carryover_config' which is a dictionary that denotes how to carryover messages from the parent chat into the first chat of the nested chats). Only applies to the first chat.
+            e.g.: carryover_summarize_chat_config = {"summary_method": "reflection_with_llm", "summary_args": None}
+            summary_method can be "last_msg", "all", "reflection_with_llm", Callable
+            The Callable signature: my_method(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+            The summary will be concatenated to the message of the first chat in the queue.
+
         Returns:
             Tuple[bool, str]: A tuple where the first element indicates the completion of the chat, and the second element contains the summary of the last chat if any chats were initiated.
         """
+        # Process carryover configuration
+        restore_chat_queue_message, original_chat_queue_message = ConversableAgent._process_chat_queue_carryover(
+            chat_queue, recipient, messages, sender, config
+        )
+
         chat_to_run = ConversableAgent._get_chats_to_run(chat_queue, recipient, messages, sender, config)
         if not chat_to_run:
             return True, None
         res = await a_initiate_chats(chat_to_run)
         index_of_last_chat = chat_to_run[-1]["chat_id"]
+
+        # We need to restore the chat queue message if it has been modified so that it will be the original message for subsequent uses
+        if restore_chat_queue_message:
+            chat_queue[0]["message"] = original_chat_queue_message
+
         return True, res[index_of_last_chat].summary
 
     def register_nested_chats(
