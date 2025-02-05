@@ -19,11 +19,23 @@ If you want to add browsing capabilities to your existing agents, see [this note
 To get started with WebSurferAgent, install AG2 with the `browser-use` and/or `crawl4ai` extras.
 ```bash
 pip install ag2[browser-use]
-````
+```
 and/or
 ```bash
 pip install ag2[crawl4ai]
-````
+```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[browser-use]
+```
+or
+```bash
+pip install -U pyautogen[browser-use]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
 
 And then setup Playwright:
 ```bash
@@ -34,6 +46,12 @@ playwright install-deps
 ```
 
 Now, you can create an agent, nominating the web tool:
+<Tip>
+[`Browser Use`](https://github.com/browser-use/browser-use) supports the following models: [Supported Models](https://docs.browser-use.com/customize/supported-models#supported-models)
+
+We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `DeepSeek` and `Ollama` haven't performed as well.
+</Tip>
+
 ```python
 from autogen.agents import WebSurferAgent
 

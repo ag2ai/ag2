@@ -98,6 +98,12 @@ Configure the agents for the interaction.
 - [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
 
+<Tip>
+[`Browser Use`](https://github.com/browser-use/browser-use) supports the following models: [Supported Models](https://docs.browser-use.com/customize/supported-models#supported-models)
+
+We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `DeepSeek` and `Ollama` haven't performed as well.
+</Tip>
+
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
 
