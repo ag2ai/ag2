@@ -107,8 +107,6 @@ def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: 
 class SwarmableAgent:
     """A class for an agent that can participate in a swarm chat."""
 
-    __exported_module__ = ""
-
     def __init__(
         self,
         name: str,

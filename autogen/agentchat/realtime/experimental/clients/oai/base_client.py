@@ -74,14 +74,6 @@ class OpenAIRealtimeClient:
             raise RuntimeError("OpenAI WebSocket is not initialized")
         return self._connection
 
-    @classmethod
-    def _get__exported_module__(cls) -> str:
-        return cls.__exported_module__
-
-    @classmethod
-    def _set__exported_module__(cls, module: str) -> None:
-        cls.__exported_module__ = module
-
     async def send_function_result(self, call_id: str, result: str) -> None:
         """Send the result of a function call to the OpenAI Realtime API.
 
