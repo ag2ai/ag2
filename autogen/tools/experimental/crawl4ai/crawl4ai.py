@@ -122,16 +122,20 @@ class Crawl4AITool(Tool):
     def _get_lite_llm_config(llm_config: dict[str, Any]) -> dict[str, Any]:
         if "config_list" not in llm_config:
             if "model" in llm_config:
-                lite_llm_config = {}
                 model = llm_config["model"]
                 api_type = "openai"
-                lite_llm_config["api_key"] = os.getenv("OPENAI_API_KEY")
+                lite_llm_config = {"api_token": os.getenv("OPENAI_API_KEY")}
             raise ValueError("llm_config must be a valid config dictionary.")
         else:
             try:
                 lite_llm_config = llm_config["config_list"][0].copy()
+                api_key = lite_llm_config.pop("api_key", None)
+                if api_key:
+                    lite_llm_config["api_token"] = api_key
                 model = lite_llm_config.pop("model")
                 api_type = lite_llm_config.pop("api_type", "openai")  # type: ignore[assignment]
+                # litellm uses "gemini" instead of "google" for the api_type
+                api_type = api_type if api_type != "google" else "gemini"
 
             except (KeyError, TypeError):
                 raise ValueError("llm_config must be a valid config dictionary.")
