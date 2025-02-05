@@ -1,0 +1,268 @@
+---
+title: Get Communicating with Discord, Slack, and Telegram
+authors:
+  - marklysze
+tags: [tools, tool calling, discord, slack, telegram, messaging]
+---
+
+<div>
+<img noZoom className="social-share-img"
+  src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+  alt="social preview"
+  style={{ position: 'absolute', left: '-9999px' }}
+/>
+</div>
+
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/marklysze">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/marklysze.png" />
+          </div>
+          <div>
+            <p class="name">Mark Sze</p>
+            <p>Software Engineer at AG2.ai</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
+## New Agents
+
+We want to help you focus on building workflows and enhancing agents, so we're building reference agents to get you going quicker.
+
+Say hello to three new AG2 communication agents - **DiscordAgent**, **SlackAgent**, and **TelegramAgent**, here so you can use an agentic workflow to send and retrieve messages from messaging platforms.
+
+There are many messaging platforms and we're starting with Discord, Slack, and Telegram. Want more? Use these reference agents, and their tools, and [creating some more](https://docs.ag2.ai/docs/contributor-guide/contributing).
+
+### New agents need new tools
+
+Underpinning these new agents are AG2 tools for sending and retrieving messages.
+
+Why is it important that these are tools? Simple, you can add the tools to your existing agents or build a *mega* communications agent with all the tools.
+
+Additionally, as the agents are tool-based, you can add *your* tools to these agents to make them even more capable.
+
+Here are our three new agents and the pair of new tools that they use (and you can use with your own agents):
+
+| Agent | Send Tool | Retrieve Tool |
+| --- | --- | --- |
+| DiscordAgent | DiscordSendTool | DiscordRetrieveTool |
+| SlackAgent | SlackSendTool | SlackRetrieveTool |
+| TelegramAgent | TelegramSendTool | TelegramRetrieveTool |
+
+### Capabilities
+
+The send tools all have the same functionality, they take a message and post it to the configured channel/group/bot. If a message is longer than the platforms permitted message length, the tool will split the message into multiple messages.
+
+All the retrieve tools can:
+- Retrieve the latest X messages from a channel/group/bot.
+- Retrieve messages since a given date.
+- Retrieve messages since a given message ID.
+- Retrieve a message given its ID.
+
+The Telegram retrieve tool also has the ability to retrieve messages using a search string (and this can be done in combination with the retrieval options above).
+
+### Configuration
+
+In this first iteration of the tools, each tool is configured for a specific channel/group/bot. This configuration is applied when you create the tool.
+
+Discord, Slack, and Telegram all have their own authentication and channel/group/bot identifiers. See [this Notebook](/docs/use-cases/notebooks/notebooks/tools_commsplatforms) for more guidance on establishing those authentication details and identifiers.
+
+Here are examples of how to create the tools, passing in the configuration:
+
+```python
+discord_send_tool = DiscordSendTool(
+    bot_token=my_bot_token,
+    guild_name=my_guild_name,
+    channel_name=my_channel_name,
+    )
+
+slack_send_tool = SlackSendTool(
+    bot_token=my_bot_token,
+    channel_id=my_channel_id,
+    )
+
+telegram_send_tool = TelegramRetrieveTool(
+    api_id=my_api_id,
+    api_hash=my_api_hash,
+    chat_id=my_group_chat_id,
+    )
+
+# And the same for DiscordRetrieveTool, SlackRetrieveTool, and TelegramRetrieveTool
+```
+
+Or, the agents:
+
+```python
+discord_agent = DiscordAgent(
+    name="discord_agent",
+    llm_config=llm_config,
+    bot_token=my_bot_token,
+    guild_name=my_guild_name,
+    channel_name=my_channel_name,
+    )
+
+slack_agent = SlackAgent(
+    name="slack_agent",
+    llm_config=llm_config,
+    bot_token=my_bot_token,
+    channel_id=my_channel_id,
+    )
+
+telegram_agent = TelegramAgent(
+    name="telegram_agent",
+    llm_config=llm_config,
+    api_id=my_api_id,
+    api_hash=my_api_hash,
+    chat_id=my_group_chat_id,
+    )
+```
+
+If you need to send to or retrieve messages from multiple channels, create additional tool instances for each channel and load up your agents or have an agent for each channel.
+
+## Agent vs Tools
+
+You could create a ConversableAgent and add the send and retrieve tools and you would almost have the same functionality as the new agents.
+
+Apart from the simplicity of creating an agent with the tools already registered, an important component of the new agents is the system message. Each one has a system message tailored to the platform's messaging requirements.
+
+They cover aspects like maximum message length, preferred format (e.g. Markdown), and provide tips like using emojis.
+
+| Agent | System Message guidance |
+| --- | --- |
+| DiscordAgent | 2,000 character limit, Markdown, bold/italic/code, use emojis |
+| SlackAgent | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
+| TelegramAgent | 4,096 character limit, HTML, mentions and emojis |
+
+You can turn these off by setting `has_writing_instructions` to False when creating the agent.
+
+An important consideration is also the execution of the tools. In AG2 the tool execution is typically handled by a separate agent that will follow the agent in the conversation (unless its an agent in a swarm whereby tools are executed automatically). So, if you are using the agents then you need to register the tools associated with them with another agent for execution. See the example below for how to do this.
+
+### Installation
+
+Each messaging platform requires installation of a package specifically for that platform.
+
+To use the Discord agent or tools install AG2 with the `commsagent-discord` extra:
+```bash
+pip install ag2[commsagent-discord]
+```
+
+Slack:
+```bash
+pip install ag2[commsagent-slack]
+```
+
+Telegram:
+```bash
+pip install ag2[commsagent-telegram]
+```
+
+You're all set! Now you can start sending to and retrieving messages from these platforms.
+
+### Demo
+
+Here's a quick example of how to use the new agents and tools. If you're after more examples, see [this Notebook](/docs/use-cases/notebooks/notebooks/tools_commsplatforms).
+
+We'll start with creating an equivalent **DiscordAgent** using the tools so you now how to construct your own communication agent. For Slack and Telegram, we'll use **SlackAgent** and **TelegramAgent**.
+
+```python
+# Imports
+from autogen import ConversableAgent # We'll build our DiscordAgent from ConversableAgent
+from autogen.agents.experimental import SlackAgent, TelegramAgent
+from autogen.tools.experimental.messageplatform import DiscordSendTool, DiscordRetrieveTool
+
+# LLM Configuration
+# OpenAI GPT-4o mini for all agents
+# Put your OpenAI API key in the OPENAI_API_KEY environment key
+llm_config = {"model": "gpt-4o-mini"}
+```
+
+All your tokens and identifiers, next.
+```python
+# Tokens and Ids
+my_discord_bot_token = ""
+my_discord_guild_name = ""
+my_discord_channel_name = ""
+
+my_telegram_api_id = ""
+my_telegram_api_hash = ""
+my_telegram_chat_id = ""
+
+my_slack_bot_token = ""
+my_slack_channel_id = ""
+```
+
+Creating an equivalent DiscordAgent using tools.
+```python
+# Manually creating a DiscordAgent, start with a ConversableAgent and detailed system message
+discord_agent = ConversableAgent(
+    name="discord_agent",
+    llm_config=llm_config,
+    system_message=(
+        "You are a helpful AI Assistant."
+        "\nFormat guidelines for Discord:\n"
+        "1. Max message length: 2000 characters\n"
+        "2. Supports Markdown formatting\n"
+        "3. Can use ** for bold, * for italic, ``` for code blocks\n"
+        "4. Consider using appropriate emojis when suitable\n"
+    )
+)
+
+# Create the tools
+discord_send_tool = DiscordSendTool(bot_token=my_discord_bot_token, guild_name=my_discord_guild_name, channel_name=my_discord_channel_name)
+discord_retrieve_tool = DiscordRetrieveTool(bot_token=my_discord_bot_token, guild_name=my_discord_guild_name, channel_name=my_discord_channel_name)
+
+# Register the tools for LLM recommendation with the agent
+discord_agent.register_for_llm()(discord_send_tool)
+discord_agent.register_for_llm()(discord_retrieve_tool)
+
+# Now you have an equivalent to DiscordAgent
+```
+
+Our Slack and Telegram agents.
+```python
+# Slack and Telegram agents
+slack_agent = SlackAgent(
+    name="slack_agent",
+    llm_config=llm_config,
+    bot_token=my_slack_bot_token,
+    channel_id=my_slack_channel_id,
+)
+
+telegram_agent = TelegramAgent(
+    name="telegram_agent",
+    llm_config=llm_config,
+    api_id=my_telegram_api_id,
+    api_hash=my_telegram_api_hash,
+    chat_id=my_telegram_chat_id,
+)
+```
+
+To execute the tools, we create a tool executor and associate the tools to allow it to execute.
+```python
+# Create an agent to execute the tools
+tool_executor = ConversableAgent(
+    name="tool_executor",
+    human_input_mode="NEVER",
+)
+
+# Register the tools with the tool executor, here are the Discord tools
+discord_send_tool.register_for_execution(tool_executor)
+discord_retrieve_tool.register_for_execution(tool_executor)
+
+# For SlackAgent and TelegramAgent we get the registered tools
+# and register them for execution with the tool executor
+for tool in slack_agent.tools + telegram_agent.tools:
+    tool.register_for_execution(tool_executor)
+```
+
+TO BE CONTINUED...
+
+## What's next?
+We're continuing to build new agents, creating more tools, and enhancing agent capabilities.
+
+If you want your AG2 agents to communicate with more messaging platforms we'd love to help you build new agents, see our [Contributor Guide](https://docs.ag2.ai/docs/contributor-guide/contributing) and chat with the team and collaborators on [Discord](https://discord.gg/pAbnFJrkgZ).
