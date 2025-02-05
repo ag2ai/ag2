@@ -13,6 +13,7 @@ import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Iterator, Optional
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -56,9 +57,7 @@ def import_submodules(module_name: str, *, include_root: bool = True) -> list[st
     return submodules
 
 
-def cleanup_module_name(module_name: str) -> None:
-    module = importlib.import_module(module_name)  # nosemgrep
-
+def remove_placeholder_from_module_name(module: ModuleType) -> None:
     for _, obj in module.__dict__.items():
         if hasattr(obj, "__module__") and "__PDOC_PLACEHOLDER__" in obj.__module__:
             original_module = obj.__module__.split("__PDOC_PLACEHOLDER__")[0]
@@ -66,9 +65,7 @@ def cleanup_module_name(module_name: str) -> None:
 
 
 @require_optional_import("pdoc", "docs")
-def build_pdoc_dict(module_name: str) -> None:
-    module = importlib.import_module(module_name)  # nosemgrep
-
+def build_pdoc_dict(module: ModuleType, module_name: str) -> None:
     if not hasattr(module, "__pdoc__"):
         setattr(module, "__pdoc__", {})
 
@@ -82,20 +79,24 @@ def build_pdoc_dict(module_name: str) -> None:
             continue
 
         if hasattr(obj, "__module__") and "__PDOC_PLACEHOLDER__" in obj.__module__:
-            _, exported_module = obj.__module__.split("__PDOC_PLACEHOLDER__")
+            exported_module = obj.__module__.split("__PDOC_PLACEHOLDER__")[1]
             if exported_module != module_name:
                 module.__pdoc__[name] = False
 
-        # Check if __exported_module__ is directly defined on this class (not inherited).
-        # This ensures we only process classes that were explicitly decorated with @export_module,
-        # ignoring classes that might inherit this attribute from their parent classes.
-        # if (
-        #     hasattr(obj, "__dict__")
-        #     and "__exported_module__" in obj.__dict__
-        #     and obj.__exported_module__ != module_name
-        # ):
-        #     # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
-        #     module.__pdoc__[name] = False
+
+@require_optional_import("pdoc", "docs")
+def process_modules(submodules: list[str]) -> None:
+    cached_modules: dict[str, ModuleType] = {}
+
+    # Pass 1: Build pdoc dictionary for all submodules
+    for submodule in submodules:
+        module = importlib.import_module(submodule)  # nosemgrep
+        cached_modules[submodule] = module
+        build_pdoc_dict(module, submodule)
+
+    # Pass 2: Remove the placeholder from the module name and revert to its original name
+    for submodule in submodules:
+        remove_placeholder_from_module_name(cached_modules[submodule])
 
 
 @require_optional_import("pdoc", "docs")
@@ -129,9 +130,7 @@ def generate(target_dir: Path, template_dir: Path) -> None:
     submodules = import_submodules("autogen")
     # print(f"{submodules=}")
 
-    for submodule in submodules:
-        build_pdoc_dict(submodule)
-        cleanup_module_name(submodule)
+    process_modules(submodules)
 
     generate_markdown(target_dir)
 
