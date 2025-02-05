@@ -31,8 +31,20 @@ Add an OPENAI_API_KEY secret to your GitHub Codespaces so your agents can use an
 Alternatively, if you'd like to install AG2 on your machine:
 
 ```bash
-pip install ag2
+pip install -U ag2
 ```
+
+:::note
+**Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen
+```
+or
+```bash
+pip install -U pyautogen
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+:::
 
 :::note
 We recommended using a virtual environment
