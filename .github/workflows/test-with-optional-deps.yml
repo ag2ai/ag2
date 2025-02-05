@@ -127,6 +127,10 @@ jobs:
           if [[ ${{ matrix.os }} != ubuntu-latest ]]; then
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
+      - name: Install playwright
+        if: matrix.optional-dependencies == "browser_use" || matrix.optional-dependencies == "crawl4ai"
+        run: |
+          uv playwright install
       - name: Test import all submodules
         shell: bash
         run: |
