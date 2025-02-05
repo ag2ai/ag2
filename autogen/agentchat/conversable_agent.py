@@ -408,7 +408,7 @@ class ConversableAgent(LLMAgent):
         """
         if name:
             func._name = name
-        else:
+        elif not hasattr(func, "_name"):
             func._name = func.__name__
 
         if description:
