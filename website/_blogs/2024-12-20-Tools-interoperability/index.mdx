@@ -37,6 +37,18 @@ To get LangChain tools working with AG2, you’ll need to install a couple of de
 pip install ag2[interop-langchain]
 ```
 
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[interop-langchain]
+```
+or
+```bash
+pip install -U pyautogen[interop-langchain]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 Also, we’ll use LangChain’s [Wikipedia Tool](https://python.langchain.com/docs/integrations/tools/wikipedia/), which needs the wikipedia package. Install it like this:
 
 ```bash
