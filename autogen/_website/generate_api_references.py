@@ -56,6 +56,15 @@ def import_submodules(module_name: str, *, include_root: bool = True) -> list[st
     return submodules
 
 
+def cleanup_module_name(module_name: str) -> None:
+    module = importlib.import_module(module_name)  # nosemgrep
+
+    for _, obj in module.__dict__.items():
+        if hasattr(obj, "__module__") and "__PDOC_PLACEHOLDER__" in obj.__module__:
+            original_module = obj.__module__.split("__PDOC_PLACEHOLDER__")[0]
+            setattr(obj, "__module__", original_module)
+
+
 @require_optional_import("pdoc", "docs")
 def build_pdoc_dict(module_name: str) -> None:
     module = importlib.import_module(module_name)  # nosemgrep
@@ -72,16 +81,21 @@ def build_pdoc_dict(module_name: str) -> None:
         if not hasattr(obj, "__name__") or name.startswith("_"):
             continue
 
+        if hasattr(obj, "__module__") and "__PDOC_PLACEHOLDER__" in obj.__module__:
+            _, exported_module = obj.__module__.split("__PDOC_PLACEHOLDER__")
+            if exported_module != module_name:
+                module.__pdoc__[name] = False
+
         # Check if __exported_module__ is directly defined on this class (not inherited).
         # This ensures we only process classes that were explicitly decorated with @export_module,
         # ignoring classes that might inherit this attribute from their parent classes.
-        if (
-            hasattr(obj, "__dict__")
-            and "__exported_module__" in obj.__dict__
-            and obj.__exported_module__ != module_name
-        ):
-            # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
-            module.__pdoc__[name] = False
+        # if (
+        #     hasattr(obj, "__dict__")
+        #     and "__exported_module__" in obj.__dict__
+        #     and obj.__exported_module__ != module_name
+        # ):
+        #     # print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
+        #     module.__pdoc__[name] = False
 
 
 @require_optional_import("pdoc", "docs")
@@ -117,6 +131,7 @@ def generate(target_dir: Path, template_dir: Path) -> None:
 
     for submodule in submodules:
         build_pdoc_dict(submodule)
+        cleanup_module_name(submodule)
 
     generate_markdown(target_dir)
 
