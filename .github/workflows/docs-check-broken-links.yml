@@ -6,6 +6,9 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read
+
 jobs:
   check-broken-link:
     if: |
