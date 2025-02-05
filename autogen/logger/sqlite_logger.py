@@ -173,8 +173,8 @@ class SqliteLogger(BaseLogger):
                         """
             self._run_query(query=query)
 
-            current_verion = self._get_current_db_version()
-            if current_verion is None:
+            current_version = self._get_current_db_version()
+            if current_version is None:
                 self._run_query(
                     query="INSERT INTO version (id, version_number) VALUES (1, ?);", args=(SqliteLogger.schema_version,)
                 )

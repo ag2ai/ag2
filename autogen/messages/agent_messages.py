@@ -35,7 +35,7 @@ __all__ = [
     "SelectSpeakerMessage",
     "SpeakerAttemptFailedMultipleAgentsMessage",
     "SpeakerAttemptFailedNoAgentsMessage",
-    "SpeakerAttemptSuccessfullMessage",
+    "SpeakerAttemptSuccessfulMessage",
     "TerminationAndHumanReplyMessage",
     "TextMessage",
     "ToolCallMessage",
@@ -367,7 +367,7 @@ class ClearAgentsHistoryMessage(BaseMessage):
 
 # todo: break into multiple messages
 @wrap_message
-class SpeakerAttemptSuccessfullMessage(BaseMessage):
+class SpeakerAttemptSuccessfulMessage(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
