@@ -3100,9 +3100,6 @@ class ConversableAgent(LLMAgent):
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 
-        # Register in the agent's function map
-        self.register_function({tool.name: tool.func})
-
     def register_for_execution(
         self,
         name: Optional[str] = None,
