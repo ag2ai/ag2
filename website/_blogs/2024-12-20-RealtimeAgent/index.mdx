@@ -165,7 +165,7 @@ FLIGHT_CANCELLATION_POLICY = """
 
 #### **Agents Definition**
 ```python
-triage_agent = SwarmAgent(
+triage_agent = ConversableAgent(
     name="Triage_Agent",
     system_message=triage_instructions(context_variables=context_variables),
     llm_config=llm_config,
@@ -175,7 +175,7 @@ triage_agent = SwarmAgent(
 - **Triage Agent:** Routes the user's request to the appropriate specialized agent based on the topic.
 
 ```python
-flight_cancel = SwarmAgent(
+flight_cancel = ConversableAgent(
     name="Flight_Cancel_Traversal",
     system_message=STARTER_PROMPT + FLIGHT_CANCELLATION_POLICY,
     llm_config=llm_config,
@@ -185,10 +185,11 @@ flight_cancel = SwarmAgent(
 - **Flight Cancel Agent:** Handles cancellations, including refunds and flight credits, while ensuring policy steps are strictly followed.
 
 ```python
-flight_modification.register_hand_off(
-    [
-        ON_CONDITION(flight_cancel, "To cancel a flight"),
-        ON_CONDITION(flight_change, "To change a flight"),
+register_hand_off(
+    agent=flight_modification,
+    hand_to=[
+        OnCondition(flight_cancel, "To cancel a flight"),
+        OnCondition(flight_change, "To change a flight"),
     ]
 )
 ```
