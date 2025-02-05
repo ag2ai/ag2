@@ -76,6 +76,7 @@ class TestCrawl4AITool:
 
         api_type = config_list[0]["api_type"]
         model = config_list[0]["model"]
+        api_type = api_type if api_type != "google" else "gemini"
         provider = f"{api_type}/{model}"
 
         if api_type == "ollama":
