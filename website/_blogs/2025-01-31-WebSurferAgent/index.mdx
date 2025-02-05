@@ -38,21 +38,36 @@ With [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent), your
 ![WebSurferAgent Example](/docs/use-cases/reference-agents/assets/websurferagent_animated.gif)
 
 ## WebSurferAgent with BrowserUseTool
-
+<Warning>
+[`Browser Use`](https://github.com/browser-use/browser-use) requires **Python 3.11 or higher**.
+</Warning>
 ### Installation
 
 To get started with the [`Browser Use`](https://github.com/browser-use/browser-use) integration in AG2, follow these steps:
 
 1. Install AG2 with the `browser-use` extra:
-   ```bash
-   pip install ag2[browser-use]
-   ````
+    ```bash
+    pip install ag2[browser-use]
+    ```
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[browser-use]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[browser-use]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
 2. Set up Playwright:
 
-   ```bash
-   playwright install
-   playwright install-deps
-   ```
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
 
 3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
     ```bash
@@ -75,6 +90,12 @@ nest_asyncio.apply()
 ```
 
 ### Configure WebSurferAgent with Browser Use
+
+<Tip>
+[`Browser Use`](https://github.com/browser-use/browser-use) supports the following models: [Supported Models](https://docs.browser-use.com/customize/supported-models#supported-models)
+
+We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `DeepSeek` and `Ollama` haven't performed as well.
+</Tip>
 
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
@@ -348,15 +369,28 @@ Here's the information extracted from the AG2 home page:
 To integrate [`Crawl4AI`](https://github.com/unclecode/crawl4ai) with AG2, follow these steps:
 
 1. Install AG2 with the `crawl4ai` extra:
-   ```bash
-   pip install ag2[crawl4ai]
-   ````
+    ```bash
+    pip install ag2[crawl4ai]
+    ```
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[crawl4ai]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[crawl4ai]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
 2. Set up Playwright:
 
-   ```bash
-   playwright install
-   playwright install-deps
-   ```
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
 3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
     ```bash
     pip install nest_asyncio
@@ -378,6 +412,12 @@ nest_asyncio.apply()
 ```
 
 ### Configure WebSurferAgent with Crawl4AI
+
+<Tip>
+[`Crawl4AI`](https://github.com/unclecode/crawl4ai) is built on top of [LiteLLM](https://github.com/BerriAI/litellm) and supports the same models as LiteLLM.
+
+We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. However, as of this writing, `DeepSeek` is encountering some issues.
+</Tip>
 
 ```python
 config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
