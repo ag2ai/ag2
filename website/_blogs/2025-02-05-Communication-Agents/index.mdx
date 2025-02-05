@@ -34,9 +34,7 @@ tags: [tools, tool calling, discord, slack, telegram, messaging]
 
 We want to help you focus on building workflows and enhancing agents, so we're building reference agents to get you going quicker.
 
-Say hello to three new AG2 communication agents - **DiscordAgent**, **SlackAgent**, and **TelegramAgent**, here so you can use an agentic workflow to send and retrieve messages from messaging platforms.
-
-There are many messaging platforms and we're starting with Discord, Slack, and Telegram. Want more? Use these reference agents, and their tools, and [creating some more](https://docs.ag2.ai/docs/contributor-guide/contributing).
+Say hello to three new AG2 communication agents - **DiscordAgent**, **SlackAgent**, and **TelegramAgent**, here so that you can use an agentic workflow to send and retrieve messages from messaging platforms.
 
 ### New agents need new tools
 
@@ -138,9 +136,9 @@ They cover aspects like maximum message length, preferred format (e.g. Markdown)
 | SlackAgent | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
 | TelegramAgent | 4,096 character limit, HTML, mentions and emojis |
 
-You can turn these off by setting `has_writing_instructions` to False when creating the agent.
+You can turn these off by setting `has_writing_instructions` to `False` when creating the agent.
 
-An important consideration is also the execution of the tools. In AG2 the tool execution is typically handled by a separate agent that will follow the agent in the conversation (unless its an agent in a swarm whereby tools are executed automatically). So, if you are using the agents then you need to register the tools associated with them with another agent for execution. See the example below for how to do this.
+An important consideration is also the execution of the tools. In AG2 the tool execution is typically handled by a separate agent that will follow the agent in the conversation (unless its an agent in a swarm whereby tools are executed automatically). So, you will need to register the tools with another agent for execution. See the demo below for how to do this.
 
 ### Installation
 
@@ -265,4 +263,4 @@ TO BE CONTINUED...
 ## What's next?
 We're continuing to build new agents, creating more tools, and enhancing agent capabilities.
 
-If you want your AG2 agents to communicate with more messaging platforms we'd love to help you build new agents, see our [Contributor Guide](https://docs.ag2.ai/docs/contributor-guide/contributing) and chat with the team and collaborators on [Discord](https://discord.gg/pAbnFJrkgZ).
+There are many messaging platforms and we're starting with Discord, Slack, and Telegram. If you want your AG2 agents to communicate with more messaging platforms we'd love to help you build new agents, see our [Contributor Guide](https://docs.ag2.ai/docs/contributor-guide/contributing) and chat with the team and collaborators on [Discord](https://discord.gg/pAbnFJrkgZ).
