@@ -130,7 +130,7 @@ jobs:
       - name: Install playwright
         if: matrix.optional-dependencies == 'browser_use' || matrix.optional-dependencies == 'crawl4ai'
         run: |
-          uv playwright install
+          playwright install
       - name: Test import all submodules
         shell: bash
         run: |
