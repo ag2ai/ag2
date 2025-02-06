@@ -3316,7 +3316,7 @@ class ConversableAgent(LLMAgent):
     ) -> ChatResult:
         """Run a chat with the agent using the given message.
 
-        A second agent will be created to represent the user, this agent will by known by the name 'user'. This agent does not have code execution enabled by default.
+        A second agent will be created to represent the user, this agent will by known by the name 'user'. This agent does not have code execution enabled by default, if needed pass the code execution config in with the executor_kwargs parameter.
 
         The user can terminate the conversation when prompted or, if agent's reply contains 'TERMINATE', it will terminate.
 
