@@ -155,7 +155,7 @@ interop-crewai = [
     "litellm<1.57.5; sys_platform=='win32'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.22"]
+interop-pydantic-ai = ["pydantic-ai==0.0.13"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
