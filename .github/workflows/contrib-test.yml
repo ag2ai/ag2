@@ -4,15 +4,8 @@
 name: Contrib tests without LLMs
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "autogen/**"
-      - "test/agentchat/contrib/**"
-      - "test/test_browser_utils.py"
-      - "test/test_retrieve_utils.py"
-      - ".github/workflows/contrib-test.yml"
-      - "pyproject.toml"
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
   pull_request:
     branches: ["main"]
     paths:
