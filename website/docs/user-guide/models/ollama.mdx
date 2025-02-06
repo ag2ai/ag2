@@ -45,6 +45,18 @@ When installing AG2, you need to install the AG2 package with the Ollama extra.
 pip install ag2[ollama]
 ```
 
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[ollama]
+```
+or
+```bash
+pip install -U pyautogen[ollama]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 See the sample `OAI_CONFIG_LIST` below showing how the Ollama client class is used by specifying the `api_type` as `ollama`.
 
 ```python

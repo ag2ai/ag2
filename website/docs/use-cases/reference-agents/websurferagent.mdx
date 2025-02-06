@@ -12,21 +12,51 @@ The `WebSurferAgent` has two in-built web tools to choose from:
 If you want to add browsing capabilities to your existing agents, see [this notebook for browser-use](/docs/use-cases/notebooks/notebooks/tools_browser_use) and [this notebook for Crawl4AI](/docs/use-cases/notebooks/notebooks/tools_crawl4ai).
 </Tip>
 
+<Warning>
+[`Browser Use`](https://github.com/browser-use/browser-use) requires **Python 3.11 or higher**.
+</Warning>
+
 To get started with WebSurferAgent, install AG2 with the `browser-use` and/or `crawl4ai` extras.
 ```bash
 pip install ag2[browser-use]
-````
+```
 and/or
 ```bash
 pip install ag2[crawl4ai]
-````
+```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[browser-use]
+```
+or
+```bash
+pip install -U pyautogen[browser-use]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
 
 And then setup Playwright:
 ```bash
+# Installs Playwright and browsers for all OS
 playwright install
+# Additional command, mandatory for Linux only
+playwright install-deps
 ```
 
 Now, you can create an agent, nominating the web tool:
+<Tip>
+[`Browser Use`](https://github.com/browser-use/browser-use) supports the following models: [Supported Models](https://docs.browser-use.com/customize/supported-models#supported-models)
+
+We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `DeepSeek` and `Ollama` haven't performed as well.
+</Tip>
+<Tip>
+[`Crawl4AI`](https://github.com/unclecode/crawl4ai) is built on top of [LiteLLM](https://github.com/BerriAI/litellm) and supports the same models as LiteLLM.
+
+We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. However, as of this writing, `DeepSeek` is encountering some issues.
+</Tip>
+
 ```python
 from autogen.agents import WebSurferAgent
 

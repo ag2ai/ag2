@@ -107,8 +107,6 @@ def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: 
 class SwarmableAgent:
     """A class for an agent that can participate in a swarm chat."""
 
-    __exported_module__ = ""
-
     def __init__(
         self,
         name: str,
@@ -337,6 +335,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         realtime_agent: "RealtimeAgent",
         initial_agent: ConversableAgent,
         agents: list[ConversableAgent],
+        question_message: Optional[str] = None,
     ) -> None:
         self._initial_agent = initial_agent
         self._agents = agents
@@ -344,6 +343,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 
         self._answer_event: anyio.Event = anyio.Event()
         self._answer: str = ""
+        self.question_message = question_message or QUESTION_MESSAGE
 
         super().__init__(
             name=realtime_agent._name,
@@ -410,7 +410,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         async def get_input() -> None:
             async with create_task_group() as tg:
                 tg.soonify(self.ask_question)(
-                    QUESTION_MESSAGE.format(messages[-1]["content"]),
+                    self.question_message.format(messages[-1]["content"]),
                     question_timeout=QUESTION_TIMEOUT_SECONDS,
                 )
 
@@ -457,6 +457,7 @@ def register_swarm(
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
     system_message: Optional[str] = None,
+    question_message: Optional[str] = None,
 ) -> None:
     """Create a SwarmableRealtimeAgent.
 
@@ -465,7 +466,10 @@ def register_swarm(
         initial_agent (ConversableAgent): The initial agent.
         agents (list[ConversableAgent]): The agents in the swarm.
         system_message (Optional[str]): The system message to set for the agent. If None, the default system message is used.
+        question_message (Optional[str]): The question message to set for the agent. If None, the default QUESTION_MESSAGE is used.
     """
-    swarmable_agent = SwarmableRealtimeAgent(realtime_agent=realtime_agent, initial_agent=initial_agent, agents=agents)
+    swarmable_agent = SwarmableRealtimeAgent(
+        realtime_agent=realtime_agent, initial_agent=initial_agent, agents=agents, question_message=question_message
+    )
 
     swarmable_agent.configure_realtime_agent(system_message=system_message)
