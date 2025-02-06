@@ -4,12 +4,14 @@
 name: Contrib tests with LLMs
 
 on:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
   pull_request_target:
     branches: ["main"]
     paths:
       - "autogen/**"
       - "test/agentchat/contrib/**"
-      - ".github/workflows/contrib-openai.yml"
+      - ".github/workflows/contrib-llm-test.yml"
       - "pyproject.toml"
 permissions:
   {}

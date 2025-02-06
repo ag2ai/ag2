@@ -4,6 +4,8 @@
 name: Core tests with LLMs
 
 on:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
   pull_request_target:
     branches: ["main"]
     paths:

@@ -4,12 +4,14 @@
 name: ContribGraphRagTests
 
 on:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
   pull_request_target:
     branches: ["main"]
     paths:
       - "autogen/agentchat/contrib/graph_rag/**"
       - "test/agentchat/contrib/graph_rag/**"
-      - ".github/workflows/contrib-test.yml"
+      - ".github/workflows/contrib-graph-rag-tests.yml"
       - "pyproject.toml"
 
 concurrency:
