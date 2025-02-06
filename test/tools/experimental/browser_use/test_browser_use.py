@@ -14,7 +14,10 @@ from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseT
 from ....conftest import Credentials, credentials_browser_use
 
 
-@skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
+@skip_on_missing_imports(
+    ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "browser_use"],
+    "browser-use",
+)
 class TestBrowserUseToolOpenai:
     def test_broser_use_tool_init(self, mock_credentials: Credentials) -> None:
         browser_use_tool = BrowserUseTool(llm_config=mock_credentials.llm_config)
@@ -32,6 +35,80 @@ class TestBrowserUseToolOpenai:
             },
         }
         assert browser_use_tool.function_schema == expected_schema
+
+    @pytest.mark.parametrize(
+        ("config_list", "llm_class_name"),
+        [
+            (
+                [
+                    {"api_type": "openai", "model": "gpt-4o-mini", "api_key": "test"},
+                ],
+                "ChatOpenAI",
+            ),
+            (
+                [
+                    {"api_type": "deepseek", "model": "deepseek-model", "api_key": "test", "base_url": "test"},
+                ],
+                "ChatOpenAI",
+            ),
+            (
+                [
+                    {
+                        "api_type": "azure",
+                        "model": "gpt-4o-mini",
+                        "api_key": "test",
+                        "base_url": "test",
+                        "api_version": "test",
+                    },
+                ],
+                "AzureChatOpenAI",
+            ),
+            (
+                [
+                    {"api_type": "google", "model": "gemini", "api_key": "test"},
+                ],
+                "ChatGoogleGenerativeAI",
+            ),
+            (
+                [
+                    {"api_type": "anthropic", "model": "sonnet", "api_key": "test"},
+                ],
+                "ChatAnthropic",
+            ),
+            (
+                [{"api_type": "ollama", "model": "mistral:7b-instruct-v0.3-q6_K"}],
+                "ChatOllama",
+            ),
+        ],
+    )
+    def test_get_llm(  # type: ignore[no-any-unimported]
+        self,
+        config_list: list[dict[str, str]],
+        llm_class_name: str,
+    ) -> None:
+        llm = BrowserUseTool._get_llm(llm_config={"config_list": config_list})
+        assert llm.__class__.__name__ == llm_class_name
+
+    @pytest.mark.parametrize(
+        ("config_list", "error_msg"),
+        [
+            (
+                [
+                    {"api_type": "deepseek", "model": "gpt-4o-mini", "api_key": "test"},
+                ],
+                "base_url is required for deepseek api type.",
+            ),
+            (
+                [
+                    {"api_type": "azure", "model": "gpt-4o-mini", "api_key": "test", "base_url": "test"},
+                ],
+                "api_version is required for azure api type.",
+            ),
+        ],
+    )
+    def test_get_llm_raises_if_mandatory_key_missing(self, config_list: list[dict[str, str]], error_msg: str) -> None:
+        with pytest.raises(ValueError, match=error_msg):
+            BrowserUseTool._get_llm(llm_config={"config_list": config_list})
 
     @pytest.mark.parametrize(
         "credentials_from_test_param",
