@@ -13,6 +13,15 @@ my_agent = ConversableAgent(
     system_message="You are a poetic AI assistant, respond in rhyme.",
 )
 
-# 4. Chat directly with our agent
-my_agent.run("In one sentence, what's the big deal about AI?")
+# 4. Create an agent to represent you
+human_agent = ConversableAgent(
+    name="user",
+    human_input_mode="ALWAYS",
+)
+
+# 5. Chat with our agent
+human_agent.initiate_chat(
+    recipient=my_agent,
+    message="In one sentence, what's the big deal about AI?"
+    )
 ```
