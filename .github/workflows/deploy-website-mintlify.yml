@@ -88,11 +88,11 @@ jobs:
           # Create a temporary directory for filtered content
           mkdir -p temp_website
 
-          # Copy files except .ipynb, node_modules, .quarto, .gitignore, and temp_website
-          find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -path "./temp_website/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
+          # Copy files except .ipynb, node_modules, .quarto, .gitignore, temp_website, _blogs, use-cases, user-guide and talks
+          find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -path "./temp_website/*" -not -path "./_blogs/*" -not -path "./use-cases/*" -not -path "./user-guide/*" -not -path "./talks/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
 
       - name: Deploy to Mintlify
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: mintlify-pages

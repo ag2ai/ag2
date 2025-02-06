@@ -44,10 +44,49 @@ class TestCrawl4AITool:
         result = await tool_without_llm(url="https://docs.ag2.ai/docs/Home")
         assert isinstance(result, str)
 
-    def test_get_provider_and_api_key(self, mock_credentials: Credentials) -> None:
-        provider, api_key = Crawl4AITool._get_provider_and_api_key(mock_credentials.llm_config)
-        assert provider == "openai/gpt-4o", provider
-        assert isinstance(api_key, str)
+    @pytest.mark.parametrize(
+        "config_list",
+        [
+            [
+                {"api_type": "openai", "model": "gpt-4o-mini", "api_key": "test"},
+            ],
+            [
+                {"api_type": "deepseek", "model": "deepseek-model", "api_key": "test", "base_url": "test"},
+            ],
+            [
+                {
+                    "api_type": "azure",
+                    "model": "gpt-4o-mini",
+                    "api_key": "test",
+                    "base_url": "test",
+                    "api_version": "test",
+                },
+            ],
+            [
+                {"api_type": "google", "model": "gemini", "api_key": "test"},
+            ],
+            [
+                {"api_type": "anthropic", "model": "sonnet", "api_key": "test"},
+            ],
+            [{"api_type": "ollama", "model": "mistral:7b"}],
+        ],
+    )
+    def test_get_provider_and_api_key(self, config_list: list[dict[str, Any]]) -> None:
+        lite_llm_config = Crawl4AITool._get_lite_llm_config({"config_list": config_list})
+
+        api_type = config_list[0]["api_type"]
+        model = config_list[0]["model"]
+        api_type = api_type if api_type != "google" else "gemini"
+        provider = f"{api_type}/{model}"
+
+        if api_type == "ollama":
+            assert lite_llm_config == {"provider": provider}
+        else:
+            assert all(key in lite_llm_config for key in ["provider", "api_token"])
+            assert lite_llm_config["provider"] == provider
+
+        if api_type == "deepseek" or api_type == "azure":
+            assert "base_url" in lite_llm_config
 
     @pytest.mark.parametrize(
         "use_extraction_model",
