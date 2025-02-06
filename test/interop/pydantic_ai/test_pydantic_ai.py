@@ -18,7 +18,9 @@ from ...conftest import Credentials
 
 with optional_import_block():
     from pydantic_ai import RunContext
+    from pydantic_ai.models.test import TestModel
     from pydantic_ai.tools import Tool as PydanticAITool
+    from pydantic_ai.usage import Usage
 
 
 @pytest.mark.interop
@@ -79,6 +81,9 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             return f"{city} {date} {ctx.deps}"  # type: ignore[attr-defined]
 
         ctx = RunContext(
+            model=TestModel(),
+            usage=Usage(),
+            prompt="",
             deps=123,
             retry=0,
             messages=None,  # type: ignore[arg-type]
@@ -103,6 +108,9 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             raise ValueError("Retry")
 
         ctx = RunContext(
+            model=TestModel(),
+            usage=Usage(),
+            prompt="",
             deps=123,
             retry=0,
             messages=None,  # type: ignore[arg-type]
@@ -173,7 +181,6 @@ class TestPydanticAIInteroperabilityWithContext:
                                 "title": "Additional Info",
                             }
                         },
-                        "required": ["additional_info"],
                         "type": "object",
                         "additionalProperties": False,
                     },
