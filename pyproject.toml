@@ -86,8 +86,8 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==4.25.3",
-    "chromadb==0.5.3",
+    "protobuf==5.29.3",
+    "chromadb==0.6.3",
     "sentence_transformers",
     "pypdf",
     "ipython",
@@ -114,7 +114,7 @@ retrievechat-qdrant = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.3.3",
+    "graphrag_sdk==0.6.0",
     "falkordb>=1.0.10"
 ]
 
@@ -135,10 +135,10 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.11",
-    "llama-index-graph-stores-neo4j==0.4.5",
-    "llama-index-core==0.12.11",
-    "llama-index-readers-web==0.3.4",
+    "llama-index==0.12.16",
+    "llama-index-graph-stores-neo4j==0.4.6",
+    "llama-index-core==0.12.16",
+    "llama-index-readers-web==0.3.5",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -218,7 +218,7 @@ docs = [
 ]
 
 types = [
-    "mypy==1.14.1",
+    "mypy==1.15.0",
     "pyautogen[test, jupyter-executor, interop]",
 ]
 

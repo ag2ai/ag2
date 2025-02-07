@@ -7,11 +7,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.experimental.messageplatform import DiscordRetrieveTool, DiscordSendTool
-
-with optional_import_block():
-    pass
 
 
 @skip_on_missing_imports("discord", "commsagent-discord")
@@ -20,7 +17,8 @@ class TestDiscordSendTool:
     def mock_discord_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
         """Create a mock for the Discord Client."""
         # Create mock instance with required attributes
-        mock_instance = AsyncMock(spec="Client")
+        mock_instance = AsyncMock()
+        mock_instance.close = AsyncMock()
 
         # Mock start to trigger on_ready event immediately
         async def mock_start(token: str) -> None:
@@ -272,7 +270,8 @@ class TestDiscordRetrieveTool:
     def mock_discord_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
         """Create a mock for the Discord Client."""
         # Create mock instance with required attributes
-        mock_instance = AsyncMock(spec="Client")
+        mock_instance = AsyncMock()
+        mock_instance.close = AsyncMock()
 
         # Mock start to trigger on_ready event immediately
         async def mock_start(token: str) -> None:
@@ -325,12 +324,12 @@ class TestDiscordRetrieveTool:
                 "type": "object",
                 "properties": {
                     "messages_since": {
-                        "type": "string",
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
                         "default": None,
                         "description": "Date to retrieve messages from (ISO format) OR Discord snowflake ID. If None, retrieves latest messages.",
                     },
                     "maximum_messages": {
-                        "type": "integer",
+                        "anyOf": [{"type": "integer"}, {"type": "null"}],
                         "default": None,
                         "description": "Maximum number of messages to retrieve. If None, retrieves all messages since date.",
                     },

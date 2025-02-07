@@ -143,7 +143,7 @@ Find more options in [Installation](https://docs.ag2.ai/docs/Installation#option
 
 Even if you are installing and running AG2 locally outside of docker, the recommendation and default behavior of agents is to perform [code execution](https://docs.ag2.ai/docs/FAQ#if-you-want-to-run-code-execution-in-docker) in docker. Find more instructions and how to change the default behaviour [here](https://docs.ag2.ai/docs/FAQ#if-you-want-to-run-code-execution-locally).
 
-For LLM inference configurations, check the [FAQs](https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints).
+For LLM inference configurations, check the [FAQs](https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive#llm-configuration).
 
 <p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
   <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
@@ -167,7 +167,7 @@ For [example](https://github.com/ag2ai/ag2/blob/main/test/twoagent.py),
 ```python
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 # Load LLM inference endpoints from an env variable or a file
-# See https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints
+# See https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive#llm-configuration
 # and OAI_CONFIG_LIST_sample
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST")
 # You can also set config_list directly as a list, for example, config_list = [{'model': 'gpt-4o', 'api_key': '<your OpenAI API key here>'},]

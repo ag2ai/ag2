@@ -185,12 +185,26 @@ class TestSlackRetrieveTool:
                 "type": "object",
                 "properties": {
                     "messages_since": {
-                        "type": "string",
+                        "anyOf": [
+                            {
+                                "type": "string",
+                            },
+                            {
+                                "type": "null",
+                            },
+                        ],
                         "default": None,
                         "description": "Date to retrieve messages from (ISO format) OR Slack message ID. If None, retrieves latest messages.",
                     },
                     "maximum_messages": {
-                        "type": "integer",
+                        "anyOf": [
+                            {
+                                "type": "integer",
+                            },
+                            {
+                                "type": "null",
+                            },
+                        ],
                         "default": None,
                         "description": "Maximum number of messages to retrieve. If None, retrieves all messages since date.",
                     },

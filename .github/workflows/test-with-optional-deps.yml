@@ -8,11 +8,6 @@ on:
     - cron: "0 0 * * *" # daily at midnight UTC
   pull_request:
     branches: ["main"]
-    paths:
-      - 'autogen/**'
-      - 'test/**'
-      - '.github/workflows/**'
-      - 'pyproject.toml'
   merge_group:
     types: [checks_requested]
 
@@ -22,7 +17,40 @@ concurrency:
 permissions: {}
 
 jobs:
+  paths-filter:
+    runs-on: ubuntu-latest
+    outputs:
+      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            autogen:
+              - "autogen/**"
+            test:
+              - "test/**"
+            workflows:
+              - ".github/workflows/**"
+            setup:
+              - "pyproject.toml"
+      - name: autogen has changes
+        run: echo "autogen has changes"
+        if: steps.filter.outputs.autogen == 'true'
+      - name: test has changes
+        run: echo "test has changes"
+        if: steps.filter.outputs.test == 'true'
+      - name: workflows has changes
+        run: echo "workflows has changes"
+        if: steps.filter.outputs.workflows == 'true'
+      - name: setup has changes
+        run: echo "setup has changes"
+        if: steps.filter.outputs.setup == 'true'
+
   test:
+    needs: paths-filter
+    if: needs.paths-filter.outputs.hasChanges == 'true'
     runs-on: ${{ matrix.os }}
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
@@ -43,7 +71,6 @@ jobs:
           # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
           - "twilio"
           - "interop"
-          - "browser_use"
           - "crawl4ai"
           - "docs"
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -62,9 +89,9 @@ jobs:
             optional-dependencies: "retrievechat-qdrant"
           # Browser use doesn't support below python 3.11
           - python-version: "3.9"
-            optional-dependencies: "browser_use"
+            optional-dependencies: "browser-use"
           - python-version: "3.10"
-            optional-dependencies: "browser_use"
+            optional-dependencies: "browser-use"
           # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
           # Because torch and sentence_transformers creates issues while trying to install
           - os: macos-latest

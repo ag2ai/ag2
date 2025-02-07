@@ -20,7 +20,7 @@ filter_dict = {"model": ["gpt-4o-mini"]}
 def create_teachable_agent(reset_db=False):
     """Instantiates a teachable agent using the settings from the top of this file."""
     # Load LLM inference endpoints from an env variable or a file
-    # See https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints
+    # See https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive#llm-configuration
     # and OAI_CONFIG_LIST_sample
     config_list = config_list_from_json(env_or_file=OAI_CONFIG_LIST, filter_dict=filter_dict, file_location=KEY_LOC)
 

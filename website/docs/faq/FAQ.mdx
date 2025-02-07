@@ -41,7 +41,7 @@ When you call `initiate_chat` the conversation restarts by default. You can use 
 
 ## `max_consecutive_auto_reply` vs `max_turn` vs `max_round`
 
-- [`max_consecutive_auto_reply`](/docs/api-reference/autogen/ConversableAgent#max-consecutive-auto-reply-2) the maximum number of consecutive auto replie (a reply from an agent without human input is considered an auto reply). It plays a role when `human_input_mode` is not "ALWAYS".
+- [`max_consecutive_auto_reply`](/docs/api-reference/autogen/ConversableAgent#max-consecutive-auto-reply-2) the maximum number of consecutive auto replies (a reply from an agent without human input is considered an auto reply). It plays a role when `human_input_mode` is not "ALWAYS".
 - [`max_turns` in `ConversableAgent.initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) limits the number of conversation turns between two conversable agents (without differentiating auto-reply and reply/input from human)
 - [`max_round` in GroupChat](https://docs.ag2.ai/docs/api-reference/autogen/GroupChat#groupchat) specifies the maximum number of rounds in a group chat session.
 
@@ -146,7 +146,7 @@ Explanation: Per [this gist](https://gist.github.com/defulmere/8b9695e415a442710
 
 ## How to register a reply function
 
-See [here](/docs/reference/agentchat/conversable_agent/#register_reply)
+See [here](/docs/api-reference/autogen/ConversableAgent#register-reply)
 
 For example, you can register a reply function that gets called when `generate_reply` is called for an agent.
 
@@ -175,7 +175,7 @@ In the above, we register a `print_messages` function that is called each time t
 
 ## How to get last message ?
 
-Refer to [here](/docs/reference/agentchat/conversable_agent/#last_message)
+Refer to [here](/docs/api-reference/autogen/ConversableAgent#last-message)
 
 ## How to get each agent message ?
 
