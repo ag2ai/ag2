@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Union
 
 from browser_use import Controller
 from pydantic import BaseModel
@@ -88,7 +88,7 @@ class BrowserUseTool(Tool):
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
             browser: Annotated[Browser, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
-        ) -> BrowserUseResult:
+        ) -> Union[str, list[str], None]:
             llm = BrowserUseTool._get_llm(llm_config)
 
             max_steps = agent_kwargs.pop("max_steps", 100)
@@ -103,10 +103,10 @@ class BrowserUseTool(Tool):
 
             result = await agent.run(max_steps=max_steps)
 
-            return BrowserUseResult(
-                extracted_content=result.extracted_content(),
-                final_result=result.final_result(),
-            )
+            if result.final_result():
+                return result.final_result()  # type: ignore[no-any-return]
+            else:
+                return result.extracted_content()  # type: ignore[no-any-return]
 
         super().__init__(
             name="browser_use",
