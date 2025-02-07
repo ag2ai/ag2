@@ -983,8 +983,7 @@ class NavigationGroup(TypedDict):
 
 
 def get_files_path_from_navigation(navigation: List[NavigationGroup]) -> List[Path]:
-    """
-    Extract all file paths from the navigation structure.
+    """Extract all file paths from the navigation structure.
 
     Args:
         navigation: List of navigation groups containing nested pages and groups
