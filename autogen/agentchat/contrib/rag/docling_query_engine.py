@@ -3,14 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from typing import Callable
+from typing import Any, Optional
 
-import chromadb
-import chromadb.utils.embedding_functions as ef
-from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
-from llama_index.core.schema import Document as LlamaDocument
-from llama_index.llms.openai import OpenAI
-from llama_index.vector_stores.chroma import ChromaVectorStore
+from autogen.import_utils import optional_import_block
+
+with optional_import_block():
+    import chromadb
+    import chromadb.utils.embedding_functions as ef
+    from chromadb.api.types import EmbeddingFunction
+    from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
+    from llama_index.core.llms import LLM
+    from llama_index.core.schema import Document as LlamaDocument
+    from llama_index.llms.openai import OpenAI
+    from llama_index.vector_stores.chroma import ChromaVectorStore
 
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
 
@@ -22,25 +27,38 @@ class DoclingQueryEngine:
 
     def __init__(
         self,
-        input_doc_paths: list[str] = None,
-        collection_name: str = DEFAULT_COLLECTION_NAME,
-        embedding_function: Callable = ef.DefaultEmbeddingFunction(),
-        metadata: dict = {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32},
-        llm=OpenAI(model="gpt-4o", temperature=0.0),
-    ):
+        db_path: Optional[str] = "./chroma",
+        embedding_function: Optional[EmbeddingFunction[Any]] = ef.DefaultEmbeddingFunction(),
+        metadata: Optional[dict[Any, Any]] = {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32},
+        llm: Optional["LLM"] = OpenAI(model="gpt-4o", temperature=0.0), # type: ignore
+    ) -> None:
         """
-        Initializes the DoclingQueryEngine with the specified document paths, database type, and embedding function.
+        Initializes the DoclingQueryEngine with db_path
+        metadata, and embedding function and llm.
         Args:
-            input_doc_paths: The paths to the input documents.
-            database: The type of database to use. Defaults to "chroma".
-            embedding_function: The embedding function to use. Defaults to None.
-            metadata: The metadata of the vector database. Default is None.
+            db_path: the path to save chromadb data
+            embedding_function: The embedding function to use. 
+            metadata: The metadata of the vector database. 
         """
-        self.collection_name = collection_name
         self.llm = llm
-        self.client = chromadb.PersistentClient()
+        self.embedding_function = embedding_function
+        self.metadata = metadata
+        self.client = chromadb.PersistentClient(path=db_path)
+
+    def init_db(
+        self, 
+        input_doc_paths: list[str], 
+        collection_name: Optional[str] = DEFAULT_COLLECTION_NAME
+    ) -> None:
+        """
+        Initinalize vectordb by putting input docs into given collection
+        """
+        
         self.collection = self.client.create_collection(
-            name=collection_name, embedding_function=embedding_function, metadata=metadata, get_or_create=True
+            name=collection_name, 
+            embedding_function=self.embedding_function,
+            metadata=self.metadata, 
+            get_or_create=True      # If collection already exists, get the collection
         )
 
         self.vector_store = ChromaVectorStore(chroma_collection=self.collection)
@@ -48,6 +66,7 @@ class DoclingQueryEngine:
 
         documents = self._load_doc(input_doc_paths)
         self.index = VectorStoreIndex.from_documents(documents, storage_context=self.storage_context)
+
 
     def query(self, question: str) -> str:
         self.query_engine = self.index.as_query_engine(llm=self.llm)
@@ -60,7 +79,7 @@ class DoclingQueryEngine:
         for doc in new_docs:
             self.index.insert(doc)
 
-    def _load_doc(self, input_docs: list[str]) -> list["LlamaDocument"]:
+    def _load_doc(self, input_docs: list[str]) -> list["LlamaDocument"]:  # type: ignore
         """
         Load documents from the input files
         """
