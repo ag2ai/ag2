@@ -10,9 +10,9 @@ from .....conftest import Credentials
 
 @skip_on_missing_imports("telethon", "commsagent-telegram")
 class TestTelegramSendTool:
-    def test_init(self, credentials: Credentials) -> None:
+    def test_init(self, mock_credentials: Credentials) -> None:
         telegram_agent = TelegramAgent(
-            name="TelegramAgent", llm_config=credentials.llm_config, api_id="", api_hash="", chat_id=""
+            name="TelegramAgent", llm_config=mock_credentials.llm_config, api_id="", api_hash="", chat_id=""
         )
 
         expected_tools = [
@@ -58,6 +58,7 @@ class TestTelegramSendTool:
             },
         ]
 
+        assert set(tool.name for tool in telegram_agent.tools) == {"telegram_send", "telegram_retrieve"}
         assert telegram_agent.llm_config["tools"] == expected_tools
         assert telegram_agent.system_message == (
             "You are a helpful AI assistant that communicates through Telegram. "
