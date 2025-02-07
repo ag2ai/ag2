@@ -110,6 +110,7 @@ class PydanticAIInteroperability:
         """
         from pydantic_ai import RunContext
         from pydantic_ai.tools import Tool as PydanticAITool
+        from pydantic_ai.usage import Usage
 
         if not isinstance(tool, PydanticAITool):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
@@ -127,6 +128,9 @@ class PydanticAIInteroperability:
 
         ctx = (
             RunContext(
+                model=None,  # type: ignore [arg-type]
+                usage=Usage(),
+                prompt="",
                 deps=deps,
                 retry=0,
                 # All messages send to or returned by a model.
