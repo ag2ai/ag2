@@ -25,12 +25,12 @@ class DoclingQueryEngine:
     Leverage llamaIndex VectorStoreIndex and Chromadb to query docling parsed md file
     """
 
-    def __init__(
+    def __init__( # type: ignore
         self,
         db_path: Optional[str] = "./chroma",
         embedding_function: Optional[EmbeddingFunction[Any]] = ef.DefaultEmbeddingFunction(),
         metadata: Optional[dict[Any, Any]] = {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32},
-        llm: Optional["LLM"] = OpenAI(model="gpt-4o", temperature=0.0), # type: ignore
+        llm: Optional["LLM"] = OpenAI(model="gpt-4o", temperature=0.0), 
     ) -> None:
         """
         Initializes the DoclingQueryEngine with db_path
@@ -43,17 +43,26 @@ class DoclingQueryEngine:
         self.llm = llm
         self.embedding_function = embedding_function
         self.metadata = metadata
-        self.client = chromadb.PersistentClient(path=db_path)
+        if db_path:
+            self.client = chromadb.PersistentClient(path=db_path)
+        else:
+            self.client = chromadb.PersistentClient()
 
     def init_db(
         self, 
         input_doc_paths: list[str], 
-        collection_name: Optional[str] = DEFAULT_COLLECTION_NAME
+        collection_name: Optional[str] = DEFAULT_COLLECTION_NAME,
+        overwrite: bool = False
     ) -> None:
         """
         Initinalize vectordb by putting input docs into given collection
+        If overwirte is True, it overwries existing collection
         """
-        
+        try:
+            self.client.delete_collection(collection_name)
+        except ValueError:
+            pass
+
         self.collection = self.client.create_collection(
             name=collection_name, 
             embedding_function=self.embedding_function,
