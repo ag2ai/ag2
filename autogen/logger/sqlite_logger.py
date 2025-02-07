@@ -275,7 +275,13 @@ class SqliteLogger(BaseLogger):
         else:
             response_messages = json.dumps(to_dict(response), indent=4)
 
-        source_name = source if isinstance(source, str) else source.name
+        source_name = (
+            source
+            if isinstance(source, str)
+            else source.name
+            if hasattr(source, "name") and source.name is not None
+            else ""
+        )
 
         query = """
             INSERT INTO chat_completions (
