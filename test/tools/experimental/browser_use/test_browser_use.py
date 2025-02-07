@@ -8,10 +8,13 @@ from typing import Callable
 import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool
 
 from ....conftest import Credentials, credentials_browser_use
+
+with optional_import_block():
+    from browser_use import Controller
 
 
 @skip_on_missing_imports(
@@ -135,6 +138,10 @@ class TestBrowserUseToolOpenai:
     @pytest.fixture()
     def browser_use_tool(self, credentials_gpt_4o_mini: Credentials) -> BrowserUseTool:
         return BrowserUseTool(llm_config=credentials_gpt_4o_mini.llm_config)
+
+    def test_get_controller(self, mock_credentials: Credentials) -> None:
+        controller = BrowserUseTool._get_controller(llm_config=mock_credentials.llm_config)
+        assert isinstance(controller, Controller)
 
     @pytest.mark.openai
     def test_end2end(self, browser_use_tool: BrowserUseTool, credentials_gpt_4o: Credentials) -> None:
