@@ -4,7 +4,6 @@
 
 from typing import Annotated, Any, Optional
 
-from browser_use import Controller
 from pydantic import BaseModel
 
 from ....doc_utils import export_module
@@ -13,7 +12,7 @@ from ... import Depends, Tool
 from ...dependency_injection import on
 
 with optional_import_block():
-    from browser_use import Agent
+    from browser_use import Agent, Controller
     from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_anthropic import ChatAnthropic
     from langchain_google_genai import ChatGoogleGenerativeAI
