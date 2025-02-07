@@ -4,6 +4,7 @@
 
 from typing import Annotated, Any, Optional
 
+from browser_use import Controller
 from pydantic import BaseModel
 
 from ....doc_utils import export_module
@@ -89,8 +90,18 @@ class BrowserUseTool(Tool):
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
         ) -> BrowserUseResult:
             llm = BrowserUseTool._get_llm(llm_config)
-            agent = Agent(task=task, llm=llm, browser=browser, **agent_kwargs)
-            result = await agent.run()
+
+            max_steps = agent_kwargs.pop("max_steps", 100)
+
+            agent = Agent(
+                task=task,
+                llm=llm,
+                browser=browser,
+                controller=BrowserUseTool._get_controller(llm_config),
+                **agent_kwargs,
+            )
+
+            result = await agent.run(max_steps=max_steps)
 
             return BrowserUseResult(
                 extracted_content=result.extracted_content(),
@@ -102,6 +113,15 @@ class BrowserUseTool(Tool):
             description="Use the browser to perform a task.",
             func_or_tool=browser_use,
         )
+
+    @staticmethod
+    def _get_controller(llm_config: dict[str, Any]) -> Any:
+        response_format = (
+            llm_config["config_list"][0].get("response_format", None)
+            if "config_list" in llm_config
+            else llm_config.get("response_format")
+        )
+        return Controller(output_model=response_format)
 
     @staticmethod
     def _get_llm(
