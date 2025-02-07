@@ -7,7 +7,7 @@
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 
 # Load LLM inference endpoints from an env variable or a file
-# See https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints
+# See https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive#llm-configuration
 # and OAI_CONFIG_LIST_sample
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={"model": "deepseek-chat"})
 print("config_listconfig_list", config_list)
