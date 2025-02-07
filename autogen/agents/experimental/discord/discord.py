@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -18,12 +18,7 @@ class DiscordAgent(ConversableAgent):
 
     def __init__(
         self,
-        llm_config: dict[str, Any],
-        system_message: Optional[Union[str, list]] = (
-            "You are a helpful AI assistant that communicates through Discord. "
-            "Remember that Discord uses Markdown for formatting and has a character limit. "
-            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
-        ),
+        system_message: Optional[Union[str, list]] = None,
         *args,
         bot_token: str,
         channel_name: str,
@@ -40,6 +35,12 @@ class DiscordAgent(ConversableAgent):
             guild_name (str): Guild (server) name where the channel is located
             has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
         """
+        system_message = system_message or (
+            "You are a helpful AI assistant that communicates through Discord. "
+            "Remember that Discord uses Markdown for formatting and has a character limit. "
+            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
+        )
+
         self._send_tool = DiscordSendTool(bot_token=bot_token, channel_name=channel_name, guild_name=guild_name)
         self._retrieve_tool = DiscordRetrieveTool(bot_token=bot_token, channel_name=channel_name, guild_name=guild_name)
 
@@ -53,7 +54,7 @@ class DiscordAgent(ConversableAgent):
                 "4. Consider using appropriate emojis when suitable\n"
             )
 
-        super().__init__(*args, llm_config=llm_config, system_message=system_message, **kwargs)
+        super().__init__(*args, system_message=system_message, **kwargs)
 
         self.register_for_llm()(self._send_tool)
         self.register_for_llm()(self._retrieve_tool)

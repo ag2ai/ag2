@@ -2,28 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
 from ....tools import Tool
-from ....tools.experimental.messageplatform.slack import SlackRetrieveTool, SlackSendTool
+from ....tools.experimental import SlackRetrieveTool, SlackSendTool
 
 __all__ = ["SlackAgent"]
 
 
-@export_module("autogen.agents")
+@export_module("autogen.agents.experimental")
 class SlackAgent(ConversableAgent):
     """An agent that can send messages and retrieve messages on Slack."""
 
     def __init__(
         self,
-        llm_config: dict[str, Any],
-        system_message: Optional[Union[str, list]] = (
-            "You are a helpful AI assistant that communicates through Slack. "
-            "Remember that Slack uses Markdown-like formatting and has message length limits. "
-            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
-        ),
+        system_message: Optional[Union[str, list]] = None,
         *args,
         bot_token: str,
         channel_id: str,
@@ -38,6 +33,12 @@ class SlackAgent(ConversableAgent):
             channel_id (str): Channel ID where messages will be sent.
             has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
         """
+        system_message = system_message or (
+            "You are a helpful AI assistant that communicates through Slack. "
+            "Remember that Slack uses Markdown-like formatting and has message length limits. "
+            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
+        )
+
         self._send_tool = SlackSendTool(bot_token=bot_token, channel_id=channel_id)
         self._retrieve_tool = SlackRetrieveTool(bot_token=bot_token, channel_id=channel_id)
 
@@ -58,7 +59,7 @@ class SlackAgent(ConversableAgent):
                 "6. Can use <!here> or <!channel> for notifications"
             )
 
-        super().__init__(*args, llm_config=llm_config, system_message=system_message, **kwargs)
+        super().__init__(*args, system_message=system_message, **kwargs)
 
         self.register_for_llm()(self._send_tool)
         self.register_for_llm()(self._retrieve_tool)

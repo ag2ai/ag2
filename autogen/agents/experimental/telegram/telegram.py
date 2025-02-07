@@ -2,28 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
 from ....tools import Tool
-from ....tools.experimental.messageplatform.telegram import TelegramRetrieveTool, TelegramSendTool
+from ....tools.experimental import TelegramRetrieveTool, TelegramSendTool
 
 __all__ = ["TelegramAgent"]
 
 
-@export_module("autogen.agents")
+@export_module("autogen.agents.experimental")
 class TelegramAgent(ConversableAgent):
     """An agent that can send messages and retrieve messages on Telegram."""
 
     def __init__(
         self,
-        llm_config: dict[str, Any],
-        system_message: Optional[Union[str, list]] = (
-            "You are a helpful AI assistant that communicates through Telegram. "
-            "Remember that Telegram uses Markdown-like formatting and has message length limits. "
-            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
-        ),
+        system_message: Optional[Union[str, list]] = None,
         *args,
         api_id: str,
         api_hash: str,
@@ -40,6 +35,12 @@ class TelegramAgent(ConversableAgent):
             chat_id: The ID of the destination (Channel, Group, or User ID).
             has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
         """
+        system_message = system_message or (
+            "You are a helpful AI assistant that communicates through Telegram. "
+            "Remember that Telegram uses Markdown-like formatting and has message length limits. "
+            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
+        )
+
         self._send_tool = TelegramSendTool(api_id=api_id, api_hash=api_hash, chat_id=chat_id)
         self._retrieve_tool = TelegramRetrieveTool(api_id=api_id, api_hash=api_hash, chat_id=chat_id)
 
@@ -63,7 +64,7 @@ class TelegramAgent(ConversableAgent):
                 "4. Supports @mentions and emoji"
             )
 
-        super().__init__(*args, llm_config=llm_config, system_message=system_message, **kwargs)
+        super().__init__(*args, system_message=system_message, **kwargs)
 
         self.register_for_llm()(self._send_tool)
         self.register_for_llm()(self._retrieve_tool)
