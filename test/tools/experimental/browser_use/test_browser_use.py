@@ -125,7 +125,7 @@ class TestBrowserUseToolOpenai:
             pytest.skip("Deepseek currently does not work too well with the browser-use")
 
         # If we decide to test with deepseek, we need to set use_vision to False
-        agent_kwargs = {"use_vision": False} if api_type == "deepseek" else {}
+        agent_kwargs = {"use_vision": False, "max_steps": 100} if api_type == "deepseek" else {"max_steps": 100}
         browser_use_tool = BrowserUseTool(llm_config=credentials_from_test_param.llm_config, agent_kwargs=agent_kwargs)
         task = "Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment."
 
