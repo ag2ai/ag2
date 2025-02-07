@@ -138,6 +138,10 @@ class OllamaClient:
             # Maximum number of tokens to predict, note: -1 is infinite, -2 is fill context, 128 is default
             options_dict["num_predict"] = validate_parameter(params, "num_predict", int, False, 128, None, None)
 
+        if "num_ctx" in params:
+            # Set size of context window used to generate next token, 2048 is default
+            options_dict["num_ctx"] = validate_parameter(params, "num_ctx", int, False, 2048, None, None)
+
         if "repeat_penalty" in params:
             options_dict["repeat_penalty"] = validate_parameter(
                 params, "repeat_penalty", (int, float), False, 1.1, None, None

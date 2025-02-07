@@ -78,7 +78,7 @@ The framework categorizes responses based on their sensitivity and highlights po
 The **Prompt Leakage Probing Framework** leverages key agentic design patterns from the [AG2 library](https://docs.ag2.ai/docs/tutorial), providing a robust and modular structure for its functionality. Below are the patterns and components used, along with relevant links for further exploration:
 
 1. **Group Chat Pattern**
-   - The chat between agents in this project is modeled on the [Group Chat Pattern](https://docs.ag2.ai/docs/tutorial/conversation-patterns#group-chat), where multiple agents collaboratively interact to perform tasks.
+   - The chat between agents in this project is modeled on the [Group Chat Pattern](https://docs.ag2.ai/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#group-chat), where multiple agents collaboratively interact to perform tasks.
    - This structure allows for seamless coordination between agents like the prompt generator, classifier, and user proxy agent.
    - The chat has a [custom speaker selection](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_groupchat_customized) method implemented so that it guarantees the prompt->response->classification chat flow.
 

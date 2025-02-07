@@ -28,7 +28,7 @@ class ContextStr:
     Use the format method to substitute context variables into the string.
 
     Args:
-        template: The string to be substituted with context variables. It is expected that the string will contain {var} placeholders
+        template: The string to be substituted with context variables. It is expected that the string will contain `{var}` placeholders
             and that string format will be able to replace all values.
     """
 

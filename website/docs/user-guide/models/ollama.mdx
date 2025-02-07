@@ -93,6 +93,7 @@ If you need to specify the URL for your Ollama install, use the `client_host` ke
 The following Ollama parameters can be added to your config. See [this link](https://github.com/ollama/ollama/blob/main/docs/api.md#parameters) for further information on them.
 
 - num_predict (integer): -1 is infinite, -2 is fill context, 128 is default
+- num_ctx (integer)
 - repeat_penalty (float)
 - seed (integer)
 - stream (boolean)
@@ -107,6 +108,7 @@ Example:
         "model": "llama3.1:instruct",
         "api_type": "ollama",
         "num_predict": -1,
+        "num_ctx": 2048,
         "repeat_penalty": 1.1,
         "seed": 42,
         "stream": False,

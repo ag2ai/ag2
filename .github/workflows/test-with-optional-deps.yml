@@ -4,8 +4,8 @@
 name: Tests with optional dependencies
 
 on:
-  push:
-    branches: ["main"]
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
   pull_request:
     branches: ["main"]
   merge_group:
@@ -15,6 +15,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions: {}
+
 jobs:
   paths-filter:
     runs-on: ubuntu-latest
@@ -46,6 +47,7 @@ jobs:
       - name: setup has changes
         run: echo "setup has changes"
         if: steps.filter.outputs.setup == 'true'
+
   test:
     needs: paths-filter
     if: needs.paths-filter.outputs.hasChanges == 'true'

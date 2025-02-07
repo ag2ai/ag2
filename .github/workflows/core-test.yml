@@ -4,8 +4,8 @@
 name: Core tests without LLMs
 
 on:
-  push:
-    branches: ["main"]
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
   pull_request:
     branches: ["main"]
   merge_group:
