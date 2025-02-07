@@ -7,12 +7,12 @@ from typing import Optional, Union
 from .... import ConversableAgent
 from ....doc_utils import export_module
 from ....tools import Tool
-from ....tools.experimental.messageplatform.discord import DiscordRetrieveTool, DiscordSendTool
+from ....tools.experimental import DiscordRetrieveTool, DiscordSendTool
 
 __all__ = ["DiscordAgent"]
 
 
-@export_module("autogen.agents")
+@export_module("autogen.agents.experimental")
 class DiscordAgent(ConversableAgent):
     """An agent that can send messages and retrieve messages on Discord."""
 
