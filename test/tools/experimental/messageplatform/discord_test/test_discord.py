@@ -7,11 +7,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.experimental.messageplatform import DiscordRetrieveTool, DiscordSendTool
-
-with optional_import_block():
-    pass
 
 
 @skip_on_missing_imports("discord", "commsagent-discord")

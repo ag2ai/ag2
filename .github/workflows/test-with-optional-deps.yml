@@ -62,9 +62,9 @@ jobs:
             optional-dependencies: "retrievechat-qdrant"
           # Browser use doesn't support below python 3.11
           - python-version: "3.9"
-            optional-dependencies: "browser_use"
+            optional-dependencies: "browser-use"
           - python-version: "3.10"
-            optional-dependencies: "browser_use"
+            optional-dependencies: "browser-use"
           # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
           # Because torch and sentence_transformers creates issues while trying to install
           - os: macos-latest
