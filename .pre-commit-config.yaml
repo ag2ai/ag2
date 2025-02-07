@@ -68,7 +68,7 @@ repos:
               website/package-lock.json |
               website/docs/use-cases/reference-agents/captainagent.mdx |
               test/agentchat/contrib/rag/pdf_parsed/Toast_financial_report.md |
-              test/agentchat/contrib/rag/pdf_parsed/nvidia_10k_2024.md 
+              test/agentchat/contrib/rag/pdf_parsed/nvidia_10k_2024.md
             )$
   # See https://jaredkhan.com/blog/mypy-pre-commit
   - repo: local
