@@ -25,20 +25,20 @@ class DoclingQueryEngine:
     Leverage llamaIndex VectorStoreIndex and Chromadb to query docling parsed md file
     """
 
-    def __init__( # type: ignore
+    def __init__(  # type: ignore
         self,
         db_path: Optional[str] = "./chroma",
         embedding_function: Optional[EmbeddingFunction[Any]] = ef.DefaultEmbeddingFunction(),
         metadata: Optional[dict[Any, Any]] = {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32},
-        llm: Optional["LLM"] = OpenAI(model="gpt-4o", temperature=0.0), 
+        llm: Optional["LLM"] = OpenAI(model="gpt-4o", temperature=0.0),
     ) -> None:
         """
         Initializes the DoclingQueryEngine with db_path
         metadata, and embedding function and llm.
         Args:
             db_path: the path to save chromadb data
-            embedding_function: The embedding function to use. 
-            metadata: The metadata of the vector database. 
+            embedding_function: The embedding function to use.
+            metadata: The metadata of the vector database.
         """
         self.llm = llm
         self.embedding_function = embedding_function
@@ -49,25 +49,19 @@ class DoclingQueryEngine:
             self.client = chromadb.PersistentClient()
 
     def init_db(
-        self, 
-        input_doc_paths: list[str], 
-        collection_name: Optional[str] = DEFAULT_COLLECTION_NAME,
-        overwrite: bool = False
+        self,
+        input_doc_paths: list[str],
+        collection_name: str = DEFAULT_COLLECTION_NAME,
     ) -> None:
         """
         Initinalize vectordb by putting input docs into given collection
-        If overwirte is True, it overwries existing collection
         """
-        try:
-            self.client.delete_collection(collection_name)
-        except ValueError:
-            pass
 
         self.collection = self.client.create_collection(
-            name=collection_name, 
+            name=collection_name,
             embedding_function=self.embedding_function,
-            metadata=self.metadata, 
-            get_or_create=True      # If collection already exists, get the collection
+            metadata=self.metadata,
+            get_or_create=True,  # If collection already exists, get the collection
         )
 
         self.vector_store = ChromaVectorStore(chroma_collection=self.collection)
@@ -75,7 +69,6 @@ class DoclingQueryEngine:
 
         documents = self._load_doc(input_doc_paths)
         self.index = VectorStoreIndex.from_documents(documents, storage_context=self.storage_context)
-
 
     def query(self, question: str) -> str:
         self.query_engine = self.index.as_query_engine(llm=self.llm)
