@@ -10,9 +10,9 @@ from autogen.import_utils import optional_import_block
 
 with optional_import_block():
     import chromadb
-    import chromadb.utils.embedding_functions as ef
     from chromadb.api.models.Collection import Collection
     from chromadb.api.types import EmbeddingFunction
+    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
     from llama_index.core.llms import LLM
     from llama_index.core.schema import Document as LlamaDocument
@@ -38,7 +38,7 @@ class DoclingMdQueryEngine:
     def __init__(  # type: ignore
         self,
         db_path: str = "./chroma",
-        embedding_function: Optional[EmbeddingFunction[Any]] = ef.DefaultEmbeddingFunction(),
+        embedding_function: Optional[EmbeddingFunction[Any]] = DefaultEmbeddingFunction(),
         metadata: Optional[dict[Any, Any]] = {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32},
         llm: Optional["LLM"] = OpenAI(model="gpt-4o", temperature=0.0),
     ) -> None:
