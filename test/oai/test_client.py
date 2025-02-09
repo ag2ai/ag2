@@ -530,7 +530,7 @@ class TestO1:
             assert test_params["messages"][0]["content"] == system_msg
             assert test_params["messages"][0]["role"] == "system"
 
-    def _test_completition(self, client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+    def _test_completion(self, client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         assert isinstance(client, OpenAIWrapper)
         response = client.create(messages=messages, cache_seed=123)
 
@@ -551,8 +551,8 @@ class TestO1:
         ],
     )
     @pytest.mark.openai
-    def test_completition_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
-        self._test_completition(o1_mini_client, messages)
+    def test_completion_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completion(o1_mini_client, messages)
 
     @pytest.mark.parametrize(
         "messages",
@@ -563,8 +563,8 @@ class TestO1:
     )
     @pytest.mark.openai
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
-    def test_completition_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
-        self._test_completition(o1_client, messages)
+    def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completion(o1_client, messages)
 
 
 if __name__ == "__main__":
