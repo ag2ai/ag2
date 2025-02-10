@@ -421,3 +421,8 @@ warn_unused_ignores = false
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
+
+[tool.codespell]
+skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./notebook,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb"
+quiet-level = 3
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane"
