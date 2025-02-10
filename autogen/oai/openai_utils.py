@@ -31,6 +31,9 @@ NON_CACHE_KEY = [
     "credentials",
 ]
 DEFAULT_AZURE_API_VERSION = "2024-02-01"
+
+# The below pricing is for 1K tokens. Whenever there is an update in the LLM's pricing,
+# Please convert it to 1K tokens and update in the below dictionary in the format: (input_token_price, output_token_price).
 OAI_PRICE1K = {
     # https://openai.com/api/pricing/
     # o1
@@ -90,10 +93,8 @@ OAI_PRICE1K = {
     "gpt-35-turbo-0301": (0.0015, 0.002),
     "gpt-35-turbo-16k": (0.003, 0.004),
     "gpt-35-turbo-16k-0613": (0.003, 0.004),
-    # The below are the discounted prices offered by deepseek to all users till 2025-02-08 16:00 (UTC)
-    # TODO: After 2025-02-08 16:00 UTC, update to standard pricing
-    # Reference: https://api-docs.deepseek.com/quick_start/pricing
-    "deepseek-chat": (0.00014, 0.00028),
+    # deepseek
+    "deepseek-chat": (0.00027, 0.0011),
 }
 
 
