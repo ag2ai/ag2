@@ -33,8 +33,6 @@ You can set `max_retries` to handle rate limit error. And you can set `timeout` 
 - `max_retries` (int): the total number of times allowed for retrying failed requests for a single client.
 - `timeout` (int): the timeout (in seconds) for a single client.
 
-Please refer to the [documentation](/docs/Use-Cases/enhanced_inference#runtime-error) for more info.
-
 ## How to continue a finished conversation
 
 When you call `initiate_chat` the conversation restarts by default. You can use `send` or `initiate_chat(clear_history=False)` to continue the conversation.
