@@ -31,9 +31,10 @@ NON_CACHE_KEY = [
     "credentials",
 ]
 DEFAULT_AZURE_API_VERSION = "2024-02-01"
+
+# The below pricing is for 1K tokens. Whenever there is an update in the LLM's pricing,
+# Please convert it to 1K tokens and update in the below dictionary in the format: (input_token_price, output_token_price).
 OAI_PRICE1K = {
-    # The below pricing is for 1K tokens. Whenever there is an update in the LLM's pricing,
-    # please convert it to 1K tokens and update in the below dictionary.
     # https://openai.com/api/pricing/
     # o1
     "o1-preview-2024-09-12": (0.0015, 0.0060),
