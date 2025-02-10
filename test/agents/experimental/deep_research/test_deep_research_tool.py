@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from autogen.agents.experimental.deep_research.deep_research_tool import DeepResearchTool
+from autogen.agents.experimental.deep_research import DeepResearchTool
 from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.dependency_injection import Depends, on
 
@@ -30,7 +30,7 @@ class TestDeepResearchTool:
             "description": "Delegate a research task to the deep research agent.",
             "name": "delegate_research_task",
             "parameters": {
-                "properties": {"task": {"description": "The tash to perform a research on.", "type": "string"}},
+                "properties": {"task": {"description": "The task to perform a research on.", "type": "string"}},
                 "required": ["task"],
                 "type": "object",
             },

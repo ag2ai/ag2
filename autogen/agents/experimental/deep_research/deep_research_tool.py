@@ -55,7 +55,7 @@ class DeepResearchTool(Tool):
         )
 
         def delegate_research_task(
-            task: Annotated[str, "The tash to perform a research on."],
+            task: Annotated[str, "The task to perform a research on."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
             max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ):
@@ -215,7 +215,7 @@ class DeepResearchTool(Tool):
         websurfer_config["config_list"][0]["response_format"] = GatheredInformation
 
         def is_termination_msg(x):
-            return x.get("content", "") and x.get("content", "").startswith("Answer confirmed:")
+            return x.get("content", "") and x.get("content", "").startswith(DeepResearchTool.ANSWER_CONFIRMED_PREFIX)
 
         websurfer_agent = WebSurferAgent(
             llm_config=websurfer_config,
@@ -249,7 +249,7 @@ class DeepResearchTool(Tool):
             description="Call this method when you agree that the original question can be answered with the gathered information and provide the answer."
         )
         def confirm_answer(answer: str) -> str:
-            return "Answer confirmed: " + answer
+            return f"{DeepResearchTool.ANSWER_CONFIRMED_PREFIX} " + answer
 
         websurfer_critic.register_for_execution()(websurfer_agent.tool)
 
