@@ -156,9 +156,11 @@ def test_create_response_with_tool_call(mock_chat, mistral_client):
     ]
 
     # Call the chat method
-    response = mistral_client.create(
-        {"messages": mistral_messages, "tools": converted_functions, "model": "mistral-medium-latest"}
-    )
+    response = mistral_client.create({
+        "messages": mistral_messages,
+        "tools": converted_functions,
+        "model": "mistral-medium-latest",
+    })
 
     # Assertions to check if the functions and content are included in the response
     assert response.choices[0].message.content == "Sample text about the functions"

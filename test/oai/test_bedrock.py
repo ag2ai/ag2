@@ -204,9 +204,11 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client):
     ]
 
     # Call the create method
-    response = bedrock_client.create(
-        {"messages": bedrock_messages, "tools": converted_functions, "model": "anthropic.claude-3-sonnet-20240229-v1:0"}
-    )
+    response = bedrock_client.create({
+        "messages": bedrock_messages,
+        "tools": converted_functions,
+        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+    })
 
     # Assertions to check if the functions and content are included in the response
     assert response.choices[0].message.content == "Sample text about the functions"

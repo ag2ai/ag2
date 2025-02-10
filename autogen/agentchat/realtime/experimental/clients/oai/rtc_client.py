@@ -64,16 +64,14 @@ class OpenAIRealtimeWebRTCClient:
             call_id (str): The ID of the function call.
             result (str): The result of the function call.
         """
-        await self._websocket.send_json(
-            {
-                "type": "conversation.item.create",
-                "item": {
-                    "type": "function_call_output",
-                    "call_id": call_id,
-                    "output": result,
-                },
-            }
-        )
+        await self._websocket.send_json({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": result,
+            },
+        })
         await self._websocket.send_json({"type": "response.create"})
 
     async def send_text(self, *, role: Role, text: str) -> None:
@@ -84,17 +82,13 @@ class OpenAIRealtimeWebRTCClient:
             text (str): The text of the message.
         """
         # await self.connection.response.cancel() #why is this here?
-        await self._websocket.send_json(
-            {
-                "type": "response.cancel",
-            }
-        )
-        await self._websocket.send_json(
-            {
-                "type": "conversation.item.create",
-                "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
-            }
-        )
+        await self._websocket.send_json({
+            "type": "response.cancel",
+        })
+        await self._websocket.send_json({
+            "type": "conversation.item.create",
+            "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
+        })
         # await self.connection.response.create()
         await self._websocket.send_json({"type": "response.create"})
 
@@ -114,14 +108,12 @@ class OpenAIRealtimeWebRTCClient:
             content_index (int): The index of the content to truncate.
             item_id (str): The ID of the item to truncate.
         """
-        await self._websocket.send_json(
-            {
-                "type": "conversation.item.truncate",
-                "content_index": content_index,
-                "item_id": item_id,
-                "audio_end_ms": audio_end_ms,
-            }
-        )
+        await self._websocket.send_json({
+            "type": "conversation.item.truncate",
+            "content_index": content_index,
+            "item_id": item_id,
+            "audio_end_ms": audio_end_ms,
+        })
 
     async def session_update(self, session_options: dict[str, Any]) -> None:
         """Send a session update to the OpenAI Realtime API.

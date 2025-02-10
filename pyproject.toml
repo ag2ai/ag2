@@ -318,6 +318,8 @@ exclude = [
     "setup_*.py",
 ]
 
+preview = true
+
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
 select = [

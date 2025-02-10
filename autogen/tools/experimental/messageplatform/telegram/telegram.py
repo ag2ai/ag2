@@ -237,24 +237,22 @@ class TelegramRetrieveTool(BaseTelegramTool, Tool):
 
                     async for message in client.iter_messages(**params):
                         count += 1
-                        messages.append(
-                            {
-                                "id": str(message.id),
-                                "date": message.date.isoformat(),
-                                "from_id": str(message.from_id) if message.from_id else None,
-                                "text": message.text,
-                                "reply_to_msg_id": str(message.reply_to_msg_id) if message.reply_to_msg_id else None,
-                                "forward_from": str(message.forward.from_id) if message.forward else None,
-                                "edit_date": message.edit_date.isoformat() if message.edit_date else None,
-                                "media": bool(message.media),
-                                "entities": [
-                                    {"type": e.__class__.__name__, "offset": e.offset, "length": e.length}
-                                    for e in message.entities
-                                ]
-                                if message.entities
-                                else None,
-                            }
-                        )
+                        messages.append({
+                            "id": str(message.id),
+                            "date": message.date.isoformat(),
+                            "from_id": str(message.from_id) if message.from_id else None,
+                            "text": message.text,
+                            "reply_to_msg_id": str(message.reply_to_msg_id) if message.reply_to_msg_id else None,
+                            "forward_from": str(message.forward.from_id) if message.forward else None,
+                            "edit_date": message.edit_date.isoformat() if message.edit_date else None,
+                            "media": bool(message.media),
+                            "entities": [
+                                {"type": e.__class__.__name__, "offset": e.offset, "length": e.length}
+                                for e in message.entities
+                            ]
+                            if message.entities
+                            else None,
+                        })
 
                         # Check if we've hit the maximum
                         if maximum_messages and len(messages) >= maximum_messages:

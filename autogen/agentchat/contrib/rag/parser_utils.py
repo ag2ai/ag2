@@ -78,7 +78,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
 
     _log.info(f"Document converted in {end_time:.2f} seconds.")
 
-    ## Export results
+    # Export results
     output_dir = Path(output_dir_path)
     output_dir.mkdir(parents=True, exist_ok=True)
 

@@ -836,9 +836,11 @@ def register_hand_off(
             elif isinstance(transit.target, dict):
                 # Transition to a nested chat
                 # We will store them here and establish them in the initiate_swarm_chat
-                agent._swarm_nested_chat_handoffs.append(
-                    {"nested_chats": transit.target, "condition": transit.condition, "available": transit.available}
-                )
+                agent._swarm_nested_chat_handoffs.append({
+                    "nested_chats": transit.target,
+                    "condition": transit.condition,
+                    "available": transit.available,
+                })
 
         else:
             raise ValueError("Invalid hand off condition, must be either OnCondition or AfterWork")

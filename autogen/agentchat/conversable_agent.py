@@ -2229,21 +2229,17 @@ class ConversableAgent(LLMAgent):
             # User provided a custom response, return function and tool failures indicating user interruption
             tool_returns = []
             if message.get("function_call", False):
-                tool_returns.append(
-                    {
-                        "role": "function",
-                        "name": message["function_call"].get("name", ""),
-                        "content": "USER INTERRUPTED",
-                    }
-                )
+                tool_returns.append({
+                    "role": "function",
+                    "name": message["function_call"].get("name", ""),
+                    "content": "USER INTERRUPTED",
+                })
 
             if message.get("tool_calls", False):
-                tool_returns.extend(
-                    [
-                        {"role": "tool", "tool_call_id": tool_call.get("id", ""), "content": "USER INTERRUPTED"}
-                        for tool_call in message["tool_calls"]
-                    ]
-                )
+                tool_returns.extend([
+                    {"role": "tool", "tool_call_id": tool_call.get("id", ""), "content": "USER INTERRUPTED"}
+                    for tool_call in message["tool_calls"]
+                ])
 
             response = {"role": "user", "content": reply}
             if tool_returns:
@@ -2344,21 +2340,17 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
             tool_returns = []
             if message.get("function_call", False):
-                tool_returns.append(
-                    {
-                        "role": "function",
-                        "name": message["function_call"].get("name", ""),
-                        "content": "USER INTERRUPTED",
-                    }
-                )
+                tool_returns.append({
+                    "role": "function",
+                    "name": message["function_call"].get("name", ""),
+                    "content": "USER INTERRUPTED",
+                })
 
             if message.get("tool_calls", False):
-                tool_returns.extend(
-                    [
-                        {"role": "tool", "tool_call_id": tool_call.get("id", ""), "content": "USER INTERRUPTED"}
-                        for tool_call in message["tool_calls"]
-                    ]
-                )
+                tool_returns.extend([
+                    {"role": "tool", "tool_call_id": tool_call.get("id", ""), "content": "USER INTERRUPTED"}
+                    for tool_call in message["tool_calls"]
+                ])
 
             response = {"role": "user", "content": reply}
             if tool_returns:

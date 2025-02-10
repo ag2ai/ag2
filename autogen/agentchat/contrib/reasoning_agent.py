@@ -282,14 +282,12 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
                     # for Beam Search
                     is_a_better = child_a.value - child_b.value > contrastive_threshold
                 if is_a_better:
-                    preference_pairs.append(
-                        {
-                            "instruction": node.trajectory,
-                            "reflection": node.reflection,
-                            "preferred_response": f"Step {child_a.depth}: {child_a.content}",
-                            "dispreferred_response": f"Step {child_b.depth}: {child_b.content}",
-                        }
-                    )
+                    preference_pairs.append({
+                        "instruction": node.trajectory,
+                        "reflection": node.reflection,
+                        "preferred_response": f"Step {child_a.depth}: {child_a.content}",
+                        "dispreferred_response": f"Step {child_b.depth}: {child_b.content}",
+                    })
 
         # Step 2: Recurse into child nodes
         for child in node.children:
@@ -450,7 +448,7 @@ class ReasoningAgent(AssistantAgent):
 
         # Update Grader's system message
         if is_outcome:
-            ## Outcome Rating
+            # Outcome Rating
             message = f"""Please rate the answer on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
 
 A great answer must:
@@ -469,7 +467,7 @@ If the answer fails to meet any of the core requirements above, it should be con
 Please provide your rating along with a brief explanation of your assessment.
 """
         else:
-            ## Process Rating
+            # Process Rating
             message = f"""Please rate the thinking trajectory on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
 
 A great thinking trajectory must:
@@ -484,7 +482,7 @@ If the trajectory does not meet one of the above requirements, it is considered 
 
 Please provide your rating along with a brief explanation of your assessment.
 """
-        ## Add ground truth to the message.
+        # Add ground truth to the message.
         if ground_truth:
             # override the system message
             message += f"--- Note that the Ground Truth is ---\n{ground_truth}\n---\n"
@@ -600,9 +598,9 @@ Please provide your rating along with a brief explanation of your assessment.
                 silent=not self._verbose,
             )
         elif self._answer_approach == "pool":
-            all_thoughts = "\n\n".join(
-                [f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)]
-            )
+            all_thoughts = "\n\n".join([
+                f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)
+            ])
             self.send(
                 message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",
                 recipient=self,

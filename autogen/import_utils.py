@@ -256,6 +256,7 @@ def require_optional_import(modules: Union[str, Iterable[str]], dep_target: str)
 
         def decorator(o: T) -> T:
             return o
+
     else:
 
         def decorator(o: T) -> T:
@@ -283,6 +284,7 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Opti
 
             pytest_mark_o = getattr(pytest.mark, mark_name)(o)
             return pytest_mark_o  # type: ignore[no-any-return]
+
     else:
 
         def decorator(o: T) -> T:
