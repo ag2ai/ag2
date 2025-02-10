@@ -2,6 +2,7 @@
   "name": "website",
   "version": "0.0.0",
   "description": "The Open Source Agent OS",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "mintlify:dev": "mintlify dev"
