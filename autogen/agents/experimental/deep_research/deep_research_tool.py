@@ -55,6 +55,7 @@ class DeepResearchTool(Tool):
 
         def delegate_research_task(
             task: Annotated[str, "The tash to perform a research on."],
+            llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
         ):
             """
             Delegate a research task to the agent.
@@ -76,10 +77,10 @@ class DeepResearchTool(Tool):
 
             result = self.critic_agent.initiate_chat(
                 self.summarizer_agent,
-                message="How many more blocks (also denoted as layers) in BERT base encoder than the encoder from the architecture proposed in Attention is All You Need?????",
+                message="Please answer the following question: " + task,
             )
 
-            result.summary
+            return result.summary
 
         super().__init__(
             name=delegate_research_task.__name__,
@@ -109,7 +110,7 @@ class DeepResearchTool(Tool):
         def split_question_and_answer_subquestions(
             question: Annotated[str, "The question to split and answer."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
-        ) -> Task:
+        ) -> str:
             subquestions_answered_prefix = "Subquestions answered:"
             decomposition_agent = ConversableAgent(
                 name="DecompositionAgent",
