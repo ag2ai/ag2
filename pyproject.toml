@@ -154,7 +154,7 @@ interop-crewai = [
     "litellm<1.57.5; sys_platform=='win32'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.22"]
+interop-pydantic-ai = ["pydantic-ai==0.0.23"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
@@ -222,7 +222,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.4",
+    "ruff==0.9.5",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
