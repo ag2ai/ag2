@@ -30,6 +30,7 @@ permissions:
 jobs:
   GraphRagIntegrationTest-FalkorDB-Ubuntu:
     runs-on: ubuntu-latest
+    environment: openai1
     strategy:
       fail-fast: false
       matrix:
@@ -92,6 +93,7 @@ jobs:
 
   GraphRagIntegrationTest-Neo4j-Llmaindex-Ubuntu:
     runs-on: ubuntu-latest
+    environment: openai1
     strategy:
       fail-fast: false
       matrix:
