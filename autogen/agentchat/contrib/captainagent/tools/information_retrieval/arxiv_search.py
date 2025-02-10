@@ -42,14 +42,12 @@ def arxiv_search(query, max_results=10, sortby="relevance"):
         print("DOI:", r.doi)
         print("Published:", r.published.strftime("%Y-%m"))
         # print("Summary:", r.summary)
-        res.append(
-            {
-                "title": r.title,
-                "authors": get_author(r),
-                "summary": r.summary,
-                "entry_id": r.entry_id,
-                "doi": r.doi,
-                "published": r.published.strftime("%Y-%m"),
-            }
-        )
+        res.append({
+            "title": r.title,
+            "authors": get_author(r),
+            "summary": r.summary,
+            "entry_id": r.entry_id,
+            "doi": r.doi,
+            "published": r.published.strftime("%Y-%m"),
+        })
     return res

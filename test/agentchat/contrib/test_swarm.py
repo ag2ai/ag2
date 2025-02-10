@@ -137,6 +137,8 @@ def test_receiving_agent():
         messages=messages_one_w_name,
         agents=[test_initial_agent, test_second_agent],
     )
+    assert context_vars is None
+    assert last_speaker
 
     assert chat_result.chat_history[0].get("name") == "MyUser"  # Should persist
     assert chat_result.chat_history[1].get("name") == "SecondAgent"
@@ -170,6 +172,9 @@ def test_resume_speaker():
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=test_initial_agent, messages=multiple_messages, agents=[test_initial_agent, test_second_agent]
         )
+        assert chat_result
+        assert context_vars is None
+        assert last_speaker is None
 
         # Ensure the second agent initiated the chat
         mock_second_chat.assert_called_once()
@@ -199,6 +204,7 @@ def test_after_work_options():
         initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2]
     )
     assert last_speaker == agent1
+    assert context_vars is None
 
     # 2. Test REVERT_TO_USER
     agent1._swarm_after_work = AfterWork(AfterWorkOption.REVERT_TO_USER)
@@ -212,6 +218,8 @@ def test_after_work_options():
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], user_agent=user_agent, max_rounds=4
         )
+        assert context_vars is None
+        assert last_speaker
 
     # Ensure that after agent1 is finished, it goes to user (4th message)
     assert chat_result.chat_history[3]["name"] == "test_user"
@@ -221,6 +229,8 @@ def test_after_work_options():
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], max_rounds=4
     )
+    assert context_vars is None
+    assert last_speaker
 
     # Stay on agent1
     assert chat_result.chat_history[3]["name"] == "agent1"
@@ -236,6 +246,8 @@ def test_after_work_options():
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], max_rounds=4
     )
+    assert context_vars is None
+    assert last_speaker
 
     # We should have transferred to agent2 after agent1 has finished
     assert chat_result.chat_history[3]["name"] == "agent2"
@@ -280,6 +292,8 @@ def test_on_condition_handoff():
         agents=[agent1, agent2],
         max_rounds=5,
     )
+    assert context_vars is None
+    assert last_speaker
 
     # We should have transferred to agent2 after agent1 has finished
     assert chat_result.chat_history[3]["name"] == "agent2"
@@ -293,6 +307,8 @@ def test_temporary_user_proxy():
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2]
     )
+    assert context_vars is None
+    assert last_speaker
 
     # Verify no message has name "_User"
     for message in chat_result.chat_history:
@@ -352,6 +368,8 @@ def test_context_variables_updating_multi_tools():
         context_variables=test_context_variables,
         max_rounds=3,
     )
+    assert chat_result
+    assert last_speaker
 
     # Ensure we've incremented the context variable
     # in both tools, updated values should traverse
@@ -406,6 +424,8 @@ def test_function_transfer():
         context_variables=test_context_variables,
         max_rounds=4,
     )
+    assert context_vars
+    assert last_speaker
 
     assert chat_result.chat_history[3]["name"] == "agent1"
 
@@ -456,11 +476,17 @@ def test_initialization():
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=agent2, messages=TEST_MESSAGES, agents=[agent1, agent2, bad_agent], max_rounds=3
         )
+        assert chat_result
+        assert context_vars
+        assert last_speaker
 
     with pytest.raises(AssertionError, match="initial_agent must be a ConversableAgent"):
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=bad_agent, messages=TEST_MESSAGES, agents=[agent1, agent2], max_rounds=3
         )
+        assert chat_result
+        assert context_vars
+        assert last_speaker
 
     register_hand_off(agent1, hand_to=AfterWork(agent3))
 
@@ -468,6 +494,9 @@ def test_initialization():
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2], max_rounds=3
         )
+        assert chat_result
+        assert context_vars
+        assert last_speaker
 
 
 def test_update_system_message():
@@ -510,6 +539,9 @@ def test_update_system_message():
     chat_result1, context_vars1, last_speaker1 = initiate_swarm_chat(
         initial_agent=agent1, messages=test_messages, agents=[agent1], context_variables=test_context, max_rounds=2
     )
+    assert chat_result1
+    assert context_vars1
+    assert last_speaker1
 
     # Verify callable function result
     assert message_container.captured_sys_message == "System message with test_value and 1 messages"
@@ -521,6 +553,9 @@ def test_update_system_message():
     chat_result2, context_vars2, last_speaker2 = initiate_swarm_chat(
         initial_agent=agent2, messages=test_messages, agents=[agent2], context_variables=test_context, max_rounds=2
     )
+    assert chat_result2
+    assert context_vars2
+    assert last_speaker2
 
     # Verify template result
     assert message_container.captured_sys_message == "Template message with test_value"
@@ -542,6 +577,9 @@ def test_update_system_message():
     chat_result6, context_vars6, last_speaker6 = initiate_swarm_chat(
         initial_agent=agent6, messages=test_messages, agents=[agent6], context_variables=test_context, max_rounds=2
     )
+    assert chat_result6
+    assert context_vars6
+    assert last_speaker6
 
     # Verify last update function took effect
     assert message_container.captured_sys_message == "Another update"
@@ -644,6 +682,8 @@ def test_string_agent_params_for_transfer():
             max_rounds=5,
         )
 
+        assert final_context
+
 
 def test_after_work_callable():
     """Test Callable in an AfterWork handoff"""
@@ -713,6 +753,9 @@ def test_after_work_callable():
         max_rounds=5,
     )
 
+    assert context_vars is None
+    assert last_speaker
+
     # Confirm transitions and it terminated with 4 messages
     assert chat_result.chat_history[1]["name"] == "agent1"
     assert chat_result.chat_history[2]["name"] == "agent2"
@@ -766,6 +809,9 @@ def test_on_condition_unique_function_names():
         agents=[agent1, agent2],
         max_rounds=5,
     )
+    assert chat_result
+    assert context_vars is None
+    assert last_speaker
 
     # Check that agent1 has 3 functions and they have unique names
     assert "transfer_agent1_to_agent2" in agent1._function_map
@@ -804,6 +850,8 @@ def test_prepare_swarm_agents():
 
     # Test valid preparation
     tool_executor, nested_chat_agents = _prepare_swarm_agents(agent1, [agent1, agent2])
+
+    assert nested_chat_agents == []
 
     # Verify tool executor setup
     assert tool_executor.name == __TOOL_EXECUTOR_NAME__
@@ -906,6 +954,7 @@ def test_process_initial_messages():
 
     assert last_agent == user_agent
     assert len(temp_users) == 0
+    assert agent_names
 
     # Test invalid agent name
     messages = [{"role": "user", "content": "Test", "name": "invalid_agent"}]
@@ -990,6 +1039,7 @@ async def test_a_initiate_swarm_chat():
     )
 
     assert context_vars == test_context
+    assert last_speaker is None
 
 
 def test_swarmresult_afterworkoption():
@@ -1122,6 +1172,9 @@ def test_update_on_condition_str():
         context_variables={"test_var": "condition2"},
         max_rounds=3,
     )
+    assert chat_result is not None
+    assert context_vars is not None
+    assert last_speaker is not None
 
     assert condition_container.captured_condition == "Transfer based on condition2"
 

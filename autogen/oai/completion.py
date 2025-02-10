@@ -121,21 +121,17 @@ class Completion(OpenAICompletion):
 
     default_search_space = (
         {
-            "model": tune.choice(
-                [
-                    "text-ada-001",
-                    "text-babbage-001",
-                    "text-davinci-003",
-                    "gpt-3.5-turbo",
-                    "gpt-4",
-                ]
-            ),
-            "temperature_or_top_p": tune.choice(
-                [
-                    {"temperature": tune.uniform(0, 2)},
-                    {"top_p": tune.uniform(0, 1)},
-                ]
-            ),
+            "model": tune.choice([
+                "text-ada-001",
+                "text-babbage-001",
+                "text-davinci-003",
+                "gpt-3.5-turbo",
+                "gpt-4",
+            ]),
+            "temperature_or_top_p": tune.choice([
+                {"temperature": tune.uniform(0, 2)},
+                {"top_p": tune.uniform(0, 1)},
+            ]),
             "max_tokens": tune.lograndint(50, 1000),
             "n": tune.randint(1, 100),
             "prompt": "{prompt}",
@@ -211,14 +207,12 @@ class Completion(OpenAICompletion):
                 key = get_key([config["prompt"]] + [choice.get("text") for choice in response["choices"]])
             value["created_at"].append(cls._count_create)
             value["cost"].append(response["cost"])
-            value["token_count"].append(
-                {
-                    "model": response["model"],
-                    "prompt_tokens": response["usage"]["prompt_tokens"],
-                    "completion_tokens": response["usage"].get("completion_tokens", 0),
-                    "total_tokens": response["usage"]["total_tokens"],
-                }
-            )
+            value["token_count"].append({
+                "model": response["model"],
+                "prompt_tokens": response["usage"]["prompt_tokens"],
+                "completion_tokens": response["usage"].get("completion_tokens", 0),
+                "total_tokens": response["usage"]["total_tokens"],
+            })
             cls._history_dict[key] = value
             cls._count_create += 1
             return

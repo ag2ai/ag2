@@ -911,12 +911,10 @@ class GroupChat:
                 }
             else:
                 # Final failure, no attempts left
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it returned multiple names.",
-                    }
-                )
+                messages.append({
+                    "role": "user",
+                    "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it returned multiple names.",
+                })
 
         else:
             # No names at all on requery so add additional reminder prompt for next retry
@@ -932,12 +930,10 @@ class GroupChat:
                 }
             else:
                 # Final failure, no attempts left
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it did not include any agent names.",
-                    }
-                )
+                messages.append({
+                    "role": "user",
+                    "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it did not include any agent names.",
+                })
 
         return True, None
 

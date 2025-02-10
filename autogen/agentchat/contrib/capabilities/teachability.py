@@ -372,24 +372,21 @@ class MemoStore:
         examples.append({"text": "Please verify that each paper you listed actually uses langchain.", "label": "no"})
         examples.append({"text": "Tell gpt the output should still be latex code.", "label": "no"})
         examples.append({"text": "Hint: convert pdfs to text and then answer questions based on them.", "label": "yes"})
-        examples.append(
-            {"text": "To create a good PPT, include enough content to make it interesting.", "label": "yes"}
-        )
-        examples.append(
-            {
-                "text": "No, for this case the columns should be aspects and the rows should be frameworks.",
-                "label": "no",
-            }
-        )
+        examples.append({
+            "text": "To create a good PPT, include enough content to make it interesting.",
+            "label": "yes",
+        })
+        examples.append({
+            "text": "No, for this case the columns should be aspects and the rows should be frameworks.",
+            "label": "no",
+        })
         examples.append({"text": "When writing code, remember to include any libraries that are used.", "label": "yes"})
         examples.append({"text": "Please summarize the papers by Eric Horvitz on bounded rationality.", "label": "no"})
         examples.append({"text": "Compare the h-index of Daniel Weld and Oren Etzioni.", "label": "no"})
-        examples.append(
-            {
-                "text": "Double check to be sure that the columns in a table correspond to what was asked for.",
-                "label": "yes",
-            }
-        )
+        examples.append({
+            "text": "Double check to be sure that the columns in a table correspond to what was asked for.",
+            "label": "yes",
+        })
         for example in examples:
             self.add_input_output_pair(example["text"], example["label"])
         self._save_memos()

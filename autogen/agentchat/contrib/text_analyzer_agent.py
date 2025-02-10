@@ -69,8 +69,10 @@ class TextAnalyzerAgent(ConversableAgent):
         # Assemble the message.
         text_to_analyze = "# TEXT\n" + text_to_analyze + "\n"
         analysis_instructions = "# INSTRUCTIONS\n" + analysis_instructions + "\n"
-        msg_text = "\n".join(
-            [analysis_instructions, text_to_analyze, analysis_instructions]
-        )  # Repeat the instructions.
+        msg_text = "\n".join([
+            analysis_instructions,
+            text_to_analyze,
+            analysis_instructions,
+        ])  # Repeat the instructions.
         # Generate and return the analysis string.
         return self.generate_oai_reply([{"role": "user", "content": msg_text}], None, None)[1]

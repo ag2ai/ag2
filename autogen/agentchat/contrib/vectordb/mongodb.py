@@ -493,9 +493,9 @@ class MongoDBAtlasVectorDB(VectorDB):
                 oversampling_factor=kwargs.get("oversampling_factor", 10),
             )
             # Change each _id key to id. with_id_rename, but with (doc, score) tuples
-            results.append(
-                [({**{k: v for k, v in d[0].items() if k != "_id"}, "id": d[0]["_id"]}, d[1]) for d in query_result]
-            )
+            results.append([
+                ({**{k: v for k, v in d[0].items() if k != "_id"}, "id": d[0]["_id"]}, d[1]) for d in query_result
+            ])
         return results
 
 

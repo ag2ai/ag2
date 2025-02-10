@@ -286,7 +286,7 @@ class ImageGeneration(AgentCapability):
         }
 
 
-### Helpers
+# Helpers
 def _validate_resolution_format(resolution: str):
     """Checks if a string is in a valid resolution format (e.g., "1024x768")."""
     pattern = r"^\d+x\d+$"  # Matches a pattern of digits, "x", and digits
