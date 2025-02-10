@@ -14,6 +14,8 @@ __all__ = ["DeepResearchAgent"]
 
 @export_module("autogen.agents.experimental")
 class DeepResearchAgent(ConversableAgent):
+    """An agent that performs deep research tasks."""
+
     DEFAULT_PROMPT = "You are a deep research agent. You have the ability to get information from the web and perform research tasks."
 
     def __init__(
@@ -23,7 +25,15 @@ class DeepResearchAgent(ConversableAgent):
         system_message: Optional[Union[str, list[str]]] = DEFAULT_PROMPT,
         max_web_steps: int = 30,
         **kwargs,
-    ):
+    ) -> None:
+        """Initialize the DeepResearchAgent.
+
+        Args:
+            name (str): The name of the agent.
+            llm_config (dict[str, Any]): The LLM configuration.
+            system_message (Optional[Union[str, list[str]], optional): The system message. Defaults to DEFAULT_PROMPT.
+            max_web_steps (int, optional): The maximum number of web steps. Defaults to 30.
+        """
         super().__init__(
             name=name,
             system_message=system_message,

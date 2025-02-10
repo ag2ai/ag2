@@ -18,6 +18,8 @@ __all__ = ["DeepResearchTool"]
 
 @export_module("autogen.tools.experimental")
 class DeepResearchTool(Tool):
+    """A tool that delegates a web research task to the subteams of agents."""
+
     ANSWER_CONFIRMED_PREFIX = "Answer confirmed:"
 
     def __init__(
@@ -25,6 +27,12 @@ class DeepResearchTool(Tool):
         llm_config: dict[str, Any],
         max_web_steps: int = 30,
     ):
+        """Initialize the DeepResearchTool.
+
+        Args:
+            llm_config (dict[str, Any]): The LLM configuration.
+            max_web_steps (int, optional): The maximum number of web steps. Defaults to 30.
+        """
         self.llm_config = llm_config
 
         self.summarizer_agent = ConversableAgent(
