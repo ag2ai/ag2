@@ -103,6 +103,10 @@ def neo4j_query_engine():
 @pytest.fixture(scope="module")
 def neo4j_query_engine_auto():
     """Test the engine with auto-generated property graph"""
+    input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.txt"
+
+    input_document = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
+
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",
         password="password",
@@ -110,7 +114,7 @@ def neo4j_query_engine_auto():
         port=7687,
         database="neo4j",
     )
-    query_engine.init_db()
+    query_engine.init_db(input_doc=input_document)
     return query_engine
 
 
