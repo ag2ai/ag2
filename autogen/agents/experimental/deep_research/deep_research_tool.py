@@ -65,7 +65,7 @@ class DeepResearchTool(Tool):
             def confirm_summary(answer: str, reasoning: str) -> str:
                 return f"{self.ANSWER_CONFIRMED_PREFIX}" + answer + "\nReasoning: " + reasoning
 
-            split_question_and_answer_subquestions = DeepResearchTool.get_split_question_and_answer_subquestions(
+            split_question_and_answer_subquestions = DeepResearchTool._get_split_question_and_answer_subquestions(
                 llm_config=llm_config
             )
 
@@ -88,13 +88,13 @@ class DeepResearchTool(Tool):
         )
 
     @staticmethod
-    def get_split_question_and_answer_subquestions(llm_config: dict[str, Any]) -> Callable[..., Any]:
+    def _get_split_question_and_answer_subquestions(llm_config: dict[str, Any]) -> Callable[..., Any]:
         class Subquestion(BaseModel):
             question: Annotated[str, "The original question."]
             answer: Annotated[Optional[str], "The answer to the question."] = None
 
             def format(self) -> str:
-                return f"Question: {self.question}\nAnswer: {self.answer}\n"
+                return f"Question: {self.question}\n{self.answer}\n"
 
         class Task(BaseModel):
             question: Annotated[str, "The original question."]
@@ -107,7 +107,7 @@ class DeepResearchTool(Tool):
                 )
 
         def split_question_and_answer_subquestions(
-            question: str,
+            question: Annotated[str, "The question to split and answer."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
         ) -> Task:
             subquestions_answered_prefix = "Subquestions answered:"
@@ -164,7 +164,7 @@ class DeepResearchTool(Tool):
                     task.subquestions = [Subquestion(question=task.question)]
 
                 for subquestion in task.subquestions:
-                    subquestion.answer = DeepResearchTool.answer_question(subquestion.question, llm_config=llm_config)
+                    subquestion.answer = DeepResearchTool._answer_question(subquestion.question, llm_config=llm_config)
 
                 return f"{subquestions_answered_prefix} \n" + task.format()
 
@@ -178,7 +178,7 @@ class DeepResearchTool(Tool):
         return split_question_and_answer_subquestions
 
     @staticmethod
-    def answer_question(
+    def _answer_question(
         question: str,
         llm_config: dict[str, Any],
         max_web_steps: int = 30,
