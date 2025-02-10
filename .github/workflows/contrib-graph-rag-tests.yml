@@ -6,6 +6,7 @@ name: ContribGraphRagTests
 on:
   schedule:
     - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
   pull_request_target:
     branches: ["main"]
     paths:
@@ -27,6 +28,7 @@ permissions:
 jobs:
   GraphRagIntegrationTest-FalkorDB-Ubuntu:
     runs-on: ubuntu-latest
+    environment: openai1
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +91,7 @@ jobs:
 
   GraphRagIntegrationTest-Neo4j-Llmaindex-Ubuntu:
     runs-on: ubuntu-latest
+    environment: openai1
     strategy:
       fail-fast: false
       matrix:
@@ -101,6 +104,10 @@ jobs:
           - 7474:7474
         env:
           NEO4J_AUTH: neo4j/password
+          NEO4J_PLUGINS: '["apoc"]'
+          NEO4J_apoc_export_file_enabled: true
+          NEO4J_apoc_import_file_enabled: true
+          NEO4J_apoc_import_file_use__neo4j__config: true
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
