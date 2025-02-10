@@ -213,7 +213,7 @@ Please find more [code examples](https://docs.ag2.ai/docs/Examples#automated-mul
 
 ## Enhanced LLM Inferences
 
-AG2 also helps maximize the utility out of the expensive LLMs such as gpt-4o. It offers [enhanced LLM inference](https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#api-unification) with powerful functionalities like caching, error handling, multi-config inference and templating.
+AG2 also helps maximize the utility out of the expensive LLMs such as gpt-4o. It offers enhanced LLM inference with powerful functionalities like caching, error handling, multi-config inference and templating.
 
 <!-- For example, you can optimize generations by LLM with your own tuning data, success metrics, and budgets.
 

@@ -817,7 +817,6 @@ class Completion(OpenAICompletion):
         logger.warning(
             "Completion.create is deprecated in autogen, pyautogen v0.2 and openai>=1. "
             "The new openai requires initiating a client for inference. "
-            "Please refer to https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#api-unification"
         )
         if ERROR:
             raise ERROR
