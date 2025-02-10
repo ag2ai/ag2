@@ -12,7 +12,7 @@ from ....tools.experimental import BrowserUseTool, Crawl4AITool
 __all__ = ["WebSurferAgent"]
 
 
-@export_module("autogen.agents")
+@export_module("autogen.agents.experimental")
 class WebSurferAgent(ConversableAgent):
     """An agent that uses web tools to interact with the web."""
 
