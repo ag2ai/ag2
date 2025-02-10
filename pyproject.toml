@@ -11,8 +11,7 @@ name = "pyautogen"
 description = "A programming framework for agentic AI"
 readme = "README.md"
 authors = [
-    {name = "Chi Wang", email = "support@ag2.ai"},
-    {name = "Qingyun Wu", email = "support@ag2.ai"},
+    {name = "Chi Wang & Qingyun Wu", email = "support@ag2.ai"}
 ]
 
 keywords = [
