@@ -23,6 +23,7 @@ class DeepResearchTool(Tool):
     def __init__(
         self,
         llm_config: dict[str, Any],
+        max_web_steps: int = 30,
     ):
         self.llm_config = llm_config
 
@@ -56,6 +57,7 @@ class DeepResearchTool(Tool):
         def delegate_research_task(
             task: Annotated[str, "The tash to perform a research on."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+            max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ):
             """
             Delegate a research task to the agent.
@@ -67,7 +69,8 @@ class DeepResearchTool(Tool):
                 return f"{self.ANSWER_CONFIRMED_PREFIX}" + answer + "\nReasoning: " + reasoning
 
             split_question_and_answer_subquestions = DeepResearchTool._get_split_question_and_answer_subquestions(
-                llm_config=llm_config
+                llm_config=llm_config,
+                max_web_steps=max_web_steps,
             )
 
             self.summarizer_agent.register_for_llm(description="Split the question into subquestions and get answers.")(
@@ -78,6 +81,8 @@ class DeepResearchTool(Tool):
             result = self.critic_agent.initiate_chat(
                 self.summarizer_agent,
                 message="Please answer the following question: " + task,
+                # This outer chat should preserve the history of the conversation
+                clear_history=False,
             )
 
             return result.summary
@@ -89,7 +94,9 @@ class DeepResearchTool(Tool):
         )
 
     @staticmethod
-    def _get_split_question_and_answer_subquestions(llm_config: dict[str, Any]) -> Callable[..., Any]:
+    def _get_split_question_and_answer_subquestions(
+        llm_config: dict[str, Any], max_web_steps: int
+    ) -> Callable[..., Any]:
         class Subquestion(BaseModel):
             question: Annotated[str, "The original question."]
             answer: Annotated[Optional[str], "The answer to the question."] = None
@@ -110,6 +117,7 @@ class DeepResearchTool(Tool):
         def split_question_and_answer_subquestions(
             question: Annotated[str, "The question to split and answer."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+            max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ) -> str:
             subquestions_answered_prefix = "Subquestions answered:"
             decomposition_agent = ConversableAgent(
@@ -160,12 +168,15 @@ class DeepResearchTool(Tool):
             def generate_subquestions(
                 task: Task,
                 llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+                max_web_steps: Annotated[int, Depends(on(max_web_steps))],
             ) -> Task:
                 if not task.subquestions:
                     task.subquestions = [Subquestion(question=task.question)]
 
                 for subquestion in task.subquestions:
-                    subquestion.answer = DeepResearchTool._answer_question(subquestion.question, llm_config=llm_config)
+                    subquestion.answer = DeepResearchTool._answer_question(
+                        subquestion.question, llm_config=llm_config, max_web_steps=max_web_steps
+                    )
 
                 return f"{subquestions_answered_prefix} \n" + task.format()
 
