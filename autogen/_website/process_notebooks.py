@@ -28,13 +28,14 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Any, Callable, Dict, List, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, List, Tuple, TypeVar, TypedDict, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import nbformat
     import yaml
+    from jinja2 import Template
     from nbclient.client import NotebookClient
     from nbclient.exceptions import (
         CellExecutionError,
@@ -42,6 +43,13 @@ with optional_import_block():
     )
     from nbformat import NotebookNode
     from termcolor import colored
+
+
+EDIT_URL_HTML = """
+<div className="edit-url-container">
+    <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/{file_path}" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>
+</div>
+"""
 
 
 @lru_cache
@@ -80,9 +88,9 @@ class Result:
         self.stderr = stderr
 
 
-def notebooks_target_dir(website_directory: Path) -> Path:
+def notebooks_target_dir(website_build_directory: Path) -> Path:
     """Return the target directory for notebooks."""
-    return website_directory / "docs" / "use-cases" / "notebooks" / "notebooks"
+    return website_build_directory / "docs" / "use-cases" / "notebooks" / "notebooks"
 
 
 def load_metadata(notebook: Path) -> dict[str, dict[str, Union[str, list[str], None]]]:
@@ -166,7 +174,9 @@ def extract_title(notebook: Path) -> str | None:
 
 @require_quarto_bin
 @require_optional_import(["nbclient", "termcolor"], "docs")
-def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, quarto_bin: str, dry_run: bool) -> str:
+def process_notebook(
+    src_notebook: Path, website_build_directory: Path, notebook_dir: Path, quarto_bin: str, dry_run: bool
+) -> str:
     """Process a single notebook."""
     in_notebook_dir = "notebook" in src_notebook.parts
 
@@ -184,7 +194,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
 
     if in_notebook_dir:
         relative_notebook = src_notebook.resolve().relative_to(notebook_dir.resolve())
-        dest_dir = notebooks_target_dir(website_directory=website_dir)
+        dest_dir = notebooks_target_dir(website_build_directory=website_build_directory)
         target_file = dest_dir / relative_notebook.with_suffix(".mdx")
         intermediate_notebook = dest_dir / relative_notebook
 
@@ -230,7 +240,7 @@ def process_notebook(src_notebook: Path, website_dir: Path, notebook_dir: Path, 
                 src_notebook, f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
             )
 
-    post_process_mdx(target_file, src_notebook, front_matter, website_dir)
+    post_process_mdx(target_file, src_notebook, front_matter, website_build_directory)
 
     return fmt_ok(src_notebook)
 
@@ -321,13 +331,13 @@ def get_error_info(nb: NotebookNode) -> NotebookError | None:
 
 
 def add_front_matter_to_metadata_mdx(
-    front_matter: dict[str, Union[str, list[str], None]], website_dir: Path, rendered_mdx: Path
+    front_matter: dict[str, Union[str, list[str], None]], website_build_directory: Path, rendered_mdx: Path
 ) -> None:
     source = front_matter.get("source_notebook")
     if isinstance(source, str) and source.startswith("/website/docs/"):
         return
 
-    metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+    metadata_mdx = website_build_directory / "snippets" / "data" / "NotebooksMetadata.mdx"
 
     if not metadata_mdx.exists():
         with open(metadata_mdx, "w", encoding="utf-8") as f:
@@ -355,7 +365,7 @@ def add_front_matter_to_metadata_mdx(
         "source": source,
     }
     # Update metadata list
-    existing_entry = next((item for item in metadata if item["title"] == entry["title"]), None)
+    existing_entry = next((item for item in metadata if item["link"] == entry["link"]), None)
     if existing_entry:
         metadata[metadata.index(existing_entry)] = entry
     else:
@@ -456,7 +466,7 @@ def convert_callout_blocks(content: str) -> str:
     return pattern.sub(replace_callout, content)
 
 
-def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path) -> str:
+def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_build_directory: Path) -> str:
     """Converts MDX code block image syntax to regular markdown image syntax.
 
     Args:
@@ -473,16 +483,32 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path
             return match.group(0)
 
         alt, rel_path = img_match.groups()
-        abs_path = (rendered_mdx.parent / Path(rel_path)).resolve().relative_to(website_dir)
+        abs_path = (rendered_mdx.parent / Path(rel_path)).resolve().relative_to(website_build_directory)
         return f"![{alt}](/{abs_path})"
 
     pattern = r"````mdx-code-block\n(!\[.*?\]\(.*?\))\n````"
     return re.sub(pattern, resolve_path, content)
 
 
+def ensure_edit_url(content: str, file_path: Path) -> str:
+    """Ensure editUrl is present in the content.
+    Args:
+        content (str): Content of the file
+        file_path (Path): Path to the file
+    """
+    html_placeholder = [line for line in EDIT_URL_HTML.splitlines() if line.strip() != ""][0]
+    if html_placeholder in content:
+        return content
+
+    return content + EDIT_URL_HTML.format(file_path=file_path)
+
+
 # rendered_notebook is the final mdx file
 def post_process_mdx(
-    rendered_mdx: Path, source_notebooks: Path, front_matter: dict[str, Union[str, list[str], None]], website_dir: Path
+    rendered_mdx: Path,
+    source_notebooks: Path,
+    front_matter: dict[str, Union[str, list[str], None]],
+    website_build_directory: Path,
 ) -> None:
     with open(rendered_mdx, encoding="utf-8") as f:
         content = f.read()
@@ -543,7 +569,7 @@ def post_process_mdx(
         )
 
     # Create the front matter metadata js file for examples by notebook section
-    add_front_matter_to_metadata_mdx(front_matter, website_dir, rendered_mdx)
+    add_front_matter_to_metadata_mdx(front_matter, website_build_directory, rendered_mdx)
 
     # Dump front_matter to ysaml
     front_matter_str = yaml.dump(front_matter, default_flow_style=False)
@@ -552,7 +578,10 @@ def post_process_mdx(
     content = convert_callout_blocks(content)
 
     # Convert mdx image syntax to mintly image syntax
-    content = convert_mdx_image_blocks(content, rendered_mdx, website_dir)
+    content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
+
+    # ensure editUrl is present
+    content = ensure_edit_url(content, repo_relative_notebook)
 
     # Rewrite the content as
     # ---
@@ -569,9 +598,9 @@ def path(path_str: str) -> Path:
     return Path(path_str)
 
 
-def collect_notebooks(notebook_directory: Path, website_directory: Path) -> list[Path]:
+def collect_notebooks(notebook_directory: Path, website_build_directory: Path) -> list[Path]:
     notebooks = list(notebook_directory.glob("*.ipynb"))
-    notebooks.extend(list(website_directory.glob("docs/**/*.ipynb")))
+    notebooks.extend(list(website_build_directory.glob("docs/**/*.ipynb")))
     return notebooks
 
 
@@ -665,7 +694,7 @@ def extract_example_group(metadata_path: Path) -> list[str]:
         .replace("/website/", "/")
         .replace("/notebook/", "docs/use-cases/notebooks/notebooks/")
         for item in notebooks_metadata
-        if not item["source"].startswith("/website/docs/")
+        if not item["source"].startswith("/website/build/docs/")
     ]
 
     return notebooks
@@ -696,14 +725,14 @@ def update_group_pages(
     return nav_copy
 
 
-def add_mdx_generated_from_notebooks_to_nav(website_dir: Path) -> None:
+def add_mdx_generated_from_notebooks_to_nav(website_build_directory: Path) -> None:
     """Updates mint.json navigation to include mdx files generated from the notebook entries
 
     Args:
-        website_dir (Path): Root directory of the website
+        website_build_directory (Path): Build directory of the website
     """
-    mint_json_path = (website_dir / "mint.json").resolve()
-    metadata_path = (website_dir / "snippets" / "data" / "NotebooksMetadata.mdx").resolve()
+    mint_json_path = (website_build_directory / "mint.json").resolve()
+    metadata_path = (website_build_directory / "snippets" / "data" / "NotebooksMetadata.mdx").resolve()
 
     if not mint_json_path.exists():
         print(f"mint.json not found at {mint_json_path}")
@@ -718,7 +747,7 @@ def add_mdx_generated_from_notebooks_to_nav(website_dir: Path) -> None:
         mint_config = json.load(f)
 
     # add talks to navigation
-    # talks_dir = website_dir / "talks"
+    # talks_dir = website_build_directory / "talks"
     # talks_section = generate_nav_group(talks_dir, "Talks", "talks")
     # talks_section_pages = (
     #     [talks_section["pages"]] if isinstance(talks_section["pages"], str) else talks_section["pages"]
@@ -730,13 +759,13 @@ def add_mdx_generated_from_notebooks_to_nav(website_dir: Path) -> None:
     # mint_config["navigation"].append(talks_section)
 
     # add blogs to navigation
-    blogs_dir = website_dir / "_blogs"
+    blogs_dir = website_build_directory / "_blogs"
     blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "docs/blog")]}
     mint_config["navigation"].append(blog_section)
 
     # Add examples to navigation
-    example_group = extract_example_group(metadata_path)
-    updated_navigation = update_group_pages(mint_config["navigation"], "Notebooks", example_group)
+    notebooks_navigation = extract_example_group(metadata_path)
+    updated_navigation = update_group_pages(mint_config["navigation"], "Notebooks", notebooks_navigation)
     mint_config["navigation"] = updated_navigation
 
     # Write back to mint.json
@@ -774,14 +803,14 @@ def fix_internal_references(content: str, root_path: Path, current_file_path: Pa
     return re.sub(pattern, resolve_link, content)
 
 
-def fix_internal_references_in_mdx_files(website_dir: Path) -> None:
+def fix_internal_references_in_mdx_files(website_build_directory: Path) -> None:
     """Process all MDX files in directory to fix internal references."""
-    for file_path in website_dir.glob("**/*.mdx"):
+    for file_path in website_build_directory.glob("**/*.mdx"):
         try:
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
-            fixed_content = fix_internal_references(content, website_dir, file_path)
+            fixed_content = fix_internal_references(content, website_build_directory, file_path)
 
             if content != fixed_content:
                 with open(file_path, "w", encoding="utf-8") as f:
@@ -851,15 +880,15 @@ def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
     return "", content
 
 
-def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
+def add_authors_and_social_img_to_blog_posts(website_build_directory: Path) -> None:
     """Add authors info to blog posts.
 
     Args:
-        website_dir (Path): Root directory of the website
+        website_build_directory (Path): Build directory of the website
     """
-    blog_dir = website_dir / "_blogs"
+    blog_dir = website_build_directory / "_blogs"
     authors_yml = blog_dir / "authors.yml"
-    generated_blog_dir = website_dir / "docs" / "blog"
+    generated_blog_dir = website_build_directory / "docs" / "blog"
 
     # Remove existing generated directory if it exists
     if generated_blog_dir.exists():
@@ -906,7 +935,13 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
             # Combine content
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
 
-            file_path.write_text(f"{new_content}\n", encoding="utf-8")
+            # ensure editUrl is present
+            rel_file_path = str(file_path.relative_to(website_build_directory.parent)).replace(
+                "build/docs/blog/", "website/_blogs/"
+            )
+            content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
+
+            file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
             # print(f"Authors info and social share image checked in {file_path}")
 
         except Exception as e:
@@ -914,8 +949,8 @@ def add_authors_and_social_img_to_blog_posts(website_dir: Path) -> None:
             continue
 
 
-def ensure_mint_json_exists(website_dir: Path) -> None:
-    mint_json_path = website_dir / "mint.json"
+def ensure_mint_json_exists(website_build_directory: Path) -> None:
+    mint_json_path = website_build_directory / "mint.json"
     if not mint_json_path.exists():
         print(f"mint.json not found at {mint_json_path}")
         print(
@@ -924,36 +959,94 @@ def ensure_mint_json_exists(website_dir: Path) -> None:
         sys.exit(1)
 
 
-def cleanup_tmp_dirs_if_no_metadata(website_dir: Path) -> None:
+def cleanup_tmp_dirs(website_build_directory: Path, re_generate_notebooks: bool) -> None:
     """Remove the temporary notebooks directory if NotebooksMetadata.mdx is not found.
 
     This is to ensure a clean build and generate the metadata file as well as to
     update the navigation with correct entries.
     """
-    metadata_mdx = website_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
+    delete_tmp_dir = re_generate_notebooks
+    metadata_mdx = website_build_directory / "snippets" / "data" / "NotebooksMetadata.mdx"
     if not metadata_mdx.exists():
         print(f"NotebooksMetadata.mdx not found at {metadata_mdx}")
+        delete_tmp_dir = True
 
-        notebooks_dir = notebooks_target_dir(website_dir)
+    if delete_tmp_dir:
+        notebooks_dir = notebooks_target_dir(website_build_directory)
         print(f"Removing the {notebooks_dir} and to ensure a clean build.")
         shutil.rmtree(notebooks_dir, ignore_errors=True)
+
+
+class NavigationGroup(TypedDict):
+    group: str
+    pages: List[Union[str, "NavigationGroup"]]
+
+
+def get_files_path_from_navigation(navigation: List[NavigationGroup]) -> List[Path]:
+    """Extract all file paths from the navigation structure.
+
+    Args:
+        navigation: List of navigation groups containing nested pages and groups
+
+    Returns:
+        List of file paths found in the navigation structure
+    """
+    file_paths = []
+
+    def extract_paths(items: Union[List[Union[str, NavigationGroup]], List[str]]) -> None:
+        for item in items:
+            if isinstance(item, str):
+                file_paths.append(Path(item))
+            elif isinstance(item, dict) and "pages" in item:
+                extract_paths(item["pages"])
+
+    extract_paths(navigation)
+    return file_paths
+
+
+@require_optional_import("jinja2", "docs")
+def add_edit_urls_to_non_generated_mdx_files(website_build_directory: Path) -> None:
+    """Add edit links to the non generated mdx files in the website directory.
+
+    For the generated mdx files i.e. mdx files of _blogs and notebooks, it is added in their respective post processing functions.
+    """
+    mint_json_template_path = website_build_directory / "mint-json-template.json.jinja"
+
+    mint_json_template_content = Template(mint_json_template_path.read_text(encoding="utf-8")).render()
+    mint_json_data = json.loads(mint_json_template_content)
+
+    mdx_files = get_files_path_from_navigation(mint_json_data["navigation"])
+    mdx_files_with_prefix = [Path(f"{website_build_directory}/{str(file_path)}.mdx") for file_path in mdx_files]
+
+    for mdx_file_path in mdx_files_with_prefix:
+        rel_path = str(mdx_file_path.relative_to(website_build_directory.parent)).replace("build/", "website/")
+        content = mdx_file_path.read_text(encoding="utf-8")
+        content_with_edit_url = ensure_edit_url(content, rel_path)
+        mdx_file_path.write_text(content_with_edit_url, encoding="utf-8")
 
 
 def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
+    website_build_dir = website_dir / "build"
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="subcommand")
+
+    if not website_build_dir.exists():
+        website_build_dir.mkdir()
+        shutil.copytree(website_dir, website_build_dir, dirs_exist_ok=True)
 
     parser.add_argument(
         "--notebook-directory",
         type=path,
         help="Directory containing notebooks to process",
-        default=website_dir / "../notebook",
+        default=website_build_dir / "../../notebook",
     )
     parser.add_argument(
-        "--website-directory", type=path, help="Root directory of mintlify website", default=website_dir
+        "--website-build-directory", type=path, help="Root directory of mintlify website", default=website_build_dir
     )
+
+    parser.add_argument("--force", help="Force re-rendering of all notebooks", default=False)
 
     render_parser = subparsers.add_parser("render")
     render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
@@ -971,13 +1064,13 @@ def main() -> None:
         print("No subcommand specified")
         sys.exit(1)
 
-    ensure_mint_json_exists(args.website_directory)
-    cleanup_tmp_dirs_if_no_metadata(args.website_directory)
+    ensure_mint_json_exists(args.website_build_directory)
+    cleanup_tmp_dirs(args.website_build_directory, args.force)
 
     if args.notebooks:
         collected_notebooks = args.notebooks
     else:
-        collected_notebooks = collect_notebooks(args.notebook_directory, args.website_directory)
+        collected_notebooks = collect_notebooks(args.notebook_directory, args.website_build_directory)
 
     filtered_notebooks = []
     for notebook in collected_notebooks:
@@ -1023,21 +1116,22 @@ def main() -> None:
     elif args.subcommand == "render":
         check_quarto_bin(args.quarto_bin)
 
-        if not notebooks_target_dir(args.website_directory).exists():
-            notebooks_target_dir(args.website_directory).mkdir(parents=True)
+        if not notebooks_target_dir(args.website_build_directory).exists():
+            notebooks_target_dir(args.website_build_directory).mkdir(parents=True)
 
         for notebook in filtered_notebooks:
             print(
                 process_notebook(
-                    notebook, args.website_directory, args.notebook_directory, args.quarto_bin, args.dry_run
+                    notebook, args.website_build_directory, args.notebook_directory, args.quarto_bin, args.dry_run
                 )
             )
 
         # Post-processing steps after all notebooks are handled
         if not args.dry_run:
-            add_mdx_generated_from_notebooks_to_nav(args.website_directory)
-            fix_internal_references_in_mdx_files(args.website_directory)
-            add_authors_and_social_img_to_blog_posts(args.website_directory)
+            add_mdx_generated_from_notebooks_to_nav(args.website_build_directory)
+            fix_internal_references_in_mdx_files(args.website_build_directory)
+            add_authors_and_social_img_to_blog_posts(args.website_build_directory)
+            add_edit_urls_to_non_generated_mdx_files(args.website_build_directory)
 
     else:
         print("Unknown subcommand")
