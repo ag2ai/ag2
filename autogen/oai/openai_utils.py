@@ -93,6 +93,7 @@ OAI_PRICE1K = {
     "gpt-35-turbo-0301": (0.0015, 0.002),
     "gpt-35-turbo-16k": (0.003, 0.004),
     "gpt-35-turbo-16k-0613": (0.003, 0.004),
+    # deepseek
     "deepseek-chat": (0.00027, 0.0011),
 }
 
