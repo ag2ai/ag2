@@ -86,6 +86,10 @@ body.reference-page h4 {
   margin-top: 1rem;
   & > a {
     color: #4b9cd6;
+    & > svg {
+      margin-right: 0.25rem;
+      vertical-align: baseline !important;
+    }
     & > p.icon {
       display: inline-block;
       margin-right: 0.25rem;
