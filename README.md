@@ -5,11 +5,21 @@
 [![Build](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg)](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml)
 ![Python Version](https://img.shields.io/badge/3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
 [![Discord](https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat)](https://discord.gg/pAbnFJrkgZ)
-[![X](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40ag2ai)](https://x.com/ag2oss)
+[![X](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40ag2oss)](https://x.com/ag2oss)
 
 <!-- [![NuGet version](https://badge.fury.io/nu/AutoGen.Core.svg)](https://badge.fury.io/nu/AutoGen.Core) -->
 
 # [AG2](https://github.com/ag2ai/ag2)
+
+## Key Features
+- 🤖 Multi-Agent Framework - Build and orchestrate AI agent interactions
+- 🔧 Flexible Integration - Support for various LLMs (OpenAI, Anthropic, Gemini, etc.)
+- 🛠 Tool Usage - Agents can use external tools and execute code
+- 👥 Human-in-the-Loop - Seamless human participation when needed
+- 🔄 Rich Orchestration Patterns - Agents can be organized in any form you like
+- 🎯 Future-Oriented - Designed for solving difficult problems and harnessing latest and future technology
+
+[📚 Documentation](https://docs.ag2.ai/) | [💡 Examples](https://github.com/ag2ai/build-with-ag2) | [🤝 Contributing](https://docs.ag2.ai/docs/contributor-guide/contributing)
 
 [📚 Cite paper](#related-papers).
 
@@ -79,7 +89,11 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 ## What is AG2
 
-AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
+AG2 (formerly AutoGen) is an open-source AgentOS for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 provides fundamental building blocks needed to create, deploy, and manage AI agents that can work together to solve complex problems.
+
+### Core Concepts
+- **Agents**: Stateful entities that can send messages, receive messages, and generate replies using underlying capabilities powered by LLMs, non-LLM tools, or human inputs. Depending on the underlying capability, an agent may reason, plan, execute tasks or involve other agents before generating a reply.
+- **Conversations**: Structured communication patterns between agents.
 
 **Open Source Statement**: The project welcomes contributions from developers and organizations worldwide. Our goal is to foster a collaborative and inclusive community where diverse perspectives and expertise can drive innovation and enhance the project's capabilities. Whether you are an individual contributor or represent an organization, we invite you to join us in shaping the future of this project. Together, we can build something truly remarkable.
 
