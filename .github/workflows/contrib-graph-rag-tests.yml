@@ -6,7 +6,9 @@ name: ContribGraphRagTests
 on:
   schedule:
     - cron: "0 0 * * *" # daily at midnight UTC
-  pull_request_target:
+  # Following should be pull_request_target
+  # ToDo: Temporary change
+  pull_request:
     branches: ["main"]
     paths:
       - "autogen/agentchat/contrib/graph_rag/**"
