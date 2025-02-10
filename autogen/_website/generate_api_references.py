@@ -16,6 +16,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Iterator, Optional
 
+from ..doc_utils import get_target_module
 from ..import_utils import optional_import_block, require_optional_import
 from .utils import copy_only_git_tracked_files
 
@@ -58,13 +59,6 @@ def import_submodules(module_name: str, *, include_root: bool = True) -> list[st
     return submodules
 
 
-def remove_placeholder_from_module_name(module: ModuleType) -> None:
-    for _, obj in module.__dict__.items():
-        if hasattr(obj, "__module__") and "__PDOC_PLACEHOLDER__" in obj.__module__:
-            original_module = obj.__module__.split("__PDOC_PLACEHOLDER__")[0]
-            setattr(obj, "__module__", original_module)
-
-
 @require_optional_import("pdoc", "docs")
 def build_pdoc_dict(module: ModuleType, module_name: str) -> None:
     if not hasattr(module, "__pdoc__"):
@@ -79,10 +73,9 @@ def build_pdoc_dict(module: ModuleType, module_name: str) -> None:
         if not hasattr(obj, "__name__") or name.startswith("_"):
             continue
 
-        if hasattr(obj, "__module__") and "__PDOC_PLACEHOLDER__" in obj.__module__:
-            exported_module = obj.__module__.split("__PDOC_PLACEHOLDER__")[1]
-            if exported_module != module_name:
-                module.__pdoc__[name] = False
+        target_module = get_target_module(obj)
+        if target_module and target_module != module_name:
+            module.__pdoc__[name] = False
 
 
 @require_optional_import("pdoc", "docs")
@@ -94,10 +87,6 @@ def process_modules(submodules: list[str]) -> None:
         module = importlib.import_module(submodule)  # nosemgrep
         cached_modules[submodule] = module
         build_pdoc_dict(module, submodule)
-
-    # Pass 2: Remove the placeholder from the module name and revert to its original name
-    for submodule in submodules:
-        remove_placeholder_from_module_name(cached_modules[submodule])
 
 
 @require_optional_import("pdoc", "docs")
