@@ -32,6 +32,8 @@ NON_CACHE_KEY = [
 ]
 DEFAULT_AZURE_API_VERSION = "2024-02-01"
 OAI_PRICE1K = {
+    # The below pricing is for 1K tokens. Whenever there is an update in the LLM's pricing,
+    # please convert it to 1K tokens and update in the below dictionary.
     # https://openai.com/api/pricing/
     # o1
     "o1-preview-2024-09-12": (0.0015, 0.0060),
@@ -90,6 +92,7 @@ OAI_PRICE1K = {
     "gpt-35-turbo-0301": (0.0015, 0.002),
     "gpt-35-turbo-16k": (0.003, 0.004),
     "gpt-35-turbo-16k-0613": (0.003, 0.004),
+    #
     "deepseek-chat": (0.00027, 0.0011),
 }
 
