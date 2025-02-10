@@ -49,3 +49,4 @@ https://github.com/ag2ai/ag2/blob/main/website/docs/topics/llm_configuration.ipy
 https://github.com/ag2ai/build-with-ag2/blob/main/samples/tools/autogenbench/CONTRIBUTING.md
 https://github.com/ag2ai/build-with-ag2/blob/main/samples/tools/autogenbench/README.md
 https://github.com/ag2ai/build-with-ag2/blob/main/samples/apps/autogen-studio
+https://www.bloomberg.com/news/newsletters/2024-02-15/tech-companies-bet-the-world-is-ready-for-ai-agents
