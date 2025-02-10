@@ -2035,17 +2035,20 @@ def test_manager_resume_messages():
     # Try a number
     with pytest.raises(Exception):
         return_agent, return_message = manager.resume(messages=messages)
+        assert return_agent
+        assert return_message
 
     # Try an empty string
     with pytest.raises(Exception):
         return_agent, return_message = manager.resume(messages="")
+        assert return_agent
+        assert return_message
 
     # Try a message starter string, which isn't valid
     with pytest.raises(Exception):
         return_agent, return_message = manager.resume(messages="Let's get this conversation started.")
-
-    assert return_agent is not None
-    assert return_message is not None
+        assert return_agent
+        assert return_message
 
 
 def test_custom_model_client():
