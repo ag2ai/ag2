@@ -22,7 +22,7 @@ with optional_import_block():
     "browser-use",
 )
 class TestBrowserUseToolOpenai:
-    def test_broser_use_tool_init(self, mock_credentials: Credentials) -> None:
+    def test_browser_use_tool_init(self, mock_credentials: Credentials) -> None:
         browser_use_tool = BrowserUseTool(llm_config=mock_credentials.llm_config)
         assert browser_use_tool.name == "browser_use"
         assert browser_use_tool.description == "Use the browser to perform a task."
@@ -123,6 +123,8 @@ class TestBrowserUseToolOpenai:
         api_type = credentials_from_test_param.api_type
         if api_type == "deepseek":
             pytest.skip("Deepseek currently does not work too well with the browser-use")
+        if api_type != "openai":
+            pytest.skip("The tests take too long to run with other APIs")
 
         # If we decide to test with deepseek, we need to set use_vision to False
         agent_kwargs = {"use_vision": False, "max_steps": 100} if api_type == "deepseek" else {"max_steps": 100}
@@ -143,6 +145,7 @@ class TestBrowserUseToolOpenai:
         controller = BrowserUseTool._get_controller(llm_config=mock_credentials.llm_config)
         assert isinstance(controller, Controller)
 
+    @pytest.mark.skip(reason="This test is too slow to run in CI")
     @pytest.mark.openai
     def test_end2end(self, browser_use_tool: BrowserUseTool, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")

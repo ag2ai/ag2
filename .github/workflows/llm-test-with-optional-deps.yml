@@ -98,7 +98,7 @@ jobs:
         run: |
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
-          bash scripts/test.sh -m "$MARKER"
+          bash scripts/test.sh -m "$MARKER and (openai or gemini or anthropic or deepseek)"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
