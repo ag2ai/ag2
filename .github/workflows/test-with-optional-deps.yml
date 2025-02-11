@@ -125,8 +125,6 @@ jobs:
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,${{ matrix.optional-dependencies }}]
-          python -c "import autogen"
-          uv pip install --system pytest-cov>=5 mock
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |

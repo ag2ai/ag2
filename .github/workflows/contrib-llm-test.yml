@@ -112,12 +112,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e ".[test]"
-          python -c "import autogen"
-          uv pip install --system pytest-cov>=5 pytest-asyncio
-      - name: Install packages for test when needed
-        run: |
-          uv pip install --system -e .[autobuild]
+          uv pip install --system -e ".[test,autobuild]"
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

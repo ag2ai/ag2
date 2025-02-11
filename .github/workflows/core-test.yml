@@ -73,8 +73,6 @@ jobs:
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,cosmosdb,interop]
-          python -c "import autogen"
-          uv pip install --system pytest-cov>=5 mock
       - name: Install optional dependencies for code executors
         # code executors and udfs auto skip without deps, so only run for python 3.11
         if: matrix.python-version == '3.11'
