@@ -117,6 +117,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr poppler-utils
           uv pip install --system --no-cache-dir unstructured[all-docs]==0.13.0
+      - name: Install packages and dependencies for RetrieveChat
+        run: |
+          uv pip install --system -e .[retrievechat]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
