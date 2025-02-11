@@ -932,8 +932,10 @@ def _add_authors_and_social_preview(
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
 
             # ensure editUrl is present
-            rel_file_path = str(file_path.relative_to(website_build_dir.parent)).replace(
-                "build/docs/blog/", "website/_blogs/"
+            rel_file_path = (
+                str(file_path.relative_to(website_build_dir.parent))
+                .replace("build/docs/", "website/docs/")
+                .replace("website/docs/blog/", "website/_blogs/")
             )
             content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
 
