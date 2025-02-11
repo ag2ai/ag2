@@ -73,8 +73,6 @@ jobs:
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,cosmosdb,interop]
-          python -c "import autogen"
-          uv pip install --system pytest-cov>=5 mock
       - name: Install optional dependencies for code executors
         # code executors and udfs auto skip without deps, so only run for python 3.11
         if: matrix.python-version == '3.11'
@@ -89,9 +87,7 @@ jobs:
           fi
       - name: Test with pytest skipping openai tests
         if: matrix.python-version != '3.10' && matrix.os == 'ubuntu-latest'
-        # Remove the line below once https://github.com/docker/docker-py/issues/3256 is merged
         run: |
-          uv pip install --system "requests<2.32.0"
           bash scripts/test-core-skip-llm.sh
       - name: Test with pytest skipping openai and docker tests
         if: matrix.python-version != '3.10' && matrix.os != 'ubuntu-latest'
@@ -105,6 +101,8 @@ jobs:
       - name: Test with Cosmos DB
         run: |
           bash scripts/test-skip-llm.sh test/cache/test_cosmos_db_cache.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.10'
         uses: codecov/codecov-action@v5
