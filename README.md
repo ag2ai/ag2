@@ -1,35 +1,271 @@
 <a name="readme-top"></a>
 
-![Pypi Downloads](https://img.shields.io/pypi/dm/pyautogen?label=PyPI%20downloads)
-[![PyPI version](https://badge.fury.io/py/autogen.svg)](https://badge.fury.io/py/autogen)
-[![Build](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg)](https://github.com/ag2ai/ag2/actions/workflows/python-package.yml)
-![Python Version](https://img.shields.io/badge/3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
-[![Discord](https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat)](https://discord.gg/pAbnFJrkgZ)
-[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40ag2ai)](https://x.com/Chi_Wang_)
+<p align="center">
+  <img src="assets/ag2-logo.png" width="100" title="hover text">
+  <br>
+  <br>
+  <img src="https://img.shields.io/pypi/dm/pyautogen?label=PyPI%20downloads">
+  <a href="https://badge.fury.io/py/autogen"><img src="https://badge.fury.io/py/autogen.svg"></a>
+  <a href="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml">
+    <img src="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg">
+  </a>
+  <img src="https://img.shields.io/badge/3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue">
+  <a href="https://discord.gg/pAbnFJrkgZ">
+    <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat">
+  </a>
+  <a href="https://x.com/Chi_Wang_">
+    <img src="https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40ag2ai">
+  </a>
+</p>
 
-<!-- [![NuGet version](https://badge.fury.io/nu/AutoGen.Core.svg)](https://badge.fury.io/nu/AutoGen.Core) -->
+<p align="center">
+  <a href="https://docs.ag2.ai/">📚 Documentation</a> |
+  <a href="https://github.com/ag2ai/build-with-ag2">💡 Examples</a> |
+  <a href="https://docs.ag2.ai/docs/contributor-guide/contributing">🤝 Contributing</a> |
+  <a href="#related-papers">📚 Cite paper</a> |
+  <a href="https://discord.gg/pAbnFJrkgZ">💬 Join Discord</a>
+</p>
 
-# [AG2](https://github.com/ag2ai/ag2)
+<p align="center">
+AG2 was evolved from AutoGen. Fully open-sourced we invite collaborators from all organizations to contribute.
+</p>
 
-[📚 Cite paper](#related-papers).
+# AG2: Open-Source AgentOS for AI Agents
 
-<!-- <p align="center">
-    <img src="https://github.com/ag2ai/ag2/blob/main/website/static/img/flaml.svg"  width=200>
-    <br>
-</p> -->
+AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
 
-> **🎉 IMPORTANT**
->
-> 🔥 🎉 **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
-> A new organization [AG2AI](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
->
-> We invite collaborators from all organizations and individuals to join the development.
+The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
 
-🔥 🎉 AG2 is available via `pyautogen` (or its alias `autogen` or `ag2`) on PyPI!
+## Installation
+
+AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `pyautogen` (or its alias `autogen` or `ag2`) on PyPI!
+
+```bash
+pip install ag2
+```
+
+Minimal dependencies are installed without extra options. You can install extra options based on the feature you need.
+
+## Getting Started
+
+### 1. Set up your API keys
+
+To keep your LLM dependencies neat we recommend using the `OAI_CONFIG_LIST` file to store your API keys.
+
+You can use the sample file `OAI_CONFIG_LIST_sample` as a template.
+
+```json
+[
+  {
+    "model": "gpt-4o",
+    "api_key": "<your OpenAI API key here>"
+  }
+]
+```
+
+### Run your first agent
+
+```python
+from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
+
+llm_config = {
+    "config_list": config_list_from_json(env_or_file="OAI_CONFIG_LIST")
+}
+
+assistant = AssistantAgent("assistant", llm_config=llm_config)
+user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
+user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
+# This initiates an automated chat between the two agents to solve the task
+```
+
+## Example applications
+
+We maintain a dedicated repository with a wide range of applications to help you get started with various use cases or check out some juypter notebooks as a starting point.
+
+- [Build with AG2](https://github.com/ag2ai/build-with-ag2)
+- [Jutpyer Notebooks](notebook)
+
+## Introduction of different agent concepts
+
+We have several agent concepts in AG2 to help you build your AI agents. We introduce the most common ones here.
+
+- **Conversable Agent**: The conversable agent
+- **Human in the loop**: Conversable agent with human_input_mode set to ALWAYS
+- **Orchestrating multiple agents**: GroupChat and Swarm
+- **Tools**: Attach functionalities to agents
+- **Structured Output**: Structured output from agents
+
+### Conversable agent
+
+The conversable agent is the most used agent and is created for generating conversations among agents.
+
+```python
+from autogen import ConversableAgent
+
+# Create an AI agent
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are an assistant that responds concisely.",
+    llm_config=llm_config
+)
+
+# Create another AI agent
+fact_checker = ConversableAgent(
+    name="fact_checker",
+    system_message="You are a fact-checking assistant.",
+    llm_config=llm_config
+)
+
+# Start the conversation
+assistant.initiate_chat(
+    recipient=fact_checker,
+    message="What is ag2?",
+    max_turns=2
+)
+```
+
+### Human in the loop
+
+If you set the setting `human_input_mode` to `ALWAYS` on the Conversable Agent you can give human input to the conversation.
+
+There are three modes for `human_input_mode`: `ALWAYS`, `NEVER`, `TERMINATE`.
+
+We created a class which sets the `human_input_mode` to `ALWAYS` for you. Its called `UserProxyAgent`.
+
+```python
+from autogen import ConversableAgent
+
+# Create an AI agent
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config=llm_config
+)
+
+# Create a human agent with manual input mode
+human = ConversableAgent(
+    name="human",
+    human_input_mode="ALWAYS"
+)
+# or
+human = UserProxyAgent(name="human", code_execution_config={"work_dir": "coding", "use_docker": False})
+
+# Start the chat
+human.initiate_chat(
+    recipient=assistant,
+    message="Hello! What's 2 + 2?"
+)
 
 ```
-pip install pyautogen
+
+### Orchestrating multiple agents
+
+At ag2 we have two concepts to orchestrate multiple agents. `Group Chat` or `Swarm`.
+Both concepts are used to orchestrate multiple agents to solve a task.
+
+The group chat works like a chat where each registered agent can participate in the conversation.
+
+```python
+from autogen import ConversableAgent, GroupChat, GroupChatManager
+
+# Create AI agents
+teacher = ConversableAgent(name="teacher", system_message="You suggest lesson topics.")
+planner = ConversableAgent(name="planner", system_message="You create lesson plans.")
+reviewer = ConversableAgent(name="reviewer", system_message="You review lesson plans.")
+
+# Create GroupChat
+groupchat = GroupChat(agents=[teacher, planner, reviewer], speaker_selection_method="auto")
+
+# Create GroupChatManager
+manager = GroupChatManager(name="manager", groupchat=groupchat)
+
+# Start the conversation
+teacher.initiate_chat(manager, "Create a lesson on photosynthesis.")
 ```
+
+The swarm requires a more rigid structure and the flow needs to be defined with hand-off, post-tool, and post-work transitions from an agent to another agent.
+
+Read more about it in the [documentation](https://docs.ag2.ai/docs/user-guide/basic-concepts/orchestrations)
+
+### Tools
+
+Agents gain significant utility through tools as they provide access to external data, APIs, and functionality.
+
+```python
+from datetime import datetime
+from typing import Annotated
+
+from autogen import ConversableAgent, register_function
+
+# 1. Our tool, returns the day of the week for a given date
+def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
+    date = datetime.strptime(date_string, "%Y-%m-%d")
+    return date.strftime("%A")
+
+# 2. Agent for determining whether to run the tool
+date_agent = ConversableAgent(
+    name="date_agent",
+    system_message="You get the day of the week for a given date.",
+    llm_config=llm_config,
+)
+
+# 3. And an agent for executing the tool
+executor_agent = ConversableAgent(
+    name="executor_agent",
+    human_input_mode="NEVER",
+)
+
+# 4. Registers the tool with the agents, the description will be used by the LLM
+register_function(
+    get_weekday,
+    caller=date_agent,
+    executor=executor_agent,
+    description="Get the day of the week for a given date",
+)
+
+# 5. Two-way chat ensures the executor agent follows the suggesting agent
+chat_result = executor_agent.initiate_chat(
+    recipient=date_agent,
+    message="I was born on the 25th of March 1995, what day was it?",
+    max_turns=2,
+)
+
+print(chat_result.chat_history[-1]["content"])
+```
+
+### Structured Output
+
+Structured output is a way to get structured data from the agents. Structured output are really helpful when you need to do an action based on the output from the agent, e.g. upload to a database, create a file, etc.
+
+```python
+import json
+from pydantic import BaseModel
+from autogen import ConversableAgent
+
+# Define a structured response model
+class LessonPlan(BaseModel):
+    title: str
+    script: str
+
+# Configure the AI agent
+agent = ConversableAgent(
+    name="lesson_agent",
+    llm_config={**llm_config, {"response_format": LessonPlan}},
+    system_message="You create simple lesson plans."
+)
+
+# Human agent
+human = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+# Start chat
+result = human.initiate_chat(agent, "Create a lesson on gravity.")
+
+# Print structured output
+print(json.dumps(json.loads(result.chat_history[-1]["content"]), indent=2))
+
+```
+
+## Announcements
 
 📄 **License:**
 We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
@@ -42,277 +278,39 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 🎉 May 11, 2024: [AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation](https://openreview.net/pdf?id=uAjxFFing2) received the best paper award at the [ICLR 2024 LLM Agents Workshop](https://llmagents.github.io/).
 
-<!-- 🎉 Apr 26, 2024: [AutoGen.NET](https://docs.ag2.ai/ag2-for-net/) is available for .NET developers! -->
+🎉 Apr 26, 2024: [AutoGen.NET](https://docs.ag2.ai/ag2-for-net/) is available for .NET developers
 
 🎉 Apr 17, 2024: Andrew Ng cited AutoGen in [The Batch newsletter](https://www.deeplearning.ai/the-batch/issue-245/) and [What's next for AI agentic workflows](https://youtu.be/sal78ACtGTc?si=JduUzN_1kDnMq0vF) at Sequoia Capital's AI Ascent (Mar 26).
 
 🎉 Mar 3, 2024: What's new in AutoGen? 📰[Blog](https://docs.ag2.ai/blog/2024-03-03-AutoGen-Update); 📺[Youtube](https://www.youtube.com/watch?v=j_mtwQiaLGU).
 
-<!-- 🎉 Mar 1, 2024: the first AutoGen multi-agent experiment on the challenging [GAIA](https://huggingface.co/spaces/gaia-benchmark/leaderboard) benchmark achieved the No. 1 accuracy in all the three levels. -->
+🎉 Mar 1, 2024: the first AutoGen multi-agent experiment on the challenging [GAIA](https://huggingface.co/spaces/gaia-benchmark/leaderboard) benchmark achieved the No. 1 accuracy in all the three levels.
 
-<!-- 🎉 Jan 30, 2024: AutoGen is highlighted by Peter Lee in Microsoft Research Forum [Keynote](https://t.co/nUBSjPDjqD). -->
+🎉 Jan 30, 2024: AutoGen is highlighted by Peter Lee in Microsoft Research Forum [Keynote](https://t.co/nUBSjPDjqD).
 
 🎉 Dec 31, 2023: [AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation Framework](https://arxiv.org/abs/2308.08155) is selected by [TheSequence: My Five Favorite AI Papers of 2023](https://thesequence.substack.com/p/my-five-favorite-ai-papers-of-2023).
 
-<!-- 🔥 Nov 24: pyautogen [v0.2](https://github.com/ag2ai/ag2/releases/tag/v0.2.0) is released with many updates and new features compared to v0.1.1. It switches to using openai-python v1. Please read the [migration guide](https://docs.ag2.ai/docs/installation/Installation). -->
+🔥 Nov 24: pyautogen [v0.2](https://github.com/ag2ai/ag2/releases/tag/v0.2.0) is released with many updates and new features compared to v0.1.1. It switches to using openai-python v1. Please read the [migration guide](https://docs.ag2.ai/docs/installation/Installation).
 
-<!-- 🔥 Nov 11: OpenAI's Assistants are available in AutoGen and interoperatable with other AutoGen agents! Checkout our [blogpost](https://docs.ag2.ai/blog/2023-11-13-OAI-assistants) for details and examples. -->
+🔥 Nov 11: OpenAI's Assistants are available in AutoGen and interoperatable with other AutoGen agents! Checkout our [blogpost](https://docs.ag2.ai/blog/2023-11-13-OAI-assistants) for details and examples.
 
 🎉 Nov 8, 2023: AutoGen is selected into [Open100: Top 100 Open Source achievements](https://www.benchcouncil.org/evaluation/opencs/annual.html) 35 days after spinoff from [FLAML](https://github.com/microsoft/FLAML).
 
-<!-- 🎉 Nov 6, 2023: AutoGen is mentioned by Satya Nadella in a [fireside chat](https://youtu.be/0pLBvgYtv6U). -->
+🎉 Nov 6, 2023: AutoGen is mentioned by Satya Nadella in a [fireside chat](https://youtu.be/0pLBvgYtv6U).
 
-<!-- 🎉 Nov 1, 2023: AutoGen is the top trending repo on GitHub in October 2023. -->
+🎉 Nov 1, 2023: AutoGen is the top trending repo on GitHub in October 2023.
 
-<!-- 🎉 Oct 03, 2023: AutoGen spins off from [FLAML](https://github.com/microsoft/FLAML) on GitHub. -->
+🎉 Oct 03, 2023: AutoGen spins off from [FLAML](https://github.com/microsoft/FLAML) on GitHub.
 
-<!-- 🎉 Aug 16: Paper about AutoGen on [arxiv](https://arxiv.org/abs/2308.08155). -->
+🎉 Aug 16: Paper about AutoGen on [arxiv](https://arxiv.org/abs/2308.08155).
 
 🎉 Mar 29, 2023: AutoGen is first created in [FLAML](https://github.com/microsoft/FLAML).
 
-<!--
 🔥 FLAML is highlighted in OpenAI's [cookbook](https://github.com/openai/openai-cookbook#related-resources-from-around-the-web).
 
 🔥 [autogen](https://docs.ag2.ai/) is released with support for ChatGPT and GPT-4, based on [Cost-Effective Hyperparameter Optimization for Large Language Model Generation Inference](https://arxiv.org/abs/2303.04673).
 
-🔥 FLAML supports Code-First AutoML & Tuning – Private Preview in [Microsoft Fabric Data Science](https://learn.microsoft.com/en-us/fabric/data-science/). -->
-
-## What is AG2
-
-AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating cooperation among multiple agents to solve tasks. AG2 aims to streamline the development and research of agentic AI, much like PyTorch does for Deep Learning. It offers features such as agents capable of interacting with each other, facilitates the use of various large language models (LLMs) and tool use support, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
-
-**Open Source Statement**: The project welcomes contributions from developers and organizations worldwide. Our goal is to foster a collaborative and inclusive community where diverse perspectives and expertise can drive innovation and enhance the project's capabilities. Whether you are an individual contributor or represent an organization, we invite you to join us in shaping the future of this project. Together, we can build something truly remarkable.
-
-The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
-
-![AG2 Overview](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/autogen_agentchat.png)
-
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
-
-<!--
-## Roadmaps
--->
-
-## Quickstart
-
-The easiest way to start playing is
-
-1. Click below to use the GitHub Codespace
-
-   [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ag2ai/ag2?quickstart=1)
-
-2. Copy OAI_CONFIG_LIST_sample to ./notebook folder, name to OAI_CONFIG_LIST, and set the correct configuration.
-3. Start playing with the notebooks!
-
-_NOTE_: OAI_CONFIG_LIST_sample lists gpt-4o as the default model. If you use a different model, you may need to revise various system prompts (especially if using weaker models like gpt-4o-mini). Proceed with caution when updating this default and be aware of additional risks related to alignment and safety.
-
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
-
-## [Installation](https://docs.ag2.ai/docs/installation/Installation)
-
-### Option 1. Install and Run AG2 in Docker
-
-Find detailed instructions for users [here](https://docs.ag2.ai/docs/installation/Docker#step-1-install-docker), and for developers [here](https://docs.ag2.ai/docs/contributor-guide/docker).
-
-### Option 2. Install AG2 Locally
-
-AG2 requires **Python version >= 3.9, < 3.14**. It can be installed from pip:
-
-```bash
-pip install ag2
-```
-
-Minimal dependencies are installed without extra options. You can install extra options based on the feature you need.
-
-<!-- For example, use the following to install the dependencies needed by the [`blendsearch`](https://microsoft.github.io/FLAML/docs/Use-Cases/Tune-User-Defined-Function#blendsearch-economical-hyperparameter-optimization-with-blended-search-strategy) option.
-```bash
-pip install "autogen[blendsearch]"
-``` -->
-
-Find more options in [Installation](https://docs.ag2.ai/docs/Installation#option-2-install-autogen-locally-using-virtual-environment).
-
-<!-- Each of the [`notebook examples`](https://github.com/ag2ai/ag2/tree/main/notebook) may require a specific option to be installed. -->
-
-Even if you are installing and running AG2 locally outside of docker, the recommendation and default behavior of agents is to perform [code execution](https://docs.ag2.ai/docs/FAQ#if-you-want-to-run-code-execution-in-docker) in docker. Find more instructions and how to change the default behaviour [here](https://docs.ag2.ai/docs/FAQ#if-you-want-to-run-code-execution-locally).
-
-For LLM inference configurations, check the [FAQs](https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints).
-
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
-
-## Multi-Agent Conversation Framework
-
-AG2 enables the next-gen LLM applications with a generic [multi-agent conversation](https://docs.ag2.ai/docs/Use-Cases/agent_chat) framework. It offers customizable and conversable agents that integrate LLMs, tools, and humans.
-By automating chat among multiple capable agents, one can easily make them collectively perform tasks autonomously or with human feedback, including tasks that require using tools via code.
-
-Features of this use case include:
-
-- **Multi-agent conversations**: AG2 agents can communicate with each other to solve tasks. This allows for more complex and sophisticated applications than would be possible with a single LLM.
-- **Customization**: AG2 agents can be customized to meet the specific needs of an application. This includes the ability to choose the LLMs to use, the types of human input to allow, and the tools to employ.
-- **Human participation**: AG2 seamlessly allows human participation. This means that humans can provide input and feedback to the agents as needed.
-
-For [example](https://github.com/ag2ai/ag2/blob/main/test/twoagent.py),
-
-```python
-from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
-# Load LLM inference endpoints from an env variable or a file
-# See https://docs.ag2.ai/docs/FAQ#set-your-api-endpoints
-# and OAI_CONFIG_LIST_sample
-config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST")
-# You can also set config_list directly as a list, for example, config_list = [{'model': 'gpt-4o', 'api_key': '<your OpenAI API key here>'},]
-assistant = AssistantAgent("assistant", llm_config={"config_list": config_list})
-user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False}) # IMPORTANT: set to True to run code in docker, recommended
-user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
-# This initiates an automated chat between the two agents to solve the task
-```
-
-This example can be run with
-
-```python
-python test/twoagent.py
-```
-
-After the repo is cloned.
-The figure below shows an example conversation flow with AG2.
-
-![Agent Chat Example](https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/chat_example.png)
-
-Alternatively, the [sample code](https://github.com/ag2ai/build-with-ag2/blob/main/samples/simple_chat.py) here allows a user to chat with an AG2 agent in ChatGPT style.
-Please find more [code examples](https://docs.ag2.ai/docs/Examples#automated-multi-agent-chat) for this feature.
-
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
-
-## Enhanced LLM Inferences
-
-AG2 also helps maximize the utility out of the expensive LLMs such as gpt-4o. It offers [enhanced LLM inference](https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#api-unification) with powerful functionalities like caching, error handling, multi-config inference and templating.
-
-<!-- For example, you can optimize generations by LLM with your own tuning data, success metrics, and budgets.
-
-```python
-# perform tuning for openai<1
-config, analysis = autogen.Completion.tune(
-    data=tune_data,
-    metric="success",
-    mode="max",
-    eval_func=eval_func,
-    inference_budget=0.05,
-    optimization_budget=3,
-    num_samples=-1,
-)
-# perform inference for a test instance
-response = autogen.Completion.create(context=test_instance, **config)
-```
-
-Please find more [code examples](https://docs.ag2.ai/docs/Examples#tune-gpt-models) for this feature. -->
-
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
-
-## Documentation
-
-You can find detailed documentation about AG2 [here](https://docs.ag2.ai/).
-
-In addition, you can find:
-
-- [Research](https://docs.ag2.ai/docs/Research), [blogposts](https://docs.ag2.ai/blog) around AG2, and [Transparency FAQs](https://github.com/ag2ai/ag2/blob/main/TRANSPARENCY_FAQS.md)
-
-- [Discord](https://discord.gg/pAbnFJrkgZ)
-
-- [Contributing guide](https://docs.ag2.ai/docs/contributor-guide/contributing)
-
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
-
-## CookBook
-
-Explore detailed implementations with sample code and applications to help you get started with AG2.
-[Cookbook](https://github.com/ag2ai/build-with-ag2)
-
-## Related Papers
-
-[AutoGen](https://arxiv.org/abs/2308.08155)
-
-```
-@inproceedings{wu2023autogen,
-      title={AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation Framework},
-      author={Qingyun Wu and Gagan Bansal and Jieyu Zhang and Yiran Wu and Beibin Li and Erkang Zhu and Li Jiang and Xiaoyun Zhang and Shaokun Zhang and Jiale Liu and Ahmed Hassan Awadallah and Ryen W White and Doug Burger and Chi Wang},
-      year={2023},
-      eprint={2308.08155},
-      archivePrefix={arXiv},
-      primaryClass={cs.AI}
-}
-```
-
-[EcoOptiGen](https://arxiv.org/abs/2303.04673)
-
-```
-@inproceedings{wang2023EcoOptiGen,
-    title={Cost-Effective Hyperparameter Optimization for Large Language Model Generation Inference},
-    author={Chi Wang and Susan Xueqing Liu and Ahmed H. Awadallah},
-    year={2023},
-    booktitle={AutoML'23},
-}
-```
-
-[MathChat](https://arxiv.org/abs/2306.01337)
-
-```
-@inproceedings{wu2023empirical,
-    title={An Empirical Study on Challenging Math Problem Solving with GPT-4},
-    author={Yiran Wu and Feiran Jia and Shaokun Zhang and Hangyu Li and Erkang Zhu and Yue Wang and Yin Tat Lee and Richard Peng and Qingyun Wu and Chi Wang},
-    year={2023},
-    booktitle={ArXiv preprint arXiv:2306.01337},
-}
-```
-
-[AgentOptimizer](https://arxiv.org/pdf/2402.11359)
-
-```
-@article{zhang2024training,
-  title={Training Language Model Agents without Modifying Language Models},
-  author={Zhang, Shaokun and Zhang, Jieyu and Liu, Jiale and Song, Linxin and Wang, Chi and Krishna, Ranjay and Wu, Qingyun},
-  journal={ICML'24},
-  year={2024}
-}
-```
-
-[StateFlow](https://arxiv.org/abs/2403.11322)
-
-```
-@article{wu2024stateflow,
-  title={StateFlow: Enhancing LLM Task-Solving through State-Driven Workflows},
-  author={Wu, Yiran and Yue, Tianwei and Zhang, Shaokun and Wang, Chi and Wu, Qingyun},
-  journal={arXiv preprint arXiv:2403.11322},
-  year={2024}
-}
-```
-
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
+🔥 FLAML supports Code-First AutoML & Tuning – Private Preview in [Microsoft Fabric Data Science](https://learn.microsoft.com/en-us/fabric/data-science/).
 
 ## Contributors Wall
 
@@ -320,11 +318,26 @@ Explore detailed implementations with sample code and applications to help you g
   <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
 </a>
 
-<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
-  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
-    ↑ Back to Top ↑
-  </a>
-</p>
+## Related Papers
+
+[AutoGen](https://arxiv.org/abs/2308.08155)
+[EcoOptiGen](https://arxiv.org/abs/2303.04673)
+[MathChat](https://arxiv.org/abs/2306.01337)
+[AgentOptimizer](https://arxiv.org/pdf/2402.11359)
+[StateFlow](https://arxiv.org/abs/2403.11322)
+
+## Cite the project
+
+```
+@software{AG2_2024,
+author = {Chi Wang and Qingyun Wu and the AG2 Community},
+title = {AG2: Open-Source AgentOS for AI Agents},
+year = {2024},
+url = {https://github.com/ag2ai/ag2},
+note = {Available at https://docs.ag2.ai/},
+version = {latest}
+}
+```
 
 ## License
 
@@ -337,3 +350,9 @@ This project is a spin-off of [AutoGen](https://github.com/microsoft/autogen) an
 - Modifications and additions made in this fork are licensed under the Apache License, Version 2.0. See the [LICENSE](./LICENSE) file for the full license text.
 
 We have documented these changes for clarity and to ensure transparency with our user and contributor community. For more details, please see the [NOTICE](./NOTICE.md) file.
+
+<p align="right" style="font-size: 14px; color: #555; margin-top: 20px;">
+  <a href="#readme-top" style="text-decoration: none; color: blue; font-weight: bold;">
+    ↑ Back to Top ↑
+  </a>
+</p>
