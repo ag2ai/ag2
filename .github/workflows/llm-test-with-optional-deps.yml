@@ -53,6 +53,7 @@ jobs:
     needs: paths-filter
     if: needs.paths-filter.outputs.hasChanges == 'true'
     runs-on: ${{ matrix.os }}
+    environment: openai1
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
     strategy:
@@ -86,6 +87,14 @@ jobs:
           playwright install
       - name: Test with pytest using optional dependency marks
         shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
