@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import os
 import uuid
@@ -68,9 +68,9 @@ def _test_gpt_assistant_chat(credentials: Credentials) -> None:
             }
         )
 
-        ok, response = analyst._invoke_assistant(
-            [{"role": "user", "content": "How many stars microsoft/autogen has on GitHub?"}]
-        )
+        ok, response = analyst._invoke_assistant([
+            {"role": "user", "content": "How many stars microsoft/autogen has on GitHub?"}
+        ])
         executable = analyst.can_execute_function("ossinsight_data_api")
         analyst.reset()
         threads_count = len(analyst._openai_threads)
@@ -84,13 +84,13 @@ def _test_gpt_assistant_chat(credentials: Credentials) -> None:
     # check the question asked
     ask_ossinsight_mock.assert_called_once()
     question_asked = ask_ossinsight_mock.call_args[0][0].lower()
-    for word in "microsoft autogen star".split(" "):
+    for word in ["microsoft", "autogen", "star"]:
         assert word in question_asked
 
     # check the answer
     response_content = response.get("content", "").lower()
     assert len(response_content) > 0
-    for word in "microsoft autogen 123 456".split(" "):
+    for word in ["microsoft", "autogen", "123", "456"]:
         assert word in response_content
 
     assert executable is False

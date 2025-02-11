@@ -397,14 +397,12 @@ class GeminiClient:
 
                 if self.use_vertexai:
                     rst.append(
-                        VertexAIPart.from_dict(
-                            {
-                                "functionCall": {
-                                    "name": function_name,
-                                    "args": json.loads(tool_call["function"]["arguments"]),
-                                }
+                        VertexAIPart.from_dict({
+                            "functionCall": {
+                                "name": function_name,
+                                "args": json.loads(tool_call["function"]["arguments"]),
                             }
-                        )
+                        })
                     )
                 else:
                     rst.append(
@@ -545,7 +543,7 @@ class GeminiClient:
         # 2. The last message must be from the user role.
         # We add a dummy message "continue" if the last role is not the user.
         if rst[-1].role not in ["user", "function"]:
-            text_part, type = self._oai_content_to_gemini_content({"content": "continue"})
+            text_part, _ = self._oai_content_to_gemini_content({"content": "continue"})
             rst.append(
                 VertexAIContent(parts=text_part, role="user")
                 if self.use_vertexai
@@ -682,12 +680,10 @@ class GeminiClient:
         """Convert safety settings to VertexAI format if needed,
         like when specifying them in the OAI_CONFIG_LIST
         """
-        if isinstance(safety_settings, list) and all(
-            [
-                isinstance(safety_setting, dict) and not isinstance(safety_setting, VertexAISafetySetting)
-                for safety_setting in safety_settings
-            ]
-        ):
+        if isinstance(safety_settings, list) and all([
+            isinstance(safety_setting, dict) and not isinstance(safety_setting, VertexAISafetySetting)
+            for safety_setting in safety_settings
+        ]):
             vertexai_safety_settings = []
             for safety_setting in safety_settings:
                 if safety_setting["category"] not in VertexAIHarmCategory.__members__:

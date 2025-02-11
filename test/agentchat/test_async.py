@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import asyncio
 
@@ -47,12 +47,10 @@ def get_market_news(ind, ind_upper):
         ]
     }
     feeds = data["feed"][ind:ind_upper]
-    feeds_summary = "\n".join(
-        [
-            f"News summary: {f['title']}. {f['summary']} overall_sentiment_score: {f['overall_sentiment_score']}"
-            for f in feeds
-        ]
-    )
+    feeds_summary = "\n".join([
+        f"News summary: {f['title']}. {f['summary']} overall_sentiment_score: {f['overall_sentiment_score']}"
+        for f in feeds
+    ])
     return feeds_summary
 
 

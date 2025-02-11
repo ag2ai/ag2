@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import asyncio
 import copy
@@ -295,12 +295,10 @@ def test_generate_code_execution_reply():
 
     dummy_messages_for_auto = []
     for i in range(3):
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
         # Without an assistant present
         agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}
@@ -335,12 +333,10 @@ def test_generate_code_execution_reply():
             "exitcode: 0 (execution succeeded)\nCode output: \nhello world\n",
         )
 
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
     # scenario 7: if last_n_messages is set to 'auto' and code is present, but not before an assistant message, then nothing happens
     agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}

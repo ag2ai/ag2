@@ -234,9 +234,11 @@ def test_create_response_with_tool_call(mock_chat, cerebras_client):
     ]
 
     # Call the create method
-    response = cerebras_client.create(
-        {"messages": cerebras_messages, "tools": converted_functions, "model": "llama-3.3-70b"}
-    )
+    response = cerebras_client.create({
+        "messages": cerebras_messages,
+        "tools": converted_functions,
+        "model": "llama-3.3-70b",
+    })
 
     # Assertions to check if the functions and content are included in the response
     assert response.choices[0].message.content == "Sample text about the functions"

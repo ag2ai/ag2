@@ -197,9 +197,9 @@ class DiscordRetrieveTool(Tool):
 
                             after_date = datetime.fromisoformat(messages_since_date)
                         except ValueError:
-                            result_future.set_result(
-                                [{"error": f"Invalid date format: {messages_since_date}. Use ISO format."}]
-                            )
+                            result_future.set_result([
+                                {"error": f"Invalid date format: {messages_since_date}. Use ISO format."}
+                            ])
                             return
 
                     while True:
@@ -225,14 +225,12 @@ class DiscordRetrieveTool(Tool):
 
                         # Process messages
                         for msg in message_batch:
-                            messages.append(
-                                {
-                                    "id": str(msg.id),
-                                    "content": msg.content,
-                                    "author": str(msg.author),
-                                    "timestamp": msg.created_at.isoformat(),
-                                }
-                            )
+                            messages.append({
+                                "id": str(msg.id),
+                                "content": msg.content,
+                                "author": str(msg.author),
+                                "timestamp": msg.created_at.isoformat(),
+                            })
 
                         # Update last message ID for pagination
                         last_message_id = message_batch[-1]  # Use message object directly as 'before' parameter

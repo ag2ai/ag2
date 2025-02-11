@@ -248,9 +248,11 @@ class TestTogether:
         ]
 
         # Call the create method (which is now mocked)
-        response = together_client.create(
-            {"messages": together_messages, "tools": converted_functions, "model": "meta-llama/Llama-3-8b-chat-hf"}
-        )
+        response = together_client.create({
+            "messages": together_messages,
+            "tools": converted_functions,
+            "model": "meta-llama/Llama-3-8b-chat-hf",
+        })
 
         # Assertions to check if response is structured as expected
         assert response.choices[0].message.content == ""
