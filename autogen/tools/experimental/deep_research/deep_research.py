@@ -8,12 +8,47 @@ from typing import Annotated, Any, Callable, List, Optional
 from pydantic import BaseModel
 
 from ....agentchat import ConversableAgent
-from ....agents.experimental.websurfer import WebSurferAgent
 from ....doc_utils import export_module
 from ... import Depends, Tool
 from ...dependency_injection import on
 
 __all__ = ["DeepResearchTool"]
+
+
+class Subquestion(BaseModel):
+    question: Annotated[str, "The original question."]
+    answer: Annotated[Optional[str], "The answer to the question."] = None
+
+    def format(self) -> str:
+        return f"Question: {self.question}\n{self.answer}\n"
+
+
+class Task(BaseModel):
+    question: Annotated[str, "The original question."]
+    subquestions: Annotated[List[Subquestion], "The subquestions that need to be answered."]
+
+    def format(self) -> str:
+        return f"Task: {self.question}\n\n" + "\n".join(
+            "Subquestion " + str(i + 1) + ":\n" + subquestion.format()
+            for i, subquestion in enumerate(self.subquestions)
+        )
+
+
+class InformationCrumb(BaseModel):
+    source_url: str
+    source_title: str
+    source_summary: str
+    relevant_info: str
+
+
+class GatheredInformation(BaseModel):
+    information: List[InformationCrumb]
+
+    def format(self) -> str:
+        return "Here is the gathered information: \n" + "\n".join(
+            f"URL: {info.source_url}\nTitle: {info.source_title}\nSummary: {info.source_summary}\nRelevant Information: {info.relevant_info}\n\n"
+            for info in self.information
+        )
 
 
 @export_module("autogen.tools.experimental")
@@ -101,33 +136,17 @@ class DeepResearchTool(Tool):
             func_or_tool=delegate_research_task,
         )
 
+    SUBQUESTIONS_ANSWER_PREFIX = "Subquestions answered:"
+
     @staticmethod
     def _get_split_question_and_answer_subquestions(
         llm_config: dict[str, Any], max_web_steps: int
     ) -> Callable[..., Any]:
-        class Subquestion(BaseModel):
-            question: Annotated[str, "The original question."]
-            answer: Annotated[Optional[str], "The answer to the question."] = None
-
-            def format(self) -> str:
-                return f"Question: {self.question}\n{self.answer}\n"
-
-        class Task(BaseModel):
-            question: Annotated[str, "The original question."]
-            subquestions: Annotated[List[Subquestion], "The subquestions that need to be answered."]
-
-            def format(self) -> str:
-                return f"Task: {self.question}\n\n" + "\n".join(
-                    "Subquestion " + str(i + 1) + ":\n" + subquestion.format()
-                    for i, subquestion in enumerate(self.subquestions)
-                )
-
         def split_question_and_answer_subquestions(
             question: Annotated[str, "The question to split and answer."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
             max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ) -> str:
-            subquestions_answered_prefix = "Subquestions answered:"
             decomposition_agent = ConversableAgent(
                 name="DecompositionAgent",
                 system_message=(
@@ -141,7 +160,7 @@ class DeepResearchTool(Tool):
                 ),
                 llm_config=llm_config,
                 is_termination_msg=lambda x: x.get("content", "")
-                and x.get("content", "").startswith(subquestions_answered_prefix),
+                and x.get("content", "").startswith(DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX),
                 human_input_mode="NEVER",
             )
 
@@ -164,29 +183,17 @@ class DeepResearchTool(Tool):
                 ),
                 llm_config=llm_config,
                 is_termination_msg=lambda x: x.get("content", "")
-                and x.get("content", "").startswith(subquestions_answered_prefix),
+                and x.get("content", "").startswith(DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX),
                 human_input_mode="NEVER",
             )
 
-            @decomposition_agent.register_for_execution()
-            @decomposition_critic.register_for_llm(
-                name="generate_subquestions",
-                description="Generates subquestions for a task.",
+            generate_subquestions = DeepResearchTool.get_generate_subquestions(
+                llm_config=llm_config, max_web_steps=max_web_steps
             )
-            def generate_subquestions(
-                task: Task,
-                llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
-                max_web_steps: Annotated[int, Depends(on(max_web_steps))],
-            ) -> str:
-                if not task.subquestions:
-                    task.subquestions = [Subquestion(question=task.question)]
-
-                for subquestion in task.subquestions:
-                    subquestion.answer = DeepResearchTool._answer_question(
-                        subquestion.question, llm_config=llm_config, max_web_steps=max_web_steps
-                    )
-
-                return f"{subquestions_answered_prefix} \n" + task.format()
+            decomposition_agent.register_for_execution()(generate_subquestions)
+            decomposition_critic.register_for_llm(description="Generate subquestions for a task.")(
+                generate_subquestions
+            )
 
             result = decomposition_critic.initiate_chat(
                 decomposition_agent,
@@ -198,32 +205,42 @@ class DeepResearchTool(Tool):
         return split_question_and_answer_subquestions
 
     @staticmethod
+    def get_generate_subquestions(
+        llm_config: dict[str, Any],
+        max_web_steps: int,
+    ) -> Callable[..., str]:
+        def generate_subquestions(
+            task: Task,
+            llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+            max_web_steps: Annotated[int, Depends(on(max_web_steps))],
+        ) -> str:
+            if not task.subquestions:
+                task.subquestions = [Subquestion(question=task.question)]
+
+            for subquestion in task.subquestions:
+                subquestion.answer = DeepResearchTool._answer_question(
+                    subquestion.question, llm_config=llm_config, max_web_steps=max_web_steps
+                )
+
+            return f"{DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX} \n" + task.format()
+
+        return generate_subquestions
+
+    @staticmethod
     def _answer_question(
         question: str,
         llm_config: dict[str, Any],
-        max_web_steps: int = 30,
+        max_web_steps: int,
     ) -> str:
-        class InformationCrumb(BaseModel):
-            source_url: str
-            source_title: str
-            source_summary: str
-            relevant_info: str
-
-        class GatheredInformation(BaseModel):
-            information: List[InformationCrumb]
-
-            def format(self) -> str:
-                return "Here is the gathered information: \n" + "\n".join(
-                    f"URL: {info.source_url}\nTitle: {info.source_title}\nSummary: {info.source_summary}\nRelevant Information: {info.relevant_info}\n\n"
-                    for info in self.information
-                )
+        from ....agents.experimental.websurfer import WebSurferAgent
 
         websurfer_config = copy.deepcopy(llm_config)
 
         websurfer_config["config_list"][0]["response_format"] = GatheredInformation
 
         def is_termination_msg(x: dict[str, Any]) -> bool:
-            return ("content" in x) and x.get("content", "").startswith(DeepResearchTool.ANSWER_CONFIRMED_PREFIX)
+            content = x.get("content", "")
+            return (content is not None) and content.startswith(DeepResearchTool.ANSWER_CONFIRMED_PREFIX)
 
         websurfer_agent = WebSurferAgent(
             llm_config=websurfer_config,

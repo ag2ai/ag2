@@ -43,6 +43,7 @@ class TestDeepResearchTool:
         result = DeepResearchTool._answer_question(
             question="Who are the founders of the AG2 framework?",
             llm_config=credentials_gpt_4o.llm_config,
+            max_web_steps=30,
         )
 
         assert isinstance(result, str)
@@ -59,7 +60,7 @@ class TestDeepResearchTool:
         )
 
         with patch(
-            "autogen.agents.experimental.deep_research.deep_research_tool.DeepResearchTool._answer_question",
+            "autogen.agents.experimental.deep_research.deep_research.DeepResearchTool._answer_question",
             return_value="Answer confirmed: Some answer",
         ) as mock_answer_question:
             result = split_question_and_answer_subquestions(
@@ -101,7 +102,7 @@ class TestDeepResearchTool:
             return split_question_and_answer_subquestions
 
         with patch(
-            "autogen.agents.experimental.deep_research.deep_research_tool.DeepResearchTool._get_split_question_and_answer_subquestions",
+            "autogen.agents.experimental.deep_research.deep_research.DeepResearchTool._get_split_question_and_answer_subquestions",
             return_value=_get_split_question_and_answer_subquestions(
                 credentials_gpt_4o_mini.llm_config, max_web_steps=expected_max_web_steps
             ),
