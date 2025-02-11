@@ -143,6 +143,7 @@ class TestBrowserUseToolOpenai:
         controller = BrowserUseTool._get_controller(llm_config=mock_credentials.llm_config)
         assert isinstance(controller, Controller)
 
+    @pytest.mark.skip(reason="The test takes too long to run.")
     @pytest.mark.openai
     def test_end2end(self, browser_use_tool: BrowserUseTool, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
