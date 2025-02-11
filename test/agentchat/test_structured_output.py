@@ -55,6 +55,46 @@ def test_structured_output(credentials_gpt_4o: Credentials):
         raise AssertionError(f"Agent did not return a structured report. Exception: {e}")
 
 
+@pytest.mark.openai
+def test_global_structured_output(credentials_gpt_4o: Credentials):
+    class ResponseModel(BaseModel):
+        question: str
+        short_answer: str
+        reasoning: str
+        difficulty: float
+
+    config_list = credentials_gpt_4o.config_list
+
+    llm_config = {
+        "config_list": config_list,
+        "cache_seed": 43,
+        "response_format": ResponseModel,
+    }
+
+    user_proxy = autogen.UserProxyAgent(
+        name="User_proxy",
+        system_message="A human admin.",
+        human_input_mode="NEVER",
+    )
+
+    assistant = autogen.AssistantAgent(
+        name="Assistant",
+        llm_config=llm_config,
+    )
+
+    chat_result = user_proxy.initiate_chat(
+        assistant,
+        message="What is the air-speed velocity of an unladen swallow?",
+        max_turns=1,
+        summary_method="last_msg",
+    )
+
+    try:
+        ResponseModel.model_validate_json(chat_result.chat_history[-1]["content"])
+    except ValidationError as e:
+        raise AssertionError(f"Agent did not return a structured report. Exception: {e}")
+
+
 # Helper classes for testing
 class Step(BaseModel):
     explanation: str

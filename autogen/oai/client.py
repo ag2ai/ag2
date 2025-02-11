@@ -384,12 +384,14 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        if self.response_format is not None:
+        if self.response_format is not None or "response_format" in params:
 
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
                     kwargs.pop("stream")
-                kwargs["response_format"] = type_to_response_format_param(self.response_format)
+                kwargs["response_format"] = type_to_response_format_param(
+                    self.response_format or params["response_format"]
+                )
                 return self._oai_client.chat.completions.create(*args, **kwargs)
 
             create_or_parse = _create_or_parse
@@ -673,9 +675,10 @@ class OpenAIWrapper:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
             for config in config_list:
                 self._register_default_client(config, openai_config)  # could modify the config
-                self._config_list.append(
-                    {**extra_kwargs, **{k: v for k, v in config.items() if k not in self.openai_kwargs}}
-                )
+                self._config_list.append({
+                    **extra_kwargs,
+                    **{k: v for k, v in config.items() if k not in self.openai_kwargs},
+                })
         else:
             self._register_default_client(extra_kwargs, openai_config)
             self._config_list = [extra_kwargs]
@@ -893,7 +896,6 @@ class OpenAIWrapper:
                 E.g., `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`.
                 The actual prompt will be:
                 "Complete the following sentence: Today I feel".
-                More examples can be found at [templating](/docs/Use-Cases/enhanced_inference#templating).
             - cache (AbstractCache | None): A Cache object to use for response cache. Default to None.
                 Note that the cache argument overrides the legacy cache_seed argument: if this argument is provided,
                 then the cache_seed argument is ignored. If this argument is not provided or None,

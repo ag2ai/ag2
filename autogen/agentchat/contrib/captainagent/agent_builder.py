@@ -457,15 +457,13 @@ Match roles in the role set to each expert in expert set.
             agent_description_list.append(resp_agent_description)
 
         for name, sys_msg, description in list(zip(agent_name_list, agent_sys_msg_list, agent_description_list)):
-            agent_configs.append(
-                {
-                    "name": name,
-                    "model": self.agent_model,
-                    "tags": self.agent_model_tags,
-                    "system_message": sys_msg,
-                    "description": description,
-                }
-            )
+            agent_configs.append({
+                "name": name,
+                "model": self.agent_model,
+                "tags": self.agent_model_tags,
+                "system_message": sys_msg,
+                "description": description,
+            })
 
         if coding is None:
             resp = (
@@ -477,15 +475,13 @@ Match roles in the role set to each expert in expert set.
             )
             coding = resp == "YES"
 
-        self.cached_configs.update(
-            {
-                "building_task": building_task,
-                "agent_configs": agent_configs,
-                "coding": coding,
-                "default_llm_config": default_llm_config,
-                "code_execution_config": code_execution_config,
-            }
-        )
+        self.cached_configs.update({
+            "building_task": building_task,
+            "agent_configs": agent_configs,
+            "coding": coding,
+            "default_llm_config": default_llm_config,
+            "code_execution_config": code_execution_config,
+        })
         _config_check(self.cached_configs)
         return self._build_agents(use_oai_assistant, user_proxy=user_proxy, **kwargs)
 
@@ -644,15 +640,13 @@ Match roles in the role set to each expert in expert set.
             )
             coding = resp == "YES"
 
-        self.cached_configs.update(
-            {
-                "building_task": building_task,
-                "agent_configs": recalled_agent_config_list,
-                "coding": coding,
-                "default_llm_config": default_llm_config,
-                "code_execution_config": code_execution_config,
-            }
-        )
+        self.cached_configs.update({
+            "building_task": building_task,
+            "agent_configs": recalled_agent_config_list,
+            "coding": coding,
+            "default_llm_config": default_llm_config,
+            "code_execution_config": code_execution_config,
+        })
         _config_check(self.cached_configs)
 
         return self._build_agents(use_oai_assistant, user_proxy=user_proxy, **kwargs)
@@ -756,26 +750,22 @@ Match roles in the role set to each expert in expert set.
 
         if kwargs.get("code_execution_config") is not None:
             # for test
-            self.cached_configs.update(
-                {
-                    "building_task": cached_configs["building_task"],
-                    "agent_configs": agent_configs,
-                    "coding": coding,
-                    "default_llm_config": default_llm_config,
-                    "code_execution_config": kwargs["code_execution_config"],
-                }
-            )
+            self.cached_configs.update({
+                "building_task": cached_configs["building_task"],
+                "agent_configs": agent_configs,
+                "coding": coding,
+                "default_llm_config": default_llm_config,
+                "code_execution_config": kwargs["code_execution_config"],
+            })
             del kwargs["code_execution_config"]
             return self._build_agents(use_oai_assistant, **kwargs)
         else:
             code_execution_config = cached_configs["code_execution_config"]
-            self.cached_configs.update(
-                {
-                    "building_task": cached_configs["building_task"],
-                    "agent_configs": agent_configs,
-                    "coding": coding,
-                    "default_llm_config": default_llm_config,
-                    "code_execution_config": code_execution_config,
-                }
-            )
+            self.cached_configs.update({
+                "building_task": cached_configs["building_task"],
+                "agent_configs": agent_configs,
+                "coding": coding,
+                "default_llm_config": default_llm_config,
+                "code_execution_config": code_execution_config,
+            })
             return self._build_agents(use_oai_assistant, **kwargs)

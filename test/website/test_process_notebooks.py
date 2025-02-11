@@ -12,13 +12,15 @@ from typing import Optional, Union
 import pytest
 
 from autogen._website.process_notebooks import (
-    add_authors_and_social_img_to_blog_posts,
+    NavigationGroup,
+    add_authors_and_social_img_to_blog_and_user_stories,
     add_front_matter_to_metadata_mdx,
-    cleanup_tmp_dirs_if_no_metadata,
+    cleanup_tmp_dirs,
     convert_callout_blocks,
     ensure_mint_json_exists,
     extract_example_group,
     generate_nav_group,
+    get_files_path_from_navigation,
     get_sorted_files,
     update_group_pages,
 )
@@ -131,7 +133,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
         (notebooks_dir / "example-1.mdx").touch()
         (notebooks_dir / "example-2.mdx").touch()
 
-        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        cleanup_tmp_dirs(tmp_path, False)
         assert not notebooks_dir.exists()
 
     # Test with the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
@@ -148,7 +150,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
         metadata_dir.mkdir(parents=True, exist_ok=True)
         (metadata_dir / "NotebooksMetadata.mdx").touch()
 
-        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        cleanup_tmp_dirs(tmp_path, False)
         assert notebooks_dir.exists()
 
 
@@ -572,7 +574,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                 lorem ipsum""").lstrip()
             (post2_dir / "index.mdx").write_text(post2_content)
 
-            # Create authors.yml
+            # Create blogs_and_user_stories_authors.yml
             authors_content = textwrap.dedent("""
                 sonichi:
                     name: Chi Wang
@@ -604,13 +606,13 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                     url: https://github.com/davorinrusevljan
                     image_url: https://github.com/davorinrusevljan.png
                 """).lstrip()
-            (blog_dir / "authors.yml").write_text(authors_content)
+            (website_dir / "blogs_and_user_stories_authors.yml").write_text(authors_content)
 
             yield website_dir
 
     def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
-        add_authors_and_social_img_to_blog_posts(test_dir)
+        add_authors_and_social_img_to_blog_and_user_stories(test_dir)
 
         # Get directory paths
         generated_blog_dir = test_dir / "docs" / "blog"
@@ -758,4 +760,59 @@ class TestConvertCalloutBlocks:
 
     def test_convert_callout_blocks(self, content: str, expected: str) -> None:
         actual = convert_callout_blocks(content)
+        assert actual == expected, actual
+
+
+class TestEditLinks:
+    @pytest.fixture
+    def navigation(self) -> list[NavigationGroup]:
+        return [
+            {"group": "Home", "pages": ["docs/home/home"]},
+            {
+                "group": "User Guide",
+                "pages": [
+                    {
+                        "group": "Basic Concepts",
+                        "pages": [
+                            "docs/user-guide/basic-concepts/installing-ag2",
+                            "docs/user-guide/basic-concepts/llm-configuration",
+                        ],
+                    },
+                    {"group": "Advanced Concepts", "pages": ["docs/user-guide/advanced-concepts/rag"]},
+                    {"group": "Model Providers", "pages": ["docs/user-guide/models/openai"]},
+                ],
+            },
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {"group": "Use cases", "pages": ["docs/use-cases/use-cases/customer-service"]},
+                    {"group": "Reference Agents", "pages": ["docs/use-cases/reference-agents/index"]},
+                    {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
+                    "docs/use-cases/community-gallery/community-gallery",
+                ],
+            },
+            {"group": "Contributor Guide", "pages": ["docs/contributor-guide/contributing"]},
+            {"group": "FAQs", "pages": ["docs/faq/FAQ"]},
+            {"group": "Ecosystem", "pages": ["docs/ecosystem/agentops"]},
+        ]
+
+    def test_get_files_path_from_navigation(self, navigation: list[NavigationGroup]) -> None:
+        expected_files = [
+            "docs/home/home",
+            "docs/user-guide/basic-concepts/installing-ag2",
+            "docs/user-guide/basic-concepts/llm-configuration",
+            "docs/user-guide/advanced-concepts/rag",
+            "docs/user-guide/models/openai",
+            "docs/use-cases/use-cases/customer-service",
+            "docs/use-cases/reference-agents/index",
+            "docs/use-cases/notebooks/notebooks",
+            "docs/use-cases/community-gallery/community-gallery",
+            "docs/contributor-guide/contributing",
+            "docs/faq/FAQ",
+            "docs/ecosystem/agentops",
+        ]
+
+        expected = [Path(f) for f in expected_files]
+
+        actual = get_files_path_from_navigation(navigation)
         assert actual == expected, actual

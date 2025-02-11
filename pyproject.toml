@@ -11,8 +11,7 @@ name = "pyautogen"
 description = "A programming framework for agentic AI"
 readme = "README.md"
 authors = [
-    {name = "Chi Wang", email = "support@ag2.ai"},
-    {name = "Qingyun Wu", email = "support@ag2.ai"},
+    {name = "Chi Wang & Qingyun Wu", email = "support@ag2.ai"}
 ]
 
 keywords = [
@@ -86,8 +85,8 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==4.25.3",
-    "chromadb==0.5.3",
+    "protobuf==5.29.3",
+    "chromadb==0.6.3",
     "sentence_transformers",
     "pypdf",
     "ipython",
@@ -114,7 +113,7 @@ retrievechat-qdrant = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.3.3",
+    "graphrag_sdk==0.6.0",
     "falkordb>=1.0.10"
 ]
 
@@ -135,10 +134,10 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.11",
-    "llama-index-graph-stores-neo4j==0.4.5",
-    "llama-index-core==0.12.11",
-    "llama-index-readers-web==0.3.4",
+    "llama-index==0.12.16",
+    "llama-index-graph-stores-neo4j==0.4.6",
+    "llama-index-core==0.12.16",
+    "llama-index-readers-web==0.3.5",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -155,7 +154,7 @@ interop-crewai = [
     "litellm<1.57.5; sys_platform=='win32'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.22"]
+interop-pydantic-ai = ["pydantic-ai==0.0.23"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
@@ -190,6 +189,10 @@ cohere = ["cohere>=5.5.8"]
 ollama = ["ollama>=0.4.5", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 
+commsagent-discord = ["discord.py>=2.4.0,<2.5"]
+commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
+commsagent-telegram = ["telethon>=1.38.1, <2"]
+
 ## dev dependencies
 
 # test dependencies
@@ -200,6 +203,7 @@ test = [
     "pytest-cov==6.0.0",
     "pytest-asyncio==0.25.3",
     "pytest==8.3.4",
+    "mock==5.1.0",
     "pandas==2.2.3",
     "fastapi==0.115.8",
 ]
@@ -219,7 +223,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.4",
+    "ruff==0.9.5",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -314,6 +318,8 @@ exclude = [
     "math_utils\\.py$",
     "setup_*.py",
 ]
+
+preview = true
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
@@ -418,3 +424,8 @@ warn_unused_ignores = false
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
+
+[tool.codespell]
+skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./notebook,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb"
+quiet-level = 3
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize"
