@@ -4,8 +4,9 @@
 
 # A script to generate devcontainer files for different python versions
 
-from pathlib import Path
 import shutil
+from pathlib import Path
+
 from jinja2 import Template
 
 # List of python versions to generate devcontainer files for
@@ -34,9 +35,11 @@ def generate_devcontainer_json_file(python_version: str) -> None:
     }
     devcontainer_content = template.render(data)
 
-    file_dir = (Path("./.devcontainer/").resolve() 
-                if python_version == DEFAULT 
-                else Path(f"./.devcontainer/python-{python_version}/").resolve())
+    file_dir = (
+        Path("./.devcontainer/").resolve()
+        if python_version == DEFAULT
+        else Path(f"./.devcontainer/python-{python_version}/").resolve()
+    )
     file_dir.mkdir(parents=True, exist_ok=True)
 
     with open(file_dir / "devcontainer.json", "w") as f:
@@ -54,7 +57,7 @@ def generate_devcontainer_files() -> None:
             Path(f"./.devcontainer/python-{python_version}/devcontainer.json"),
             Path(f"./.devcontainer/python-{python_version}/"),
         ]
-        
+
         for file in files_to_delete:
             if file.exists():
                 print(f"Deleting {file}")
