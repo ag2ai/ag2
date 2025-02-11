@@ -138,7 +138,6 @@ jobs:
       - name: Test import all submodules
         shell: bash
         run: |
-          uv pip install --system "requests<2.32.0"
           bash scripts/test.sh test/test_import.py
       - name: Test with pytest using optional dependency marks
         shell: bash
