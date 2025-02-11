@@ -87,9 +87,7 @@ jobs:
           fi
       - name: Test with pytest skipping openai tests
         if: matrix.python-version != '3.10' && matrix.os == 'ubuntu-latest'
-        # Remove the line below once https://github.com/docker/docker-py/issues/3256 is merged
         run: |
-          uv pip install --system "requests<2.32.0"
           bash scripts/test-core-skip-llm.sh
       - name: Test with pytest skipping openai and docker tests
         if: matrix.python-version != '3.10' && matrix.os != 'ubuntu-latest'
