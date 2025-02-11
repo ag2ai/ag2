@@ -134,7 +134,7 @@ _NOTE_: OAI_CONFIG_LIST_sample lists gpt-4o as the default model. If you use a d
 
 ### Option 1. Install and Run AG2 in Docker
 
-Find detailed instructions for users [here](https://docs.ag2.ai/docs/installation/Docker#step-1-install-docker), and for developers [here](https://docs.ag2.ai/docs/contributor-guide/docker).
+Find detailed instructions for users [here](https://docs.ag2.ai/docs/installation/Docker#step-1-install-docker), and for developers [here](https://docs.ag2.ai/docs/contributor-guide/setup-development-environment).
 
 ### Option 2. Install AG2 Locally
 
