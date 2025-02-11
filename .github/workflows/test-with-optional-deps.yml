@@ -145,6 +145,8 @@ jobs:
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
           bash scripts/test-skip-llm.sh -m "$MARKER"
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:

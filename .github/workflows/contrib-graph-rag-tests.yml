@@ -78,7 +78,7 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
       - name: Show coverage report
-        run: coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -131,7 +131,7 @@ jobs:
         run: |
           bash scripts/test.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
       - name: Show coverage report
-        run: coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:

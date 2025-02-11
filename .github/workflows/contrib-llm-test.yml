@@ -66,6 +66,8 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -121,6 +123,8 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -174,6 +178,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
