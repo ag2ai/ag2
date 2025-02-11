@@ -66,6 +66,7 @@ jobs:
         os: [ubuntu-latest]
         # Run tests only for py versions 3.11
         python-version: ["3.11"]
+        llm: ["openai", "gemini", "anthropic", "deepseek"]
 
     steps:
       - uses: actions/checkout@v4
@@ -98,7 +99,7 @@ jobs:
         run: |
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
-          bash scripts/test.sh -m "$MARKER and (openai or gemini or anthropic or deepseek)"
+          bash scripts/test.sh -m "$MARKER and ${{ matrix.llm }}"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:

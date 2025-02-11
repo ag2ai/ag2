@@ -123,8 +123,6 @@ class TestBrowserUseToolOpenai:
         api_type = credentials_from_test_param.api_type
         if api_type == "deepseek":
             pytest.skip("Deepseek currently does not work too well with the browser-use")
-        if api_type != "openai":
-            pytest.skip("The tests take too long to run with other APIs")
 
         # If we decide to test with deepseek, we need to set use_vision to False
         agent_kwargs = {"use_vision": False, "max_steps": 100} if api_type == "deepseek" else {"max_steps": 100}
