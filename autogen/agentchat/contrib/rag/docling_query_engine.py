@@ -26,6 +26,7 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+
 @require_optional_import(["chromadb", "llama_index"], "rag")
 class DoclingMdQueryEngine:
     """
@@ -52,9 +53,13 @@ class DoclingMdQueryEngine:
                 For more details about the default metadata, please refer to [HNSW configuration](https://cookbook.chromadb.dev/core/configuration/#hnsw-configuration)
             llm: LLM model used by LlamaIndex. You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/)
         """
-        self.llm = llm or OpenAI(model="gpt-4o", temperature=0.0)
-        self.embedding_function = embedding_function or DefaultEmbeddingFunction()
-        self.metadata = metadata or {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32}
+        self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
+        self.embedding_function: EmbeddingFunction[Any] = embedding_function or DefaultEmbeddingFunction()  # type: ignore[assignment]
+        self.metadata: dict[str, Any] = metadata or {
+            "hnsw:space": "ip",
+            "hnsw:construction_ef": 30,
+            "hnsw:M": 32,
+        }
         self.client = chromadb.PersistentClient(path=db_path or "./chroma")
 
     def init_db(
