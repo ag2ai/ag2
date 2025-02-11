@@ -60,7 +60,7 @@ class RealtimeAgent:
             llm_config=llm_config, logger=self.logger, **client_kwargs
         )
 
-        self._registred_realtime_tools: dict[str, Tool] = {}
+        self._registered_realtime_tools: dict[str, Tool] = {}
         self._observers: list[RealtimeObserver] = [FunctionObserver(logger=logger)]
 
         if audio_adapter:
@@ -84,9 +84,9 @@ class RealtimeAgent:
         return self._realtime_client
 
     @property
-    def registred_realtime_tools(self) -> dict[str, Tool]:
+    def registered_realtime_tools(self) -> dict[str, Tool]:
         """Get the registered realtime tools."""
-        return self._registred_realtime_tools
+        return self._registered_realtime_tools
 
     def register_observer(self, observer: RealtimeObserver) -> None:
         """Register an observer with the Realtime Agent.
@@ -148,7 +148,7 @@ class RealtimeAgent:
             """
             tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
 
-            self._registred_realtime_tools[tool.name] = tool
+            self._registered_realtime_tools[tool.name] = tool
 
             return tool
 
