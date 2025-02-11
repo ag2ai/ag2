@@ -274,6 +274,23 @@ result = human.initiate_chat(recipient=lesson_agent, message="Create a lesson on
 
 ```
 
+#### Code Style and Linting
+
+This project uses pre-commit hooks to maintain code quality. Before contributing:
+
+1. Install pre-commit:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+2. The hooks will run automatically on commit, or you can run them manually:
+
+```bash
+pre-commit run --all-files
+```
+
 ## Announcements
 
 📄 **License:**
