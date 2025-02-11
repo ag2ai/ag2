@@ -80,8 +80,6 @@ jobs:
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,${{ matrix.optional-dependencies }}]
-          python -c "import autogen"
-          uv pip install --system pytest-cov>=5 mock
       - name: Install playwright
         if: matrix.optional-dependencies == 'browser-use' || matrix.optional-dependencies == 'crawl4ai'
         run: |
@@ -100,6 +98,8 @@ jobs:
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
           bash scripts/test.sh -m "$MARKER and ${{ matrix.llm }}"
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
