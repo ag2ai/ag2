@@ -46,6 +46,7 @@ def require_jupyter_kernel_gateway_installed() -> Callable[[T], T]:
 
         def decorator(o: T) -> T:
             return o
+
     else:
 
         def decorator(o: T) -> T:
@@ -71,6 +72,7 @@ def skip_on_missing_jupyter_kernel_gateway() -> Callable[[T], T]:
 
             pytest_mark_o = getattr(pytest.mark, mark_name)(o)
             return pytest_mark_o  # type: ignore[no-any-return]
+
     else:
 
         def decorator(o: T) -> T:

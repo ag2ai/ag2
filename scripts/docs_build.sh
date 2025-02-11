@@ -8,15 +8,22 @@ set -e
 set -x
 
 docs_generate() {
+    local force=$1  # Get force flag as argument
     cd website && \
-        python ./generate_api_references.py && \
+        # Only add --force if argument is exactly "--force"
+        if [ "$force" = "--force" ]; then
+            python ./generate_api_references.py --force
+        else
+            python ./generate_api_references.py
+        fi && \
         python ./process_notebooks.py render
 }
 
 docs_build() {
-    docs_generate
+    local force=${1:-""}  # Default to empty string if no argument
+    docs_generate "$force"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    docs_build
+    docs_build "$1"
 fi

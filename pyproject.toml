@@ -11,8 +11,7 @@ name = "pyautogen"
 description = "A programming framework for agentic AI"
 readme = "README.md"
 authors = [
-    {name = "Chi Wang", email = "support@ag2.ai"},
-    {name = "Qingyun Wu", email = "support@ag2.ai"},
+    {name = "Chi Wang & Qingyun Wu", email = "support@ag2.ai"}
 ]
 
 keywords = [
@@ -155,7 +154,7 @@ interop-crewai = [
     "litellm<1.57.5; sys_platform=='win32'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.22"]
+interop-pydantic-ai = ["pydantic-ai==0.0.23"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
@@ -204,6 +203,7 @@ test = [
     "pytest-cov==6.0.0",
     "pytest-asyncio==0.25.3",
     "pytest==8.3.4",
+    "mock==5.1.0",
     "pandas==2.2.3",
     "fastapi==0.115.8",
 ]
@@ -223,7 +223,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.4",
+    "ruff==0.9.5",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -318,6 +318,8 @@ exclude = [
     "math_utils\\.py$",
     "setup_*.py",
 ]
+
+preview = true
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
@@ -422,3 +424,8 @@ warn_unused_ignores = false
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 disallow_any_unimported = true
+
+[tool.codespell]
+skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./notebook,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb"
+quiet-level = 3
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane"

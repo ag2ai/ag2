@@ -228,12 +228,12 @@ class AgentOptimizer:
                 "1",
             ], "The input is invalid. Please input 1 or 0. 1 represents satisfied. 0 represents not satisfied."
             is_satisfied = reply == "1"
-        self._trial_conversations_history.append(
-            {f"Conversation {len(self._trial_conversations_history)}": conversation_history}
-        )
-        self._trial_conversations_performance.append(
-            {f"Conversation {len(self._trial_conversations_performance)}": 1 if is_satisfied else 0}
-        )
+        self._trial_conversations_history.append({
+            f"Conversation {len(self._trial_conversations_history)}": conversation_history
+        })
+        self._trial_conversations_performance.append({
+            f"Conversation {len(self._trial_conversations_performance)}": 1 if is_satisfied else 0
+        })
 
     def step(self):
         """One step of training. It will return register_for_llm and register_for_executor at each iteration,
@@ -294,23 +294,19 @@ class AgentOptimizer:
             register_for_llm.append({"func_sig": {"name": name}, "is_remove": True})
             register_for_exector.update({name: None})
         for func in incumbent_functions:
-            register_for_llm.append(
-                {
-                    "func_sig": {
-                        "name": func.get("name"),
-                        "description": func.get("description"),
-                        "parameters": {"type": "object", "properties": func.get("arguments")},
-                    },
-                    "is_remove": False,
-                }
-            )
-            register_for_exector.update(
-                {
-                    func.get("name"): lambda **args: execute_func(
-                        func.get("name"), func.get("packages"), func.get("code"), **args
-                    )
-                }
-            )
+            register_for_llm.append({
+                "func_sig": {
+                    "name": func.get("name"),
+                    "description": func.get("description"),
+                    "parameters": {"type": "object", "properties": func.get("arguments")},
+                },
+                "is_remove": False,
+            })
+            register_for_exector.update({
+                func.get("name"): lambda **args: execute_func(
+                    func.get("name"), func.get("packages"), func.get("code"), **args
+                )
+            })
 
         self._trial_functions = incumbent_functions
         return register_for_llm, register_for_exector
@@ -365,15 +361,13 @@ class AgentOptimizer:
                 incumbent_functions = [item for item in incumbent_functions if item["name"] != name]
             else:
                 incumbent_functions = [item for item in incumbent_functions if item["name"] != name]
-                incumbent_functions.append(
-                    {
-                        "name": name,
-                        "description": description,
-                        "arguments": arguments,
-                        "packages": packages,
-                        "code": code,
-                    }
-                )
+                incumbent_functions.append({
+                    "name": name,
+                    "description": description,
+                    "arguments": arguments,
+                    "packages": packages,
+                    "code": code,
+                })
 
         return incumbent_functions
 
