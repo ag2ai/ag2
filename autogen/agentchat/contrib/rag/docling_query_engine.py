@@ -54,7 +54,7 @@ class DoclingMdQueryEngine:
             llm: LLM model used by LlamaIndex. You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/)
         """
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
-        self.embedding_function: EmbeddingFunction[Any] = embedding_function or DefaultEmbeddingFunction()  # type: ignore[assignment]
+        self.embedding_function: EmbeddingFunction[Any] = embedding_function or DefaultEmbeddingFunction()  # type: ignore[no-any-unimported,assignment]
         self.metadata: dict[str, Any] = metadata or {
             "hnsw:space": "ip",
             "hnsw:construction_ef": 30,
