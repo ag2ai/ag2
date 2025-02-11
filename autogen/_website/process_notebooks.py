@@ -725,8 +725,8 @@ def update_group_pages(
     return nav_copy
 
 
-def add_mdx_generated_from_notebooks_to_nav(website_build_directory: Path) -> None:
-    """Updates mint.json navigation to include mdx files generated from the notebook entries
+def add_notebooks_blogs_and_user_stories_to_nav(website_build_directory: Path) -> None:
+    """Updates mint.json navigation to include notebooks, blogs, and user stories.
 
     Args:
         website_build_directory (Path): Build directory of the website
@@ -757,6 +757,14 @@ def add_mdx_generated_from_notebooks_to_nav(website_build_directory: Path) -> No
     # future_talks_index = talks_section_pages.pop()
     # talks_section_pages.insert(0, future_talks_index)
     # mint_config["navigation"].append(talks_section)
+
+    # add user_stories to navigation
+    user_stories_dir = website_build_directory / "docs" / "user-stories"
+    user_stories_section = {
+        "group": "User Stories",
+        "pages": [generate_nav_group(user_stories_dir, "User Stories", "docs/user-stories")],
+    }
+    mint_config["navigation"].append(user_stories_section)
 
     # add blogs to navigation
     blogs_dir = website_build_directory / "_blogs"
@@ -1127,7 +1135,7 @@ def main() -> None:
 
         # Post-processing steps after all notebooks are handled
         if not args.dry_run:
-            add_mdx_generated_from_notebooks_to_nav(args.website_build_directory)
+            add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
             fix_internal_references_in_mdx_files(args.website_build_directory)
             add_authors_and_social_img_to_blog_posts(args.website_build_directory)
             add_edit_urls_to_non_generated_mdx_files(args.website_build_directory)
