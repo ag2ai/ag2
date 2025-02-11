@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import pytest
 
-from autogen.agents.experimental.deep_research import DeepResearchTool
 from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.dependency_injection import Depends, on
+from autogen.tools.experimental import DeepResearchTool
 
 from ....conftest import Credentials
 

@@ -8,10 +8,10 @@ from typing import Annotated, Any, Callable, List, Optional
 from pydantic import BaseModel
 
 from ....agentchat import ConversableAgent
+from ....agents.experimental.websurfer import WebSurferAgent
 from ....doc_utils import export_module
-from ....tools import Depends, Tool
-from ....tools.dependency_injection import on
-from ..websurfer import WebSurferAgent
+from ... import Depends, Tool
+from ...dependency_injection import on
 
 __all__ = ["DeepResearchTool"]
 
@@ -66,7 +66,7 @@ class DeepResearchTool(Tool):
             task: Annotated[str, "The task to perform a research on."],
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
             max_web_steps: Annotated[int, Depends(on(max_web_steps))],
-        ):
+        ) -> str:
             """
             Delegate a research task to the agent.
             """
@@ -177,7 +177,7 @@ class DeepResearchTool(Tool):
                 task: Task,
                 llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
                 max_web_steps: Annotated[int, Depends(on(max_web_steps))],
-            ) -> Task:
+            ) -> str:
                 if not task.subquestions:
                     task.subquestions = [Subquestion(question=task.question)]
 
@@ -222,8 +222,8 @@ class DeepResearchTool(Tool):
 
         websurfer_config["config_list"][0]["response_format"] = GatheredInformation
 
-        def is_termination_msg(x):
-            return x.get("content", "") and x.get("content", "").startswith(DeepResearchTool.ANSWER_CONFIRMED_PREFIX)
+        def is_termination_msg(x: dict[str, Any]) -> bool:
+            return ("content" in x) and x.get("content", "").startswith(DeepResearchTool.ANSWER_CONFIRMED_PREFIX)
 
         websurfer_agent = WebSurferAgent(
             llm_config=websurfer_config,

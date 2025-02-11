@@ -4,6 +4,7 @@
 
 from .browser_use import BrowserUseTool
 from .crawl4ai import Crawl4AITool
+from .deep_research import DeepResearchTool
 from .messageplatform import (
     DiscordRetrieveTool,
     DiscordSendTool,
@@ -16,6 +17,7 @@ from .messageplatform import (
 __all__ = [
     "BrowserUseTool",
     "Crawl4AITool",
+    "DeepResearchTool",
     "DiscordRetrieveTool",
     "DiscordSendTool",
     "SlackRetrieveTool",

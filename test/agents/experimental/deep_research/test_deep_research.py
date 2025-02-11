@@ -6,8 +6,9 @@ from typing import Any
 
 import pytest
 
-from autogen.agents.experimental.deep_research import DeepResearchAgent, DeepResearchTool
+from autogen.agents.experimental import DeepResearchAgent
 from autogen.import_utils import skip_on_missing_imports
+from autogen.tools.experimental import DeepResearchTool
 
 from ....conftest import Credentials
 

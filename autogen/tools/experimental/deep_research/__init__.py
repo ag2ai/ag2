@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .deep_research import DeepResearchAgent
+from .deep_research_tool import DeepResearchTool
 
-__all__ = ["DeepResearchAgent"]
+__all__ = ["DeepResearchTool"]

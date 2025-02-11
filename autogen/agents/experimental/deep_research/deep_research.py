@@ -7,7 +7,7 @@ from typing import Any, Optional, Union
 from .... import ConversableAgent
 from ....doc_utils import export_module
 from ....tools import Tool
-from .deep_research_tool import DeepResearchTool
+from ....tools.experimental import DeepResearchTool
 
 __all__ = ["DeepResearchAgent"]
 
