@@ -38,7 +38,7 @@ class DoclingMdQueryEngine:
     def __init__(  # type: ignore
         self,
         db_path: Optional[str] = None,
-        embedding_function: Optional[EmbeddingFunction[Any]] = None,
+        embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
         metadata: Optional[dict[str, Any]] = None,
         llm: Optional["LLM"] = None,
     ) -> None:
@@ -126,7 +126,7 @@ class DoclingMdQueryEngine:
         return loaded_documents
 
     def _create_index(  # type: ignore
-        self, collection: Collection, docs: list["LlamaDocument"]
+        self, collection: "Collection", docs: list["LlamaDocument"]
     ) -> "VectorStoreIndex":
         """
         Create a LlamaIndex VectorStoreIndex using the provided documents and Chromadb collection.
