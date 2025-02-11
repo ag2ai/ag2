@@ -82,7 +82,7 @@ jobs:
           python -c "import autogen"
           uv pip install --system pytest-cov>=5 mock
       - name: Install playwright
-        if: matrix.optional-dependencies == 'browser_use' || matrix.optional-dependencies == 'crawl4ai'
+        if: matrix.optional-dependencies == 'browser-use' || matrix.optional-dependencies == 'crawl4ai'
         run: |
           playwright install
       - name: Test with pytest using optional dependency marks
