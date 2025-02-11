@@ -227,10 +227,8 @@ register_function(
 chat_result = executor_agent.initiate_chat(
     recipient=date_agent,
     message="I was born on the 25th of March 1995, what day was it?",
-    max_turns=2,
+    max_turns=1,
 )
-
-print(chat_result.chat_history[-1]["content"])
 ```
 
 ### Structured Output
@@ -247,21 +245,32 @@ class LessonPlan(BaseModel):
     title: str
     script: str
 
+llm_config_list = config_list_from_json(
+    env_or_file="OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4o"],
+    },
+)
+
+for config in llm_config_list:
+    config["response_format"] = LessonPlan
+
+llm_config = {
+    "config_list": llm_config_list,
+}
+
 # Configure the AI agent
-agent = ConversableAgent(
+lesson_agent = ConversableAgent(
     name="lesson_agent",
-    llm_config={**llm_config, {"response_format": LessonPlan}},
+    llm_config=llm_config,
     system_message="You create simple lesson plans."
 )
 
 # Human agent
-human = ConversableAgent(name="user", human_input_mode="ALWAYS")
+human = ConversableAgent(name="human", human_input_mode="NEVER")
 
 # Start chat
-result = human.initiate_chat(agent, "Create a lesson on gravity.")
-
-# Print structured output
-print(json.dumps(json.loads(result.chat_history[-1]["content"]), indent=2))
+result = human.initiate_chat(recipient=lesson_agent, message="Create a lesson on gravity.", max_turns=1)
 
 ```
 
