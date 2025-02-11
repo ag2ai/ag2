@@ -888,50 +888,38 @@ def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
     return "", content
 
 
-def add_authors_and_social_img_to_blog_posts(website_build_directory: Path) -> None:
-    """Add authors info to blog posts.
-
-    Args:
-        website_build_directory (Path): Build directory of the website
-    """
-    blog_dir = website_build_directory / "_blogs"
-    authors_yml = blog_dir / "authors.yml"
-    generated_blog_dir = website_build_directory / "docs" / "blog"
-
-    # Remove existing generated directory if it exists
-    if generated_blog_dir.exists():
-        shutil.rmtree(generated_blog_dir)
-
-    # Copy entire blog directory structure to generated_blog
-    shutil.copytree(blog_dir, generated_blog_dir)
-
+def _get_authors_info(authors_yml: Path) -> Dict[str, Dict[str, str]]:
     try:
         all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
     except (yaml.YAMLError, OSError) as e:
         print(f"Error reading authors file: {e}")
         sys.exit(1)
 
-    for file_path in generated_blog_dir.glob("**/*.mdx"):
-        try:
-            front_matter_string, content = separate_front_matter_and_content(file_path)
+    return all_authors_info
 
-            # Skip if authors section already exists
-            # if '<div class="blog-authors">' in content:
-            #     continue
 
-            # Convert single author to list and handle authors
-            front_matter = yaml.safe_load(front_matter_string[4:-3])
-            authors = front_matter.get("authors", [])
-            authors_list = [authors] if isinstance(authors, str) else authors
+def _add_authors_and_social_preview(
+    website_build_dir: Path, target_dir: Path, all_authors_info: Dict[str, Dict[str, str]]
+) -> None:
+    """Add authors info and social share image to mdx files in the target directory."""
 
-            # Social share image
-            social_img_html = """\n<div>
+    # Social share image
+    social_img_html = """\n<div>
 <img noZoom className="social-share-img"
   src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
   alt="social preview"
   style={{ position: 'absolute', left: '-9999px' }}
 />
 </div>"""
+
+    for file_path in target_dir.glob("**/*.mdx"):
+        try:
+            front_matter_string, content = separate_front_matter_and_content(file_path)
+
+            # Convert single author to list and handle authors
+            front_matter = yaml.safe_load(front_matter_string[4:-3])
+            authors = front_matter.get("authors", [])
+            authors_list = [authors] if isinstance(authors, str) else authors
 
             # Generate authors HTML
             authors_html = (
@@ -944,17 +932,40 @@ def add_authors_and_social_img_to_blog_posts(website_build_directory: Path) -> N
             new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
 
             # ensure editUrl is present
-            rel_file_path = str(file_path.relative_to(website_build_directory.parent)).replace(
+            rel_file_path = str(file_path.relative_to(website_build_dir.parent)).replace(
                 "build/docs/blog/", "website/_blogs/"
             )
             content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
 
             file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
-            # print(f"Authors info and social share image checked in {file_path}")
 
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
+
+
+def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory: Path) -> None:
+    """Add authors info to blog posts and user stories.
+
+    Args:
+        website_build_directory (Path): Build directory of the website
+    """
+    blog_dir = website_build_directory / "_blogs"
+    generated_blog_dir = website_build_directory / "docs" / "blog"
+
+    authors_yml = website_build_directory / "blogs_and_user_stories_authors.yml"
+    all_authors_info = _get_authors_info(authors_yml)
+
+    # Remove existing generated directory if it exists
+    if generated_blog_dir.exists():
+        shutil.rmtree(generated_blog_dir)
+
+    # Copy entire blog directory structure to generated_blog
+    shutil.copytree(blog_dir, generated_blog_dir)
+    _add_authors_and_social_preview(website_build_directory, generated_blog_dir, all_authors_info)
+
+    user_stories_dir = website_build_directory / "docs" / "user-stories"
+    _add_authors_and_social_preview(website_build_directory, user_stories_dir, all_authors_info)
 
 
 def ensure_mint_json_exists(website_build_directory: Path) -> None:
@@ -1137,7 +1148,7 @@ def main() -> None:
         if not args.dry_run:
             add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
             fix_internal_references_in_mdx_files(args.website_build_directory)
-            add_authors_and_social_img_to_blog_posts(args.website_build_directory)
+            add_authors_and_social_img_to_blog_and_user_stories(args.website_build_directory)
             add_edit_urls_to_non_generated_mdx_files(args.website_build_directory)
 
     else:
