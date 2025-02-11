@@ -7,8 +7,11 @@
 from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
+from ...doc_utils import export_module
+
 
 @dataclass
+@export_module("autogen.coding.jupyter")
 class JupyterConnectionInfo:
     """(Experimental)"""
 
@@ -23,6 +26,7 @@ class JupyterConnectionInfo:
 
 
 @runtime_checkable
+@export_module("autogen.coding.jupyter")
 class JupyterConnectable(Protocol):
     """(Experimental)"""
 

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.agentchat.realtime_agent import RealtimeAgent
+from autogen.agentchat.realtime.experimental import RealtimeAgent
 from autogen.tools.tool import Tool
 
 from ...conftest import Credentials

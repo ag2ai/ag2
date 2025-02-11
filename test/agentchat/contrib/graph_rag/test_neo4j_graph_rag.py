@@ -36,7 +36,7 @@ def neo4j_query_engine_with_json():
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
-        host="bolt://172.17.0.3",  # Change
+        host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database
     )
@@ -85,7 +85,7 @@ def neo4j_query_engine():
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",  # Change if you reset username
         password="password",  # Change if you reset password
-        host="bolt://172.17.0.3",  # Change
+        host="bolt://127.0.0.1",  # Change
         port=7687,  # if needed
         database="neo4j",  # Change if you want to store the graphh in your custom database
         entities=entities,  # possible entities
@@ -103,18 +103,23 @@ def neo4j_query_engine():
 @pytest.fixture(scope="module")
 def neo4j_query_engine_auto():
     """Test the engine with auto-generated property graph"""
+    input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.txt"
+
+    input_document = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
+
     query_engine = Neo4jGraphQueryEngine(
         username="neo4j",
         password="password",
-        host="bolt://172.17.0.3",
+        host="bolt://127.0.0.1",
         port=7687,
         database="neo4j",
     )
-    query_engine.init_db()
+    query_engine.init_db(input_doc=input_document)
     return query_engine
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
@@ -133,6 +138,7 @@ def test_neo4j_query_engine(neo4j_query_engine):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
@@ -156,6 +162,7 @@ def test_neo4j_add_records(neo4j_query_engine):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
@@ -171,6 +178,7 @@ def test_neo4j_auto(neo4j_query_engine_auto):
 
 
 @pytest.mark.openai
+@pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,

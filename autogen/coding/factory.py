@@ -4,11 +4,13 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from ..doc_utils import export_module
 from .base import CodeExecutionConfig, CodeExecutor
 
 __all__ = ("CodeExecutorFactory",)
 
 
+@export_module("autogen.coding")
 class CodeExecutorFactory:
     """(Experimental) A factory class for creating code executors."""
 

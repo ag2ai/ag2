@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import re
 import sys
@@ -14,9 +15,11 @@ import uuid
 import warnings
 from typing import Any, Callable, Optional, Protocol, Union
 
-from pydantic import BaseModel, schema_json_of
+from pydantic import BaseModel
+from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
+from ..doc_utils import export_module
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
@@ -81,7 +84,7 @@ if gemini_result.is_successful:
     gemini_import_exception: Optional[ImportError] = None
 else:
     gemini_InternalServerError = gemini_ResourceExhausted = Exception  # noqa: N816
-    gemini_import_exception = ImportError("google-generativeai not found")
+    gemini_import_exception = ImportError("google-genai not found")
 
 with optional_import_block() as anthropic_result:
     from anthropic import (  # noqa
@@ -192,6 +195,7 @@ LEGACY_CACHE_DIR = ".cache"
 OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
+@export_module("autogen")
 class ModelClient(Protocol):
     """A client class must implement the following methods:
     - create must return a response object that implements the ModelClientResponseProtocol
@@ -380,12 +384,14 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        if self.response_format is not None:
+        if self.response_format is not None or "response_format" in params:
 
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
                     kwargs.pop("stream")
-                kwargs["response_format"] = type_to_response_format_param(self.response_format)
+                kwargs["response_format"] = type_to_response_format_param(
+                    self.response_format or params["response_format"]
+                )
                 return self._oai_client.chat.completions.create(*args, **kwargs)
 
             create_or_parse = _create_or_parse
@@ -595,6 +601,7 @@ class OpenAIClient:
 
 
 @require_optional_import("openai", "openai")
+@export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
 
@@ -627,7 +634,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](/docs/reference/oai/client#create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -668,9 +675,10 @@ class OpenAIWrapper:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
             for config in config_list:
                 self._register_default_client(config, openai_config)  # could modify the config
-                self._config_list.append(
-                    {**extra_kwargs, **{k: v for k, v in config.items() if k not in self.openai_kwargs}}
-                )
+                self._config_list.append({
+                    **extra_kwargs,
+                    **{k: v for k, v in config.items() if k not in self.openai_kwargs},
+                })
         else:
             self._register_default_client(extra_kwargs, openai_config)
             self._config_list = [extra_kwargs]
@@ -753,7 +761,7 @@ class OpenAIWrapper:
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("google"):
                 if gemini_import_exception:
-                    raise ImportError("Please install `google-generativeai` and 'vertexai' to use Google's API.")
+                    raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
                 client = GeminiClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("anthropic"):
@@ -888,7 +896,6 @@ class OpenAIWrapper:
                 E.g., `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`.
                 The actual prompt will be:
                 "Complete the following sentence: Today I feel".
-                More examples can be found at [templating](/docs/Use-Cases/enhanced_inference#templating).
             - cache (AbstractCache | None): A Cache object to use for response cache. Default to None.
                 Note that the cache argument overrides the legacy cache_seed argument: if this argument is provided,
                 then the cache_seed argument is ignored. If this argument is not provided or None,
@@ -967,7 +974,10 @@ class OpenAIWrapper:
                 with cache_client as cache:
                     # Try to get the response from cache
                     key = get_key(
-                        {**params, **{"response_format": schema_json_of(params["response_format"])}}
+                        {
+                            **params,
+                            **{"response_format": json.dumps(TypeAdapter(params["response_format"]).json_schema())},
+                        }
                         if "response_format" in params
                         else params
                     )

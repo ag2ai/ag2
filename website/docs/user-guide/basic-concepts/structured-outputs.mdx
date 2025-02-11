@@ -1,0 +1,38 @@
+---
+title: Structured outputs
+---
+
+Working with freeform text from LLMs isn't optimal when you know how you want the reply formatted.
+
+Using structured outputs, you define a class, based on Pydantic's `BaseModel`, for the reply format you want and attach it to the LLM configuration. Replies from agent using that configuration will be in a matching JSON format.
+
+In earlier examples, we created a classroom lesson plan and provided guidance in the agent's system message to put the content in tags, like `<title>` and `<learning_objectives>`. Using structured outputs we can ensure that our lesson plans are formatted.
+
+import Example from "/snippets/python-examples/structured_output.mdx";
+
+<Example/>
+
+
+```console
+{
+  "title": "Exploring the Solar System",
+  "learning_objectives": [
+    {
+      "title": "Understanding the Solar System",
+      "description": "Students will learn the names and order of the planets in the solar system."
+    },
+    {
+      "title": "Identifying Planet Characteristics",
+      "description": "Students will be able to describe at least one distinctive feature of each planet."
+    },
+    {
+      "title": "Creating a Planet Fact Sheet",
+      "description": "Students will create a fact sheet for one planet of their choice."
+    }
+  ],
+  "script": "Introduction (10 minutes):\nBegin the class by asking students what they already know about the solar system. Write their responses on the board. \n\nIntroduce the topic by explaining that today they will be learning about the solar system, which includes the Sun, planets, moons, and other celestial objects.\n\nDirect Instruction (20 minutes):\nUse a visual aid (such as a poster or video) to show the solar system's structure. \n\nDiscuss the eight planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. \n\nFor each planet, mention:\n- Its position from the Sun.\n- Key characteristics (e.g., size, color, temperature).\n- Any notable features (e.g., rings, atmosphere). \n\nInteractive Activity (15 minutes):\nSplit the class into small groups. Give each group a set of planet cards that include pictures and information. Have them work together to put the planets in order from the Sun. Each group will present their order and one interesting fact about each planet they discussed."
+}
+```
+<Tip>
+Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs).
+</Tip>

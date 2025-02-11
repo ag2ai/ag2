@@ -1,0 +1,406 @@
+---
+title: Swarm Deep-dive
+---
+
+In this Swarm deep-dive we run through all the components of AG2's Swarm.
+
+## Components
+
+Here are the main components that need to be used to create a swarm chat.
+
+### Create a `SwarmAgent`
+
+All the agents passed to the swarm chat should be instances of `SwarmAgent`. `SwarmAgent` is very similar to `AssistantAgent`, but it has some additional features to support function registration and handoffs. When creating a `SwarmAgent`, you can pass in a list of functions. These functions will be converted to schemas to be passed to the LLMs, and you don't need to worry about registering the functions for execution. You can also pass back a `SwarmResult` class, where you can return a value, the next agent to call, and update context variables at the same time.
+
+**Notes for creating the function calls**
+- For input arguments, you must define the type of the argument, otherwise, the registration will fail (e.g. `arg_name: str`).
+- If your function requires access or modification of the context variables, you must pass in `context_variables: dict` as one argument. This argument will not be visible to the LLM (removed when registering the function schema). But when called, the global context variables will be passed in by the swarm chat.
+- The docstring of the function will be used as the prompt. So make sure to write a clear description.
+- The function name will be used as the tool name.
+
+### Registering Handoffs to agents
+While you can create a function to decide what next agent to call, we provide a quick way to register the handoff using `ON_CONDITION`. We will craft this transition function and add it to the LLM config directly.
+
+```python
+agent_2 = SwarmAgent(...)
+agent_3 = SwarmAgent(...)
+
+# Register the handoff
+agent_1 = SwarmAgent(...)
+agent_1.handoff(hand_to=[ON_CONDITION(agent_2, "condition_1"), ON_CONDITION(agent_3, "condition_2")])
+
+# This is equivalent to:
+def transfer_to_agent_2():
+    """condition_1"""
+    return agent_2
+
+def transfer_to_agent_3():
+    """condition_2"""
+    return agent_3
+
+agent_1 = SwarmAgent(..., functions=[transfer_to_agent_2, transfer_to_agent_3])
+# You can also use agent_1.add_functions to add more functions after initialization
+```
+
+### Registering Handoffs to a nested chat
+In addition to transferring to an agent, you can also trigger a nested chat by doing a handoff and using `ON_CONDITION`. This is a useful way to perform sub-tasks without that work becoming part of the broader swarm's messages.
+
+Configuring the nested chat is similar to [establishing a nested chat for an agent](/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#nested-chats).
+
+Nested chats are a set of sequential chats and these are defined like so:
+```python
+nested_chats = [
+    {
+        "recipient": my_first_agent,
+        "summary_method": "reflection_with_llm",
+        "summary_prompt": "Summarize the conversation into bullet points.",
+    },
+    {
+        "recipient": poetry_agent,
+        "message": "Write a poem about the context.",
+        "max_turns": 1,
+        "summary_method": "last_msg",
+    },
+]
+```
+
+New to nested chats within swarms is the ability to **carryover some context from the swarm chat into the nested chat**. This is done by adding a carryover configuration. If you're not using carryover, then no messages from the swarm chat will be brought into the nested chat.
+
+The carryover is applicable only to the first chat in the nested chats and works together with that nested chat's "message" value, if any.
+
+```python
+my_carryover_config = {
+    "summary_method": "reflection_with_llm",
+    "summary_args": {"summary_prompt": "Summarise the conversation into bullet points."}
+    }
+```
+
+The `summary_method` can be (with messages referring to the swarm chat's messages):
+
+- `"all"` - messages will be converted to a new-line concatenated string, e.g. `[first nested chat message]\nContext: \n[swarm message 1]\n[swarm message 2]\n...`
+- `"last_msg"` - the latest message will be added, e.g. `[first nested chat message]\nContext: \n[swarm's latest message]`
+- `"reflection_with_llm"` - utilises an LLM to interpret the messages and its resulting response will be added, e.g. `[first nested chat message]\nContext: \n[llm response]`
+- `Callable` - a function that returns the full message (this will not concatenate with the first nested chat's message, it will replace it entirely).
+
+The signature of the `summary_method` callable is:
+`def my_method(agent: ConversableAgent, messages: List[Dict[str, Any]], summary_args: Dict) -> str:`
+
+Both the "reflection_with_llm" and Callable will be able to utilise the `summary_args` if they are included.
+
+With your configuration available, you can add it to the first chat in the nested chat:
+```python
+nested_chats = [
+    {
+        "recipient": my_first_agent,
+        "summary_method": "reflection_with_llm",
+        "summary_prompt": "Summarize the conversation into bullet points.",
+        "carryover_config": my_carryover_config,
+    },
+    {
+        "recipient": poetry_agent,
+        "message": "Write a poem about the context.",
+        "max_turns": 1,
+        "summary_method": "last_msg",
+    },
+]
+```
+
+Finally, we add the nested chat as a handoff in the same way as we do to an agent:
+
+```python
+agent_1.handoff(
+    hand_to=[ON_CONDITION(
+        target={
+            "chat_queue":[nested_chats],
+            "config": Any,
+            "reply_func_from_nested_chats": None,
+            "use_async": False
+        },
+        condition="condition_1")
+        ]
+    )
+```
+
+See the documentation on [registering a nested chat](/docs/api-reference/autogen/ConversableAgent#register-nested-chats) for further information on the parameters `reply_func_from_nested_chats`, `use_async`, and `config`.
+
+Once a nested chat is complete, the resulting output from the last chat in the nested chats will be returned as the agent that triggered the nested chat's response.
+
+### AFTER_WORK
+
+When the active agent's response doesn't suggest a tool call or handoff, the chat will terminate by default. However, you can register an `AFTER_WORK` handoff to control what to do next. You can register these `AFTER_WORK` handoffs at the agent level and also the swarm level (through the `after_work` parameter on `initiate_swarm_chat`). The agent level takes precedence over the swarm level.
+
+The AFTER_WORK takes a single parameter and this can be an agent, an agent's name, an `AfterWorkOption`, or a callable function.
+
+The `AfterWorkOption` options are:
+- `TERMINATE`: Terminate the chat
+- `STAY`: Stay at the current agent
+- `REVERT_TO_USER`: Revert to the user agent. Only if a user agent is passed in when initializing. (See below for more details)
+- `SWARM_MANAGER`: Use the internal group chat's `auto` speaker selection method
+
+The callable function signature is:
+`def my_after_work_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, SwarmAgent, str]:`
+
+Note: there should only be one `AFTER_WORK`, if your requirement is more complex, use the callable function parameter.
+
+Here are examples of registering AFTER_WORKS
+
+```python
+# Register the handoff to an agent
+agent_1.handoff(hand_to=[
+ ON_CONDITION(...),
+ ON_CONDITION(...),
+ AFTER_WORK(agent_4) # Fallback to agent_4 if no ON_CONDITION handoff is suggested
+])
+
+# Register the handoff to an AfterWorkOption
+agent_2.handoff(hand_to=[AFTER_WORK(AfterWorkOption.TERMINATE)]) # Terminate the chat if no handoff is suggested
+
+def my_after_work_func(last_speaker: SwarmAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, SwarmAgent, str]:
+    if last_speaker.get_context("agent_1_done"):
+        return agent_2
+    else:
+        return AfterWorkOption.TERMINATE
+
+# Register the handoff to a function that will return an agent or AfterWorkOption
+agent_3.handoff(hand_to=[AFTER_WORK(my_after_work_func)])
+
+# Register the swarm level AFTER_WORK that becomes the default for agents that don't have one specified
+chat_history, context_variables, last_active_agent = initiate_swarm_chat(
+    ...
+    after_work=AfterWorkOption.TERMINATE # Or an agent or Callable
+)
+```
+
+### SwarmResult
+
+When tools are called, a `SwarmResult` can be returned and that can be used to specify the next agent to speak through the `SwarmResult`'s `agent` parameter.
+
+The `agent` property can be an agent object, an agent's name (string), an `AfterWorkOption`, or `None`.
+- If it is an agent object or agent name, that agent will be the next speaker.
+- If `None` it will return to the previous speaker.
+- If an `AfterWorkOption`, it will follow the rules noted in the previous section.
+
+By using an `AfterWorkOption` you have additional flexibility, such as terminating the swarm at this point, or transferring to the swarm's user agent.
+
+### Update Agent state before replying
+
+It can be useful to update a swarm agent's state before they reply. For example, using an agent's context variables you could change their system message based on the state of the workflow.
+
+When initialising a swarm agent use the `update_agent_state_before_reply` parameter to register updates that run after the agent is selected, but before they reply.
+
+`update_agent_state_before_reply` takes a list of any combination of the following (executing them in the provided order):
+
+- `UPDATE_SYSTEM_MESSAGE` provides a simple way to update the agent's system message via an f-string that substitutes the values of context variables, or a Callable that returns a string
+- Callable with two parameters of type `ConversableAgent` for the agent and `List[Dict[str Any]]` for the messages, and does not return a value
+
+Below is an example of setting these up when creating a Swarm agent.
+
+```python
+# Creates a system message string
+def create_system_prompt_function(my_agent: ConversableAgent, messages: List[Dict[]]) -> str:
+    preferred_name = my_agent.get_context("preferred_name", "(name not provided)")
+
+    # Note that the returned string will be treated like an f-string using the context variables
+    return "You are a customer service representative helping a customer named "
+    + preferred_name
+    + " and their passport number is '{passport_number}'."
+
+# Function to update an Agent's state
+def my_callable_state_update_function(my_agent: ConversableAgent, messages: List[Dict[]]) -> None:
+    agent.set_context("context_key", 43)
+    agent.update_system_message("You are a customer service representative.")
+
+# Create the SwarmAgent and set agent updates
+customer_service = SwarmAgent(
+    name="CustomerServiceRep",
+    system_message="You are a customer service representative.",
+    update_agent_state_before_reply=[
+        UPDATE_SYSTEM_MESSAGE("You are a customer service representative. Quote passport number '{passport_number}'"),
+        UPDATE_SYSTEM_MESSAGE(create_system_prompt_function),
+        my_callable_state_update_function]
+    ...
+)
+```
+
+### Initialize SwarmChat with `initiate_swarm_chat` / `a_initiate_swarm_chat`
+
+After a set of swarm agents are created, you can initiate a swarm chat by calling `initiate_swarm_chat` (or `a_initiate_swarm_chat` for an asynchronous version).
+
+```python
+chat_history, context_variables, last_active_agent = initiate_swarm_chat(
+    initial_agent=agent_1, # the first agent to start the chat
+    agents=[agent_1, agent_2, agent_3], # a list of agents
+    messages=[{"role": "user", "content": "Hello"}], # a list of messages to start the chat, you can also pass in one string
+    user_agent=user_agent, # optional, if you want to revert to the user agent
+    context_variables={"key": "value"} # optional, initial context variables
+)
+```
+
+How we handle messages:
+- Case 1: If you pass in one single message
+    - If there is a name in that message, we will assume this message is from that agent. (It will be error if that name doesn't match any agent you passed in.)
+    - If there is no name, 1. User agent passed in: we assume this message is from the user agent. 2. No user agent passed in: we will create a temporary user agent just to start the chat.
+- Case 2: We will use the [Resume GroupChat](/docs/user-guide/advanced-concepts/resuming-group-chat) feature to resume the chat. The `name` fields in these messages must be one of the names of the agents you passed in, otherwise, it will be an error.
+
+## Q&As
+
+> How are context variables updated?
+
+In a swarm, the context variables are shared amongst Swarm agents. As context variables are available at the agent level, you can use the context variable getters/setters on the agent to view and change the shared context variables. If you're working with a function that returns a `SwarmResult` you should update the passed in context variables and return it in the `SwarmResult`, this will ensure the shared context is updated.
+
+> What is the difference between ON_CONDITION and AFTER_WORK?
+
+When registering an ON_CONDITION handoff, we are creating a function schema to be passed to the LLM. The LLM will decide whether to call this function.
+
+When registering an AFTER_WORK handoff, we are defining the fallback mechanism when no tool calls are suggested. This is a higher level of control from the swarm chat level.
+
+> When to pass in a user agent?
+
+If your application requires interactions with the user, you can pass in a user agent to the groupchat, so that don't need to write an outer loop to accept user inputs and call swarm.
+
+
+## Demonstration
+
+### Create Swarm Agents
+
+```python
+import autogen
+
+config_list = autogen.config_list_from_json(...)
+llm_config = {"config_list": config_list}
+
+import random
+
+from autogen import (
+    AFTER_WORK,
+    ON_CONDITION,
+    AfterWorkOption,
+    SwarmAgent,
+    SwarmResult,
+    initiate_swarm_chat,
+)
+
+
+# 1. A function that returns a value of "success" and updates the context variable "1" to True
+def update_context_1(context_variables: dict) -> SwarmResult:
+    context_variables["1"] = True
+    return SwarmResult(value="success", context_variables=context_variables)
+
+
+# 2. A function that returns an SwarmAgent object
+def transfer_to_agent_2() -> SwarmAgent:
+    """Transfer to agent 2"""
+    return agent_2
+
+
+# 3. A function that returns the value of "success", updates the context variable and transfers to agent 3
+def update_context_2_and_transfer_to_3(context_variables: dict) -> SwarmResult:
+    context_variables["2"] = True
+    return SwarmResult(value="success", context_variables=context_variables, agent=agent_3)
+
+
+# 4. A function that returns a normal value
+def get_random_number() -> str:
+    return random.randint(1, 100)
+
+
+def update_context_3_with_random_number(context_variables: dict, random_number: int) -> SwarmResult:
+    context_variables["3"] = random_number
+    return SwarmResult(value="success", context_variables=context_variables)
+
+
+agent_1 = SwarmAgent(
+    name="Agent_1",
+    system_message="You are Agent 1, first, call the function to update context 1, and transfer to Agent 2",
+    llm_config=llm_config,
+    functions=[update_context_1, transfer_to_agent_2],
+)
+
+agent_2 = SwarmAgent(
+    name="Agent_2",
+    system_message="You are Agent 2, call the function that updates context 2 and transfer to Agent 3",
+    llm_config=llm_config,
+    functions=[update_context_2_and_transfer_to_3],
+)
+
+agent_3 = SwarmAgent(
+    name="Agent_3",
+    system_message="You are Agent 3, tell a joke",
+    llm_config=llm_config,
+)
+
+agent_4 = SwarmAgent(
+    name="Agent_4",
+    system_message="You are Agent 4, call the function to get a random number",
+    llm_config=llm_config,
+    functions=[get_random_number],
+)
+
+agent_5 = SwarmAgent(
+    name="Agent_5",
+    system_message="Update context 3 with the random number.",
+    llm_config=llm_config,
+    functions=[update_context_3_with_random_number],
+)
+
+
+# This is equivalent to writing a transfer function
+agent_3.register_hand_off(ON_CONDITION(agent_4, "Transfer to Agent 4"))
+
+agent_4.register_hand_off([AFTER_WORK(agent_5)])
+
+print("Agent 1 function schema:")
+for func_schema in agent_1.llm_config["tools"]:
+    print(func_schema)
+
+print("Agent 3 function schema:")
+for func_schema in agent_3.llm_config["tools"]:
+    print(func_schema)
+
+context_variables = {"1": False, "2": False, "3": False}
+chat_result, context_variables, last_agent = initiate_swarm_chat(
+    initial_agent=agent_1,
+    agents=[agent_1, agent_2, agent_3, agent_4, agent_5],
+    messages="start",
+    context_variables=context_variables,
+    after_work=AFTER_WORK(AfterWorkOption.TERMINATE),  # this is the default
+)
+```
+
+### Demo with User Agent
+
+We pass in a user agent to the swarm chat to accept user inputs. With `agent_6`, we register an `AFTER_WORK` handoff to revert to the user agent when no tool calls are suggested.
+
+```python
+from autogen import UserProxyAgent
+
+user_agent = UserProxyAgent(name="User", code_execution_config=False)
+
+agent_6 = SwarmAgent(
+    name="Agent_6",
+    system_message="You are Agent 6. Your job is to tell jokes.",
+    llm_config=llm_config,
+)
+
+agent_7 = SwarmAgent(
+    name="Agent_7",
+    system_message="You are Agent 7, explain the joke.",
+    llm_config=llm_config,
+)
+
+agent_6.register_hand_off(
+    [
+        ON_CONDITION(
+            agent_7, "Used to transfer to Agent 7. Don't call this function, unless the user explicitly tells you to."
+        ),
+        AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
+    ]
+)
+
+chat_result, _, _ = initiate_swarm_chat(
+    initial_agent=agent_6,
+    agents=[agent_6, agent_7],
+    user_agent=user_agent,
+    messages="start",
+)
+```

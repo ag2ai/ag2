@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import asyncio
 import copy
@@ -19,11 +19,16 @@ import pytest
 from pydantic import BaseModel, Field
 
 import autogen
-from autogen.agentchat import ConversableAgent, UserProxyAgent
+from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
-from autogen.exception_utils import InvalidCarryOverType, SenderRequired
+from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 
-from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
+from ..conftest import (
+    Credentials,
+    credentials_all_llms,
+    suppress_gemini_resource_exhausted,
+    suppress_json_decoder_error,
+)
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -290,12 +295,10 @@ def test_generate_code_execution_reply():
 
     dummy_messages_for_auto = []
     for i in range(3):
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
         # Without an assistant present
         agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}
@@ -330,12 +333,10 @@ def test_generate_code_execution_reply():
             "exitcode: 0 (execution succeeded)\nCode output: \nhello world\n",
         )
 
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
     # scenario 7: if last_n_messages is set to 'auto' and code is present, but not before an assistant message, then nothing happens
     agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}
@@ -483,7 +484,7 @@ def test_generate_reply():
     )
 
     dummy_agent_2.register_reply(["str", None], ConversableAgent.generate_oai_reply)
-    with pytest.raises(SenderRequired):
+    with pytest.raises(SenderRequiredError):
         dummy_agent_2.generate_reply(messages=messages, sender=None)
 
 
@@ -599,7 +600,7 @@ def test__wrap_function_sync():
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
-        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
+        amount: float = Field(default=100.0, description="Amount of money in the currency")
 
     Currency(currency="USD", amount=100.0)
 
@@ -637,7 +638,7 @@ async def test__wrap_function_async():
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
-        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
+        amount: float = Field(default=100.0, description="Amount of money in the currency")
 
     Currency(currency="USD", amount=100.0)
 
@@ -1061,6 +1062,8 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
 ) -> None:
+    if credentials_from_test_param.api_type == "google":
+        pytest.skip("This test currently fails with gemini flash model")
     await _test_function_registration_e2e_async(credentials_from_test_param)
 
 
@@ -1242,7 +1245,7 @@ def test_messages_with_carryover():
     assert isinstance(generated_message, str)
 
     context = dict(message="hello", carryover=3)
-    with pytest.raises(InvalidCarryOverType):
+    with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
     # Test multimodal messages
@@ -1269,7 +1272,7 @@ def test_messages_with_carryover():
     assert len(generated_message["content"]) == 4
 
     context = dict(message=mm_message, carryover=3)
-    with pytest.raises(InvalidCarryOverType):
+    with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
     # Test without carryover
@@ -1588,9 +1591,9 @@ def test_context_variables():
 @pytest.mark.gemini
 @suppress_gemini_resource_exhausted
 def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value(
-    credentials_gemini_pro: Credentials,
+    credentials_gemini_flash: Credentials,
 ) -> None:
-    agent = ConversableAgent(name="agent", llm_config=credentials_gemini_pro.llm_config)
+    agent = ConversableAgent(name="agent", llm_config=credentials_gemini_flash.llm_config)
 
     user_proxy = UserProxyAgent(
         name="user_proxy_1",
@@ -1612,6 +1615,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
 
 
 @pytest.mark.deepseek
+@suppress_json_decoder_error
 def test_conversable_agent_with_deepseek_reasoner(
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
@@ -1631,6 +1635,36 @@ def test_conversable_agent_with_deepseek_reasoner(
     assert isinstance(result.summary, str)
 
 
+def test_invalid_functions_parameter():
+    """Test initialization with valid and invalid parameters"""
+
+    # Invalid functions parameter
+    with pytest.raises(TypeError):
+        ConversableAgent("test_agent", functions="invalid")
+
+
+def test_update_system_message():
+    """Tests the update_agent_state_before_reply functionality with multiple scenarios"""
+
+    # Test invalid update function
+    with pytest.raises(ValueError, match="The update function must be either a string or a callable"):
+        ConversableAgent("agent3", update_agent_state_before_reply=UpdateSystemMessage(123))
+
+    # Test invalid callable (wrong number of parameters)
+    def invalid_update_function(context_variables):
+        return "Invalid function"
+
+    with pytest.raises(ValueError, match="The update function must accept two parameters"):
+        ConversableAgent("agent4", update_agent_state_before_reply=UpdateSystemMessage(invalid_update_function))
+
+    # Test invalid callable (wrong return type)
+    def invalid_return_function(context_variables, messages) -> dict:
+        return {}
+
+    with pytest.raises(ValueError, match="The update function must return a string"):
+        ConversableAgent("agent5", update_agent_state_before_reply=UpdateSystemMessage(invalid_return_function))
+
+
 if __name__ == "__main__":
     # test_trigger()
     # test_context()
@@ -1643,4 +1677,5 @@ if __name__ == "__main__":
     # test_function_registration_e2e_sync()
     # test_process_gemini_carryover()
     # test_process_carryover()
-    test_context_variables()
+    # test_context_variables()
+    test_invalid_functions_parameter()

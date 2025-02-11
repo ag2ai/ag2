@@ -4,9 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
-import os
 
 import pytest
 
@@ -53,12 +52,12 @@ def anthropic_client():
 
 
 @skip_on_missing_imports(["anthropic"], "anthropic")
-def test_initialization_missing_api_key():
-    os.environ.pop("ANTHROPIC_API_KEY", None)
-    os.environ.pop("AWS_ACCESS_KEY", None)
-    os.environ.pop("AWS_SECRET_KEY", None)
-    os.environ.pop("AWS_SESSION_TOKEN", None)
-    os.environ.pop("AWS_REGION", None)
+def test_initialization_missing_api_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("AWS_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("AWS_SECRET_KEY", raising=False)
+    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
+    monkeypatch.delenv("AWS_REGION", raising=False)
     with pytest.raises(ValueError, match="credentials are required to use the Anthropic API."):
         AnthropicClient()
 
@@ -135,14 +134,14 @@ def test_cost_calculation(mock_completion):
 @skip_on_missing_imports(["anthropic"], "anthropic")
 def test_load_config(anthropic_client):
     params = {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-3-5-sonnet-latest",
         "stream": False,
         "temperature": 1,
         "top_p": 0.8,
         "max_tokens": 100,
     }
     expected_params = {
-        "model": "claude-3-sonnet-20240229",
+        "model": "claude-3-5-sonnet-latest",
         "stream": False,
         "temperature": 1,
         "top_p": 0.8,

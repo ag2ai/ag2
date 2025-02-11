@@ -4,7 +4,7 @@
 
 import inspect
 import sys
-from typing import Annotated, Callable, Optional, get_type_hints
+from typing import Annotated, Any, Callable, Optional, get_type_hints
 
 import pytest
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ from autogen.tools.dependency_injection import (
     _is_context_param,
     _is_depends_param,
     _remove_injected_params_from_signature,
+    _set_return_annotation_to_any,
     _string_metadata_to_description_field,
     get_context_params,
 )
@@ -189,25 +190,51 @@ class TestRemoveInjectedParamsFromSignature:
         assert str(inspect.signature(f)) == "(a: int) -> int"
 
 
-def test_string_metadata_to_description_field() -> None:
-    def f(
-        a: int,
+class TestHelperFunctions:
+    def f_sync(  # type: ignore[misc]
+        a: int,  # noqa: N805
         b: Annotated[int, "b description"],
         c: Annotated[Optional[int], "c description"] = None,
     ) -> int:
         return a + b
 
-    f = _string_metadata_to_description_field(f)
-    type_hints = get_type_hints(f, include_extras=True)
+    def f_async(  # type: ignore[misc]
+        a: int,  # noqa: N805
+        b: Annotated[int, "b description"],
+        c: Annotated[Optional[int], "c description"] = None,
+    ) -> int:
+        return a + b
 
-    field_info = type_hints["b"].__metadata__[0]
-    assert isinstance(field_info, Field)
-    assert field_info.description == "b description"
+    @pytest.mark.parametrize(
+        "test_func",
+        [
+            f_sync,
+            f_async,
+        ],
+    )
+    def test_string_metadata_to_description_field(self, test_func: Callable[..., int]) -> None:
+        f = _string_metadata_to_description_field(test_func)
+        type_hints = get_type_hints(f, include_extras=True)
 
-    if sys.version_info < (3, 11):
-        field_info = type_hints["c"].__args__[0].__metadata__[0]
-    else:
-        field_info = type_hints["c"].__metadata__[0]
+        field_info = type_hints["b"].__metadata__[0]
+        assert isinstance(field_info, Field)
+        assert field_info.description == "b description"
 
-    assert isinstance(field_info, Field)
-    assert field_info.description == "c description"
+        if sys.version_info < (3, 11):
+            field_info = type_hints["c"].__args__[0].__metadata__[0]
+        else:
+            field_info = type_hints["c"].__metadata__[0]
+
+        assert isinstance(field_info, Field)
+        assert field_info.description == "c description"
+
+    @pytest.mark.parametrize(
+        "test_func",
+        [
+            f_sync,
+            f_async,
+        ],
+    )
+    def test_set_return_annotation_to_any(self, test_func: Callable[..., int]) -> None:
+        f = _set_return_annotation_to_any(test_func)
+        assert inspect.signature(f).return_annotation == Any

@@ -8,12 +8,15 @@ import sys
 from types import TracebackType
 from typing import Any, Optional, Protocol
 
+from ..doc_utils import export_module
+
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
 
 
+@export_module("autogen.cache")
 class AbstractCache(Protocol):
     """This protocol defines the basic interface for cache operations.
     Implementing classes should provide concrete implementations for

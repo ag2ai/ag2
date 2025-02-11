@@ -1,0 +1,52 @@
+---
+title: Community Gallery
+mode: "wide"
+---
+
+import { GalleryPage } from "/snippets/components/GalleryPage.mdx";
+import { galleryItems } from "/snippets/data/GalleryItems.mdx";
+import { ClientSideComponent } from "/snippets/components/ClientSideComponent.mdx";
+
+This page contains a list of demos that use AG2 in various applications from the community.
+
+**Contribution guide:**
+Built something interesting with AG2? Submit a PR to add it to the list! See the [Contribution Guide below](#contributing) for more details.
+
+<ClientSideComponent Component={GalleryPage} componentProps={{galleryItems: galleryItems}} />
+
+
+## Contributing
+Thank you for your interest in contributing! To add your demo to the gallery, please create a Pull Request (PR) with the following details.
+
+  - Updated `website/snippets/data/GalleryItems.mdx` file with your application entry.
+
+  - The application image should be added to the `static/img/gallery` directory if the image is local. If the image is hosted online, just update the `image` property with the URL of the image.
+
+  - Below is an example of an entry in the `website/snippets/data/GalleryItems.mdx` file:
+
+    ```
+      {
+      "title": "AG2 Playground", // The title of your demo
+      "link": "https://huggingface.co/spaces/thinkall/AutoGen_Playground", // URL to your demo
+      "description": "A space to explore the capabilities of AG2.", // A brief description
+      "image": "default.png", // Filename of the image present in the `static/img/gallery` directory or URL of the hosted image
+      "tags": ["ui"] // Tags to categorize your demo
+      }
+		```
+  - Refer to the below table for description of each property:
+
+    | Property     | Description                                                                                         |
+    |--------------|-----------------------------------------------------------------------------------------------------|
+    | `title`      | Provide a clear and concise title for your demo.                                                    |
+    | `link`       | Include a valid URL linking to your demo.                                                           |
+    | `description`| Write a short description (1-2 sentences) to summarize your demo.                                   |
+    | `image`      | Use the filename of an image stored in the `static/img/gallery` directory if the image is local.    |
+    |              | If the image is hosted online, ensure the URL is correctly added to the entry.                      |
+    | `tags`       | Add up to two tags that best describe your demo for clarity.                                        |
+    |              | Choose from the existing tags:                                                                      |
+    |              | - `app`: Using AG2 for specific applications.                                                   |
+    |              | - `extension`: Enhancing AG2 beyond the features in the current version.                        |
+    |              | - `ui`: Building a user interface for AG2.                                                      |
+    |              | - `tool`: Strengthening AG2 Agents with external tools.                                         |
+    |              | - `groupchat`: Solving complex tasks with a group of Agents.                                        |
+    |              | Or propose new tags if the existing ones do not describe your demo. Ensure they are descriptive and concise. |

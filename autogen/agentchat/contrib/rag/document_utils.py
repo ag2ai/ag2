@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
 
+from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -101,6 +102,7 @@ def list_files(directory: Union[Path, str]) -> list[Path]:
     return [f for f in path.rglob("*") if f.is_file()]
 
 
+@export_module("autogen.agentchat.contrib.rag")
 def handle_input(input_path: Union[Path, str], output_dir: Optional[Union[Path, str]] = None) -> list[Path]:
     """Process the input string and return the appropriate file paths"""
     input_path = Path(input_path)

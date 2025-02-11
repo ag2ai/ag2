@@ -6,6 +6,7 @@ import re
 import sys
 from typing import Any, Optional
 
+from ...doc_utils import export_module
 from ...import_utils import optional_import_block
 from ...tools import Tool
 from ..registry import register_interoperable_class
@@ -18,6 +19,7 @@ def _sanitize_name(s: str) -> str:
 
 
 @register_interoperable_class("crewai")
+@export_module("autogen.interop")
 class CrewAIInteroperability:
     """A class implementing the `Interoperable` protocol for converting CrewAI tools
     to a general `Tool` format.

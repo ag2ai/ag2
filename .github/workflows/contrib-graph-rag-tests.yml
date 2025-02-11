@@ -4,12 +4,15 @@
 name: ContribGraphRagTests
 
 on:
-  pull_request:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+  pull_request_target:
     branches: ["main"]
     paths:
       - "autogen/agentchat/contrib/graph_rag/**"
       - "test/agentchat/contrib/graph_rag/**"
-      - ".github/workflows/contrib-test.yml"
+      - ".github/workflows/contrib-graph-rag-tests.yml"
       - "pyproject.toml"
 
 concurrency:
@@ -21,9 +24,11 @@ permissions:
   # checks: read
   # contents: read
   # deployments: read
+
 jobs:
   GraphRagIntegrationTest-FalkorDB-Ubuntu:
     runs-on: ubuntu-latest
+    environment: openai1
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +39,21 @@ jobs:
         ports:
           - 6379:6379
     steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
@@ -42,12 +62,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest
       - name: Install FalkorDB SDK when on linux
         run: |
-          uv pip install --system -e .[graph-rag-falkor-db]
+          uv pip install --system -e .[test,graph-rag-falkor-db]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -59,16 +76,20 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          uv pip install --system pytest-cov>=5
-          bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
+          bash scripts/test.sh test/agentchat/contrib/graph_rag/test_falkor_graph_rag.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: falkordb, ubuntu-latest, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   GraphRagIntegrationTest-Neo4j-Llmaindex-Ubuntu:
     runs-on: ubuntu-latest
+    environment: openai1
     strategy:
       fail-fast: false
       matrix:
@@ -81,6 +102,10 @@ jobs:
           - 7474:7474
         env:
           NEO4J_AUTH: neo4j/password
+          NEO4J_PLUGINS: '["apoc"]'
+          NEO4J_apoc_export_file_enabled: true
+          NEO4J_apoc_import_file_enabled: true
+          NEO4J_apoc_import_file_use__neo4j__config: true
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -90,12 +115,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest
       - name: Install Neo4j and Llama-index when on linux
         run: |
-          uv pip install --system -e .[neo4j_graph_rag]
+          uv pip install --system -e .[test,neo4j]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -107,10 +129,59 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          uv pip install --system pytest-cov>=5
-          bash scripts/test-skip-llm.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
+          bash scripts/test.sh test/agentchat/contrib/graph_rag/test_neo4j_graph_rag.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Test-Neo4j-Llmaindex-Ubuntu:
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       python-version: ["3.9", "3.10", "3.13"]
+  #   services:
+  #     neo4j:
+  #       image: neo4j:latest
+  #       ports:
+  #         - 7687:7687
+  #         - 7474:7474
+  #       env:
+  #         NEO4J_AUTH: neo4j/password
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: astral-sh/setup-uv@v5
+  #       with:
+  #         version: "latest"
+  #     - name: Set up Python ${{ matrix.python-version }}
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #     - name: Install Neo4j and Llama-index when on linux
+  #       run: |
+  #         uv pip install --system -e .[neo4j,test]
+  #     - name: Set AUTOGEN_USE_DOCKER based on OS
+  #       shell: bash
+  #       run: |
+  #         echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
+  #     - name: Coverage
+  #       env:
+  #         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  #         AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+  #         AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+  #         OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+  #       run: |
+  #         bash scripts/test.sh -m "neo4j"
+  #     - name: Upload coverage to Codecov
+  #       uses: codecov/codecov-action@v5
+  #       with:
+  #         files: ./coverage.xml
+  #         flags: neo4j, ubuntu-latest, ${{ matrix.python-version }}
+  #         fail_ci_if_error: true
+  #         token: ${{ secrets.CODECOV_TOKEN }}

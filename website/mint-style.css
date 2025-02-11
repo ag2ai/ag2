@@ -28,6 +28,13 @@ h4 {
   }
 }
 
+.prose :where(h3):not(:where([class~=not-prose],[class~=not-prose] *)) {
+  margin-top: 1em;
+}
+.prose :where(h2):not(:where([class~=not-prose],[class~=not-prose] *)) {
+  margin-top: 0.8em;
+}
+
 .card h2 {
   font-size: 2rem !important;
 
@@ -75,6 +82,24 @@ body.reference-page h4 {
   text-transform: none !important;
 }
 
+.edit-url-container {
+  margin-top: 1rem;
+  & > a {
+    color: #4b9cd6;
+    & > svg {
+      margin-right: 0.25rem;
+      vertical-align: baseline !important;
+    }
+    & > p.icon {
+      display: inline-block;
+      margin-right: 0.25rem;
+      & > svg {
+        vertical-align: baseline;
+      }
+    }
+  }
+}
+
 /* Reference section starts */
 
 body.reference-page h1,
@@ -96,6 +121,9 @@ body.reference-page .doc-symbol-class {
   position: relative;
   background-color: #ebf3f9;
 }
+.dark body.reference-page .doc-symbol-class {
+  background-color: #79c0ff1a;
+}
 
 body.reference-page .doc-symbol-class:before {
   content: "class" !important;
@@ -111,9 +139,17 @@ body.reference-page .doc-symbol-class:before {
   display: inline-block;
 }
 
+.dark body.reference-page .doc-symbol-method {
+  background-color: #79c0ff1a;
+}
+
 .doc-symbol-attribute {
   background-color: #f4ebe6;
   display: inline-block;
+}
+
+.dark body.reference-page .doc-symbol-attribute {
+  background-color: #79c0ff1a;
 }
 
 .doc-symbol-function:before {
@@ -123,6 +159,10 @@ body.reference-page .doc-symbol-class:before {
   font-size: 0.75rem;
   font-weight: bold;
   vertical-align: middle;
+}
+
+.dark body.reference-page .doc-symbol-function {
+  background-color: #79c0ff1a;
 }
 
 .doc-symbol-method:before {
@@ -204,6 +244,38 @@ body.reference-page .headerlink:hover {
   font-family: monospace;
   font-size: 1rem;
   margin: 0 0.25rem;
+}
+
+body.reference-page  h2#classes,
+body.reference-page  h2#functions {
+  font-family: monospace !important;
+  font-size: 1.25rem !important;
+}
+
+body.reference-page  p.overview-symbol {
+  margin: 1rem 0;
+
+  & a {
+    text-decoration: none;
+    color: #338fd1;
+    font-family: monospace;
+    & code {
+      padding: 0.2em 0.4em;
+      background-color: #ebf3f9;
+      border-radius: 3px;
+      text-decoration: none;
+    }
+  }
+}
+
+.dark body.reference-page  p.overview-symbol {
+  & a {
+    border-bottom: none;
+    & code {
+      background-color: #79c0ff1a;
+      color: #338fd1;
+    }
+  }
 }
 /* Reference section ends */
 
@@ -370,7 +442,6 @@ a.colab-badge > img, a.github-badge  > img {
   text-align: center;
 }
 .popular-resources .youtube-video a {
-  color: #000;
   display: block;
   --font-family-headings-custom: "Jersey 10" !important;
   font-family: var(
@@ -380,6 +451,7 @@ a.colab-badge > img, a.github-badge  > img {
   font-size: 1.125rem;
   text-align: left;
   margin-top: 6px;
+  margin-left: 0.15rem;
 }
 
 .popular-resources .youtube-video iframe {
@@ -711,13 +783,41 @@ table {
     & > div > ul > li {
       & > a,
       & > div {
-        padding-left: 2.5rem !important;
+        padding-left: 1rem !important;
       }
 
       & > ul > li {
         & > a,
         & > div {
-          padding-left: 3.5rem !important;
+          padding-left: 1.5rem !important;
+        }
+
+        & > ul > li {
+          & > a,
+          & > div {
+            padding-left: 2rem !important;
+          }
+
+          & > ul > li {
+            & > a,
+            & > div {
+              padding-left: 2.5rem !important;
+            }
+
+            & > ul > li {
+              & > a,
+              & > div {
+                padding-left: 3rem !important;
+              }
+
+              & > ul > li {
+                & > a,
+                & > div {
+                  padding-left: 3.5rem !important;
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -824,9 +924,9 @@ table {
 
       &:first-child {
         margin-top: 0;
-        h5 {
+        /* h5 {
           display: none;
-        }
+        } */
       }
     }
   }

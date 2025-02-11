@@ -45,9 +45,9 @@ def optional_import_block() -> Generator[Result, None, None]:
     try:
         yield result
         result._failed = False
-    except ImportError as e:
+    except ImportError:
         # Ignore ImportErrors during this context
-        logger.info(f"Ignoring ImportError: {e}")
+        # logger.info(f"Ignoring ImportError: {e}")
         result._failed = True
 
 
@@ -256,6 +256,7 @@ def require_optional_import(modules: Union[str, Iterable[str]], dep_target: str)
 
         def decorator(o: T) -> T:
             return o
+
     else:
 
         def decorator(o: T) -> T:
@@ -272,19 +273,27 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Opti
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
     missing_modules = get_missing_imports(modules)
+    # Add pytest.mark.dep_target decorator
+    # For example, if dep_target is "jupyter-executor" add pytest.mark.jupyter_executor
+    mark_name = dep_target.replace("-", "_") if dep_target else "openai"
 
     if not missing_modules:
 
         def decorator(o: T) -> T:
-            return o
+            import pytest
+
+            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            return pytest_mark_o  # type: ignore[no-any-return]
+
     else:
 
         def decorator(o: T) -> T:
             import pytest
 
             install_target = "" if dep_target is None else f"[{dep_target}]"
-            return pytest.mark.skip(  # type: ignore[return-value]
+            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            return pytest.mark.skip(  # type: ignore[return-value,no-any-return]
                 f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2{install_target}'"
-            )(o)
+            )(pytest_mark_o)
 
     return decorator

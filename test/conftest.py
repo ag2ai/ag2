@@ -10,12 +10,11 @@ import inspect
 import os
 import re
 import time
+from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
 import pytest
-from _pytest.outcomes import Skipped
-from pytest import CallInfo, Item
 
 import autogen
 from autogen.import_utils import optional_import_block
@@ -33,19 +32,32 @@ class Secrets:
     @staticmethod
     def add_secret(secret: str) -> None:
         Secrets._secrets.add(secret)
-
-        for i in range(0, len(secret), 16):
-            chunk = secret[i : (i + 16)]
-            if len(chunk) > 8:
-                Secrets._secrets.add(chunk)
+        Secrets.get_secrets_patten.cache_clear()
 
     @staticmethod
-    def remove_secret(secret: str) -> None:
-        Secrets._secrets.remove(secret)
+    @functools.lru_cache(None)
+    def get_secrets_patten(x: int = 5) -> re.Pattern[str]:
+        """
+        Builds a regex pattern to match substrings of length `x` or greater derived from any secret in the list.
+
+        Args:
+            data (str): The string to be checked.
+            x (int): The minimum length of substrings to match.
+
+        Returns:
+            re.Pattern: Compiled regex pattern for matching substrings.
+        """
+        substrings: set[str] = set()
+        for secret in Secrets._secrets:
+            for length in range(x, len(secret) + 1):
+                substrings.update(secret[i : i + length] for i in range(len(secret) - length + 1))
+
+        return re.compile("|".join(re.escape(sub) for sub in sorted(substrings, key=len, reverse=True)))
 
     @staticmethod
     def sanitize_secrets(data: str, x: int = 5) -> str:
-        """Censors substrings of length `x` or greater derived from any secret in the list.
+        """
+        Censors substrings of length `x` or greater derived from any secret in the list.
 
         Args:
             data (str): The string to be censored.
@@ -54,45 +66,12 @@ class Secrets:
         Returns:
             str: The censored string.
         """
-        # Build a list of all substrings of length >= x from each secret
-        substrings: set[str] = set()
-        for secret in Secrets._secrets:
-            for length in range(x, len(secret) + 1):  # Generate substrings of lengths >= x
-                substrings.update(secret[i : i + length] for i in range(len(secret) - length + 1))
+        if len(Secrets._secrets) == 0:
+            return data
 
-        # Create a regex pattern to match any of these substrings
-        pattern = re.compile("|".join(re.escape(sub) for sub in substrings))
+        pattern = Secrets.get_secrets_patten(x)
 
-        # Replace all matches with the mask
-        def mask_match(match: re.Match[str]) -> str:
-            return "*" * len(match.group(0))
-
-        return pattern.sub(mask_match, data)
-
-    @staticmethod
-    def needs_sanitizing(data: str, x: int = 5) -> bool:
-        """Checks if the string contains any substrings of length `x` or greater derived from any secret in the list.
-
-        Args:
-            data (str): The string to be checked.
-            x (int): The minimum length of substrings to match.
-
-        Returns:
-            bool: True if the string contains any secrets, False otherwise.
-        """
-        # Build a list of all substrings of length >= x from each secret
-        substrings: set[str] = set()
-        for secret in Secrets._secrets:
-            for length in range(x, len(secret) + 1):
-                substrings.update(secret[i : i + length] for i in range(len(secret) - length + 1))
-
-        # Create a regex pattern to match any of these substrings
-        pattern = re.compile("|".join(re.escape(sub) for sub in substrings))
-
-        # Check if there is a match
-        pattern_match = pattern.search(data)
-
-        return pattern_match is not None
+        return re.sub(pattern, "*****", data)
 
 
 class Credentials:
@@ -134,31 +113,27 @@ class Credentials:
         return self.llm_config["config_list"][0]["model"]  # type: ignore[no-any-return]
 
 
-class CensoredError(Exception):
-    def __init__(self, exception: BaseException):
-        self.exception = exception
-        self.__traceback__ = exception.__traceback__
-        original_message = "".join([repr(arg) for arg in exception.args])
-        message = Secrets.sanitize_secrets(original_message)
-        super().__init__(message)
+def patch_pytest_terminal_writer() -> None:
+    import _pytest._io
+
+    org_write = _pytest._io.TerminalWriter.write
+
+    def write(self: _pytest._io.TerminalWriter, msg: str, *, flush: bool = False, **markup: bool) -> None:
+        msg = Secrets.sanitize_secrets(msg)
+        return org_write(self, msg, flush=flush, **markup)
+
+    _pytest._io.TerminalWriter.write = write  # type: ignore[method-assign]
+
+    org_line = _pytest._io.TerminalWriter.line
+
+    def write_line(self: _pytest._io.TerminalWriter, s: str = "", **markup: bool) -> None:
+        s = Secrets.sanitize_secrets(s)
+        return org_line(self, s=s, **markup)
+
+    _pytest._io.TerminalWriter.line = write_line  # type: ignore[method-assign]
 
 
-def pytest_runtest_makereport(item: Item, call: CallInfo[Any]) -> None:
-    """Hook to customize the exception output.
-    This is called after each test call.
-    """
-    if call.excinfo is not None:  # This means the test failed
-        exception_value = call.excinfo.value
-
-        original_message = "".join([repr(arg) for arg in exception_value.args])  # noqa: F841
-
-        # Check if this exception is a pytest skip exception
-        if isinstance(exception_value, Skipped):
-            return  # Don't modify skip exceptions
-
-        # if Secrets.needs_sanitizing(original_message):
-        #     censored_exception = CensoredError(call.excinfo.value)
-        #     call.excinfo = pytest.ExceptionInfo.from_exception(censored_exception)
+patch_pytest_terminal_writer()
 
 
 def get_credentials(
@@ -298,16 +273,16 @@ def credentials() -> Credentials:
 
 
 @pytest.fixture
-def credentials_gemini_pro() -> Credentials:
+def credentials_gemini_flash() -> Credentials:
     return get_llm_credentials(
-        "GEMINI_API_KEY", model="gemini-pro", api_type="google", filter_dict={"tags": ["gemini-pro"]}
+        "GEMINI_API_KEY", model="gemini-1.5-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
     )
 
 
 @pytest.fixture
 def credentials_gemini_flash_exp() -> Credentials:
     return get_llm_credentials(
-        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash"]}
+        "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash-exp"]}
     )
 
 
@@ -315,7 +290,7 @@ def credentials_gemini_flash_exp() -> Credentials:
 def credentials_anthropic_claude_sonnet() -> Credentials:
     return get_llm_credentials(
         "ANTHROPIC_API_KEY",
-        model="claude-3-sonnet-20240229",
+        model="claude-3-5-sonnet-latest",
         api_type="anthropic",
         filter_dict={"tags": ["anthropic-claude-sonnet"]},
     )
@@ -384,7 +359,7 @@ credentials_all_llms = [
         marks=pytest.mark.openai,
     ),
     pytest.param(
-        credentials_gemini_pro.__name__,
+        credentials_gemini_flash.__name__,
         marks=pytest.mark.gemini,
     ),
     pytest.param(
@@ -417,7 +392,13 @@ credentials_browser_use = [
 T = TypeVar("T", bound=Callable[..., Any])
 
 
-def suppress(exception: type[BaseException], *, retries: Optional[int] = None, timeout: int = 60) -> Callable[[T], T]:
+def suppress(
+    exception: type[BaseException],
+    *,
+    retries: int = 0,
+    timeout: int = 60,
+    error_filter: Optional[Callable[[BaseException], bool]] = None,
+) -> Callable[[T], T]:
     """Suppresses the specified exception and retries the function a specified number of times.
 
     Args:
@@ -428,7 +409,11 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
     """
 
     def decorator(
-        func: T, exception: type[BaseException] = exception, retries: Optional[int] = retries, timeout: int = timeout
+        func: T,
+        exception: type[BaseException] = exception,
+        retries: int = retries,
+        timeout: int = timeout,
+        error_filter: Optional[Callable[[BaseException], bool]] = error_filter,
     ) -> T:
         if inspect.iscoroutinefunction(func):
 
@@ -436,50 +421,41 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
             async def wrapper(
                 *args: Any,
                 exception: type[BaseException] = exception,
-                retries: Optional[int] = retries,
+                retries: int = retries,
                 timeout: int = timeout,
                 **kwargs: Any,
             ) -> Any:
-                if retries is None:
+                for i in range(retries + 1):
                     try:
                         return await func(*args, **kwargs)
-                    except exception:
-                        pytest.xfail(f"Suppressed '{exception}' raised")
-                        raise
-                else:
-                    for i in range(retries):
-                        try:
-                            return await func(*args, **kwargs)
-                        except exception:
-                            if i >= retries - 1:
-                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
-                                raise
-                            await asyncio.sleep(timeout)
+                    except exception as e:
+                        if error_filter and not error_filter(e):  # type: ignore [arg-type]
+                            raise
+                        if i >= retries - 1:
+                            pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            raise
+                        await asyncio.sleep(timeout)
+
         else:
 
             @functools.wraps(func)
             def wrapper(
                 *args: Any,
                 exception: type[BaseException] = exception,
-                retries: Optional[int] = retries,
+                retries: int = retries,
                 timeout: int = timeout,
                 **kwargs: Any,
             ) -> Any:
-                if retries is None:
+                for i in range(retries + 1):
                     try:
                         return func(*args, **kwargs)
-                    except exception:
-                        pytest.xfail(f"Suppressed '{exception}' raised")
-                        raise
-                else:
-                    for i in range(retries):
-                        try:
-                            return func(*args, **kwargs)
-                        except exception:
-                            if i >= retries - 1:
-                                pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
-                                raise
-                            time.sleep(timeout)
+                    except exception as e:
+                        if error_filter and not error_filter(e):  # type: ignore [arg-type]
+                            raise
+                        if i >= retries - 1:
+                            pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
+                            raise
+                        time.sleep(timeout)
 
         return wrapper  # type: ignore[return-value]
 
@@ -488,8 +464,16 @@ def suppress(exception: type[BaseException], *, retries: Optional[int] = None, t
 
 def suppress_gemini_resource_exhausted(func: T) -> T:
     with optional_import_block():
-        from google.api_core.exceptions import ResourceExhausted
+        from google.genai.errors import ClientError
 
-        return suppress(ResourceExhausted, retries=2)(func)
+        # Catch only code 429 which is RESOURCE_EXHAUSTED error instead of catching all the client errors
+        def is_resource_exhausted_error(e: BaseException) -> bool:
+            return isinstance(e, ClientError) and getattr(e, "code", None) in [429, 503]
+
+        return suppress(ClientError, retries=2, error_filter=is_resource_exhausted_error)(func)
 
     return func
+
+
+def suppress_json_decoder_error(func: T) -> T:
+    return suppress(JSONDecodeError)(func)

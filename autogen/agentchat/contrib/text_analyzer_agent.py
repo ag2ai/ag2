@@ -31,10 +31,10 @@ class TextAnalyzerAgent(ConversableAgent):
         system_message (str): system message for the ChatCompletion inference.
         human_input_mode (str): This agent should NEVER prompt the human for input.
         llm_config (dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
+            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create)
             for available options.
             To disable llm-based auto reply, set to False.
-        **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).
+        **kwargs (dict): other kwargs in [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name=name,
@@ -69,8 +69,10 @@ class TextAnalyzerAgent(ConversableAgent):
         # Assemble the message.
         text_to_analyze = "# TEXT\n" + text_to_analyze + "\n"
         analysis_instructions = "# INSTRUCTIONS\n" + analysis_instructions + "\n"
-        msg_text = "\n".join(
-            [analysis_instructions, text_to_analyze, analysis_instructions]
-        )  # Repeat the instructions.
+        msg_text = "\n".join([
+            analysis_instructions,
+            text_to_analyze,
+            analysis_instructions,
+        ])  # Repeat the instructions.
         # Generate and return the analysis string.
         return self.generate_oai_reply([{"role": "user", "content": msg_text}], None, None)[1]
