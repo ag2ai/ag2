@@ -56,7 +56,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e .[teachable,test]
+          uv pip install --system -e .[test,teachable]
           python -c "import autogen"
       - name: Coverage
         env:
@@ -66,6 +66,8 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -112,12 +114,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e ".[test]"
-          python -c "import autogen"
-          uv pip install --system pytest-cov>=5 pytest-asyncio
-      - name: Install packages for test when needed
-        run: |
-          uv pip install --system -e .[autobuild]
+          uv pip install --system -e ".[test,autobuild]"
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -126,6 +123,8 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -172,13 +171,15 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e .[lmm,test]
+          uv pip install --system -e .[test,lmm]
           python -c "import autogen"
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
