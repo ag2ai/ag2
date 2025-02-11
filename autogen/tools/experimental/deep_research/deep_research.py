@@ -157,6 +157,7 @@ class DeepResearchTool(Tool):
                     "Do not include banal, general knowledge questions\n"
                     "Do not include questions that go into unnecessary detail that is not relevant to the original question\n"
                     "Do not include question that require knowledge of the original or other subquestions to answer\n"
+                    "Some rule of thumb is to have only one subquestion for easy questions, 3 for medium questions, and 5 for hard questions.\n"
                 ),
                 llm_config=llm_config,
                 is_termination_msg=lambda x: x.get("content", "")
@@ -180,6 +181,7 @@ class DeepResearchTool(Tool):
                     "After you are satisfied with the subquestions, call the 'generate_subquestions' method to answer each subquestion.\n"
                     "This is an example of an argument that can be passed to the 'generate_subquestions' method:\n"
                     f"{{'task': {example_task.model_dump()}}}\n"
+                    "Some rule of thumb is to have only one subquestion for easy questions, 3 for medium questions, and 5 for hard questions.\n"
                 ),
                 llm_config=llm_config,
                 is_termination_msg=lambda x: x.get("content", "")
