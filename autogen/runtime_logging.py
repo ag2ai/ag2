@@ -11,6 +11,7 @@ import sqlite3
 import uuid
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar
 
+from asyncer import asyncify
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
 
@@ -41,7 +42,7 @@ def start(
     logger: Optional[BaseLogger] = None,
     logger_type: Literal["sqlite", "file"] = "sqlite",
     config: Optional[dict[str, Any]] = None,
-) -> str:
+) -> Optional[str]:
     """Start logging for the runtime.
 
     Args:
@@ -49,13 +50,13 @@ def start(
         logger_type (str):      The type of logger to use (default: sqlite)
         config (dict):          Configuration for the logger
     Returns:
-        session_id (str(uuid.uuid4)):       a unique id for the logging session
+        session_id (Optional[str(uuid.uuid4)]):       a unique id for the logging session
     """
     global autogen_logger
     global is_logging
 
     autogen_logger = logger or LoggerFactory.get_logger(logger_type=logger_type, config=config)
-
+    session_id: Optional[str] = None
     try:
         session_id = autogen_logger.start()
         is_logging = True
@@ -158,3 +159,81 @@ def get_connection() -> None | sqlite3.Connection:
 
 def logging_enabled() -> bool:
     return is_logging
+
+
+# Async versions of the above
+async def a_start(
+    logger: Optional[BaseLogger] = None,
+    logger_type: Literal["sqlite", "file"] = "sqlite",
+    config: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
+    """Start logging for the runtime.
+
+    Args:
+        logger (BaseLogger):    A logger instance
+        logger_type (str):      The type of logger to use (default: sqlite)
+        config (dict):          Configuration for the logger
+    Returns:
+        session_id (Optional[str(uuid.uuid4)]):       a unique id for the logging session
+    """
+    return await asyncify(start)(logger, logger_type, config)
+
+
+async def a_log_chat_completion(
+    invocation_id: uuid.UUID,
+    client_id: int,
+    wrapper_id: int,
+    agent: str | Agent,
+    request: dict[str, float | str | list[dict[str, str]]],
+    response: str | ChatCompletion,
+    is_cached: int,
+    cost: float,
+    start_time: str,
+) -> None:
+    await asyncify(log_chat_completion)(
+        invocation_id, client_id, wrapper_id, agent, request, response, is_cached, cost, start_time
+    )
+
+
+async def a_log_new_agent(agent: ConversableAgent, init_args: dict[str, Any]) -> None:
+    await asyncify(log_new_agent)(agent, init_args)
+
+
+async def a_log_event(source: str | Agent, name: str, **kwargs: dict[str, Any]) -> None:
+    await asyncify(log_event)(source, name, **kwargs)
+
+
+async def a_log_function_use(agent: str | Agent, function: F, args: dict[str, Any], returns: any):
+    await asyncify(log_function_use)(agent, function, args, returns)
+
+
+async def a_log_new_wrapper(wrapper: OpenAIWrapper, init_args: dict[str, LLMConfig | list[LLMConfig]]) -> None:
+    await asyncify(log_new_wrapper)(wrapper, init_args)
+
+
+async def a_log_new_client(
+    client: (
+        AzureOpenAI
+        | OpenAI
+        | CerebrasClient
+        | GeminiClient
+        | AnthropicClient
+        | MistralAIClient
+        | TogetherClient
+        | GroqClient
+        | CohereClient
+        | OllamaClient
+        | BedrockClient
+    ),
+    wrapper: OpenAIWrapper,
+    init_args: dict[str, Any],
+) -> None:
+    await asyncify(log_new_client)(client, wrapper, init_args)
+
+
+async def a_get_connection() -> None | sqlite3.Connection:
+    return await asyncify(get_connection)()
+
+
+async def a_stop() -> None:
+    await asyncify(stop)()

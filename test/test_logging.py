@@ -13,6 +13,7 @@ from typing import Any, Callable
 from unittest.mock import Mock, patch
 
 import pytest
+import pytest_asyncio
 from openai import AzureOpenAI
 
 import autogen.runtime_logging
@@ -310,3 +311,166 @@ def test_logging_exception_will_not_crash_only_print_error(mock_logger_error, db
     args, _ = mock_logger_error.call_args
     error_message = args[0]
     assert error_message.startswith("[sqlite logger]Error running query with query")
+
+
+# Async
+################################################################################################
+@pytest_asyncio.fixture(scope="function")
+async def a_db_connection():
+    await autogen.runtime_logging.a_start(config={"dbname": ":memory:"})
+    con = await autogen.runtime_logging.a_get_connection()
+    con.row_factory = sqlite3.Row
+    yield con
+
+    await autogen.runtime_logging.a_stop()
+
+
+@pytest.mark.asyncio
+async def test_a_start():
+    session_id = await autogen.runtime_logging.a_start(config={"dbname": ":memory:"})
+    assert session_id is not None
+    assert autogen.runtime_logging.logging_enabled()
+
+
+@pytest.mark.asyncio
+async def test_a_stop():
+    await autogen.runtime_logging.a_start(config={"dbname": ":memory:"})
+    assert autogen.runtime_logging.logging_enabled()
+
+    await autogen.runtime_logging.a_stop()
+    assert not autogen.runtime_logging.logging_enabled()
+
+
+@pytest.mark.parametrize(
+    "response, expected_logged_response",
+    [
+        (SAMPLE_CHAT_RESPONSE, SAMPLE_CHAT_RESPONSE),
+        (None, {"response": None}),
+        ("error in response", {"response": "error in response"}),
+    ],
+)
+async def test_a_log_chat_completion(response, expected_logged_response, a_db_connection):
+    sample_completion = get_sample_chat_completion(response)
+    await autogen.runtime_logging.a_log_chat_completion(**sample_completion)
+    cur = a_db_connection.cursor()
+    query = """
+        SELECT invocation_id, client_id, wrapper_id, request, response, is_cached,
+            cost, start_time, source_name FROM chat_completions
+    """
+    query = """
+        SELECT invocation_id, client_id, wrapper_id, request, response, is_cached,
+            cost, start_time, source_name FROM chat_completions
+    """
+
+    for row in await cur.execute(query):
+        assert row["invocation_id"] == sample_completion["invocation_id"]
+        assert row["client_id"] == sample_completion["client_id"]
+        assert row["wrapper_id"] == sample_completion["wrapper_id"]
+        assert json.loads(row["request"]) == sample_completion["request"]
+        assert json.loads(row["response"]) == expected_logged_response
+        assert row["is_cached"] == sample_completion["is_cached"]
+        assert row["cost"] == sample_completion["cost"]
+        assert row["start_time"] == sample_completion["start_time"]
+        assert row["source_name"] == "TestAgent"
+
+
+@pytest.mark.asyncio
+async def test_a_log_new_agent(a_db_connection):
+    from autogen import AssistantAgent
+
+    agent_name = "some_assistant"
+    config_list = [{"model": "gpt-4o", "api_key": "some_key"}]
+
+    agent = AssistantAgent(agent_name, llm_config={"config_list": config_list})
+    init_args = {"foo": "bar", "baz": {"other_key": "other_val"}, "a": None}
+
+    await autogen.runtime_logging.a_log_new_agent(agent, init_args)
+    cur = a_db_connection.cursor()
+    query = """
+        SELECT session_id, name, class, init_args FROM agents
+    """
+
+    for row in cur.execute(query):
+        assert row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"], (
+            "session id is not valid uuid"
+        )
+        assert row["name"] == agent_name
+        assert row["class"] == "AssistantAgent"
+        assert row["init_args"] == json.dumps(init_args)
+
+
+@pytest.mark.asyncio
+async def test_a_log_oai_wrapper(a_db_connection):
+    from autogen import OpenAIWrapper
+
+    cur = a_db_connection.cursor()
+
+    llm_config = {"config_list": [{"model": "gpt-4o", "api_key": "some_key", "base_url": "some url"}]}
+    init_args = {"llm_config": llm_config, "base_config": {}}
+    wrapper = OpenAIWrapper(**llm_config)
+
+    await autogen.runtime_logging.a_log_new_wrapper(wrapper, init_args)
+
+    query = """
+        SELECT session_id, init_args FROM oai_wrappers
+    """
+
+    for row in cur.execute(query):
+        assert row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"], (
+            "session id is not valid uuid"
+        )
+        saved_init_args = json.loads(row["init_args"])
+        assert "config_list" in saved_init_args
+        assert "api_key" not in saved_init_args["config_list"][0]
+        assert "base_url" not in saved_init_args["config_list"][0]
+        assert "base_config" in saved_init_args
+
+
+@pytest.mark.asyncio
+async def test_a_log_oai_client(a_db_connection):
+    cur = a_db_connection.cursor()
+
+    openai_config = {
+        "api_key": "some_key",
+        "api_version": "2024-08-06",
+        "azure_deployment": "gpt-4o",
+        "azure_endpoint": "https://foobar.openai.azure.com/",
+    }
+    client = AzureOpenAI(**openai_config)
+
+    await autogen.runtime_logging.a_log_new_client(client, Mock(), openai_config)
+
+    query = """
+        SELECT session_id, init_args, class FROM oai_clients
+    """
+
+    for row in cur.execute(query):
+        assert row["session_id"] and str(uuid.UUID(row["session_id"], version=4)) == row["session_id"], (
+            "session id is not valid uuid"
+        )
+        assert row["class"] == "AzureOpenAI"
+        saved_init_args = json.loads(row["init_args"])
+        assert "api_version" in saved_init_args
+        assert "api_key" not in saved_init_args
+
+
+@pytest.mark.asyncio
+async def test_a_log_function_use(a_db_connection):
+    cur = a_db_connection.cursor()
+
+    source = autogen.AssistantAgent(name="TestAgent", code_execution_config=False)
+    func: Callable[[str, int], Any] = dummy_function
+    args = {"foo": "bar"}
+    returns = True
+
+    await autogen.runtime_logging.a_log_function_use(agent=source, function=func, args=args, returns=returns)
+
+    query = """
+        SELECT source_id, source_name, function_name, args, returns, timestamp
+        FROM function_calls
+    """
+
+    for row in cur.execute(query):
+        assert row["source_name"] == "TestAgent"
+        assert row["args"] == json.dumps(args)
+        assert row["returns"] == json.dumps(returns)
