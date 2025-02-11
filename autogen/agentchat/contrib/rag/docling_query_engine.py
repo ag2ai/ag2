@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any, Optional
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import chromadb
@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-
+@require_optional_import(["chromadb", "llama_index"], "rag")
 class DoclingMdQueryEngine:
     """
     This query engine leverages LlamaIndex's VectorStoreIndex in combination with Chromadb to query Markdown files processed by docling.
@@ -37,36 +37,39 @@ class DoclingMdQueryEngine:
 
     def __init__(  # type: ignore
         self,
-        db_path: str = "./chroma",
-        embedding_function: Optional[EmbeddingFunction[Any]] = DefaultEmbeddingFunction(),
-        metadata: Optional[dict[Any, Any]] = {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32},
-        llm: Optional["LLM"] = OpenAI(model="gpt-4o", temperature=0.0),
+        db_path: Optional[str] = None,
+        embedding_function: Optional[EmbeddingFunction[Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        llm: Optional["LLM"] = None,
     ) -> None:
         """
         Initializes the DoclingMdQueryEngine with db_path, metadata, and embedding function and llm.
         Args:
             db_path: the path to save chromadb data
-            embedding_function: The embedding function to use. Default embedding uses  Sentence Transformers model all-MiniLM-L6-v2.
+            embedding_function: The embedding function to use. Default embedding uses Sentence Transformers model all-MiniLM-L6-v2.
                 For more embeddings that ChromaDB support, please refer to [embeddings](https://docs.trychroma.com/docs/embeddings/embedding-functions)
             metadata: The metadata used by Chromadb collection creation. Chromadb uses HNSW indexing algorithm under the hood.
                 For more details about the default metadata, please refer to [HNSW configuration](https://cookbook.chromadb.dev/core/configuration/#hnsw-configuration)
             llm: LLM model used by LlamaIndex. You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/)
         """
-        self.llm = llm
-        self.embedding_function = embedding_function
-        self.metadata = metadata
-        self.client = chromadb.PersistentClient(path=db_path)
+        self.llm = llm or OpenAI(model="gpt-4o", temperature=0.0)
+        self.embedding_function = embedding_function or DefaultEmbeddingFunction()
+        self.metadata = metadata or {"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32}
+        self.client = chromadb.PersistentClient(path=db_path or "./chroma")
 
     def init_db(
         self,
-        input_dir: str = "",
-        input_doc_paths: list[str] = [],
-        collection_name: str = DEFAULT_COLLECTION_NAME,
+        input_dir: Optional[str] = None,
+        input_doc_paths: Optional[list[str]] = None,
+        collection_name: Optional[str] = None,
     ) -> None:
         """
         Initialize VectorDB by creating collection using given name,
         loading docs and creating index
         """
+        input_dir = input_dir or ""
+        input_doc_paths = input_doc_paths or []
+        collection_name = collection_name or DEFAULT_COLLECTION_NAME
 
         self.collection = self.client.create_collection(
             name=collection_name,
@@ -124,7 +127,7 @@ class DoclingMdQueryEngine:
 
     def _create_index(  # type: ignore
         self, collection: Collection, docs: list["LlamaDocument"]
-    ) -> VectorStoreIndex:
+    ) -> "VectorStoreIndex":
         """
         Create a LlamaIndex VectorStoreIndex using the provided documents and Chromadb collection.
         """
