@@ -18,7 +18,7 @@ from typing import Any, Iterator, Optional
 
 from ..doc_utils import get_target_module
 from ..import_utils import optional_import_block, require_optional_import
-from .utils import copy_only_git_tracked_files
+from .utils import copy_only_git_tracked_and_untracked_files
 
 with optional_import_block():
     import pdoc
@@ -369,7 +369,7 @@ def main() -> None:
     if not website_build_dir.exists():
         website_build_dir.mkdir()
 
-    copy_only_git_tracked_files(website_dir, website_build_dir)
+    copy_only_git_tracked_and_untracked_files(website_dir, website_build_dir)
 
     if args.api_dir.exists():
         # Force delete the directory and its contents
