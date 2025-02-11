@@ -387,14 +387,12 @@ class TestDiscordRetrieveTool:
             try:
                 messages = []
                 for msg in mock_messages:
-                    messages.append(
-                        {
-                            "id": str(msg.id),
-                            "content": msg.content,
-                            "author": str(msg.author),
-                            "timestamp": msg.created_at.isoformat(),
-                        }
-                    )
+                    messages.append({
+                        "id": str(msg.id),
+                        "content": msg.content,
+                        "author": str(msg.author),
+                        "timestamp": msg.created_at.isoformat(),
+                    })
                 result_future.set_result(messages)
             except Exception as e:
                 result_future.set_exception(e)

@@ -491,12 +491,10 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
                     last_tool_use_index = len(processed_messages) - 1
                 else:
                     # Not using tools, so put in a plain text message
-                    processed_messages.append(
-                        {
-                            "role": "assistant",
-                            "content": f"Some internal function(s) that could be used: [{', '.join(tool_names)}]",
-                        }
-                    )
+                    processed_messages.append({
+                        "role": "assistant",
+                        "content": f"Some internal function(s) that could be used: [{', '.join(tool_names)}]",
+                    })
             elif "tool_call_id" in message:
                 if has_tools:
                     # Map the tool usage call to tool_result for Anthropic
@@ -521,9 +519,10 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
                     tool_result_messages += 1
                 else:
                     # Not using tools, so put in a plain text message
-                    processed_messages.append(
-                        {"role": "user", "content": f"Running the function returned: {message['content']}"}
-                    )
+                    processed_messages.append({
+                        "role": "user",
+                        "content": f"Running the function returned: {message['content']}",
+                    })
             elif message["content"] == "":
                 # Ignoring empty messages
                 pass

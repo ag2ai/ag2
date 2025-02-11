@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import os
 import random
@@ -270,12 +270,10 @@ def test_visualize_tree_render_failure(mock_digraph):
 
     with patch("builtins.print") as mock_print:
         visualize_tree(root)
-        mock_print.assert_has_calls(
-            [
-                call("Error rendering graph: Rendering failed"),
-                call("Make sure graphviz is installed on your system: https://graphviz.org/download/"),
-            ]
-        )
+        mock_print.assert_has_calls([
+            call("Error rendering graph: Rendering failed"),
+            call("Make sure graphviz is installed on your system: https://graphviz.org/download/"),
+        ])
 
 
 if __name__ == "__main__":

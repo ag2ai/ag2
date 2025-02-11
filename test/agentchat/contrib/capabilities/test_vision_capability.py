@@ -75,7 +75,7 @@ def test_process_last_received_message_with_image(
     assert processed_content == expected_caption
 
 
-####### Test the Custom Caption Func
+# Test the Custom Caption Func
 
 
 @pytest.fixture

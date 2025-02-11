@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python
+# !/usr/bin/env python
 
 from __future__ import annotations
 
@@ -1067,10 +1067,9 @@ def main() -> None:
     ensure_mint_json_exists(args.website_build_directory)
     cleanup_tmp_dirs(args.website_build_directory, args.force)
 
-    if args.notebooks:
-        collected_notebooks = args.notebooks
-    else:
-        collected_notebooks = collect_notebooks(args.notebook_directory, args.website_build_directory)
+    collected_notebooks = (
+        args.notebooks if args.notebooks else collect_notebooks(args.notebook_directory, args.website_build_directory)
+    )
 
     filtered_notebooks = []
     for notebook in collected_notebooks:

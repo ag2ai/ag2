@@ -673,9 +673,10 @@ class OpenAIWrapper:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
             for config in config_list:
                 self._register_default_client(config, openai_config)  # could modify the config
-                self._config_list.append(
-                    {**extra_kwargs, **{k: v for k, v in config.items() if k not in self.openai_kwargs}}
-                )
+                self._config_list.append({
+                    **extra_kwargs,
+                    **{k: v for k, v in config.items() if k not in self.openai_kwargs},
+                })
         else:
             self._register_default_client(extra_kwargs, openai_config)
             self._config_list = [extra_kwargs]

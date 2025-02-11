@@ -121,12 +121,10 @@ class SocietyOfMindAgent(ConversableAgent):
             # Add the modified message to the transcript
             _messages.append(message)
 
-        _messages.append(
-            {
-                "role": "system",
-                "content": prompt,
-            }
-        )
+        _messages.append({
+            "role": "system",
+            "content": prompt,
+        })
 
         response = self.client.create(context=None, messages=_messages, cache=self.client_cache, agent=self.name)
         extracted_response = self.client.extract_text_or_completion_object(response)[0]

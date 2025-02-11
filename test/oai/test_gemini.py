@@ -332,9 +332,11 @@ def test_create_response_with_text(mock_calculate_cost, mock_generative_model, g
     mock_calculate_cost.return_value = 0.002
 
     # Call the create method
-    response = gemini_client.create(
-        {"model": "gemini-pro", "messages": [{"content": "Hello", "role": "user"}], "stream": False}
-    )
+    response = gemini_client.create({
+        "model": "gemini-pro",
+        "messages": [{"content": "Hello", "role": "user"}],
+        "stream": False,
+    })
 
     # Assertions to check if response is structured as expected
     # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
@@ -386,9 +388,11 @@ def test_vertexai_create_response(
     mock_calculate_cost.return_value = 0.002
 
     # Call the create method
-    response = gemini_client_with_credentials.create(
-        {"model": "gemini-pro", "messages": [{"content": "Hello", "role": "user"}], "stream": False}
-    )
+    response = gemini_client_with_credentials.create({
+        "model": "gemini-pro",
+        "messages": [{"content": "Hello", "role": "user"}],
+        "stream": False,
+    })
 
     # Assertions to check if response is structured as expected
     # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
