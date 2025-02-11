@@ -82,9 +82,13 @@ class DoclingMdQueryEngine:
             metadata=self.metadata,
             get_or_create=True,  # If collection already exists, get the collection
         )
+        logger.info(f"Collection {collection_name} was created in the database.")
 
         documents = self._load_doc(input_dir, input_doc_paths)
+        logger.info("Documents are loaded successfully.")
+
         self.index = self._create_index(self.collection, documents)
+        logger.info("VectorDB index was created with input documents")
 
     def query(self, question: str) -> str:
         """
@@ -107,7 +111,7 @@ class DoclingMdQueryEngine:
         self, input_dir: Optional[str], input_docs: Optional[list[str]]
     ) -> list["LlamaDocument"]:
         """
-        Load documents from the input directory or a list of input files (if input directory not provided).
+        Load documents from the input directory and/or a list of input files, if provided.
         It supports lots of [formats](https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types),
           but you should use Docling parsed Markdown files for this query engine.
         """
@@ -118,14 +122,14 @@ class DoclingMdQueryEngine:
                 raise ValueError(f"Input directory not found: {input_dir}")
             loaded_documents.extend(SimpleDirectoryReader(input_dir=input_dir).load_data())
 
-        elif input_docs:
+        if input_docs:
             for doc in input_docs:
                 logger.info(f"Loading input doc: {doc}")
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
             loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())
 
-        else:
+        if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
 
         return loaded_documents
