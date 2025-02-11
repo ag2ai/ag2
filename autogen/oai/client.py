@@ -384,12 +384,14 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        if self.response_format is not None:
+        if self.response_format is not None or "response_format" in params:
 
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
                     kwargs.pop("stream")
-                kwargs["response_format"] = type_to_response_format_param(self.response_format)
+                kwargs["response_format"] = type_to_response_format_param(
+                    self.response_format or params["response_format"]
+                )
                 return self._oai_client.chat.completions.create(*args, **kwargs)
 
             create_or_parse = _create_or_parse
