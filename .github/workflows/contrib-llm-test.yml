@@ -56,7 +56,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e .[teachable,test]
+          uv pip install --system -e .[test,teachable]
           python -c "import autogen"
       - name: Coverage
         env:
@@ -167,7 +167,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e .[lmm,test]
+          uv pip install --system -e .[test,lmm]
           python -c "import autogen"
       - name: Coverage
         env:
