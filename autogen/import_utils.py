@@ -45,9 +45,9 @@ def optional_import_block() -> Generator[Result, None, None]:
     try:
         yield result
         result._failed = False
-    except ImportError:
+    except ImportError as e:
         # Ignore ImportErrors during this context
-        # logger.info(f"Ignoring ImportError: {e}")
+        logger.debug(f"Ignoring ImportError: {e}")
         result._failed = True
 
 
