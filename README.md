@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-AG2 was evolved from AutoGen. Fully open-sourced we invite collaborators from all organizations to contribute.
+AG2 was evolved from AutoGen. Fully open-sourced. We invite collaborators from all organizations to contribute.
 </p>
 
 # AG2: Open-Source AgentOS for AI Agents
@@ -52,7 +52,7 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Tools](#tools)
     - [Structured Output](#structured-output)
   - [Code Style and Linting](#code-style-and-linting)
-  - [Announcement Highlights](#announcement-highlights)
+  - [Announcements](#announcements)
   - [Contributors Wall](#contributors-wall)
   - [Related Papers](#related-papers)
   - [Cite the project](#cite-the-project)
@@ -62,7 +62,7 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
 
 ### Installation
 
-AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `pyautogen` (or its alias `autogen` or `ag2`) on PyPI!
+AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `pyautogen` (or its alias `autogen` or `ag2`) on PyPI.
 
 ```bash
 pip install ag2
@@ -113,10 +113,10 @@ We maintain a dedicated repository with a wide range of applications to help you
 
 We have several agent concepts in AG2 to help you build your AI agents. We introduce the most common ones here.
 
-- **Conversable Agent**: Create conversations between agents
+- **Conversable Agent**: Agents that are able to send messages, receive messages and generate replies using GenAI models, non-GenAI tools, or human inputs.
 - **Human in the loop**: Add human input to the conversation
-- **Orchestrating multiple agents**: GroupChat and Swarm as orchastration concepts
-- **Tools**: Attach functionalities to agents
+- **Orchestrating multiple agents**: Users can orchestrate multiple agents with built-in conversation patterns such as swarms, group chats, nested chats, sequential chats or customize the orchestration by registering custom reply methods.
+- **Tools**: Programs that can be registered, invoked and executed by agents
 - **Structured Output**: Receive structured output from agents
 
 ### Conversable agent
@@ -318,15 +318,19 @@ pre-commit install
 pre-commit run --all-files
 ```
 
-## Announcement Highlights
+## Announcements
+
+🔥 🎉 **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
+A new organization [AG2AI](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
+
+📄 **License:**
+We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
 
 🎉 May 29, 2024: DeepLearning.ai launched a new short course [AI Agentic Design Patterns with AutoGen](https://www.deeplearning.ai/short-courses/ai-agentic-design-patterns-with-autogen), made in collaboration with Microsoft and Penn State University, and taught by AutoGen creators [Chi Wang](https://github.com/sonichi) and [Qingyun Wu](https://github.com/qingyun-wu).
 
+🎉 May 24, 2024: Foundation Capital published an article on [Forbes: The Promise of Multi-Agent AI](https://www.forbes.com/sites/joannechen/2024/05/24/the-promise-of-multi-agent-ai/?sh=2c1e4f454d97) and a video [AI in the Real World Episode 2: Exploring Multi-Agent AI and AutoGen with Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk).
+
 🎉 Apr 17, 2024: Andrew Ng cited AutoGen in [The Batch newsletter](https://www.deeplearning.ai/the-batch/issue-245/) and [What's next for AI agentic workflows](https://youtu.be/sal78ACtGTc?si=JduUzN_1kDnMq0vF) at Sequoia Capital's AI Ascent (Mar 26).
-
-🎉 Nov 6, 2023: AutoGen is mentioned by Satya Nadella in a [fireside chat](https://youtu.be/0pLBvgYtv6U).
-
-🎉 Mar 29, 2023: AutoGen is first created in [FLAML](https://github.com/microsoft/FLAML).
 
 [More Announcements](assets/announcements.md)
 
