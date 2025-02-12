@@ -52,7 +52,6 @@ import warnings
 from io import BytesIO
 from typing import Any, Optional, Type
 
-import jsonref
 import requests
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
@@ -64,6 +63,7 @@ from .client_utils import FormatterProtocol
 
 with optional_import_block():
     import google.genai as genai
+    import jsonref
     import vertexai
     from PIL import Image
     from google.auth.credentials import Credentials
@@ -97,7 +97,7 @@ with optional_import_block():
 logger = logging.getLogger(__name__)
 
 
-@require_optional_import(["google", "vertexai", "PIL", "jsonschema"], "gemini")
+@require_optional_import(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")
 class GeminiClient:
     """Client for Google's Gemini API."""
 
