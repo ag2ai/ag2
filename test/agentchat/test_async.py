@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import asyncio
 
@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, credentials_all_llms
+from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
 
 def get_market_news(ind, ind_upper):
@@ -47,12 +47,10 @@ def get_market_news(ind, ind_upper):
         ]
     }
     feeds = data["feed"][ind:ind_upper]
-    feeds_summary = "\n".join(
-        [
-            f"News summary: {f['title']}. {f['summary']} overall_sentiment_score: {f['overall_sentiment_score']}"
-            for f in feeds
-        ]
-    )
+    feeds_summary = "\n".join([
+        f"News summary: {f['title']}. {f['summary']} overall_sentiment_score: {f['overall_sentiment_score']}"
+        for f in feeds
+    ])
     return feeds_summary
 
 
@@ -89,6 +87,7 @@ async def _test_async_groupchat(credentials: Credentials):
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 @pytest.mark.asyncio
 async def test_async_groupchat(
     credentials_from_test_param: Credentials,
@@ -163,6 +162,7 @@ async def _test_stream(credentials: Credentials):
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
+@suppress_gemini_resource_exhausted
 @pytest.mark.asyncio
 async def test_stream(
     credentials_from_test_param: Credentials,

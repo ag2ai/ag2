@@ -13,9 +13,9 @@ from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 
-from autogen.agentchat.contrib.swarm_agent import SwarmAgent
-from autogen.agentchat.realtime_agent import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
-from autogen.agentchat.realtime_agent.realtime_swarm import register_swarm
+from autogen import ConversableAgent
+from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
+from autogen.agentchat.realtime.experimental.realtime_swarm import register_swarm
 from autogen.tools.dependency_injection import Field as AG2Field
 
 from ...conftest import Credentials
@@ -58,7 +58,7 @@ class TestSwarmE2E:
             def get_weather(location: Annotated[str, AG2Field(description="city")]) -> str:
                 return "The weather is cloudy." if location == "Seattle" else "The weather is sunny."
 
-            weatherman = SwarmAgent(
+            weatherman = ConversableAgent(
                 name="Weatherman",
                 system_message="You are a weatherman. You can answer questions about the weather.",
                 llm_config=credentials_gpt_4o_mini.llm_config,
@@ -83,15 +83,13 @@ class TestSwarmE2E:
         client = TestClient(app)
         with client.websocket_connect("/media-stream") as websocket:
             await sleep(5)
-            websocket.send_json(
-                {
-                    "event": "media",
-                    "media": {
-                        "timestamp": 0,
-                        "payload": text_to_speech(text="How is the weather in Seattle?", openai_api_key=openai_api_key),
-                    },
-                }
-            )
+            websocket.send_json({
+                "event": "media",
+                "media": {
+                    "timestamp": 0,
+                    "payload": text_to_speech(text="How is the weather in Seattle?", openai_api_key=openai_api_key),
+                },
+            })
 
             # Wait for the weather function to be called or timeout
             with move_on_after(10) as scope:

@@ -62,7 +62,7 @@ For both tasks, **StateFlow** achieves the best performance with the lowest cost
 
 
 ## Implement StateFlow With GroupChat
-We illustrate how to build **StateFlow** with GroupChat. Previous blog [FSM Group Chat](/blog/2024-02-11-FSM-GroupChat/index)
+We illustrate how to build **StateFlow** with GroupChat. Previous blog [FSM Group Chat](/docs/blog/2024-02-11-FSM-GroupChat/index)
 introduces a new feature of GroupChat that allows us to input a transition graph to constrain agent transitions.
 It requires us to use natural language to describe the transition conditions of the FSM in the agent's `description` parameter, and then use an LLM to take in the description and make decisions for the next agent.
 In this blog, we take advantage of a customized speaker selection function passed to the `speaker_selection_method` of the `GroupChat` object.
@@ -148,7 +148,7 @@ When returning `None`, the group chat will terminate. Note that some of the tran
 
 ## For Further Reading
 * [StateFlow paper](https://arxiv.org/abs/2403.11322)
-* [StateFlow notebook](/notebooks/agentchat_groupchat_stateflow)
-* [GroupChat with Customized Speaker Selection notebook](/notebooks/agentchat_groupchat_customized)
-* [FSM Group Chat](/blog/2024-02-11-FSM-GroupChat/index)
+* [StateFlow notebook](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_stateflow)
+* [GroupChat with Customized Speaker Selection notebook](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_customized)
+* [FSM Group Chat](/docs/blog/2024-02-11-FSM-GroupChat/index)
 * [Documentation about `autogen`](/docs/Getting-Started)

@@ -283,16 +283,15 @@ class GPTAssistantAgent(ConversableAgent):
                     if msg.run_id == run.id:
                         for content in msg.content:
                             if content.type == "text":
-                                new_messages.append(
-                                    {"role": msg.role, "content": self._format_assistant_message(content.text)}
-                                )
+                                new_messages.append({
+                                    "role": msg.role,
+                                    "content": self._format_assistant_message(content.text),
+                                })
                             elif content.type == "image_file":
-                                new_messages.append(
-                                    {
-                                        "role": msg.role,
-                                        "content": f"Received file id={content.image_file.file_id}",
-                                    }
-                                )
+                                new_messages.append({
+                                    "role": msg.role,
+                                    "content": f"Received file id={content.image_file.file_id}",
+                                })
                 return new_messages
             elif run.status == "requires_action":
                 actions = []

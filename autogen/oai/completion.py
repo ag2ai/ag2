@@ -14,6 +14,8 @@ from typing import Callable, Optional, Union
 
 import numpy as np
 
+from ..doc_utils import export_module
+
 # Adding a NullHandler to silence FLAML log warning during
 # import
 flaml_logger = logging.getLogger("flaml")
@@ -67,6 +69,7 @@ if not logger.handlers:
     logger.addHandler(_ch)
 
 
+@export_module("autogen")
 class Completion(OpenAICompletion):
     """`(openai<1)` A class for OpenAI completion API.
 
@@ -118,21 +121,17 @@ class Completion(OpenAICompletion):
 
     default_search_space = (
         {
-            "model": tune.choice(
-                [
-                    "text-ada-001",
-                    "text-babbage-001",
-                    "text-davinci-003",
-                    "gpt-3.5-turbo",
-                    "gpt-4",
-                ]
-            ),
-            "temperature_or_top_p": tune.choice(
-                [
-                    {"temperature": tune.uniform(0, 2)},
-                    {"top_p": tune.uniform(0, 1)},
-                ]
-            ),
+            "model": tune.choice([
+                "text-ada-001",
+                "text-babbage-001",
+                "text-davinci-003",
+                "gpt-3.5-turbo",
+                "gpt-4",
+            ]),
+            "temperature_or_top_p": tune.choice([
+                {"temperature": tune.uniform(0, 2)},
+                {"top_p": tune.uniform(0, 1)},
+            ]),
             "max_tokens": tune.lograndint(50, 1000),
             "n": tune.randint(1, 100),
             "prompt": "{prompt}",
@@ -208,14 +207,12 @@ class Completion(OpenAICompletion):
                 key = get_key([config["prompt"]] + [choice.get("text") for choice in response["choices"]])
             value["created_at"].append(cls._count_create)
             value["cost"].append(response["cost"])
-            value["token_count"].append(
-                {
-                    "model": response["model"],
-                    "prompt_tokens": response["usage"]["prompt_tokens"],
-                    "completion_tokens": response["usage"].get("completion_tokens", 0),
-                    "total_tokens": response["usage"]["total_tokens"],
-                }
-            )
+            value["token_count"].append({
+                "model": response["model"],
+                "prompt_tokens": response["usage"]["prompt_tokens"],
+                "completion_tokens": response["usage"].get("completion_tokens", 0),
+                "total_tokens": response["usage"]["total_tokens"],
+            })
             cls._history_dict[key] = value
             cls._count_create += 1
             return
@@ -753,7 +750,6 @@ class Completion(OpenAICompletion):
                 E.g., `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`.
                 The actual prompt will be:
                 "Complete the following sentence: Today I feel".
-                More examples can be found at [templating](https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#templating).
             use_cache (bool, Optional): Whether to use cached responses.
             config_list (List, Optional): List of configurations for the completion to try.
                 The first one that does not raise an error will be used.
@@ -815,7 +811,6 @@ class Completion(OpenAICompletion):
         logger.warning(
             "Completion.create is deprecated in autogen, pyautogen v0.2 and openai>=1. "
             "The new openai requires initiating a client for inference. "
-            "Please refer to https://docs.ag2.ai/docs/Use-Cases/enhanced_inference#api-unification"
         )
         if ERROR:
             raise ERROR
@@ -1218,6 +1213,7 @@ class Completion(OpenAICompletion):
         cls._history_dict = cls._count_create = None
 
 
+@export_module("autogen")
 class ChatCompletion(Completion):
     """`(openai<1)` A class for OpenAI API ChatCompletion. Share the same API as Completion."""
 

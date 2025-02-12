@@ -19,6 +19,8 @@ from openai import OpenAI
 from openai.types.beta.assistant import Assistant
 from packaging.version import parse
 
+from ..doc_utils import export_module
+
 NON_CACHE_KEY = [
     "api_key",
     "base_url",
@@ -29,6 +31,9 @@ NON_CACHE_KEY = [
     "credentials",
 ]
 DEFAULT_AZURE_API_VERSION = "2024-02-01"
+
+# The below pricing is for 1K tokens. Whenever there is an update in the LLM's pricing,
+# Please convert it to 1K tokens and update in the below dictionary in the format: (input_token_price, output_token_price).
 OAI_PRICE1K = {
     # https://openai.com/api/pricing/
     # o1
@@ -88,10 +93,8 @@ OAI_PRICE1K = {
     "gpt-35-turbo-0301": (0.0015, 0.002),
     "gpt-35-turbo-16k": (0.003, 0.004),
     "gpt-35-turbo-16k-0613": (0.003, 0.004),
-    # The below are the discounted prices offered by deepseek to all users till 2025-02-08 16:00 (UTC)
-    # TODO: After 2025-02-08 16:00 UTC, update to standard pricing
-    # Reference: https://api-docs.deepseek.com/quick_start/pricing
-    "deepseek-chat": (0.00014, 0.00028),
+    # deepseek
+    "deepseek-chat": (0.00027, 0.0011),
 }
 
 
@@ -132,6 +135,7 @@ def is_valid_api_key(api_key: str) -> bool:
     return bool(re.fullmatch(api_key_re, api_key))
 
 
+@export_module("autogen")
 def get_config_list(
     api_keys: list[str],
     base_urls: Optional[list[str]] = None,
@@ -183,6 +187,7 @@ def get_config_list(
     return config_list
 
 
+@export_module("autogen")
 def config_list_openai_aoai(
     key_file_path: Optional[str] = ".",
     openai_api_key_file: Optional[str] = "key_openai.txt",
@@ -312,6 +317,7 @@ def config_list_openai_aoai(
     return config_list
 
 
+@export_module("autogen")
 def config_list_from_models(
     key_file_path: Optional[str] = ".",
     openai_api_key_file: Optional[str] = "key_openai.txt",
@@ -378,6 +384,7 @@ def config_list_from_models(
     return config_list
 
 
+@export_module("autogen")
 def config_list_gpt4_gpt35(
     key_file_path: Optional[str] = ".",
     openai_api_key_file: Optional[str] = "key_openai.txt",
@@ -407,6 +414,7 @@ def config_list_gpt4_gpt35(
     )
 
 
+@export_module("autogen")
 def filter_config(
     config_list: list[dict[str, Any]],
     filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]],
@@ -486,6 +494,7 @@ def _satisfies_criteria(value: Any, criteria_values: Any) -> bool:
         return value in criteria_values
 
 
+@export_module("autogen")
 def config_list_from_json(
     env_or_file: str,
     file_location: Optional[str] = "",
@@ -586,6 +595,7 @@ def get_config(
     return config
 
 
+@export_module("autogen")
 def config_list_from_dotenv(
     dotenv_file_path: Optional[str] = None,
     model_api_key_map: Optional[dict[str, Any]] = None,

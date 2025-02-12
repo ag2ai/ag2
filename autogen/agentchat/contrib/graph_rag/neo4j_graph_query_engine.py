@@ -96,7 +96,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
     def init_db(self, input_doc: Optional[list[Document]] = None):
         """Build the knowledge graph with input documents."""
-        self.documents = self._load_doc(input_doc)
+        self.documents = self._load_doc(input_doc if input_doc is not None else [])
 
         self.graph_store = Neo4jPropertyGraphStore(
             username=self.username,

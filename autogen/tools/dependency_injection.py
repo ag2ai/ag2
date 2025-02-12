@@ -2,18 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 import inspect
 import sys
 from abc import ABC
 from collections.abc import Iterable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
 
 from ..agentchat import Agent
+from ..doc_utils import export_module
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -25,9 +27,11 @@ __all__ = [
     "Field",
     "get_context_params",
     "inject_params",
+    "on",
 ]
 
 
+@export_module("autogen.tools")
 class BaseContext(ABC):
     """Base class for context classes.
 
@@ -38,6 +42,7 @@ class BaseContext(ABC):
     pass
 
 
+@export_module("autogen.tools")
 class ChatContext(BaseContext):
     """ChatContext class that extends BaseContext.
 
@@ -72,6 +77,17 @@ class ChatContext(BaseContext):
         return self._agent.last_message()
 
 
+T = TypeVar("T")
+
+
+def on(x: T) -> Callable[[], T]:
+    def inner(_x: T = x) -> T:
+        return _x
+
+    return inner
+
+
+@export_module("autogen.tools")
 def Depends(x: Any) -> Any:  # noqa: N802
     """Creates a dependency for injection based on the provided context or type.
 
@@ -187,6 +203,31 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
     return f
 
 
+def _set_return_annotation_to_any(f: Callable[..., Any]) -> Callable[..., Any]:
+    if inspect.iscoroutinefunction(f):
+
+        @functools.wraps(f)
+        async def _a_wrapped_func(*args: Any, **kwargs: Any) -> Any:
+            return await f(*args, **kwargs)
+
+        wrapped_func = _a_wrapped_func
+
+    else:
+
+        @functools.wraps(f)
+        def _wrapped_func(*args: Any, **kwargs: Any) -> Any:
+            return f(*args, **kwargs)
+
+        wrapped_func = _wrapped_func
+
+    sig = inspect.signature(f)
+
+    # Change the return annotation directly on the signature of the wrapper
+    wrapped_func.__signature__ = sig.replace(return_annotation=Any)  # type: ignore[attr-defined]
+
+    return wrapped_func
+
+
 def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
     """Injects parameters into a function, removing injected dependencies from its signature.
 
@@ -204,6 +245,7 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
         f = _fix_staticmethod(f)
 
     f = _string_metadata_to_description_field(f)
+    f = _set_return_annotation_to_any(f)
     f = inject(f)
     f = _remove_injected_params_from_signature(f)
 

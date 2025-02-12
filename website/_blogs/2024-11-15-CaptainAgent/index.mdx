@@ -12,7 +12,7 @@ tags: [LLM, GPT, AutoBuild]
 <iframe width="560" height="315" src="https://www.youtube.com/embed/laGZmQUolBY?si=oU9FSfWPGCTbJ1Y_" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 **TL;DR**
-- We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://docs.ag2.ai/docs/tutorial/conversation-patterns#nested-chats) conversation pattern in AG2.
+- We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://docs.ag2.ai/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#nested-chats) conversation pattern in AG2.
 - CaptainAgent supports all types of `ConversableAgents` implemented in AG2.
 
 ![Illustration of how CaptainAgent build a team](img/overall.webp)
@@ -33,6 +33,18 @@ To install AG2 with CaptainAgent:
 ```bash
 pip install ag2[captainagent]
 ```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[captainagent]
+```
+or
+```bash
+pip install -U pyautogen[captainagent]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
 
 # Using CaptainAgent without pre-specified agent/tool libraries
 CaptainAgent can serve as a drop-in replacement for the general `AssistantAgent` class in AG2. It also allows customization such as agent/tool libraries. When the libraries are provided, CaptainAgent will try to leverage them when solving a task.
@@ -96,7 +108,7 @@ result = user_proxy.initiate_chat(captain_agent, message=query)
 # Further Reading
 For a detailed description of how to configure the CaptainAgent, please refer to
 - [document](https://docs.ag2.ai/docs/topics/captainagent/agent_library).
-- [Notebook example](https://docs.ag2.ai/notebooks/agentchat_captainagent)
+- [Notebook example](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_captainagent)
 
 Please also refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
 

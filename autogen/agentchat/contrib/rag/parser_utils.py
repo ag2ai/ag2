@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Union
 
+from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from .document_utils import handle_input
 
@@ -23,6 +24,7 @@ _log.setLevel(logging.INFO)
 
 
 @require_optional_import(["docling"], "rag")
+@export_module("autogen.agentchat.contrib.rag")
 def docling_parse_docs(  # type: ignore[no-any-unimported]
     input_file_path: Union[Path, str],
     output_dir_path: Union[Path, str],
@@ -76,7 +78,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
 
     _log.info(f"Document converted in {end_time:.2f} seconds.")
 
-    ## Export results
+    # Export results
     output_dir = Path(output_dir_path)
     output_dir.mkdir(parents=True, exist_ok=True)
 

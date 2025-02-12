@@ -2,5 +2,4 @@
 branch = True
 source = autogen
 omit =
-  *test*
-  *samples*
+  autogen/agentchat/contrib/*

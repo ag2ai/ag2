@@ -7,6 +7,7 @@
 import getpass
 from typing import Any
 
+from ..doc_utils import export_module
 from ..messages.base_message import BaseMessage
 from ..messages.print_message import PrintMessage
 from .base import IOStream
@@ -14,6 +15,7 @@ from .base import IOStream
 __all__ = ("IOConsole",)
 
 
+@export_module("autogen.io")
 class IOConsole(IOStream):
     """A console input/output stream."""
 

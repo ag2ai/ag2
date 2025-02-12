@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
 
+from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
 from .logger_utils import get_current_ts, to_dict
 
@@ -59,6 +60,7 @@ def safe_serialize(obj: Any) -> str:
     return json.dumps(obj, default=default)
 
 
+@export_module("autogen.logger")
 class SqliteLogger(BaseLogger):
     """Sqlite logger class."""
 
@@ -273,7 +275,13 @@ class SqliteLogger(BaseLogger):
         else:
             response_messages = json.dumps(to_dict(response), indent=4)
 
-        source_name = source if isinstance(source, str) else source.name
+        source_name = (
+            source
+            if isinstance(source, str)
+            else source.name
+            if hasattr(source, "name") and source.name is not None
+            else ""
+        )
 
         query = """
             INSERT INTO chat_completions (

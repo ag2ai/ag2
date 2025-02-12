@@ -9,9 +9,8 @@ import re
 from time import sleep
 from typing import Any, Callable, Literal, Optional, Union
 
-from pydantic import BaseModel, Extra, root_validator
+from pydantic import BaseModel, root_validator
 
-from ..._pydantic import PYDANTIC_V1
 from ...code_utils import UNKNOWN, execute_code, extract_code, infer_lang
 from ...import_utils import optional_import_block, require_optional_import
 from ...math_utils import get_answer
@@ -166,7 +165,7 @@ class MathUserProxyAgent(UserProxyAgent):
                 when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         max_invalid_q_per_step (int): (ADDED) the maximum number of invalid queries per step.
-        **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
+        **kwargs (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
         """
         super().__init__(
             name=name,
@@ -397,12 +396,6 @@ class WolframAlphaAPIWrapper(BaseModel):
 
     wolfram_client: Any  #: :meta private:
     wolfram_alpha_appid: Optional[str] = None
-
-    class Config:
-        """Configuration for this pydantic object."""
-
-        if PYDANTIC_V1:
-            extra = Extra.forbid
 
     @root_validator(skip_on_failure=True)
     @classmethod

@@ -1,0 +1,58 @@
+---
+title: Game Design
+---
+
+<Tip>
+[This](https://github.com/ag2ai/build-with-ag2/tree/main/game-design-agent-team) is from AG2's *[Build with AG2](https://github.com/ag2ai/build-with-ag2)* repository, find the source files and more use cases there!
+</Tip>
+
+Here's a fantastic community contributed Game Designer application using AG2 and Streamlit. Thanks to Shubham ([X](https://x.com/Saboo_Shubham_) / [GitHub](https://github.com/Shubhamsaboo))!
+
+The Game Designer utilises AG2 with a swarm of agents to craft the core components of Story, Gameplay, Visuals, and Technology recommendations, based on user inputs such as game type, target audience, art style, and technical requirements.
+
+## Description
+
+**Agents and Workflow**
+
+The context variables are initialized (e.g., project details, user inputs) to store the relevant game design requirements. The AI Game Design Agent Team comprises the following specialized agents:
+
+- 🎭 Story Agent: Focuses on narrative design and world-building. Responsible for character backgrounds, lore, plot arcs, and dialogue.
+
+- 🎮 Gameplay Agent: Specializes in game mechanics, systems design, resource management, progression, balancing, and overall gameplay flow.
+
+- 🎨 Visuals Agent: Manages the art direction (including style guidelines, character/environment art, UI/UX) and also addresses audio elements like sound effects and music.
+
+- ⚙️ Tech Agent: Provides technical architecture and implementation guidance—engine selection, optimization strategies, networking requirements, platform constraints, and development roadmap.
+
+When a user provides high-level game requirements (e.g., game type, setting, audience, visuals, platform), the swarm is started and allocates requirements to the respective specialized agents. Each agent elaborates on its area of expertise, and final outputs are combined into a cohesive game design proposal.
+
+## Installation
+1. Clone and navigate to the folder:
+  ```bash
+  git clone https://github.com/ag2ai/build-with-ag2.git
+  cd build-with-ag2/game_design_agent_team
+  ```
+2. Install the required dependencies:
+  ```bash
+  pip install -r requirements.txt
+  ```
+The two dependencies are the ag2 (AG2) library and streamlit.
+
+## Run the code
+
+Before you start, go to [OpenAI's platform](https://platform.openai.com/) to get an API key if you don't have one.
+
+Run the Streamlit app to start a web interface for the AI Game Design Agent Team.
+```bash
+streamlit run main.py
+```
+
+In the web interface to the left, put your OpenAI API key in the sidebar.
+
+Now you can design your game through the browser. Click `Generate Game Concept` to receive a comprehensive design output from the specialized agents.
+
+## Screenshots
+
+![Game Design](./assets/game-design-page.png)
+
+![Game Designed](./assets/game-designed.png)

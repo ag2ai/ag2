@@ -9,10 +9,12 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Any
 
+from ..doc_utils import export_module
 from .abstract_cache_base import AbstractCache
 from .cache_factory import CacheFactory
 
 
+@export_module("autogen")
 class Cache(AbstractCache):
     """A wrapper class for managing cache configuration and instances.
 

@@ -19,6 +19,7 @@ with optional_import_block():
 
 
 # skip if python version is not >= 3.9
+@pytest.mark.interop
 @skip_on_missing_imports("langchain", "interop-langchain")
 class TestLangChainInteroperability:
     @pytest.fixture(autouse=True)
