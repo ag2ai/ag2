@@ -70,9 +70,11 @@ class TestGeminiRealtimeClient:
     async def test_send_text(self, client: GeminiRealtimeClient) -> None:
         mock = MagicMock()
 
+        agent_finished_speaking = False
+
         async with client.connect():
-            # read events for 3 seconds and then interrupt
-            with move_on_after(3) as scope:
+            # give the agent 5 seconds to speak and finish speaking
+            with move_on_after(5) as scope:
                 print("Reading events...")
                 async for event in client.read_events():
                     print(f"-> Received event: {event}")
@@ -81,11 +83,19 @@ class TestGeminiRealtimeClient:
                     if isinstance(event, SessionCreated):
                         await client.send_text(role="user", text="Hello, how are you?")
 
-        # checking if the scope was cancelled by move_on_after
-        assert scope.cancelled_caught
+                    if event.raw_message == {"serverContent": {"turnComplete": True}}:
+                        agent_finished_speaking = True
+                        break
 
         # check that we received the expected SessionCreated and AudioDelta events
         calls_args = [arg_list.args for arg_list in mock.call_args_list]
         assert isinstance(calls_args[0][0], SessionCreated), f"Type of calls_args[0][0] is {type(calls_args[0][0])}"
 
-        assert isinstance(calls_args[-1][0], AudioDelta), f"Type of calls_args[-1][0] is {type(calls_args[-1][0])}"
+        # if the agent finished speaking, the last event should be an Event with turnComplete=True
+        if agent_finished_speaking:
+            assert isinstance(calls_args[-2][0], AudioDelta), f"Type of calls_args[-1][0] is {type(calls_args[-1][0])}"
+            assert calls_args[-1][0].raw_message == {"serverContent": {"turnComplete": True}}
+        # if the agent did not finish speaking, the last event should be an AudioDelta and the scope should be cancelled
+        else:
+            assert scope.cancelled_caught
+            assert isinstance(calls_args[-1][0], AudioDelta), f"Type of calls_args[-1][0] is {type(calls_args[-1][0])}"
