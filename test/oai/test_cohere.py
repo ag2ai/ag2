@@ -4,9 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
-import os
 
 import pytest
 
@@ -20,8 +19,8 @@ def cohere_client():
 
 
 @skip_on_missing_imports(["cohere"], "cohere")
-def test_initialization_missing_api_key():
-    os.environ.pop("COHERE_API_KEY", None)
+def test_initialization_missing_api_key(monkeypatch):
+    monkeypatch.delenv("COHERE_API_KEY", raising=False)
     with pytest.raises(
         AssertionError,
         match="Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable.",

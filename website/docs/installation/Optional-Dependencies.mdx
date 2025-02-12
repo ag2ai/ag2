@@ -6,8 +6,20 @@ AG2 installs OpenAI package by default. To use LLMs by other providers, you can 
 pip install ag2[gemini,anthropic,mistral,together,groq,cohere]
 ```
 
-Check out the [notebook](/notebooks/autogen_uniformed_api_calling) and
-[blogpost](/blog/2024-06-24-AltModels-Classes/index) for more details.
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[gemini,anthropic,mistral,together,groq,cohere]
+```
+or
+```bash
+pip install -U pyautogen[gemini,anthropic,mistral,together,groq,cohere]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
+Check out the [notebook](/docs/use-cases/notebooks/notebooks/autogen_uniformed_api_calling) and
+[blogpost](/docs/blog/2024-06-24-AltModels-Classes/index) for more details.
 
 ## LLM Caching
 
@@ -80,7 +92,7 @@ To use Teachability, please install AG2 with the [teachable] option.
 pip install "ag2[teachable]"
 ```
 
-Example notebook: [Chatting with a teachable agent](/notebooks/agentchat_teachability)
+Example notebook: [Chatting with a teachable agent](/docs/use-cases/notebooks/notebooks/agentchat_teachability)
 
 ## Large Multimodal Model (LMM) Agents
 
@@ -90,7 +102,7 @@ We offered Multimodal Conversable Agent and LLaVA Agent. Please install with the
 pip install "ag2[lmm]"
 ```
 
-Example notebook: [LLaVA Agent](/notebooks/agentchat_lmm_llava)
+Example notebook: [LLaVA Agent](/docs/use-cases/notebooks/notebooks/agentchat_lmm_llava)
 
 ## Graph
 
@@ -100,7 +112,7 @@ To use a graph in `GroupChat`, particularly for graph visualization, please inst
 pip install "ag2[graph]"
 ```
 
-Example notebook: [Finite State Machine graphs to set speaker transition constraints](/notebooks/agentchat_groupchat_finite_state_machine)
+Example notebook: [Finite State Machine graphs to set speaker transition constraints](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_finite_state_machine)
 
 ## Long Context Handling
 

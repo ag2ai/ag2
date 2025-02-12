@@ -18,9 +18,12 @@ from ...conftest import Credentials
 
 with optional_import_block():
     from pydantic_ai import RunContext
+    from pydantic_ai.models.test import TestModel
     from pydantic_ai.tools import Tool as PydanticAITool
+    from pydantic_ai.usage import Usage
 
 
+@pytest.mark.interop
 @skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithotContext:
     @pytest.fixture(autouse=True)
@@ -65,6 +68,7 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert False, "No tool response found in chat messages"
 
 
+@pytest.mark.interop
 @skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityDependencyInjection:
     def test_dependency_injection(self) -> None:
@@ -77,6 +81,9 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             return f"{city} {date} {ctx.deps}"  # type: ignore[attr-defined]
 
         ctx = RunContext(
+            model=TestModel(),
+            usage=Usage(),
+            prompt="",
             deps=123,
             retry=0,
             messages=None,  # type: ignore[arg-type]
@@ -101,6 +108,9 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             raise ValueError("Retry")
 
         ctx = RunContext(
+            model=TestModel(),
+            usage=Usage(),
+            prompt="",
             deps=123,
             retry=0,
             messages=None,  # type: ignore[arg-type]
@@ -124,6 +134,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
             assert pydantic_ai_tool.current_retry == 3
 
 
+@pytest.mark.interop
 @skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithContext:
     @pytest.fixture(autouse=True)
@@ -170,7 +181,6 @@ class TestPydanticAIInteroperabilityWithContext:
                                 "title": "Additional Info",
                             }
                         },
-                        "required": ["additional_info"],
                         "type": "object",
                         "additionalProperties": False,
                     },

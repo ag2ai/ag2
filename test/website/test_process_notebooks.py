@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-import sys
 import tempfile
 import textwrap
 from collections.abc import Generator
@@ -12,18 +11,106 @@ from typing import Optional, Union
 
 import pytest
 
-# Add the ../../website directory to sys.path
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
-from process_notebooks import (
-    add_authors_and_social_img_to_blog_posts,
+from autogen._website.process_notebooks import (
+    NavigationGroup,
+    add_authors_and_social_img_to_blog_and_user_stories,
     add_front_matter_to_metadata_mdx,
-    cleanup_tmp_dirs_if_no_metadata,
+    cleanup_tmp_dirs,
     convert_callout_blocks,
+    copy_images_from_notebooks_dir_to_target_dir,
     ensure_mint_json_exists,
     extract_example_group,
+    extract_img_tag_from_figure_tag,
     generate_nav_group,
+    get_files_path_from_navigation,
     get_sorted_files,
+    update_group_pages,
 )
+
+
+class TestUpdateGroupPages:
+    @pytest.fixture
+    def sample_navigation(self) -> list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]:
+        return [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {
+                        "group": "Use cases",
+                        "pages": [
+                            "docs/use-cases/use-cases/customer-service",
+                        ],
+                    },
+                    {
+                        "group": "Reference Agents",
+                        "pages": [
+                            "docs/use-cases/reference-agents/index",
+                        ],
+                    },
+                    {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
+                    {
+                        "group": "Community Gallery",
+                        "pages": ["docs/use-cases/community-gallery/community-gallery"],
+                    },
+                ],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+    def test_update_top_level_group(
+        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+    ) -> None:
+        updated_pages = ["docs/use-cases/use-cases/customer-service"]
+        target_grp = "Use Cases"
+        updated_navigation = update_group_pages(sample_navigation, target_grp, updated_pages)
+        expected_navigation = [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": ["docs/use-cases/use-cases/customer-service"],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+        assert updated_navigation == expected_navigation, updated_navigation
+        assert sample_navigation != updated_navigation
+
+    def test_update_nested_group(
+        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+    ) -> None:
+        updated_pages = ["docs/use-cases/updated-notebook/index"]
+        target_grp = "Notebooks"
+        updated_navigation = update_group_pages(sample_navigation, target_grp, updated_pages)
+        expected_navigation = [
+            {"group": "Home", "pages": ["docs/home/Home"]},
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {
+                        "group": "Use cases",
+                        "pages": [
+                            "docs/use-cases/use-cases/customer-service",
+                        ],
+                    },
+                    {
+                        "group": "Reference Agents",
+                        "pages": [
+                            "docs/use-cases/reference-agents/index",
+                        ],
+                    },
+                    {"group": "Notebooks", "pages": ["docs/use-cases/updated-notebook/index"]},
+                    {
+                        "group": "Community Gallery",
+                        "pages": ["docs/use-cases/community-gallery/community-gallery"],
+                    },
+                ],
+            },
+            {"group": "FAQs", "pages": ["faq/FAQ"]},
+        ]
+
+        assert updated_navigation == expected_navigation, updated_navigation
+        assert sample_navigation != updated_navigation
 
 
 def test_ensure_mint_json() -> None:
@@ -43,12 +130,12 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
     # the tmp_dir / "notebooks" should be removed.
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        notebooks_dir = tmp_path / "notebooks"
+        notebooks_dir = tmp_path / "docs" / "use-cases" / "notebooks" / "notebooks"
         notebooks_dir.mkdir(parents=True, exist_ok=True)
         (notebooks_dir / "example-1.mdx").touch()
         (notebooks_dir / "example-2.mdx").touch()
 
-        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        cleanup_tmp_dirs(tmp_path, False)
         assert not notebooks_dir.exists()
 
     # Test with the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
@@ -65,7 +152,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
         metadata_dir.mkdir(parents=True, exist_ok=True)
         (metadata_dir / "NotebooksMetadata.mdx").touch()
 
-        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        cleanup_tmp_dirs(tmp_path, False)
         assert notebooks_dir.exists()
 
 
@@ -107,7 +194,7 @@ Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.p
 export const notebooksMetadata = [
     {
         "title": "some title",
-        "link": "/notebooks/source",
+        "link": "/docs/use-cases/notebooks/notebooks/source",
         "description": "some description",
         "image": "some image",
         "tags": [
@@ -118,7 +205,7 @@ export const notebooksMetadata = [
     }
 ];
 """
-            )
+            ), actual
 
     def test_with_metadata_mdx(self) -> None:
         front_matter_dict: dict[str, Optional[Union[str, Union[list[str]]]]] = {
@@ -189,7 +276,7 @@ export const notebooksMetadata = [
     },
     {
         "title": "some title",
-        "link": "/notebooks/source",
+        "link": "/docs/use-cases/notebooks/notebooks/source",
         "description": "some description",
         "image": "some image",
         "tags": [
@@ -315,7 +402,6 @@ class TestUpdateNavigation:
                     "group": "Installation",
                     "pages": [
                         "docs/installation/Installation",
-                        "docs/installation/Docker",
                         "docs/installation/Optional-Dependencies",
                     ],
                 },
@@ -384,20 +470,11 @@ class TestUpdateNavigation:
             metadata_path = tmp_path / "snippets" / "data" / "NotebooksMetadata.mdx"
             actual = extract_example_group(metadata_path)
 
-            expected = {
-                "group": "Examples",
-                "pages": [
-                    {
-                        "group": "Examples by Notebook",
-                        "pages": [
-                            "notebooks/Notebooks",
-                            "notebooks/agentchat_RetrieveChat_mongodb",
-                            "notebooks/JSON_mode_example",
-                        ],
-                    },
-                    "notebooks/Gallery",
-                ],
-            }
+            expected = [
+                "docs/use-cases/notebooks/Notebooks",
+                "docs/use-cases/notebooks/notebooks/agentchat_RetrieveChat_mongodb",
+                "docs/use-cases/notebooks/notebooks/JSON_mode_example",
+            ]
 
             assert actual == expected, actual
 
@@ -499,7 +576,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                 lorem ipsum""").lstrip()
             (post2_dir / "index.mdx").write_text(post2_content)
 
-            # Create authors.yml
+            # Create blogs_and_user_stories_authors.yml
             authors_content = textwrap.dedent("""
                 sonichi:
                     name: Chi Wang
@@ -531,16 +608,16 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                     url: https://github.com/davorinrusevljan
                     image_url: https://github.com/davorinrusevljan.png
                 """).lstrip()
-            (blog_dir / "authors.yml").write_text(authors_content)
+            (website_dir / "blogs_and_user_stories_authors.yml").write_text(authors_content)
 
             yield website_dir
 
     def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
-        add_authors_and_social_img_to_blog_posts(test_dir)
+        add_authors_and_social_img_to_blog_and_user_stories(test_dir)
 
         # Get directory paths
-        generated_blog_dir = test_dir / "blog"
+        generated_blog_dir = test_dir / "docs" / "blog"
         blog_dir = test_dir / "_blogs"
 
         # Verify directory structure matches
@@ -686,3 +763,160 @@ class TestConvertCalloutBlocks:
     def test_convert_callout_blocks(self, content: str, expected: str) -> None:
         actual = convert_callout_blocks(content)
         assert actual == expected, actual
+
+
+class TestEditLinks:
+    @pytest.fixture
+    def navigation(self) -> list[NavigationGroup]:
+        return [
+            {"group": "Home", "pages": ["docs/home/home"]},
+            {
+                "group": "User Guide",
+                "pages": [
+                    {
+                        "group": "Basic Concepts",
+                        "pages": [
+                            "docs/user-guide/basic-concepts/installing-ag2",
+                            "docs/user-guide/basic-concepts/llm-configuration",
+                        ],
+                    },
+                    {"group": "Advanced Concepts", "pages": ["docs/user-guide/advanced-concepts/rag"]},
+                    {"group": "Model Providers", "pages": ["docs/user-guide/models/openai"]},
+                ],
+            },
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {"group": "Use cases", "pages": ["docs/use-cases/use-cases/customer-service"]},
+                    {"group": "Reference Agents", "pages": ["docs/use-cases/reference-agents/index"]},
+                    {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
+                    "docs/use-cases/community-gallery/community-gallery",
+                ],
+            },
+            {"group": "Contributor Guide", "pages": ["docs/contributor-guide/contributing"]},
+            {"group": "FAQs", "pages": ["docs/faq/FAQ"]},
+            {"group": "Ecosystem", "pages": ["docs/ecosystem/agentops"]},
+        ]
+
+    def test_get_files_path_from_navigation(self, navigation: list[NavigationGroup]) -> None:
+        expected_files = [
+            "docs/home/home",
+            "docs/user-guide/basic-concepts/installing-ag2",
+            "docs/user-guide/basic-concepts/llm-configuration",
+            "docs/user-guide/advanced-concepts/rag",
+            "docs/user-guide/models/openai",
+            "docs/use-cases/use-cases/customer-service",
+            "docs/use-cases/reference-agents/index",
+            "docs/use-cases/notebooks/notebooks",
+            "docs/use-cases/community-gallery/community-gallery",
+            "docs/contributor-guide/contributing",
+            "docs/faq/FAQ",
+            "docs/ecosystem/agentops",
+        ]
+
+        expected = [Path(f) for f in expected_files]
+
+        actual = get_files_path_from_navigation(navigation)
+        assert actual == expected, actual
+
+
+class TestExtractImgTagFromFigureTag:
+    @pytest.fixture
+    def content(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Figure
+
+            <figure>
+                <img src="https://example.com/image.png" alt="image" />
+                <figcaption>Image caption</figcaption>
+            </figure>
+
+            <figure>
+                <img src="swarm_enhanced_01.png" alt="image" />
+                <figcaption>Image caption</figcaption>
+            </figure>
+
+            <figure>
+            <img
+            src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/friendly_and_suspicous.jpg"
+            alt="agent flow" />
+            <figcaption aria-hidden="true">agent flow</figcaption>
+            </figure>
+
+            ## Conclusion
+
+            This is a conclusion.
+            """).lstrip()
+
+    @pytest.fixture
+    def expected(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Figure
+
+            <img src="https://example.com/image.png" alt="image" />
+
+            <img src="/docs/use-cases/notebooks/notebooks/swarm_enhanced_01.png" alt="image" />
+
+            <img
+            src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/friendly_and_suspicous.jpg"
+            alt="agent flow" />
+
+            ## Conclusion
+
+            This is a conclusion.
+            """).lstrip()
+
+    def test_extract_img_tag_from_figure_tag(self, content: str, expected: str) -> None:
+        img_rel_path = Path("docs/use-cases/notebooks/notebooks")
+        actual = extract_img_tag_from_figure_tag(content, img_rel_path)
+        assert actual == expected, actual
+
+
+class TestCopyImagesFromNotebooksDirToTargetDir:
+    @pytest.fixture
+    def setup_test_files(self, tmp_path: Path) -> dict[str, Path]:
+        # Create directories
+        notebook_dir = tmp_path / "notebooks"
+        notebook_sub_dir = notebook_dir / "sub_dir"
+        notebook_dir.mkdir()
+        notebook_sub_dir.mkdir()
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        # Create test files
+        files_to_create = [
+            (notebook_dir / "test1.png", b"png content"),
+            (notebook_dir / "test2.jpg", b"jpg content"),
+            (notebook_dir / "test3.txt", b"text content"),
+            (notebook_sub_dir / "test1.png", b"png content"),
+            (notebook_sub_dir / "test2.jpg", b"jpg content"),
+        ]
+
+        for file_path, content in files_to_create:
+            file_path.write_bytes(content)
+
+        return {"notebook_dir": notebook_dir, "target_dir": target_dir}
+
+    def test_copy_images(self, setup_test_files: dict[str, Path]) -> None:
+        copy_images_from_notebooks_dir_to_target_dir(setup_test_files["notebook_dir"], setup_test_files["target_dir"])
+
+        # Check only images were copied
+        copied_files = list(setup_test_files["target_dir"].iterdir())
+        assert len(copied_files) == 2
+        assert (setup_test_files["target_dir"] / "test1.png").exists()
+        assert (setup_test_files["target_dir"] / "test2.jpg").exists()
+        assert not (setup_test_files["target_dir"] / "test3.txt").exists()
+        assert not (setup_test_files["target_dir"] / "sub_dir").exists()

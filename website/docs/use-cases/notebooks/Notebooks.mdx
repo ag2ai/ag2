@@ -1,0 +1,16 @@
+---
+title: All Notebooks
+sidebarTitle: All Notebooks
+mode: "wide"
+---
+
+import { GalleryPage } from '/snippets/components/GalleryPage.mdx';
+import { ClientSideComponent } from "/snippets/components/ClientSideComponent.mdx";
+import { notebooksMetadata } from "/snippets/data/NotebooksMetadata.mdx";
+
+This page contains a collection of notebooks that demonstrate how to use
+AG2. The notebooks are tagged with the topics they cover.
+For example, a notebook that demonstrates how to use function calling will
+be tagged with `tool/function`.
+
+<ClientSideComponent Component={GalleryPage} componentProps={{galleryItems: notebooksMetadata, target: "_self", allowDefaultImage: false}} />

@@ -1,0 +1,156 @@
+---
+title: Ending a chat
+---
+
+There are a number of ways a chat can end:
+1. The maximum number of turns in a chat is reached
+2. An agent's termination function passes on a received message
+3. An agent automatically replies a maximum number of times
+4. A human replies with 'exit' when prompted
+5. In a group chat, there's no next agent
+6. In a swarm, transitioning to AfterWorkOption.TERMINATE
+7. Custom reply functions
+
+### 1. Maximum turns
+For GroupChat and swarm, use `max_round` to set a limit on the number of replies. Each round represents an agent speaking and includes the initial message.
+
+```python
+# GroupChat with a maximum of 5 rounds
+groupchat = GroupChat(
+    agents=[agent_a, agent_b, agent_c],
+    speaker_selection_method="round_robin",
+    max_round=5,
+    ...
+)
+gcm = GroupChatManager(
+    ...
+)
+agent_a.initiate_chat(gcm, "first message")
+# 1. agent_a with "first message" > 2. agent_b > 3. agent_c > 4. agent_a > 5. agent_b > end
+
+# Swarm with a maximum of 5 rounds
+initiate_swarm_chat(
+    agents=[agent_a, agent_b, agent_c],
+    max_round=5,
+    messages="first message"
+    ...
+)
+# When initial agent is set to agent_a and agents hand off to the next agent.
+# 1. User with "first message" > 2. agent_a > 3. agent_b > 4. agent_c > 5. agent_a > end
+```
+
+For `initiate_chat` use `max_turns`. Each turn represents a round trip of both agents speaking and includes the initial message.
+
+```python
+# initiate_chat with a maximum of 2 turns across the 2 agents (effectively 4 steps)
+agent_a.initiate_chat(
+    recipient=agent_b,
+    max_turns=2,
+    message="first message"
+)
+# 1. agent_a with "first message" > 1. agent_b > 2. agent_a > 2. agent_b > end
+```
+
+### 2. Terminating message
+Agents can check their received message for a termination condition and, if that condition returns `True`, the chat will be ended. This check is carried out before they reply.
+
+When constructing an agent, use the `is_termination_msg` parameter with a Callable. To save creating a function, you can use a [lambda function](https://docs.python.org/2/tutorial/controlflow.html#lambda-expressions) as in the example below.
+
+It's important to put the termination check on the agents that will receive the message, not the agent creating the message.
+
+```python
+agent_a = ConversableAgent(
+    system_message="You're a helpful AI assistant, end your responses with 'DONE!'"
+    ...
+)
+
+# Terminates when the agent receives a message with "DONE!" in it.
+agent_b = ConversableAgent(
+    is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper()
+    ...
+)
+
+# agent_b > agent_a replies with message "... DONE!" > agent_b ends before replying
+```
+
+<Note>
+If the termination condition is met and the agent's `human_input_mode` is "ALWAYS" or 'TERMINATE' (ConversableAgent's default), you will be asked for input and can decide to end the chat. If it is "NEVER" it will end immediately.
+</Note>
+
+### 3. Number of automatic replies
+
+A conversation can be ended when an agent has responded to another agent a certain number of times. An agent evaluates this when it is next their time to reply, not immediately after they have replied.
+
+When constructing an agent, use the `max_consecutive_auto_reply` parameter to set this.
+
+```python
+agent_a = ConversableAgent(
+    max_consecutive_auto_reply=2
+    ...
+)
+
+agent_b = ConversableAgent(
+    ...
+)
+
+agent_a.initiate_chat(agent_b, ...)
+
+# agent_a > agent_b > agent_a with first auto reply > agent_b > agent_a with second auto reply > agent_b > agent_a ends before replying
+```
+
+<Note>
+If the agent's `human_input_mode` is "ALWAYS" or 'TERMINATE' (ConversableAgent's default), you will be asked for input and can decide to end the chat. If it is "NEVER" it will end immediately.
+</Note>
+
+### 4. Human replies with 'exit'
+During the course of the conversation, if you are prompted and reply 'exit', the chat will end.
+
+```console
+--------------------------------------------------------------------------------
+Please give feedback to agent_a. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: exit
+```
+
+### 5. GroupChat, no next agent
+If the next agent in a GroupChat can't be determined the chat will end.
+
+If you are customizing the speaker selection method with a Callable, return `None` to end the chat.
+
+### 6. Swarm, transitioning to end the chat
+In a swarm, if you transition to `AfterWorkOption.TERMINATE` it will end the swarm. The default swarm-level AfterWork option is `AfterWorkOption.TERMINATE` and this will apply to any agent in the swarm that doesn't have an AfterWork hand-off specified.
+
+Additionally, if you transition to `AfterWorkOption.REVERT_TO_USER` but have not specified a `user_agent` in `initiate_swarm_chat` then it will end the swarm.
+
+### 7. Reply functions
+AG2 provides the ability to create custom reply functions for an agent using `register_reply`.
+
+In your function, return a `Tuple` of `True, None` to indicate that the reply is final with `None` indicating there's no reply and it should end the chat.
+
+```python
+agent_a = ConversableAgent(
+    ...
+)
+
+agent_b = ConversableAgent(
+    ...
+)
+
+def my_reply_func(
+    recipient: ConversableAgent,
+    messages: Optional[List[Dict]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[Any] = None,
+) -> Tuple[bool, Union[str, Dict, None]]:
+    return True, None # Indicates termination
+
+# Register the reply function as the agent_a's first reply function
+agent_a.register_reply(
+    trigger=[Agent, None],
+    reply_func=my_reply_func,
+    position=0
+
+)
+
+agent_a.initiate_chat(agent_b, ...)
+
+# agent_a > agent_b > agent_a ends with first custom reply function
+```

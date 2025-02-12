@@ -9,6 +9,7 @@ from functools import wraps
 from inspect import signature
 from typing import Any, Callable, Optional
 
+from ...doc_utils import export_module
 from ...import_utils import optional_import_block
 from ..registry import register_interoperable_class
 from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
@@ -17,6 +18,7 @@ __all__ = ["PydanticAIInteroperability"]
 
 
 @register_interoperable_class("pydanticai")
+@export_module("autogen.interop")
 class PydanticAIInteroperability:
     """A class implementing the `Interoperable` protocol for converting Pydantic AI tools
     into a general `Tool` format.
@@ -108,6 +110,7 @@ class PydanticAIInteroperability:
         """
         from pydantic_ai import RunContext
         from pydantic_ai.tools import Tool as PydanticAITool
+        from pydantic_ai.usage import Usage
 
         if not isinstance(tool, PydanticAITool):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
@@ -125,6 +128,9 @@ class PydanticAIInteroperability:
 
         ctx = (
             RunContext(
+                model=None,  # type: ignore [arg-type]
+                usage=Usage(),
+                prompt="",
                 deps=deps,
                 retry=0,
                 # All messages send to or returned by a model.

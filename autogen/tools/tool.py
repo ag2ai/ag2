@@ -5,15 +5,17 @@
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
+from ..doc_utils import export_module
 from ..tools.function_utils import get_function_schema
 from .dependency_injection import ChatContext, get_context_params, inject_params
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
 
-__all__ = ["Tool"]
+__all__ = ["Tool", "tool"]
 
 
+@export_module("autogen.tools")
 class Tool:
     """A class representing a Tool that can be used by an agent for various tasks.
 
@@ -22,8 +24,8 @@ class Tool:
 
     Attributes:
         name (str): The name of the tool.
-        description (str): A brief description of the tool's purpose or function.
-        func (Callable[..., Any]): The function to be executed when the tool is called.
+        description (str): The description of the tool.
+        func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
     """
 
     def __init__(
@@ -146,3 +148,21 @@ class Tool:
         schema = {"type": schema["type"], **schema["function"]}
 
         return schema
+
+
+@export_module("autogen.tools")
+def tool(name: Optional[str] = None, description: Optional[str] = None) -> Callable[[Callable[..., Any]], Tool]:
+    """Decorator to create a Tool from a function.
+
+    Args:
+        name (str): The name of the tool.
+        description (str): The description of the tool.
+
+    Returns:
+        Callable[[Callable[..., Any]], Tool]: A decorator that creates a Tool from a function.
+    """
+
+    def decorator(func: Callable[..., Any]) -> Tool:
+        return Tool(name=name, description=description, func_or_tool=func)
+
+    return decorator

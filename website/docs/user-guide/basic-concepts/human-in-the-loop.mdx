@@ -1,0 +1,21 @@
+---
+title: Human in the loop
+---
+
+In the previous ConversableAgent example we demonstrated that you were able to chat with an agent.
+
+As you build your own workflows, you can decide if and how to use your *human in the loop* agents. As demonstrated previously, and in the following example, to do so, simply use the ConversableAgent and set the `human_input_mode` to `ALWAYS`.
+
+Let's start to build a more useful scenario, a classroom lesson planner, and create our human agent.
+
+You'll also see in this example that you can use the `system_message` property to give detailed instructions to agents.
+
+import Example from "/snippets/python-examples/humanintheloop.mdx";
+
+<Example/>
+
+1. Create our human-in-the-loop agent by setting its `human_input_mode`, and no `llm_config` is required.
+
+2. Our `the_human` agent starts a conversation by sending a message to `lesson_planner`. An agent's `initiate_chat` method is used to start a conversation between two agents.
+
+This creates a conversation between you and the lesson planner agent.

@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import builtins
 import io
@@ -20,9 +20,9 @@ import pytest
 import autogen
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
-from autogen.exception_utils import AgentNameConflict, UndefinedNextAgent
+from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentError
 
-from ..conftest import Credentials
+from ..conftest import Credentials, suppress_json_decoder_error
 
 
 def test_func_call_groupchat():
@@ -446,7 +446,7 @@ def test_next_agent():
     assert groupchat.next_agent(agent4, [agent1, agent3]) == agent1
     assert groupchat.next_agent(agent4, [agent1, agent2, agent3]) == agent1
 
-    with pytest.raises(UndefinedNextAgent):
+    with pytest.raises(UndefinedNextAgentError):
         groupchat.next_agent(agent4, [agent5, agent6])
 
 
@@ -919,11 +919,11 @@ def test_get_agent_by_name():
     assert gc.agent_by_name("team2", recursive=True, raise_on_name_conflict=True) is None
 
     # Testing naming conflict
-    with pytest.raises(AgentNameConflict):
+    with pytest.raises(AgentNameConflictError):
         gc.agent_by_name("team1", raise_on_name_conflict=True)
 
     # Testing name conflict with recursive search
-    with pytest.raises(AgentNameConflict):
+    with pytest.raises(AgentNameConflictError):
         gc.agent_by_name("team1_member1", recursive=True, raise_on_name_conflict=True)
 
 
@@ -1482,7 +1482,7 @@ def test_role_for_reflection_summary():
         )
 
         mock_generate_oai_reply_from_client.assert_called_once()
-        args, kwargs = mock_generate_oai_reply_from_client.call_args
+        _, kwargs = mock_generate_oai_reply_from_client.call_args
         assert kwargs["messages"][-1]["role"] == role_name
 
 
@@ -1524,13 +1524,13 @@ def test_speaker_selection_auto_process_result():
         ],
     )
 
-    ### Agent selected successfully
+    # Agent selected successfully
     chat_result.chat_history[3]["content"] = "[AGENT SELECTED]Product_Manager"
 
     # Product_Manager should be returned
     assert groupchat._process_speaker_selection_result(chat_result, cmo, agent_list) == pm
 
-    ### Agent not selected successfully
+    # Agent not selected successfully
     chat_result.chat_history[3]["content"] = (
         "[AGENT SELECTION FAILED]Select speaker attempt #3 of 3 failed as it did not include any agent names."
     )
@@ -1538,7 +1538,7 @@ def test_speaker_selection_auto_process_result():
     # The next speaker in the list will be selected, which will be the Product_Manager (as the last speaker is the Chief_Marketing_Officer)
     assert groupchat._process_speaker_selection_result(chat_result, cmo, agent_list) == pm
 
-    ### Invalid result messages, will return the next agent
+    # Invalid result messages, will return the next agent
     chat_result.chat_history[3]["content"] = "This text should not be here."
 
     # The next speaker in the list will be selected, which will be the Chief_Marketing_Officer (as the last speaker is the Product_Maanger)
@@ -1599,7 +1599,7 @@ def test_speaker_selection_validate_speaker_name():
         {"content": "UPDATED_BELOW", "role": "user"},
     ]
 
-    ### Single agent name returned
+    # Single agent name returned
     attempts_left = 2
     attempt = 1
     select_speaker_messages[-1]["content"] = "Product_Manager is the next to speak"
@@ -1619,7 +1619,7 @@ def test_speaker_selection_validate_speaker_name():
 
     select_speaker_messages.pop(-1)  # Remove the last message before the next test
 
-    ### Multiple agent names returned with attempts left
+    # Multiple agent names returned with attempts left
     attempts_left = 2
     attempt = 1
     select_speaker_messages[-1]["content"] = "Product_Manager must speak after the Chief_Marketing_Officer"
@@ -1643,7 +1643,7 @@ def test_speaker_selection_validate_speaker_name():
         },
     )
 
-    ### Multiple agent names returned with no attempts left
+    # Multiple agent names returned with no attempts left
     attempts_left = 0
     attempt = 1
     select_speaker_messages[-1]["content"] = "Product_Manager must speak after the Chief_Marketing_Officer"
@@ -1666,7 +1666,7 @@ def test_speaker_selection_validate_speaker_name():
 
     select_speaker_messages.pop(-1)  # Remove the last message before the next test
 
-    ### No agent names returned with attempts left
+    # No agent names returned with attempts left
     attempts_left = 3
     attempt = 2
     select_speaker_messages[-1]["content"] = "The PM must speak after the CMO"
@@ -1690,7 +1690,7 @@ def test_speaker_selection_validate_speaker_name():
         },
     )
 
-    ### Multiple agents returned with no attempts left
+    # Multiple agents returned with no attempts left
     attempts_left = 0
     attempt = 3
     select_speaker_messages[-1]["content"] = "The PM must speak after the CMO"
@@ -2035,14 +2035,20 @@ def test_manager_resume_messages():
     # Try a number
     with pytest.raises(Exception):
         return_agent, return_message = manager.resume(messages=messages)
+        assert return_agent
+        assert return_message
 
     # Try an empty string
     with pytest.raises(Exception):
         return_agent, return_message = manager.resume(messages="")
+        assert return_agent
+        assert return_message
 
     # Try a message starter string, which isn't valid
     with pytest.raises(Exception):
         return_agent, return_message = manager.resume(messages="Let's get this conversation started.")
+        assert return_agent
+        assert return_message
 
 
 def test_custom_model_client():
@@ -2091,6 +2097,8 @@ def test_custom_model_client():
     checking_agent, speaker_selection_agent = group_chat._create_internal_agents(
         agents=[], messages=[], max_attempts=3, validate_speaker_name=(True, "test")
     )
+
+    assert checking_agent is not None
 
     # Check that the custom model client is assigned to the speaker selection agent
     assert isinstance(speaker_selection_agent.client._clients[0], CustomModelClient)
@@ -2177,12 +2185,15 @@ def test_manager_resume_message_assignment():
     ]
 
     return_agent, return_message = manager.resume(messages=prev_messages)
+    assert return_agent is not None
+    assert return_message is not None
 
     # Compare agent_a's message state to previous messages (excludes last message)
     assert list(agent_a.chat_messages.values())[0] == prev_messages[:-1]
 
 
 @pytest.mark.deepseek
+@suppress_json_decoder_error
 def test_groupchat_with_deepseek_reasoner(
     credentials_gpt_4o_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,

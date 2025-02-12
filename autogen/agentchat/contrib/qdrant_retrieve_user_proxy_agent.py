@@ -95,7 +95,7 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
             - payload_indexing: Whether to create a payload index for the document field. Default is False.
               You can find more info about the payload indexing options at https://qdrant.tech/documentation/concepts/indexing/#payload-index
               API Reference: https://qdrant.github.io/qdrant/redoc/index.html#tag/collections/operation/create_field_index
-         **kwargs (dict): other kwargs in [UserProxyAgent](../user_proxy_agent#init).
+         **kwargs (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
 
         """
         warnings.warn(
@@ -209,12 +209,12 @@ def create_qdrant_from_dir(
         client.set_model(embedding_model)
 
     if custom_text_split_function is not None:
-        chunks, sources = split_files_to_chunks(
+        chunks, _ = split_files_to_chunks(
             get_files_from_dir(dir_path, custom_text_types, recursive),
             custom_text_split_function=custom_text_split_function,
         )
     else:
-        chunks, sources = split_files_to_chunks(
+        chunks, _ = split_files_to_chunks(
             get_files_from_dir(dir_path, custom_text_types, recursive), max_tokens, chunk_mode, must_break_at_empty_line
         )
     logger.info(f"Found {len(chunks)} chunks.")

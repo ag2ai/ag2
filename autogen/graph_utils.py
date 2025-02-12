@@ -33,7 +33,7 @@ def check_graph_validity(
         2. Warning if the set of agents in allowed_speaker_transitions do not match agents
         3. Warning if there are duplicated agents in any values of `allowed_speaker_transitions_dict`
     """
-    ### Errors
+    # Errors
 
     # Check 1. The dictionary must have a structure of keys and list as values
     if not isinstance(allowed_speaker_transitions_dict, dict):
@@ -48,9 +48,9 @@ def check_graph_validity(
         raise ValueError("allowed_speaker_transitions_dict has keys not in agents.")
 
     # Check 3. Every value is a list of Agents or empty list (not string).
-    if not all(
-        [all([isinstance(agent, Agent) for agent in value]) for value in allowed_speaker_transitions_dict.values()]
-    ):
+    if not all([
+        all([isinstance(agent, Agent) for agent in value]) for value in allowed_speaker_transitions_dict.values()
+    ]):
         raise ValueError("allowed_speaker_transitions_dict has values that are not lists of Agents.")
 
     # Warnings

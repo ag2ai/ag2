@@ -4,6 +4,7 @@
 
 from typing import Callable, TypeVar
 
+from ..doc_utils import export_module
 from .interoperable import Interoperable
 
 __all__ = ["InteroperableRegistry", "register_interoperable_class"]
@@ -44,6 +45,7 @@ _register = InteroperableRegistry()
 
 
 # register decorator
+@export_module("autogen.interop")
 def register_interoperable_class(short_name: str) -> Callable[[InteroperableClass], InteroperableClass]:
     """Register an Interoperable class in the global registry.
 
