@@ -67,13 +67,13 @@ jobs:
         if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
         run: |
           docker --version
-          uv pip install --system -e ".[test,redis,interop]"
+          uv pip install --system -e ".[test,redis]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
         if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
         run: |
           docker --version
-          uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
+          uv pip install --system -e ".[test,redis,${{ matrix.llm }}]"
           python -c "import autogen"
       - name: LLM tests using ${{ matrix.llm }}
         env:
