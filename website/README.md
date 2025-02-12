@@ -27,14 +27,27 @@ Follow these steps to build and serve the documentation on your local machine:
 
 4. Build and Serve the Documentation:
 
-To build and serve the documentation locally, run the following command from the project root directory:
+    - To build and serve the documentation locally, run the following command from the project root directory:
 
-    ```console
-    ./scripts/docs_serve.sh
-    ```
+        ```console
+        ./scripts/docs_serve.sh
+        ```
 
-The last command starts a local development server and opens up a browser window.
-Most changes are reflected live without having to restart the server.
+    - Optionally, you can pass the `--force` flag to clean up all temporary files and generate the documentation from scratch:
+
+        ```console
+        ./scripts/docs_serve.sh --force
+        ```
+
+    - The above command starts a local development server and opens up a browser window.
+
+5. Handling Updates or Changes:
+
+    - Whenever you update the documentation, stop the server and re-run the `./scripts/docs_serve.sh` command to serve the docs with the latest changes and view them live.
+
+    - If deleted files are still displayed, it indicates cached or temporary files may be causing issues. To resolve this, use the `--force` flag to clean the build directory and regenerate the documentation.
+
+By following these steps, you can build, serve, and update the documentation locally.
 
 ## Build with Dev Containers
 
@@ -42,11 +55,26 @@ To build and test documentation using Dev Containers, open the project using [VS
 
 This will open the project in a Dev Container with all the required dependencies installed.
 
-Open a terminal and run the following commands from the project root directory to build and serve the documentation:
+Build and Serve the Documentation:
 
-```console
-pip install -e ".[docs]"
-./scripts/docs_serve.sh
-```
+    - Open a terminal and run the following commands from the project root directory to build and serve the documentation:
 
-Once done you should be able to access the documentation at `http://localhost:3000/`.
+        ```console
+        pip install -e ".[docs]"
+        ./scripts/docs_serve.sh
+        ```
+
+    - Optionally, you can pass the `--force` flag to clean up all temporary files and generate the documentation from scratch:
+
+        ```console
+        pip install -e ".[docs]"
+        ./scripts/docs_serve.sh --force
+        ```
+
+    Once done you should be able to access the documentation at `http://localhost:3000/`.
+
+Handling Updates or Changes:
+
+    - Whenever you update the documentation, stop the server and re-run the `./scripts/docs_serve.sh` command to serve the docs with the latest changes and view them live.
+
+    - If deleted files are still displayed, it indicates cached or temporary files may be causing issues. To resolve this, use the `--force` flag to clean the build directory and regenerate the documentation.
