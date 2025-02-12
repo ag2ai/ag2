@@ -264,7 +264,7 @@ exclude = ["test", "notebook"]
 
 
 [tool.pytest.ini_options]
-addopts = '--cov=. --cov-append --cov-branch --cov-report=xml -m "not conda"'
+addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not conda"'
 testpaths = [
     "test",
 ]
