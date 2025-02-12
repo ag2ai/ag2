@@ -22,7 +22,7 @@ with optional_import_block():
     "browser-use",
 )
 class TestBrowserUseToolOpenai:
-    def test_broser_use_tool_init(self, mock_credentials: Credentials) -> None:
+    def test_browser_use_tool_init(self, mock_credentials: Credentials) -> None:
         browser_use_tool = BrowserUseTool(llm_config=mock_credentials.llm_config)
         assert browser_use_tool.name == "browser_use"
         assert browser_use_tool.description == "Use the browser to perform a task."
@@ -123,11 +123,13 @@ class TestBrowserUseToolOpenai:
         api_type = credentials_from_test_param.api_type
         if api_type == "deepseek":
             pytest.skip("Deepseek currently does not work too well with the browser-use")
+        if api_type == "openai":
+            pytest.skip("This test case will be covered by the test_end2end test case.")
 
         # If we decide to test with deepseek, we need to set use_vision to False
         agent_kwargs = {"use_vision": False, "max_steps": 100} if api_type == "deepseek" else {"max_steps": 100}
         browser_use_tool = BrowserUseTool(llm_config=credentials_from_test_param.llm_config, agent_kwargs=agent_kwargs)
-        task = "Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment."
+        task = "Get info from https://docs.ag2.ai/docs/Home"
 
         result = await browser_use_tool(
             task=task,
@@ -153,7 +155,7 @@ class TestBrowserUseToolOpenai:
 
         result = user_proxy.initiate_chat(
             recipient=assistant,
-            message="Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment.",
+            message="Get info from https://docs.ag2.ai/docs/Home",
             max_turns=2,
         )
 

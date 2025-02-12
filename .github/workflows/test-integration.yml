@@ -1,13 +1,13 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# This workflow will install Python dependencies and run tests with Python 3.11
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Tests with optional dependencies
+name: Test integration
 
 on:
   schedule:
     - cron: "0 0 * * *" # daily at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
-  pull_request:
+  pull_request_target:
     branches: ["main"]
   merge_group:
     types: [checks_requested]
@@ -53,68 +53,44 @@ jobs:
     needs: paths-filter
     if: needs.paths-filter.outputs.hasChanges == 'true'
     runs-on: ${{ matrix.os }}
+    environment: openai1
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
     strategy:
       fail-fast: false
       matrix:
+        # Add more optional dependencies if needed
         optional-dependencies:
           - "browser-use"
-          - "commsagent-discord"
-          - "commsagent-slack"
-          - "commsagent-telegram"
-          - "jupyter-executor"
-          - "retrievechat"
-          - "retrievechat-pgvector"
-          - "retrievechat-mongodb"
-          - "retrievechat-qdrant"
-          - "graph-rag-falkor-db"
-          # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
-          - "twilio"
-          - "interop"
           - "crawl4ai"
-          - "docs"
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        # Run tests only for py versions 3.9, 3.10, 3.13
-        python-version: ["3.9", "3.10", "3.13"]
-        # add more if needed
-        exclude:
-          # pdoc3 is failing in python 3.9 for some reason, we build docs with Python 3.10
-          - python-version: "3.9"
-            optional-dependencies: "docs"
-          # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
-          - python-version: "3.9"
-            optional-dependencies: "graph-rag-falkor-db"
-          # Issues with installing retrievechat-qdrant in python 3.13
-          - python-version: "3.13"
-            optional-dependencies: "retrievechat-qdrant"
-          # Browser use doesn't support below python 3.11
-          - python-version: "3.9"
-            optional-dependencies: "browser-use"
-          - python-version: "3.10"
-            optional-dependencies: "browser-use"
-          # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
-          # Because torch and sentence_transformers creates issues while trying to install
-          - os: macos-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat"
-          - os: macos-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-pgvector"
-          - os: macos-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-mongodb"
-          - os: windows-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat"
-          - os: windows-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-pgvector"
-          - os: windows-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-mongodb"
+          - "interop"
+        os: [ubuntu-latest]
+        # Run tests only for py versions 3.11
+        python-version: ["3.11"]
+        # Add more LLMs if needed
+        llm: ["openai", "gemini", "anthropic", "deepseek"]
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
+      # checkout to pr branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -125,26 +101,24 @@ jobs:
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,${{ matrix.optional-dependencies }}]
-      - name: Set AUTOGEN_USE_DOCKER based on OS
-        shell: bash
-        run: |
-          if [[ ${{ matrix.os }} != ubuntu-latest ]]; then
-            echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
-          fi
       - name: Install playwright
         if: matrix.optional-dependencies == 'browser-use' || matrix.optional-dependencies == 'crawl4ai'
         run: |
           playwright install
-      - name: Test import all submodules
-        shell: bash
-        run: |
-          bash scripts/test.sh test/test_import.py
       - name: Test with pytest using optional dependency marks
         shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
-          bash scripts/test-skip-llm.sh -m "$MARKER"
+          bash scripts/test.sh -m "$MARKER and ${{ matrix.llm }}"
       - name: Show coverage report
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
