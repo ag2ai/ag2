@@ -6,6 +6,9 @@ import random
 import re
 import warnings
 from typing import Any, Optional
+from typing import Any, Callable, Optional, TypeVar
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block
