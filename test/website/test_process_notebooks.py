@@ -881,7 +881,6 @@ class TestExtractImgTagFromFigureTag:
     def test_extract_img_tag_from_figure_tag(self, content: str, expected: str) -> None:
         img_rel_path = Path("docs/use-cases/notebooks/notebooks")
         actual = extract_img_tag_from_figure_tag(content, img_rel_path)
-        print(f"{actual=}")
         assert actual == expected, actual
 
 
