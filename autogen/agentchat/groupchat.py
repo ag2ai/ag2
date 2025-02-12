@@ -27,7 +27,7 @@ from ..messages.agent_messages import (
     SelectSpeakerTryCountExceededMessage,
     SpeakerAttemptFailedMultipleAgentsMessage,
     SpeakerAttemptFailedNoAgentsMessage,
-    SpeakerAttemptSuccessfullMessage,
+    SpeakerAttemptSuccessfulMessage,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -864,7 +864,7 @@ class GroupChat:
             if no_of_mentions == 1:
                 # Success on retry, we have just one name mentioned
                 iostream.send(
-                    SpeakerAttemptSuccessfullMessage(
+                    SpeakerAttemptSuccessfulMessage(
                         mentions=mentions,
                         attempt=attempt,
                         attempts_left=attempts_left,
