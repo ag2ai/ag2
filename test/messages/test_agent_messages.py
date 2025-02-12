@@ -595,7 +595,7 @@ class TestSpeakerAttemptSuccessfulMessage:
         assert isinstance(actual, SpeakerAttemptSuccessfulMessage)
 
         expected_model_dump = {
-            "type": "speaker_attempt_successfull",
+            "type": "speaker_attempt_successful",
             "content": {
                 "uuid": uuid,
                 "mentions": mentions,
