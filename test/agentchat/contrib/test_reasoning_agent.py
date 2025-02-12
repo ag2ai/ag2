@@ -276,5 +276,58 @@ def test_visualize_tree_render_failure(mock_digraph):
         ])
 
 
+def test_reasoning_agent_code_execution():
+    """Test that ReasoningAgent properly executes code in responses"""
+    mock_config = {
+        "config_list": [{"model": "gpt-4o", "api_key": "fake", "base_url": "0.0.0.0:8000"}],
+        "temperature": 0,
+    }
+
+    # Create agent with code execution enabled
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_config,
+            code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
+        )
+
+        def mock_response(*args, **kwargs):
+            instance = args[0]
+            if instance.name == "tot_thinker":
+                return True, {
+                    "content": """Reflection
+Let's solve this with Python.
+
+Possible Options:
+Option 1: Calculate factorial with Python
+```python
+def factorial(n):
+    if n == 0:
+        return 1
+    return n * factorial(n-1)
+
+print(f"Factorial of 5 is {factorial(5)}")
+```
+
+Option 2: TERMINATE"""
+                }
+            elif instance.name == "reasoner_user_proxy":
+                # Mock the code execution result
+                return True, {"content": "Factorial of 5 is 120"}
+            elif instance.name == "test_agent":
+                return True, {"content": "The factorial of 5 is 120"}
+            return True, {"content": "5"}
+
+        mock_oai_reply.side_effect = mock_response
+
+        # Test code execution
+        response = agent._beam_reply("Calculate factorial of 5")
+
+        # Verify code was executed
+        assert "Factorial of 5 is 120" in agent._root.children[0].content
+        assert "Code Execution Result:" in agent._root.children[0].content
+        assert response == "The factorial of 5 is 120"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
