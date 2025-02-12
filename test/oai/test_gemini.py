@@ -459,3 +459,31 @@ def test_extract_json_response(gemini_client):
         match="Failed to parse response as valid JSON matching the schema for Structured Output: Expecting value:",
     ):
         gemini_client._convert_json_response(no_json_response)
+
+
+def test_convert_type_null_to_nullable():
+    initial_schema = {
+        "type": "object",
+        "properties": {
+            "additional_notes": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "default": None,
+                "description": "Additional notes",
+            }
+        },
+        "required": [],
+    }
+
+    expected_schema = {
+        "properties": {
+            "additional_notes": {
+                "anyOf": [{"type": "string"}, {"nullable": True}],
+                "default": None,
+                "description": "Additional notes",
+            }
+        },
+        "required": [],
+        "type": "object",
+    }
+    converted_schema = GeminiClient._convert_type_null_to_nullable(initial_schema)
+    assert converted_schema == expected_schema
