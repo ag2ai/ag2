@@ -13,7 +13,7 @@ import pytest
 
 from autogen._website.process_notebooks import (
     NavigationGroup,
-    add_authors_and_social_img_to_blog_posts,
+    add_authors_and_social_img_to_blog_and_user_stories,
     add_front_matter_to_metadata_mdx,
     cleanup_tmp_dirs,
     convert_callout_blocks,
@@ -574,7 +574,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                 lorem ipsum""").lstrip()
             (post2_dir / "index.mdx").write_text(post2_content)
 
-            # Create authors.yml
+            # Create blogs_and_user_stories_authors.yml
             authors_content = textwrap.dedent("""
                 sonichi:
                     name: Chi Wang
@@ -606,13 +606,13 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                     url: https://github.com/davorinrusevljan
                     image_url: https://github.com/davorinrusevljan.png
                 """).lstrip()
-            (blog_dir / "authors.yml").write_text(authors_content)
+            (website_dir / "blogs_and_user_stories_authors.yml").write_text(authors_content)
 
             yield website_dir
 
     def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
-        add_authors_and_social_img_to_blog_posts(test_dir)
+        add_authors_and_social_img_to_blog_and_user_stories(test_dir)
 
         # Get directory paths
         generated_blog_dir = test_dir / "docs" / "blog"
