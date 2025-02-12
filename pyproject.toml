@@ -176,6 +176,7 @@ gemini = [
     "google-auth",
     "pillow",
     "jsonschema",
+    "jsonref"
 ]
 together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]

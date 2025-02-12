@@ -63,6 +63,7 @@ from .client_utils import FormatterProtocol
 
 with optional_import_block():
     import google.genai as genai
+    import jsonref
     import vertexai
     from PIL import Image
     from google.auth.credentials import Credentials
@@ -79,14 +80,12 @@ with optional_import_block():
         Type,
     )
     from jsonschema import ValidationError
-    from vertexai.generative_models import (
-        Content as VertexAIContent,
-    )
+    from vertexai.generative_models import Content as VertexAIContent
     from vertexai.generative_models import FunctionDeclaration as vaiFunctionDeclaration
+    from vertexai.generative_models import GenerationConfig, GenerativeModel
     from vertexai.generative_models import (
         GenerationResponse as VertexAIGenerationResponse,
     )
-    from vertexai.generative_models import GenerativeModel
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
     from vertexai.generative_models import Part as VertexAIPart
@@ -98,7 +97,7 @@ with optional_import_block():
 logger = logging.getLogger(__name__)
 
 
-@require_optional_import(["google", "vertexai", "PIL", "jsonschema"], "gemini")
+@require_optional_import(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")
 class GeminiClient:
     """Client for Google's Gemini API."""
 
@@ -249,14 +248,18 @@ class GeminiClient:
         if params.get("response_format"):
             self._response_format = params.get("response_format")
             generation_config["response_mime_type"] = "application/json"
-            generation_config["response_schema"] = params.get("response_format")
+
+            response_schema = dict(jsonref.replace_refs(params.get("response_format").model_json_schema()))
+            if "$defs" in response_schema:
+                response_schema.pop("$defs")
+            generation_config["response_schema"] = response_schema
 
         # A. create and call the chat model.
         gemini_messages = self._oai_messages_to_gemini_messages(messages)
         if self.use_vertexai:
             model = GenerativeModel(
                 model_name,
-                generation_config=generation_config,
+                generation_config=GenerationConfig(**generation_config),
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
                 tools=tools,
