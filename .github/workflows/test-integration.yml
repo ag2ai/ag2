@@ -67,6 +67,7 @@ jobs:
         os: [ubuntu-latest]
         # Run tests only for py versions 3.11
         python-version: ["3.11"]
+        # Add more LLMs if needed
         llm: ["openai", "gemini", "anthropic", "deepseek"]
 
     steps:
