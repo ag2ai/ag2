@@ -85,12 +85,12 @@ class TestRealtimeAgent:
     ) -> None:
         agent.register_realtime_function(description="Example function")(func)
 
-        assert isinstance(agent._registred_realtime_tools[func_name], Tool)
+        assert isinstance(agent._registered_realtime_tools[func_name], Tool)
 
         expected_tools["name"] = func_name
-        assert agent._registred_realtime_tools[func_name].realtime_tool_schema == expected_tools
+        assert agent._registered_realtime_tools[func_name].realtime_tool_schema == expected_tools
 
-        retval = agent._registred_realtime_tools[func_name].func(1)
+        retval = agent._registered_realtime_tools[func_name].func(1)
         actual = await retval if is_async else retval
 
         assert actual == expected

@@ -83,7 +83,7 @@ def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Pat
         filename += ".html"
     output_dir = Path(output_dir) if output_dir else Path()
     filepath = output_dir / filename
-    with filepath.open("w", encoding="utf-8") as f:
+    with open(file=filepath, mode="w", encoding="utf-8") as f:
         f.write(rendered_html)
 
     return filepath
@@ -105,12 +105,13 @@ def list_files(directory: Union[Path, str]) -> list[Path]:
 @export_module("autogen.agentchat.contrib.rag")
 def handle_input(input_path: Union[Path, str], output_dir: Optional[Union[Path, str]] = None) -> list[Path]:
     """Process the input string and return the appropriate file paths"""
-    input_path = Path(input_path)
 
-    if is_url(str(input_path)):
+    if isinstance(input_path, str) and is_url(input_path):
         _logger.info("Detected URL. Downloading content...")
         return [download_url(url=input_path, output_dir=output_dir)]
-    elif input_path.is_dir():
+    else:
+        input_path = Path(input_path)
+    if input_path.is_dir():
         _logger.info("Detected directory. Listing files...")
         return list_files(directory=input_path)
     elif input_path.is_file():
