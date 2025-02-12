@@ -30,8 +30,6 @@ class RealtimeAgentCallbacks:
 
 @export_module("autogen.agentchat.realtime.experimental")
 class RealtimeAgent:
-    """(Experimental) Agent for interacting with the Realtime Clients."""
-
     def __init__(
         self,
         *,
