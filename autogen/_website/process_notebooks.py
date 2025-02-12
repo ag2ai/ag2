@@ -526,7 +526,7 @@ def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
             # If src doesn't start with http/https, it's a local image
             if not src.startswith(("http://", "https://")):
                 # Replace old src with new prefixed path
-                img_tag = img_tag.replace(f'src="{src}"', f'src="/{str(img_rel_path)}/{src}"')
+                img_tag = img_tag.replace(f'src="{src}"', f'src="/{str(img_rel_path.as_posix())}/{src}"')
         return img_tag
 
     pattern = r"<figure>\s*(<img\s+.*?/>)\s*<figcaption[^>]*>.*?</figcaption>\s*</figure>"
