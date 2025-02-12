@@ -114,13 +114,15 @@ retrievechat-qdrant = [
 
 graph-rag-falkor-db = [
     "graphrag_sdk==0.6.0",
-    "falkordb>=1.0.10"
+    "falkordb>=1.0.10",
 ]
 
 rag = [
     "docling>=2.15.1,<3",
     "selenium>=4.28.1,<5",
     "webdriver-manager==4.0.2",
+    "chromadb>=0.5,<1",
+    "llama-index>=0.12,<1",
 ]
 
 
@@ -174,6 +176,7 @@ gemini = [
     "google-auth",
     "pillow",
     "jsonschema",
+    "jsonref"
 ]
 together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
@@ -264,7 +267,7 @@ exclude = ["test", "notebook"]
 
 
 [tool.pytest.ini_options]
-addopts = '--cov=. --cov-append --cov-branch --cov-report=xml -m "not conda"'
+addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not conda"'
 testpaths = [
     "test",
 ]
@@ -428,4 +431,4 @@ disallow_any_unimported = true
 [tool.codespell]
 skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg,./notebook,./website/node_modules,.notebook/agentchat_microsoft_fabric.ipynb"
 quiet-level = 3
-ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane"
+ignore-words-list = "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,ege,leapYear,fO,bu,te,ROUGE,ser,doubleClick,CNa,wOh,Hart,Empress,Chage,mane,digitalize"

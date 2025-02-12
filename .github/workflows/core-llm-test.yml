@@ -67,13 +67,13 @@ jobs:
         if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
         run: |
           docker --version
-          uv pip install --system -e ".[test,redis,interop]"
+          uv pip install --system -e ".[test,redis]"
           python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
         if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
         run: |
           docker --version
-          uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
+          uv pip install --system -e ".[test,redis,${{ matrix.llm }}]"
           python -c "import autogen"
       - name: LLM tests using ${{ matrix.llm }}
         env:
@@ -88,6 +88,7 @@ jobs:
       - name: Show coverage report
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml

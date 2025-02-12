@@ -503,6 +503,37 @@ def ensure_edit_url(content: str, file_path: Path) -> str:
     return content + EDIT_URL_HTML.format(file_path=file_path)
 
 
+def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
+    """Extracts the img tag from the figure tag and modifies local image path.
+
+    Quarto converts the markdown images syntax to <figure> tag while rendering and converting the notebook to mdx file.
+    Mintlify could not able to process the <figure> tags properly and does not shows these images in the documentation.
+    As a fix, the <img> tag present inside the <figure> is extracted and saved to the mdx file.
+
+    Args:
+        content (str): Content of the file
+
+    Returns:
+        str: Content of the file with <img> tag extracted from <figure> tag
+    """
+
+    def replace_local_path(match: re.Match) -> str:
+        img_tag = match.group(1)
+        # Find src attribute value
+        src_match = re.search(r'src="([^"]+)"', img_tag)
+        if src_match:
+            src = src_match.group(1)
+            # If src doesn't start with http/https, it's a local image
+            if not src.startswith(("http://", "https://")):
+                # Replace old src with new prefixed path
+                img_tag = img_tag.replace(f'src="{src}"', f'src="/{str(img_rel_path.as_posix())}/{src}"')
+        return img_tag
+
+    pattern = r"<figure>\s*(<img\s+.*?/>)\s*<figcaption[^>]*>.*?</figcaption>\s*</figure>"
+    content = re.sub(pattern, replace_local_path, content, flags=re.DOTALL)
+    return content
+
+
 # rendered_notebook is the final mdx file
 def post_process_mdx(
     rendered_mdx: Path,
@@ -582,6 +613,10 @@ def post_process_mdx(
 
     # ensure editUrl is present
     content = ensure_edit_url(content, repo_relative_notebook)
+
+    # convert figure tag to img tag
+    img_rel_path = rendered_mdx.parent.relative_to(website_build_directory)
+    content = extract_img_tag_from_figure_tag(content, img_rel_path)
 
     # Rewrite the content as
     # ---
@@ -1046,6 +1081,18 @@ def add_edit_urls_to_non_generated_mdx_files(website_build_directory: Path) -> N
         mdx_file_path.write_text(content_with_edit_url, encoding="utf-8")
 
 
+def copy_images_from_notebooks_dir_to_target_dir(notebook_directory: Path, target_notebooks_dir: Path) -> None:
+    """Copy images from notebooks directory to the target directory."""
+    # Define supported image extensions
+    supported_img_extensions = {".png", ".jpg"}
+
+    # Single loop through directory contents
+    for image_path in notebook_directory.iterdir():
+        if image_path.is_file() and image_path.suffix.lower() in supported_img_extensions:
+            target_image = target_notebooks_dir / image_path.name
+            shutil.copy(image_path, target_image)
+
+
 def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
@@ -1148,6 +1195,8 @@ def main() -> None:
 
         # Post-processing steps after all notebooks are handled
         if not args.dry_run:
+            target_notebooks_dir = notebooks_target_dir(args.website_build_directory)
+            copy_images_from_notebooks_dir_to_target_dir(args.notebook_directory, target_notebooks_dir)
             add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
             fix_internal_references_in_mdx_files(args.website_build_directory)
             add_authors_and_social_img_to_blog_and_user_stories(args.website_build_directory)

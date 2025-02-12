@@ -132,7 +132,7 @@ jobs:
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
       - name: Install playwright
-        if: matrix.optional-dependencies == 'browser_use' || matrix.optional-dependencies == 'crawl4ai'
+        if: matrix.optional-dependencies == 'browser-use' || matrix.optional-dependencies == 'crawl4ai'
         run: |
           playwright install
       - name: Test import all submodules
@@ -148,6 +148,7 @@ jobs:
       - name: Show coverage report
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
