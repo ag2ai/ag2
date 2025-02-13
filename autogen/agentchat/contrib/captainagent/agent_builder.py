@@ -677,7 +677,6 @@ Match roles in the role set to each expert in expert set.
                 member_name=[agent["name"] for agent in agent_configs],
                 llm_config=default_llm_config,
                 use_oai_assistant=use_oai_assistant,
-                **kwargs,
             )
         agent_list = [agent_config[0] for agent_config in self.agent_procs_assign.values()]
 
