@@ -18,9 +18,7 @@ Let's break it down:
 
 3. Create our ConversableAgent give them a unique name, and use `system_message` to define their purpose.
 
-4. Create an agent to represent you, so you can engage with the LLM-based agent.
-
-5. Have the agent representing you ask the LLM-based agent a question using the `initiate_chat` method, passing in our starting message.
+4. Ask the agent a question using their `run` method, passing in our starting message.
 
     ```console
     user (to helpful_agent):

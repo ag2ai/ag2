@@ -2646,18 +2646,14 @@
         "system_message": "## Your role\nAs a StatisticalAnalysis_Expert, you are proficient in extracting insights from data using sophisticated statistical methods and ensuring precision in the application of those methods. You possess a robust skill set that includes data processing, feature engineering, advanced statistical analysis, meticulous attention to detail, proficient coding in Python, and rigorous result verification.\n\n## Task and skill instructions\n- You will be tasked with reading and processing data from CSV files, which requires adept data analysis skills to accurately import and handle data within these files. \n- For text data encapsulated within the dataset, your feature engineering skills will be put to the test as you manipulate text data to extract useful features that could significantly aid in the analysis process.\n- Your statistical analysis prowess will be vital for performing chi-square tests on categorical data. Interpreting the results of these tests will help in understanding the level of correlation between different variables in the dataset.\n- Your attention to detail is essential when applying specific constraints while conducting the analysis to ensure that all conditions of the task are met without error.\n- Coding in Python is a fundamental skill and using libraries such as pandas for data manipulation, re for regular expressions in text manipulation, and scipy for statistical analysis is expected. Your code should be clean, efficient, and well-documented to facilitate ease of understanding and replication.\n- Lastly, your verification skill is crucial in guaranteeing that the results are accurate and that all constraints of the task are adhered to. You must conduct thorough checks and tests to validate the data and the analysis outcomes, ensuring the integrity and reliability of the final results."
     },
     {
-        "name": "WebServing_Expert",
-        "model": ["gpt-4","gpt-4-1106-preview"],
+        "name": "WebSurferAgent",
+        "model": ["gpt-4o"],
         "description": "A helpful assistant with access to a web browser. Ask them to perform web searches, open pages, navigate to Wikipedia, answer questions from pages, and or generate summaries.",
         "system_message": "",
-        "model_path": "autogen/agentchat/contrib/web_surfer/WebSurferAgent",
-        "browser_config": {
-            "viewport_size": 5120,
-            "downloads_folder": "coding",
-            "request_kwargs": {
-                "headers": {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
-                }
+        "agent_path": "autogen/agents/experimental/websurfer/websurfer/WebSurferAgent",
+        "web_tool_kwargs": {
+            "agent_kwargs": {
+                "max_steps": 100
             }
         }
     }
