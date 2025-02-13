@@ -9,8 +9,11 @@ on:
   workflow_dispatch: # allows manual triggering of the workflow
   pull_request_target:
     branches: ["main"]
-  merge_group:
-    types: [checks_requested]
+    paths:
+      - "autogen/**"
+      - "test/**"
+      - ".github/workflows/test-integration.yml"
+      - "pyproject.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
@@ -18,40 +21,7 @@ concurrency:
 permissions: {}
 
 jobs:
-  paths-filter:
-    runs-on: ubuntu-latest
-    outputs:
-      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            autogen:
-              - "autogen/**"
-            test:
-              - "test/**"
-            workflows:
-              - ".github/workflows/**"
-            setup:
-              - "pyproject.toml"
-      - name: autogen has changes
-        run: echo "autogen has changes"
-        if: steps.filter.outputs.autogen == 'true'
-      - name: test has changes
-        run: echo "test has changes"
-        if: steps.filter.outputs.test == 'true'
-      - name: workflows has changes
-        run: echo "workflows has changes"
-        if: steps.filter.outputs.workflows == 'true'
-      - name: setup has changes
-        run: echo "setup has changes"
-        if: steps.filter.outputs.setup == 'true'
-
   test:
-    needs: paths-filter
-    if: needs.paths-filter.outputs.hasChanges == 'true'
     runs-on: ${{ matrix.os }}
     environment: openai1
     env:
@@ -99,11 +69,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
-        if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
-        run: |
-          uv pip install --system -e .[test,${{ matrix.optional-dependencies }}]
-      - name: Install packages and dependencies
-        if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
         run: |
           uv pip install --system -e .[test,${{ matrix.optional-dependencies }},${{ matrix.llm }}]
       - name: Install playwright
