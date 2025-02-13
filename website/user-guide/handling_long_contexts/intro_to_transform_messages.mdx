@@ -44,7 +44,7 @@ Consider a scenario where you want to limit the context history to only the most
 
 ```python
 # Limit the message history to the 3 most recent messages
-max_msg_transfrom = transforms.MessageHistoryLimiter(max_messages=3)
+max_msg_transform = transforms.MessageHistoryLimiter(max_messages=3)
 
 messages = [
     {"role": "user", "content": "hello"},
@@ -54,7 +54,7 @@ messages = [
     {"role": "user", "content": "very very very very very very long string"},
 ]
 
-processed_messages = max_msg_transfrom.apply_transform(copy.deepcopy(messages))
+processed_messages = max_msg_transform.apply_transform(copy.deepcopy(messages))
 pprint.pprint(processed_messages)
 ```
 
@@ -67,7 +67,7 @@ pprint.pprint(processed_messages)
 By applying the `MessageHistoryLimiter`, we can see that we were able to limit the context history to the 3 most recent messages. However, if the splitting point is between a "tool_calls" and "tool" pair, the complete pair will be included to obey the OpenAI API call constraints.
 
 ```python
-max_msg_transfrom = transforms.MessageHistoryLimiter(max_messages=3)
+max_msg_transform = transforms.MessageHistoryLimiter(max_messages=3)
 
 messages = [
     {"role": "user", "content": "hello"},
@@ -77,7 +77,7 @@ messages = [
     {"role": "assistant", "content": [{"type": "text", "text": "are you doing?"}]},
 ]
 
-processed_messages = max_msg_transfrom.apply_transform(copy.deepcopy(messages))
+processed_messages = max_msg_transform.apply_transform(copy.deepcopy(messages))
 pprint.pprint(processed_messages)
 ```
 ```console
