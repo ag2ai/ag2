@@ -8,6 +8,7 @@
 
 import json
 import os
+import tempfile
 
 import pytest
 
@@ -54,17 +55,19 @@ def test_build(builder: AgentBuilder):
         "For example, find a recent paper about gpt-4 on arxiv "
         "and find its potential applications in software."
     )
-    _, agent_config = builder.build(
-        building_task=building_task,
-        default_llm_config={"temperature": 0},
-        code_execution_config={
-            "last_n_messages": 2,
-            "work_dir": f"{here}/test_agent_scripts",
-            "timeout": 60,
-            "use_docker": "python:3",
-        },
-    )
-    _config_check(agent_config)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _, agent_config = builder.build(
+            building_task=building_task,
+            default_llm_config={"temperature": 0},
+            code_execution_config={
+                "last_n_messages": 2,
+                "work_dir": f"{temp_dir}/test_agent_scripts",
+                "timeout": 60,
+                "use_docker": "python:3",
+            },
+        )
+        _config_check(agent_config)
 
     # check number of agents
     assert len(agent_config["agent_configs"]) <= builder.max_agents
@@ -78,18 +81,19 @@ def test_build_from_library(builder: AgentBuilder):
         "For example, find a recent paper about gpt-4 on arxiv "
         "and find its potential applications in software."
     )
-    _, agent_config = builder.build_from_library(
-        building_task=building_task,
-        library_path_or_json=f"{here}/example_agent_builder_library.json",
-        default_llm_config={"temperature": 0},
-        code_execution_config={
-            "last_n_messages": 2,
-            "work_dir": f"{here}/test_agent_scripts",
-            "timeout": 60,
-            "use_docker": "python:3",
-        },
-    )
-    _config_check(agent_config)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _, agent_config = builder.build_from_library(
+            building_task=building_task,
+            library_path_or_json=f"{here}/example_agent_builder_library.json",
+            default_llm_config={"temperature": 0},
+            code_execution_config={
+                "last_n_messages": 2,
+                "work_dir": f"{temp_dir}/test_agent_scripts",
+                "timeout": 60,
+                "use_docker": "python:3",
+            },
+        )
+        _config_check(agent_config)
 
     # check number of agents
     assert len(agent_config["agent_configs"]) <= builder.max_agents
@@ -97,19 +101,20 @@ def test_build_from_library(builder: AgentBuilder):
     builder.clear_all_agents()
 
     # test embedding similarity selection
-    _, agent_config = builder.build_from_library(
-        building_task=building_task,
-        library_path_or_json=f"{here}/example_agent_builder_library.json",
-        default_llm_config={"temperature": 0},
-        embedding_model="all-mpnet-base-v2",
-        code_execution_config={
-            "last_n_messages": 2,
-            "work_dir": f"{here}/test_agent_scripts",
-            "timeout": 60,
-            "use_docker": "python:3",
-        },
-    )
-    _config_check(agent_config)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _, agent_config = builder.build_from_library(
+            building_task=building_task,
+            library_path_or_json=f"{here}/example_agent_builder_library.json",
+            default_llm_config={"temperature": 0},
+            embedding_model="all-mpnet-base-v2",
+            code_execution_config={
+                "last_n_messages": 2,
+                "work_dir": f"{temp_dir}/test_agent_scripts",
+                "timeout": 60,
+                "use_docker": "python:3",
+            },
+        )
+        _config_check(agent_config)
 
     # check number of agents
     assert len(agent_config["agent_configs"]) <= builder.max_agents
@@ -122,62 +127,66 @@ def test_save(builder: AgentBuilder):
         "For example, find a recent paper about gpt-4 on arxiv "
         "and find its potential applications in software."
     )
+    with tempfile.TemporaryDirectory() as temp_dir:
+        builder.build(
+            building_task=building_task,
+            default_llm_config={"temperature": 0},
+            code_execution_config={
+                "last_n_messages": 2,
+                "work_dir": f"{temp_dir}/test_agent_scripts",
+                "timeout": 60,
+                "use_docker": "python:3",
+            },
+        )
 
-    builder.build(
-        building_task=building_task,
-        default_llm_config={"temperature": 0},
-        code_execution_config={
-            "last_n_messages": 2,
-            "work_dir": f"{here}/test_agent_scripts",
-            "timeout": 60,
-            "use_docker": "python:3",
-        },
-    )
-    saved_files = builder.save(f"{here}/example_save_agent_builder_config.json")
+        # creat
+        saved_files = builder.save(f"{temp_dir}/example_save_agent_builder_config.json")
 
-    # check config file path
-    assert os.path.isfile(saved_files)
+        # check config file path
+        assert os.path.isfile(saved_files)
 
-    saved_configs = json.load(open(saved_files))  # noqa: SIM115
+        saved_configs = json.load(open(saved_files))  # noqa: SIM115
 
-    _config_check(saved_configs)
+        _config_check(saved_configs)
 
 
 @pytest.mark.openai
 def test_load(builder: AgentBuilder):
-    config_save_path = f"{here}/example_test_agent_builder_config.json"
-    json.load(open(config_save_path))  # noqa: SIM115
+    with tempfile.TemporaryDirectory() as temp_dir:
+        config_save_path = f"{here}/example_test_agent_builder_config.json"
+        json.load(open(config_save_path))  # noqa: SIM115
 
-    _, loaded_agent_configs = builder.load(
-        config_save_path,
-        code_execution_config={
-            "last_n_messages": 2,
-            "work_dir": f"{here}/test_agent_scripts",
-            "timeout": 60,
-            "use_docker": "python:3",
-        },
-    )
-    print(loaded_agent_configs)
+        _, loaded_agent_configs = builder.load(
+            config_save_path,
+            code_execution_config={
+                "last_n_messages": 2,
+                "work_dir": f"{temp_dir}/test_agent_scripts",
+                "timeout": 60,
+                "use_docker": "python:3",
+            },
+        )
+        print(loaded_agent_configs)
 
-    _config_check(loaded_agent_configs)
+        _config_check(loaded_agent_configs)
 
 
 @pytest.mark.openai
 def test_clear_agent(builder: AgentBuilder):
-    config_save_path = f"{here}/example_test_agent_builder_config.json"
-    builder.load(
-        config_save_path,
-        code_execution_config={
-            "last_n_messages": 2,
-            "work_dir": f"{here}/test_agent_scripts",
-            "timeout": 60,
-            "use_docker": "python:3",
-        },
-    )
-    builder.clear_all_agents()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        config_save_path = f"{here}/example_test_agent_builder_config.json"
+        builder.load(
+            config_save_path,
+            code_execution_config={
+                "last_n_messages": 2,
+                "work_dir": f"{temp_dir}/test_agent_scripts",
+                "timeout": 60,
+                "use_docker": "python:3",
+            },
+        )
+        builder.clear_all_agents()
 
-    # check if the agent cleared
-    assert len(builder.agent_procs_assign) == 0
+        # check if the agent cleared
+        assert len(builder.agent_procs_assign) == 0
 
 
 if __name__ == "__main__":
