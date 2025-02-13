@@ -36,11 +36,11 @@ AG2 (formerly AutoGen) is an open-source programming framework for building AI a
 
 The project is currently maintained by a [dynamic group of volunteers](MAINTAINERS.md) from several organizations. Contact project administrators Chi Wang and Qingyun Wu via [support@ag2.ai](mailto:support@ag2.ai) if you are interested in becoming a maintainer.
 
-## Table of Contents
+## Table of contents
 
 - [AG2: Open-Source AgentOS for AI Agents](#ag2-open-source-agentos-for-ai-agents)
-  - [Table of Contents](#table-of-contents)
-  - [Getting Started](#getting-started)
+  - [Table of contents](#table-of-contents)
+  - [Getting started](#getting-started)
     - [Installation](#installation)
     - [Setup your API keys](#setup-your-api-keys)
     - [Run your first agent](#run-your-first-agent)
@@ -50,25 +50,27 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Human in the loop](#human-in-the-loop)
     - [Orchestrating multiple agents](#orchestrating-multiple-agents)
     - [Tools](#tools)
-    - [Structured Output](#structured-output)
-  - [Code Style and Linting](#code-style-and-linting)
+    - [Advanced agent concepts](#advanced-agent-concepts)
+  - [Code style and linting](#code-style-and-linting)
   - [Announcements](#announcements)
   - [Contributors Wall](#contributors-wall)
-  - [Related Papers](#related-papers)
+  - [Related papers](#related-papers)
   - [Cite the project](#cite-the-project)
   - [License](#license)
 
-## Getting Started
+## Getting started
+
+For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](https://docs.ag2.ai/docs/user-guide/basic-concepts) in our documentation.
 
 ### Installation
 
-AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `pyautogen` (or its alias `autogen` or `ag2`) on PyPI.
+AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `ag2` (or its alias `pyautogen` or `autogen`) on PyPI.
 
 ```bash
 pip install ag2
 ```
 
-Minimal dependencies are installed without extra options. You can install extra options based on the feature you need.
+Minimal dependencies are installed by default. You can install extra options based on the features you need.
 
 ### Setup your API keys
 
@@ -87,7 +89,7 @@ You can use the sample file `OAI_CONFIG_LIST_sample` as a template.
 
 ### Run your first agent
 
-Create a script or a jupyter notebook and run your first agent.
+Create a script or a Jupyter Notebook and run your first agent.
 
 ```python
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
@@ -107,7 +109,7 @@ user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stoc
 We maintain a dedicated repository with a wide range of applications to help you get started with various use cases or check out our collection of juypter notebooks as a starting point.
 
 - [Build with AG2](https://github.com/ag2ai/build-with-ag2)
-- [Jutpyer Notebooks](notebook)
+- [Jupyter Notebooks](notebook)
 
 ## Introduction of different agent concepts
 
@@ -117,7 +119,7 @@ We have several agent concepts in AG2 to help you build your AI agents. We intro
 - **Human in the loop**: Add human input to the conversation
 - **Orchestrating multiple agents**: Users can orchestrate multiple agents with built-in conversation patterns such as swarms, group chats, nested chats, sequential chats or customize the orchestration by registering custom reply methods.
 - **Tools**: Programs that can be registered, invoked and executed by agents
-- **Structured Output**: Receive structured output from agents
+- **Advanced Concepts**: AG2 supports more concepts such as structured outputs, rag, code execution, etc.
 
 ### Conversable agent
 
@@ -144,7 +146,7 @@ fact_checker = ConversableAgent(
 # Start the conversation
 assistant.initiate_chat(
     recipient=fact_checker,
-    message="What is ag2?",
+    message="What is AG2?",
     max_turns=2
 )
 ```
@@ -153,7 +155,7 @@ assistant.initiate_chat(
 
 Sometimes your wished workflow requires human input. Therefore you can enable the human in the loop feature.
 
-If you set the setting `human_input_mode` to `ALWAYS` on the Conversable Agent you can give human input to the conversation.
+If you set `human_input_mode` to `ALWAYS` on ConversableAgent you can give human input to the conversation.
 
 There are three modes for `human_input_mode`: `ALWAYS`, `NEVER`, `TERMINATE`.
 
@@ -187,7 +189,7 @@ human.initiate_chat(
 
 ### Orchestrating multiple agents
 
-At ag2 we have two concepts to orchestrate multiple agents. The `Group Chat` or `Swarm`.
+AG2 has two main patterns to orchestrate multiple agents, `Group Chat` and `Swarm`.
 Both concepts are used to orchestrate multiple agents to solve a task.
 
 The group chat works like a chat where each registered agent can participate in the conversation.
@@ -258,50 +260,17 @@ chat_result = executor_agent.initiate_chat(
 )
 ```
 
-### Structured Output
+### Advanced agent concepts
 
-Structured output is a way to get structured data from the agents. Structured output are really helpful when you need to do an action based on the output from the agent, e.g. upload to a database, create a file, show a table, etc.
+AG2 supports more advanced concepts to help you build your AI agent workflows. You can find more information in the documentation.
 
-```python
-import json
-from pydantic import BaseModel
-from autogen import ConversableAgent
+- [Structured Output](https://docs.ag2.ai/docs/user-guide/basic-concepts/structured-outputs)
+- [Ending a conversation](https://docs.ag2.ai/docs/user-guide/basic-concepts/ending-a-chat)
+- [Retrieval Augmented Generation (RAG)](https://docs.ag2.ai/docs/user-guide/advanced-concepts/rag)
+- [Code Execution](https://docs.ag2.ai/docs/user-guide/advanced-concepts/code-execution)
+- [Tools with Secrets](https://docs.ag2.ai/docs/user-guide/advanced-concepts/tools-with-secrets)
 
-# Define a structured response model
-class LessonPlan(BaseModel):
-    title: str
-    script: str
-
-llm_config_list = config_list_from_json(
-    env_or_file="OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gpt-4o"],
-    },
-)
-
-for config in llm_config_list:
-    config["response_format"] = LessonPlan
-
-llm_config = {
-    "config_list": llm_config_list,
-}
-
-# Configure the AI agent
-lesson_agent = ConversableAgent(
-    name="lesson_agent",
-    llm_config=llm_config,
-    system_message="You create simple lesson plans."
-)
-
-# Human agent
-human = ConversableAgent(name="human", human_input_mode="NEVER")
-
-# Start chat
-result = human.initiate_chat(recipient=lesson_agent, message="Create a lesson on gravity.", max_turns=1)
-
-```
-
-## Code Style and Linting
+## Code style and linting
 
 This project uses pre-commit hooks to maintain code quality. Before contributing:
 
@@ -340,7 +309,7 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
   <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
 </a>
 
-## Related Papers
+## Related papers
 
 - [AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation](https://arxiv.org/abs/2308.08155)
 
