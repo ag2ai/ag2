@@ -17,8 +17,10 @@ from autogen._website.process_notebooks import (
     add_front_matter_to_metadata_mdx,
     cleanup_tmp_dirs,
     convert_callout_blocks,
+    copy_images_from_notebooks_dir_to_target_dir,
     ensure_mint_json_exists,
     extract_example_group,
+    extract_img_tag_from_figure_tag,
     generate_nav_group,
     get_files_path_from_navigation,
     get_sorted_files,
@@ -816,3 +818,105 @@ class TestEditLinks:
 
         actual = get_files_path_from_navigation(navigation)
         assert actual == expected, actual
+
+
+class TestExtractImgTagFromFigureTag:
+    @pytest.fixture
+    def content(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Figure
+
+            <figure>
+                <img src="https://example.com/image.png" alt="image" />
+                <figcaption>Image caption</figcaption>
+            </figure>
+
+            <figure>
+                <img src="swarm_enhanced_01.png" alt="image" />
+                <figcaption>Image caption</figcaption>
+            </figure>
+
+            <figure>
+            <img
+            src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/friendly_and_suspicous.jpg"
+            alt="agent flow" />
+            <figcaption aria-hidden="true">agent flow</figcaption>
+            </figure>
+
+            ## Conclusion
+
+            This is a conclusion.
+            """).lstrip()
+
+    @pytest.fixture
+    def expected(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Figure
+
+            <img src="https://example.com/image.png" alt="image" />
+
+            <img src="/docs/use-cases/notebooks/notebooks/swarm_enhanced_01.png" alt="image" />
+
+            <img
+            src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/friendly_and_suspicous.jpg"
+            alt="agent flow" />
+
+            ## Conclusion
+
+            This is a conclusion.
+            """).lstrip()
+
+    def test_extract_img_tag_from_figure_tag(self, content: str, expected: str) -> None:
+        img_rel_path = Path("docs/use-cases/notebooks/notebooks")
+        actual = extract_img_tag_from_figure_tag(content, img_rel_path)
+        assert actual == expected, actual
+
+
+class TestCopyImagesFromNotebooksDirToTargetDir:
+    @pytest.fixture
+    def setup_test_files(self, tmp_path: Path) -> dict[str, Path]:
+        # Create directories
+        notebook_dir = tmp_path / "notebooks"
+        notebook_sub_dir = notebook_dir / "sub_dir"
+        notebook_dir.mkdir()
+        notebook_sub_dir.mkdir()
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        # Create test files
+        files_to_create = [
+            (notebook_dir / "test1.png", b"png content"),
+            (notebook_dir / "test2.jpg", b"jpg content"),
+            (notebook_dir / "test3.txt", b"text content"),
+            (notebook_sub_dir / "test1.png", b"png content"),
+            (notebook_sub_dir / "test2.jpg", b"jpg content"),
+        ]
+
+        for file_path, content in files_to_create:
+            file_path.write_bytes(content)
+
+        return {"notebook_dir": notebook_dir, "target_dir": target_dir}
+
+    def test_copy_images(self, setup_test_files: dict[str, Path]) -> None:
+        copy_images_from_notebooks_dir_to_target_dir(setup_test_files["notebook_dir"], setup_test_files["target_dir"])
+
+        # Check only images were copied
+        copied_files = list(setup_test_files["target_dir"].iterdir())
+        assert len(copied_files) == 2
+        assert (setup_test_files["target_dir"] / "test1.png").exists()
+        assert (setup_test_files["target_dir"] / "test2.jpg").exists()
+        assert not (setup_test_files["target_dir"] / "test3.txt").exists()
+        assert not (setup_test_files["target_dir"] / "sub_dir").exists()
