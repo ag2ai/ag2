@@ -16,6 +16,7 @@ on:
       - "notebook/agentchat_function_call.ipynb"
       - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
       - ".github/workflows/core-llm-test.yml"
+      - "pyproject.toml"
 permissions:
   {}
 
