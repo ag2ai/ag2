@@ -86,13 +86,8 @@ jobs:
             echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
           fi
       - name: Test with pytest skipping openai tests
-        # if: matrix.python-version != '3.10' && matrix.os == 'ubuntu-latest'
         run: |
           bash scripts/test-core-skip-llm.sh
-      - name: Test with pytest skipping openai and docker tests
-        # if: matrix.python-version != '3.10' && matrix.os != 'ubuntu-latest'
-        run: |
-          bash scripts/test-core-skip-llm.sh -m "not docker"
       - name: Run tests with Redis
         run: |
           uv pip install --system -e .[redis,websockets]
