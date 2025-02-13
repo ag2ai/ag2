@@ -1,7 +1,8 @@
 <a name="readme-top"></a>
 
 <p align="center">
-  <img src="assets/ag2-logo.png" width="100" title="hover text">
+  <!-- The image URL points to the GitHub-hosted content, ensuring it displays correctly on the PyPI website.-->
+  <img src="https://raw.githubusercontent.com/ag2ai/ag2/27b37494a6f72b1f8050f6bd7be9a7ff232cf749/website/static/img/ag2.svg" width="150" title="hover text">
   <br>
   <br>
   <img src="https://img.shields.io/pypi/dm/pyautogen?label=PyPI%20downloads">
@@ -51,9 +52,9 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Orchestrating multiple agents](#orchestrating-multiple-agents)
     - [Tools](#tools)
     - [Advanced agentic design patterns](#advanced-agentic-design-patterns)
-  - [Code style and linting](#code-style-and-linting)
   - [Announcements](#announcements)
   - [Contributors Wall](#contributors-wall)
+  - [Code style and linting](#code-style-and-linting)
   - [Related papers](#related-papers)
   - [Cite the project](#cite-the-project)
   - [License](#license)
@@ -270,6 +271,28 @@ AG2 supports more advanced concepts to help you build your AI agent workflows. Y
 - [Code Execution](https://docs.ag2.ai/docs/user-guide/advanced-concepts/code-execution)
 - [Tools with Secrets](https://docs.ag2.ai/docs/user-guide/advanced-concepts/tools-with-secrets)
 
+## Announcements
+
+🔥 🎉 **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
+A new organization [AG2AI](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
+
+📄 **License:**
+We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
+
+🎉 May 29, 2024: DeepLearning.ai launched a new short course [AI Agentic Design Patterns with AutoGen](https://www.deeplearning.ai/short-courses/ai-agentic-design-patterns-with-autogen), made in collaboration with Microsoft and Penn State University, and taught by AutoGen creators [Chi Wang](https://github.com/sonichi) and [Qingyun Wu](https://github.com/qingyun-wu).
+
+🎉 May 24, 2024: Foundation Capital published an article on [Forbes: The Promise of Multi-Agent AI](https://www.forbes.com/sites/joannechen/2024/05/24/the-promise-of-multi-agent-ai/?sh=2c1e4f454d97) and a video [AI in the Real World Episode 2: Exploring Multi-Agent AI and AutoGen with Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk).
+
+🎉 Apr 17, 2024: Andrew Ng cited AutoGen in [The Batch newsletter](https://www.deeplearning.ai/the-batch/issue-245/) and [What's next for AI agentic workflows](https://youtu.be/sal78ACtGTc?si=JduUzN_1kDnMq0vF) at Sequoia Capital's AI Ascent (Mar 26).
+
+[More Announcements](announcements.md)
+
+## Contributors Wall
+
+<a href="https://github.com/ag2ai/ag2/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
+</a>
+
 ## Code style and linting
 
 This project uses pre-commit hooks to maintain code quality. Before contributing:
@@ -286,28 +309,6 @@ pre-commit install
 ```bash
 pre-commit run --all-files
 ```
-
-## Announcements
-
-🔥 🎉 **Nov 11, 2024:** We are evolving AutoGen into **AG2**!
-A new organization [AG2AI](https://github.com/ag2ai) is created to host the development of AG2 and related projects with open governance. Check [AG2's new look](https://ag2.ai/).
-
-📄 **License:**
-We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-source collaboration while providing additional protections for contributors and users alike.
-
-🎉 May 29, 2024: DeepLearning.ai launched a new short course [AI Agentic Design Patterns with AutoGen](https://www.deeplearning.ai/short-courses/ai-agentic-design-patterns-with-autogen), made in collaboration with Microsoft and Penn State University, and taught by AutoGen creators [Chi Wang](https://github.com/sonichi) and [Qingyun Wu](https://github.com/qingyun-wu).
-
-🎉 May 24, 2024: Foundation Capital published an article on [Forbes: The Promise of Multi-Agent AI](https://www.forbes.com/sites/joannechen/2024/05/24/the-promise-of-multi-agent-ai/?sh=2c1e4f454d97) and a video [AI in the Real World Episode 2: Exploring Multi-Agent AI and AutoGen with Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk).
-
-🎉 Apr 17, 2024: Andrew Ng cited AutoGen in [The Batch newsletter](https://www.deeplearning.ai/the-batch/issue-245/) and [What's next for AI agentic workflows](https://youtu.be/sal78ACtGTc?si=JduUzN_1kDnMq0vF) at Sequoia Capital's AI Ascent (Mar 26).
-
-[More Announcements](assets/announcements.md)
-
-## Contributors Wall
-
-<a href="https://github.com/ag2ai/ag2/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
-</a>
 
 ## Related papers
 
