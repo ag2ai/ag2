@@ -50,7 +50,7 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Human in the loop](#human-in-the-loop)
     - [Orchestrating multiple agents](#orchestrating-multiple-agents)
     - [Tools](#tools)
-    - [Advanced agent concepts](#advanced-agent-concepts)
+    - [Advanced agentic design patterns](#advanced-agentic-design-patterns)
   - [Code style and linting](#code-style-and-linting)
   - [Announcements](#announcements)
   - [Contributors Wall](#contributors-wall)
@@ -260,7 +260,7 @@ chat_result = executor_agent.initiate_chat(
 )
 ```
 
-### Advanced agent concepts
+### Advanced agentic design patterns
 
 AG2 supports more advanced concepts to help you build your AI agent workflows. You can find more information in the documentation.
 
