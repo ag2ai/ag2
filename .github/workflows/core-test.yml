@@ -94,7 +94,7 @@ jobs:
         run: |
           bash scripts/test-core-skip-llm.sh -m "not docker"
       - name: Run tests with Redis
-        if: matrix.python-version == '3.10'
+        # if: matrix.python-version == '3.10'
         run: |
           uv pip install --system -e .[redis,websockets]
           bash scripts/test-core-skip-llm.sh
