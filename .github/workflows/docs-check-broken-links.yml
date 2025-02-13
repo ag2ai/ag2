@@ -5,6 +5,8 @@ on:
     workflows: ["mintlify docs"]
     types:
       - completed
+    branches:
+      - main
 
 permissions:
   contents: read

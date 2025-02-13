@@ -31,9 +31,9 @@ tags: [tools, tool calling, web surfing, browser use, crawl4ai, WebSurferAgent]
 </div>
 
 ## Introduction
-In our [Adding Browsing Capabilities to AG2](/blog/2025-01-31-Websurfing-Tools) guide, we explored how to build agents with basic web surfing capabilities. Now, let's take it to the next level with [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent)—a powerful agent that comes with built-in web browsing tools right out of the box!
+In our [Adding Browsing Capabilities to AG2](/blog/2025-01-31-Websurfing-Tools) guide, we explored how to build agents with basic web surfing capabilities. Now, let's take it to the next level with [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent)—a powerful agent that comes with built-in web browsing tools right out of the box!
 
-With [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent), your agents can seamlessly browse the web, retrieve real-time information, and interact with web pages—all with minimal setup.
+With [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent), your agents can seamlessly browse the web, retrieve real-time information, and interact with web pages—all with minimal setup.
 
 ![WebSurferAgent Example](/docs/use-cases/reference-agents/assets/websurferagent_animated.gif)
 
@@ -105,9 +105,9 @@ llm_config = {
 }
 ````
 
-[`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
+[`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
 
-After creating the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent) there are two ways to start the chat session:
+After creating the [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) there are two ways to start the chat session:
 
 #### **Recommended:** Using the [`run`](/docs/api-reference/autogen/ConversableAgent#run) Method
 
@@ -620,4 +620,4 @@ This summary covers the main sections, key features, links to further exploratio
 
 ## Conclusion
 
-In this post, we've shown how to boost your agents with web browsing abilities using the [`WebSurferAgent`](/docs/api-reference/autogen/agents/WebSurferAgent). By using tools like [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) and [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool), your agents can easily fetch real-time information from the web. This makes your agents more useful and flexible, whether you're getting data from specific pages or gathering info across different topics. With these tools, AG2 helps you create smarter agents that can navigate the web and bring back the details you need with minimal effort.
+In this post, we've shown how to boost your agents with web browsing abilities using the [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent). By using tools like [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) and [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool), your agents can easily fetch real-time information from the web. This makes your agents more useful and flexible, whether you're getting data from specific pages or gathering info across different topics. With these tools, AG2 helps you create smarter agents that can navigate the web and bring back the details you need with minimal effort.

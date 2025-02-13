@@ -32,7 +32,7 @@ from autogen.messages.agent_messages import (
     SelectSpeakerTryCountExceededMessage,
     SpeakerAttemptFailedMultipleAgentsMessage,
     SpeakerAttemptFailedNoAgentsMessage,
-    SpeakerAttemptSuccessfullMessage,
+    SpeakerAttemptSuccessfulMessage,
     TerminationAndHumanReplyMessage,
     TextMessage,
     ToolCallMessage,
@@ -573,7 +573,7 @@ class TestClearAgentsHistoryMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-class TestSpeakerAttemptSuccessfullMessage:
+class TestSpeakerAttemptSuccessfulMessage:
     @pytest.mark.parametrize(
         "mentions, expected",
         [
@@ -585,17 +585,17 @@ class TestSpeakerAttemptSuccessfullMessage:
         attempts_left = 2
         verbose = True
 
-        actual = SpeakerAttemptSuccessfullMessage(
+        actual = SpeakerAttemptSuccessfulMessage(
             uuid=uuid,
             mentions=mentions,
             attempt=attempt,
             attempts_left=attempts_left,
             select_speaker_auto_verbose=verbose,
         )
-        assert isinstance(actual, SpeakerAttemptSuccessfullMessage)
+        assert isinstance(actual, SpeakerAttemptSuccessfulMessage)
 
         expected_model_dump = {
-            "type": "speaker_attempt_successfull",
+            "type": "speaker_attempt_successful",
             "content": {
                 "uuid": uuid,
                 "mentions": mentions,
