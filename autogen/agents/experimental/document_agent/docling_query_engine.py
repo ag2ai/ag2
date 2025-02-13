@@ -141,6 +141,8 @@ class DoclingMdQueryEngine:
             new_doc_paths: A list of file paths specifying additional documents to load.
                 Each file should be a Docling-parsed Markdown file.
         """
+        new_doc_dir = new_doc_dir or ""
+        new_doc_paths = new_doc_paths or []
         new_docs = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
         for doc in new_docs:
             self.index.insert(doc)
