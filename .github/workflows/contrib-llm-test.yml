@@ -57,7 +57,6 @@ jobs:
         run: |
           docker --version
           uv pip install --system -e .[test,teachable]
-          python -c "import autogen"
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -174,7 +173,6 @@ jobs:
         run: |
           docker --version
           uv pip install --system -e .[test,lmm]
-          python -c "import autogen"
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
