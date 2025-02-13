@@ -35,16 +35,8 @@ my_agent = ConversableAgent(
     system_message=system_message
     )
 
-human_agent = ConversableAgent(
-    name="user",
-    human_input_mode="ALWAYS",
-    )
-
-# 4. Get our structured output
-chat_result = human_agent.initiate_chat(
-    recipient=my_agent,
-    message="In one sentence, what's the big deal about AI?"
-    )
+# 4. Chat directly with our agent
+chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
 
 # 5. Get and print our lesson plan
 lesson_plan_json = json.loads(chat_result.chat_history[-1]["content"])
