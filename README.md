@@ -13,7 +13,7 @@
   <a href="https://discord.gg/pAbnFJrkgZ">
     <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat">
   </a>
-  <a href="https://x.com/Chi_Wang_">
+  <a href="https://x.com/ag2oss">
     <img src="https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40ag2ai">
   </a>
 </p>
@@ -22,7 +22,7 @@
   <a href="https://docs.ag2.ai/">📚 Documentation</a> |
   <a href="https://github.com/ag2ai/build-with-ag2">💡 Examples</a> |
   <a href="https://docs.ag2.ai/docs/contributor-guide/contributing">🤝 Contributing</a> |
-  <a href="#related-papers">📚 Cite paper</a> |
+  <a href="#related-papers">📝 Cite paper</a> |
   <a href="https://discord.gg/pAbnFJrkgZ">💬 Join Discord</a>
 </p>
 

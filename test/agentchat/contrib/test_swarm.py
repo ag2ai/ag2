@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+import json
 from typing import Any, Optional, Union
 from unittest.mock import MagicMock, patch
 
@@ -57,6 +58,31 @@ def test_swarm_result():
     agent = ConversableAgent("test")
     result = SwarmResult(values="test", agent=agent)
     assert result.agent == agent
+
+
+def test_swarm_result_serialization():
+    agent = ConversableAgent(name="test_agent", human_input_mode="NEVER")
+    result = SwarmResult(
+        values="test",
+        agent=agent,
+        context_variables={"key": "value"},
+    )
+
+    serialized = json.loads(result.model_dump_json())
+    assert serialized["agent"] == "test_agent"
+    assert serialized["values"] == "test"
+    assert serialized["context_variables"] == {"key": "value"}
+
+    result = SwarmResult(
+        values="test",
+        agent="test_agent",
+        context_variables={"key": "value"},
+    )
+
+    serialized = json.loads(result.model_dump_json())
+    assert serialized["agent"] == "test_agent"
+    assert serialized["values"] == "test"
+    assert serialized["context_variables"] == {"key": "value"}
 
 
 def test_after_work_initialization():
