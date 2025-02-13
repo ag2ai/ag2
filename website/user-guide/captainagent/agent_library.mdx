@@ -27,17 +27,14 @@ We also support adding agents with advanced capability to the library, aside fro
 ```
 [
     {
-        "name": "WebServing_Expert",
+        "name": "WebSurferAgent",
+        "model": ["gpt-4o"],
         "description": "A helpful assistant with access to a web browser. Ask them to perform web searches, open pages, navigate to Wikipedia, answer questions from pages, and or generate summaries.",
         "system_message": "",
-        "agent_path": "autogen/agentchat/contrib/web_surfer/WebSurferAgent",
-        "browser_config": {
-            "viewport_size": 5120,
-            "downloads_folder": "coding",
-            "request_kwargs": {
-                "headers": {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
-                }
+        "agent_path": "autogen/agents/experimental/websurfer/websurfer/WebSurferAgent",
+        "web_tool_kwargs": {
+            "agent_kwargs": {
+                "max_steps": 100
             }
         }
     }

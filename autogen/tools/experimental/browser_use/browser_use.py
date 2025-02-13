@@ -12,7 +12,7 @@ from ... import Depends, Tool
 from ...dependency_injection import on
 
 with optional_import_block():
-    from browser_use import Agent
+    from browser_use import Agent, Controller
     from browser_use.browser.browser import Browser, BrowserConfig
     from langchain_anthropic import ChatAnthropic
     from langchain_google_genai import ChatGoogleGenerativeAI
@@ -89,8 +89,18 @@ class BrowserUseTool(Tool):
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
         ) -> BrowserUseResult:
             llm = BrowserUseTool._get_llm(llm_config)
-            agent = Agent(task=task, llm=llm, browser=browser, **agent_kwargs)
-            result = await agent.run()
+
+            max_steps = agent_kwargs.pop("max_steps", 100)
+
+            agent = Agent(
+                task=task,
+                llm=llm,
+                browser=browser,
+                controller=BrowserUseTool._get_controller(llm_config),
+                **agent_kwargs,
+            )
+
+            result = await agent.run(max_steps=max_steps)
 
             return BrowserUseResult(
                 extracted_content=result.extracted_content(),
@@ -102,6 +112,15 @@ class BrowserUseTool(Tool):
             description="Use the browser to perform a task.",
             func_or_tool=browser_use,
         )
+
+    @staticmethod
+    def _get_controller(llm_config: dict[str, Any]) -> Any:
+        response_format = (
+            llm_config["config_list"][0].get("response_format", None)
+            if "config_list" in llm_config
+            else llm_config.get("response_format")
+        )
+        return Controller(output_model=response_format)
 
     @staticmethod
     def _get_llm(

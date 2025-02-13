@@ -408,7 +408,7 @@ Collect information from the general task, follow the suggestions from manager t
                     if self._nested_config["autobuild_tool_config"].get("tool_root", "default") == "default":
                         print(colored("==> Retrieving tools...", "green"), flush=True)
                         cur_path = os.path.dirname(os.path.abspath(__file__))
-                        tool_root_dir = os.path.join(cur_path, "captainagent", "tools")
+                        tool_root_dir = os.path.join(cur_path, "tools")
                     elif isinstance(self._nested_config["autobuild_tool_config"].get("tool_root", "default"), list):
                         # We get a list, in this case, we assume it contains several tools for the agents
                         tool_root_dir = self._nested_config["autobuild_tool_config"]["tool_root"]

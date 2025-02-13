@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import pytest
 
@@ -147,12 +147,10 @@ def test_nested(
         nested_chat_queue,
         trigger=user,
     )
-    user.initiate_chats(
-        [
-            {"recipient": assistant, "message": tasks[0], "max_turns": 1},
-            {"recipient": assistant_2, "message": tasks[1], "max_turns": 1},
-        ]
-    )
+    user.initiate_chats([
+        {"recipient": assistant, "message": tasks[0], "max_turns": 1},
+        {"recipient": assistant_2, "message": tasks[1], "max_turns": 1},
+    ])
 
 
 def test_sync_nested_chat():

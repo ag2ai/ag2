@@ -4,15 +4,19 @@
 name: Contrib tests with LLMs
 
 on:
-  pull_request:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+  pull_request_target:
     branches: ["main"]
     paths:
       - "autogen/**"
       - "test/agentchat/contrib/**"
-      - ".github/workflows/contrib-openai.yml"
+      - ".github/workflows/contrib-llm-test.yml"
       - "pyproject.toml"
 permissions:
   {}
+
 jobs:
   TeachableAgent:
     strategy:
@@ -22,6 +26,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     environment: openai1
     steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
       # checkout to pr branch
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,7 +56,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e .[teachable,test]
+          uv pip install --system -e .[test,teachable]
           python -c "import autogen"
       - name: Coverage
         env:
@@ -47,7 +66,10 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -63,6 +85,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     environment: openai1
     steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
       # checkout to pr branch
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,12 +115,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e ".[test]"
-          python -c "import autogen"
-          uv pip install --system pytest-cov>=5 pytest-asyncio
-      - name: Install packages for test when needed
-        run: |
-          uv pip install --system -e .[autobuild]
+          uv pip install --system -e ".[test,autobuild]"
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -92,7 +124,10 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -108,6 +143,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     environment: openai1
     steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
       # checkout to pr branch
       - name: Checkout
         uses: actions/checkout@v4
@@ -123,14 +173,17 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e .[lmm,test]
+          uv pip install --system -e .[test,lmm]
           python -c "import autogen"
       - name: Coverage
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           bash scripts/test.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml

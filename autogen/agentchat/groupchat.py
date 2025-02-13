@@ -27,7 +27,7 @@ from ..messages.agent_messages import (
     SelectSpeakerTryCountExceededMessage,
     SpeakerAttemptFailedMultipleAgentsMessage,
     SpeakerAttemptFailedNoAgentsMessage,
-    SpeakerAttemptSuccessfullMessage,
+    SpeakerAttemptSuccessfulMessage,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -864,7 +864,7 @@ class GroupChat:
             if no_of_mentions == 1:
                 # Success on retry, we have just one name mentioned
                 iostream.send(
-                    SpeakerAttemptSuccessfullMessage(
+                    SpeakerAttemptSuccessfulMessage(
                         mentions=mentions,
                         attempt=attempt,
                         attempts_left=attempts_left,
@@ -911,12 +911,10 @@ class GroupChat:
                 }
             else:
                 # Final failure, no attempts left
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it returned multiple names.",
-                    }
-                )
+                messages.append({
+                    "role": "user",
+                    "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it returned multiple names.",
+                })
 
         else:
             # No names at all on requery so add additional reminder prompt for next retry
@@ -932,12 +930,10 @@ class GroupChat:
                 }
             else:
                 # Final failure, no attempts left
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it did not include any agent names.",
-                    }
-                )
+                messages.append({
+                    "role": "user",
+                    "content": f"[AGENT SELECTION FAILED]Select speaker attempt #{attempt} of {attempt + attempts_left} failed as it did not include any agent names.",
+                })
 
         return True, None
 

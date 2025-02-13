@@ -435,6 +435,7 @@ def suppress(
                             pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
                             raise
                         await asyncio.sleep(timeout)
+
         else:
 
             @functools.wraps(func)

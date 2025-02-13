@@ -2,11 +2,13 @@
 title: Human in the loop
 ---
 
-In the previous ConversableAgent example you were able to chat with the agent and this is because another agent was automatically created to represent you, the human in the loop, when using an agent's `run` method.
+In the previous ConversableAgent example we demonstrated that you were able to chat with an agent.
 
-As you build your own workflows, you'll want to create your own *human in the loop* agents and decide if and how to use them. To do so, simply use the ConversableAgent and set the `human_input_mode` to `ALWAYS`.
+As you build your own workflows, you can decide if and how to use your *human in the loop* agents. As demonstrated previously, and in the following example, to do so, simply use the ConversableAgent and set the `human_input_mode` to `ALWAYS`.
 
 Let's start to build a more useful scenario, a classroom lesson planner, and create our human agent.
+
+You'll also see in this example that you can use the `system_message` property to give detailed instructions to agents.
 
 import Example from "/snippets/python-examples/humanintheloop.mdx";
 

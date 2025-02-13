@@ -4,6 +4,9 @@
 name: Contrib tests without LLMs
 
 on:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
   pull_request:
     branches: ["main"]
     paths:
@@ -43,16 +46,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
+      - name: Install packages and dependencies for RetrieveChat
         run: |
-          uv pip install --system pytest-cov>=5
+          uv pip install --system -e .[test,retrievechat]
       - name: Install qdrant_client when python-version is 3.10
         if: matrix.python-version == '3.10'
         run: |
           uv pip install --system -e .[retrievechat-qdrant]
-      - name: Install packages and dependencies for RetrieveChat
-        run: |
-          uv pip install --system -e .[retrievechat]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -62,7 +62,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat/test_retrievechat.py test/agentchat/contrib/retrievechat/test_qdrant_retrievechat.py test/agentchat/contrib/vectordb
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -104,37 +107,30 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest
-      - name: Install qdrant_client when python-version is 3.10
-        if: matrix.python-version == '3.10'
-        run: |
-          uv pip install --system -e .[retrievechat-qdrant]
-      - name: Install pgvector when on linux
-        run: |
-          uv pip install --system -e .[retrievechat-pgvector]
-      - name: Install mongodb when on linux
-        run: |
-          uv pip install --system -e .[retrievechat-mongodb]
       - name: Install unstructured when python-version is 3.9 and on linux
         if: matrix.python-version == '3.9'
         run: |
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr poppler-utils
           uv pip install --system --no-cache-dir unstructured[all-docs]==0.13.0
-      - name: Install packages and dependencies for RetrieveChat
+      - name: Install qdrant_client when python-version is 3.10
+        if: matrix.python-version == '3.10'
         run: |
-          uv pip install --system -e .[retrievechat]
+          uv pip install --system -e .[retrievechat-qdrant]
+      - name: Install pgvector when on linux
+        run: |
+          uv pip install --system -e .[test,retrievechat-pgvector,retrievechat-mongodb]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
           echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
       - name: Coverage
         run: |
-          uv pip install --system pytest-cov>=5
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -158,16 +154,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for AgentEval
         run: |
-          uv pip install --system -e .
+          uv pip install --system -e .[test]
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/agent_eval/
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -191,12 +187,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for GPTAssistantAgent
         run: |
-          uv pip install --system -e .
+          uv pip install --system -e .[test]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -206,7 +199,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_gpt_assistant.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -230,12 +226,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Teachability
         run: |
-          uv pip install --system -e .[teachable]
+          uv pip install --system -e .[test,teachable]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -245,7 +238,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_teachable_agent.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -269,12 +265,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for WebSurfer
         run: |
-          uv pip install --system -e .[websurfer]
+          uv pip install --system -e .[test,websurfer]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -284,7 +277,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/test_browser_utils.py test/agentchat/contrib/test_web_surfer.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -310,12 +306,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for LMM
         run: |
-          uv pip install --system -e .[lmm]
+          uv pip install --system -e .[test,lmm]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -329,7 +322,10 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' && matrix.python-version != '3.13' }}
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_image_generation_capability.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -358,12 +354,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Gemini
         run: |
-          uv pip install --system -e .[gemini,test]
+          uv pip install --system -e .[test,gemini]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -373,7 +366,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_gemini.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -397,12 +393,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Transform Messages
         run: |
-          uv pip install --system -e '.[long-context]'
+          uv pip install --system -e '.[test,long-context]'
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -412,7 +405,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/capabilities/test_transform_messages.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -436,17 +432,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for LlamaIndexConverableAgent
         run: |
-          uv pip install --system -e .
+          uv pip install --system -e .[test]
           uv pip install --system llama-index llama-index-llms-openai
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_llamaindex_conversable_agent.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -473,13 +469,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
-
       - name: Install packages and dependencies for Anthropic
         run: |
-          uv pip install --system -e .[anthropic,test]
+          uv pip install --system -e .[test,anthropic]
 
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
@@ -491,7 +483,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_anthropic.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -520,12 +515,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Cerebras
         run: |
-          uv pip install --system -e .[cerebras,test]
+          uv pip install --system -e .[test,cerebras]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -535,7 +527,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cerebras.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -564,12 +559,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Mistral
         run: |
-          uv pip install --system -e .[mistral,test]
+          uv pip install --system -e .[test,mistral]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -579,7 +571,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_mistral.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -608,12 +603,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Together
         run: |
-          uv pip install --system -e .[together,test]
+          uv pip install --system -e .[test,together]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -623,7 +615,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_together.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -652,12 +647,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Groq
         run: |
-          uv pip install --system -e .[groq,test]
+          uv pip install --system -e .[test,groq]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -667,7 +659,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_groq.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -692,12 +687,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Cohere
         run: |
-          uv pip install --system -e .[cohere,test]
+          uv pip install --system -e .[test,cohere]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -707,7 +699,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_cohere.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -736,12 +731,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Ollama
         run: |
-          uv pip install --system -e .[ollama,test]
+          uv pip install --system -e .[test,ollama]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -751,7 +743,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_ollama.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -780,12 +775,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Amazon Bedrock
         run: |
-          uv pip install --system -e .[bedrock,test]
+          uv pip install --system -e .[test,bedrock]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -795,7 +787,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/oai/test_bedrock.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -824,12 +819,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies for all tests
-        run: |
-          uv pip install --system pytest-cov>=5
       - name: Install packages and dependencies for Swarms
         run: |
-          uv pip install --system -e .
+          uv pip install --system -e .[test]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -839,7 +831,10 @@ jobs:
       - name: Coverage
         run: |
           bash scripts/test-skip-llm.sh test/agentchat/contrib/test_swarm.py
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
@@ -868,12 +863,9 @@ jobs:
           uses: actions/setup-python@v5
           with:
             python-version: ${{ matrix.python-version }}
-        - name: Install packages and dependencies for all tests
-          run: |
-            uv pip install --system pytest-cov>=5
         - name: Install packages and dependencies for Reasoning
           run: |
-            uv pip install --system -e .
+            uv pip install --system -e .[test]
         - name: Install Graphviz based on OS
           run: |
             if [[ ${{ matrix.os }} == 'ubuntu-latest' ]]; then
@@ -894,7 +886,10 @@ jobs:
         - name: Coverage
           run: |
             bash scripts/test-skip-llm.sh test/agentchat/contrib/test_reasoning_agent.py
+        - name: Show coverage report
+          run: bash scripts/show-coverage-report.sh
         - name: Upload coverage to Codecov
+          if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
           uses: codecov/codecov-action@v5
           with:
             files: ./coverage.xml

@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 from collections.abc import Generator
 from tempfile import TemporaryDirectory
@@ -142,22 +142,20 @@ def test_chats_group(
             "use_docker": False,
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
-    chat_res = user.initiate_chats(
-        [
-            {
-                "recipient": financial_assistant,
-                "message": financial_tasks[0],
-                "summary_method": "last_msg",
-                "max_turns": 1,
-            },
-            {
-                "recipient": manager_1,
-                "message": financial_tasks[1],
-                "summary_method": "reflection_with_llm",
-            },
-            {"recipient": manager_2, "message": writing_tasks[0]},
-        ]
-    )
+    chat_res = user.initiate_chats([
+        {
+            "recipient": financial_assistant,
+            "message": financial_tasks[0],
+            "summary_method": "last_msg",
+            "max_turns": 1,
+        },
+        {
+            "recipient": manager_1,
+            "message": financial_tasks[1],
+            "summary_method": "reflection_with_llm",
+        },
+        {"recipient": manager_2, "message": writing_tasks[0]},
+    ])
 
     chat_w_manager = chat_res[-1]
     print(chat_w_manager.chat_history, chat_w_manager.summary, chat_w_manager.cost)
@@ -240,50 +238,48 @@ def test_chats(credentials_gpt_4o_mini: Credentials):
     # )
     # print(chat_res_play.summary)
 
-    chat_res = user.initiate_chats(
-        [
-            {
-                "recipient": financial_assistant_1,
-                "message": financial_tasks[0],
-                "silent": False,
-                "summary_method": my_summary_method,
-                "verbose": True,
-                "max_turns": 1,
+    chat_res = user.initiate_chats([
+        {
+            "recipient": financial_assistant_1,
+            "message": financial_tasks[0],
+            "silent": False,
+            "summary_method": my_summary_method,
+            "verbose": True,
+            "max_turns": 1,
+        },
+        {
+            "recipient": financial_assistant_2,
+            "message": financial_tasks[1],
+            "silent": False,
+            "max_turns": 1,
+            "summary_method": "reflection_with_llm",
+            "verbose": True,
+        },
+        {
+            "recipient": financial_assistant_1,
+            "message": financial_tasks[2],
+            "summary_method": "last_msg",
+            "clear_history": False,
+            "max_turns": 1,
+        },
+        {
+            "recipient": financial_assistant_1,
+            "message": {
+                "content": "Let's play a game.",
+                "function_call": {"name": "get_random_number", "arguments": "{}"},
             },
-            {
-                "recipient": financial_assistant_2,
-                "message": financial_tasks[1],
-                "silent": False,
-                "max_turns": 1,
-                "summary_method": "reflection_with_llm",
-                "verbose": True,
-            },
-            {
-                "recipient": financial_assistant_1,
-                "message": financial_tasks[2],
-                "summary_method": "last_msg",
-                "clear_history": False,
-                "max_turns": 1,
-            },
-            {
-                "recipient": financial_assistant_1,
-                "message": {
-                    "content": "Let's play a game.",
-                    "function_call": {"name": "get_random_number", "arguments": "{}"},
-                },
-                "carryover": "I like even number.",
-                "summary_method": "last_msg",
-                "max_turns": 1,
-            },
-            {
-                "recipient": writer,
-                "message": writing_tasks[0],
-                "carryover": "Make the numbers relevant.",
-                "summary_method": "last_msg",
-                "max_turns": 1,
-            },
-        ]
-    )
+            "carryover": "I like even number.",
+            "summary_method": "last_msg",
+            "max_turns": 1,
+        },
+        {
+            "recipient": writer,
+            "message": writing_tasks[0],
+            "carryover": "Make the numbers relevant.",
+            "summary_method": "last_msg",
+            "max_turns": 1,
+        },
+    ])
 
     chat_w_writer = chat_res[-1]
     print(chat_w_writer.chat_history, chat_w_writer.summary, chat_w_writer.cost)
@@ -355,42 +351,40 @@ def test_chats_general(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str
     def my_summary_method(recipient, sender, summary_args):
         return recipient.chat_messages[sender][1].get("content", "")
 
-    chat_res = initiate_chats(
-        [
-            {
-                "sender": user,
-                "recipient": financial_assistant_1,
-                "message": financial_tasks[0],
-                "silent": False,
-                "summary_method": my_summary_method,
-                "max_turns": 1,
-            },
-            {
-                "sender": user_2,
-                "recipient": financial_assistant_2,
-                "message": financial_tasks[1],
-                "silent": False,
-                "max_turns": 3,
-                "summary_method": "reflection_with_llm",
-            },
-            {
-                "sender": user,
-                "recipient": financial_assistant_1,
-                "message": financial_tasks[2],
-                "summary_method": "last_msg",
-                "clear_history": False,
-                "max_turns": 1,
-            },
-            {
-                "sender": user,
-                "recipient": writer,
-                "message": writing_tasks[0],
-                "carryover": "I want to include a figure or a table of data in the blogpost.",
-                "summary_method": "last_msg",
-                "max_turns": 2,
-            },
-        ]
-    )
+    chat_res = initiate_chats([
+        {
+            "sender": user,
+            "recipient": financial_assistant_1,
+            "message": financial_tasks[0],
+            "silent": False,
+            "summary_method": my_summary_method,
+            "max_turns": 1,
+        },
+        {
+            "sender": user_2,
+            "recipient": financial_assistant_2,
+            "message": financial_tasks[1],
+            "silent": False,
+            "max_turns": 3,
+            "summary_method": "reflection_with_llm",
+        },
+        {
+            "sender": user,
+            "recipient": financial_assistant_1,
+            "message": financial_tasks[2],
+            "summary_method": "last_msg",
+            "clear_history": False,
+            "max_turns": 1,
+        },
+        {
+            "sender": user,
+            "recipient": writer,
+            "message": writing_tasks[0],
+            "carryover": "I want to include a figure or a table of data in the blogpost.",
+            "summary_method": "last_msg",
+            "max_turns": 2,
+        },
+    ])
 
     chat_w_writer = chat_res[-1]
     print(chat_w_writer.chat_history, chat_w_writer.summary, chat_w_writer.cost)
@@ -445,46 +439,42 @@ def test_chats_exceptions(credentials_gpt_4o: Credentials, tasks_work_dir: str):
         AssertionError,
         match="summary_method must be a string chosen from 'reflection_with_llm' or 'last_msg' or a callable, or None.",
     ):
-        user.initiate_chats(
-            [
-                {
-                    "recipient": financial_assistant_1,
-                    "message": financial_tasks[0],
-                    "silent": False,
-                    "summary_method": "last_msg",
-                    "max_turns": 1,
-                },
-                {
-                    "recipient": financial_assistant_2,
-                    "message": financial_tasks[2],
-                    "summary_method": "llm",
-                    "clear_history": False,
-                    "max_turns": 1,
-                },
-            ]
-        )
+        user.initiate_chats([
+            {
+                "recipient": financial_assistant_1,
+                "message": financial_tasks[0],
+                "silent": False,
+                "summary_method": "last_msg",
+                "max_turns": 1,
+            },
+            {
+                "recipient": financial_assistant_2,
+                "message": financial_tasks[2],
+                "summary_method": "llm",
+                "clear_history": False,
+                "max_turns": 1,
+            },
+        ])
     with pytest.raises(
         AssertionError,
         match="llm client must be set in either the recipient or sender when summary_method is reflection_with_llm.",
     ):
-        user.initiate_chats(
-            [
-                {
-                    "recipient": financial_assistant_1,
-                    "message": financial_tasks[0],
-                    "silent": False,
-                    "summary_method": "last_msg",
-                    "max_turns": 1,
-                },
-                {
-                    "recipient": user_2,
-                    "message": financial_tasks[2],
-                    "clear_history": False,
-                    "summary_method": "reflection_with_llm",
-                    "max_turns": 1,
-                },
-            ]
-        )
+        user.initiate_chats([
+            {
+                "recipient": financial_assistant_1,
+                "message": financial_tasks[0],
+                "silent": False,
+                "summary_method": "last_msg",
+                "max_turns": 1,
+            },
+            {
+                "recipient": user_2,
+                "message": financial_tasks[2],
+                "clear_history": False,
+                "summary_method": "reflection_with_llm",
+                "max_turns": 1,
+            },
+        ])
 
 
 def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
@@ -607,26 +597,24 @@ def test_udf_message_in_chats(credentials_gpt_4o_mini: Credentials, tasks_work_d
         },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
     )
 
-    chat_results = autogen.initiate_chats(
-        [
-            {
-                "sender": user_proxy_auto,
-                "recipient": researcher,
-                "message": research_task,
-                "clear_history": True,
-                "silent": False,
-                "max_turns": 2,
-            },
-            {
-                "sender": user_proxy_auto,
-                "recipient": writer,
-                "message": my_writing_task,
-                "max_turns": 2,  # max number of turns for the conversation (added for demo purposes, generally not necessarily needed)
-                "summary_method": "reflection_with_llm",
-                "work_dir": tasks_work_dir,
-            },
-        ]
-    )
+    chat_results = autogen.initiate_chats([
+        {
+            "sender": user_proxy_auto,
+            "recipient": researcher,
+            "message": research_task,
+            "clear_history": True,
+            "silent": False,
+            "max_turns": 2,
+        },
+        {
+            "sender": user_proxy_auto,
+            "recipient": writer,
+            "message": my_writing_task,
+            "max_turns": 2,  # max number of turns for the conversation (added for demo purposes, generally not necessarily needed)
+            "summary_method": "reflection_with_llm",
+            "work_dir": tasks_work_dir,
+        },
+    ])
     print(chat_results[0].summary, chat_results[0].cost)
     print(chat_results[1].summary, chat_results[1].cost)
 

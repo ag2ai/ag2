@@ -32,14 +32,14 @@ from autogen import ConversableAgent
 #    uses the OPENAI_API_KEY environment variable
 llm_config = {"model": "gpt-4o-mini"}
 
-# 3. Create our agent
+# 3. Create our LLM agent
 my_agent = ConversableAgent(
     name="helpful_agent",
     llm_config=llm_config,
     system_message="You are a poetic AI assistant, respond in rhyme.",
 )
 
-# 4. Get a reply from our agent
+# 4. Run the agent with a prompt
 chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
 
 # 5. Print the chat
@@ -74,7 +74,7 @@ emma = ConversableAgent(
     llm_config=llm_config,
     system_message=(
       "Your name is Emma and you are a comedian "
-      "in two-person comedy show. Say the word FINISH "
+      "in a two-person comedy show. Say the word FINISH "
       "ONLY AFTER you've heard 2 of Jack's jokes."
     ),
 )

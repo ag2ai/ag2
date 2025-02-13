@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import asyncio
 import copy
@@ -295,12 +295,10 @@ def test_generate_code_execution_reply():
 
     dummy_messages_for_auto = []
     for i in range(3):
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
         # Without an assistant present
         agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}
@@ -335,12 +333,10 @@ def test_generate_code_execution_reply():
             "exitcode: 0 (execution succeeded)\nCode output: \nhello world\n",
         )
 
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
     # scenario 7: if last_n_messages is set to 'auto' and code is present, but not before an assistant message, then nothing happens
     agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}
@@ -1591,7 +1587,7 @@ def test_context_variables():
     assert agent._context_variables == expected_final_context
 
 
-@pytest.mark.skip(reason="This test is failing. We need to investigate the issue.")
+@pytest.mark.skip(reason="'anyOf' parameters works with vertexai setup but it is not supported in google.genai")
 @pytest.mark.gemini
 @suppress_gemini_resource_exhausted
 def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value(
@@ -1611,6 +1607,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
     def login(
         additional_notes: Annotated[Optional[str], "Additional notes"] = None,
     ) -> str:
+        mock()
         return "Login successful."
 
     user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
