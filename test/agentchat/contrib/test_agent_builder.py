@@ -84,7 +84,7 @@ def test_build_from_library(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         _, agent_config = builder.build_from_library(
             building_task=building_task,
-            library_path_or_json=f"{temp_dir}/example_agent_builder_library.json",
+            library_path_or_json=f"{here}/example_agent_builder_library.json",
             default_llm_config={"temperature": 0},
             code_execution_config={
                 "last_n_messages": 2,
@@ -104,7 +104,7 @@ def test_build_from_library(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         _, agent_config = builder.build_from_library(
             building_task=building_task,
-            library_path_or_json=f"{temp_dir}/example_agent_builder_library.json",
+            library_path_or_json=f"{here}/example_agent_builder_library.json",
             default_llm_config={"temperature": 0},
             embedding_model="all-mpnet-base-v2",
             code_execution_config={
