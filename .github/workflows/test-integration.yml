@@ -69,11 +69,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies
-        if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
-        run: |
-          uv pip install --system -e .[test,${{ matrix.optional-dependencies }}]
-      - name: Install packages and dependencies
-        if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
         run: |
           uv pip install --system -e .[test,${{ matrix.optional-dependencies }},${{ matrix.llm }}]
       - name: Install playwright
