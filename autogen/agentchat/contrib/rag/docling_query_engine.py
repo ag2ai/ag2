@@ -124,7 +124,7 @@ class DoclingMdQueryEngine:
 
         return str(response)
 
-    def add_docs(self, new_doc_dir: Optional[str] = "", new_doc_paths: Optional[list[str]] = []) -> None:
+    def add_docs(self, new_doc_dir: Optional[str] = None, new_doc_paths: Optional[list[str]] = None) -> None:
         """
         Add additional documents to the existing vector index.
 
@@ -137,6 +137,8 @@ class DoclingMdQueryEngine:
             new_doc_paths: A list of file paths specifying additional documents to load.
                 Each file should be a Docling-parsed Markdown file.
         """
+        new_doc_dir = new_doc_dir or ""
+        new_doc_paths = new_doc_paths or []
         new_docs = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
         for doc in new_docs:
             self.index.insert(doc)
