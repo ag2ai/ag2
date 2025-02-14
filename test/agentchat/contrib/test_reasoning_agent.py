@@ -16,6 +16,8 @@ import pytest
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
 from autogen.import_utils import skip_on_missing_imports
 
+from ...conftest import Credentials
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 
@@ -276,18 +278,14 @@ def test_visualize_tree_render_failure(mock_digraph):
         ])
 
 
-def test_reasoning_agent_code_execution():
+def test_reasoning_agent_code_execution(mock_credentials: Credentials):
     """Test that ReasoningAgent properly executes code in responses"""
-    mock_config = {
-        "config_list": [{"model": "gpt-4o", "api_key": "fake", "base_url": "0.0.0.0:8000"}],
-        "temperature": 0,
-    }
 
     # Create agent with code execution enabled
     with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
         agent = ReasoningAgent(
             "test_agent",
-            llm_config=mock_config,
+            llm_config=mock_credentials.llm_config,
             code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
         )
 
