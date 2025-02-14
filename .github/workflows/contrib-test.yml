@@ -104,7 +104,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install unstructured when python-version is 3.9 and on linux
-        # if: matrix.python-version == '3.9'
+        if: matrix.python-version == '3.9'
         run: |
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr poppler-utils
