@@ -3,7 +3,7 @@ title: Swarm Deep-dive
 ---
 
 <Tip>
-Changes at version >= 0.7.4: 
+Changes at version >= 0.7.4:
 1. Deprecated: `SwarmAgent.register_hand_off` is no longer available. Instead, [`register_hand_off`](/docs/api-reference/autogen/register_hand_off) is now a standalone function.
 2. Compatibility with `ConversableAgent`: Now you can directly use `ConversableAgent` or `AssistantAgent` in the swarm chat. We recommend switching to `AssistantAgent` since `SwarmAgent` might be deprecated in the future.
 3. Deprecation Warning: `OnCondition` and `AfterWork` will be deprecated in the future. Please use [`OnCondition`](/docs/api-reference/autogen/OnCondition) and [`AfterWork`](/docs/api-reference/autogen/AfterWork) instead.
@@ -11,7 +11,7 @@ Changes at version >= 0.7.4:
 </Tip>
 
 Swarms provide controllable flows between agents that are determined at the agent level. You define hand-off, post-tool, and post-work transitions from one agent to another (or to end the swarm).
-In this Swarm deep-dive we run through all the components of AG2's Swarm. 
+In this Swarm deep-dive we run through all the components of AG2's Swarm.
 Learn about the high-level concepts in [Basic Concepts](/docs/user-guide/basic-concepts/swarm) section.
 
 ## Components
