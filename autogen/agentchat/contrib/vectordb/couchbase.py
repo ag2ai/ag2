@@ -105,7 +105,7 @@ class CouchbaseVectorDB(VectorDB):
         collection_name: str,
         overwrite: bool = False,
         get_or_create: bool = True,
-    ) -> Collection:
+    ) -> "Collection":
         """
         Create a collection in the vector database and create a vector search index in the collection.
         Args:
@@ -132,7 +132,7 @@ class CouchbaseVectorDB(VectorDB):
         return collection
 
     def create_index_if_not_exists(
-        self, index_name: str = "vector_index", collection: Optional[Collection] = None
+        self, index_name: str = "vector_index", collection: Optional["Collection"] = None
     ) -> None:
         """
         Creates a vector search index on the specified collection in Couchbase.
@@ -143,7 +143,7 @@ class CouchbaseVectorDB(VectorDB):
         if not self.search_index_exists(index_name):
             self.create_vector_search_index(collection, index_name)
 
-    def get_collection(self, collection_name: Optional[str] = None) -> Collection:
+    def get_collection(self, collection_name: Optional[str] = None) -> "Collection":
         """
         Get the collection from the vector database.
         Args:
@@ -269,7 +269,7 @@ class CouchbaseVectorDB(VectorDB):
         logger.info(f"Search index {index_name} created successfully.")
 
     def upsert_docs(
-        self, docs: List[Document], collection: Collection, batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
+        self, docs: List[Document], collection: "Collection", batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
     ) -> None:
         if docs[0].get("content") is None:
             raise ValueError("The document content is required.")
