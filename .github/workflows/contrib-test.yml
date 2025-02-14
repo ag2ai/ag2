@@ -50,7 +50,7 @@ jobs:
         run: |
           uv pip install --system -e .[test,retrievechat]
       - name: Install qdrant_client when python-version is 3.10
-        if: matrix.python-version == '3.10'
+        # if: matrix.python-version == '3.10'
         run: |
           uv pip install --system -e .[retrievechat-qdrant]
       - name: Set AUTOGEN_USE_DOCKER based on OS
@@ -114,7 +114,7 @@ jobs:
           sudo apt-get install -y tesseract-ocr poppler-utils
           uv pip install --system --no-cache-dir unstructured[all-docs]==0.13.0
       - name: Install qdrant_client when python-version is 3.10
-        if: matrix.python-version == '3.10'
+        # if: matrix.python-version == '3.10'
         run: |
           uv pip install --system -e .[retrievechat-qdrant]
       - name: Install pgvector when on linux
