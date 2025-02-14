@@ -190,7 +190,10 @@ human.initiate_chat(
 
 ### Orchestrating multiple agents
 
-AG2 has two main patterns to orchestrate multiple agents, `Group Chat` and `Swarm`.
+Users can define their own orchestration patterns using the flexible programming interface from AG2.
+
+Additionally AG2 provides two main patterns to orchestrate multiple agents, `GroupChat` and `Swarm`.
+
 Both concepts are used to orchestrate multiple agents to solve a task.
 
 The group chat works like a chat where each registered agent can participate in the conversation.
