@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
-      - name: Coverage
+      - name: Run tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -146,7 +146,7 @@ jobs:
         shell: bash
         run: |
           echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
-      - name: Coverage
+      - name: Run tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -195,7 +195,7 @@ jobs:
   #       shell: bash
   #       run: |
   #         echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
-  #     - name: Coverage
+  #     - name: Run tests
   #       env:
   #         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   #         AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
