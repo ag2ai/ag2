@@ -13,6 +13,9 @@ from autogen.agents.experimental.document_agent.parser_utils import docling_pars
 from .docling_query_engine import DoclingMdQueryEngine
 from .document_utils import preprocess_path
 
+from .docling_query_engine import DoclingMdQueryEngine
+from .document_utils import preprocess_path
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
