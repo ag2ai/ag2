@@ -32,7 +32,7 @@ Instructions:
 - Provide a brief description for each option.
 - Present your output in the specified format.
 - If the question is a multi-choice question, you should carefully eliminate obviously wrong choices, look for contextual clues in the question, and use logical reasoning to select the most plausible answer.
-- If you need to validate, simulate, or illustrate a reasoning concept with Python, place the code in a fenced block like ```python ... ```
+- If you need to validate, simulate, or illustrate a reasoning concept with Python, place the code in a fenced block like ```python ... ``` and always print the results that you want to see.
 
 (Note: Randomness, floating point precision, or hardware specifics may affect outputs, so your reasoning should not rely heavily on Python results.)
 
@@ -53,6 +53,7 @@ Option 3: Analyze and validate the results based on the previous steps.
 Option 4: Simulate the experiment and perform stats analysis with python.
 ```python
 ...
+print(result)
 ```
 
 Option 5: Perform Y.
