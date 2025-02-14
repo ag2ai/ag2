@@ -112,6 +112,11 @@ retrievechat-qdrant = [
     "fastembed>=0.3.1",
 ]
 
+retrievechat-couchbase = [
+    "pyautogen[retrievechat]",
+    "couchbase>=4.3.0",
+]
+
 graph-rag-falkor-db = [
     "graphrag_sdk==0.6.0",
     "falkordb>=1.0.10",

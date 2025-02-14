@@ -34,6 +34,7 @@ setuptools.setup(
         "retrievechat-pgvector": ["pyautogen[retrievechat-pgvector]==" + __version__],
         "retrievechat-mongodb": ["pyautogen[retrievechat-mongodb]==" + __version__],
         "retrievechat-qdrant": ["pyautogen[retrievechat-qdrant]==" + __version__],
+        "retrievechat-couchbase": ["pyautogen[retrievechat-couchbase]==" + __version__],
         "graph-rag-falkor-db": ["pyautogen[graph-rag-falkor-db]==" + __version__],
         "rag": ["pyautogen[rag]==" + __version__],
         "crawl4ai": ["pyautogen[crawl4ai]==" + __version__],

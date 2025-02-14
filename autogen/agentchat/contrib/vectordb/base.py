@@ -193,7 +193,7 @@ class VectorDB(Protocol):
 class VectorDBFactory:
     """Factory class for creating vector databases."""
 
-    PREDEFINED_VECTOR_DB = ["chroma", "pgvector", "mongodb", "qdrant"]
+    PREDEFINED_VECTOR_DB = ["chroma", "pgvector", "mongodb", "qdrant", "couchbase"]
 
     @staticmethod
     def create_vector_db(db_type: str, **kwargs) -> VectorDB:
@@ -222,6 +222,10 @@ class VectorDBFactory:
             from .qdrant import QdrantVectorDB
 
             return QdrantVectorDB(**kwargs)
+        if db_type.lower() in ["couchbase", "couchbasedb", "capella"]:
+            from .couchbase import CouchbaseVectorDB
+
+            return CouchbaseVectorDB(**kwargs)
         else:
             raise ValueError(
                 f"Unsupported vector database type: {db_type}. Valid types are {VectorDBFactory.PREDEFINED_VECTOR_DB}."
