@@ -46,7 +46,7 @@ DELAY = 2
 TIMEOUT = 120.0
 
 
-def _empty_collections_and_delete_indexes(cluster: Cluster, bucket_name, scope_name, collections=None):
+def _empty_collections_and_delete_indexes(cluster: "Cluster", bucket_name, scope_name, collections=None):
     bucket = cluster.bucket(bucket_name)
     try:
         scope_manager = bucket.collections().get_all_scopes()
