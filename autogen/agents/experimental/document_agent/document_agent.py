@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 from copy import deepcopy
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -21,6 +22,9 @@ from autogen.agents.experimental.document_agent.docling_query_engine import Docl
 from autogen.oai.client import OpenAIWrapper
 
 from .docling_doc_ingest_agent import DoclingDocIngestAgent
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 DEFAULT_SYSTEM_MESSAGE = """
     You are a document agent.
@@ -149,7 +153,7 @@ class DocumentAgent(ConversableAgent):
             queries: list[Query],
             context_variables: dict,  # type: ignore[type-arg]
         ) -> SwarmResult:
-            print("initiate_tasks context_variables", context_variables)
+            logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
                 return SwarmResult(values="Task already initiated", context_variables=context_variables)
             context_variables["DocumentsToIngest"] = ingestions
@@ -200,11 +204,11 @@ class DocumentAgent(ConversableAgent):
         )
 
         def has_ingest_tasks(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> bool:
-            print("context_variables", agent._context_variables)
+            logger.debug("has_ingest_tasks context_variables:", agent._context_variables)
             return len(agent.get_context("DocumentsToIngest")) > 0
 
         def has_query_tasks(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> bool:
-            print("context_variables", agent._context_variables)
+            logger.debug("has_query_tasks context_variables:", agent._context_variables)
             if len(agent.get_context("DocumentsToIngest")) > 0:
                 return False
             return len(agent.get_context("QueriesToRun")) > 0

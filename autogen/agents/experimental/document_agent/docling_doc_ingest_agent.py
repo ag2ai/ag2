@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 from pathlib import Path
 from typing import Literal, Optional, Union
 
@@ -12,8 +13,8 @@ from autogen.agents.experimental.document_agent.parser_utils import docling_pars
 from .docling_query_engine import DoclingMdQueryEngine
 from .document_utils import preprocess_path
 
-from .docling_query_engine import DoclingMdQueryEngine
-from .document_utils import preprocess_path
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 DOCLING_PARSE_TOOL_NAME = "docling_parse_docs"
 
@@ -60,7 +61,7 @@ class DoclingDocIngestAgent(ConversableAgent):
                             self.docling_query_engine.add_docs(new_doc_paths=[output_file])
 
             context_variables["CompletedTaskCount"] += 1
-            print("docling ingest:", context_variables, "\n", context_variables)
+            logger.info("data_ingest_task context_variables:", context_variables)
 
             return SwarmResult(
                 agent="TaskManagerAgent",

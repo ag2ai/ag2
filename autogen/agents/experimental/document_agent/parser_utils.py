@@ -18,8 +18,8 @@ with optional_import_block():
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @require_optional_import(["docling"], "rag")
@@ -77,7 +77,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     conv_results = list(doc_converter.convert_all(input_doc_paths))
     end_time = time.time() - start_time
 
-    _log.info(f"Document converted in {end_time:.2f} seconds.")
+    logger.info(f"Document converted in {end_time:.2f} seconds.")
 
     # Export results
     output_dir = Path(output_dir_path)
@@ -88,8 +88,8 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     for res in conv_results:
         out_path = Path(output_dir_path)
         doc_filename = res.input.file.stem
-        _log.debug(f"Document {res.input.file.name} converted.\nSaved markdown output to: {out_path!s}")
-        _log.debug(res.document._export_to_indented_text(max_text_len=16))
+        logger.debug(f"Document {res.input.file.name} converted.\nSaved markdown output to: {out_path!s}")
+        logger.debug(res.document._export_to_indented_text(max_text_len=16))
 
         if "markdown" in output_formats:
             # Export Docling document format to markdown:
@@ -109,7 +109,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
         for table_ix, table in enumerate(res.document.tables):
             # Save the table as html
             element_html_filename = output_dir / f"{doc_filename}-table-{table_ix + 1}.html"
-            _log.debug(f"Saving HTML table to {element_html_filename}")
+            logger.debug(f"Saving HTML table to {element_html_filename}")
             with element_html_filename.open("w") as fp:
                 fp.write(table.export_to_html())
 
