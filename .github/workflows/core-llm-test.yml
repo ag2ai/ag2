@@ -68,7 +68,6 @@ jobs:
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,${{ matrix.llm }}]"
-          python -c "import autogen"
       - name: LLM tests using ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
