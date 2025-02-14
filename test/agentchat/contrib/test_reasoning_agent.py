@@ -43,11 +43,9 @@ def think_node():
 
 
 @pytest.fixture
-def reasoning_agent():
+def reasoning_agent(mock_credentials: Credentials):
     """Create a ReasoningAgent instance for testing"""
-    config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "fake_key"}]
-    llm_config = {"config_list": config_list, "temperature": 0}
-    return ReasoningAgent("reasoning_agent", llm_config=llm_config)
+    return ReasoningAgent("reasoning_agent", llm_config=mock_credentials.llm_config)
 
 
 def test_think_node_init(think_node):
@@ -149,23 +147,19 @@ def test_think_node_serialization_with_children():
     assert new_root.children[0].content == "Child"
 
 
-def test_reasoning_agent_answer():
+def test_reasoning_agent_answer(mock_credentials: Credentials):
     for max_depth in range(1, 10):
         for beam_size in range(1, 10):
             for answer_approach in ["pool", "best"]:
-                helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach)
+                helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials)
 
 
-def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach):
+def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials: Credentials):
     """Test that ReasoningAgent properly terminates when TERMINATE is received"""
-    mock_config = {
-        "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": "fake", "base_url": "0.0.0.0:8000"}],
-        "temperature": 0,
-    }
     with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
         agent = ReasoningAgent(
             "test_agent",
-            llm_config=mock_config,
+            llm_config=mock_credentials.llm_config,
             reason_config={"beam_size": beam_size, "answer_approach": answer_approach, "max_depth": max_depth},
         )
 
