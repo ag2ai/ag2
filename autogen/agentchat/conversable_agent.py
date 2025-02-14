@@ -287,7 +287,7 @@ class ConversableAgent(LLMAgent):
         if isinstance(functions, list):
             if not all(isinstance(func, Callable) for func in functions):
                 raise TypeError("All elements in the functions list must be callable")
-            self._add_functions(functions)
+            self.add_functions(functions)
         elif isinstance(functions, Callable):
             self._add_single_function(functions)
         elif functions is not None:
@@ -390,7 +390,7 @@ class ConversableAgent(LLMAgent):
     def __str__(self):
         return self._get_display_name()
 
-    def _add_functions(self, func_list: list[Callable]):
+    def add_functions(self, func_list: list[Callable]):
         """Add (Register) a list of functions to the agent
 
         Args:
