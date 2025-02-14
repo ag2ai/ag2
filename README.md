@@ -107,7 +107,7 @@ user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stoc
 
 ## Example applications
 
-We maintain a dedicated repository with a wide range of applications to help you get started with various use cases or check out our collection of juypter notebooks as a starting point.
+We maintain a dedicated repository with a wide range of applications to help you get started with various use cases or check out our collection of jupyter notebooks as a starting point.
 
 - [Build with AG2](https://github.com/ag2ai/build-with-ag2)
 - [Jupyter Notebooks](notebook)
@@ -192,7 +192,7 @@ human.initiate_chat(
 
 Users can define their own orchestration patterns using the flexible programming interface from AG2.
 
-Additionally AG2 provides two main patterns to orchestrate multiple agents, `GroupChat` and `Swarm`.
+Additionally AG2 provides multiple built-in patterns to orchestrate multiple agents, such as `GroupChat` and `Swarm`.
 
 Both concepts are used to orchestrate multiple agents to solve a task.
 
@@ -218,7 +218,7 @@ teacher.initiate_chat(manager, "Create a lesson on photosynthesis.")
 
 The swarm requires a more rigid structure and the flow needs to be defined with hand-off, post-tool, and post-work transitions from an agent to another agent.
 
-Read more about it in the [documentation](https://docs.ag2.ai/docs/user-guide/basic-concepts/orchestrations)
+Read more about it in the [documentation](https://docs.ag2.ai/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive)
 
 ### Tools
 
