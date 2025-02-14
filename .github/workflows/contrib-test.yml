@@ -100,6 +100,11 @@ jobs:
           - "8091-8095:8091-8095"
           - "11210:11210"
           - "9102:9102"
+        env:
+          COUCHBASE_ADMINISTRATOR_USERNAME: Administrator
+          COUCHBASE_ADMINISTRATOR_PASSWORD: ${{ secrets.COUCHBASE_PASSWORD }}
+          COUCHBASE_BUCKET: autogen_test_bucket
+          COUCHBASE_SCOPE: _default
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
