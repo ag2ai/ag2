@@ -123,6 +123,7 @@ rag = [
     "webdriver-manager==4.0.2",
     "chromadb>=0.5,<1",
     "llama-index>=0.12,<1",
+    "llama-index-vector-stores-chroma==0.4.1",
 ]
 
 
