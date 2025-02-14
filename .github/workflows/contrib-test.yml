@@ -104,12 +104,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install unstructured when python-version is 3.9 and on linux
-        if: matrix.python-version == '3.9'
+        # if: matrix.python-version == '3.9'
         run: |
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr poppler-utils
           uv pip install --system --no-cache-dir unstructured[all-docs]==0.13.0
-      - name: Install qdrant_client when python-version is 3.10
+      - name: Install qdrant_client when python-version is not 3.9
         if: matrix.python-version != '3.9'
         run: |
           uv pip install --system -e .[retrievechat-qdrant]
