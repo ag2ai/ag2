@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 from autogen import Agent, ConversableAgent
-from autogen.agentchat.contrib.rag.docling_query_engine import DoclingMdQueryEngine
 from autogen.agentchat.contrib.swarm_agent import (
     AfterWork,
     AfterWorkOption,
@@ -18,6 +17,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     initiate_swarm_chat,
     register_hand_off,
 )
+from autogen.agents.experimental.document_agent.docling_query_engine import DoclingMdQueryEngine
 from autogen.oai.client import OpenAIWrapper
 
 from .docling_doc_ingest_agent import DoclingDocIngestAgent

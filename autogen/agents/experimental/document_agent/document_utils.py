@@ -102,7 +102,7 @@ def list_files(directory: Union[Path, str]) -> list[Path]:
     return [f for f in path.rglob("*") if f.is_file()]
 
 
-@export_module("autogen.agentchat.contrib.rag")
+@export_module("autogen.agents.experimental.document_agent")
 def handle_input(input_path: Union[Path, str], output_dir: Union[Path, str] = "./output") -> list[Path]:
     """Process the input string and return the appropriate file paths"""
 

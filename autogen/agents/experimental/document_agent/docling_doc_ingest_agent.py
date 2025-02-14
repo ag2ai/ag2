@@ -6,8 +6,11 @@ from pathlib import Path
 from typing import Literal, Optional, Union
 
 from autogen import ConversableAgent
-from autogen.agentchat.contrib.rag.parser_utils import docling_parse_docs
 from autogen.agentchat.contrib.swarm_agent import SwarmResult
+from autogen.agents.experimental.document_agent.parser_utils import docling_parse_docs
+
+from .docling_query_engine import DoclingMdQueryEngine
+from .document_utils import preprocess_path
 
 from .docling_query_engine import DoclingMdQueryEngine
 from .document_utils import preprocess_path

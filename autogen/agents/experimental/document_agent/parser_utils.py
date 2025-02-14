@@ -23,7 +23,7 @@ _log.setLevel(logging.INFO)
 
 
 @require_optional_import(["docling"], "rag")
-@export_module("autogen.agentchat.contrib.rag")
+@export_module("autogen.agents.experimental.document_agent")
 def docling_parse_docs(  # type: ignore[no-any-unimported]
     input_file_path: Union[Path, str],
     output_dir_path: Union[Path, str] = "./output_dir",
