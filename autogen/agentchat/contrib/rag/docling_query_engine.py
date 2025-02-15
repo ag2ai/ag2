@@ -155,7 +155,7 @@ class DoclingChromaMdQueryEngine:
 
         This helper method reads Docling-parsed Markdown files using LlamaIndex's
         SimpleDirectoryReader. It supports multiple file [formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)),
-          but the intended use is for documents processed by Docling.
+        but the intended use is for documents processed by Docling.
 
         Args:
             input_dir: The directory containing documents to be loaded.
@@ -229,7 +229,7 @@ class DoclingChromaMdQueryEngine:
 @require_optional_import(["pymongo", "llama_index"], "rag")
 class DoclingMongoAtlasMdQueryEngine:
     """
-    This engine leverages MongoDB Atlas to store document embeddings in a named collection
+    This engine leverages MongoDB Atlas to persist document embeddings in a named collection
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. The MongoDB Atlas collection serves as the storage layer, while
     the collection name uniquely identifies the set of documents within the persistent database.
@@ -239,36 +239,58 @@ class DoclingMongoAtlasMdQueryEngine:
         self,
         connection_string: str = "mongodb+srv://<username>:<password>@<host>?retryWrites=true&w=majority",
         database_name: str = "vector_db",
-        collection_name: str = "docling-parsed-docs",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
         vector_index_name: str = "vector_index",
         llm: Optional["LLM"] = None,
         **kwargs: Any,
     ) -> None:
         """
-        Initializes the DoclingMongoAtlasMdQueryEngine.
+        Initialize the Docling Mongo Atlas Query Engine.
+
         Args:
-            connection_string: MongoDB Atlas connection string.
-            database_name: The database name to use.
-            collection_name: The name of the collection storing document embeddings.
-            vector_index_name: The name for the vector index.
-            llm: LLM model used by LlamaIndex for query processing.
+            connection_string (str): Connection string for MongoDB Atlas.
+            database_name (str): Name of the database.
+            collection_name (str): Name of the collection for storing embeddings.
+            vector_index_name (str): Name of the vector index.
+            llm (Optional[LLM]): An instance of a language model for query processing. Defaults to OpenAI.
             **kwargs: Additional keyword arguments for MongoDBAtlasVectorSearch.
+
+        Raises:
+            Exception: Propagates exceptions from creating the vector search index.
         """
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.client = self.get_mongo_client(connection_string)
-        # Initialize the MongoDB Atlas vector search wrapper
         self.collection_name = collection_name
+
         self.collection = MongoDBAtlasVectorSearch(
             self.client,
             db_name=database_name,
-            collection_name=collection_name,
+            collection_name=self.collection_name,
             vector_index_name=vector_index_name,
             **kwargs,
         )
         self.index = None
         self.storage_context = None
 
+        try:
+            self.collection.create_vector_search_index(dimensions=1536, path="embedding", similarity="cosine")
+            logger.info("Vector search index created for MongoDB Atlas collection.")
+        except Exception as e:
+            logger.warning(f"Vector search index may already exist or could not be created: {e}")
+
     def get_mongo_client(self, connection_string: str) -> MongoClient:  # type: ignore[no-any-unimported]
+        """
+        Create and return a MongoClient instance using the provided connection string.
+
+        Args:
+            connection_string (str): MongoDB Atlas connection URI.
+
+        Returns:
+            MongoClient: The MongoDB client instance.
+
+        Raises:
+            pymongo.errors.ConnectionFailure: If connection fails.
+        """
         try:
             client = MongoClient(connection_string)
             logger.info("Connected to MongoDB Atlas.")
@@ -282,44 +304,42 @@ class DoclingMongoAtlasMdQueryEngine:
         input_dir: Optional[str] = None,
         input_doc_paths: Optional[list[str]] = None,
         collection_name: Optional[str] = None,
-        overwrite: bool = False,
-        index_name: str = "vector_index",
     ) -> None:
         """
-        Initialize the database for document indexing.
-
-        Creates (or retrieves) a MongoDB Atlas collection using the provided collection name,
-        loads documents from a directory or a list of file paths, and builds the vector index
-        to enable efficient querying.
+        Initialize the database by loading documents and creating a vector index.
 
         Args:
-            input_dir: The directory path from which to load documents.
-                The directory should contain Docling-parsed Markdown files.
-            input_doc_paths: A list of file paths to individual documents.
-                Each file should be a Docling-parsed Markdown file.
-            collection_name: (Optional) New collection name to override the existing one.
-            overwrite: If True, overwrite any existing index.
-            index_name: The name of the vector index.
+            input_dir (Optional[str]): Directory from which to load documents.
+            input_doc_paths (Optional[list[str]]): List of document file paths.
+            collection_name (Optional[str]): Optional new collection name.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If document loading fails.
         """
-        # Optionally update the collection name if provided
         if collection_name:
-            self.collection.collection_name = collection_name
+            self.collection_name = collection_name
 
         docs = self._load_doc(input_dir, input_doc_paths)
-        logger.info("Documents are loaded successfully.")
+        logger.info(f"Documents are loaded successfully. Total docs loaded: {len(docs)}")
 
         self.index = self._create_index(self.collection, docs)
         logger.info("Vector index created with input documents.")
 
     def query(self, question: str) -> str:
         """
-        Retrieve information from indexed documents by processing a natural language query.
+        Process a natural language query to retrieve information from the indexed documents.
 
         Args:
-            question: A natural language query string.
+            question (str): The query string.
 
         Returns:
-            A string containing the response generated by the LLM.
+            str: The result generated by the language model.
+
+        Raises:
+            ValueError: If the index is not initialized.
         """
         if self.index is None:
             raise ValueError("The index has not been initialized. Call init_db() first.")
@@ -330,37 +350,38 @@ class DoclingMongoAtlasMdQueryEngine:
 
     def add_docs(self, new_doc_dir: Optional[str] = None, new_doc_paths: Optional[list[str]] = None) -> None:
         """
-        Add additional documents to the existing vector index.
-
-        Loads new Docling-parsed Markdown files from a specified directory or list of file paths
-        and inserts them into the current index for future queries.
+        Add new documents to the existing vector index.
 
         Args:
-            new_doc_dir: The directory containing additional documents.
-            new_doc_paths: A list of file paths for additional documents.
+            new_doc_dir (Optional[str]): The directory containing additional documents.
+            new_doc_paths (Optional[list[str]]): List of file paths for additional documents.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If document loading fails.
         """
         new_doc_dir = new_doc_dir or ""
         new_doc_paths = new_doc_paths or []
         new_docs = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
         for doc in new_docs:
             self.index.insert(doc)  # type: ignore[attr-defined]
+            logger.info("Inserted a new document into the index.")
 
     def _load_doc(self, input_dir: Optional[str], input_docs: Optional[list[str]]) -> list["LlamaDocument"]:  # type: ignore[no-any-unimported]
         """
         Load documents from a directory and/or a list of file paths.
 
-        This helper method reads Docling-parsed Markdown files using LlamaIndex's SimpleDirectoryReader.
-        It supports multiple file formats, but the intended use is for documents processed by Docling.
-
         Args:
-            input_dir: The directory containing documents.
-            input_docs: A list of individual file paths to load.
+            input_dir (Optional[str]): The directory containing documents.
+            input_docs (Optional[list[str]]): List of document file paths.
 
         Returns:
-            A list of LlamaDocument objects.
+            list[LlamaDocument]: A list of loaded documents.
 
         Raises:
-            ValueError: If the directory or any file is not found, or if no inputs are provided.
+            ValueError: If the directory or any provided file path does not exist.
         """
         loaded_documents = []
         if input_dir:
@@ -383,29 +404,30 @@ class DoclingMongoAtlasMdQueryEngine:
 
     def _create_index(self, collection: "MongoDBAtlasVectorSearch", docs: list["LlamaDocument"]) -> "VectorStoreIndex":  # type: ignore[no-any-unimported]
         """
-        Build a vector index for document retrieval using a MongoDB Atlas collection.
-
-        Wraps the MongoDB Atlas vector search instance into a vector store and uses LlamaIndex's
-        StorageContext to create a VectorStoreIndex from the supplied documents.
+        Create a vector index using the provided MongoDB Atlas collection and documents.
 
         Args:
-            collection: A MongoDBAtlasVectorSearch instance storing document embeddings.
-            docs: A list of LlamaDocument objects.
+            collection (MongoDBAtlasVectorSearch): The vector search collection instance.
+            docs (list[LlamaDocument]): List of documents to be indexed.
 
         Returns:
-            A VectorStoreIndex object built from the documents.
+            VectorStoreIndex: The created vector index.
+
+        Raises:
+            Exception: Propagates any exception from index creation.
         """
         self.storage_context = StorageContext.from_defaults(vector_store=collection)
         index = VectorStoreIndex.from_documents(docs, storage_context=self.storage_context)
+        logger.info(f"Index created with {len(docs)} documents.")
         return index
 
     def get_collection_name(self) -> Optional[str]:
         """
-        Retrieve the name of the MongoDB Atlas collection used for indexing.
+        Retrieve the collection name used by the engine.
 
         Returns:
-            The collection name as a string, or None if the index has not been initialized.
+            Optional[str]: The MongoDB Atlas collection name if the index exists, otherwise None.
         """
         if self.index:
-            return self.collection.collection_name
+            return self.collection_name
         return None
