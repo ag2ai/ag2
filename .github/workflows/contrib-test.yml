@@ -153,22 +153,26 @@ jobs:
             sleep 5
           done
       - name: Initialize Couchbase
+        env:
+          CB_PASSWORD: ${{ secrets.COUCHBASE_PASSWORD }}
         run: |
           docker exec ${{ job.services.couchbase.id }} couchbase-cli cluster-init \
             --cluster localhost:8091 \
             --cluster-name myCluster \
             --cluster-username Administrator \
-            --cluster-password ${{ secrets.COUCHBASE_PASSWORD }} \
+            --cluster-password "$CB_PASSWORD" \
             --services data,index,query,fts \
             --cluster-ramsize 512 \
             --cluster-index-ramsize 256 \
             --cluster-fts-ramsize 256
       - name: Create Couchbase bucket
+        env:
+          CB_PASSWORD: ${{ secrets.COUCHBASE_PASSWORD }}
         run: |
           docker exec ${{ job.services.couchbase.id }} couchbase-cli bucket-create \
             --cluster localhost:8091 \
             --username Administrator \
-            --password ${{ secrets.COUCHBASE_PASSWORD }} \
+            --password "$CB_PASSWORD" \
             --bucket autogen_test_bucket \
             --bucket-type couchbase \
             --bucket-ramsize 256
