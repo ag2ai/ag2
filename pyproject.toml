@@ -127,7 +127,10 @@ rag = [
     "selenium>=4.28.1,<5",
     "webdriver-manager==4.0.2",
     "chromadb>=0.5,<1",
+    "pymongo>=4.11",
     "llama-index>=0.12,<1",
+    "llama-index-vector-stores-chroma>=0.4",
+    "llama-index-vector-stores-mongodb>=0.6",
 ]
 
 
