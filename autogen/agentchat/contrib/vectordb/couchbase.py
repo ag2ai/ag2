@@ -7,7 +7,7 @@
 import json
 import time
 from datetime import timedelta
-from typing import Any, Callable, Dict, List, Literal, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
@@ -45,7 +45,7 @@ class CouchbaseVectorDB(VectorDB):
         username: str = "Administrator",
         password: str = "password",
         bucket_name: str = "vector_db",
-        embedding_function: Callable = SentenceTransformer("all-MiniLM-L6-v2").encode,
+        embedding_function: Callable = None,
         scope_name: str = "_default",
         collection_name: str = "_default",
         index_name: str = None,
@@ -62,10 +62,11 @@ class CouchbaseVectorDB(VectorDB):
             collection_name (str): The name of the collection to create for this vector database. Default is '_default'.
             index_name (str): Index name for the vector database. Default is None.
             overwrite (bool): Whether to overwrite existing data. Default is False.
-            wait_until_index_ready (float | None): Blocking call to wait until the database indexes are ready. None means no wait. Default is None.
-            wait_until_document_ready (float | None): Blocking call to wait until the database documents are ready. None means no wait. Default is None.
+            wait_until_index_ready (float or None): Blocking call to wait until the database indexes are ready. None means no wait. Default is None.
+            wait_until_document_ready (float or None): Blocking call to wait until the database documents are ready. None means no wait. Default is None.
         """
-
+        if embedding_function is None:
+            embedding_function = SentenceTransformer("all-MiniLM-L6-v2").encode
         self.embedding_function = embedding_function
         self.index_name = index_name
 
@@ -104,13 +105,13 @@ class CouchbaseVectorDB(VectorDB):
         collection_name: str,
         overwrite: bool = False,
         get_or_create: bool = True,
-    ) -> Collection:
+    ) -> "Collection":
         """
         Create a collection in the vector database and create a vector search index in the collection.
         Args:
-            collection_name: str | The name of the collection.
-            overwrite: bool | Whether to overwrite the collection if it exists. Default is False.
-            get_or_create: bool | Whether to get or create the collection. Default is True
+            collection_name (str): The name of the collection.
+            overwrite (bool): Whether to overwrite the collection if it exists. Default is False.
+            get_or_create (bool): Whether to get or create the collection. Default is True
         """
         if overwrite:
             self.delete_collection(collection_name)
@@ -130,7 +131,9 @@ class CouchbaseVectorDB(VectorDB):
         self.create_index_if_not_exists(index_name=self.index_name, collection=collection)
         return collection
 
-    def create_index_if_not_exists(self, index_name: str = "vector_index", collection=None) -> None:
+    def create_index_if_not_exists(
+        self, index_name: str = "vector_index", collection: Optional["Collection"] = None
+    ) -> None:
         """
         Creates a vector search index on the specified collection in Couchbase.
         Args:
@@ -140,14 +143,13 @@ class CouchbaseVectorDB(VectorDB):
         if not self.search_index_exists(index_name):
             self.create_vector_search_index(collection, index_name)
 
-    def get_collection(self, collection_name: str | None = None) -> Collection:
+    def get_collection(self, collection_name: Optional[str] = None) -> "Collection":
         """
         Get the collection from the vector database.
         Args:
-            collection_name: str | The name of the collection. Default is None. If None, return the
-                current active collection.
+            collection_name (str): The name of the collection. Default is None. If None, return the current active collection.
         Returns:
-            Collection | The collection object.
+            The collection object (Collection)
         """
         if collection_name is None:
             if self.active_collection is None:
@@ -165,7 +167,7 @@ class CouchbaseVectorDB(VectorDB):
         """
         Delete the collection from the vector database.
         Args:
-            collection_name: str | The name of the collection.
+            collection_name (str): The name of the collection.
         """
         try:
             collection_mgr = self.bucket.collections()
@@ -176,7 +178,7 @@ class CouchbaseVectorDB(VectorDB):
     def create_vector_search_index(
         self,
         collection,
-        index_name: Union[str, None] = "vector_index",
+        index_name: Optional[str] = "vector_index",
         similarity: Literal["l2_norm", "dot_product"] = "dot_product",
     ) -> None:
         """Create a vector search index in the collection."""
@@ -267,7 +269,7 @@ class CouchbaseVectorDB(VectorDB):
         logger.info(f"Search index {index_name} created successfully.")
 
     def upsert_docs(
-        self, docs: List[Document], collection: Collection, batch_size=DEFAULT_BATCH_SIZE, **kwargs: Any
+        self, docs: List[Document], collection: "Collection", batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
     ) -> None:
         if docs[0].get("content") is None:
             raise ValueError("The document content is required.")
@@ -296,7 +298,7 @@ class CouchbaseVectorDB(VectorDB):
         docs: List[Document],
         collection_name: str = None,
         upsert: bool = False,
-        batch_size=DEFAULT_BATCH_SIZE,
+        batch_size: int = DEFAULT_BATCH_SIZE,
         **kwargs,
     ) -> None:
         """Insert Documents and Vector Embeddings into the collection of the vector database. Documents are upserted in all cases."""
@@ -308,13 +310,15 @@ class CouchbaseVectorDB(VectorDB):
         self.upsert_docs(docs, collection, batch_size=batch_size)
 
     def update_docs(
-        self, docs: List[Document], collection_name: str = None, batch_size=DEFAULT_BATCH_SIZE, **kwargs: Any
+        self, docs: List[Document], collection_name: str = None, batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
     ) -> None:
         """Update documents, including their embeddings, in the Collection."""
         collection = self.get_collection(collection_name)
         self.upsert_docs(docs, collection, batch_size)
 
-    def delete_docs(self, ids: List[ItemID], collection_name: str = None, batch_size=DEFAULT_BATCH_SIZE, **kwargs):
+    def delete_docs(
+        self, ids: List[ItemID], collection_name: str = None, batch_size: int = DEFAULT_BATCH_SIZE, **kwargs
+    ):
         """Delete documents from the collection of the vector database."""
         collection = self.get_collection(collection_name)
         # based on batch size, delete the documents
@@ -323,7 +327,11 @@ class CouchbaseVectorDB(VectorDB):
             collection.remove_multi(batch)
 
     def get_docs_by_ids(
-        self, ids: List[ItemID] | None = None, collection_name: str = None, include: List[str] | None = None, **kwargs
+        self,
+        ids: Optional[List[ItemID]] = None,
+        collection_name: str = None,
+        include: Optional[List[str]] = None,
+        **kwargs,
     ) -> List[Document]:
         """Retrieve documents from the collection of the vector database based on the ids."""
         if include is None:

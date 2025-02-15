@@ -100,6 +100,16 @@ jobs:
           - "8091-8095:8091-8095"
           - "11210:11210"
           - "9102:9102"
+        env:
+          COUCHBASE_ADMINISTRATOR_USERNAME: Administrator
+          COUCHBASE_ADMINISTRATOR_PASSWORD: ${{ secrets.COUCHBASE_PASSWORD }}
+          COUCHBASE_BUCKET: autogen_test_bucket
+          COUCHBASE_SCOPE: _default
+        options: >-
+          --health-cmd "curl -f http://localhost:8091/pools || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -129,6 +139,40 @@ jobs:
         shell: bash
         run: |
           echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
+
+      - name: Wait for Couchbase to be ready
+        run: |
+          attempt_counter=0
+          max_attempts=20
+          until $(curl --output /dev/null --silent --head --fail http://localhost:8091); do
+            if [ ${attempt_counter} -eq ${max_attempts} ];then
+              echo "Max attempts reached. Couchbase failed to start."
+              exit 1
+            fi
+            printf '.'
+            attempt_counter=$(($attempt_counter+1))
+            sleep 5
+          done
+      - name: Initialize Couchbase
+        run: |
+          docker exec ${{ job.services.couchbase.id }} couchbase-cli cluster-init \
+            --cluster localhost:8091 \
+            --cluster-name myCluster \
+            --cluster-username Administrator \
+            --cluster-password password \
+            --services data,index,query,fts \
+            --cluster-ramsize 512 \
+            --cluster-index-ramsize 256 \
+            --cluster-fts-ramsize 256
+      - name: Create Couchbase bucket
+        run: |
+          docker exec ${{ job.services.couchbase.id }} couchbase-cli bucket-create \
+            --cluster localhost:8091 \
+            --username Administrator \
+            --password password \
+            --bucket autogen_test_bucket \
+            --bucket-type couchbase \
+            --bucket-ramsize 256
       - name: Run tests
         run: |
           bash scripts/test-skip-llm.sh test/test_retrieve_utils.py test/agentchat/contrib/retrievechat test/agentchat/contrib/vectordb
