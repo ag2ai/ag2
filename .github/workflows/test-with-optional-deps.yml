@@ -65,7 +65,6 @@ jobs:
           - "commsagent-telegram"
           - "jupyter-executor"
           - "retrievechat"
-          - "retrievechat-couchbase"
           - "retrievechat-pgvector"
           - "retrievechat-mongodb"
           - "retrievechat-qdrant"
