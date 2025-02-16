@@ -14,7 +14,7 @@ from hashlib import md5
 from pathlib import Path
 from time import sleep
 from types import TracebackType
-from typing import Any, ClassVar, Optional, Type, Union
+from typing import Any, ClassVar, Optional, Union
 
 import docker
 from docker.errors import ImageNotFound
@@ -262,7 +262,7 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
+        exc_type: Optional[type[BaseException]],
         exc_val: Optional[BaseException],
         exc_tb: Optional[TracebackType],
     ) -> None:

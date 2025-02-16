@@ -28,7 +28,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
@@ -86,7 +86,7 @@ class OllamaClient:
             None
         """
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: Optional[type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
