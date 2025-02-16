@@ -53,7 +53,7 @@ jobs:
       - run: uv pip install --system ".[types]"
         if: matrix.optional-dependencies == 'none'
       - run: uv pip install --system ".[types, ${{ matrix.optional-dependencies }}]"
-        if: matrix.optional-dependencies != "none"
+        if: matrix.optional-dependencies != 'none'
       # Any additional configuration should be defined in pyproject.toml
       - run: |
           mypy
