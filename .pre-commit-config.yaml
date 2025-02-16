@@ -62,6 +62,7 @@ repos:
               notebook/agentchat_lmm_gpt-4v.ipynb |
               notebook/agentchat_graph_rag_neo4j.ipynb |
               notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb |
+              notebook/agentchat_reasoning_agent.ipynb |
               website/node_modules/.* |
               website/notebooks/.*
             )$
