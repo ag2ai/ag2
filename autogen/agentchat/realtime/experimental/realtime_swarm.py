@@ -5,7 +5,8 @@
 import logging
 import warnings
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 
 import anyio
 from asyncer import asyncify, create_task_group, syncify

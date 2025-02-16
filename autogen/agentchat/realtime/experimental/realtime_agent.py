@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from logging import Logger, getLogger
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Optional, TypeVar, Union
 
 from anyio import lowlevel
 from asyncer import create_task_group

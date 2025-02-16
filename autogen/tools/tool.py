@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from ..doc_utils import export_module
 from ..tools.function_utils import get_function_schema

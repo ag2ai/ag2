@@ -9,7 +9,8 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion

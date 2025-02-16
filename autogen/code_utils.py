@@ -13,10 +13,11 @@ import subprocess
 import sys
 import time
 import venv
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from hashlib import md5
 from types import SimpleNamespace
-from typing import Callable, Optional, Union
+from typing import Optional, Union
 
 import docker
 

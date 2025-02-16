@@ -13,7 +13,8 @@ import re
 import sys
 import uuid
 import warnings
-from typing import Any, Callable, Optional, Protocol, Union
+from collections.abc import Callable
+from typing import Any, Optional, Protocol, Union
 
 from pydantic import BaseModel
 from pydantic.type_adapter import TypeAdapter
@@ -916,7 +917,7 @@ class OpenAIWrapper:
         ```
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
-            - api_version (str | None): The api version. Default to None. E.g., "2024-02-01".
+            - api_version (Optional[str]): The api version. Default to None. E.g., "2024-02-01".
 
         Raises:
             - RuntimeError: If all declared custom model clients are not registered

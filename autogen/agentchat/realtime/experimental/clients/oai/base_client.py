@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection

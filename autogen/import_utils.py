@@ -5,11 +5,11 @@
 import inspect
 import sys
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable
 from contextlib import contextmanager, suppress
 from functools import wraps
 from logging import getLogger
-from typing import Any, Callable, Generic, Optional, Type, TypeVar, Union
+from typing import Any, Generic, Optional, Type, TypeVar, Union
 
 __all__ = ["optional_import_block", "patch_object", "require_optional_import", "skip_on_missing_imports"]
 

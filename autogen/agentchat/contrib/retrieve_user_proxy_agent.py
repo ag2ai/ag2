@@ -8,7 +8,8 @@ import hashlib
 import os
 import re
 import uuid
-from typing import Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Any, Literal, Optional, Union
 
 from ...code_utils import extract_code
 from ...formatting_utils import colored

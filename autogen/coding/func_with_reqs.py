@@ -8,10 +8,11 @@
 import functools
 import importlib
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib.abc import SourceLoader
 from textwrap import dedent, indent
-from typing import Any, Callable, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union
 
 from typing_extensions import ParamSpec
 

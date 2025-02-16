@@ -5,7 +5,8 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Any, Callable, Union
+from collections.abc import Callable
+from typing import Any, Union
 
 from ..doc_utils import export_module
 from .agent import Agent

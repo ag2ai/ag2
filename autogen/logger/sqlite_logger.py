@@ -12,7 +12,8 @@ import os
 import sqlite3
 import threading
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion

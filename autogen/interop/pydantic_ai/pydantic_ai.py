@@ -5,9 +5,10 @@
 
 import sys
 import warnings
+from collections.abc import Callable
 from functools import wraps
 from inspect import signature
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block

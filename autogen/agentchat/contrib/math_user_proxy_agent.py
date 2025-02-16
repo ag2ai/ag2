@@ -6,8 +6,9 @@
 # SPDX-License-Identifier: MIT
 import os
 import re
+from collections.abc import Callable
 from time import sleep
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, root_validator
 

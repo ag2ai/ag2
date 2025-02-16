@@ -4,11 +4,12 @@
 import copy
 import json
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from inspect import signature
 from types import MethodType
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 

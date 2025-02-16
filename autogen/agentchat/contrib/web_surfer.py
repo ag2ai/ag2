@@ -7,8 +7,9 @@
 import copy
 import logging
 import re
+from collections.abc import Callable
 from datetime import datetime
-from typing import Annotated, Any, Callable, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from ... import Agent, AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
