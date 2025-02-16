@@ -283,6 +283,8 @@ class ConversableAgent(LLMAgent):
 
         self._context_variables = context_variables if context_variables is not None else {}
 
+        self._tools: list[Tool] = []
+
         # Register functions to the agent
         if isinstance(functions, list):
             if not all(isinstance(func, Callable) for func in functions):
@@ -2861,6 +2863,30 @@ class ConversableAgent(LLMAgent):
 
         return self._handle_carryover(message, kwargs)
 
+    @property
+    def tools(self) -> list[Tool]:
+        """Get the agent's tools (registered for LLM)
+
+        Note this is a copy of the tools list, use add_tool and remove_tool to modify the tools list.
+        """
+        return self._tools.copy()
+
+    def add_tool_for_llm(self, tool: Tool) -> None:
+        """Add a tool (registered for LLM tool)"""
+        if not isinstance(tool, Tool):
+            raise TypeError(f"Expected Tool instance, got {type(tool)}")
+
+        self.register_for_llm()(tool)
+        self._tools.append(tool)
+
+    def remove_tool_for_llm(self, tool: Tool) -> None:
+        """Remove a tool (register for LLM tool)"""
+        try:
+            self._register_for_llm(tool=tool, api_style="tool", is_remove=True)
+            self._tools.remove(tool)
+        except ValueError:
+            raise ValueError(f"Tool {tool} not found in collection")
+
     def register_function(self, function_map: dict[str, Union[Callable, None]]):
         """Register functions to the agent.
 
@@ -2941,9 +2967,7 @@ class ConversableAgent(LLMAgent):
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
             else:
-                self.llm_config["tools"] = [
-                    tool for tool in self.llm_config["tools"] if tool["function"]["name"] != tool_sig
-                ]
+                self.llm_config["tools"] = [tool for tool in self.llm_config["tools"] if tool != tool_sig]
         else:
             if not isinstance(tool_sig, dict):
                 raise ValueError(
@@ -3080,15 +3104,15 @@ class ConversableAgent(LLMAgent):
 
         return _decorator
 
-    def _register_for_llm(self, tool: Tool, api_style: Literal["tool", "function"]) -> None:
+    def _register_for_llm(self, tool: Tool, api_style: Literal["tool", "function"], is_remove: bool = False) -> None:
         # register the function to the agent if there is LLM config, raise an exception otherwise
         if self.llm_config is None:
             raise RuntimeError("LLM config must be setup before registering a function for LLM.")
 
         if api_style == "function":
-            self.update_function_signature(tool.function_schema, is_remove=False)
+            self.update_function_signature(tool.function_schema, is_remove=is_remove)
         elif api_style == "tool":
-            self.update_tool_signature(tool.tool_schema, is_remove=False)
+            self.update_tool_signature(tool.tool_schema, is_remove=is_remove)
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 

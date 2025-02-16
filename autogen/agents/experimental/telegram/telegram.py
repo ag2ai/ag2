@@ -6,7 +6,6 @@ from typing import Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
-from ....tools import Tool
 from ....tools.experimental import TelegramRetrieveTool, TelegramSendTool
 
 __all__ = ["TelegramAgent"]
@@ -66,9 +65,5 @@ class TelegramAgent(ConversableAgent):
 
         super().__init__(*args, system_message=system_message, **kwargs)
 
-        self.register_for_llm()(self._send_tool)
-        self.register_for_llm()(self._retrieve_tool)
-
-    @property
-    def tools(self) -> list[Tool]:
-        return [self._send_tool, self._retrieve_tool]
+        self.add_tool_for_llm(self._send_tool)
+        self.add_tool_for_llm(self._retrieve_tool)
