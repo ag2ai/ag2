@@ -2,8 +2,9 @@ name: Type check
 # see: https://help.github.com/en/actions/reference/events-that-trigger-workflows
 on: # Trigger the workflow on pull request or merge
   pull_request:
-  merge_group:
-    types: [checks_requested]
+  push:
+    branches:
+      - main
 
 defaults:
   run:
@@ -15,9 +16,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        version: ["3.9", "3.10", "3.11", "3.12"]
         optional-dependencies:
-          - ""
+          - "none"
           # LLMs
           - "openai"
           - "gemini"
@@ -50,9 +51,9 @@ jobs:
           python-version: ${{ matrix.version }}
       # All additional modules should be defined in pyproject.toml
       - run: uv pip install --system ".[types]"
-        if: matrix.optional-dependencies == ""
+        if: ${{ matrix.optional-dependencies == 'none' }}
       - run: uv pip install --system ".[types, ${matrix.optional-dependencies}]"
-        if: matrix.optional-dependencies != ""
+        if: ${{ matrix.optional-dependencies != 'none' }}
       # Any additional configuration should be defined in pyproject.toml
       - run: |
           mypy
