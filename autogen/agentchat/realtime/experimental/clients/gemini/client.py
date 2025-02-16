@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from ......doc_utils import export_module
 from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
@@ -62,7 +62,7 @@ class GeminiRealtimeClient:
             "base_url",
             f"wss://{HOST}/ws/google.ai.generativelanguage.{API_VERSION}.GenerativeService.BidiGenerateContent?key={self._api_key}",
         )
-        self._final_config: Dict[str, Any] = {}
+        self._final_config: dict[str, Any] = {}
         self._pending_session_updates: dict[str, Any] = {}
         self._is_reading_events = False
 

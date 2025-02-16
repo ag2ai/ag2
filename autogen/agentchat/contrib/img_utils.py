@@ -10,7 +10,7 @@ import os
 import re
 from io import BytesIO
 from math import ceil
-from typing import Union
+from typing import Any, Union
 
 import requests
 
@@ -193,7 +193,7 @@ def convert_base64_to_data_uri(base64_image):
 
 
 @require_optional_import("PIL", "unknown")
-def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dict]]:
+def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dict[str, Any]]]:
     """Formats the input prompt by replacing image tags and returns a list of text and images.
 
     Args:
@@ -201,7 +201,7 @@ def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dic
         - img_format (str): what image format should be used. One of "uri", "url", "pil".
 
     Returns:
-        - List[Union[str, dict]]: A list of alternating text and image dictionary items.
+        - List[Union[str, dict[str, Any]]]: A list of alternating text and image dictionary items.
     """
     assert img_format in ["uri", "url", "pil"]
 
@@ -277,7 +277,7 @@ def _to_pil(data: str) -> "Image.Image":
 
 
 @require_optional_import("PIL", "unknown")
-def message_formatter_pil_to_b64(messages: list[dict]) -> list[dict]:
+def message_formatter_pil_to_b64(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Converts the PIL image URLs in the messages to base64 encoded data URIs.
 
     This function iterates over a list of message dictionaries. For each message,

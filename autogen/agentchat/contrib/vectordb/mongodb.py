@@ -4,10 +4,9 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from time import monotonic, sleep
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
 
 import numpy as np
 
@@ -42,12 +41,12 @@ class MongoDBAtlasVectorDB(VectorDB):
         self,
         connection_string: str = "",
         database_name: str = "vector_db",
-        embedding_function: Optional[Callable] = None,
+        embedding_function: Optional[Callable[..., Any]] = None,
         collection_name: str = None,
         index_name: str = "vector_index",
         overwrite: bool = False,
-        wait_until_index_ready: float = None,
-        wait_until_document_ready: float = None,
+        wait_until_index_ready: Optional[float] = None,
+        wait_until_document_ready: Optional[float] = None,
     ):
         """Initialize the vector database.
 
@@ -59,9 +58,9 @@ class MongoDBAtlasVectorDB(VectorDB):
                 Defaults to None
             index_name: str | Index name for the vector database, defaults to 'vector_index'
             overwrite: bool = False
-            wait_until_index_ready: float | None | Blocking call to wait until the
+            wait_until_index_ready: Optional[float] | Blocking call to wait until the
                 database indexes are ready. None, the default, means no wait.
-            wait_until_document_ready: float | None | Blocking call to wait until the
+            wait_until_document_ready: Optional[float] | Blocking call to wait until the
                 database indexes are ready. None, the default, means no wait.
         """
         self.embedding_function = embedding_function or SentenceTransformer("all-MiniLM-L6-v2").encode

@@ -51,7 +51,7 @@ def cache_content_set(cache: Optional[AbstractCache], key: str, content: Message
         cache.set(key, cache_value)
 
 
-def min_tokens_reached(messages: list[dict], min_tokens: Optional[int]) -> bool:
+def min_tokens_reached(messages: list[dict[str, Any]], min_tokens: Optional[int]) -> bool:
     """Returns True if the total number of tokens in the messages is greater than or equal to the specified value.
 
     Args:

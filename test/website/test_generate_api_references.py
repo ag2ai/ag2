@@ -347,7 +347,7 @@ title: autogen
 <a href="#autogen..gather_usage_summary" class="headerlink" title="Permanent link"></a>
 
 ```python
-gather_usage_summary(agents: list[autogen.Agent]) -> dict[dict[str, dict], dict[str, dict]]
+gather_usage_summary(agents: list[autogen.Agent]) -> dict[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]
 ```
 
     Gather usage summary from all agents.
@@ -360,7 +360,7 @@ gather_usage_summary(agents: list[autogen.Agent]) -> dict[dict[str, dict], di
 <b>Returns:</b>
 | Type | Description |
 |--|--|
-| `dict[dict[str, dict], dict[str, dict]]` | dictionary: A dictionary containing two keys: - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference. - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference". Example: ```python \\{ "usage_including_cached_inference": \\{ "total_cost": 0.0006090000000000001, "gpt-35-turbo": \\{ "cost": 0.0006090000000000001, "prompt_tokens": 242, "completion_tokens": 123, "total_tokens": 365, }, }, "usage_excluding_cached_inference": \\{ "total_cost": 0.0006090000000000001, "gpt-35-turbo": \\{ "cost": 0.0006090000000000001, "prompt_tokens": 242, "completion_tokens": 123, "total_tokens": 365, }, }, } ``` |
+| `dict[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]` | dictionary: A dictionary containing two keys: - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference. - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference". Example: ```python \\{ "usage_including_cached_inference": \\{ "total_cost": 0.0006090000000000001, "gpt-35-turbo": \\{ "cost": 0.0006090000000000001, "prompt_tokens": 242, "completion_tokens": 123, "total_tokens": 365, }, }, "usage_excluding_cached_inference": \\{ "total_cost": 0.0006090000000000001, "gpt-35-turbo": \\{ "cost": 0.0006090000000000001, "prompt_tokens": 242, "completion_tokens": 123, "total_tokens": 365, }, }, } ``` |
 
 <br />
 
@@ -406,7 +406,7 @@ config_list_from_dotenv(
 ConversableAgent(
     name: str,
     system_message: str | list | None = 'You are a helpful AI Assistant.',
-    is_termination_msg: Callable[[dict], bool] | None = None,
+    is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
 )
 ```
 
@@ -417,7 +417,7 @@ ConversableAgent(
 |--|--|
 | `name` | name of the agent.<br/><br/>**Type:** `str` |
 | `system_message` | system message for the ChatCompletion inference.<br/><br/>**Type:** `str \\| list \\| None`<br/><br/>**Default:** 'You are a helpful AI Assistant.' |
-| `is_termination_msg` | a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message.<br/><br/>The dict can contain the following keys: "content", "role", "name", "function_call".<br/><br/>**Type:** `Callable[[dict], bool] \\| None`<br/><br/>**Default:** None |
+| `is_termination_msg` | a function that takes a message in the form of a dictionary and returns a boolean value indicating if this received message is a termination message.<br/><br/>The dict can contain the following keys: "content", "role", "name", "function_call".<br/><br/>**Type:** `Callable[[dict[str, Any]], bool] \\| None`<br/><br/>**Default:** None |
 
 ### Class Attributes
 
@@ -456,7 +456,7 @@ ConversableAgent(
 ```python
 a_check_termination_and_human_reply(
     self,
-    messages: list[dict] | None = None,
+    messages: list[dict[str, Any]] | None = None,
 ) -> tuple[bool, str | None]
 ```
 
@@ -465,7 +465,7 @@ a_check_termination_and_human_reply(
 <b>Parameters:</b>
 | Name | Description |
 |--|--|
-| `messages` | A list of message dictionaries, representing the conversation history.<br/><br/>**Type:** `list[dict] \\| None`<br/><br/>**Default:** None |
+| `messages` | A list of message dictionaries, representing the conversation history.<br/><br/>**Type:** `list[dict[str, Any]] \\| None`<br/><br/>**Default:** None |
 
 <b>Returns:</b>
 | Type | Description |
@@ -506,7 +506,7 @@ a_execute_function(
 ```python
 a_generate_function_call_reply(
     self,
-    messages: list[dict] | None = None,
+    messages: list[dict[str, Any]] | None = None,
 ) -> tuple[bool, dict | None]
 ```
 
@@ -515,7 +515,7 @@ a_generate_function_call_reply(
 <b>Parameters:</b>
 | Name | Description |
 |--|--|
-| `messages` | **Type:** `list[dict] \\| None`<br/><br/>**Default:** None |
+| `messages` | **Type:** `list[dict[str, Any]] \\| None`<br/><br/>**Default:** None |
 
 <br />
 **** SYMBOL_END ****

@@ -76,7 +76,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
@@ -170,7 +170,7 @@ class AnthropicClient:
         self._last_tooluse_status = {}
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: Optional[type[BaseModel]] = None
 
     def load_config(self, params: dict[str, Any]):
         """Load the configuration for the Anthropic API client."""

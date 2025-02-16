@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-from typing import Annotated, Any, Callable, List, Optional
+from typing import Annotated, Any, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -25,7 +25,7 @@ class Subquestion(BaseModel):
 
 class Task(BaseModel):
     question: Annotated[str, "The original question."]
-    subquestions: Annotated[List[Subquestion], "The subquestions that need to be answered."]
+    subquestions: Annotated[list[Subquestion], "The subquestions that need to be answered."]
 
     def format(self) -> str:
         return f"Task: {self.question}\n\n" + "\n".join(
@@ -42,7 +42,7 @@ class InformationCrumb(BaseModel):
 
 
 class GatheredInformation(BaseModel):
-    information: List[InformationCrumb]
+    information: list[InformationCrumb]
 
     def format(self) -> str:
         return "Here is the gathered information: \n" + "\n".join(

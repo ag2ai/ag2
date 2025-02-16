@@ -36,7 +36,7 @@ class WebSurferAgent(ConversableAgent):
         is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable]] = None,
+        function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict, Literal[False]] = False,
         llm_config: Optional[Union[dict, Literal[False]]] = None,
         summarizer_llm_config: Optional[Union[dict, Literal[False]]] = None,

@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper
 from ...import_utils import optional_import_block, require_optional_import
@@ -65,7 +65,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     def _generate_oai_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Union[str, dict, None]]:
@@ -80,7 +80,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     async def _a_generate_oai_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Union[str, dict, None]]:
@@ -96,7 +96,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         return (True, extracted_response)
 
     def _extract_message_and_history(
-        self, messages: Optional[list[dict]] = None, sender: Optional[Agent] = None
+        self, messages: Optional[list[dict[str, Any]]] = None, sender: Optional[Agent] = None
     ) -> tuple[str, list["ChatMessage"]]:
         """Extract the message and history from the messages."""
         if not messages:

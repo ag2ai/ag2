@@ -536,7 +536,7 @@ def test_update_system_message():
     message_container = MessageContainer()
 
     # 1. Test with a callable function
-    def custom_update_function(agent: ConversableAgent, messages: list[dict]) -> str:
+    def custom_update_function(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
         return f"System message with {agent.get_context('test_var')} and {len(messages)} messages"
 
     # 2. Test with a string template
@@ -587,7 +587,7 @@ def test_update_system_message():
     assert message_container.captured_sys_message == "Template message with test_value"
 
     # Test multiple update functions
-    def another_update_function(context_variables: dict[str, Any], messages: list[dict]) -> str:
+    def another_update_function(context_variables: dict[str, Any], messages: list[dict[str, Any]]) -> str:
         return "Another update"
 
     agent6 = ConversableAgent(

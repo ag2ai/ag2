@@ -7,7 +7,7 @@
 import os
 import re
 import urllib.parse
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 
@@ -36,7 +36,7 @@ class Collection:
             Default is None. SentenceTransformer("all-MiniLM-L6-v2").encode will be used when None.
             Models can be chosen from:
             https://huggingface.co/models?library=sentence-transformers
-        metadata (Optional[dict]): The metadata of the collection.
+        metadata (Optional[dict[str, Any]]): The metadata of the collection.
         get_or_create (Optional): The flag indicating whether to get or create the collection.
     """
 
@@ -555,7 +555,7 @@ class PGVectorDB(VectorDB):
         password: Optional[str] = None,
         connect_timeout: Optional[int] = 10,
         embedding_function: Callable = None,
-        metadata: Optional[dict] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         """Initialize the vector database.
 

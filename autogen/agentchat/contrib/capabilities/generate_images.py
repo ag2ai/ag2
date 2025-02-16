@@ -153,7 +153,7 @@ class ImageGeneration(AgentCapability):
         self,
         image_generator: ImageGenerator,
         cache: Optional[AbstractCache] = None,
-        text_analyzer_llm_config: Optional[dict] = None,
+        text_analyzer_llm_config: Optional[dict[str, Any]] = None,
         text_analyzer_instructions: str = PROMPT_INSTRUCTIONS,
         verbosity: int = 0,
         register_reply_position: int = 2,
@@ -215,7 +215,7 @@ class ImageGeneration(AgentCapability):
     def _image_gen_reply(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict]],
+        messages: Optional[list[dict[str, Any]]],
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:

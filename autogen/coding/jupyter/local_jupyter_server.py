@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 from types import TracebackType
+from typing import Optional
 
 from ...doc_utils import export_module
 
@@ -35,7 +36,7 @@ class LocalJupyterServer(JupyterConnectable):
     def __init__(
         self,
         ip: str = "127.0.0.1",
-        port: int | None = None,
+        port: Optional[int] = None,
         token: str | GenerateToken = GenerateToken(),
         log_file: str = "jupyter_gateway.log",
         log_level: str = "INFO",
@@ -165,6 +166,6 @@ class LocalJupyterServer(JupyterConnectable):
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
         self.stop()

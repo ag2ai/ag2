@@ -10,7 +10,7 @@ import sys
 import time
 from collections import defaultdict
 from time import sleep
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 
@@ -534,7 +534,7 @@ class Completion(OpenAICompletion):
     @require_optional_import("flaml", "flaml")
     def tune(
         cls,
-        data: list[dict],
+        data: list[dict[str, Any]],
         metric: str,
         mode: str,
         eval_func: Callable,
@@ -734,10 +734,10 @@ class Completion(OpenAICompletion):
     @classmethod
     def create(
         cls,
-        context: Optional[dict] = None,
+        context: Optional[dict[str, Any]] = None,
         use_cache: Optional[bool] = True,
-        config_list: Optional[list[dict]] = None,
-        filter_func: Optional[Callable[[dict, dict], bool]] = None,
+        config_list: Optional[list[dict[str, Any]]] = None,
+        filter_func: Optional[Callable[[dict, dict[str, Any]], bool]] = None,
         raise_on_ratelimit_or_timeout: Optional[bool] = True,
         allow_format_str_template: Optional[bool] = False,
         **config,
@@ -867,7 +867,7 @@ class Completion(OpenAICompletion):
     def instantiate(
         cls,
         template: Union[str, None],
-        context: Optional[dict] = None,
+        context: Optional[dict[str, Any]] = None,
         allow_format_str_template: Optional[bool] = False,
     ):
         if not context or template is None:
@@ -1152,7 +1152,10 @@ class Completion(OpenAICompletion):
 
     @classmethod
     def start_logging(
-        cls, history_dict: Optional[dict] = None, compact: Optional[bool] = True, reset_counter: Optional[bool] = True
+        cls,
+        history_dict: Optional[dict[str, Any]] = None,
+        compact: Optional[bool] = True,
+        reset_counter: Optional[bool] = True,
     ):
         """Start book keeping.
 

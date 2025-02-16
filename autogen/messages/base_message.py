@@ -47,7 +47,7 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
     This is needed for proper serialization and deserialization of messages in a union type.
 
     Args:
-        message_cls (Type[BaseMessage]): Message class to wrap
+        message_cls (type[BaseMessage]): Message class to wrap
     """
     global _message_classes
 

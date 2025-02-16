@@ -35,7 +35,9 @@ class ChatResult:
     """The chat history."""
     summary: str = None
     """A summary obtained from the chat."""
-    cost: dict[str, dict] = None  # keys: "usage_including_cached_inference", "usage_excluding_cached_inference"
+    cost: dict[str, dict[str, Any]] = (
+        None  # keys: "usage_including_cached_inference", "usage_excluding_cached_inference"
+    )
     """The cost of the chat.
        The value for each usage type is a dictionary containing cost information for that specific type.
            - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference.

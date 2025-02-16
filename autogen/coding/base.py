@@ -40,7 +40,7 @@ class CodeExtractor(Protocol):
     """(Experimental) A code extractor class that extracts code blocks from a message."""
 
     def extract_code_blocks(
-        self, message: str | list[Union[UserMessageTextContentPart, UserMessageImageContentPart]] | None
+        self, message: Optional[Union[str, list[Union[UserMessageTextContentPart, UserMessageImageContentPart]]]]
     ) -> list[CodeBlock]:
         """(Experimental) Extract code blocks from a message.
 

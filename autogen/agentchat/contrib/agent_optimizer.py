@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from ... import OpenAIWrapper, filter_config
 from ...code_utils import execute_code
@@ -212,7 +212,7 @@ class AgentOptimizer:
         self.llm_config["config_list"] = filter_config(llm_config["config_list"], {"model": [self.optimizer_model]})
         self._client = OpenAIWrapper(**self.llm_config)
 
-    def record_one_conversation(self, conversation_history: list[dict], is_satisfied: bool = None):
+    def record_one_conversation(self, conversation_history: list[dict[str, Any]], is_satisfied: bool = None):
         """Record one conversation history.
 
         Args:

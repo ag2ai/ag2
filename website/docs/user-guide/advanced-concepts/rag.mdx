@@ -67,7 +67,7 @@ base_system_message = "You are a helpful agent, answering questions about the fi
 Here's the function we'll attach to the hook, it gets all files in the current directory and updates the associated agent's system message accordingly.
 
 ```python
-def give_agent_file_listing(agent: ConversableAgent, messages: list[dict]) -> None:
+def give_agent_file_listing(agent: ConversableAgent, messages: list[dict[str, Any]]) -> None:
     # Get the list of files in the current directory
     files = os.listdir()
 
