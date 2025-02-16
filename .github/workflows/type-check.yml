@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
         optional-dependencies:
           - "none"
           # LLMs
@@ -40,6 +40,41 @@ jobs:
           - "interop"
           - "crawl4ai"
           - "docs"
+        exclude:
+          # pdoc3 is failing in python 3.9 for some reason, we build docs with Python 3.10
+          - python-version: "3.9"
+            optional-dependencies: "docs"
+          # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
+          - python-version: "3.9"
+            optional-dependencies: "graph-rag-falkor-db"
+          # Issues with installing retrievechat-qdrant in python 3.13
+          - python-version: "3.13"
+            optional-dependencies: "retrievechat-qdrant"
+          # Browser use doesn't support below python 3.11
+          - python-version: "3.9"
+            optional-dependencies: "browser-use"
+          - python-version: "3.10"
+            optional-dependencies: "browser-use"
+          # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
+          # Because torch and sentence_transformers creates issues while trying to install
+          - os: macos-latest
+            python-version: "3.13"
+            optional-dependencies: "retrievechat"
+          - os: macos-latest
+            python-version: "3.13"
+            optional-dependencies: "retrievechat-pgvector"
+          - os: macos-latest
+            python-version: "3.13"
+            optional-dependencies: "retrievechat-mongodb"
+          - os: windows-latest
+            python-version: "3.13"
+            optional-dependencies: "retrievechat"
+          - os: windows-latest
+            python-version: "3.13"
+            optional-dependencies: "retrievechat-pgvector"
+          - os: windows-latest
+            python-version: "3.13"
+            optional-dependencies: "retrievechat-mongodb"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +83,7 @@ jobs:
           version: "latest"
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.version }}
+          python-version: ${{ matrix.python-version }}
       # All additional modules should be defined in pyproject.toml
       - run: uv pip install --system ".[types]"
         if: matrix.optional-dependencies == 'none'
