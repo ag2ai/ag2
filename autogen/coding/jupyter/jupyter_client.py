@@ -118,9 +118,9 @@ class JupyterKernelClient:
         output: str
         data_items: list[DataItem]
 
-    def __init__(self, websocket: WebSocket):
+    def __init__(self, websocket: WebSocket):  # type: ignore[no-any-unimported]
         self._session_id: str = uuid.uuid4().hex
-        self._websocket: WebSocket = websocket
+        self._websocket: WebSocket = websocket  # type: ignore[no-any-unimported]
 
     def __enter__(self) -> Self:
         return self
