@@ -16,6 +16,29 @@ jobs:
       fail-fast: true
       matrix:
         version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        optional-dependencies:
+          - ""
+          # LLMs
+          - "openai"
+          - "gemini"
+          - "anthropic"
+          - "deepseek"
+          # optional dependencies
+          - "browser-use"
+          - "commsagent-discord"
+          - "commsagent-slack"
+          - "commsagent-telegram"
+          - "jupyter-executor"
+          - "retrievechat"
+          - "retrievechat-pgvector"
+          - "retrievechat-mongodb"
+          - "retrievechat-qdrant"
+          - "graph-rag-falkor-db"
+          # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
+          - "twilio"
+          - "interop"
+          - "crawl4ai"
+          - "docs"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +50,9 @@ jobs:
           python-version: ${{ matrix.version }}
       # All additional modules should be defined in pyproject.toml
       - run: uv pip install --system ".[types]"
+        if: matrix.optional-dependencies == ""
+      - run: uv pip install --system ".[types, ${matrix.optional-dependencies}]"
+        if: matrix.optional-dependencies != ""
       # Any additional configuration should be defined in pyproject.toml
       - run: |
           mypy
