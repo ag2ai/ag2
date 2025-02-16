@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from ......doc_utils import export_module
 from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated

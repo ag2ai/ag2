@@ -8,8 +8,7 @@ import hashlib
 import os
 import re
 import uuid
-from collections.abc import Callable
-from typing import Any, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from ...code_utils import extract_code
 from ...formatting_utils import colored
@@ -100,8 +99,8 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self,
         name="RetrieveChatAgent",  # default set to RetrieveChatAgent
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
-        retrieve_config: Optional[dict] = None,  # config for the retrieve agent
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
+        retrieve_config: Optional[dict[str, Any]] = None,  # config for the retrieve agent
         **kwargs,
     ):
         r"""Args:
@@ -521,7 +520,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
     def _generate_retrieve_user_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:

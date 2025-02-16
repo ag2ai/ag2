@@ -7,9 +7,8 @@
 
 import json
 import time
-from collections.abc import Callable
 from datetime import timedelta
-from typing import Any, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 import numpy as np
 

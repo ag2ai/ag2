@@ -7,9 +7,8 @@
 import copy
 import logging
 import re
-from collections.abc import Callable
 from datetime import datetime
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Callable, Literal, Optional, Union
 
 from ... import Agent, AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
@@ -37,7 +36,7 @@ class WebSurferAgent(ConversableAgent):
         is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable]] = None,
+        function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict, Literal[False]] = False,
         llm_config: Optional[Union[dict, Literal[False]]] = None,
         summarizer_llm_config: Optional[Union[dict, Literal[False]]] = None,

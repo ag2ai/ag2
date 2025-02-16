@@ -4,10 +4,9 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from time import monotonic, sleep
-from typing import Any, Literal, Optional, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
 
 import numpy as np
 
@@ -42,7 +41,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         self,
         connection_string: str = "",
         database_name: str = "vector_db",
-        embedding_function: Optional[Callable] = None,
+        embedding_function: Optional[Callable[..., Any]] = None,
         collection_name: str = None,
         index_name: str = "vector_index",
         overwrite: bool = False,

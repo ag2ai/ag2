@@ -43,7 +43,7 @@ class Neo4jGraphCapability(GraphRagCapability):
     def _reply_using_neo4j_query(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:

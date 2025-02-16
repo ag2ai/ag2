@@ -3,8 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-from collections.abc import Callable
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Callable, Optional
 
 from pydantic import BaseModel
 

@@ -32,7 +32,7 @@ class GPTAssistantAgent(ConversableAgent):
         name="GPT Assistant",
         instructions: Optional[str] = None,
         llm_config: Optional[Union[dict, bool]] = None,
-        assistant_config: Optional[dict] = None,
+        assistant_config: Optional[dict[str, Any]] = None,
         overwrite_instructions: bool = False,
         overwrite_tools: bool = False,
         **kwargs,
@@ -181,7 +181,7 @@ class GPTAssistantAgent(ConversableAgent):
 
     def _invoke_assistant(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, dict, None]]:

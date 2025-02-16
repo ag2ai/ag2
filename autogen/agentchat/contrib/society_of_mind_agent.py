@@ -8,7 +8,7 @@
 import copy
 import traceback
 from contextlib import suppress
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
 
@@ -38,11 +38,11 @@ class SocietyOfMindAgent(ConversableAgent):
         self,
         name: str,
         chat_manager: GroupChatManager,
-        response_preparer: Optional[Union[str, Callable]] = None,
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        response_preparer: Optional[Union[str, Callable[..., Any]]] = None,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable]] = None,
+        function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict, Literal[False]] = False,
         llm_config: Optional[Union[dict, Literal[False]]] = False,
         default_auto_reply: Optional[Union[str, dict, None]] = "",
@@ -157,7 +157,7 @@ class SocietyOfMindAgent(ConversableAgent):
 
     def generate_inner_monologue_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Union[str, dict, None]]:

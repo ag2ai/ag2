@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from ..doc_utils import export_module
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -34,10 +34,10 @@ class UserProxyAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "TERMINATE", "NEVER"] = "ALWAYS",
-        function_map: Optional[dict[str, Callable]] = None,
+        function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict, Literal[False]] = {},
         default_auto_reply: Optional[Union[str, dict, None]] = "",
         llm_config: Optional[Union[dict, Literal[False]]] = False,

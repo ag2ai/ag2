@@ -11,8 +11,7 @@ import logging
 import os
 import threading
 import uuid
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion

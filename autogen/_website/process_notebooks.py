@@ -21,14 +21,13 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Any, Optional, TypeVar, TypedDict, Union
+from typing import Any, Callable, Optional, Sequence, TypeVar, TypedDict, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 

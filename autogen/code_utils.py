@@ -13,11 +13,10 @@ import subprocess
 import sys
 import time
 import venv
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from hashlib import md5
 from types import SimpleNamespace
-from typing import Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import docker
 
@@ -694,7 +693,7 @@ class PassAssertionFilter:
 
 def implement(
     definition: str,
-    configs: Optional[list[dict]] = None,
+    configs: Optional[list[dict[str, Any]]] = None,
     assertions: Optional[Union[str, Callable[[str], tuple[str, float]]]] = generate_assertions,
 ) -> tuple[str, float]:
     """`(openai<1)` Implement a function from a definition.

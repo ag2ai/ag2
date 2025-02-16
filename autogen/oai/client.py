@@ -13,8 +13,7 @@ import re
 import sys
 import uuid
 import warnings
-from collections.abc import Callable
-from typing import Any, Optional, Protocol, Union
+from typing import Any, Callable, Optional, Protocol, Union
 
 from pydantic import BaseModel
 from pydantic.type_adapter import TypeAdapter

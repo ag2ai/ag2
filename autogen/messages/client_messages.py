@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Callable
-from typing import Any, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel

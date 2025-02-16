@@ -4,8 +4,7 @@
 
 
 import json
-from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from uuid import UUID
 
 from .base_message import BaseMessage, wrap_message

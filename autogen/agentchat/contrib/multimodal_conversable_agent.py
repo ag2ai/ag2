@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper
 from ...code_utils import content_str
@@ -100,7 +100,7 @@ class MultimodalConversableAgent(ConversableAgent):
 
     def generate_oai_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Union[str, dict, None]]:

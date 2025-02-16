@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Callable
-from typing import Any
+from typing import Any, Callable
 
 from ...agentchat.conversable_agent import ConversableAgent
 from ...tools import Tool

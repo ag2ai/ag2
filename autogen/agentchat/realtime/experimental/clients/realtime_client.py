@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator
 from logging import Logger
-from typing import Any, AsyncContextManager, Literal, Optional, Protocol, TypeVar, runtime_checkable
+from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, TypeVar, runtime_checkable
 
 from .....doc_utils import export_module
 from ..realtime_events import RealtimeEvent

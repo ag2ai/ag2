@@ -11,7 +11,7 @@ import random
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from ..code_utils import content_str
 from ..doc_utils import export_module
@@ -128,14 +128,14 @@ class GroupChat:
     """
 
     agents: list[Agent]
-    messages: list[dict]
+    messages: list[dict[str, Any]]
     max_round: int = 10
     admin_name: str = "Admin"
     func_call_filter: bool = True
-    speaker_selection_method: Union[Literal["auto", "manual", "random", "round_robin"], Callable] = "auto"
+    speaker_selection_method: Union[Literal["auto", "manual", "random", "round_robin"], Callable[..., Any]] = "auto"
     max_retries_for_selecting_speaker: int = 2
     allow_repeat_speaker: Optional[Union[bool, list[Agent]]] = None
-    allowed_or_disallowed_speaker_transitions: Optional[dict] = None
+    allowed_or_disallowed_speaker_transitions: Optional[dict[str, Any]] = None
     speaker_transitions_type: Literal["allowed", "disallowed", None] = None
     enable_clear_history: bool = False
     send_introductions: bool = False
@@ -436,7 +436,7 @@ class GroupChat:
     def _prepare_and_select_agents(
         self,
         last_speaker: Agent,
-    ) -> tuple[Optional[Agent], list[Agent], Optional[list[dict]]]:
+    ) -> tuple[Optional[Agent], list[Agent], Optional[list[dict[str, Any]]]]:
         # If self.speaker_selection_method is a callable, call it to get the next speaker.
         # If self.speaker_selection_method is a string, return it.
         speaker_selection_method = self.speaker_selection_method
@@ -684,7 +684,7 @@ class GroupChat:
         self,
         last_speaker: Agent,
         selector: ConversableAgent,
-        messages: Optional[list[dict]],
+        messages: Optional[list[dict[str, Any]]],
         agents: Optional[list[Agent]],
     ) -> Agent:
         """Selects next speaker for the "auto" speaker selection method. Utilises its own two-agent chat to determine the next speaker and supports requerying.
@@ -767,7 +767,7 @@ class GroupChat:
         self,
         last_speaker: Agent,
         selector: ConversableAgent,
-        messages: Optional[list[dict]],
+        messages: Optional[list[dict[str, Any]]],
         agents: Optional[list[Agent]],
     ) -> Agent:
         """(Asynchronous) Selects next speaker for the "auto" speaker selection method. Utilises its own two-agent chat to determine the next speaker and supports requerying.
@@ -1069,7 +1069,7 @@ class GroupChatManager(ConversableAgent):
         """Returns the group chat managed by the group chat manager."""
         return self._groupchat
 
-    def chat_messages_for_summary(self, agent: Agent) -> list[dict]:
+    def chat_messages_for_summary(self, agent: Agent) -> list[dict[str, Any]]:
         """The list of messages in the group chat as a conversation to summarize.
         The agent is ignored.
         """
@@ -1134,7 +1134,7 @@ class GroupChatManager(ConversableAgent):
 
     def run_chat(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ) -> tuple[bool, Optional[str]]:
@@ -1214,7 +1214,7 @@ class GroupChatManager(ConversableAgent):
 
     async def a_run_chat(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ):
@@ -1284,10 +1284,10 @@ class GroupChatManager(ConversableAgent):
 
     def resume(
         self,
-        messages: Union[list[dict], str],
+        messages: Union[list[dict[str, Any]], str],
         remove_termination_string: Optional[Union[str, Callable[[str], str]]] = None,
         silent: Optional[bool] = False,
-    ) -> tuple[ConversableAgent, dict]:
+    ) -> tuple[ConversableAgent, dict[str, Any]]:
         """Resumes a group chat using the previous messages as a starting point. Requires the agents, group chat, and group chat manager to be established
         as per the original group chat.
 
@@ -1387,10 +1387,10 @@ class GroupChatManager(ConversableAgent):
 
     async def a_resume(
         self,
-        messages: Union[list[dict], str],
+        messages: Union[list[dict[str, Any]], str],
         remove_termination_string: Optional[Union[str, Callable[[str], str]]] = None,
         silent: Optional[bool] = False,
-    ) -> tuple[ConversableAgent, dict]:
+    ) -> tuple[ConversableAgent, dict[str, Any]]:
         """Resumes a group chat using the previous messages as a starting point, asynchronously. Requires the agents, group chat, and group chat manager to be established
         as per the original group chat.
 
@@ -1488,7 +1488,7 @@ class GroupChatManager(ConversableAgent):
 
         return previous_last_agent, last_message
 
-    def _valid_resume_messages(self, messages: list[dict]):
+    def _valid_resume_messages(self, messages: list[dict[str, Any]]):
         """Validates the messages used for resuming
 
         Args:
@@ -1513,7 +1513,7 @@ class GroupChatManager(ConversableAgent):
                 raise Exception(f"Agent name in message doesn't exist as agent in group chat: {message['name']}")
 
     def _process_resume_termination(
-        self, remove_termination_string: Union[str, Callable[[str], str]], messages: list[dict]
+        self, remove_termination_string: Union[str, Callable[[str], str]], messages: list[dict[str, Any]]
     ):
         """Removes termination string, if required, and checks if termination may occur.
 
@@ -1543,7 +1543,7 @@ class GroupChatManager(ConversableAgent):
         if self._is_termination_msg and self._is_termination_msg(last_message):
             logger.warning("WARNING: Last message meets termination criteria and this may terminate the chat.")
 
-    def messages_from_string(self, message_string: str) -> list[dict]:
+    def messages_from_string(self, message_string: str) -> list[dict[str, Any]]:
         """Reads the saved state of messages in Json format for resume and returns as a messages list
 
         Args:
@@ -1559,7 +1559,7 @@ class GroupChatManager(ConversableAgent):
 
         return state
 
-    def messages_to_string(self, messages: list[dict]) -> str:
+    def messages_to_string(self, messages: list[dict[str, Any]]) -> str:
         """Converts the provided messages into a Json string that can be used for resuming the chat.
         The state is made up of a list of messages
 

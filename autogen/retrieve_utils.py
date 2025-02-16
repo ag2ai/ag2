@@ -9,7 +9,7 @@ import hashlib
 import logging
 import os
 import re
-from typing import Callable, Union
+from typing import Any, Callable, Union
 from urllib.parse import urlparse
 
 import requests
@@ -163,7 +163,7 @@ def split_files_to_chunks(
     chunk_mode: str = "multi_lines",
     must_break_at_empty_line: bool = True,
     custom_text_split_function: Callable = None,
-) -> tuple[list[str], list[dict]]:
+) -> tuple[list[str], list[dict[str, Any]]]:
     """Split a list of files into chunks of max_tokens."""
     chunks = []
     sources = []
