@@ -57,24 +57,6 @@ jobs:
             optional-dependencies: "browser-use"
           # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat
           # Because torch and sentence_transformers creates issues while trying to install
-          - os: macos-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat"
-          - os: macos-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-pgvector"
-          - os: macos-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-mongodb"
-          - os: windows-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat"
-          - os: windows-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-pgvector"
-          - os: windows-latest
-            python-version: "3.13"
-            optional-dependencies: "retrievechat-mongodb"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
