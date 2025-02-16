@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from pytest import LogCaptureFixture, fixture, raises
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
-from autogen.agentchat.contrib.rag.parser_utils import docling_parse_docs
+from autogen.agents.experimental.document_agent.parser_utils import docling_parse_docs
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.tool import Tool
 
@@ -40,7 +40,7 @@ class TestDoclingParseDocs:
 
     def test_no_documents_found(self) -> None:
         """Test that ValueError is raised when no documents are found."""
-        with patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[]):  # noqa: SIM117
+        with patch("autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[]):  # noqa: SIM117
             with raises(ValueError, match="No documents found."):
                 list(docling_parse_docs("input_file_path", "output_dir_path"))
 
@@ -49,9 +49,11 @@ class TestDoclingParseDocs:
         input_file_path = tmp_path / "input_file_path"
         output_dir_path = tmp_path / "output"
         with (
-            patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[input_file_path]),
             patch(
-                "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
                 return_value=iter([mock_conversion_result]),
             ),
         ):
@@ -68,9 +70,11 @@ class TestDoclingParseDocs:
         input_file_path = tmp_path / "input_file_path"
         output_dir_path = tmp_path / "output"
         with (
-            patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[input_file_path]),
             patch(
-                "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
                 return_value=iter([mock_conversion_result]),
             ),
         ):
@@ -105,9 +109,12 @@ class TestDoclingParseDocs:
         output_dir_path = tmp_path / "output"
 
         with (
-            patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[Path("input_file_path")]),
             patch(
-                "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input",
+                return_value=[Path("input_file_path")],
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
                 return_value=[mock_conversion_result],
             ),
             caplog.at_level(logging.INFO),

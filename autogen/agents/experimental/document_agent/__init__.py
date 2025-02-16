@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .document_agent import DocumentAgent
 from .document_utils import handle_input
 from .parser_utils import docling_parse_docs
 
-__all__ = ["docling_parse_docs", "handle_input"]
+__all__ = ["DocumentAgent", "docling_parse_docs", "handle_input"]
