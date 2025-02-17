@@ -11,26 +11,38 @@ repos:
     rev: v5.0.0
     hooks:
     - id: check-added-large-files
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: check-ast
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: check-yaml
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: check-toml
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: check-json
+      stages: [pre-commit, pre-merge-commit, manual]
       exclude: |
         (?x)^(
           .devcontainer/.*devcontainer\.json |
           ^notebook/agentchat_pdf_rag/(parsed_elements|processed_elements)\.json$
         )$
     - id: check-byte-order-marker
+      stages: [pre-commit, pre-merge-commit, manual]
       exclude: .gitignore
     - id: check-merge-conflict
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: detect-private-key
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: trailing-whitespace
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: end-of-file-fixer
+      stages: [pre-commit, pre-merge-commit, manual]
     - id: no-commit-to-branch
+      stages: [pre-commit, pre-merge-commit, manual]
   - repo: local
     hooks:
       - id: build-setup-scripts
         name: build setup scripts
+        stages: [pre-commit, pre-merge-commit, manual]
         entry: "scripts/pre-commit-build-setup-files.sh"
         language: python
         #        language_version: python3.9
@@ -42,6 +54,7 @@ repos:
     hooks:
       - id: lint
         name: linting and formatting
+        stages: [pre-commit, pre-merge-commit, manual]
         entry: "scripts/pre-commit-lint.sh"
         language: python
         #        language_version: python3.9
@@ -52,6 +65,7 @@ repos:
     rev: v2.3.0
     hooks:
       - id: codespell
+        stages: [pre-commit, pre-merge-commit, manual]
         additional_dependencies:
         - tomli
         # args: ["-L", "ans,linar,nam,tread,ot,assertIn,dependin,socio-economic,Regio"]
@@ -70,6 +84,7 @@ repos:
     hooks:
     - id: mypy
       name: mypy
+      stages: [pre-commit, pre-merge-commit]
       entry: "./scripts/pre-commit-mypy-run.sh"
       language: python
       # use your preferred Python version
@@ -83,6 +98,7 @@ repos:
       verbose: true
     - id: check-license-headers
       name: check license headers
+      stages: [pre-commit, pre-merge-commit, manual]
       entry: python ./scripts/pre-commit-license-check.py
       language: python
       types: [python]
@@ -96,6 +112,7 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
+        stages: [pre-commit, pre-merge-commit, manual]
         args: ["--baseline", ".secrets.baseline"]
         exclude: |
           (?x)^(
@@ -106,6 +123,7 @@ repos:
     hooks:
       - id: generate-devcontainer-files
         name: Generate devcontainer files
+        stages: [pre-commit, pre-merge-commit, manual]
         entry: "scripts/devcontainer/generate-devcontainers.sh"
         language: python
         require_serial: true
