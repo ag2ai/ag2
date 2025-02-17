@@ -43,10 +43,10 @@ class Neo4jGraphCapability(GraphRagCapability):
     def _reply_using_neo4j_query(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Query neo4j and return the message. Internally, it queries the Property graph
         and returns the answer from the graph query engine.
         TODO: reply with a dictionary including both the answer and semantic source triplets.
@@ -66,7 +66,7 @@ class Neo4jGraphCapability(GraphRagCapability):
 
         return True, result.answer
 
-    def _get_last_question(self, message: Union[dict, str]):
+    def _get_last_question(self, message: Union[dict[str, Any], str]) -> None:
         """Retrieves the last message from the conversation history."""
         if isinstance(message, str):
             return message

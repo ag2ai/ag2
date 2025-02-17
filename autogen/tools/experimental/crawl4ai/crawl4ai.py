@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from typing import Annotated, Any, Optional, Type
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel
 
@@ -29,7 +29,7 @@ class Crawl4AITool(Tool):
     def __init__(
         self,
         llm_config: Optional[dict[str, Any]] = None,
-        extraction_model: Optional[Type[BaseModel]] = None,
+        extraction_model: Optional[type[BaseModel]] = None,
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
         """
@@ -70,7 +70,7 @@ class Crawl4AITool(Tool):
             instruction: Annotated[str, "The instruction to provide on how and what to extract."],
             llm_config: Annotated[Any, Depends(on(llm_config))],
             llm_strategy_kwargs: Annotated[Optional[dict[str, Any]], Depends(on(llm_strategy_kwargs))],
-            extraction_model: Annotated[Optional[Type[BaseModel]], Depends(on(extraction_model))],
+            extraction_model: Annotated[Optional[type[BaseModel]], Depends(on(extraction_model))],
         ) -> Any:
             browser_cfg = BrowserConfig(headless=True)
             crawl_config = Crawl4AITool._get_crawl_config(
@@ -148,7 +148,7 @@ class Crawl4AITool(Tool):
         llm_config: dict[str, Any],
         instruction: str,
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
-        extraction_model: Optional[Type[BaseModel]] = None,
+        extraction_model: Optional[type[BaseModel]] = None,
     ) -> "CrawlerRunConfig":
         lite_llm_config = Crawl4AITool._get_lite_llm_config(llm_config)
 

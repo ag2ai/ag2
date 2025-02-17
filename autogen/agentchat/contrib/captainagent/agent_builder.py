@@ -11,7 +11,7 @@ import logging
 import re
 import subprocess as sp
 import time
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from termcolor import colored
 
@@ -222,7 +222,7 @@ Match roles in the role set to each expert in expert set.
         self.config_file_location = config_file_location
 
         self.building_task: str = None
-        self.agent_configs: list[dict] = []
+        self.agent_configs: list[dict[str, Any]] = []
         self.open_ports: list[str] = []
         self.agent_procs: dict[str, tuple[sp.Popen, str]] = {}
         self.agent_procs_assign: dict[str, tuple[ConversableAgent, str]] = {}
@@ -238,9 +238,9 @@ Match roles in the role set to each expert in expert set.
 
     def _create_agent(
         self,
-        agent_config: dict,
+        agent_config: dict[str, Any],
         member_name: list[str],
-        llm_config: dict,
+        llm_config: dict[str, Any],
         use_oai_assistant: Optional[bool] = False,
     ) -> AssistantAgent:
         """Create a group chat participant agent.
@@ -364,14 +364,14 @@ Match roles in the role set to each expert in expert set.
     def build(
         self,
         building_task: str,
-        default_llm_config: dict,
+        default_llm_config: dict[str, Any],
         coding: Optional[bool] = None,
-        code_execution_config: Optional[dict] = None,
+        code_execution_config: Optional[dict[str, Any]] = None,
         use_oai_assistant: Optional[bool] = False,
         user_proxy: Optional[ConversableAgent] = None,
         max_agents: Optional[int] = None,
-        **kwargs,
-    ) -> tuple[list[ConversableAgent], dict]:
+        **kwargs: Any,
+    ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Auto build agents based on the building task.
 
         Args:
@@ -489,15 +489,15 @@ Match roles in the role set to each expert in expert set.
         self,
         building_task: str,
         library_path_or_json: str,
-        default_llm_config: dict,
+        default_llm_config: dict[str, Any],
         top_k: int = 3,
         coding: Optional[bool] = None,
-        code_execution_config: Optional[dict] = None,
+        code_execution_config: Optional[dict[str, Any]] = None,
         use_oai_assistant: Optional[bool] = False,
         embedding_model: Optional[str] = "all-mpnet-base-v2",
         user_proxy: Optional[ConversableAgent] = None,
-        **kwargs,
-    ) -> tuple[list[ConversableAgent], dict]:
+        **kwargs: Any,
+    ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Build agents from a library.
         The library is a list of agent configs, which contains the name and system_message for each agent.
         We use a build manager to decide what agent in that library should be involved to the task.
@@ -653,7 +653,7 @@ Match roles in the role set to each expert in expert set.
 
     def _build_agents(
         self, use_oai_assistant: Optional[bool] = False, user_proxy: Optional[ConversableAgent] = None, **kwargs
-    ) -> tuple[list[ConversableAgent], dict]:
+    ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Build agents with generated configs.
 
         Args:
@@ -717,8 +717,8 @@ Match roles in the role set to each expert in expert set.
         filepath: Optional[str] = None,
         config_json: Optional[str] = None,
         use_oai_assistant: Optional[bool] = False,
-        **kwargs,
-    ) -> tuple[list[ConversableAgent], dict]:
+        **kwargs: Any,
+    ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Load building configs and call the build function to complete building without calling online LLMs' api.
 
         Args:

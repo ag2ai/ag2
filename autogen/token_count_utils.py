@@ -4,10 +4,11 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import json
 import logging
 import re
-from typing import Union
+from typing import Any, Union
 
 import tiktoken
 
@@ -70,7 +71,7 @@ def percentile_used(input, model="gpt-3.5-turbo-0613"):
     return count_token(input) / get_max_token_limit(model)
 
 
-def token_left(input: Union[str, list, dict], model="gpt-3.5-turbo-0613") -> int:
+def token_left(input: Union[str, list[str], dict[str, Any]], model="gpt-3.5-turbo-0613") -> int:
     """Count number of tokens left for an OpenAI model.
 
     Args:
@@ -83,7 +84,7 @@ def token_left(input: Union[str, list, dict], model="gpt-3.5-turbo-0613") -> int
     return get_max_token_limit(model) - count_token(input, model=model)
 
 
-def count_token(input: Union[str, list, dict], model: str = "gpt-3.5-turbo-0613") -> int:
+def count_token(input: Union[str, list[str], dict[str, Any]], model: str = "gpt-3.5-turbo-0613") -> int:
     """Count number of tokens used by an OpenAI model.
 
     Args:
@@ -111,7 +112,7 @@ def _num_token_from_text(text: str, model: str = "gpt-3.5-turbo-0613"):
     return len(encoding.encode(text))
 
 
-def _num_token_from_messages(messages: Union[list, dict], model="gpt-3.5-turbo-0613"):
+def _num_token_from_messages(messages: Union[list[str], dict[str, Any]], model="gpt-3.5-turbo-0613"):
     """Return the number of tokens used by a list of messages.
 
     retrieved from https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb/

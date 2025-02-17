@@ -5,7 +5,7 @@ import math
 import random
 import re
 import warnings
-from typing import Optional
+from typing import Any, Optional
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block
@@ -142,7 +142,7 @@ class ThinkNode:
         }
 
     @classmethod
-    def from_dict(cls, data: dict, parent: Optional["ThinkNode"] = None) -> "ThinkNode":
+    def from_dict(cls, data: dict[str, Any], parent: Optional["ThinkNode"] = None) -> "ThinkNode":
         """Create ThinkNode from dictionary representation.
 
         Args:
@@ -207,7 +207,7 @@ def visualize_tree(root: ThinkNode) -> None:
         print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
 
 
-def extract_sft_dataset(root: ThinkNode) -> list[dict]:
+def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
     """Extract the best trajectory or multiple equally good trajectories for SFT training.
 
     Args:
@@ -243,7 +243,7 @@ def extract_sft_dataset(root: ThinkNode) -> list[dict]:
     return best_trajectories
 
 
-def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: float = 0.2) -> list[dict]:
+def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: float = 0.2) -> list[dict[str, Any]]:
     """Extract and generate preference pairs for RLHF training by comparing sibling nodes.
 
     Args:
@@ -304,21 +304,21 @@ class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
         name: str,
-        llm_config: dict,
-        grader_llm_config: Optional[dict] = None,
+        llm_config: dict[str, Any],
+        grader_llm_config: Optional[dict[str, Any]] = None,
         max_depth: int = 4,
         beam_size: int = 3,
         answer_approach: str = "pool",
         verbose: bool = True,
-        reason_config: dict = {},
-        **kwargs,
+        reason_config: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
 
         Args:
             name (str): Name of the agent
             llm_config(dict): Configuration for the language model
-            grader_llm_config(Optional[dict]): Optional separate configuration for the grader model. If not provided, uses llm_config
+            grader_llm_config(Optional[dict[str, Any]]): Optional separate configuration for the grader model. If not provided, uses llm_config
             max_depth (int): Maximum depth of the reasoning tree
             beam_size (int): DEPRECATED. Number of parallel reasoning paths to maintain
             answer_approach (str): DEPRECATED. Either "pool" or "best" - how to generate final answer
@@ -349,6 +349,7 @@ class ReasoningAgent(AssistantAgent):
                     `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
                     `{"method": "lats", "nsim": 5, "forest_size": 3}`
         """
+        reason_config = reason_config or {}
         super().__init__(name=name, llm_config=llm_config, **kwargs)
         self._verbose = verbose
         self._llm_config = llm_config
@@ -391,7 +392,7 @@ class ReasoningAgent(AssistantAgent):
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
 
     def generate_forest_response(
-        self, messages: list[dict], sender: Agent, config: Optional[dict] = None
+        self, messages: list[dict[str, Any]], sender: Agent, config: Optional[dict[str, Any]] = None
     ) -> tuple[bool, str]:
         """Generate a response using tree-of-thought reasoning.
 
@@ -510,7 +511,7 @@ Please provide your rating along with a brief explanation of your assessment.
             reward = 0.0  # Default reward if parsing fails
         return reward
 
-    def _process_prompt(self, messages: list[dict], sender: Agent) -> tuple[Optional[str], Optional[str]]:
+    def _process_prompt(self, messages: list[dict[str, Any]], sender: Agent) -> tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
         This method checks if the provided messages are None and retrieves the last message's content.
