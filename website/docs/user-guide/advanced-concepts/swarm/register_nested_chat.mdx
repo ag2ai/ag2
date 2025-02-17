@@ -65,7 +65,7 @@ Finally, we add the nested chat as a handoff in the same way as we do to an agen
 
 ```python
 register_hand_off(
-    agent=agent_1, 
+    agent=agent_1,
     hand_to=[OnCondition(
         target={
             "chat_queue": [nested_chats],
@@ -80,4 +80,3 @@ register_hand_off(
 See the documentation on [registering a nested chat](/docs/api-reference/autogen/ConversableAgent#register-nested-chats) for further information on the parameters `reply_func_from_nested_chats`, `use_async`, and `config`.
 
 Once a nested chat is complete, the resulting output from the last chat in the nested chats will be returned as the agent that triggered the nested chat's response.
-
