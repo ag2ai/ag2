@@ -947,10 +947,6 @@ class OpenAIWrapper:
             params = self._construct_create_params(create_config, extra_kwargs)
             # get the cache_seed, filter_func and context
             cache_seed = extra_kwargs.get("cache_seed", LEGACY_DEFAULT_CACHE_SEED)
-            if cache_seed == LEGACY_DEFAULT_CACHE_SEED:
-                logger.warning(
-                    f"Using the default cache_seed value {LEGACY_DEFAULT_CACHE_SEED}. It is recommended to provide a custom cache_seed value for controlled randomness."
-                )
             cache = extra_kwargs.get("cache")
             filter_func = extra_kwargs.get("filter_func")
             context = extra_kwargs.get("context")
@@ -976,6 +972,7 @@ class OpenAIWrapper:
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
 
             if cache_client is not None:
+                logger.info(f"Using cache with seed value: {cache_client.config['cache_seed']}")
                 with cache_client as cache:
                     # Try to get the response from cache
                     key = get_key(
