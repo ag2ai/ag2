@@ -141,9 +141,9 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.16",
+    "llama-index==0.12.17",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-core==0.12.16",
+    "llama-index-core==0.12.18",
     "llama-index-readers-web==0.3.5",
 ]
 
@@ -157,11 +157,9 @@ twilio = [
 interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
-    # crewai uses litellm, litellm introduced uvloop as deps with version 1.57.5 which does not support win32
-    "litellm<1.57.5; sys_platform=='win32'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.23"]
+interop-pydantic-ai = ["pydantic-ai==0.0.24"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
@@ -231,7 +229,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.5",
+    "ruff==0.9.6",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -241,7 +239,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.5.29",
+    "uv==0.6.0",
 ]
 
 
