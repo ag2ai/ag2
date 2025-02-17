@@ -35,7 +35,7 @@ jobs:
           - "retrievechat-mongodb"
           - "retrievechat-qdrant"
           - "graph-rag-falkor-db"
-          # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
+          - "neo4j"
           - "twilio"
           - "interop"
           - "crawl4ai"
