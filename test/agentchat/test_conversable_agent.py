@@ -1716,6 +1716,12 @@ def test_add_tool_for_llm_invalid_type(conversable_agent):
         conversable_agent.add_tool_for_llm("not a tool")
 
 
+def test_remove_tool_for_llm_invalid_type(conversable_agent):
+    """Test removing an invalid tool type raises TypeError."""
+    with pytest.raises(TypeError, match="Expected Tool instance"):
+        conversable_agent.remove_tool_for_llm("not a tool")
+
+
 def test_remove_tool_for_llm(mock_credentials: Credentials):
     """Test removing a tool."""
     agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)

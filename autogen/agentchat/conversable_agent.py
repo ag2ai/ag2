@@ -2881,11 +2881,11 @@ class ConversableAgent(LLMAgent):
 
     def remove_tool_for_llm(self, tool: Tool) -> None:
         """Remove a tool (register for LLM tool)"""
-        try:
-            self._register_for_llm(tool=tool, api_style="tool", is_remove=True)
-            self._tools.remove(tool)
-        except ValueError:
-            raise ValueError(f"Tool {tool} not found in collection")
+        if not isinstance(tool, Tool):
+            raise TypeError(f"Expected Tool instance, got {type(tool)}")
+
+        self._register_for_llm(tool=tool, api_style="tool", is_remove=True)
+        self._tools.remove(tool)
 
     def register_function(self, function_map: dict[str, Union[Callable, None]]):
         """Register functions to the agent.
