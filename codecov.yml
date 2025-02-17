@@ -1,0 +1,41 @@
+codecov:
+  require_ci_to_pass: yes
+  notify:
+    after_n_builds: 15
+    wait_for_ci: yes
+
+coverage:
+  status:
+    project:
+      default:
+        # Basic settings
+        target: auto
+        threshold: 1%
+        base: auto
+        if_ci_failed: success
+    patch:
+      default:
+        # Settings for new code in PRs
+        target: auto
+        threshold: 1%
+        base: auto
+
+# Configure codecov bot behavior
+comment:
+  # Only post comment after all builds finish
+  after_n_builds: 15
+  # Hide PR comment if there are no changes
+  require_changes: true
+  # Add a summary header
+  layout: "diff, files"
+  # Show coverage for changed files
+  show_carryforward_flags: true
+
+# Ignore certain paths/files
+ignore:
+  - "test/**/*"
+  - "website/**/*"
+  - "docs/**/*"
+
+github_checks:
+  annotations: true
