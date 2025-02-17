@@ -61,7 +61,7 @@ dependencies = [
     "pydantic>=2.6.1,<3",
     "docker",
     "packaging",
-    "websockets>=14,<15",
+    "websockets>=15,<16",
     "asyncer==0.0.8",
     "fast_depends>=2.4.12,<3",
 ]
