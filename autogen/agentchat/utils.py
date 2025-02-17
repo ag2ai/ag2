@@ -34,7 +34,7 @@ def consolidate_chat_info(chat_info, uniform_sender=None) -> None:
 
 
 @export_module("autogen")
-def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict], dict[str, dict]]:
+def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
     r"""Gather usage summary from all agents.
 
     Args:

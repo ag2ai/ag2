@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Optional
+from typing import Any, Optional
 
 from ...conversable_agent import ConversableAgent
 
@@ -27,7 +27,7 @@ class SubCriticAgent(ConversableAgent):
         name="subcritic",
         system_message: Optional[str] = DEFAULT_SYSTEM_MESSAGE,
         description: Optional[str] = DEFAULT_DESCRIPTION,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): agent name.

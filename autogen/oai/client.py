@@ -916,7 +916,7 @@ class OpenAIWrapper:
         ```
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
-            - api_version (str | None): The api version. Default to None. E.g., "2024-02-01".
+            - api_version (Optional[str]): The api version. Default to None. E.g., "2024-02-01".
 
         Raises:
             - RuntimeError: If all declared custom model clients are not registered

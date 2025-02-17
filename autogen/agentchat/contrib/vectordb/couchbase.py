@@ -4,10 +4,11 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import json
 import time
 from datetime import timedelta
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+from typing import Any, Callable, Literal, Optional
 
 import numpy as np
 
@@ -269,7 +270,7 @@ class CouchbaseVectorDB(VectorDB):
         logger.info(f"Search index {index_name} created successfully.")
 
     def upsert_docs(
-        self, docs: List[Document], collection: "Collection", batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
+        self, docs: list[Document], collection: "Collection", batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
     ) -> None:
         if docs[0].get("content") is None:
             raise ValueError("The document content is required.")
@@ -295,11 +296,11 @@ class CouchbaseVectorDB(VectorDB):
 
     def insert_docs(
         self,
-        docs: List[Document],
+        docs: list[Document],
         collection_name: str = None,
         upsert: bool = False,
         batch_size: int = DEFAULT_BATCH_SIZE,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Insert Documents and Vector Embeddings into the collection of the vector database. Documents are upserted in all cases."""
         if not docs:
@@ -310,14 +311,14 @@ class CouchbaseVectorDB(VectorDB):
         self.upsert_docs(docs, collection, batch_size=batch_size)
 
     def update_docs(
-        self, docs: List[Document], collection_name: str = None, batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
+        self, docs: list[Document], collection_name: str = None, batch_size: int = DEFAULT_BATCH_SIZE, **kwargs: Any
     ) -> None:
         """Update documents, including their embeddings, in the Collection."""
         collection = self.get_collection(collection_name)
         self.upsert_docs(docs, collection, batch_size)
 
     def delete_docs(
-        self, ids: List[ItemID], collection_name: str = None, batch_size: int = DEFAULT_BATCH_SIZE, **kwargs
+        self, ids: list[ItemID], collection_name: str = None, batch_size: int = DEFAULT_BATCH_SIZE, **kwargs
     ):
         """Delete documents from the collection of the vector database."""
         collection = self.get_collection(collection_name)
@@ -328,11 +329,11 @@ class CouchbaseVectorDB(VectorDB):
 
     def get_docs_by_ids(
         self,
-        ids: Optional[List[ItemID]] = None,
+        ids: Optional[list[ItemID]] = None,
         collection_name: str = None,
-        include: Optional[List[str]] = None,
-        **kwargs,
-    ) -> List[Document]:
+        include: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
         """Retrieve documents from the collection of the vector database based on the ids."""
         if include is None:
             include = [TEXT_KEY, "metadata", "id"]
@@ -355,11 +356,11 @@ class CouchbaseVectorDB(VectorDB):
 
     def retrieve_docs(
         self,
-        queries: List[str],
+        queries: list[str],
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
-        **kwargs,
+        **kwargs: Any,
     ) -> QueryResults:
         """Retrieve documents from the collection of the vector database based on the queries.
         Note: Distance threshold is not supported in Couchbase FTS.
@@ -376,7 +377,9 @@ class CouchbaseVectorDB(VectorDB):
             results.append(query_result)
         return results
 
-    def _vector_search(self, embedding_vector: List[float], n_results: int = 10, **kwargs) -> List[Tuple[Dict, float]]:
+    def _vector_search(
+        self, embedding_vector: list[float], n_results: int = 10, **kwargs
+    ) -> list[tuple[dict[str, Any], float]]:
         """Core vector search using Couchbase FTS."""
 
         search_req = search.SearchRequest.create(

@@ -55,7 +55,7 @@ def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: 
     Parse a message into an OpenAI-compatible message format.
 
     Args:
-        message (Union[dict, str]): The message to parse.
+        message (Union[dict[str, Any], str]): The message to parse.
         role (str): The role associated with the message.
         conversation_id (Agent): The conversation context for the message.
         is_sending (bool): Indicates if the message is being sent or received.

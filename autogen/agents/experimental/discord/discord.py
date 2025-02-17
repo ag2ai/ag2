@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -24,7 +24,7 @@ class DiscordAgent(ConversableAgent):
         channel_name: str,
         guild_name: str,
         has_writing_instructions: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize the DiscordAgent.
 

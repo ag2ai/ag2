@@ -14,7 +14,7 @@ from hashlib import md5
 from pathlib import Path
 from time import sleep
 from types import TracebackType
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Optional, Union
 
 import docker
 from docker.errors import ImageNotFound
@@ -64,13 +64,13 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
     def __init__(
         self,
         image: str = "python:3-slim",
-        container_name: str | None = None,
+        container_name: Optional[str] = None,
         timeout: int = 60,
-        work_dir: Path | str = Path(),
-        bind_dir: Path | str | None = None,
+        work_dir: Optional[Union[Path, str]] = None,
+        bind_dir: Optional[Union[Path, str]] = None,
         auto_remove: bool = True,
         stop_container: bool = True,
-        execution_policies: dict[str, bool] | None = None,
+        execution_policies: Optional[dict[str, bool]] = None,
     ):
         """(Experimental) A code executor class that executes code through
         a command line environment in a Docker container.
@@ -103,6 +103,8 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         Raises:
             ValueError: On argument error, or if the container fails to start.
         """
+        work_dir = work_dir if work_dir is not None else Path()
+
         if timeout < 1:
             raise ValueError("Timeout must be greater than or equal to 1.")
 
@@ -259,6 +261,9 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
     ) -> None:
         self.stop()
