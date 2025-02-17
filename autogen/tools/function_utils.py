@@ -11,7 +11,7 @@ from logging import getLogger
 from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field, TypeAdapter
-from pydantic._internal._typing_extra import try_eval_type
+from pydantic._internal._typing_extra import try_eval_type  # type: ignore[attr-defined]
 from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Literal, get_args, get_origin
 

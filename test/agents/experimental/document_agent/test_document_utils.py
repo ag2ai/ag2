@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from autogen.agentchat.contrib.rag.document_utils import (
+from autogen.agents.experimental.document_agent.document_utils import (
     _download_rendered_html,
     download_url,
     handle_input,
@@ -113,7 +113,7 @@ class TestDownloadUrl:
 
     @pytest.fixture
     def mock_download(self, mock_html_value: str) -> Iterable[MagicMock]:
-        with patch("autogen.agentchat.contrib.rag.document_utils._download_rendered_html") as mock:
+        with patch("autogen.agents.experimental.document_agent.document_utils._download_rendered_html") as mock:
             mock.return_value = mock_html_value
             yield mock
 
@@ -160,7 +160,9 @@ class TestDownloadUrl:
     @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_url_invalid_url(self) -> None:
         url = "invalid url"
-        with patch("autogen.agentchat.contrib.rag.document_utils._download_rendered_html") as mock_download:
+        with patch(
+            "autogen.agents.experimental.document_agent.document_utils._download_rendered_html"
+        ) as mock_download:
             mock_download.side_effect = Exception("Invalid URL")
             with pytest.raises(Exception):
                 download_url(url)
