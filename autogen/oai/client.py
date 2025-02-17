@@ -970,9 +970,9 @@ class OpenAIWrapper:
             elif cache_seed is not None:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
+            logger.info(f"Using cache with seed value: {cache if cache is not None else cache_seed}")
 
             if cache_client is not None:
-                logger.info(f"Using cache with seed value: {cache_client.config['cache_seed']}")
                 with cache_client as cache:
                     # Try to get the response from cache
                     key = get_key(
