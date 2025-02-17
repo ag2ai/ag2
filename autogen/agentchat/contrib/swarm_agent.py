@@ -240,6 +240,10 @@ def _prepare_swarm_agents(
         for func_name, (func, _) in agent._swarm_conditional_functions.items():
             tool_execution._function_map[func_name] = func
 
+        # Register tools from the tools property
+        for tool in agent.tools:
+            tool_execution.register_for_execution()(tool)
+
     return tool_execution, nested_chat_agents
 
 
