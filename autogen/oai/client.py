@@ -899,7 +899,8 @@ class OpenAIWrapper:
             - cache (AbstractCache | None): A Cache object to use for response cache. Default to None.
                 Note that the cache argument overrides the legacy cache_seed argument: if this argument is provided,
                 then the cache_seed argument is ignored. If this argument is not provided or None,
-                then the cache_seed argument is used.
+                then the cache_seed argument is used. If both cache and cache_seed are None,
+                then LEGACY_DEFAULT_CACHE_SEED is used as the cache_seed.
             - agent (AbstractAgent | None): The object responsible for creating a completion if an agent.
             - (Legacy) cache_seed (int | None) for using the DiskCache. Default to 41.
                 An integer cache_seed is useful when implementing "controlled randomness" for the completion.
