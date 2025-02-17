@@ -6,13 +6,11 @@ Bring your social platforms into your AG2 workflow with [`DiscordAgent`](/docs/a
 
 Available as standalone agents or as tools that you can add to your own agents.
 
-````mdx-code-block
-:::note
+<Warning>
 These tools are currently in our `experimental` namespace, indicating that we have tested the functionality but their interface may change. Please use them with that in mind and we appreciate any feedback on them.
 
 If you do find any bugs please [log an issue](https://github.com/ag2ai/ag2/issues) in the AG2 repository. If you would like to add more tools or functionality, we would love your [contribution](https://docs.ag2.ai/docs/contributor-guide/contributing).
-:::
-````
+</Warning>
 
 ## Installation
 
@@ -60,7 +58,7 @@ The three communication agents have two in-built tools for sending and retrievin
 | [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) | [`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) | [`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) |
 | [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) | [`TelegramSendTool`](/docs/api-reference/autogen/tools/experimental/TelegramSendTool) | [`TelegramRetrieveTool`](/docs/api-reference/autogen/tools/experimental/TelegramRetrieveTool) |
 
-As the agents are based on `ConversableAgent` you can use them in any conversation pattern in AG2.
+As the agents are based on [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent) you can use them in any conversation pattern in AG2.
 
 An important component of the new agents (as opposed to just using their tools) is that the platform's messaging requirements will be appended to their system message.
 
@@ -126,15 +124,15 @@ Here's the message it retrieved and the poem it sent back.
 
 ### Code examples
 
-See our [blog post](/docs/use-cases/notebooks/notebooks/tools_browser_use) for a demonstration of using the communication agents.
+See our [blog post](/docs/blog/2025-02-05-Communication-Agents/) for a demonstration of using the communication agents.
 
-For supporting guidance on establishing the relevant authentication tokens and IDs, see [this Notebook](/docs/use-cases/notebooks/notebooks/tools_commsplatforms).
+For supporting guidance on establishing the relevant authentication tokens and IDs, see this [notebook](/docs/use-cases/notebooks/notebooks/tools_commsplatforms).
 
 ## Using the Tools directly
 
 You can create and add any of the available communication tools to your agents, empowering your agents with communication abilities.
 
-Here's a simple example using the Slack tools with a ConversableAgent-based agent to send a weather forecast to a Slack channel.
+Here's a simple example using the Slack tools with a [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent)-based agent to send a weather forecast to a Slack channel.
 
 ```python
 # Tools are available in the autogen.tools namespace
