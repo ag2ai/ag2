@@ -1,7 +1,17 @@
+---
+title: Swarm Concept Code
+sidebarTitle: Concepts code
+---
 
-## Demonstrations
+Here are two simple and complete Swarm examples to demonstrate the basic concepts of a swarm.
 
-### Create Swarm Agents
+This first example demonstrates (see matching numbers in the code):
+1. How to update and return context variables in functions
+2. How to transfer to another agent in a function
+3. Combination of 1 and 2
+4. A standard function
+5. How handoffs are a convenient alternative to functions for transferring
+
 ```python
 import autogen
 import random
@@ -21,7 +31,7 @@ llm_config = {"config_list": config_list}
 
 # 1. A function that returns a value of "success" and updates the context variable "1" to True
 def update_context_1(context_variables: dict) -> SwarmResult:
- context_variables["1"] = True
+    context_variables["1"] = True
     return SwarmResult(value="success", context_variables=context_variables)
 
 # 2. A function that returns an AssistantAgent object
@@ -32,7 +42,7 @@ def transfer_to_agent_2() -> AssistantAgent:
 
 # 3. A function that returns the value of "success", updates the context variable and transfers to agent 3
 def update_context_2_and_transfer_to_3(context_variables: dict) -> SwarmResult:
- context_variables["2"] = True
+    context_variables["2"] = True
     return SwarmResult(value="success", context_variables=context_variables, agent=agent_3)
 
 
@@ -81,7 +91,7 @@ agent_5 = AssistantAgent(
 )
 
 
-# This is equivalent to writing a transfer function
+# 5. This is equivalent to writing a transfer function
 register_hand_off(agent=agent_3,hand_to=[OnCondition(agent_4, "Transfer to Agent 4")])
 register_hand_off(agent=agent_4,hand_to=[AfterWork(agent_5)])
 
@@ -103,9 +113,9 @@ chat_result, context_variables, last_agent = initiate_swarm_chat(
 )
 ```
 
-### Demo with User Agent
+This second example shows how to incorporate your own user agent into a swarm, allowing you to be a part of the swarm.
 
-We pass in a user agent to the swarm chat to accept user inputs. With `agent_6`, we register an `AfterWork` handoff to revert to the user agent when no tool calls are suggested.
+We pass in a [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) to the swarm chat, through the `user_agent` parameter on [`initiate_swarm_chat`](/docs/api-reference/autogen/initiate_swarm_chat), to accept user inputs. With `agent_6`, we register an [`AfterWork`](/docs/api-reference/autogen/AfterWork) handoff to revert to the user agent when no tool calls are suggested.
 
 ```python
 from autogen import UserProxyAgent

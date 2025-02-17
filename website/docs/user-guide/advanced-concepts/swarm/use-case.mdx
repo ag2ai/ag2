@@ -1,5 +1,6 @@
 ---
-title: Swarm Use Case
+title: Swarm Use Case Example
+sidebarTitle: Use Case example
 ---
 
 <Tip>
@@ -125,7 +126,7 @@ ORDER_DATABASE = {
 
 Here are the functions we'll soon add to our agents.
 
-In Swarms, functions can be used to handle transitions to the next agent as well. Return an `SwarmResult` and setting the `agent` allows you to determine who the next agent is. If you don't set the `agent` parameter, it will be determined through hand-offs or other functions.
+In Swarms, functions can be used to handle transitions to the next agent as well. Return an [`SwarmResult`](/docs/api-reference/autogen/SwarmResult) and setting the `agent` allows you to determine who the next agent is. If you don't set the `agent` parameter, it will be determined through hand-offs or other functions.
 
 Later we will see the use of the `available` parameter in an OnCondition hand-off to determine if a hand-off is made available for evaluation by the LLM. As that parameter takes a context variable that must be equivalent to `True`, we use two context variable keys to control authentication hand-offs, `logged_in` and `requires_login`, which have alternating boolean values.
 
@@ -194,7 +195,7 @@ def login_customer_by_username(username: str, context_variables: dict) -> SwarmR
 #### Agents with dynamic system message
 Here are our agents and we register the functions we created above with them.
 
-The first of our features for this enhanced Swarm walk-through is done here, `UpdateSystemMessage`. By incorporating context variables into our agent's prompts (e.g. `{customer_name}`) and using `UpdateSystemMessage` with the agent's `update_agent_state_before_reply` hook, the agent's system message will be updated with the values from the context variables before they reply (goes to the LLM).
+The first of our features for this enhanced Swarm walk-through is done here, [`UpdateSystemMessage`](/docs/api-reference/autogen/UpdateSystemMessage). By incorporating context variables into our agent's prompts (e.g. `{customer_name}`) and using [`UpdateSystemMessage`](/docs/api-reference/autogen/UpdateSystemMessage) with the agent's `update_agent_state_before_reply` hook, the agent's system message will be updated with the values from the context variables before they reply (goes to the LLM).
 
 This provides robust context for the LLM to work with, allowing the LLM to make better decisions on what do to next.
 
@@ -312,7 +313,7 @@ The ability to turn an OnCondition hand-off on or off is the third enhanced feat
 
 Using the `available` parameter of an OnCondition with a context variable key or a Callable allows us to show/hide the option from the LLM when they're determining what to do next.
 
-Together with the ability to put context into an agent's system message (`UpdateSystemMessage` covered earlier), we're afforded both the ability to control what options they have and also improved reasoning LLM capability through better context.
+Together with the ability to put context into an agent's system message ([`UpdateSystemMessage`](/docs/api-reference/autogen/UpdateSystemMessage) covered earlier), we're afforded both the ability to control what options they have and also improved reasoning LLM capability through better context.
 
 Here we can see the use of context variable keys in the `available` parameter as well as the `has_order_in_context` function as an alternative to context variables. You will notice that the function does the same as using a context variable key string in this case.
 
@@ -783,4 +784,4 @@ With the order id, we can handle order enquiries and retrieve order details.
 - [initiate_swarm_chat](/docs/api-reference/autogen/initiate_swarm_chat)
 - [OnCondition](/docs/api-reference/autogen/OnCondition)
 - [AfterWork](/docs/api-reference/autogen/AfterWork)
-- [UPDATE_SYSTEM_MESSAGE](/docs/api-reference/autogen/UPDATE_SYSTEM_MESSAGE)
+- [UpdateSystemMessage](/docs/api-reference/autogen/UpdateSystemMessage)
