@@ -61,7 +61,7 @@ dependencies = [
     "pydantic>=2.6.1,<3",
     "docker",
     "packaging",
-    "websockets>=15,<16",
+    "websockets>=14,<15",
     "asyncer==0.0.8",
     "fast_depends>=2.4.12,<3",
 ]
@@ -187,7 +187,7 @@ together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
-websockets = ["websockets>=15.0,<16"]
+websockets = ["websockets>=14.0,<15"]
 long-context = ["llmlingua<0.3"]
 anthropic = ["anthropic[vertex]>=0.23.1"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
