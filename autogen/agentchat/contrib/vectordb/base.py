@@ -153,7 +153,7 @@ class VectorDB(Protocol):
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
-        **kwargs,
+        **kwargs: Any,
     ) -> QueryResults:
         """Retrieve documents from the collection of the vector database based on the queries.
 
@@ -172,7 +172,7 @@ class VectorDB(Protocol):
         ...
 
     def get_docs_by_ids(
-        self, ids: list[ItemID] = None, collection_name: str = None, include=None, **kwargs
+        self, ids: list[ItemID] = None, collection_name: str = None, include: Optional[list[str]] = None, **kwargs: Any
     ) -> list[Document]:
         """Retrieve documents from the collection of the vector database based on the ids.
 

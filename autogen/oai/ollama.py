@@ -28,7 +28,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
@@ -86,7 +86,7 @@ class OllamaClient:
             None
         """
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: Optional[type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -505,7 +505,7 @@ def _format_json_response(response: Any, original_answer: str) -> str:
 @require_optional_import("fix_busted_json", "ollama")
 def response_to_tool_call(response_string: str) -> Any:
     """Attempts to convert the response to an object, aimed to align with function format `[{},{}]`"""
-    # We try and detect the list[dict] format:
+    # We try and detect the list[dict[str, Any]] format:
     # Pattern 1 is [{},{}]
     # Pattern 2 is {} (without the [], so could be a single function call)
     patterns = [r"\[[\s\S]*?\]", r"\{[\s\S]*\}"]
@@ -561,7 +561,7 @@ def response_to_tool_call(response_string: str) -> Any:
     return None
 
 
-def _object_to_tool_call(data_object: Any) -> list[dict]:
+def _object_to_tool_call(data_object: Any) -> list[dict[str, Any]]:
     """Attempts to convert an object to a valid tool call object List[Dict] and returns it, if it can, otherwise None"""
     # If it's a dictionary and not a list then wrap in a list
     if isinstance(data_object, dict):

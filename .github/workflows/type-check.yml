@@ -2,8 +2,9 @@ name: Type check
 # see: https://help.github.com/en/actions/reference/events-that-trigger-workflows
 on: # Trigger the workflow on pull request or merge
   pull_request:
-  merge_group:
-    types: [checks_requested]
+  push:
+    branches:
+      - main
 
 defaults:
   run:
@@ -13,9 +14,50 @@ permissions: {}
 jobs:
   type-check:
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        optional-dependencies:
+          - "none"
+          # LLMs
+          - "openai"
+          - "gemini"
+          - "anthropic"
+          - "deepseek"
+          # optional dependencies
+          - "browser-use"
+          - "commsagent-discord"
+          - "commsagent-slack"
+          - "commsagent-telegram"
+          - "jupyter-executor"
+          - "retrievechat"
+          - "retrievechat-pgvector"
+          - "retrievechat-mongodb"
+          - "retrievechat-qdrant"
+          - "graph-rag-falkor-db"
+          # - "neo4j"  # Separate test exists at contrib-graph-rag-tests.yml
+          - "twilio"
+          - "interop"
+          - "crawl4ai"
+          - "docs"
+          - "interop-crewai"
+          - "interop-langchain"
+          - "interop-pydantic-ai"
+        exclude:
+          # pdoc3 is failing in python 3.9 for some reason, we build docs with Python 3.10
+          - python-version: "3.9"
+            optional-dependencies: "docs"
+          # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
+          - python-version: "3.9"
+            optional-dependencies: "graph-rag-falkor-db"
+          # Issues with installing retrievechat-qdrant in python 3.13
+          - python-version: "3.13"
+            optional-dependencies: "retrievechat-qdrant"
+          # Browser use doesn't support below python 3.11
+          - python-version: "3.9"
+            optional-dependencies: "browser-use"
+          - python-version: "3.10"
+            optional-dependencies: "browser-use"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,9 +66,12 @@ jobs:
           version: "latest"
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.version }}
+          python-version: ${{ matrix.python-version }}
       # All additional modules should be defined in pyproject.toml
       - run: uv pip install --system ".[types]"
+        if: matrix.optional-dependencies == 'none'
+      - run: uv pip install --system ".[types, ${{ matrix.optional-dependencies }}]"
+        if: matrix.optional-dependencies != 'none'
       # Any additional configuration should be defined in pyproject.toml
       - run: |
           mypy

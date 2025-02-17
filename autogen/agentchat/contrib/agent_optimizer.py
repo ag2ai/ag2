@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from ... import OpenAIWrapper, filter_config
 from ...code_utils import execute_code
@@ -175,7 +175,7 @@ class AgentOptimizer:
     def __init__(
         self,
         max_actions_per_step: int,
-        llm_config: dict,
+        llm_config: dict[str, Any],
         optimizer_model: Optional[str] = "gpt-4-1106-preview",
     ):
         """(These APIs are experimental and may change in the future.)
@@ -212,7 +212,7 @@ class AgentOptimizer:
         self.llm_config["config_list"] = filter_config(llm_config["config_list"], {"model": [self.optimizer_model]})
         self._client = OpenAIWrapper(**self.llm_config)
 
-    def record_one_conversation(self, conversation_history: list[dict], is_satisfied: bool = None):
+    def record_one_conversation(self, conversation_history: list[dict[str, Any]], is_satisfied: bool = None):
         """Record one conversation history.
 
         Args:

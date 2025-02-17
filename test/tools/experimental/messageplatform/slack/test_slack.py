@@ -94,7 +94,7 @@ class TestSlackSendTool:
     async def test_slack_api_error(self, tool: SlackSendTool, mock_webclient: MagicMock) -> None:
         """Test handling of SlackApiError."""
         mock_instance = mock_webclient.return_value
-        mock_instance.chat_postMessage.side_effect = SlackApiError(
+        mock_instance.chat_postMessage.side_effect = SlackApiError(  # type: ignore[no-untyped-call]
             message="", response={"ok": False, "error": "channel_not_found"}
         )
 
@@ -306,7 +306,7 @@ class TestSlackRetrieveTool:
     async def test_slack_api_error(self, tool: SlackRetrieveTool, mock_webclient: MagicMock) -> None:
         """Test handling of SlackApiError."""
         mock_instance = mock_webclient.return_value
-        mock_instance.conversations_history.side_effect = SlackApiError(
+        mock_instance.conversations_history.side_effect = SlackApiError(  # type: ignore[no-untyped-call]
             message="", response={"ok": False, "error": "channel_not_found"}
         )
 

@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import httpx
 
@@ -131,7 +131,7 @@ class OpenAIRealtimeWebRTCClient:
         await self._websocket.send_json({"type": "session.update", "session": session_options})
         logger.info("Sending session update finished")
 
-    def session_init_data(self) -> List[dict[str, Any]]:
+    def session_init_data(self) -> list[dict[str, Any]]:
         """Control initial session with OpenAI."""
         session_update = {
             "turn_detection": {"type": "server_vad"},

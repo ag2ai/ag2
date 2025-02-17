@@ -47,7 +47,7 @@ class Interoperability:
             type (str): The type of the interoperability class to retrieve.
 
         Returns:
-            Type[Interoperable]: The interoperability class type.
+            type[Interoperable]: The interoperability class type.
 
         Raises:
             ValueError: If no interoperability class is found for the provided type.

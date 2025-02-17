@@ -25,7 +25,7 @@ class _MockTextCompressor:
         return {"compressed_prompt": ""}
 
 
-def get_long_messages() -> list[dict]:
+def get_long_messages() -> list[dict[str, Any]]:
     return [
         {"role": "assistant", "content": [{"type": "text", "text": "are you doing?"}]},
         {"role": "user", "content": "very very very very very very long string"},
@@ -35,7 +35,7 @@ def get_long_messages() -> list[dict]:
     ]
 
 
-def get_short_messages() -> list[dict]:
+def get_short_messages() -> list[dict[str, Any]]:
     return [
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": [{"type": "text", "text": "there"}]},
@@ -43,11 +43,11 @@ def get_short_messages() -> list[dict]:
     ]
 
 
-def get_no_content_messages() -> list[dict]:
+def get_no_content_messages() -> list[dict[str, Any]]:
     return [{"role": "user", "function_call": "example"}, {"role": "assistant", "content": None}]
 
 
-def get_tool_messages() -> list[dict]:
+def get_tool_messages() -> list[dict[str, Any]]:
     return [
         {"role": "user", "content": "hello"},
         {"role": "tool_calls", "content": "calling_tool"},
@@ -57,7 +57,7 @@ def get_tool_messages() -> list[dict]:
     ]
 
 
-def get_tool_messages_kept() -> list[dict]:
+def get_tool_messages_kept() -> list[dict[str, Any]]:
     return [
         {"role": "user", "content": "hello"},
         {"role": "tool_calls", "content": "calling_tool"},
@@ -67,7 +67,7 @@ def get_tool_messages_kept() -> list[dict]:
     ]
 
 
-def get_messages_with_names() -> list[dict]:
+def get_messages_with_names() -> list[dict[str, Any]]:
     return [
         {"role": "system", "content": "I am the system."},
         {"role": "user", "name": "charlie", "content": "I think the sky is blue."},
@@ -76,7 +76,7 @@ def get_messages_with_names() -> list[dict]:
     ]
 
 
-def get_messages_with_names_post_start() -> list[dict]:
+def get_messages_with_names_post_start() -> list[dict[str, Any]]:
     return [
         {"role": "system", "content": "I am the system."},
         {"role": "user", "name": "charlie", "content": "'charlie' said:\nI think the sky is blue."},
@@ -85,7 +85,7 @@ def get_messages_with_names_post_start() -> list[dict]:
     ]
 
 
-def get_messages_with_names_post_end() -> list[dict]:
+def get_messages_with_names_post_end() -> list[dict[str, Any]]:
     return [
         {"role": "system", "content": "I am the system."},
         {"role": "user", "name": "charlie", "content": "I think the sky is blue.\n(said 'charlie')"},
@@ -94,7 +94,7 @@ def get_messages_with_names_post_end() -> list[dict]:
     ]
 
 
-def get_messages_with_names_post_filtered() -> list[dict]:
+def get_messages_with_names_post_filtered() -> list[dict[str, Any]]:
     return [
         {"role": "system", "content": "I am the system."},
         {"role": "user", "name": "charlie", "content": "I think the sky is blue."},
@@ -137,7 +137,10 @@ def message_token_limiter_with_threshold() -> MessageTokenLimiter:
 
 
 def _filter_dict_test(
-    post_transformed_message: dict, pre_transformed_messages: dict, roles: list[str], exclude_filter: bool
+    post_transformed_message: dict[str, Any],
+    pre_transformed_messages: dict[str, Any],
+    roles: list[str],
+    exclude_filter: bool,
 ) -> bool:
     is_role = post_transformed_message["role"] in roles
     if exclude_filter:
