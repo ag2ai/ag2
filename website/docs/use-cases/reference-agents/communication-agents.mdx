@@ -2,7 +2,7 @@
 title: Communication Agents
 ---
 
-Bring your social platforms into your AG2 workflow with `DiscordAgent`, `SlackAgent`, and `TelegramAgent`.
+Bring your social platforms into your AG2 workflow with [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent), [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent), and [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent).
 
 Available as standalone agents or as tools that you can add to your own agents.
 
@@ -56,9 +56,9 @@ The three communication agents have two in-built tools for sending and retrievin
 
 | Agent | Send Tool | Retrieve Tool |
 | --- | --- | --- |
-| DiscordAgent | DiscordSendTool | DiscordRetrieveTool |
-| SlackAgent | SlackSendTool | SlackRetrieveTool |
-| TelegramAgent | TelegramSendTool | TelegramRetrieveTool |
+| [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) | [`DiscordSendTool`](/docs/api-reference/autogen/tools/experimental/DiscordSendTool) | [`DiscordRetrieveTool`](/docs/api-reference/autogen/tools/experimental/DiscordRetrieveTool) |
+| [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) | [`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) | [`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) |
+| [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) | [`TelegramSendTool`](/docs/api-reference/autogen/tools/experimental/TelegramSendTool) | [`TelegramRetrieveTool`](/docs/api-reference/autogen/tools/experimental/TelegramRetrieveTool) |
 
 As the agents are based on `ConversableAgent` you can use them in any conversation pattern in AG2.
 
@@ -68,13 +68,13 @@ They cover aspects like maximum message length, preferred format (e.g. Markdown)
 
 | Agent | System Message guidance |
 | --- | --- |
-| DiscordAgent | 2,000 character limit, Markdown, bold/italic/code, use emojis |
-| SlackAgent | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
-| TelegramAgent | 4,096 character limit, HTML, mentions and emojis |
+| [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) | 2,000 character limit, Markdown, bold/italic/code, use emojis |
+| [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
+| [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) | 4,096 character limit, HTML, mentions and emojis |
 
 These are enabled by default, but you can turn these off by setting `has_writing_instructions` to `False` when creating the agent.
 
-Here's a simple example using the `DiscordAgent` where we will use both tools by retrieving the latest message and then sending back a poem about it.
+Here's a simple example using the [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) where we will use both tools by retrieving the latest message and then sending back a poem about it.
 
 ```python
 # Agents are available in the autogen.agents namespace
@@ -199,7 +199,7 @@ executor_agent.initiate_chat(
 )
 ```
 
-The main difference between this example and using the `SlackAgent` agent is that the agent in this example doesn't have the Slack-specific system message, including formatting instructions.
+The main difference between this example and using the [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) agent is that the agent in this example doesn't have the Slack-specific system message, including formatting instructions.
 
 ### Code examples
 
