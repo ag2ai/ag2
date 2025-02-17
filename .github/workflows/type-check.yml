@@ -54,9 +54,9 @@ jobs:
           - python-version: "3.13"
             optional-dependencies: "retrievechat-qdrant"
           # Browser use doesn't support below python 3.11
-          - python-version:
-              - "3.9"
-              - "3.10"
+          - python-version: "3.9"
+            optional-dependencies: "browser-use"
+          - python-version: "3.10"
             optional-dependencies: "browser-use"
     runs-on: ubuntu-latest
     steps:
