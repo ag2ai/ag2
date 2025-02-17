@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -23,7 +23,7 @@ class SlackAgent(ConversableAgent):
         bot_token: str,
         channel_id: str,
         has_writing_instructions: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize the SlackAgent.
 

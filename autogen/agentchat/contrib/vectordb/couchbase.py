@@ -300,7 +300,7 @@ class CouchbaseVectorDB(VectorDB):
         collection_name: str = None,
         upsert: bool = False,
         batch_size: int = DEFAULT_BATCH_SIZE,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Insert Documents and Vector Embeddings into the collection of the vector database. Documents are upserted in all cases."""
         if not docs:
@@ -332,7 +332,7 @@ class CouchbaseVectorDB(VectorDB):
         ids: Optional[list[ItemID]] = None,
         collection_name: str = None,
         include: Optional[list[str]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> list[Document]:
         """Retrieve documents from the collection of the vector database based on the ids."""
         if include is None:
@@ -360,7 +360,7 @@ class CouchbaseVectorDB(VectorDB):
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
-        **kwargs,
+        **kwargs: Any,
     ) -> QueryResults:
         """Retrieve documents from the collection of the vector database based on the queries.
         Note: Distance threshold is not supported in Couchbase FTS.

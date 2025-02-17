@@ -160,7 +160,7 @@ class GroupChat:
     select_speaker_transform_messages: Optional[transform_messages.TransformMessages] = None
     select_speaker_auto_verbose: Optional[bool] = False
     select_speaker_auto_model_client_cls: Optional[Union[ModelClient, list[ModelClient]]] = None
-    select_speaker_auto_llm_config: Optional[Union[dict, Literal[False]]] = None
+    select_speaker_auto_llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None
     role_for_select_speaker_messages: Optional[str] = "system"
 
     _VALID_SPEAKER_SELECTION_METHODS = ["auto", "manual", "random", "round_robin"]
@@ -171,7 +171,7 @@ class GroupChat:
         "Hello everyone. We have assembled a great team today to answer questions and solve tasks. In attendance are:"
     )
 
-    allowed_speaker_transitions_dict: dict = field(init=False)
+    allowed_speaker_transitions_dict: dict[str, list[Agent]] = field(init=False)
 
     def __post_init__(self):
         # Post init steers clears of the automatically generated __init__ method from dataclass
@@ -299,7 +299,7 @@ class GroupChat:
         """Reset the group chat."""
         self.messages.clear()
 
-    def append(self, message: dict, speaker: Agent):
+    def append(self, message: dict[str, Any], speaker: Agent):
         """Append a message to the group chat.
         We cast the content to str here so that it can be managed by text-based
         model.
@@ -719,7 +719,9 @@ class GroupChat:
         attempt = 0
 
         # Registered reply function for checking_agent, checks the result of the response for agent names
-        def validate_speaker_name(recipient, messages, sender, config) -> tuple[bool, Union[str, dict, None]]:
+        def validate_speaker_name(
+            recipient, messages, sender, config
+        ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
             # The number of retries left, starting at max_retries_for_selecting_speaker
             nonlocal attempts_left
             nonlocal attempt
@@ -801,7 +803,9 @@ class GroupChat:
         attempt = 0
 
         # Registered reply function for checking_agent, checks the result of the response for agent names
-        def validate_speaker_name(recipient, messages, sender, config) -> tuple[bool, Union[str, dict, None]]:
+        def validate_speaker_name(
+            recipient, messages, sender, config
+        ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
             # The number of retries left, starting at max_retries_for_selecting_speaker
             nonlocal attempts_left
             nonlocal attempt
@@ -846,7 +850,7 @@ class GroupChat:
 
     def _validate_speaker_name(
         self, recipient, messages, sender, config, attempts_left, attempt, agents
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Validates the speaker response for each round in the internal 2-agent
         chat within the  auto select speaker method.
 
@@ -1026,7 +1030,7 @@ class GroupChatManager(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         system_message: Optional[Union[str, list]] = "Group chat manager.",
         silent: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
         if (
             kwargs.get("llm_config")
@@ -1582,7 +1586,7 @@ class GroupChatManager(ConversableAgent):
         for agent in self._groupchat.agents:
             agent._raise_exception_on_async_reply_functions()
 
-    def clear_agents_history(self, reply: dict, groupchat: GroupChat) -> str:
+    def clear_agents_history(self, reply: dict[str, Any], groupchat: GroupChat) -> str:
         """Clears history of messages for all agents or selected one. Can preserve selected number of last messages.
         That function is called when user manually provide "clear history" phrase in his reply.
         When "clear history" is provided, the history of messages for all agents is cleared.

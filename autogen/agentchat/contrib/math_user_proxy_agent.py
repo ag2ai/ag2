@@ -146,9 +146,9 @@ class MathUserProxyAgent(UserProxyAgent):
             Callable[[Dict[str, Any]], bool]
         ] = _is_termination_msg_mathchat,  # terminate if \boxed{} in message
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",  # Fully automated
-        default_auto_reply: Optional[Union[str, dict, None]] = DEFAULT_REPLY,
+        default_auto_reply: Optional[Union[str, dict[str, Any]]] = DEFAULT_REPLY,
         max_invalid_q_per_step=3,  # a parameter needed in MathChat
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent

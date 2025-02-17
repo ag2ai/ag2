@@ -38,12 +38,12 @@ class UserProxyAgent(ConversableAgent):
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "TERMINATE", "NEVER"] = "ALWAYS",
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
-        code_execution_config: Union[dict, Literal[False]] = {},
-        default_auto_reply: Optional[Union[str, dict, None]] = "",
-        llm_config: Optional[Union[dict, Literal[False]]] = False,
-        system_message: Optional[Union[str, list]] = "",
+        code_execution_config: Union[dict[str, Any], Literal[False]] = {},
+        default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
+        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
+        system_message: Optional[Union[str, list[str]]] = "",
         description: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent.

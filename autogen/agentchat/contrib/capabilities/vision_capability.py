@@ -46,7 +46,7 @@ class VisionCapability(AgentCapability):
 
     def __init__(
         self,
-        lmm_config: dict,
+        lmm_config: dict[str, Any],
         description_prompt: Optional[str] = DEFAULT_DESCRIPTION_PROMPT,
         custom_caption_func: Callable = None,
     ) -> None:

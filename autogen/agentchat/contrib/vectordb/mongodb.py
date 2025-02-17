@@ -270,8 +270,8 @@ class MongoDBAtlasVectorDB(VectorDB):
         docs: list[Document],
         collection_name: str = None,
         upsert: bool = False,
-        batch_size=DEFAULT_INSERT_BATCH_SIZE,
-        **kwargs,
+        batch_size: int = DEFAULT_INSERT_BATCH_SIZE,
+        **kwargs: Any,
     ) -> None:
         """Insert Documents and Vector Embeddings into the collection of the vector database.
 
@@ -452,7 +452,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
-        **kwargs,
+        **kwargs: Any,
     ) -> QueryResults:
         """Retrieve documents from the collection of the vector database based on the queries.
 
@@ -506,7 +506,7 @@ def _vector_search(
     distance_threshold: float = -1.0,
     oversampling_factor=10,
     include_embedding=False,
-) -> list[tuple[dict, float]]:
+) -> list[tuple[dict[str, Any], float]]:
     """Core $vectorSearch Aggregation pipeline.
 
     Args:

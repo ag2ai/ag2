@@ -137,7 +137,10 @@ def message_token_limiter_with_threshold() -> MessageTokenLimiter:
 
 
 def _filter_dict_test(
-    post_transformed_message: dict, pre_transformed_messages: dict, roles: list[str], exclude_filter: bool
+    post_transformed_message: dict[str, Any],
+    pre_transformed_messages: dict[str, Any],
+    roles: list[str],
+    exclude_filter: bool,
 ) -> bool:
     is_role = post_transformed_message["role"] in roles
     if exclude_filter:

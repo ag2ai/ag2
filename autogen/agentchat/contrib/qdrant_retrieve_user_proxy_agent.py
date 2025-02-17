@@ -32,7 +32,7 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
         is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         retrieve_config: Optional[dict[str, Any]] = None,  # config for the retrieve agent
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent.

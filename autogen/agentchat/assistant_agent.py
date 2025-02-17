@@ -42,12 +42,12 @@ Reply "TERMINATE" in the end when everything is done.
         self,
         name: str,
         system_message: Optional[str] = DEFAULT_SYSTEM_MESSAGE,
-        llm_config: Optional[Union[dict, Literal[False]]] = None,
+        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
         is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): agent name.

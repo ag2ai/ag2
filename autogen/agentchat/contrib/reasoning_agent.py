@@ -142,7 +142,7 @@ class ThinkNode:
         }
 
     @classmethod
-    def from_dict(cls, data: dict, parent: Optional["ThinkNode"] = None) -> "ThinkNode":
+    def from_dict(cls, data: dict[str, Any], parent: Optional["ThinkNode"] = None) -> "ThinkNode":
         """Create ThinkNode from dictionary representation.
 
         Args:
@@ -304,14 +304,14 @@ class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
         name: str,
-        llm_config: dict,
+        llm_config: dict[str, Any],
         grader_llm_config: Optional[dict[str, Any]] = None,
         max_depth: int = 4,
         beam_size: int = 3,
         answer_approach: str = "pool",
         verbose: bool = True,
-        reason_config: dict = {},
-        **kwargs,
+        reason_config: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
 
@@ -349,6 +349,7 @@ class ReasoningAgent(AssistantAgent):
                     `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
                     `{"method": "lats", "nsim": 5, "forest_size": 3}`
         """
+        reason_config = reason_config or {}
         super().__init__(name=name, llm_config=llm_config, **kwargs)
         self._verbose = verbose
         self._llm_config = llm_config

@@ -4,10 +4,12 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from typing import Any
+
 from .tsp import tsp_data
 
 
-def change_dist(dist: dict, i: int, j: int, new_cost: float) -> float:
+def change_dist(dist: Any, i: int, j: int, new_cost: float) -> float:
     """Change the distance between two points.
 
     Args:
@@ -25,7 +27,7 @@ def change_dist(dist: dict, i: int, j: int, new_cost: float) -> float:
     return prev_cost
 
 
-def compare_costs(prev_cost, new_cost) -> float:
+def compare_costs(prev_cost: float, new_cost: float) -> float:
     """Compare the previous cost and the new cost.
 
     Args:

@@ -33,7 +33,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         name: str,
         llama_index_agent: "AgentRunner",
         description: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): agent name.
@@ -68,7 +68,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
@@ -83,7 +83,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
