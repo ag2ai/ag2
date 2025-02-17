@@ -26,9 +26,7 @@ with optional_import_block() as result:
     from vertexai.generative_models import SafetySetting as VertexAISafetySetting
 
 
-@skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
-)
+@skip_on_missing_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
 class TestGeminiClient:
     # Fixtures for mock data
     @pytest.fixture
@@ -433,3 +431,78 @@ class TestGeminiClient:
         }
         converted_schema = GeminiClient._convert_type_null_to_nullable(initial_schema)
         assert converted_schema == expected_schema
+
+    def test_create_gemini_function_parameters_with_nested_parameters(self):
+        function_parameter = {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "$defs": {
+                        "Detail": {
+                            "properties": {"description": {"title": "Description", "type": "string"}},
+                            "required": ["description"],
+                            "title": "Detail",
+                            "type": "object",
+                        },
+                        "Subquestion": {
+                            "properties": {
+                                "question": {"title": "Question", "type": "string"},
+                                "detail": {"$ref": "#/$defs/Detail"},
+                                "answer": {"default": "No answer provided.", "title": "Answer", "type": "string"},
+                            },
+                            "required": ["question", "detail"],
+                            "title": "Subquestion",
+                            "type": "object",
+                        },
+                    },
+                    "properties": {
+                        "question": {"title": "Question", "type": "string"},
+                        "subquestions": {
+                            "items": {"$ref": "#/$defs/Subquestion"},
+                            "title": "Subquestions",
+                            "type": "array",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "title": "Task",
+                    "type": "object",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+
+        result = GeminiClient._create_gemini_function_parameters(function_parameter)
+
+        expected_result = {
+            "type": "OBJECT",
+            "properties": {
+                "task": {
+                    "properties": {
+                        "question": {"type": "STRING"},
+                        "subquestions": {
+                            "items": {
+                                "properties": {
+                                    "question": {"type": "STRING"},
+                                    "detail": {
+                                        "properties": {"description": {"type": "STRING"}},
+                                        "required": ["description"],
+                                        "type": "OBJECT",
+                                    },
+                                    "answer": {"type": "STRING"},
+                                },
+                                "required": ["question", "detail"],
+                                "type": "OBJECT",
+                            },
+                            "type": "ARRAY",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "type": "OBJECT",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+
+        assert result == expected_result, result

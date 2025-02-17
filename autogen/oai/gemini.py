@@ -593,6 +593,20 @@ class GeminiClient:
             return [GeminiClient._convert_type_null_to_nullable(item) for item in schema]
         return schema
 
+    @staticmethod
+    def _unwrap_references(function_parameters: dict[str, Any]) -> dict[str, Any]:
+        if "properties" not in function_parameters:
+            return function_parameters
+
+        function_parameters_copy = copy.deepcopy(function_parameters)
+
+        for property_name, property_value in function_parameters["properties"].items():
+            if "$defs" in property_value:
+                function_parameters_copy["properties"][property_name] = dict(jsonref.replace_refs(property_value))
+                function_parameters_copy["properties"][property_name].pop("$defs")
+
+        return function_parameters_copy
+
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
         functions = []
@@ -601,10 +615,11 @@ class GeminiClient:
                 tool["function"]["parameters"] = GeminiClient._convert_type_null_to_nullable(
                     tool["function"]["parameters"]
                 )
+                function_parameters = GeminiClient._unwrap_references(tool["function"]["parameters"])
                 function = vaiFunctionDeclaration(
                     name=tool["function"]["name"],
                     description=tool["function"]["description"],
-                    parameters=tool["function"]["parameters"],
+                    parameters=function_parameters,
                 )
             else:
                 function = GeminiClient._create_gemini_function_declaration(tool)
@@ -681,8 +696,12 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
+        function_parameter = GeminiClient._unwrap_references(function_parameter)
+
         if "type" in function_parameter:
             function_parameter["type"] = function_parameter["type"].upper()
+            # If the schema was created from pydantic BaseModel, it will "title" attribute which needs to be removed
+            function_parameter.pop("title", None)
 
         # Parameter properties and items
         if "properties" in function_parameter:

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any, Callable
 
 from pydantic import BaseModel
 
@@ -17,7 +17,7 @@ __all__ = ["DeepResearchTool"]
 
 class Subquestion(BaseModel):
     question: Annotated[str, "The original question."]
-    answer: Annotated[Optional[str], "The answer to the question."] = None
+    answer: Annotated[str, "The answer to the question."] = ""
 
     def format(self) -> str:
         return f"Question: {self.question}\n{self.answer}\n"
@@ -245,7 +245,8 @@ class DeepResearchTool(Tool):
             return (content is not None) and content.startswith(DeepResearchTool.ANSWER_CONFIRMED_PREFIX)
 
         websurfer_agent = WebSurferAgent(
-            llm_config=websurfer_config,
+            llm_config=llm_config,
+            web_tool_llm_config=websurfer_config,
             name="WebSurferAgent",
             system_message=(
                 "You are a web surfer agent responsible for gathering information from the web to provide information for answering a question\n"
