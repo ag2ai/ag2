@@ -34,7 +34,7 @@ tags: [tools, tool calling, discord, slack, telegram, messaging]
 
 We want to help you focus on building workflows and enhancing agents, so we're building reference agents to get you going quicker.
 
-Say hello to three new AG2 communication agents - **DiscordAgent**, **SlackAgent**, and **TelegramAgent**, here so that you can use an agentic application to send and retrieve messages from messaging platforms.
+Say hello to three new AG2 communication agents - [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent), [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent), and [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent), here so that you can use an agentic application to send and retrieve messages from messaging platforms.
 
 ### New agents need new tools
 
@@ -48,9 +48,9 @@ Here are our three new agents and the pair of new tools that they use (and you c
 
 | Agent | Send Tool | Retrieve Tool |
 | --- | --- | --- |
-| DiscordAgent | DiscordSendTool | DiscordRetrieveTool |
-| SlackAgent | SlackSendTool | SlackRetrieveTool |
-| TelegramAgent | TelegramSendTool | TelegramRetrieveTool |
+| [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) | [`DiscordSendTool`](/docs/api-reference/autogen/tools/experimental/DiscordSendTool) | [`DiscordRetrieveTool`](/docs/api-reference/autogen/tools/experimental/DiscordRetrieveTool) |
+| [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) | [`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) | [`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) |
+| [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) | [`TelegramSendTool`](/docs/api-reference/autogen/tools/experimental/TelegramSendTool) | [`TelegramRetrieveTool`](/docs/api-reference/autogen/tools/experimental/TelegramRetrieveTool) |
 
 ### Capabilities
 
@@ -132,9 +132,9 @@ They cover aspects like maximum message length, preferred format (e.g. Markdown)
 
 | Agent | System Message guidance |
 | --- | --- |
-| DiscordAgent | 2,000 character limit, Markdown, bold/italic/code, use emojis |
-| SlackAgent | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
-| TelegramAgent | 4,096 character limit, HTML, mentions and emojis |
+| [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) | 2,000 character limit, Markdown, bold/italic/code, use emojis |
+| [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) | 40,000 character limit, Markdown, bold/italic/code, emojis, notification formats |
+| [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) | 4,096 character limit, HTML, mentions and emojis |
 
 These are enabled by default, but you can turn these off by setting `has_writing_instructions` to `False` when creating the agent.
 
@@ -167,7 +167,7 @@ Here's a quick example of how to use the new agents and tools. If you're after m
 
 In this demo we have a Slack channel where AG2 bugs are noted. Those bugs need to go to a Discord channel for them to be raised as a ticket and also to Telegram to inform the community about it. Finally, we should send a message back to Slack to say that we've actioned the steps.
 
-We'll start with creating an equivalent **DiscordAgent** using the tools so you now how to construct your own communication agent. For Slack and Telegram, we'll use **SlackAgent** and **TelegramAgent**.
+We'll start with creating an equivalent [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) using the tools so you now how to construct your own communication agent. For Slack and Telegram, we'll use [`SlackAgent`](/docs/api-reference/autogen/agents/experimental/SlackAgent) and [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent).
 
 ```python
 # Imports
@@ -197,7 +197,7 @@ my_slack_bot_token = ""
 my_slack_channel_id = ""
 ```
 
-Creating an equivalent DiscordAgent using tools.
+Creating an equivalent [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) using tools.
 ```python
 # Manually creating a DiscordAgent, start with a ConversableAgent and detailed system message
 discord_agent = ConversableAgent(
@@ -456,7 +456,7 @@ Finally, our return message to Slack (based on Markdown):
 ![Slack message](img/commsagents_slack_finalmsg.png)
 
 ## Feedback
-These tools are currently in our `experimental` namespace, indicating that we have tested the functionality but they have not been confirmed for use in production.
+These tools are currently in our `experimental` namespace, indicating that we have tested the functionality but their interface may change.
 
 We'd love for you to try them but please use them with that in mind. Let us know how you go with them!
 
