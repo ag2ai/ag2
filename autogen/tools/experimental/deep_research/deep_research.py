@@ -5,7 +5,7 @@
 import copy
 from typing import Annotated, Any, Callable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ....agentchat import ConversableAgent
 from ....doc_utils import export_module
@@ -16,16 +16,24 @@ __all__ = ["DeepResearchTool"]
 
 
 class Subquestion(BaseModel):
-    question: Annotated[str, "The original question."]
-    answer: Annotated[str, "The answer to the question."] = ""
+    question: Annotated[str, Field(description="The original question.")]
+
+    def format(self) -> str:
+        return f"Question: {self.question}\n"
+
+
+# todo; use this
+class SubquestionAnswer(BaseModel):
+    question: Annotated[str, Field(description="The original question.")]
+    answer: Annotated[str, Field(description="The answer to the question.")]
 
     def format(self) -> str:
         return f"Question: {self.question}\n{self.answer}\n"
 
 
 class Task(BaseModel):
-    question: Annotated[str, "The original question."]
-    subquestions: Annotated[list[Subquestion], "The subquestions that need to be answered."]
+    question: Annotated[str, Field(description="The original question.")]
+    subquestions: Annotated[list[Subquestion], Field(description="The subquestions that need to be answered.")]
 
     def format(self) -> str:
         return f"Task: {self.question}\n\n" + "\n".join(
@@ -102,8 +110,15 @@ class DeepResearchTool(Tool):
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
             max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ) -> str:
-            """
-            Delegate a research task to the agent.
+            """Delegate a research task to the agent.
+
+            Args:
+                task (str): The task to perform a research on.
+                llm_config (dict[str, Any]): The LLM configuration.
+                max_web_steps (int): The maximum number of web steps.
+
+            Returns:
+                str: The answer to the research task.
             """
 
             @self.summarizer_agent.register_for_execution()
@@ -211,6 +226,16 @@ class DeepResearchTool(Tool):
         llm_config: dict[str, Any],
         max_web_steps: int,
     ) -> Callable[..., str]:
+        """Get the generate_subquestions method.
+
+        Args:
+            llm_config (dict[str, Any]): The LLM configuration.
+            max_web_steps (int): The maximum number of web steps.
+
+        Returns:
+            Callable[..., str]: The generate_subquestions method.
+        """
+
         def generate_subquestions(
             task: Task,
             llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],

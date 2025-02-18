@@ -18,9 +18,9 @@ class WebSurferAgent(ConversableAgent):
 
     def __init__(
         self,
+        *,
         llm_config: dict[str, Any],
         web_tool_llm_config: Optional[dict[str, Any]] = None,
-        *args,
         web_tool: Literal["browser_use", "crawl4ai"] = "browser_use",
         web_tool_kwargs: dict[str, Any] = None,
         **kwargs: Any,
@@ -42,6 +42,6 @@ class WebSurferAgent(ConversableAgent):
         else:
             raise ValueError(f"Unsupported {web_tool=}.")
 
-        super().__init__(*args, llm_config=llm_config, **kwargs)
+        super().__init__(llm_config=llm_config, **kwargs)
 
         self.register_for_llm()(self.tool)
