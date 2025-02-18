@@ -152,9 +152,9 @@ compute embeddings. It's possible that you want to use OpenAI, Cohere, HuggingFa
 from chromadb.utils import embedding_functions
 
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-                api_key="YOUR_API_KEY",
-                model_name="text-embedding-ada-002"
-            )
+    api_key="YOUR_API_KEY",
+    model_name="text-embedding-ada-002"
+)
 
 ragproxyagent = RetrieveUserProxyAgent(
     name="ragproxyagent",
