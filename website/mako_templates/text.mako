@@ -10,7 +10,7 @@
   link_prefix = ''
   show_inherited_members = True
 
-  def make_link_without_symbol_links(dobj: pdoc.Doc, current_module, name=None) -> str:
+  def make_link_with_symbol_names(dobj: pdoc.Doc, current_module, name=None) -> str:
     if isinstance(dobj, pdoc.External):
         # Get last part of the name - the symbol itself
         full_name = dobj.name
@@ -38,11 +38,9 @@
         [text](url) format instead of <a> tags.
     """
     name = name or dobj.qualname + ('()' if isinstance(dobj, pdoc.Function) else '')
-    ##   if isinstance(dobj, pdoc.External) and not external_links:
     if isinstance(dobj, pdoc.External):
         fullname = f"{dobj.module}.{dobj.name}" if dobj.module else dobj.name
         if fullname in _PDOC_MODULE_EXPORT_MAPPINGS:
-            # The autogen types which comes are the one's that are decorated with @export_module
             symbol_name = fullname.split('.')[-1]
             new_path = _PDOC_MODULE_EXPORT_MAPPINGS[fullname]
             url = f"/docs/api-reference/{new_path.replace('.','/')}/{symbol_name}"
@@ -297,7 +295,7 @@ ${'####'} ${func.name}
         params_with_symbol_links = func.params(annotate=show_type_annotations, link=link)
         returns_with_symbol_links = show_type_annotations and func.return_annotation(link=link) or ''
 
-        link_with_symbol_name = lambda dobj, name=None: make_link_without_symbol_links(dobj, func.module, name)
+        link_with_symbol_name = lambda dobj, name=None: make_link_with_symbol_names(dobj, func.module, name)
         params_without_symbol_links = func.params(annotate=show_type_annotations, link=link_with_symbol_name)
         returns_without_symbol_links = show_type_annotations and func.return_annotation(link=link_with_symbol_name) or ''
 
@@ -357,7 +355,7 @@ title: ${cls.module.name}.${cls.name}
     link = lambda dobj, name=None: make_link(dobj, cls.module, name)
     params_with_symbol_links = cls.params(annotate=show_type_annotations, link=link)
 
-    link_with_symbol_name = lambda dobj, name=None: make_link_without_symbol_links(dobj, cls.module, name)
+    link_with_symbol_name = lambda dobj, name=None: make_link_with_symbol_names(dobj, cls.module, name)
     params_without_symbol_links = cls.params(annotate=show_type_annotations, link=link_with_symbol_name)
 
 
