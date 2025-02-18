@@ -71,7 +71,7 @@ teacher = SwarmAgent(
 
 # Lesson planner will create a plan and hand off to the reviewer if we're still
 # allowing reviews. After that's done, transition to the teacher.
-lesson_planner.register_hand_off(
+register_hand_off(lesson_planner,
     [
         ON_CONDITION(
             target=lesson_reviewer,
@@ -84,7 +84,7 @@ lesson_planner.register_hand_off(
 
 # Lesson reviewer will review the plan and return control to the planner if there's
 # no plan to review, otherwise it will provide a review and
-lesson_reviewer.register_hand_off(
+register_hand_off(lesson_reviewer,
     [
         ON_CONDITION(
             target=lesson_planner, condition="After new feedback has been made and recorded, the plan must be updated."
@@ -95,7 +95,7 @@ lesson_reviewer.register_hand_off(
 
 # Teacher works with the lesson planner to create a plan. When control returns to them and
 # a plan exists, they'll end the swarm.
-teacher.register_hand_off(
+register_hand_off(teacher,
     [
         ON_CONDITION(target=lesson_planner, condition="Create a lesson plan.", available="reviews_left"),
         AFTER_WORK(AfterWorkOption.TERMINATE),
