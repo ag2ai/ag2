@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-from typing import Annotated, Any, Callable, Union
+from typing import Annotated, Any, Callable
 
 from pydantic import BaseModel, Field
 
@@ -22,7 +22,6 @@ class Subquestion(BaseModel):
         return f"Question: {self.question}\n"
 
 
-# todo; use this
 class SubquestionAnswer(Subquestion):
     answer: Annotated[str, Field(description="The answer to the question.")]
 
@@ -41,10 +40,15 @@ class Task(BaseModel):
         )
 
 
-class CompletedTask(Task):
-    subquestions: Annotated[
-        list[Union[Subquestion, SubquestionAnswer]], Field(description="The subquestions that need to be answered.")
-    ]
+class CompletedTask(BaseModel):
+    question: Annotated[str, Field(description="The original question.")]
+    subquestions: Annotated[list[SubquestionAnswer], Field(description="The subquestions and their answers")]
+
+    def format(self) -> str:
+        return f"Task: {self.question}\n\n" + "\n".join(
+            "Subquestion " + str(i + 1) + ":\n" + subquestion.format()
+            for i, subquestion in enumerate(self.subquestions)
+        )
 
 
 class InformationCrumb(BaseModel):
