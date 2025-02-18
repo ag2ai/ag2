@@ -3036,6 +3036,24 @@ class ConversableAgent(LLMAgent):
 
         return wrapped_func
 
+    @staticmethod
+    def _create_tool_if_needed(
+        func_or_tool: Union[F, Tool],
+        name: Optional[str],
+        description: Optional[str],
+    ) -> Tool:
+        if isinstance(func_or_tool, Tool):
+            tool: Tool = func_or_tool
+            # create new tool object if name or description is not None
+            if name or description:
+                tool = Tool(func_or_tool=tool, name=name, description=description)
+        elif inspect.isfunction(func_or_tool):
+            function: Callable[..., Any] = func_or_tool
+            tool = Tool(func_or_tool=function, name=name, description=description)
+        else:
+            raise TypeError(f"'func_or_tool' must be a function or a Tool object, got '{type(func_or_tool)}' instead.")
+        return tool
+
     def register_for_llm(
         self,
         *,
@@ -3082,7 +3100,9 @@ class ConversableAgent(LLMAgent):
 
         """
 
-        def _decorator(func_or_tool: Union[F, Tool]) -> Tool:
+        def _decorator(
+            func_or_tool: Union[F, Tool], name: Optional[str] = name, description: Optional[str] = description
+        ) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:
@@ -3096,7 +3116,7 @@ class ConversableAgent(LLMAgent):
                 RuntimeError: if the LLM config is not set up before registering a function.
 
             """
-            tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
+            tool = self._create_tool_if_needed(func_or_tool, name, description)
 
             self._register_for_llm(tool, api_style)
             self._tools.append(tool)
@@ -3120,6 +3140,7 @@ class ConversableAgent(LLMAgent):
     def register_for_execution(
         self,
         name: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> Callable[[Union[Tool, F]], Tool]:
         """Decorator factory for registering a function to be executed by an agent.
 
@@ -3142,22 +3163,22 @@ class ConversableAgent(LLMAgent):
 
         """
 
-        def _decorator(func_or_tool: Union[Tool, F]) -> Tool:
+        def _decorator(
+            func_or_tool: Union[Tool, F], name: Optional[str] = name, description: Optional[str] = description
+        ) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:
-                func: the function to be registered.
+                func_or_tool: the function or the tool to be registered.
+                name: the name of the function.
+                description: the description of the function.
 
             Returns:
-                The function to be registered, with the _description attribute set to the function description.
-
-            Raises:
-                ValueError: if the function description is not provided and not propagated by a previous decorator.
+                The tool to be registered.
 
             """
-            nonlocal name
 
-            tool = Tool(func_or_tool=func_or_tool, name=name)
+            tool = self._create_tool_if_needed(func_or_tool, name, description)
             chat_context = ChatContext(self)
             chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
 

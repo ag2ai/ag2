@@ -1712,7 +1712,9 @@ def test_add_tool_for_llm(mock_credentials: Credentials):
 
 def test_add_tool_for_llm_invalid_type(conversable_agent):
     """Test adding an invalid tool type raises TypeError."""
-    with pytest.raises(TypeError, match="Expected Tool instance"):
+    with pytest.raises(
+        TypeError, match="'func_or_tool' must be a function or a Tool object, got '<class 'str'>' instead."
+    ):
         conversable_agent.register_for_llm()("not a tool")
 
 
