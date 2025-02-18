@@ -20,7 +20,6 @@ https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff
 https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff148ac/src/openai/_client.py
 https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py
 https://openreview.net/pdf?id=BAakY1hNKS
-https://docs.ag2.ai/_sites/docs.ag2.ai/docs/Gallery#contributing
 https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-to-get-a-notebook-displayed-on-the-website
 https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/agent_builder.py
 https://github.com/qdrant/qdrant-client/blob/master/qdrant_client/qdrant_client.py
@@ -29,18 +28,10 @@ https://qdrant.github.io/qdrant/redoc/index.html#tag/collections/operation/creat
 https://github.com/chroma-core/chroma/blob/566bc80f6c8ee29f7d99b6322654f32183c368c4/chromadb/segment/impl/vector/local_hnsw.py
 https://github.com/nmslib/hnswlib#supported-distances
 https://github.com/ollama/ollama/blob/main/docs/api.md#parameters
-https://docs.ag2.ai/_sites/
 https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_black_box/prompt_leakage_black_box.py
 https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_classifier/prompt_leakage_classifier.py
 https://github.com/ag2ai/ag2/tree/main/autogen/agentchat/contrib/captainagent/tools/README.md
 https://docs.trychroma.com/troubleshooting#sqlite
-https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/agentchat_RetrieveChat#
-https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/agentchat_lmm_llava#
-https://docs.ag2.ai/_sites/docs.ag2.ai/docs/ecosystem/portkey#
-https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/agentchat_RetrieveChat_mongodb#
-https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/agentchat_RetrieveChat_pgvector#
-https://docs.ag2.ai/_sites/docs.ag2.ai/notebooks/Gallery#
-https://docs.ag2.ai/_sites/docs.ag2.ai/docs/topics/non-openai-models/cloud-gemini_vertexai#
 https://investor.nvidia.com
 https://github.com/neo4j/neo4j-graphrag-python
 https://platform.deepseek.com/sign_in
