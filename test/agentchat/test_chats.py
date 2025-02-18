@@ -46,7 +46,10 @@ def test_chat_messages_for_summary(mock_credentials: Credentials):
 
     groupchat = GroupChat(agents=[user, assistant], messages=[], max_round=2)
     manager = GroupChatManager(
-        groupchat=groupchat, name="manager", llm_config=mock_credentials, code_execution_config={"use_docker": False}
+        groupchat=groupchat,
+        name="manager",
+        llm_config=mock_credentials.llm_config,
+        code_execution_config={"use_docker": False},
     )
     user.initiate_chat(manager, message="What is the capital of France?")
     messages = manager.chat_messages_for_summary(user)

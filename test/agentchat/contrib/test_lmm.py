@@ -120,7 +120,7 @@ def test_group_chat_with_lmm(mock_credentials: Credentials):
 
     # Setting up the group chat
     groupchat = autogen.GroupChat(agents=[agent1, agent2, user_proxy], messages=[], max_round=max_round)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
 
     # Initiating the group chat and observing the number of rounds
     user_proxy.initiate_chat(group_chat_manager, message=f"What do you see? <img {base64_encoded_image}>")

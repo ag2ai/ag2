@@ -41,7 +41,7 @@ def test_func_call_groupchat(mock_credentials: Credentials):
         function_map={"test_func": lambda x: x},
     )
     groupchat = autogen.GroupChat(agents=[agent1, agent2], messages=[], max_round=3)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
     agent2.initiate_chat(group_chat_manager, message={"function_call": {"name": "test_func", "arguments": '{"x": 1}'}})
 
     assert len(groupchat.messages) == 3
@@ -60,7 +60,7 @@ def test_func_call_groupchat(mock_credentials: Credentials):
         function_map={"test_func": lambda x: x + 1},
     )
     groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=3)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
     agent3.initiate_chat(group_chat_manager, message={"function_call": {"name": "test_func", "arguments": '{"x": 1}'}})
 
     assert (
@@ -89,7 +89,7 @@ def test_chat_manager(mock_credentials: Credentials):
         default_auto_reply="This is bob speaking.",
     )
     groupchat = autogen.GroupChat(agents=[agent1, agent2], messages=[], max_round=2)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
     agent1.initiate_chat(group_chat_manager, message="hello")
 
     assert len(agent1.chat_messages[group_chat_manager]) == 2
@@ -136,7 +136,7 @@ def _test_selection_method(method: str, mock_credentials: Credentials):
         speaker_selection_method=method,
         allow_repeat_speaker=method != "manual",
     )
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
 
     if method == "round_robin":
         agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
@@ -274,7 +274,7 @@ def test_plugin(mock_credentials: Credentials):
         default_auto_reply="This is bob speaking.",
     )
     groupchat = autogen.GroupChat(agents=[agent1, agent2], messages=[], max_round=2)
-    group_chat_manager = autogen.ConversableAgent(name="deputy_manager", llm_config=mock_credentials)
+    group_chat_manager = autogen.ConversableAgent(name="deputy_manager", llm_config=mock_credentials.llm_config)
     group_chat_manager.register_reply(
         autogen.Agent,
         reply_func=autogen.GroupChatManager.run_chat,
@@ -709,7 +709,7 @@ def test_clear_agents_history(mock_credentials: Credentials):
         llm_config=False,
     )
     groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=3, enable_clear_history=True)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
 
     # testing pure "clear history" statement
     with mock.patch.object(builtins, "input", lambda _: "clear history. How you doing?"):
@@ -784,7 +784,7 @@ def test_clear_agents_history(mock_credentials: Credentials):
     agent3.reset()
     # we want to broadcast the message only in the preparation.
     groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=1, enable_clear_history=True)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
     # We want to trigger the broadcast of group chat manager, which requires `request_reply` to be set to True.
     agent1.send("dummy message", group_chat_manager, request_reply=True)
     agent1.send(
@@ -810,7 +810,7 @@ def test_clear_agents_history(mock_credentials: Credentials):
     )
     # increase max_round to 3
     groupchat.max_round = 3
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
     with mock.patch.object(builtins, "input", lambda _: "clear history alice 1. How you doing?"):
         agent1.initiate_chat(group_chat_manager, message="hello", clear_history=False)
 
@@ -847,7 +847,7 @@ def test_clear_agents_history(mock_credentials: Credentials):
         },
     )
     groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=1, enable_clear_history=True)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
     agent1.send("dummy message", group_chat_manager, request_reply=True)
     agent1.send(
         {
@@ -862,7 +862,7 @@ def test_clear_agents_history(mock_credentials: Credentials):
         request_reply=True,
     )
     groupchat.max_round = 2
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
 
     agent1.initiate_chat(group_chat_manager, message="hello")
     agent1_history = list(agent1._oai_messages.values())[0]
@@ -2262,7 +2262,7 @@ def test_groupchatmanager_llm_config(mock_credentials: Credentials):
         agent_a.initiate_chat(manager, message="Hello")
 
     # 2. LLM Config on GCM
-    manager = GroupChatManager(groupchat, llm_config=mock_credentials)
+    manager = GroupChatManager(groupchat, llm_config=mock_credentials.llm_config)
 
     # Should not throw an exception
     result = agent_a.initiate_chat(manager, message="Hello")
@@ -2271,7 +2271,10 @@ def test_groupchatmanager_llm_config(mock_credentials: Credentials):
 
     # 3. GCM config through groupchat parameter
     groupchat = GroupChat(
-        messages=[], agents=[agent_a, agent_b, agent_c], max_round=2, select_speaker_auto_llm_config=mock_credentials
+        messages=[],
+        agents=[agent_a, agent_b, agent_c],
+        max_round=2,
+        select_speaker_auto_llm_config=mock_credentials.llm_config,
     )
     manager = GroupChatManager(groupchat, llm_config=None)
 
