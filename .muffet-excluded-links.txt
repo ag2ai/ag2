@@ -22,3 +22,4 @@ https://platform.deepseek.com/sign_in
 https://www.bloomberg.com/news/newsletters/2024-02-15/tech-companies-bet-the-world-is-ready-for-ai-agents
 https://docs.ag2.ai/_sites.*
 https://github.com/ag2ai/ag2/edit.*
+https://(gist\.)?github.com/.*#.*
