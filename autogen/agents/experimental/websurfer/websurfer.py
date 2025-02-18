@@ -42,7 +42,3 @@ class WebSurferAgent(ConversableAgent):
         super().__init__(*args, llm_config=llm_config, **kwargs)
 
         self.register_for_llm()(self.tool)
-
-    @property
-    def tools(self) -> list[Tool]:
-        return [self.tool]
