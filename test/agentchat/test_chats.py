@@ -37,7 +37,7 @@ def tasks_work_dir() -> Generator[str, None, None]:
         yield temp_dir
 
 
-def test_chat_messages_for_summary():
+def test_chat_messages_for_summary(mock_credentials: Credentials):
     assistant = UserProxyAgent(name="assistant", human_input_mode="NEVER", code_execution_config={"use_docker": False})
     user = UserProxyAgent(name="user", human_input_mode="NEVER", code_execution_config={"use_docker": False})
     user.send("What is the capital of France?", assistant)
@@ -46,7 +46,7 @@ def test_chat_messages_for_summary():
 
     groupchat = GroupChat(agents=[user, assistant], messages=[], max_round=2)
     manager = GroupChatManager(
-        groupchat=groupchat, name="manager", llm_config=False, code_execution_config={"use_docker": False}
+        groupchat=groupchat, name="manager", llm_config=mock_credentials, code_execution_config={"use_docker": False}
     )
     user.initiate_chat(manager, message="What is the capital of France?")
     messages = manager.chat_messages_for_summary(user)
