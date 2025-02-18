@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class GPTAssistantAgent(ConversableAgent):
-    """An experimental AutoGen agent class that leverages the OpenAI Assistant API for conversational capabilities.
+    """An experimental AG2 agent class that leverages the OpenAI Assistant API for conversational capabilities.
     This agent is unique in its reliance on the OpenAI Assistant for state management, differing from other agents like ConversableAgent.
     """
 
