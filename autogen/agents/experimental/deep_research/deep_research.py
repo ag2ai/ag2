@@ -6,7 +6,6 @@ from typing import Any, Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
-from ....tools import Tool
 from ....tools.experimental import DeepResearchTool
 
 __all__ = ["DeepResearchAgent"]
@@ -47,7 +46,3 @@ class DeepResearchAgent(ConversableAgent):
         )
 
         self.register_for_llm()(self.tool)
-
-    @property
-    def tools(self) -> list[Tool]:
-        return [self.tool]
