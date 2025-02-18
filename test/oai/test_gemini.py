@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
-from typing import List
+from typing import Any, List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -432,8 +432,9 @@ class TestGeminiClient:
         converted_schema = GeminiClient._convert_type_null_to_nullable(initial_schema)
         assert converted_schema == expected_schema
 
-    def test_create_gemini_function_parameters_with_nested_parameters(self):
-        function_parameter = {
+    @pytest.fixture
+    def nested_function_parameters(self) -> dict[str, Any]:
+        return {
             "type": "object",
             "properties": {
                 "task": {
@@ -472,7 +473,49 @@ class TestGeminiClient:
             "required": ["task"],
         }
 
-        result = GeminiClient._create_gemini_function_parameters(function_parameter)
+    def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
+        result = GeminiClient._unwrap_references(nested_function_parameters)
+
+        expected_result = {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "properties": {
+                        "question": {"title": "Question", "type": "string"},
+                        "subquestions": {
+                            "items": {
+                                "properties": {
+                                    "question": {"title": "Question", "type": "string"},
+                                    "detail": {
+                                        "properties": {"description": {"title": "Description", "type": "string"}},
+                                        "required": ["description"],
+                                        "title": "Detail",
+                                        "type": "object",
+                                    },
+                                    "answer": {"default": "No answer provided.", "title": "Answer", "type": "string"},
+                                },
+                                "required": ["question", "detail"],
+                                "title": "Subquestion",
+                                "type": "object",
+                            },
+                            "title": "Subquestions",
+                            "type": "array",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "title": "Task",
+                    "type": "object",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+        assert result == expected_result, result
+
+    def test_create_gemini_function_parameters_with_nested_parameters(
+        self, nested_function_parameters: dict[str, Any]
+    ) -> None:
+        result = GeminiClient._create_gemini_function_parameters(nested_function_parameters)
 
         expected_result = {
             "type": "OBJECT",
