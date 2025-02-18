@@ -42,10 +42,10 @@ class FalkorGraphRagCapability(GraphRagCapability):
     def _reply_using_falkordb_query(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Query FalkorDB and return the message. Internally, it utilises OpenAI to generate a reply based on the given messages.
         The history with FalkorDB is also logged and updated.
 
@@ -67,7 +67,7 @@ class FalkorGraphRagCapability(GraphRagCapability):
 
         return True, result.answer if result.answer else "I'm sorry, I don't have an answer for that."
 
-    def _messages_summary(self, messages: Union[dict, str], system_message: str) -> str:
+    def _messages_summary(self, messages: Union[dict[str, Any], str], system_message: str) -> str:
         """Summarize the messages in the conversation history. Excluding any message with 'tool_calls' and 'tool_responses'
         Includes the 'name' (if it exists) and the 'content', with a new line between each one, like:
         customer:

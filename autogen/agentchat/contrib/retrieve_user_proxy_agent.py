@@ -99,9 +99,9 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self,
         name="RetrieveChatAgent",  # default set to RetrieveChatAgent
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
-        retrieve_config: Optional[dict] = None,  # config for the retrieve agent
-        **kwargs,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
+        retrieve_config: Optional[dict[str, Any]] = None,  # config for the retrieve agent
+        **kwargs: Any,
     ):
         r"""Args:
             name (str): name of the agent.
@@ -231,7 +231,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 query_texts: List[str],
                 n_results: int = 10,
                 search_string: str = "",
-                **kwargs,
+                **kwargs: Any,
             ) -> Dict[str, Union[List[str], List[List[str]]]]:
                 # define your own query function here
                 pass
@@ -241,7 +241,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                     query_texts=[problem],
                     n_results=n_results,
                     search_string=search_string,
-                    **kwargs,
+                    **kwargs: Any,
                 )
 
                 self._results = results
@@ -520,10 +520,10 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
     def _generate_retrieve_user_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """In this function, we will update the context and reset the conversation based on different conditions.
         We'll update the context and reset the conversation if update_context is True and either of the following:
         (1) the last message contains "UPDATE CONTEXT",

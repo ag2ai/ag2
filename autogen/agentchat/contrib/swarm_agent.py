@@ -74,14 +74,14 @@ class AfterWork:  # noqa: N801
         agent: The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
                 def my_after_work_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
-        next_agent_selection_msg: Optional[Union[str, Callable]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
+        next_agent_selection_msg: Optional[Union[str, Callable[..., Any]]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
                 def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
     """
 
-    agent: Union[AfterWorkOption, ConversableAgent, str, Callable]
-    next_agent_selection_msg: Optional[Union[str, ContextStr, Callable]] = None
+    agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
+    next_agent_selection_msg: Optional[Union[str, ContextStr, Callable[..., Any]]] = None
 
     def __post_init__(self):
         if isinstance(self.agent, str):
@@ -121,7 +121,7 @@ class OnCondition:  # noqa: N801
         target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
-        condition (Union[str, ContextStr, Callable]): The condition for transitioning to the target agent, evaluated by the LLM.
+        condition (Union[str, ContextStr, Callable[..., Any]]): The condition for transitioning to the target agent, evaluated by the LLM.
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
@@ -134,7 +134,7 @@ class OnCondition:  # noqa: N801
     """
 
     target: Union[ConversableAgent, dict[str, Any]] = None
-    condition: Union[str, ContextStr, Callable] = ""
+    condition: Union[str, ContextStr, Callable[..., Any]] = ""
     available: Optional[Union[Callable, str]] = None
 
     def __post_init__(self):
@@ -282,7 +282,7 @@ def _process_initial_messages(
     user_agent: Optional[UserProxyAgent],
     agents: list[ConversableAgent],
     nested_chat_agents: list[ConversableAgent],
-) -> tuple[list[dict], Optional[Agent], list[str], list[Agent]]:
+) -> tuple[list[dict[str, Any]], Optional[Agent], list[str], list[Agent]]:
     """Process initial messages, validating agent names against messages, and determining the last agent to speak.
 
     Args:
@@ -292,7 +292,7 @@ def _process_initial_messages(
         nested_chat_agents: List of nested chat agents.
 
     Returns:
-        list[dict]: Processed message(s).
+        list[dict[str, Any]]: Processed message(s).
         Agent: Last agent to speak.
         list[str]: List of agent names.
         list[Agent]: List of temporary user proxy agents to add to GroupChat.
@@ -356,7 +356,7 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
 def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
     last_swarm_agent: ConversableAgent,
-    after_work_next_agent_selection_msg: Optional[Union[str, ContextStr, Callable]],
+    after_work_next_agent_selection_msg: Optional[Union[str, ContextStr, Callable[..., Any]]],
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
 
@@ -365,7 +365,7 @@ def _prepare_groupchat_auto_speaker(
     Args:
         groupchat (GroupChat): GroupChat instance.
         last_swarm_agent (ConversableAgent): The last swarm agent for which the LLM config is used
-        after_work_next_agent_selection_msg (Union[str, ContextStr, Callable]): Optional message to use for the agent selection (in internal group chat).
+        after_work_next_agent_selection_msg (Union[str, ContextStr, Callable[..., Any]]): Optional message to use for the agent selection (in internal group chat).
             if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
             if a ContextStr, it will substitute the agentlist first and then the context variables
             if a Callable, it will not substitute the agentlist or context variables, signature:
@@ -413,7 +413,7 @@ def _determine_next_agent(
     tool_execution: ConversableAgent,
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    swarm_after_work: Optional[Union[AfterWorkOption, Callable]],
+    swarm_after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]],
 ) -> Optional[Agent]:
     """Determine the next agent in the conversation.
 
@@ -425,7 +425,7 @@ def _determine_next_agent(
         tool_execution (ConversableAgent): The tool execution agent.
         swarm_agent_names (list[str]): List of agent names.
         user_agent (UserProxyAgent): Optional user proxy agent.
-        swarm_after_work (Union[AfterWorkOption, Callable]): Method to handle conversation continuation when an agent doesn't select the next agent.
+        swarm_after_work (Union[AfterWorkOption, Callable[..., Any]]): Method to handle conversation continuation when an agent doesn't select the next agent.
     """
     if use_initial_agent:
         return initial_agent
@@ -511,7 +511,7 @@ def create_swarm_transition(
     tool_execution: ConversableAgent,
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    swarm_after_work: Optional[Union[AfterWorkOption, Callable]],
+    swarm_after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]],
 ) -> Callable[[ConversableAgent, GroupChat], Optional[Agent]]:
     """Creates a transition function for swarm chat with enclosed state for the use_initial_agent.
 
@@ -520,7 +520,7 @@ def create_swarm_transition(
         tool_execution (ConversableAgent): The tool execution agent
         swarm_agent_names (list[str]): List of all agent names
         user_agent (UserProxyAgent): Optional user proxy agent
-        swarm_after_work (Union[AfterWorkOption, Callable]): Swarm-level after work
+        swarm_after_work (Union[AfterWorkOption, Callable[..., Any]]): Swarm-level after work
 
     Returns:
         Callable transition function (for sync and async swarm chats)
@@ -587,7 +587,7 @@ def initiate_swarm_chat(
     swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
-    after_work: Optional[Union[AfterWorkOption, Callable]] = AfterWork(AfterWorkOption.TERMINATE),
+    after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat
 
@@ -669,7 +669,7 @@ async def a_initiate_swarm_chat(
     swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
-    after_work: Optional[Union[AfterWorkOption, Callable]] = AfterWork(AfterWorkOption.TERMINATE),
+    after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat asynchronously
 
@@ -852,7 +852,7 @@ def register_hand_off(
             raise ValueError("Invalid hand off condition, must be either OnCondition or AfterWork")
 
 
-def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict]] = None) -> None:
+def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
     """Updates the agent's functions based on the OnCondition's available condition."""
     for func_name, (func, on_condition) in agent._swarm_conditional_functions.items():
         is_available = True
@@ -880,10 +880,10 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
 
 def _generate_swarm_tool_reply(
     agent: ConversableAgent,
-    messages: Optional[list[dict]] = None,
+    messages: Optional[list[dict[str, Any]]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
-) -> tuple[bool, dict]:
+) -> tuple[bool, dict[str, Any]]:
     """Pre-processes and generates tool call replies.
 
     This function:

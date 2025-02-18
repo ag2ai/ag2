@@ -153,7 +153,7 @@ class VectorDB(Protocol):
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
-        **kwargs,
+        **kwargs: Any,
     ) -> QueryResults:
         """Retrieve documents from the collection of the vector database based on the queries.
 
@@ -172,7 +172,7 @@ class VectorDB(Protocol):
         ...
 
     def get_docs_by_ids(
-        self, ids: list[ItemID] = None, collection_name: str = None, include=None, **kwargs
+        self, ids: list[ItemID] = None, collection_name: str = None, include: Optional[list[str]] = None, **kwargs: Any
     ) -> list[Document]:
         """Retrieve documents from the collection of the vector database based on the ids.
 
@@ -193,7 +193,7 @@ class VectorDB(Protocol):
 class VectorDBFactory:
     """Factory class for creating vector databases."""
 
-    PREDEFINED_VECTOR_DB = ["chroma", "pgvector", "mongodb", "qdrant"]
+    PREDEFINED_VECTOR_DB = ["chroma", "pgvector", "mongodb", "qdrant", "couchbase"]
 
     @staticmethod
     def create_vector_db(db_type: str, **kwargs) -> VectorDB:
@@ -222,6 +222,10 @@ class VectorDBFactory:
             from .qdrant import QdrantVectorDB
 
             return QdrantVectorDB(**kwargs)
+        if db_type.lower() in ["couchbase", "couchbasedb", "capella"]:
+            from .couchbase import CouchbaseVectorDB
+
+            return CouchbaseVectorDB(**kwargs)
         else:
             raise ValueError(
                 f"Unsupported vector database type: {db_type}. Valid types are {VectorDBFactory.PREDEFINED_VECTOR_DB}."

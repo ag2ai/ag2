@@ -152,7 +152,7 @@ class SlackRetrieveTool(Tool):
                             params["cursor"] = cursor
 
                         # Make API call
-                        response = web_client.conversations_history(**params)
+                        response = web_client.conversations_history(**params)  # type: ignore[arg-type]
 
                         if not response["ok"]:
                             return f"Message retrieval failed, Slack response error: {response['error']}"
