@@ -192,7 +192,7 @@ class BedrockClient:
         return base_params, additional_params
 
     def create(self, params) -> ChatCompletion:
-        """Run Amazon Bedrock inference and return AutoGen response"""
+        """Run Amazon Bedrock inference and return AG2 response"""
         # Set custom client class settings
         self.parse_custom_params(params)
 
@@ -522,7 +522,7 @@ def format_tools(tools: list[dict[str, Any]]) -> dict[Literal["tools"], list[dic
 
 
 def format_tool_calls(content):
-    """Converts Converse API response tool calls to AutoGen format"""
+    """Converts Converse API response tool calls to AG2 format"""
     tool_calls = []
     for tool_request in content:
         if "toolUse" in tool_request:

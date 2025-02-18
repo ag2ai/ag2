@@ -119,7 +119,7 @@ class CerebrasClient:
     def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
-        # Convert AutoGen messages to Cerebras messages
+        # Convert AG2 messages to Cerebras messages
         cerebras_messages = oai_messages_to_cerebras_messages(messages)
 
         # Parse parameters to the Cerebras API's parameters

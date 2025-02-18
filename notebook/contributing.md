@@ -31,7 +31,7 @@ The following points are best practices for authoring notebooks to ensure consis
 
 ### Consistency for installation and LLM config
 
-You don't need to explain in depth how to install AutoGen. Unless there are specific instructions for the notebook just use the following markdown snippet:
+You don't need to explain in depth how to install AG2. Unless there are specific instructions for the notebook just use the following markdown snippet:
 
 ``````
 ````{=mdx}
