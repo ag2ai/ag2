@@ -21,14 +21,13 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Any, Callable, Dict, List, Tuple, TypeVar, TypedDict, Union
+from typing import Any, Callable, Optional, Sequence, TypeVar, TypedDict, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 
@@ -151,7 +150,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]
     return None
 
 
-def extract_title(notebook: Path) -> str | None:
+def extract_title(notebook: Path) -> Optional[str]:
     """Extract the title of the notebook."""
     with open(notebook, encoding="utf-8") as f:
         content = f.read()
@@ -249,7 +248,7 @@ def process_notebook(
 @dataclass
 class NotebookError:
     error_name: str
-    error_value: str | None
+    error_value: Optional[str]
     traceback: str
     cell_source: str
 
@@ -264,7 +263,7 @@ NB_VERSION = 4
 
 @require_quarto_bin
 @require_optional_import("nbclient", "docs")
-def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, NotebookError | NotebookSkip | None]:
+def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Optional[Union[NotebookError, NotebookSkip]]]:
     nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore
 
     if "skip_test" in nb.metadata:
@@ -297,7 +296,7 @@ def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Notebo
 @require_optional_import("nbclient", "docs")
 def get_timeout_info(
     nb: NotebookNode,
-) -> NotebookError | None:
+) -> Optional[NotebookError]:
     for i, cell in enumerate(nb.cells):
         if cell.cell_type != "code":
             continue
@@ -313,7 +312,7 @@ def get_timeout_info(
 
 
 @require_optional_import("nbclient", "docs")
-def get_error_info(nb: NotebookNode) -> NotebookError | None:
+def get_error_info(nb: NotebookNode) -> Optional[NotebookError]:
     for cell in nb["cells"]:  # get LAST error
         if cell["cell_type"] != "code":
             continue
@@ -680,7 +679,7 @@ def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
         raise FileNotFoundError(f"Directory not found: {input_dir}")
 
     # Sort files by parent directory date (if exists) and name
-    def sort_key(file_path: Path) -> Tuple[datetime, str]:
+    def sort_key(file_path: Path) -> tuple[datetime, str]:
         dirname = file_path.parent.name
         try:
             # Extract date from directory name (first 3 parts)
@@ -696,7 +695,7 @@ def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
     return [f"{prefix}/{f.parent.relative_to(input_dir)}/index".replace("\\", "/") for f in reversed_files]
 
 
-def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[str, Union[str, List[str]]]:
+def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> dict[str, Union[str, list[str]]]:
     """Generate navigation group for a directory.
 
     Args:
@@ -865,11 +864,11 @@ def fix_internal_references_in_mdx_files(website_build_directory: Path) -> None:
             sys.exit(1)
 
 
-def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict[str, str]]) -> str:
+def construct_authors_html(authors_list: list[str], authors_dict: dict[str, dict[str, str]]) -> str:
     """Constructs HTML for displaying author cards in a blog.
 
     Args:
-        authors_list: List of author identifiers
+        authors_list: list of author identifiers
         authors_dict: Dictionary containing author information keyed by author identifier
     Returns:
         str: Formatted HTML string containing author cards
@@ -906,7 +905,7 @@ def construct_authors_html(authors_list: List[str], authors_dict: Dict[str, Dict
     return retval
 
 
-def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
+def separate_front_matter_and_content(file_path: Path) -> tuple[str, str]:
     """Separate front matter and content from a markdown file.
 
     Args:
@@ -923,7 +922,7 @@ def separate_front_matter_and_content(file_path: Path) -> Tuple[str, str]:
     return "", content
 
 
-def _get_authors_info(authors_yml: Path) -> Dict[str, Dict[str, str]]:
+def _get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
     try:
         all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
     except (yaml.YAMLError, OSError) as e:
@@ -934,7 +933,7 @@ def _get_authors_info(authors_yml: Path) -> Dict[str, Dict[str, str]]:
 
 
 def _add_authors_and_social_preview(
-    website_build_dir: Path, target_dir: Path, all_authors_info: Dict[str, Dict[str, str]]
+    website_build_dir: Path, target_dir: Path, all_authors_info: dict[str, dict[str, str]]
 ) -> None:
     """Add authors info and social share image to mdx files in the target directory."""
 
@@ -1035,21 +1034,21 @@ def cleanup_tmp_dirs(website_build_directory: Path, re_generate_notebooks: bool)
 
 class NavigationGroup(TypedDict):
     group: str
-    pages: List[Union[str, "NavigationGroup"]]
+    pages: list[Union[str, "NavigationGroup"]]
 
 
-def get_files_path_from_navigation(navigation: List[NavigationGroup]) -> List[Path]:
+def get_files_path_from_navigation(navigation: list[NavigationGroup]) -> list[Path]:
     """Extract all file paths from the navigation structure.
 
     Args:
-        navigation: List of navigation groups containing nested pages and groups
+        navigation: list of navigation groups containing nested pages and groups
 
     Returns:
-        List of file paths found in the navigation structure
+        list of file paths found in the navigation structure
     """
     file_paths = []
 
-    def extract_paths(items: Union[List[Union[str, NavigationGroup]], List[str]]) -> None:
+    def extract_paths(items: Union[list[Union[str, NavigationGroup]], list[str]]) -> None:
         for item in items:
             if isinstance(item, str):
                 file_paths.append(Path(item))

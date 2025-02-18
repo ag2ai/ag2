@@ -4,7 +4,7 @@
 
 from collections.abc import AsyncGenerator
 from logging import Logger
-from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, Type, TypeVar, runtime_checkable
+from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, TypeVar, runtime_checkable
 
 from .....doc_utils import export_module
 from ..realtime_events import RealtimeEvent
@@ -95,22 +95,22 @@ class RealtimeClientProtocol(Protocol):
         ...
 
 
-_realtime_client_classes: dict[str, Type[RealtimeClientProtocol]] = {}
+_realtime_client_classes: dict[str, type[RealtimeClientProtocol]] = {}
 
 T = TypeVar("T", bound=RealtimeClientProtocol)
 
 
-def register_realtime_client() -> Callable[[Type[T]], Type[T]]:
+def register_realtime_client() -> Callable[[type[T]], type[T]]:
     """Register a Realtime API client.
 
     Args:
         name (str): The name of the Realtime API client.
 
     Returns:
-        Callable[[Type[T]], Type[T]]: The decorator to register the Realtime API client
+        Callable[[type[T]], type[T]]: The decorator to register the Realtime API client
     """
 
-    def decorator(client_cls: Type[T]) -> Type[T]:
+    def decorator(client_cls: type[T]) -> type[T]:
         """Register a Realtime API client.
 
         Args:

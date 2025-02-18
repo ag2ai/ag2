@@ -1,0 +1,86 @@
+---
+title: Registering Handoffs to a nested chat
+sidebarTitle: Nested chats
+---
+
+In addition to transferring to an agent, you can also trigger a nested chat by using a handoff with [`OnCondition`](/docs/api-reference/autogen/OnCondition). This is a useful way to perform sub-tasks without that work becoming part of the broader swarm's messages and agents.
+
+Configuring the nested chat is similar to [establishing a nested chat for an agent](/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#nested-chats).
+
+Nested chats are a set of sequential chats and these are defined like so:
+```python
+nested_chats = [
+ {
+        "recipient": my_first_agent,
+        "summary_method": "reflection_with_llm",
+        "summary_prompt": "Summarize the conversation into bullet points.",
+ },
+ {
+        "recipient": poetry_agent,
+        "message": "Write a poem about the context.",
+        "max_turns": 1,
+        "summary_method": "last_msg",
+ },
+]
+```
+
+New to nested chats within swarms is the ability to **carryover some context from the swarm chat into the nested chat**. This is done by adding a carryover configuration. If you're not using carryover, then no messages from the swarm chat will be brought into the nested chat.
+
+The carryover is applicable only to the first chat in the nested chats and works together with that nested chat's "message" value, if any.
+
+```python
+my_carryover_config = {
+    "summary_method": "reflection_with_llm",
+    "summary_args": {"summary_prompt": "Summarise the conversation into bullet points."}
+ }
+```
+
+The `summary_method` can be (with messages referring to the swarm chat's messages):
+
+- `"all"` - messages will be converted to a new-line concatenated string, e.g. `[first nested chat message]\nContext: \n[swarm message 1]\n[swarm message 2]\n...`
+- `"last_msg"` - the latest message will be added, e.g. `[first nested chat message]\nContext: \n[swarm's latest message]`
+- `"reflection_with_llm"` - utilizes an LLM to interpret the messages and its resulting response will be added, e.g. `[first nested chat message]\nContext: \n[llm response]`
+- `Callable` - a function that returns the full message (this will not concatenate with the first nested chat's message, it will replace it entirely).
+
+The signature of the `summary_method` callable is:
+`def my_method(agent: ConversableAgent, messages: List[Dict[str, Any]], summary_args: Dict) -> str:`
+
+Both the "reflection_with_llm" and Callable will be able to utilise the `summary_args` if they are included.
+
+With your configuration available, you can add it to the first chat in the nested chat:
+```python
+nested_chats = [
+ {
+        "recipient": my_first_agent,
+        "summary_method": "reflection_with_llm",
+        "summary_prompt": "Summarize the conversation into bullet points.",
+        "carryover_config": my_carryover_config,
+ },
+ {
+        "recipient": poetry_agent,
+        "message": "Write a poem about the context.",
+        "max_turns": 1,
+        "summary_method": "last_msg",
+ },
+]
+```
+
+Finally, we add the nested chat as a handoff in the same way as we do to an agent:
+
+```python
+register_hand_off(
+    agent=agent_1,
+    hand_to=[OnCondition(
+        target={
+            "chat_queue": [nested_chats],
+            "config": Any,
+            "reply_func_from_nested_chats": None,
+            "use_async": False
+        },
+        condition="condition_1")
+])
+```
+
+See the documentation on [registering a nested chat](/docs/api-reference/autogen/ConversableAgent#register-nested-chats) for further information on the parameters `reply_func_from_nested_chats`, `use_async`, and `config`.
+
+Once a nested chat is complete, the resulting output from the last chat in the nested chats will be returned as the agent that triggered the nested chat's response.

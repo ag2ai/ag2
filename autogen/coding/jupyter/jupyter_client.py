@@ -12,7 +12,7 @@ import sys
 import uuid
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 from ...doc_utils import export_module
 
@@ -118,15 +118,15 @@ class JupyterKernelClient:
         output: str
         data_items: list[DataItem]
 
-    def __init__(self, websocket: WebSocket):
+    def __init__(self, websocket: WebSocket):  # type: ignore[no-any-unimported]
         self._session_id: str = uuid.uuid4().hex
-        self._websocket: WebSocket = websocket
+        self._websocket: WebSocket = websocket  # type: ignore[no-any-unimported]
 
     def __enter__(self) -> Self:
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
         self.stop()
 
@@ -154,7 +154,7 @@ class JupyterKernelClient:
         self._websocket.send_text(json.dumps(message))
         return message_id
 
-    def _receive_message(self, timeout_seconds: float | None) -> dict[str, Any] | None:
+    def _receive_message(self, timeout_seconds: Optional[float]) -> Optional[dict[str, Any]]:
         self._websocket.settimeout(timeout_seconds)
         try:
             data = self._websocket.recv()
@@ -164,7 +164,7 @@ class JupyterKernelClient:
         except websocket.WebSocketTimeoutException:
             return None
 
-    def wait_for_ready(self, timeout_seconds: float | None = None) -> bool:
+    def wait_for_ready(self, timeout_seconds: Optional[float] = None) -> bool:
         message_id = self._send_message(content={}, channel="shell", message_type="kernel_info_request")
         while True:
             message = self._receive_message(timeout_seconds)
@@ -177,7 +177,7 @@ class JupyterKernelClient:
             ):
                 return True
 
-    def execute(self, code: str, timeout_seconds: float | None = None) -> ExecutionResult:
+    def execute(self, code: str, timeout_seconds: Optional[float] = None) -> ExecutionResult:
         message_id = self._send_message(
             content={
                 "code": code,

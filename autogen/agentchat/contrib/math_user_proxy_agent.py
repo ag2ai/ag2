@@ -7,7 +7,7 @@
 import os
 import re
 from time import sleep
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Callable, Dict, Literal, Optional, Union
 
 from pydantic import BaseModel, root_validator
 
@@ -143,12 +143,12 @@ class MathUserProxyAgent(UserProxyAgent):
         self,
         name: Optional[str] = "MathChatAgent",  # default set to MathChatAgent
         is_termination_msg: Optional[
-            Callable[[dict], bool]
+            Callable[[Dict[str, Any]], bool]
         ] = _is_termination_msg_mathchat,  # terminate if \boxed{} in message
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",  # Fully automated
-        default_auto_reply: Optional[Union[str, dict, None]] = DEFAULT_REPLY,
+        default_auto_reply: Optional[Union[str, dict[str, Any]]] = DEFAULT_REPLY,
         max_invalid_q_per_step=3,  # a parameter needed in MathChat
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent

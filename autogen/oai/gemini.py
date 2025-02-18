@@ -166,7 +166,7 @@ class GeminiClient:
         self.api_version = kwargs.get("api_version")
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: Optional[type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -370,7 +370,7 @@ class GeminiClient:
 
         return response_oai
 
-    def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list, str]:
+    def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list[Any], str]:
         """Convert AutoGen content to Gemini parts, catering for text and tool calls"""
         rst = []
 

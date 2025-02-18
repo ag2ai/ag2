@@ -104,7 +104,7 @@ class Agent(Protocol):
         """Generate a reply based on the received messages.
 
         Args:
-            messages (list[dict]): a list of messages received from other agents.
+            messages (list[dict[str, Any]]): a list of messages received from other agents.
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
@@ -122,7 +122,7 @@ class Agent(Protocol):
         """(Async) Generate a reply based on the received messages.
 
         Args:
-            messages (list[dict]): a list of messages received from other agents.
+            messages (list[dict[str, Any]]): a list of messages received from other agents.
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.

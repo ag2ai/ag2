@@ -1699,7 +1699,7 @@ def test_add_tool_for_llm(mock_credentials: Credentials):
     mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
 
     # Add the tool
-    agent.add_tool_for_llm(mock_tool)
+    agent.register_for_llm()(mock_tool)
 
     # Verify tool was added to internal list
     assert len(agent._tools) == 1
@@ -1713,7 +1713,7 @@ def test_add_tool_for_llm(mock_credentials: Credentials):
 def test_add_tool_for_llm_invalid_type(conversable_agent):
     """Test adding an invalid tool type raises TypeError."""
     with pytest.raises(TypeError, match="Expected Tool instance"):
-        conversable_agent.add_tool_for_llm("not a tool")
+        conversable_agent.register_for_llm()("not a tool")
 
 
 def test_remove_tool_for_llm(mock_credentials: Credentials):
@@ -1725,7 +1725,7 @@ def test_remove_tool_for_llm(mock_credentials: Credentials):
 
     mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
 
-    agent.add_tool_for_llm(mock_tool)
+    agent.register_for_llm()(mock_tool)
 
     # Remove the tool
     agent.remove_tool_for_llm(mock_tool)
@@ -1765,8 +1765,8 @@ def test_tool_integration(mock_credentials: Credentials):
     tool2 = Tool(name="tool2", description="A test tool", func_or_tool=sample_tool_func)
 
     # Add tools
-    agent.add_tool_for_llm(tool1)
-    agent.add_tool_for_llm(tool2)
+    agent.register_for_llm()(tool1)
+    agent.register_for_llm()(tool2)
 
     # Verify both tools are in the list
     assert len(agent.tools) == 2

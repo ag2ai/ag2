@@ -7,7 +7,7 @@
 import os
 import re
 import urllib.parse
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 
@@ -36,17 +36,17 @@ class Collection:
             Default is None. SentenceTransformer("all-MiniLM-L6-v2").encode will be used when None.
             Models can be chosen from:
             https://huggingface.co/models?library=sentence-transformers
-        metadata (Optional[dict]): The metadata of the collection.
+        metadata (Optional[dict[str, Any]]): The metadata of the collection.
         get_or_create (Optional): The flag indicating whether to get or create the collection.
     """
 
     def __init__(
         self,
-        client=None,
+        client: Optional[Any] = None,
         collection_name: str = "autogen-docs",
-        embedding_function: Callable = None,
-        metadata=None,
-        get_or_create=None,
+        embedding_function: Optional[Callable[..., Any]] = None,
+        metadata: Optional[Any] = None,
+        get_or_create: Optional[Any] = None,
     ):
         """Initialize the Collection object.
 
@@ -83,7 +83,13 @@ class Collection:
         self.name = name
         return self.name
 
-    def add(self, ids: list[ItemID], documents: list, embeddings: list = None, metadatas: list = None) -> None:
+    def add(
+        self,
+        ids: list[ItemID],
+        documents: Optional[list[Document]],
+        embeddings: Optional[list[Any]] = None,
+        metadatas: Optional[list[Any]] = None,
+    ) -> None:
         """Add documents to the collection.
 
         Args:
@@ -121,7 +127,13 @@ class Collection:
         cursor.executemany(sql_string, sql_values)
         cursor.close()
 
-    def upsert(self, ids: list[ItemID], documents: list, embeddings: list = None, metadatas: list = None) -> None:
+    def upsert(
+        self,
+        ids: list[ItemID],
+        documents: list[Document],
+        embeddings: Optional[list[Any]] = None,
+        metadatas: Optional[list[Any]] = None,
+    ) -> None:
         """Upsert documents into the collection.
 
         Args:
@@ -297,7 +309,7 @@ class Collection:
         cursor.close()
         return retrieved_documents
 
-    def update(self, ids: list, embeddings: list, metadatas: list, documents: list) -> None:
+    def update(self, ids: list[str], embeddings: list[Any], metadatas: list[Any], documents: list[Document]) -> None:
         """Update documents in the collection.
 
         Args:
@@ -555,7 +567,7 @@ class PGVectorDB(VectorDB):
         password: Optional[str] = None,
         connect_timeout: Optional[int] = 10,
         embedding_function: Callable = None,
-        metadata: Optional[dict] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         """Initialize the vector database.
 

@@ -23,8 +23,8 @@ class TextAnalyzerAgent(ConversableAgent):
         name="analyzer",
         system_message: Optional[str] = system_message,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        llm_config: Optional[Union[dict, bool]] = None,
-        **kwargs,
+        llm_config: Optional[Union[dict[str, Any], bool]] = None,
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent.
@@ -47,10 +47,10 @@ class TextAnalyzerAgent(ConversableAgent):
 
     def _analyze_in_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Analyzes the given text as instructed, and returns the analysis as a message.
         Assumes exactly two messages containing the text to analyze and the analysis instructions.
         See Teachability.analyze for an example of how to use this method.
