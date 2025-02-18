@@ -1223,7 +1223,7 @@ def test_agent_tool_registration_for_execution(mock_credentials: Credentials):
 
     # Create the mock tool and add it to the agent's _tools property
     mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
-    agent.add_tool_for_llm(mock_tool)
+    agent.register_for_llm()(mock_tool)
 
     # Prepare swarm agents, this is where the tool will be registered for execution
     # with the internal tool executor agent
