@@ -1,5 +1,6 @@
 ---
-title: Swarm Enhanced Features
+title: Swarm Use Case Example
+sidebarTitle: Use Case example
 ---
 
 <Tip>
@@ -33,14 +34,15 @@ Key aspects of this swarm are:
 from typing import Any, Dict, List
 
 from autogen import (
-    AFTER_WORK,
-    ON_CONDITION,
+    AfterWork,
+    OnCondition,
     UPDATE_SYSTEM_MESSAGE,
     AfterWorkOption,
-    SwarmAgent,
+    AssistantAgent,
     SwarmResult,
     UserProxyAgent,
     initiate_swarm_chat,
+    register_hand_off
 )
 
 llm_config = {"model": "gpt-4o-mini", "cache_seed": None}
@@ -124,7 +126,7 @@ ORDER_DATABASE = {
 
 Here are the functions we'll soon add to our agents.
 
-In Swarms, functions can be used to handle transitions to the next agent as well. Return an `SwarmResult` and setting the `agent` allows you to determine who the next agent is. If you don't set the `agent` parameter, it will be determined through hand-offs or other functions.
+In Swarms, functions can be used to handle transitions to the next agent as well. Return an [`SwarmResult`](/docs/api-reference/autogen/SwarmResult) and setting the `agent` allows you to determine who the next agent is. If you don't set the `agent` parameter, it will be determined through hand-offs or other functions.
 
 Later we will see the use of the `available` parameter in an OnCondition hand-off to determine if a hand-off is made available for evaluation by the LLM. As that parameter takes a context variable that must be equivalent to `True`, we use two context variable keys to control authentication hand-offs, `logged_in` and `requires_login`, which have alternating boolean values.
 
@@ -193,7 +195,7 @@ def login_customer_by_username(username: str, context_variables: dict) -> SwarmR
 #### Agents with dynamic system message
 Here are our agents and we register the functions we created above with them.
 
-The first of our features for this enhanced Swarm walk-through is done here, `UpdateSystemMessage`. By incorporating context variables into our agent's prompts (e.g. `{customer_name}`) and using `UpdateSystemMessage` with the agent's `update_agent_state_before_reply` hook, the agent's system message will be updated with the values from the context variables before they reply (goes to the LLM).
+The first of our features for this enhanced Swarm walk-through is done here, [`UpdateSystemMessage`](/docs/api-reference/autogen/UpdateSystemMessage). By incorporating context variables into our agent's prompts (e.g. `{customer_name}`) and using [`UpdateSystemMessage`](/docs/api-reference/autogen/UpdateSystemMessage) with the agent's `update_agent_state_before_reply` hook, the agent's system message will be updated with the values from the context variables before they reply (goes to the LLM).
 
 This provides robust context for the LLM to work with, allowing the LLM to make better decisions on what do to next.
 
@@ -219,7 +221,7 @@ Logged in: {logged_in}
 Enquiring for Order ID: {order_id}
 """
 
-order_triage_agent = SwarmAgent(
+order_triage_agent = AssistantAgent(
     name="order_triage_agent",
     update_agent_state_before_reply=[
         UPDATE_SYSTEM_MESSAGE(order_triage_prompt),
@@ -230,7 +232,7 @@ order_triage_agent = SwarmAgent(
 
 authentication_prompt = "You are an authentication agent that verifies the identity of the customer."
 
-authentication_agent = SwarmAgent(
+authentication_agent = AssistantAgent(
     name="authentication_agent",
     system_message=authentication_prompt,
     functions=[login_customer_by_username],
@@ -249,7 +251,7 @@ Logged in: {logged_in}
 Enquiring for Order ID: {order_id}
 """
 
-order_mgmt_agent = SwarmAgent(
+order_mgmt_agent = AssistantAgent(
     name="order_mgmt_agent",
     update_agent_state_before_reply=[
         UPDATE_SYSTEM_MESSAGE(order_management_prompt),
@@ -267,20 +269,20 @@ Our nested chats are setup as a queue of two chats, the first is for the `order_
 
 ```python
 # NESTED CHAT - Delivery Status
-order_retrieval_agent = SwarmAgent(
+order_retrieval_agent = AssistantAgent(
     name="order_retrieval_agent",
     system_message="You are an order retrieval agent that gets details about an order.",
     llm_config=llm_config,
 )
 
-order_summarizer_agent = SwarmAgent(
+order_summarizer_agent = AssistantAgent(
     name="order_summarizer_agent",
     system_message="You are an order summarizer agent that provides a summary of the order details.",
     llm_config=llm_config,
 )
 
 
-def extract_order_summary(recipient: SwarmAgent, messages, sender: SwarmAgent, config):
+def extract_order_summary(recipient: AssistantAgent, messages, sender: AssistantAgent, config):
     """Extracts the order summary based on the OrderID in the context variables"""
     order_id = sender.get_context("order_id")
     if order_id in ORDER_DATABASE:
@@ -311,60 +313,63 @@ The ability to turn an OnCondition hand-off on or off is the third enhanced feat
 
 Using the `available` parameter of an OnCondition with a context variable key or a Callable allows us to show/hide the option from the LLM when they're determining what to do next.
 
-Together with the ability to put context into an agent's system message (`UpdateSystemMessage` covered earlier), we're afforded both the ability to control what options they have and also improved reasoning LLM capability through better context.
+Together with the ability to put context into an agent's system message ([`UpdateSystemMessage`](/docs/api-reference/autogen/UpdateSystemMessage) covered earlier), we're afforded both the ability to control what options they have and also improved reasoning LLM capability through better context.
 
 Here we can see the use of context variable keys in the `available` parameter as well as the `has_order_in_context` function as an alternative to context variables. You will notice that the function does the same as using a context variable key string in this case.
 
 ```python
 # HANDOFFS
-order_triage_agent.register_hand_off(
-    [
-        ON_CONDITION(
+register_hand_off(
+    agent=order_triage_agent,
+    hand_to=[
+        OnCondition(
             target=authentication_agent,
             condition="The customer is not logged in, authenticate the customer.",
             available="requires_login",
         ),
-        ON_CONDITION(
+        OnCondition(
             target=order_mgmt_agent,
             condition="The customer is logged in, continue with the order triage.",
             available="logged_in",
         ),
-        AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
+        AfterWork(AfterWorkOption.REVERT_TO_USER),
     ]
 )
 
-authentication_agent.register_hand_off(
-    [
-        ON_CONDITION(
+register_hand_off(
+    agent=authentication_agent,
+    hand_to=[
+        OnCondition(
             target=order_triage_agent,
             condition="The customer is logged in, continue with the order triage.",
             available="logged_in",
         ),
-        AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
+        AfterWork(AfterWorkOption.REVERT_TO_USER),
     ]
 )
 
 
-def has_order_in_context(agent: SwarmAgent, messages: List[Dict[str, Any]]) -> bool:
+def has_order_in_context(agent: AssistantAgent, messages: List[Dict[str, Any]]) -> bool:
     return agent.get_context("has_order_id")
 
 
-order_mgmt_agent.register_hand_off(
-    [
-        ON_CONDITION(
+register_hand_off(
+    agent=order_mgmt_agent,
+    hand_to=[
+        OnCondition(
             target={
                 "chat_queue": chat_queue,
             },
             condition="Retrieve the status of the order",
             available=has_order_in_context,
         ),
-        ON_CONDITION(
+        OnCondition(
             target=authentication_agent,
             condition="The customer is not logged in, authenticate the customer.",
             available="requires_login",
         ),
-        ON_CONDITION(target=order_triage_agent, condition="The customer has no more enquiries about this order."),
-        AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
+        OnCondition(target=order_triage_agent, condition="The customer has no more enquiries about this order."),
+        AfterWork(AfterWorkOption.REVERT_TO_USER),
     ]
 )
 ```
@@ -777,6 +782,6 @@ With the order id, we can handle order enquiries and retrieve order details.
 ### API
 
 - [initiate_swarm_chat](/docs/api-reference/autogen/initiate_swarm_chat)
-- [ON_CONDITION](/docs/api-reference/autogen/ON_CONDITION)
-- [AFTER_WORK](/docs/api-reference/autogen/AFTER_WORK)
-- [UPDATE_SYSTEM_MESSAGE](/docs/api-reference/autogen/UPDATE_SYSTEM_MESSAGE)
+- [OnCondition](/docs/api-reference/autogen/OnCondition)
+- [AfterWork](/docs/api-reference/autogen/AfterWork)
+- [UpdateSystemMessage](/docs/api-reference/autogen/UpdateSystemMessage)
