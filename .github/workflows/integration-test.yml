@@ -7,7 +7,7 @@ on:
   schedule:
     - cron: "0 0 * * *" # daily at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
-  pull_request:
+  pull_request_target:
     branches: ["main"]
     paths:
       - "autogen/**"
@@ -29,9 +29,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        # Run tests only for py versions 3.11
-        python-version: ["3.11"]
         # Add more optional dependencies if needed
         optional-dependencies:
           - "browser-use"
@@ -39,7 +36,9 @@ jobs:
           - "interop"
         # Add more LLMs if needed
         llm: ["openai", "gemini", "anthropic", "deepseek"]
-
+        # Run tests only for py versions 3.11
+        python-version: ["3.11"]
+        os: [ubuntu-latest]
     steps:
       - name: Get User Permission
         id: checkAccess
