@@ -162,7 +162,7 @@ class CohereClient:
         # Parse parameters to the Cohere API's parameters
         cohere_params = self.parse_params(params)
 
-        # Convert AutoGen messages to Cohere messages
+        # Convert AG2 messages to Cohere messages
         cohere_messages, preamble, final_message = oai_messages_to_cohere_messages(messages, params, cohere_params)
 
         cohere_params["chat_history"] = cohere_messages
@@ -292,8 +292,8 @@ def oai_messages_to_cohere_messages(
     We correct for any specific role orders and types.
 
     Parameters:
-        messages: list[Dict[str, Any]]: AutoGen messages
-        params: Dict[str, Any]:         AutoGen parameters dictionary
+        messages: list[Dict[str, Any]]: AG2 messages
+        params: Dict[str, Any]:         AG2 parameters dictionary
         cohere_params: Dict[str, Any]:  Cohere parameters dictionary
 
     Returns:

@@ -133,7 +133,7 @@ class GroqClient:
     def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
-        # Convert AutoGen messages to Groq messages
+        # Convert AG2 messages to Groq messages
         groq_messages = oai_messages_to_groq_messages(messages)
 
         # Parse parameters to the Groq API's parameters
