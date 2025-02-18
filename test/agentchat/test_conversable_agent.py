@@ -859,7 +859,7 @@ def test_register_for_llm_without_model_name():
         ValueError,
         match="When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'.",
     ):
-        ConversableAgent(name="agent", llm_config={"config_list": [{"api_type": "openai", "model": ""}]})
+        ConversableAgent(name="agent", llm_config={"config_list": [{"model": ""}]})
 
 
 def test_register_for_execution(mock_credentials: Credentials):
