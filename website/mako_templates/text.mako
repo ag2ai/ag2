@@ -11,7 +11,21 @@
   show_inherited_members = True
 
   def make_link_without_symbol_links(dobj: pdoc.Doc, current_module, name=None) -> str:
-    pass
+    if isinstance(dobj, pdoc.External):
+        # Get last part of the name - the symbol itself
+        full_name = dobj.name
+        parts = full_name.split('.')
+        return parts[-1]
+
+    # For internal objects, extract the simple name too
+    name = name or dobj.qualname + ('()' if isinstance(dobj, pdoc.Function) else '')
+
+    # If it's a type from a qualified path, extract just the type name
+    if '.' in name:
+        parts = name.split('.')
+        return parts[-1]
+
+    return name
 
   def make_link(dobj: pdoc.Doc, current_module, name=None) -> str:
     """Mirror the HTML template's link function but generate markdown links.
@@ -283,9 +297,9 @@ ${'####'} ${func.name}
         params_with_symbol_links = func.params(annotate=show_type_annotations, link=link)
         returns_with_symbol_links = show_type_annotations and func.return_annotation(link=link) or ''
 
-        link_without_symbol_links = lambda dobj, name=None: make_link_without_symbol_links(dobj, func.module, name)
-        params_without_symbol_links = func.params(annotate=show_type_annotations)
-        returns_without_symbol_links = show_type_annotations and func.return_annotation() or ''
+        link_with_symbol_name = lambda dobj, name=None: make_link_without_symbol_links(dobj, func.module, name)
+        params_without_symbol_links = func.params(annotate=show_type_annotations, link=link_with_symbol_name)
+        returns_without_symbol_links = show_type_annotations and func.return_annotation(link=link_with_symbol_name) or ''
 
         if len(params_without_symbol_links) > 2:
             formatted_params = ',\n    '.join(params_without_symbol_links)
@@ -340,15 +354,20 @@ title: ${cls.module.name}.${cls.name}
 </h2>
 
 <%
-   link = lambda dobj, name=None: make_link(dobj, cls.module, name)
-   params = cls.params(annotate=show_type_annotations, link=link)
-   if len(params) > 2:
-       formatted_params = ',\n    '.join(params)
-       signature = f"{cls.name}(\n    {formatted_params}\n)"
-   else:
-       signature = f"{cls.name}({', '.join(params)})"
+    link = lambda dobj, name=None: make_link(dobj, cls.module, name)
+    params_with_symbol_links = cls.params(annotate=show_type_annotations, link=link)
 
-   cleaned_docstring = clean_docstring(cls.docstring)
+    link_with_symbol_name = lambda dobj, name=None: make_link_without_symbol_links(dobj, cls.module, name)
+    params_without_symbol_links = cls.params(annotate=show_type_annotations, link=link_with_symbol_name)
+
+
+    if len(params_without_symbol_links) > 2:
+        formatted_params = ',\n    '.join(params_without_symbol_links)
+        signature = f"{cls.name}(\n    {formatted_params}\n)"
+    else:
+        signature = f"{cls.name}({', '.join(params_without_symbol_links)})"
+
+    cleaned_docstring = clean_docstring(cls.docstring)
 %>
 
 ```python
@@ -356,8 +375,8 @@ ${signature}
 ```
 ${cleaned_docstring | deflist}
 
-% if len(params) > 0:
-${format_param_table(params, cls, cleaned_docstring)}
+% if len(params_with_symbol_links) > 0:
+${format_param_table(params_with_symbol_links, cls, cleaned_docstring)}
 % endif
 
 <%
