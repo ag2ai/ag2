@@ -35,7 +35,7 @@ tags: [tools, tool calling, web surfing, browser use, crawl4ai]
 Previously, in our [Cross-Framework LLM Tool Integration](/docs/blog/2024-12-20-Tools-interoperability) guide, we combined tools from frameworks like **LangChain**, **CrewAI**, and **PydanticAI** to enhance AG2.
 
 Now, we’re taking AG2 even further by integrating [`Browser Use`](https://github.com/browser-use/browser-use) and [`Crawl4AI`](https://github.com/unclecode/crawl4ai), enabling agents to navigate websites, extract dynamic content, and interact with web pages. This unlocks new possibilities for automated data collection, web automation, and more.
-![Browser Use Example](/docs/use-cases/reference-agents/assets/websurferagent_animated.gif)
+![Browser Use Example](/docs/user-guide/reference-agents/assets/websurferagent_animated.gif)
 
 ## `Browser Use` Integration
 
@@ -105,7 +105,7 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
 
 llm_config = {
     "config_list": config_list,
@@ -296,7 +296,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 </Tip>
 
 ```python
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
 
 llm_config = {
     "config_list": config_list,

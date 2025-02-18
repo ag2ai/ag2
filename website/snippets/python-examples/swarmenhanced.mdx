@@ -13,7 +13,8 @@ from autogen import (
     initiate_swarm_chat,
 )
 
-llm_config = {"model": "gpt-4o-mini", "cache_seed": None}
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 workflow_context = {
     # customer details

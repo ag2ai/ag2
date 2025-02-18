@@ -1,7 +1,8 @@
 ```python
 from autogen import ConversableAgent, GroupChat, GroupChatManager
 
-llm_config = {"model": "gpt-4o-mini"}
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.

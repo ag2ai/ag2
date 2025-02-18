@@ -60,7 +60,8 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 ```python
 from autogen.agents.experimental import WebSurferAgent
 
-llm_config = {"model": "gpt-4o-mini"}
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 # Create our agent
 websurfer = WebSurferAgent(
