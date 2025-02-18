@@ -10,6 +10,7 @@ from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
+from openai.types.chat.chat_completion import ChatCompletion
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
@@ -248,39 +249,38 @@ class TestGeminiClient:
         )
         assert gemini_client.cost(response) > 0, "Cost should be correctly calculated as zero"
 
-    @patch("autogen.oai.gemini.genai.GenerativeModel")
+    @patch("autogen.oai.gemini.genai.Client")
     # @patch("autogen.oai.gemini.genai.configure")
     @patch("autogen.oai.gemini.calculate_gemini_cost")
-    def test_create_response_with_text(self, mock_calculate_cost, mock_generative_model, gemini_client):
-        # Mock the genai model configuration and creation process
+    def test_create_response_with_text(self, mock_calculate_cost, mock_generative_client):
+        mock_calculate_cost.return_value = 0.002
+        # mock client.chats.create
         mock_chat = MagicMock()
-        mock_model = MagicMock()
-        # mock_configure.return_value = None
-        mock_generative_model.return_value = mock_model
-        mock_model.start_chat.return_value = mock_chat
-
-        # Set up mock token counts with real integers
-        mock_usage_metadata = MagicMock()
-        mock_usage_metadata.prompt_token_count = 100
-        mock_usage_metadata.candidates_token_count = 50
+        # mock_generative_client.chats.create.return_value = mock_chat
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+        assert mock_generative_client().chats.create() == mock_chat
 
         mock_text_part = MagicMock()
         mock_text_part.text = "Example response"
         mock_text_part.function_call = None
 
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 100
+        mock_usage_metadata.candidates_token_count = 50
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
         mock_response = MagicMock(spec=GenerateContentResponse)
-        mock_response._done = True
-        mock_response._iterator = None
-        mock_response._result = None
-        mock_response.parts = [mock_text_part]
-
         mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
         mock_chat.send_message.return_value = mock_response
+        assert isinstance(mock_response, GenerateContentResponse)
 
-        # Mock the calculate_gemini_cost function
-        mock_calculate_cost.return_value = 0.002
+        assert isinstance(mock_chat.send_message("dkdk"), GenerateContentResponse)
 
-        # Call the create method
+        gemini_client = GeminiClient(api_key="fake_api_key", system_message="aaa")
         response = gemini_client.create({
             "model": "gemini-pro",
             "messages": [{"content": "Hello", "role": "user"}],
@@ -288,7 +288,9 @@ class TestGeminiClient:
         })
 
         # Assertions to check if response is structured as expected
-        # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
+        assert isinstance(response, ChatCompletion), (
+            f"Response should be an instance of ChatCompletion - got {type(response)}"
+        )
         assert response.choices[0].message.content == "Example response", (
             "Response content should match expected output"
         )
