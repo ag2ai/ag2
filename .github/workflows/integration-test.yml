@@ -29,12 +29,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         # Add more optional dependencies if needed
         optional-dependencies:
           - "browser-use"
           - "crawl4ai"
           - "interop"
-        os: [ubuntu-latest]
         # Run tests only for py versions 3.11
         python-version: ["3.11"]
         # Add more LLMs if needed
