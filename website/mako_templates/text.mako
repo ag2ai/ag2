@@ -137,8 +137,6 @@
       param_descriptions = extract_param_descriptions(docstring)
       table = "| Name | Description |\n|--|--|\n"
 
-      link = lambda dobj, name=None: make_link(dobj, obj.module, name)
-
       for param in params:
           # Split the parameter into name and type annotation
           parts = param.split(':')
