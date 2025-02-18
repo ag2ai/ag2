@@ -10,6 +10,9 @@
   link_prefix = ''
   show_inherited_members = True
 
+  def make_link_without_symbol_links(dobj: pdoc.Doc, current_module, name=None) -> str:
+    pass
+
   def make_link(dobj: pdoc.Doc, current_module, name=None) -> str:
     """Mirror the HTML template's link function but generate markdown links.
 
@@ -23,9 +26,6 @@
     name = name or dobj.qualname + ('()' if isinstance(dobj, pdoc.Function) else '')
     ##   if isinstance(dobj, pdoc.External) and not external_links:
     if isinstance(dobj, pdoc.External):
-        ## print("=" * 50)
-        ## print(f"{isinstance(dobj, pdoc.External)=}, {dobj.qualname=}, {name=}")
-        ## print("=" * 50)
         fullname = f"{dobj.module}.{dobj.name}" if dobj.module else dobj.name
         if fullname in _PDOC_MODULE_EXPORT_MAPPINGS:
             # The autogen types which comes are the one's that are decorated with @export_module
@@ -44,7 +44,7 @@
             return f'[{symbol_name}]({url})'
         else:
             symbol_name = dobj.refname.split('.')[-1]
-            url = dobj.refname.replace("autogen.", "").replace('.', '/')
+            url = f"/docs/api-reference/{dobj.refname.replace('.', '/')}"
             return f'[{symbol_name}]({url})'
 
     url = dobj.url(relative_to=current_module, link_prefix=link_prefix,
@@ -258,7 +258,7 @@ ${indent(s)}
       returns = returns.replace('{', '\{').replace("<", "&lt;").replace("|", "\\|")
       description = description.replace('{', '\{').replace("<", "&lt;").replace("|", "\\|")
 
-      table += f"| `{returns}` | {description} |\n"
+      table += f"| {returns} | {description} |\n"
       return "<b>Returns:</b>" + "\n" + table
 %>
 
@@ -280,13 +280,18 @@ ${'####'} ${func.name}
 
 <%
         link = lambda dobj, name=None: make_link(dobj, func.module, name)
-        returns = show_type_annotations and func.return_annotation(link=link) or ''
-        params = func.params(annotate=show_type_annotations, link=link)
-        if len(params) > 2:
-            formatted_params = ',\n    '.join(params)
-            signature = f"{func.name}(\n    {formatted_params}\n) -> {returns}"
+        params_with_symbol_links = func.params(annotate=show_type_annotations, link=link)
+        returns_with_symbol_links = show_type_annotations and func.return_annotation(link=link) or ''
+
+        link_without_symbol_links = lambda dobj, name=None: make_link_without_symbol_links(dobj, func.module, name)
+        params_without_symbol_links = func.params(annotate=show_type_annotations)
+        returns_without_symbol_links = show_type_annotations and func.return_annotation() or ''
+
+        if len(params_without_symbol_links) > 2:
+            formatted_params = ',\n    '.join(params_without_symbol_links)
+            signature = f"{func.name}(\n    {formatted_params}\n) -> {returns_without_symbol_links}"
         else:
-            signature = f"{func.name}({', '.join(params)}) -> {returns}"
+            signature = f"{func.name}({', '.join(params_without_symbol_links)}) -> {returns_without_symbol_links}"
 
         cleaned_docstring = clean_docstring(func.docstring)
 %>
@@ -296,12 +301,12 @@ ${signature}
 
 ${cleaned_docstring | deflist}
 
-% if len(params) > 0:
-${format_param_table(params, func, func.docstring)}
+% if len(params_with_symbol_links) > 0:
+${format_param_table(params_with_symbol_links, func, func.docstring)}
 % endif
 
-% if returns:
-${format_returns_table(returns, func.docstring)}
+% if returns_with_symbol_links:
+${format_returns_table(returns_with_symbol_links, func.docstring)}
 % endif
 
 <br />
