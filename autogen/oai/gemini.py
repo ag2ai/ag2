@@ -371,7 +371,7 @@ class GeminiClient:
         return response_oai
 
     def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list[Any], str]:
-        """Convert AutoGen content to Gemini parts, catering for text and tool calls"""
+        """Convert AG2 content to Gemini parts, catering for text and tool calls"""
         rst = []
 
         if "role" in message and message["role"] == "tool":

@@ -136,7 +136,7 @@ class TogetherClient:
     def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
 
-        # Convert AutoGen messages to Together.AI messages
+        # Convert AG2 messages to Together.AI messages
         together_messages = oai_messages_to_together_messages(messages)
 
         # Parse parameters to Together.AI API's parameters

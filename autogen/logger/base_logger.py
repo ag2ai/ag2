@@ -47,7 +47,7 @@ class BaseLogger(ABC):
     ) -> None:
         """Log a chat completion to database.
 
-        In AutoGen, chat completions are somewhat complicated because they are handled by the `autogen.oai.OpenAIWrapper` class.
+        In AG2, chat completions are somewhat complicated because they are handled by the `autogen.oai.OpenAIWrapper` class.
         One invocation to `create` can lead to multiple underlying OpenAI calls, depending on the llm_config list used, and
         any errors or retries.
 
