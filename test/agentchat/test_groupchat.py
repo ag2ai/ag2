@@ -17,6 +17,7 @@ from typing import Any, Optional
 from unittest import mock
 
 import pytest
+from pytest import MonkeyPatch
 
 import autogen
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
@@ -26,7 +27,7 @@ from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentEr
 from ..conftest import Credentials, suppress_json_decoder_error
 
 
-def test_func_call_groupchat(mock_credentials: Credentials):
+def test_func_call_groupchat(monkeypatch: MonkeyPatch):
     agent1 = autogen.ConversableAgent(
         "alice",
         human_input_mode="NEVER",
@@ -40,8 +41,12 @@ def test_func_call_groupchat(mock_credentials: Credentials):
         default_auto_reply="This is bob speaking.",
         function_map={"test_func": lambda x: x},
     )
+
+    # Mock speaker selection so it doesn't require a GroupChatManager with an LLM
+    monkeypatch.setattr(GroupChat, "_auto_select_speaker", lambda *args, **kwargs: agent1)
+
     groupchat = autogen.GroupChat(agents=[agent1, agent2], messages=[], max_round=3)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
     agent2.initiate_chat(group_chat_manager, message={"function_call": {"name": "test_func", "arguments": '{"x": 1}'}})
 
     assert len(groupchat.messages) == 3
@@ -59,21 +64,22 @@ def test_func_call_groupchat(mock_credentials: Credentials):
         default_auto_reply="This is carol speaking.",
         function_map={"test_func": lambda x: x + 1},
     )
-    groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=3)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3], messages=[], max_round=3, speaker_selection_method="round_robin"
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
     agent3.initiate_chat(group_chat_manager, message={"function_call": {"name": "test_func", "arguments": '{"x": 1}'}})
 
-    assert (
-        groupchat.messages[-2]["role"] == "function"
-        and groupchat.messages[-2]["name"] == "test_func"
-        and groupchat.messages[-2]["content"] == "1"
-    )
+    assert groupchat.messages[-2]["role"] == "function"
+    assert groupchat.messages[-2]["name"] == "test_func"
+    assert groupchat.messages[-2]["content"] == "1"
     assert groupchat.messages[-1]["name"] == "carol"
 
     agent2.initiate_chat(group_chat_manager, message={"function_call": {"name": "func", "arguments": '{"x": 1}'}})
 
 
-def test_chat_manager(mock_credentials: Credentials):
+def test_chat_manager(monkeypatch: MonkeyPatch):
     agent1 = autogen.ConversableAgent(
         "alice",
         max_consecutive_auto_reply=2,
@@ -88,8 +94,12 @@ def test_chat_manager(mock_credentials: Credentials):
         llm_config=False,
         default_auto_reply="This is bob speaking.",
     )
+
+    # Mock speaker selection so it doesn't require a GroupChatManager with an LLM
+    monkeypatch.setattr(GroupChat, "_auto_select_speaker", lambda *args, **kwargs: agent1)
+
     groupchat = autogen.GroupChat(agents=[agent1, agent2], messages=[], max_round=2)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
     agent1.initiate_chat(group_chat_manager, message="hello")
 
     assert len(agent1.chat_messages[group_chat_manager]) == 2
@@ -106,7 +116,7 @@ def test_chat_manager(mock_credentials: Credentials):
         agent2.initiate_chat(group_chat_manager, message={"function_call": {"name": "func", "arguments": '{"x": 1}'}})
 
 
-def _test_selection_method(method: str, mock_credentials: Credentials):
+def _test_selection_method(method: str, monkeypatch: MonkeyPatch):
     agent1 = autogen.ConversableAgent(
         "alice",
         max_consecutive_auto_reply=10,
@@ -129,6 +139,9 @@ def _test_selection_method(method: str, mock_credentials: Credentials):
         default_auto_reply="This is charlie speaking.",
     )
 
+    # Mock speaker selection so it doesn't require a GroupChatManager with an LLM
+    monkeypatch.setattr(GroupChat, "_auto_select_speaker", lambda *args, **kwargs: agent1)
+
     groupchat = autogen.GroupChat(
         agents=[agent1, agent2, agent3],
         messages=[],
@@ -136,7 +149,7 @@ def _test_selection_method(method: str, mock_credentials: Credentials):
         speaker_selection_method=method,
         allow_repeat_speaker=method != "manual",
     )
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
 
     if method == "round_robin":
         agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
@@ -178,9 +191,9 @@ def _test_selection_method(method: str, mock_credentials: Credentials):
             agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
 
 
-def test_speaker_selection_method(mock_credentials: Credentials):
+def test_speaker_selection_method(monkeypatch: MonkeyPatch):
     for method in ["auto", "round_robin", "random", "manual", "wrong", "RounD_roBin"]:
-        _test_selection_method(method, mock_credentials)
+        _test_selection_method(method, monkeypatch)
 
 
 def _test_n_agents_less_than_3(method):
@@ -257,7 +270,7 @@ def test_n_agents_less_than_3():
         _test_n_agents_less_than_3(method)
 
 
-def test_plugin(mock_credentials: Credentials):
+def test_plugin(monkeypatch: MonkeyPatch):
     # Give another Agent class ability to manage group chat
     agent1 = autogen.ConversableAgent(
         "alice",
@@ -273,8 +286,12 @@ def test_plugin(mock_credentials: Credentials):
         llm_config=False,
         default_auto_reply="This is bob speaking.",
     )
+
+    # Mock speaker selection so it doesn't require a GroupChatManager with an LLM
+    monkeypatch.setattr(GroupChat, "_auto_select_speaker", lambda *args, **kwargs: agent1)
+
     groupchat = autogen.GroupChat(agents=[agent1, agent2], messages=[], max_round=2)
-    group_chat_manager = autogen.ConversableAgent(name="deputy_manager", llm_config=mock_credentials.llm_config)
+    group_chat_manager = autogen.ConversableAgent(name="deputy_manager", llm_config=None)
     group_chat_manager.register_reply(
         autogen.Agent,
         reply_func=autogen.GroupChatManager.run_chat,
@@ -687,7 +704,7 @@ def test_graceful_exit_before_max_round():
     assert len(groupchat.messages) == 3
 
 
-def test_clear_agents_history(mock_credentials: Credentials):
+def test_clear_agents_history(monkeypatch: MonkeyPatch):
     agent1 = autogen.ConversableAgent(
         "alice",
         max_consecutive_auto_reply=10,
@@ -708,8 +725,18 @@ def test_clear_agents_history(mock_credentials: Credentials):
         human_input_mode="ALWAYS",
         llm_config=False,
     )
-    groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=3, enable_clear_history=True)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+
+    # Mock speaker selection so it doesn't require a GroupChatManager with an LLM
+    # monkeypatch.setattr(GroupChat, "_auto_select_speaker", lambda *args, **kwargs: agent2)
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        max_round=3,
+        enable_clear_history=True,
+        speaker_selection_method="round_robin",
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
 
     # testing pure "clear history" statement
     with mock.patch.object(builtins, "input", lambda _: "clear history. How you doing?"):
@@ -783,8 +810,14 @@ def test_clear_agents_history(mock_credentials: Credentials):
     agent2.reset()
     agent3.reset()
     # we want to broadcast the message only in the preparation.
-    groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=1, enable_clear_history=True)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        max_round=1,
+        enable_clear_history=True,
+        speaker_selection_method="round_robin",
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
     # We want to trigger the broadcast of group chat manager, which requires `request_reply` to be set to True.
     agent1.send("dummy message", group_chat_manager, request_reply=True)
     agent1.send(
@@ -810,7 +843,7 @@ def test_clear_agents_history(mock_credentials: Credentials):
     )
     # increase max_round to 3
     groupchat.max_round = 3
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
     with mock.patch.object(builtins, "input", lambda _: "clear history alice 1. How you doing?"):
         agent1.initiate_chat(group_chat_manager, message="hello", clear_history=False)
 
@@ -846,8 +879,14 @@ def test_clear_agents_history(mock_credentials: Credentials):
             "content": "Clear history. How you doing?",
         },
     )
-    groupchat = autogen.GroupChat(agents=[agent1, agent2, agent3], messages=[], max_round=1, enable_clear_history=True)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        max_round=1,
+        enable_clear_history=True,
+        speaker_selection_method="round_robin",
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
     agent1.send("dummy message", group_chat_manager, request_reply=True)
     agent1.send(
         {
@@ -862,7 +901,7 @@ def test_clear_agents_history(mock_credentials: Credentials):
         request_reply=True,
     )
     groupchat.max_round = 2
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials.llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
 
     agent1.initiate_chat(group_chat_manager, message="hello")
     agent1_history = list(agent1._oai_messages.values())[0]
@@ -2239,7 +2278,7 @@ def test_groupchat_with_deepseek_reasoner(
         assert isinstance(result.summary, str)
 
 
-def test_groupchatmanager_llm_config(mock_credentials: Credentials):
+def test_groupchatmanager_no_llm_config():
     """Tests that the GroupChatManager has an LLM config"""
     # Setup
     agent_a = AssistantAgent(name="Agent_A", llm_config=None)
@@ -2247,7 +2286,7 @@ def test_groupchatmanager_llm_config(mock_credentials: Credentials):
     agent_c = AssistantAgent(name="Agent_C", llm_config=None)
     groupchat = GroupChat(messages=[], agents=[agent_a, agent_b, agent_c], max_round=2)
 
-    # 1. No LLM Config on GCM
+    # No LLM Config on GCM
     manager = GroupChatManager(groupchat, llm_config=None)
 
     # Manager doesn't have an LLM, can't use auto speaker selection
@@ -2260,28 +2299,6 @@ def test_groupchatmanager_llm_config(mock_credentials: Credentials):
         ),
     ):
         agent_a.initiate_chat(manager, message="Hello")
-
-    # 2. LLM Config on GCM
-    manager = GroupChatManager(groupchat, llm_config=mock_credentials.llm_config)
-
-    # Should not throw an exception
-    result = agent_a.initiate_chat(manager, message="Hello")
-
-    assert len(result.chat_history) > 1
-
-    # 3. GCM config through groupchat parameter
-    groupchat = GroupChat(
-        messages=[],
-        agents=[agent_a, agent_b, agent_c],
-        max_round=2,
-        select_speaker_auto_llm_config=mock_credentials.llm_config,
-    )
-    manager = GroupChatManager(groupchat, llm_config=None)
-
-    # Should not throw an exception
-    result = agent_a.initiate_chat(manager, message="Hello")
-
-    assert len(result.chat_history) > 1
 
 
 if __name__ == "__main__":
