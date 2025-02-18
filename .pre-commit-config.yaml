@@ -96,7 +96,9 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: ["--baseline", ".secrets.baseline"]
+        args: [
+          '--baseline', '.secrets.baseline',
+          '--exclude-lines', '(YOUR_API_KEY)',]
         exclude: |
           (?x)^(
               package.lock.json
