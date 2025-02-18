@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional, TypeVar
 import pytest
 
 import autogen
+from autogen import UserProxyAgent
 from autogen.import_utils import optional_import_block
 
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
@@ -351,6 +352,15 @@ def credentials_from_test_param(request: pytest.FixtureRequest) -> Credentials:
     if not isinstance(credentials, Credentials):
         raise ValueError(f"Fixture {fixture_name} did not return a Credentials object")
     return credentials
+
+
+@pytest.fixture
+def user_proxy() -> UserProxyAgent:
+    return UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
 
 
 credentials_all_llms = [
