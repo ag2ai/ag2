@@ -5,6 +5,12 @@ x.com
 twitter.com
 example.com
 rapidapi.com
+openai.com
+platform.openai.com
+code.visualstudio.com
+bloomberg.com
+https://www.llama.com/docs/how-to-guides/prompting/
+https://docs.trychroma.com/updates/troubleshooting#sqlite
 https://qdrant.github.io/qdrant/redoc/index.html#tag/collections/operation/create_collection
 https://qdrant.github.io/qdrant/redoc/index.html#tag/collections/operation/create_field_index
 https://docs.ag2.ai/_sites.*
