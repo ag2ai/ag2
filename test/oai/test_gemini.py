@@ -252,7 +252,7 @@ class TestGeminiClient:
     @patch("autogen.oai.gemini.genai.Client")
     # @patch("autogen.oai.gemini.genai.configure")
     @patch("autogen.oai.gemini.calculate_gemini_cost")
-    def test_create_response_with_text(self, mock_calculate_cost, mock_generative_client):
+    def test_create_response_with_text(self, mock_calculate_cost, mock_generative_client, gemini_client):
         mock_calculate_cost.return_value = 0.002
         # mock client.chats.create
         mock_chat = MagicMock()
@@ -280,7 +280,6 @@ class TestGeminiClient:
 
         assert isinstance(mock_chat.send_message("dkdk"), GenerateContentResponse)
 
-        gemini_client = GeminiClient(api_key="fake_api_key", system_message="aaa")
         response = gemini_client.create({
             "model": "gemini-pro",
             "messages": [{"content": "Hello", "role": "user"}],
