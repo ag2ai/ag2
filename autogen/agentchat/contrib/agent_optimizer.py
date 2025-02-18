@@ -168,7 +168,7 @@ if result is not None: print(result)
 
 
 class AgentOptimizer:
-    """Base class for optimizing AutoGen agents. Specifically, it is used to optimize the functions used in the agent.
+    """Base class for optimizing AG2 agents. Specifically, it is used to optimize the functions used in the agent.
     More information could be found in the following paper: https://arxiv.org/abs/2402.11359.
     """
 
