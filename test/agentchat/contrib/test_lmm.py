@@ -15,7 +15,7 @@ from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalCon
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import skip_on_missing_imports
 
-from ...conftest import MOCK_OPEN_AI_API_KEY
+from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
 
 base64_encoded_image = (
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4"
@@ -85,7 +85,7 @@ class TestMultimodalConversableAgent(unittest.TestCase):
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
-def test_group_chat_with_lmm():
+def test_group_chat_with_lmm(mock_credentials: Credentials):
     """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.
     Each agent is set to describe an image in a unique style, but the chat should not exceed the specified max_rounds.
@@ -120,7 +120,7 @@ def test_group_chat_with_lmm():
 
     # Setting up the group chat
     groupchat = autogen.GroupChat(agents=[agent1, agent2, user_proxy], messages=[], max_round=max_round)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=mock_credentials)
 
     # Initiating the group chat and observing the number of rounds
     user_proxy.initiate_chat(group_chat_manager, message=f"What do you see? <img {base64_encoded_image}>")
