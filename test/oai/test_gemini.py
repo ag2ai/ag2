@@ -254,9 +254,8 @@ class TestGeminiClient:
     @patch("autogen.oai.gemini.calculate_gemini_cost")
     def test_create_response_with_text(self, mock_calculate_cost, mock_generative_client, gemini_client):
         mock_calculate_cost.return_value = 0.002
-        # mock client.chats.create
+
         mock_chat = MagicMock()
-        # mock_generative_client.chats.create.return_value = mock_chat
         mock_generative_client.return_value.chats.create.return_value = mock_chat
         assert mock_generative_client().chats.create() == mock_chat
 
