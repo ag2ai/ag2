@@ -22,7 +22,6 @@ permissions: {}
 
 jobs:
   test:
-    name: test (${{ matrix.os }}, ${{ matrix.python-version }}, ${{ matrix.llm }}, ${{ matrix.optional-dependencies }})
     runs-on: ${{ matrix.os }}
     environment: openai1
     env:
