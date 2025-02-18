@@ -12,7 +12,7 @@ on:
     paths:
       - "autogen/**"
       - "test/**"
-      - ".github/workflows/test-integration.yml"
+      - ".github/workflows/integration-test.yml"
       - "pyproject.toml"
 
 concurrency:
@@ -34,12 +34,11 @@ jobs:
           - "browser-use"
           - "crawl4ai"
           - "interop"
-        os: [ubuntu-latest]
-        # Run tests only for py versions 3.11
-        python-version: ["3.11"]
         # Add more LLMs if needed
         llm: ["openai", "gemini", "anthropic", "deepseek"]
-
+        # Run tests only for py versions 3.11
+        python-version: ["3.11"]
+        os: [ubuntu-latest]
     steps:
       - name: Get User Permission
         id: checkAccess
@@ -86,9 +85,7 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
-          MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
-          bash scripts/test.sh -m "$MARKER and ${{ matrix.llm }}"
+          bash scripts/integration-test.sh -d "${{ matrix.optional-dependencies }}" -l "${{ matrix.llm }}"
       - name: Show coverage report
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
@@ -100,7 +97,7 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  test-integration-check:
+  integration-test-check:
     if: always()
     runs-on: ubuntu-latest
     needs: [test]
