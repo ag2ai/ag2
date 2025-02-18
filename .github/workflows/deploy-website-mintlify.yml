@@ -8,6 +8,10 @@ on:
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
       - ".github/workflows/docs-check-broken-links.yml"
+      - "scripts/broken-links-check.sh"
+      - "scripts/docs_build.sh"
+      - "scripts/docs_serve.sh"
+      - ".muffet-excluded-links.txt"
   push:
     branches: [main]
     paths:
@@ -15,6 +19,10 @@ on:
       - "website/**"
       - ".github/workflows/deploy-website-mintlify.yml"
       - ".github/workflows/docs-check-broken-links.yml"
+      - "scripts/broken-links-check.sh"
+      - "scripts/docs_build.sh"
+      - "scripts/docs_serve.sh"
+      - ".muffet-excluded-links.txt"
   workflow_dispatch:
   merge_group:
     types: [checks_requested]

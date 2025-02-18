@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from ..doc_utils import export_module
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -42,12 +42,12 @@ Reply "TERMINATE" in the end when everything is done.
         self,
         name: str,
         system_message: Optional[str] = DEFAULT_SYSTEM_MESSAGE,
-        llm_config: Optional[Union[dict, Literal[False]]] = None,
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         description: Optional[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): agent name.

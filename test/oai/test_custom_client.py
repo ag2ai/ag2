@@ -5,6 +5,8 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
+from typing import Any
+
 import pytest
 
 from autogen import OpenAIWrapper
@@ -21,7 +23,7 @@ TEST_MAX_LENGTH = 1000
 @skip_on_missing_imports(["openai"])
 def test_custom_model_client():
     class CustomModel:
-        def __init__(self, config: dict, test_hook):
+        def __init__(self, config: dict[str, Any], test_hook):
             self.test_hook = test_hook
             self.device = config["device"]
             self.model = config["model"]
@@ -169,7 +171,7 @@ def test_not_all_clients_registered_raises_error():
 @skip_on_missing_imports(["openai"])
 def test_registering_with_extra_config_args():
     class CustomModel:
-        def __init__(self, config: dict, test_hook):
+        def __init__(self, config: dict[str, Any], test_hook):
             self.test_hook = test_hook
             self.test_hook["called"] = True
 

@@ -7,7 +7,7 @@
 import abc
 import logging
 from collections.abc import Sequence
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
@@ -40,7 +40,7 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
         cache_dir: Optional[str] = None,
         threads: Optional[int] = None,
         parallel: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Initialize fastembed.TextEmbedding.
 
@@ -81,7 +81,7 @@ class QdrantVectorDB(VectorDB):
         content_payload_key: str = "_content",
         metadata_payload_key: str = "_metadata",
         collection_options: dict = {},
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize the vector database.
 
@@ -208,7 +208,7 @@ class QdrantVectorDB(VectorDB):
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = 0,
-        **kwargs,
+        **kwargs: Any,
     ) -> QueryResults:
         """Retrieve documents from the collection of the vector database based on the queries.
 

@@ -899,7 +899,8 @@ class OpenAIWrapper:
             - cache (AbstractCache | None): A Cache object to use for response cache. Default to None.
                 Note that the cache argument overrides the legacy cache_seed argument: if this argument is provided,
                 then the cache_seed argument is ignored. If this argument is not provided or None,
-                then the cache_seed argument is used.
+                then the cache_seed argument is used. If both cache and cache_seed are None,
+                then LEGACY_DEFAULT_CACHE_SEED is used as the cache_seed.
             - agent (AbstractAgent | None): The object responsible for creating a completion if an agent.
             - (Legacy) cache_seed (int | None) for using the DiskCache. Default to 41.
                 An integer cache_seed is useful when implementing "controlled randomness" for the completion.
@@ -916,7 +917,7 @@ class OpenAIWrapper:
         ```
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
-            - api_version (str | None): The api version. Default to None. E.g., "2024-02-01".
+            - api_version (Optional[str]): The api version. Default to None. E.g., "2024-02-01".
 
         Raises:
             - RuntimeError: If all declared custom model clients are not registered
@@ -969,6 +970,7 @@ class OpenAIWrapper:
             elif cache_seed is not None:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
+            logger.info(f"Using cache with seed value: {cache if cache is not None else cache_seed}")
 
             if cache_client is not None:
                 with cache_client as cache:

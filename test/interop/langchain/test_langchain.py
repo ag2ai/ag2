@@ -83,7 +83,7 @@ class TestLangChainInteroperabilityWithoutPydanticInput:
     def setup(self) -> None:
         self.mock = MagicMock()
 
-        @langchain_tool
+        @langchain_tool  # type: ignore[misc]
         def search(query: str, max_length: int) -> str:
             """Look up things online."""
             self.mock(query, max_length)

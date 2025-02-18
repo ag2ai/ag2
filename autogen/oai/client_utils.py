@@ -8,7 +8,7 @@
 
 import logging
 import warnings
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -21,11 +21,11 @@ class FormatterProtocol(Protocol):
 def validate_parameter(
     params: dict[str, Any],
     param_name: str,
-    allowed_types: tuple,
+    allowed_types: tuple[Any, ...],
     allow_None: bool,  # noqa: N803
     default_value: Any,
-    numerical_bound: tuple,
-    allowed_values: list,
+    numerical_bound: Optional[tuple[Optional[float], Optional[float]]],
+    allowed_values: Optional[list[Any]],
 ) -> Any:
     """Validates a given config parameter, checking its type, values, and setting defaults
     Parameters:

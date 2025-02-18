@@ -4,13 +4,14 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import logging
 import shutil
 import sys
 import time
 from collections import defaultdict
 from time import sleep
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 
@@ -185,7 +186,7 @@ class Completion(OpenAICompletion):
             cache.clear()
 
     @classmethod
-    def _book_keeping(cls, config: dict, response):
+    def _book_keeping(cls, config: dict[str, Any], response) -> None:
         """Book keeping for the created completions."""
         if response != -1 and "cost" not in response:
             response["cost"] = cls.cost(response)
@@ -223,7 +224,9 @@ class Completion(OpenAICompletion):
         cls._count_create += 1
 
     @classmethod
-    def _get_response(cls, config: dict, raise_on_ratelimit_or_timeout=False, use_cache=True):
+    def _get_response(
+        cls, config: dict[str, Any], raise_on_ratelimit_or_timeout: bool = False, use_cache: bool = True
+    ) -> None:
         """Get the response from the openai api call.
 
         Try cache first. If not found, call the openai api. If the api call fails, retry after retry_wait_time.
@@ -359,7 +362,7 @@ class Completion(OpenAICompletion):
         return params
 
     @classmethod
-    def _eval(cls, config: dict, prune=True, eval_only=False):
+    def _eval(cls, config: dict[str, Any], prune: bool = True, eval_only: bool = False):
         """Evaluate the given config as the hyperparameter setting for the openai api call.
 
         Args:
@@ -534,7 +537,7 @@ class Completion(OpenAICompletion):
     @require_optional_import("flaml", "flaml")
     def tune(
         cls,
-        data: list[dict],
+        data: list[dict[str, Any]],
         metric: str,
         mode: str,
         eval_func: Callable,
@@ -734,10 +737,10 @@ class Completion(OpenAICompletion):
     @classmethod
     def create(
         cls,
-        context: Optional[dict] = None,
+        context: Optional[dict[str, Any]] = None,
         use_cache: Optional[bool] = True,
-        config_list: Optional[list[dict]] = None,
-        filter_func: Optional[Callable[[dict, dict], bool]] = None,
+        config_list: Optional[list[dict[str, Any]]] = None,
+        filter_func: Optional[Callable[[dict[str, Any], dict[str, Any]], bool]] = None,
         raise_on_ratelimit_or_timeout: Optional[bool] = True,
         allow_format_str_template: Optional[bool] = False,
         **config,
@@ -867,7 +870,7 @@ class Completion(OpenAICompletion):
     def instantiate(
         cls,
         template: Union[str, None],
-        context: Optional[dict] = None,
+        context: Optional[dict[str, Any]] = None,
         allow_format_str_template: Optional[bool] = False,
     ):
         if not context or template is None:
@@ -1152,7 +1155,10 @@ class Completion(OpenAICompletion):
 
     @classmethod
     def start_logging(
-        cls, history_dict: Optional[dict] = None, compact: Optional[bool] = True, reset_counter: Optional[bool] = True
+        cls,
+        history_dict: Optional[dict[str, Any]] = None,
+        compact: Optional[bool] = True,
+        reset_counter: Optional[bool] = True,
     ):
         """Start book keeping.
 

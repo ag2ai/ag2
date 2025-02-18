@@ -23,7 +23,7 @@ class DeepResearchAgent(ConversableAgent):
         llm_config: dict[str, Any],
         system_message: Optional[Union[str, list[str]]] = DEFAULT_PROMPT,
         max_web_steps: int = 30,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize the DeepResearchAgent.
 
@@ -45,4 +45,4 @@ class DeepResearchAgent(ConversableAgent):
             max_web_steps=max_web_steps,
         )
 
-        self.add_tool_for_llm(self.tool)
+        self.register_for_llm()(self.tool)

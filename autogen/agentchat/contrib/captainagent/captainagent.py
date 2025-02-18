@@ -4,7 +4,7 @@
 import hashlib
 import json
 import os
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from termcolor import colored
 
@@ -135,17 +135,17 @@ Note that the previous experts will forget everything after you obtain the respo
         self,
         name: str,
         system_message: Optional[str] = None,
-        llm_config: Optional[Union[dict, Literal[False]]] = None,
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Optional[str] = "NEVER",
-        code_execution_config: Optional[Union[dict, Literal[False]]] = False,
-        nested_config: Optional[dict] = None,
+        code_execution_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
+        nested_config: Optional[dict[str, Any]] = None,
         agent_lib: Optional[str] = None,
         tool_lib: Optional[str] = None,
         agent_config_save_path: Optional[str] = None,
         description: Optional[str] = DEFAULT_DESCRIPTION,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): agent name.
@@ -219,7 +219,7 @@ Note that the previous experts will forget everything after you obtain the respo
         )
 
     @staticmethod
-    def _update_config(default_dict: dict, update_dict: Optional[dict]) -> dict:
+    def _update_config(default_dict: dict[str, Any], update_dict: Optional[dict[str, Any]]) -> dict[str, Any]:
         """Recursively updates the default_dict with values from update_dict."""
         if update_dict is None:
             return default_dict
@@ -287,14 +287,14 @@ Collect information from the general task, follow the suggestions from manager t
     def __init__(
         self,
         name: str,
-        nested_config: dict,
+        nested_config: dict[str, Any],
         agent_config_save_path: str = None,
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Optional[str] = "NEVER",
-        code_execution_config: Optional[Union[dict, Literal[False]]] = None,
-        default_auto_reply: Optional[Union[str, dict, None]] = DEFAULT_AUTO_REPLY,
-        llm_config: Optional[Union[dict, Literal[False]]] = False,
+        code_execution_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        default_auto_reply: Optional[Union[str, dict[str, Any]]] = DEFAULT_AUTO_REPLY,
+        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
         system_message: Optional[Union[str, list]] = "",
         description: Optional[str] = None,
     ):
