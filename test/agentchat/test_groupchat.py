@@ -2251,11 +2251,14 @@ def test_groupchatmanager_llm_config(mock_credentials: Credentials):
     manager = GroupChatManager(groupchat, llm_config=None)
 
     # Manager doesn't have an LLM, can't use auto speaker selection
-    with pytest.raises(ValueError, match=re.escape(
-        "The group chat's internal speaker selection agent does not have an LLM configuration. "
-        "Please provide a valid LLM config to the group chat's GroupChatManager or set it with "
-        "the select_speaker_auto_llm_config parameter."
-    )):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The group chat's internal speaker selection agent does not have an LLM configuration. "
+            "Please provide a valid LLM config to the group chat's GroupChatManager or set it with "
+            "the select_speaker_auto_llm_config parameter."
+        ),
+    ):
         agent_a.initiate_chat(manager, message="Hello")
 
     # 2. LLM Config on GCM
@@ -2267,13 +2270,16 @@ def test_groupchatmanager_llm_config(mock_credentials: Credentials):
     assert len(result.chat_history) > 1
 
     # 3. GCM config through groupchat parameter
-    groupchat = GroupChat(messages=[], agents=[agent_a, agent_b, agent_c], max_round=2, select_speaker_auto_llm_config=mock_credentials)
+    groupchat = GroupChat(
+        messages=[], agents=[agent_a, agent_b, agent_c], max_round=2, select_speaker_auto_llm_config=mock_credentials
+    )
     manager = GroupChatManager(groupchat, llm_config=None)
 
     # Should not throw an exception
     result = agent_a.initiate_chat(manager, message="Hello")
 
     assert len(result.chat_history) > 1
+
 
 if __name__ == "__main__":
     # test_func_call_groupchat()
