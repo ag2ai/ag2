@@ -439,26 +439,27 @@ class TestGeminiClient:
             "properties": {
                 "task": {
                     "$defs": {
-                        "Detail": {
-                            "properties": {"description": {"title": "Description", "type": "string"}},
-                            "required": ["description"],
-                            "title": "Detail",
-                            "type": "object",
-                        },
                         "Subquestion": {
                             "properties": {
-                                "question": {"title": "Question", "type": "string"},
-                                "detail": {"$ref": "#/$defs/Detail"},
-                                "answer": {"default": "No answer provided.", "title": "Answer", "type": "string"},
+                                "question": {
+                                    "description": "The original question.",
+                                    "title": "Question",
+                                    "type": "string",
+                                }
                             },
-                            "required": ["question", "detail"],
+                            "required": ["question"],
                             "title": "Subquestion",
                             "type": "object",
-                        },
+                        }
                     },
                     "properties": {
-                        "question": {"title": "Question", "type": "string"},
+                        "question": {
+                            "description": "The original question.",
+                            "title": "Question",
+                            "type": "string",
+                        },
                         "subquestions": {
+                            "description": "The subquestions that need to be answered.",
                             "items": {"$ref": "#/$defs/Subquestion"},
                             "title": "Subquestions",
                             "type": "array",
@@ -481,20 +482,18 @@ class TestGeminiClient:
             "properties": {
                 "task": {
                     "properties": {
-                        "question": {"title": "Question", "type": "string"},
+                        "question": {"description": "The original question.", "title": "Question", "type": "string"},
                         "subquestions": {
+                            "description": "The subquestions that need to be answered.",
                             "items": {
                                 "properties": {
-                                    "question": {"title": "Question", "type": "string"},
-                                    "detail": {
-                                        "properties": {"description": {"title": "Description", "type": "string"}},
-                                        "required": ["description"],
-                                        "title": "Detail",
-                                        "type": "object",
-                                    },
-                                    "answer": {"default": "No answer provided.", "title": "Answer", "type": "string"},
+                                    "question": {
+                                        "description": "The original question.",
+                                        "title": "Question",
+                                        "type": "string",
+                                    }
                                 },
-                                "required": ["question", "detail"],
+                                "required": ["question"],
                                 "title": "Subquestion",
                                 "type": "object",
                             },
@@ -522,19 +521,12 @@ class TestGeminiClient:
             "properties": {
                 "task": {
                     "properties": {
-                        "question": {"type": "STRING"},
+                        "question": {"description": "The original question.", "type": "STRING"},
                         "subquestions": {
+                            "description": "The subquestions that need to be answered.",
                             "items": {
-                                "properties": {
-                                    "question": {"type": "STRING"},
-                                    "detail": {
-                                        "properties": {"description": {"type": "STRING"}},
-                                        "required": ["description"],
-                                        "type": "OBJECT",
-                                    },
-                                    "answer": {"type": "STRING"},
-                                },
-                                "required": ["question", "detail"],
+                                "properties": {"question": {"description": "The original question.", "type": "STRING"}},
+                                "required": ["question"],
                                 "type": "OBJECT",
                             },
                             "type": "ARRAY",

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-from typing import Annotated, Any, Callable
+from typing import Annotated, Any, Callable, Union
 
 from pydantic import BaseModel, Field
 
@@ -23,8 +23,7 @@ class Subquestion(BaseModel):
 
 
 # todo; use this
-class SubquestionAnswer(BaseModel):
-    question: Annotated[str, Field(description="The original question.")]
+class SubquestionAnswer(Subquestion):
     answer: Annotated[str, Field(description="The answer to the question.")]
 
     def format(self) -> str:
@@ -40,6 +39,12 @@ class Task(BaseModel):
             "Subquestion " + str(i + 1) + ":\n" + subquestion.format()
             for i, subquestion in enumerate(self.subquestions)
         )
+
+
+class CompletedTask(Task):
+    subquestions: Annotated[
+        list[Union[Subquestion, SubquestionAnswer]], Field(description="The subquestions that need to be answered.")
+    ]
 
 
 class InformationCrumb(BaseModel):
@@ -204,7 +209,7 @@ class DeepResearchTool(Tool):
                 human_input_mode="NEVER",
             )
 
-            generate_subquestions = DeepResearchTool.get_generate_subquestions(
+            generate_subquestions = DeepResearchTool._get_generate_subquestions(
                 llm_config=llm_config, max_web_steps=max_web_steps
             )
             decomposition_agent.register_for_execution()(generate_subquestions)
@@ -222,7 +227,7 @@ class DeepResearchTool(Tool):
         return split_question_and_answer_subquestions
 
     @staticmethod
-    def get_generate_subquestions(
+    def _get_generate_subquestions(
         llm_config: dict[str, Any],
         max_web_steps: int,
     ) -> Callable[..., str]:
@@ -244,12 +249,16 @@ class DeepResearchTool(Tool):
             if not task.subquestions:
                 task.subquestions = [Subquestion(question=task.question)]
 
+            subquestions_answers: list[SubquestionAnswer] = []
             for subquestion in task.subquestions:
-                subquestion.answer = DeepResearchTool._answer_question(
+                answer = DeepResearchTool._answer_question(
                     subquestion.question, llm_config=llm_config, max_web_steps=max_web_steps
                 )
+                subquestions_answers.append(SubquestionAnswer(question=subquestion.question, answer=answer))
 
-            return f"{DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX} \n" + task.format()
+            completed_task = CompletedTask(question=task.question, subquestions=subquestions_answers)
+
+            return f"{DeepResearchTool.SUBQUESTIONS_ANSWER_PREFIX} \n" + completed_task.format()
 
         return generate_subquestions
 
