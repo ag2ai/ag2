@@ -3,6 +3,66 @@
 <%!
   import re
 
+  import pdoc
+
+  from autogen.doc_utils import _PDOC_MODULE_EXPORT_MAPPINGS
+
+  link_prefix = ''
+  show_inherited_members = True
+
+  def make_link_with_symbol_names(dobj: pdoc.Doc, current_module, name=None) -> str:
+    if isinstance(dobj, pdoc.External):
+        # Get last part of the name - the symbol itself
+        full_name = dobj.name
+        parts = full_name.split('.')
+        return parts[-1]
+
+    # For internal objects, extract the simple name too
+    name = name or dobj.qualname + ('()' if isinstance(dobj, pdoc.Function) else '')
+
+    # If it's a type from a qualified path, extract just the type name
+    if '.' in name:
+        parts = name.split('.')
+        return parts[-1]
+
+    return name
+
+  def make_link(dobj: pdoc.Doc, current_module, name=None) -> str:
+    """Mirror the HTML template's link function but generate markdown links.
+
+    Args:
+        dobj: The doc object to link to.
+        name: The name to display for the link. If None, the doc object's qualname is used.
+
+    Returns:
+        [text](url) format instead of <a> tags.
+    """
+    name = name or dobj.qualname + ('()' if isinstance(dobj, pdoc.Function) else '')
+    if isinstance(dobj, pdoc.External):
+        fullname = f"{dobj.module}.{dobj.name}" if dobj.module else dobj.name
+        if fullname in _PDOC_MODULE_EXPORT_MAPPINGS:
+            symbol_name = fullname.split('.')[-1]
+            new_path = _PDOC_MODULE_EXPORT_MAPPINGS[fullname]
+            url = f"/docs/api-reference/{new_path.replace('.','/')}/{symbol_name}"
+            return f'[{symbol_name}]({url})'
+        else:
+            return name
+
+    elif 'autogen' in dobj.refname:
+        if dobj.refname in _PDOC_MODULE_EXPORT_MAPPINGS:
+            symbol_name = fullname.split('.')[-1]
+            new_path = _PDOC_MODULE_EXPORT_MAPPINGS[fullname]
+            url = f"/docs/api-reference/{new_path.replace('.','/')}/{symbol_name}"
+            return f'[{symbol_name}]({url})'
+        else:
+            symbol_name = dobj.refname.split('.')[-1]
+            url = f"/docs/api-reference/{dobj.refname.replace('.', '/')}"
+            return f'[{symbol_name}]({url})'
+
+    url = dobj.url(relative_to=current_module, link_prefix=link_prefix,
+                    top_ancestor=not show_inherited_members)
+    return f'[{name}]({url})'
+
   def indent(s, spaces=4):
       new = s.replace('\n', '\n' + ' ' * spaces)
       return ' ' * spaces + new.strip()
@@ -67,12 +127,13 @@
 
       return param_desc
 
-  def format_param_table(params, docstring):
+  def format_param_table(params, obj, docstring):
       # remove self and * from params
       params = [param for param in params if not param.startswith('self:') and param != 'self' and param != '*']
 
       if not params:
           return ""
+
       param_descriptions = extract_param_descriptions(docstring)
       table = "| Name | Description |\n|--|--|\n"
 
@@ -90,6 +151,8 @@
               else:
                   type_val = type_default.replace('|', '\\|')
                   default = '-'
+
+              type_val = type_val if type_val else '-'
           else:
               name = param.strip()
               type_val = '-'
@@ -109,7 +172,9 @@
           # Format the table cell
           formatted_desc = f"{description}<br/><br/>" if description else ''
           if type_val != '-':
-              formatted_desc += f"**Type:** `{type_val}`"
+            ##   formatted_desc += f"**Type:** {get_doc_path(type_val)}"
+              type_val = re.sub(r"<class[\s\xa0]'([^']+)'>", r"'\1'", type_val)
+              formatted_desc += f"**Type:** {type_val}"
           if default != '-' and default != '"-"':
               formatted_desc += f"<br/><br/>**Default:** {default}"
 
@@ -204,7 +269,7 @@ ${indent(s)}
       returns = returns.replace('{', '\{').replace("<", "&lt;").replace("|", "\\|")
       description = description.replace('{', '\{').replace("<", "&lt;").replace("|", "\\|")
 
-      table += f"| `{returns}` | {description} |\n"
+      table += f"| {returns} | {description} |\n"
       return "<b>Returns:</b>" + "\n" + table
 %>
 
@@ -225,13 +290,19 @@ ${metadata}
 ${'####'} ${func.name}
 
 <%
-        returns = show_type_annotations and func.return_annotation() or ''
-        params = func.params(annotate=show_type_annotations)
-        if len(params) > 2:
-            formatted_params = ',\n    '.join(params)
-            signature = f"{func.name}(\n    {formatted_params}\n) -> {returns}"
+        link = lambda dobj, name=None: make_link(dobj, func.module, name)
+        params_with_symbol_links = func.params(annotate=show_type_annotations, link=link)
+        returns_with_symbol_links = show_type_annotations and func.return_annotation(link=link) or ''
+
+        link_with_symbol_name = lambda dobj, name=None: make_link_with_symbol_names(dobj, func.module, name)
+        params_without_symbol_links = func.params(annotate=show_type_annotations, link=link_with_symbol_name)
+        returns_without_symbol_links = show_type_annotations and func.return_annotation(link=link_with_symbol_name) or ''
+
+        if len(params_without_symbol_links) > 2:
+            formatted_params = ',\n    '.join(params_without_symbol_links)
+            signature = f"{func.name}(\n    {formatted_params}\n) -> {returns_without_symbol_links}"
         else:
-            signature = f"{func.name}({', '.join(params)}) -> {returns}"
+            signature = f"{func.name}({', '.join(params_without_symbol_links)}) -> {returns_without_symbol_links}"
 
         cleaned_docstring = clean_docstring(func.docstring)
 %>
@@ -241,12 +312,12 @@ ${signature}
 
 ${cleaned_docstring | deflist}
 
-% if len(params) > 0:
-${format_param_table(params, func.docstring)}
+% if len(params_with_symbol_links) > 0:
+${format_param_table(params_with_symbol_links, func, func.docstring)}
 % endif
 
-% if returns:
-${format_returns_table(returns, func.docstring)}
+% if returns_with_symbol_links:
+${format_returns_table(returns_with_symbol_links, func.docstring)}
 % endif
 
 <br />
@@ -280,14 +351,20 @@ title: ${cls.module.name}.${cls.name}
 </h2>
 
 <%
-   params = cls.params(annotate=show_type_annotations)
-   if len(params) > 2:
-       formatted_params = ',\n    '.join(params)
-       signature = f"{cls.name}(\n    {formatted_params}\n)"
-   else:
-       signature = f"{cls.name}({', '.join(params)})"
+    link = lambda dobj, name=None: make_link(dobj, cls.module, name)
+    params_with_symbol_links = cls.params(annotate=show_type_annotations, link=link)
 
-   cleaned_docstring = clean_docstring(cls.docstring)
+    link_with_symbol_name = lambda dobj, name=None: make_link_with_symbol_names(dobj, cls.module, name)
+    params_without_symbol_links = cls.params(annotate=show_type_annotations, link=link_with_symbol_name)
+
+
+    if len(params_without_symbol_links) > 2:
+        formatted_params = ',\n    '.join(params_without_symbol_links)
+        signature = f"{cls.name}(\n    {formatted_params}\n)"
+    else:
+        signature = f"{cls.name}({', '.join(params_without_symbol_links)})"
+
+    cleaned_docstring = clean_docstring(cls.docstring)
 %>
 
 ```python
@@ -295,8 +372,8 @@ ${signature}
 ```
 ${cleaned_docstring | deflist}
 
-% if len(params) > 0:
-${format_param_table(params, cleaned_docstring)}
+% if len(params_with_symbol_links) > 0:
+${format_param_table(params_with_symbol_links, cls, cleaned_docstring)}
 % endif
 
 <%

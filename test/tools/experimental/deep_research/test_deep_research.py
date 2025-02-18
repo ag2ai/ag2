@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from autogen.agentchat import AssistantAgent
 from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.dependency_injection import Depends, on
 from autogen.tools.experimental import DeepResearchTool
@@ -36,6 +37,67 @@ class TestDeepResearchTool:
             },
         }
         assert tool.function_schema == expected_schema
+
+    def test_get_generate_subquestions(self, mock_credentials: Credentials) -> None:
+        generate_subquestions = DeepResearchTool._get_generate_subquestions(
+            llm_config=mock_credentials.llm_config,
+            max_web_steps=30,
+        )
+
+        assistant = AssistantAgent(
+            name="assistant",
+            llm_config=mock_credentials.llm_config,
+        )
+        assistant.register_for_llm(description="Generate subquestions for a given question.")(generate_subquestions)
+        expected_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "description": "Generate subquestions for a given question.",
+                    "name": "generate_subquestions",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "task": {
+                                "$defs": {
+                                    "Subquestion": {
+                                        "properties": {
+                                            "question": {
+                                                "description": "The original question.",
+                                                "title": "Question",
+                                                "type": "string",
+                                            }
+                                        },
+                                        "required": ["question"],
+                                        "title": "Subquestion",
+                                        "type": "object",
+                                    }
+                                },
+                                "properties": {
+                                    "question": {
+                                        "description": "The original question.",
+                                        "title": "Question",
+                                        "type": "string",
+                                    },
+                                    "subquestions": {
+                                        "description": "The subquestions that need to be answered.",
+                                        "items": {"$ref": "#/$defs/Subquestion"},
+                                        "title": "Subquestions",
+                                        "type": "array",
+                                    },
+                                },
+                                "required": ["question", "subquestions"],
+                                "title": "Task",
+                                "type": "object",
+                                "description": "task",
+                            }
+                        },
+                        "required": ["task"],
+                    },
+                },
+            }
+        ]
+        assert assistant.llm_config["tools"] == expected_tools, assistant.llm_config["tools"]  # type: ignore[index]
 
     # gpt-4o-mini isn't good enough to answer this question
     @pytest.mark.openai
