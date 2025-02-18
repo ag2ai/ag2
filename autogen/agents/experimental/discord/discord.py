@@ -55,5 +55,5 @@ class DiscordAgent(ConversableAgent):
 
         super().__init__(*args, system_message=system_message, **kwargs)
 
-        self.add_tool_for_llm(self._send_tool)
-        self.add_tool_for_llm(self._retrieve_tool)
+        self.register_for_llm()(self._send_tool)
+        self.register_for_llm()(self._retrieve_tool)
