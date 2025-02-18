@@ -173,6 +173,7 @@
           formatted_desc = f"{description}<br/><br/>" if description else ''
           if type_val != '-':
             ##   formatted_desc += f"**Type:** {get_doc_path(type_val)}"
+              type_val = re.sub(r"<class[\s\xa0]'([^']+)'>", r"'\1'", type_val)
               formatted_desc += f"**Type:** {type_val}"
           if default != '-' and default != '"-"':
               formatted_desc += f"<br/><br/>**Default:** {default}"
