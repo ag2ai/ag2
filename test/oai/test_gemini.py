@@ -6,10 +6,11 @@
 # SPDX-License-Identifier: MIT
 
 import os
-from typing import List
+from typing import Any, List
 from unittest.mock import MagicMock, patch
 
 import pytest
+from openai.types.chat.chat_completion import ChatCompletion
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
@@ -26,9 +27,7 @@ with optional_import_block() as result:
     from vertexai.generative_models import SafetySetting as VertexAISafetySetting
 
 
-@skip_on_missing_imports(
-    ["vertexai", "PIL", "google.ai", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini"
-)
+@skip_on_missing_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
 class TestGeminiClient:
     # Fixtures for mock data
     @pytest.fixture
@@ -250,39 +249,36 @@ class TestGeminiClient:
         )
         assert gemini_client.cost(response) > 0, "Cost should be correctly calculated as zero"
 
-    @patch("autogen.oai.gemini.genai.GenerativeModel")
+    @patch("autogen.oai.gemini.genai.Client")
     # @patch("autogen.oai.gemini.genai.configure")
     @patch("autogen.oai.gemini.calculate_gemini_cost")
-    def test_create_response_with_text(self, mock_calculate_cost, mock_generative_model, gemini_client):
-        # Mock the genai model configuration and creation process
-        mock_chat = MagicMock()
-        mock_model = MagicMock()
-        # mock_configure.return_value = None
-        mock_generative_model.return_value = mock_model
-        mock_model.start_chat.return_value = mock_chat
+    def test_create_response_with_text(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        mock_calculate_cost.return_value = 0.002
 
-        # Set up mock token counts with real integers
-        mock_usage_metadata = MagicMock()
-        mock_usage_metadata.prompt_token_count = 100
-        mock_usage_metadata.candidates_token_count = 50
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+        assert mock_generative_client().chats.create() == mock_chat
 
         mock_text_part = MagicMock()
         mock_text_part.text = "Example response"
         mock_text_part.function_call = None
 
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 100
+        mock_usage_metadata.candidates_token_count = 50
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
         mock_response = MagicMock(spec=GenerateContentResponse)
-        mock_response._done = True
-        mock_response._iterator = None
-        mock_response._result = None
-        mock_response.parts = [mock_text_part]
-
         mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
         mock_chat.send_message.return_value = mock_response
+        assert isinstance(mock_response, GenerateContentResponse)
 
-        # Mock the calculate_gemini_cost function
-        mock_calculate_cost.return_value = 0.002
+        assert isinstance(mock_chat.send_message("dkdk"), GenerateContentResponse)
 
-        # Call the create method
         response = gemini_client.create({
             "model": "gemini-pro",
             "messages": [{"content": "Hello", "role": "user"}],
@@ -290,7 +286,9 @@ class TestGeminiClient:
         })
 
         # Assertions to check if response is structured as expected
-        # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
+        assert isinstance(response, ChatCompletion), (
+            f"Response should be an instance of ChatCompletion - got {type(response)}"
+        )
         assert response.choices[0].message.content == "Example response", (
             "Response content should match expected output"
         )
@@ -433,3 +431,113 @@ class TestGeminiClient:
         }
         converted_schema = GeminiClient._convert_type_null_to_nullable(initial_schema)
         assert converted_schema == expected_schema
+
+    @pytest.fixture
+    def nested_function_parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "$defs": {
+                        "Subquestion": {
+                            "properties": {
+                                "question": {
+                                    "description": "The original question.",
+                                    "title": "Question",
+                                    "type": "string",
+                                }
+                            },
+                            "required": ["question"],
+                            "title": "Subquestion",
+                            "type": "object",
+                        }
+                    },
+                    "properties": {
+                        "question": {
+                            "description": "The original question.",
+                            "title": "Question",
+                            "type": "string",
+                        },
+                        "subquestions": {
+                            "description": "The subquestions that need to be answered.",
+                            "items": {"$ref": "#/$defs/Subquestion"},
+                            "title": "Subquestions",
+                            "type": "array",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "title": "Task",
+                    "type": "object",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+
+    def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
+        result = GeminiClient._unwrap_references(nested_function_parameters)
+
+        expected_result = {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "properties": {
+                        "question": {"description": "The original question.", "title": "Question", "type": "string"},
+                        "subquestions": {
+                            "description": "The subquestions that need to be answered.",
+                            "items": {
+                                "properties": {
+                                    "question": {
+                                        "description": "The original question.",
+                                        "title": "Question",
+                                        "type": "string",
+                                    }
+                                },
+                                "required": ["question"],
+                                "title": "Subquestion",
+                                "type": "object",
+                            },
+                            "title": "Subquestions",
+                            "type": "array",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "title": "Task",
+                    "type": "object",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+        assert result == expected_result, result
+
+    def test_create_gemini_function_parameters_with_nested_parameters(
+        self, nested_function_parameters: dict[str, Any]
+    ) -> None:
+        result = GeminiClient._create_gemini_function_parameters(nested_function_parameters)
+
+        expected_result = {
+            "type": "OBJECT",
+            "properties": {
+                "task": {
+                    "properties": {
+                        "question": {"description": "The original question.", "type": "STRING"},
+                        "subquestions": {
+                            "description": "The subquestions that need to be answered.",
+                            "items": {
+                                "properties": {"question": {"description": "The original question.", "type": "STRING"}},
+                                "required": ["question"],
+                                "type": "OBJECT",
+                            },
+                            "type": "ARRAY",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "type": "OBJECT",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+
+        assert result == expected_result, result
