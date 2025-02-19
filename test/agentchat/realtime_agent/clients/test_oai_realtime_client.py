@@ -15,7 +15,7 @@ from ....conftest import Credentials
 
 class TestOAIRealtimeClient:
     @pytest.fixture
-    def client(self, credentials_gpt_4o_realtime: Credentials) -> RealtimeClientProtocol:
+    def client(self, credentials_gpt_4o_realtime: Credentials) -> OpenAIRealtimeClient:
         llm_config = credentials_gpt_4o_realtime.llm_config
         return OpenAIRealtimeClient(
             llm_config=llm_config,

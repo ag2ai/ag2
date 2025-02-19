@@ -16,7 +16,7 @@ from ....conftest import Credentials, suppress_gemini_resource_exhausted
 
 class TestGeminiRealtimeClient:
     @pytest.fixture
-    def client(self, credentials_gemini_realtime: Credentials) -> RealtimeClientProtocol:
+    def client(self, credentials_gemini_realtime: Credentials) -> GeminiRealtimeClient:
         llm_config = credentials_gemini_realtime.llm_config
         return GeminiRealtimeClient(
             llm_config=llm_config,
