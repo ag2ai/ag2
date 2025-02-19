@@ -64,7 +64,7 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
 
     Please don't output anything else.
 
-    The initiate_tasks tool should only be called once at a time.
+    Use the initiate_tasks tool to incorporate all ingestions and queries. Don't call it again until new ingestions or queries are raised.
     """
 DEFAULT_ERROR_SWARM_MESSAGE: str = """
 Document Agent failed to perform task.
