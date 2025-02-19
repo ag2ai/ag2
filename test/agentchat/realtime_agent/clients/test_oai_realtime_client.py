@@ -47,7 +47,7 @@ class TestOAIRealtimeClient:
 
         async with client.connect():
             # read events for 3 seconds and then interrupt
-            with move_on_after(77) as scope:
+            with move_on_after(3) as scope:
                 print("Reading events...")
                 async for event in client.read_events():
                     print(f"-> Received event: {event}")
