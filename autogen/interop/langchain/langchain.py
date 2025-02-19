@@ -53,7 +53,7 @@ class LangChainInteroperability:
             raise ValueError(f"The LangchainInteroperability does not support any additional arguments, got {kwargs}")
 
         # needed for type checking
-        langchain_tool: LangchainTool = tool
+        langchain_tool: LangchainTool = tool  # type: ignore[no-any-unimported]
 
         model_type = langchain_tool.get_input_schema()
 
