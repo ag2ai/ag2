@@ -27,7 +27,6 @@ from .docling_query_engine import DoclingMdQueryEngine
 __all__ = ["DocumentAgent"]
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 DEFAULT_SYSTEM_MESSAGE = """
     You are a document agent.
@@ -399,10 +398,6 @@ class DocumentAgent(ConversableAgent):
             return True, DEFAULT_ERROR_SWARM_MESSAGE
 
         return True, chat_result.summary
-
-    def _init_swarm_agents(self, agents: list[ConversableAgent]) -> None:
-        for agent in agents:
-            agent.reset()
 
     def _get_document_input_message(self, messages: Optional[Union[list[dict[str, Any]], str]]) -> str:  # type: ignore[type-arg]
         if isinstance(messages, str):

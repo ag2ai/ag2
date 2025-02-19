@@ -16,7 +16,6 @@ from .document_utils import preprocess_path
 __all__ = ["DoclingDocIngestAgent"]
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 DOCLING_PARSE_TOOL_NAME = "docling_parse_docs"
 
