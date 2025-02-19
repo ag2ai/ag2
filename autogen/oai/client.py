@@ -13,6 +13,7 @@ import re
 import sys
 import uuid
 import warnings
+from functools import lru_cache
 from typing import Any, Callable, Optional, Protocol, Union
 
 from pydantic import BaseModel
@@ -193,6 +194,11 @@ if not logger.handlers:
 LEGACY_DEFAULT_CACHE_SEED = 41
 LEGACY_CACHE_DIR = ".cache"
 OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
+
+
+@lru_cache(maxsize=128)
+def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient") -> None:
+    logger.info(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
 
 
 @export_module("autogen")
@@ -970,7 +976,8 @@ class OpenAIWrapper:
             elif cache_seed is not None:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
-            logger.info(f"Using cache with seed value: {cache if cache is not None else cache_seed}")
+
+            log_cache_seed_value(cache if cache is not None else cache_seed, client=client)
 
             if cache_client is not None:
                 with cache_client as cache:
