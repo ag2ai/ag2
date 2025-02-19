@@ -165,6 +165,24 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 @pytest.mark.openai
 @skip_on_missing_imports(["openai"])
+def test_log_cache_seed_value(credentials_gpt_4o_mini: Credentials, monkeypatch: pytest.MonkeyPatch):
+    mock_logger = MagicMock()
+    monkeypatch.setattr("autogen.oai.client.logger", mock_logger)
+
+    prompt = "Write a 100 word summary on the topic of the history of human civilization."
+
+    # Test single client
+    wrapper = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    _ = wrapper.create(messages=[{"role": "user", "content": prompt}], cache_seed=999)
+
+    mock_logger.info.assert_called_once()
+    actual = mock_logger.info.call_args[0][0]
+    expected = "Using cache with seed value 999 for client OpenAIClient"
+    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["openai"])
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
