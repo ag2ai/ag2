@@ -117,13 +117,18 @@ class RealtimeClientBase:
 
     async def _read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read events from a Realtime Client."""
-        connection_reader = asyncio.create_task(self._read_from_connection_task())
-        while True:
-            event = await self._eventQueue.get()
-            if event is not None:
-                yield event
-            else:
-                break
+        try:
+            connection_reader = asyncio.create_task(self._read_from_connection_task())
+            while True:
+                event = await self._eventQueue.get()
+                if event is not None:
+                    yield event
+                else:
+                    break
+        except asyncio.CancelledError:
+            if connection_reader.done() is False:
+                connection_reader.cancel()
+            raise
         await asyncio.gather(connection_reader)
 
     async def queue_input_audio_buffer_delta(self, audio: str) -> None:
