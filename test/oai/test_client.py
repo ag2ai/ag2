@@ -14,7 +14,6 @@ from collections.abc import Generator
 from unittest.mock import MagicMock
 
 import pytest
-from openai.types.chat.chat_completion import ChatCompletion
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
@@ -28,6 +27,7 @@ TOOL_ENABLED = False
 with optional_import_block() as result:
     import openai
     from openai import OpenAI
+    from openai.types.chat.chat_completion import ChatCompletion
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
