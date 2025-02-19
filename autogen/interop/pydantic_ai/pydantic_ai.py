@@ -10,15 +10,21 @@ from inspect import signature
 from typing import Any, Callable, Optional
 
 from ...doc_utils import export_module
-from ...import_utils import optional_import_block
+from ...import_utils import optional_import_block, require_optional_import
 from ..registry import register_interoperable_class
 from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 __all__ = ["PydanticAIInteroperability"]
 
+with optional_import_block():
+    from pydantic_ai import RunContext
+    from pydantic_ai.tools import Tool as PydanticAITool
+    from pydantic_ai.usage import Usage
+
 
 @register_interoperable_class("pydanticai")
 @export_module("autogen.interop")
+@require_optional_import("pydantic_ai", "interop-pydantic-ai")
 class PydanticAIInteroperability:
     """A class implementing the `Interoperable` protocol for converting Pydantic AI tools
     into a general `Tool` format.
@@ -49,9 +55,6 @@ class PydanticAIInteroperability:
         Raises:
             ValueError: If the tool fails after the maximum number of retries.
         """
-        from pydantic_ai import RunContext
-        from pydantic_ai.tools import Tool as PydanticAITool
-
         ctx_typed: Optional[RunContext[Any]] = ctx  # type: ignore
         tool_typed: PydanticAITool[Any] = tool  # type: ignore
 
@@ -108,10 +111,6 @@ class PydanticAIInteroperability:
                         dependencies are missing for tools that require a context.
             UserWarning: If the `deps` argument is provided for a tool that does not take a context.
         """
-        from pydantic_ai import RunContext
-        from pydantic_ai.tools import Tool as PydanticAITool
-        from pydantic_ai.usage import Usage
-
         if not isinstance(tool, PydanticAITool):
             raise ValueError(f"Expected an instance of `pydantic_ai.tools.Tool`, got {type(tool)}")
 
