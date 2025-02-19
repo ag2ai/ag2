@@ -1,0 +1,29 @@
+---
+Title: Nested chat
+---
+
+A powerful method to encapsulate a single workflow into an agent is through AG2's nested chats.
+
+Nested chats is powered by the nested chats handler, which is a pluggable component of [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent). The figure below illustrates how the nested chats handler triggers a sequence of nested chats when a message is received.
+
+![nested_chat](../assets/nested-chats.png)
+
+When a message comes in and passes the human-in-the-loop component, the nested chats handler checks if the message should trigger a nested chat based on conditions specified by the user.
+
+If the conditions are met, the nested chats handler starts a sequence of nested chats specified using the sequential chats pattern.
+
+In each of the nested chats, the sender agent is always the same agent that triggered the nested chats.
+
+In the end, the nested chat handler uses the results of the nested chats to produce a response to the original message (by default a summary of the last chat).
+
+Here is an example of a nested chat where a single agent, `lead_teacher_agent` encapsulates a workflow involving five other agents. This inner workflow includes two-agent chats and a group chat.
+
+The end result is that when this agent is called to reply in a chat it will, internally, run through a workflow using the nested chats and a fully considered lesson plan will be returned as its reply.
+
+import Example from "/snippets/python-examples/nestedchat.mdx";
+
+<Example/>
+
+Nested chat is a useful conversation pattern that allows you to package complex workflows into a single agent.
+
+For further information on setting up a nested chat, see the [`register_nested_chats`](/docs/api-reference/autogen/ConversableAgent#register-nested-chats) API reference and this [notebook](/docs/use-cases/notebooks/notebooks/agentchat_nested_chats_chess).

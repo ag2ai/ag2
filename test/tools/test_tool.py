@@ -23,7 +23,7 @@ class TestTool:
         assert self.tool.description == "A test tool"
 
     def test_register_for_llm(self) -> None:
-        config_list = [{"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]
+        config_list = [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]
 
         agent = AssistantAgent(
             name="agent",

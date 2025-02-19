@@ -665,6 +665,11 @@ class GroupChat:
         # Override the selector's config if one was passed as a parameter to this class
         speaker_selection_llm_config = self.select_speaker_auto_llm_config or selector.llm_config
 
+        if speaker_selection_llm_config is False:
+            raise ValueError(
+                "The group chat's internal speaker selection agent does not have an LLM configuration. Please provide a valid LLM config to the group chat's GroupChatManager or set it with the select_speaker_auto_llm_config parameter."
+            )
+
         # Agent for selecting a single agent name from the response
         speaker_selection_agent = ConversableAgent(
             "speaker_selection_agent",

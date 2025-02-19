@@ -12,7 +12,7 @@ In AG2, agents use LLMs as key components to understand and react. To configure 
 import os
 
 llm_config = {
-    "config_list": [{"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
+    "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
 }
 ```
 
@@ -152,8 +152,8 @@ Model names can differ between OpenAI and Azure OpenAI, so tags offer an easy wa
 
 ```python
 config_list = [
-    {"model": "my-gpt-4o-deployment", "api_key": "", "tags": ["gpt4o", "openai"]},
-    {"model": "llama-7B", "base_url": "http://127.0.0.1:8080", "tags": ["llama", "local"]},
+    {"api_type": "openai", "model": "my-gpt-4o-deployment", "api_key": "", "tags": ["gpt4o", "openai"]},
+    {"api_type": "openai", "model": "llama-7B", "base_url": "http://127.0.0.1:8080", "tags": ["llama", "local"]},
 ]
 ```
 

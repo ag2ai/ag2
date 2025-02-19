@@ -160,7 +160,7 @@ class TestPydanticAIInteroperabilityWithContext:
             PydanticAIInteroperability.convert_tool(tool=self.pydantic_ai_tool, deps=None)
 
     def test_expected_tools(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": "abc"}]
+        config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "abc"}]
         chatbot = AssistantAgent(
             name="chatbot",
             llm_config={"config_list": config_list},

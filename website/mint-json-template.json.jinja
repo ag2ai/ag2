@@ -106,23 +106,44 @@
           "group": "Basic Concepts",
           "pages": [
             "docs/user-guide/basic-concepts/installing-ag2",
-            "docs/user-guide/basic-concepts/llm-configuration",
+            {
+              "group": "LLM Configuration",
+              "pages":
+              [
+                "docs/user-guide/basic-concepts/llm-configuration/llm-configuration",
+                "docs/user-guide/basic-concepts/llm-configuration/structured-outputs"
+              ]
+            },
             "docs/user-guide/basic-concepts/conversable-agent",
             "docs/user-guide/basic-concepts/human-in-the-loop",
-            "docs/user-guide/basic-concepts/orchestrations",
-            "docs/user-guide/basic-concepts/groupchat",
-            "docs/user-guide/basic-concepts/swarm",
-            "docs/user-guide/basic-concepts/tools",
-            "docs/user-guide/basic-concepts/structured-outputs",
-            "docs/user-guide/basic-concepts/ending-a-chat"
+            {
+              "group": "Orchestrating Agents",
+              "pages":
+              [
+                "docs/user-guide/basic-concepts/orchestration/orchestrations",
+                "docs/user-guide/basic-concepts/orchestration/sequential-chat",
+                "docs/user-guide/basic-concepts/orchestration/nested-chat",
+                "docs/user-guide/basic-concepts/orchestration/swarm",
+                "docs/user-guide/basic-concepts/orchestration/ending-a-chat"
+              ]
+            },
+            "docs/user-guide/basic-concepts/tools"
           ]
         },
         {
           "group": "Advanced Concepts",
           "pages": [
             "docs/user-guide/advanced-concepts/rag",
-            "docs/user-guide/advanced-concepts/custom-group-chat",
-            "docs/user-guide/advanced-concepts/resuming-group-chat",
+
+            {
+              "group": "GroupChat",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/groupchat/groupchat",
+                "docs/user-guide/advanced-concepts/groupchat/custom-group-chat",
+                "docs/user-guide/advanced-concepts/groupchat/resuming-group-chat"
+              ]
+            },
             {
               "group": "Swarm",
               "pages":
@@ -158,6 +179,16 @@
             "docs/user-guide/models/togetherai",
             "docs/user-guide/models/vLLM"
           ]
+        },
+        {
+          "group": "Reference Agents",
+          "pages": [
+            "docs/user-guide/reference-agents/index",
+            "docs/user-guide/reference-agents/captainagent",
+            "docs/user-guide/reference-agents/communication-agents",
+            "docs/user-guide/reference-agents/reasoningagent",
+            "docs/user-guide/reference-agents/websurferagent"
+          ]
         }
       ]
     },
@@ -170,16 +201,6 @@
             "docs/use-cases/use-cases/customer-service",
             "docs/use-cases/use-cases/game-design",
             "docs/use-cases/use-cases/travel-planning"
-          ]
-        },
-        {
-          "group": "Reference Agents",
-          "pages": [
-            "docs/use-cases/reference-agents/index",
-            "docs/use-cases/reference-agents/captainagent",
-            "docs/use-cases/reference-agents/communication-agents",
-            "docs/use-cases/reference-agents/reasoningagent",
-            "docs/use-cases/reference-agents/websurferagent"
           ]
         },
         {

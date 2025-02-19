@@ -42,7 +42,7 @@ import os
 from autogen import UserProxyAgent, ReasoningAgent
 
 # Configure the model
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY")}]
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY")}]
 
 # Create a reasoning agent with MCTS
 mcts_agent = ReasoningAgent(
@@ -73,8 +73,8 @@ Here’s how you can set it up:
 
 ```python
 # Configure the model
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY")}]
-config_list_larger = [{"model": "gpt-4o", "api_key": os.environ.get("OPENAI_API_KEY")}]
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY")}]
+config_list_larger = [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ.get("OPENAI_API_KEY")}]
 
 # Create a reasoning agent with MCTS
 mcts_agent = ReasoningAgent(
