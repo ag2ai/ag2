@@ -14,6 +14,7 @@ from collections.abc import Generator
 from unittest.mock import MagicMock
 
 import pytest
+from openai.types.chat.chat_completion import ChatCompletion
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
@@ -165,14 +166,53 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
 
 @pytest.mark.openai
 @skip_on_missing_imports(["openai"])
-def test_log_cache_seed_value(credentials_gpt_4o_mini: Credentials, monkeypatch: pytest.MonkeyPatch):
+def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest.MonkeyPatch):
+    chat_completion = ChatCompletion(**{
+        "id": "chatcmpl-B2ZfaI387UgmnNXS69egxeKbDWc0u",
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "index": 0,
+                "logprobs": None,
+                "message": {
+                    "content": "The history of human civilization spans thousands of years, beginning with the emergence of Homo sapiens in Africa around 200,000 years ago. Early humans formed hunter-gatherer societies before transitioning to agriculture during the Neolithic Revolution, around 10,000 BCE, leading to the establishment of permanent settlements. The rise of city-states and empires, such as Mesopotamia, Ancient Egypt, and the Indus Valley, marked significant advancements in governance, trade, and culture. The classical era saw the flourish of philosophies and science in Greece and Rome, while the Middle Ages brought feudalism and the spread of religions. The Renaissance sparked exploration and modernization, culminating in the contemporary globalized world.",
+                    "refusal": None,
+                    "role": "assistant",
+                    "audio": None,
+                    "function_call": None,
+                    "tool_calls": None,
+                },
+            }
+        ],
+        "created": 1739953470,
+        "model": "gpt-4o-mini-2024-07-18",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_13eed4fce1",
+        "usage": {
+            "completion_tokens": 142,
+            "prompt_tokens": 23,
+            "total_tokens": 165,
+            "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+            },
+            "prompt_tokens_details": {"audio_tokens": 0, "cached_tokens": 0},
+        },
+        "cost": 8.864999999999999e-05,
+    })
+
     mock_logger = MagicMock()
+    mock_cache_get = MagicMock(return_value=chat_completion)
     monkeypatch.setattr("autogen.oai.client.logger", mock_logger)
+    monkeypatch.setattr("autogen.cache.disk_cache.DiskCache.get", mock_cache_get)
 
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
 
     # Test single client
-    wrapper = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    wrapper = OpenAIWrapper(config_list=mock_credentials.config_list)
     _ = wrapper.create(messages=[{"role": "user", "content": prompt}], cache_seed=999)
 
     mock_logger.info.assert_called_once()
