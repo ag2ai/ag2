@@ -212,6 +212,18 @@ class DoclingMdQueryEngine:
         existing_collections = self.client.list_collections()
         return any(col == collection_name for col in existing_collections)
 
+    def get_collection_name(self) -> str:
+        """
+        Get the name of the collection used by the query engine.
+
+        Returns:
+            The name of the collection.
+        """
+        if self.collection_name:
+            return self.collection_name
+        else:
+            raise ValueError("Collection name not set.")
+
     def validate_query_index(self) -> None:
         """Ensures an index exists"""
         if not hasattr(self, "index"):
