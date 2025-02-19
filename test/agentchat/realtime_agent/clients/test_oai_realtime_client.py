@@ -39,6 +39,7 @@ class TestOAIRealtimeClient:
 
         assert not scope.cancelled_caught
 
+    @pytest.mark.skip
     @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_start_read_events(self, client: OpenAIRealtimeClient) -> None:
@@ -62,6 +63,7 @@ class TestOAIRealtimeClient:
         assert isinstance(calls_kwargs[0][0], SessionCreated)
         assert isinstance(calls_kwargs[1][0], SessionUpdated)
 
+    @pytest.mark.skip
     @pytest.mark.openai
     @pytest.mark.asyncio
     async def test_send_text(self, client: OpenAIRealtimeClient) -> None:

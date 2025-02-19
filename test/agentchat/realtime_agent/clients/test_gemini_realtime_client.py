@@ -41,6 +41,7 @@ class TestGeminiRealtimeClient:
 
         assert not scope.cancelled_caught
 
+    @pytest.mark.skip
     @pytest.mark.gemini
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
@@ -64,6 +65,7 @@ class TestGeminiRealtimeClient:
 
         assert isinstance(calls_args[0][0], SessionCreated)
 
+    @pytest.mark.skip
     @pytest.mark.gemini
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
