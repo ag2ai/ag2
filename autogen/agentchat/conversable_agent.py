@@ -1743,7 +1743,7 @@ class ConversableAgent(LLMAgent):
         else:
             return self._finished_chats
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset the agent."""
         self.clear_history()
         self.reset_consecutive_auto_reply_counter()
