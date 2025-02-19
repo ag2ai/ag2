@@ -120,10 +120,13 @@ class RealtimeClientBase:
         try:
             connection_reader = asyncio.create_task(self._read_from_connection_task())
             while True:
-                event = await self._eventQueue.get()
-                if event is not None:
-                    yield event
-                else:
+                try:
+                    event = await self._eventQueue.get()
+                    if event is not None:
+                        yield event
+                    else:
+                        break
+                except Exception:
                     break
         except asyncio.CancelledError:
             if connection_reader.done() is False:
