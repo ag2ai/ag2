@@ -21,7 +21,7 @@ logger.setLevel(logging.INFO)
 DOCLING_PARSE_TOOL_NAME = "docling_parse_docs"
 
 DEFAULT_DOCLING_PARSER_PROMPT = f"""
-You are an expert in parsing and understanding text. You can use {DOCLING_PARSE_TOOL_NAME} tool to parse various documents and extract information from them.
+You are an expert in parsing and understanding text. You can use {DOCLING_PARSE_TOOL_NAME} tool to parse various documents and extract information from them. You can only use the tool once per turn.
 """
 
 
@@ -37,6 +37,8 @@ class DoclingDocIngestAgent(ConversableAgent):
         llm_config: Optional[Union[dict, Literal[False]]] = None,  # type: ignore[type-arg]
         parsed_docs_path: Optional[Union[Path, str]] = None,
         query_engine: Optional[DoclingMdQueryEngine] = None,
+        return_agent_success: str = "TaskManagerAgent",
+        return_agent_error: str = "ErrorManagerAgent",
     ):
         """
         Initialize the DoclingDocIngestAgent.
@@ -50,7 +52,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         name = name or "DoclingDocIngestAgent"
 
         parsed_docs_path = parsed_docs_path or Path("./parsed_docs")
-        parsed_docs_path = preprocess_path(str_or_path=parsed_docs_path)
+        parsed_docs_path = preprocess_path(str_or_path=parsed_docs_path, mk_path=True)
 
         self.docling_query_engine = query_engine or DoclingMdQueryEngine()
 
@@ -66,28 +68,40 @@ class DoclingDocIngestAgent(ConversableAgent):
             SwarmResult: The result of the task.
             """
 
-            tasks = context_variables.get("DocumentsToIngest", [])
-            while tasks:
-                task = tasks.pop()
-                input_file_path = task["path_or_url"]
-                output_files = docling_parse_docs(
-                    input_file_path=input_file_path, output_dir_path=parsed_docs_path, output_formats=["markdown"]
+            try:
+                input_file_path = ""
+                tasks = context_variables.get("DocumentsToIngest", [])
+                while tasks:
+                    task = tasks.pop()
+                    input_file_path = task["path_or_url"]
+                    output_files = docling_parse_docs(
+                        input_file_path=input_file_path, output_dir_path=parsed_docs_path, output_formats=["markdown"]
+                    )
+
+                    # Limit to one output markdown file for now.
+                    if output_files:
+                        output_file = output_files[0]
+                        if output_file.suffix == ".md":
+                            if self.docling_query_engine.get_collection_name() is None:
+                                self.docling_query_engine.init_db(input_doc_paths=[output_file])
+                            else:
+                                self.docling_query_engine.add_docs(new_doc_paths=[output_file])
+
+                    # Keep track of documents ingested
+                    context_variables["DocumentsIngested"].append(input_file_path)
+
+                context_variables["CompletedTaskCount"] += 1
+                logger.info("data_ingest_task context_variables:", context_variables)
+
+            except Exception as e:
+                return SwarmResult(
+                    agent=return_agent_error,
+                    values=f"Data Ingestion Task Failed, Error {e}: '{input_file_path}'",
+                    context_variables=context_variables,
                 )
 
-                # Limit to one output markdown file for now.
-                if output_files:
-                    output_file = output_files[0]
-                    if output_file.suffix == ".md":
-                        if self.docling_query_engine.get_collection_name() is None:
-                            self.docling_query_engine.init_db(input_doc_paths=[output_file])
-                        else:
-                            self.docling_query_engine.add_docs(new_doc_paths=[output_file])
-
-            context_variables["CompletedTaskCount"] += 1
-            logger.info("data_ingest_task context_variables:", context_variables)
-
             return SwarmResult(
-                agent="TaskManagerAgent",
+                agent=return_agent_success,
                 values=f"Data Ingestion Task Completed for {input_file_path}",
                 context_variables=context_variables,
             )

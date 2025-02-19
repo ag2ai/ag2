@@ -10,7 +10,7 @@ from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from .... import Agent, ConversableAgent
+from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.swarm_agent import (
     AfterWork,
     AfterWorkOption,
@@ -68,10 +68,18 @@ DEFAULT_ERROR_SWARM_MESSAGE: str = """
 Document Agent failed to perform task.
 """
 
+ERROR_MANAGER_NAME = "ErrorManagerAgent"
+ERROR_MANAGER_SYSTEM_MESSAGE = """
+You communicate errors to the user. Include the original error messages in full. Use the format:
+The following error(s) have occurred:
+- Error 1
+- Error 2
+"""
+
 
 class QueryType(Enum):
     RAG_QUERY = "RAG_QUERY"
-    COMMON_QUESTION = "COMMON_QUESTION"
+    # COMMON_QUESTION = "COMMON_QUESTION"
 
 
 class Ingest(BaseModel):
@@ -102,10 +110,9 @@ class DocumentTriageAgent(ConversableAgent):
             name="DocumentTriageAgent",
             system_message=(
                 "You are a document triage agent."
-                "You are responsible for deciding what type of task to perform from user requests."
-                "When user uploads new documents or provide links of documents, you should add Ingest task to DocumentTask."
-                "When user asks common questions, you should add 'COMMON_QUESTION' Query task to DocumentTask."
-                "When user asks questions about information from existing documents, you add 'RAG_QUERY' Query task to DocumentTask."
+                "You are responsible for deciding what type of task to perform from a user's request and populating a DocumentTask formatted response."
+                "If the user specifies files or URLs, add them as individual 'ingestions' to DocumentTask."
+                "Add the user's questions about the files/URLs as individual 'RAG_QUERY' queries to the 'query' list in the DocumentTask. Don't make up questions, keep it as concise and close to the user's request as possible."
             ),
             human_input_mode="NEVER",
             llm_config=structured_config_list,
@@ -160,11 +167,18 @@ class DocumentAgent(ConversableAgent):
 
         self._context_variables: dict[str, Any] = {
             "DocumentsToIngest": [],
+            "DocumentsIngested": [],
             "QueriesToRun": [],
             "QueryResults": [],
         }
 
         self._triage_agent = DocumentTriageAgent(llm_config=llm_config)
+
+        self._error_agent = ConversableAgent(
+            name=ERROR_MANAGER_NAME,
+            system_message=ERROR_MANAGER_SYSTEM_MESSAGE,
+            llm_config=llm_config,
+        )
 
         def initiate_tasks(
             ingestions: list[Ingest],
@@ -199,7 +213,11 @@ class DocumentAgent(ConversableAgent):
 
         query_engine = DoclingMdQueryEngine()
         self._data_ingestion_agent = DoclingDocIngestAgent(
-            llm_config=llm_config, query_engine=query_engine, parsed_docs_path=parsed_docs_path
+            llm_config=llm_config,
+            query_engine=query_engine,
+            parsed_docs_path=parsed_docs_path,
+            return_agent_success=TASK_MANAGER_NAME,
+            return_agent_error=ERROR_MANAGER_NAME,
         )
 
         def execute_rag_query(context_variables: dict) -> SwarmResult:  # type: ignore[type-arg]
@@ -207,20 +225,33 @@ class DocumentAgent(ConversableAgent):
             answer = query_engine.query(query)
             context_variables["QueriesToRun"].pop(0)
             context_variables["CompletedTaskCount"] += 1
-            context_variables["QueryResults"].append({"query": query, "result": answer})
+            context_variables["QueryResults"].append({"query": query, "answer": answer})
             return SwarmResult(values=answer, context_variables=context_variables)
 
         self._query_agent = ConversableAgent(
             name="QueryAgent",
-            system_message="You are a query agent. You answer the user's questions only using the query function provided to you.",
+            system_message="You are a query agent. You answer the user's questions only using the query function provided to you. You can only call use the execute_rag_query tool once per turn.",
             llm_config=llm_config,
             functions=[execute_rag_query],
         )
 
+        # Summary agent prompt will include the results of the ingestions and swarms
+        def create_summary_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+            system_message = (
+                "You are a summary agent and you provide a summary of all completed tasks and the list of queries and their answers. "
+                "Format the Query and Answers as 'Query:\nAnswer:'. Add a number to each query if more than one. Use the context below:\n"
+                f"Documents ingested: {agent.get_context('DocumentsIngested')}\n"
+                f"Documents left to ingest: {len(agent.get_context('DocumentsToIngest'))}\n"
+                f"Queries left to run: {len(agent.get_context('QueriesToRun'))}\n"
+                f"Query and Answers: {agent.get_context('QueryResults')}\n"
+            )
+
+            return system_message
+
         self._summary_agent = ConversableAgent(
             name="SummaryAgent",
-            system_message="You are a summary agent. You would generate a summary of all completed tasks and  answer the user's questions.",
             llm_config=llm_config,
+            update_agent_state_before_reply=[UpdateSystemMessage(create_summary_agent_prompt)],
         )
 
         def has_ingest_tasks(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
@@ -255,7 +286,7 @@ class DocumentAgent(ConversableAgent):
                 ),
                 OnCondition(
                     self._summary_agent,
-                    "Create a summary of the query result",
+                    "Call this function as work is done and a summary will be created",
                     available=summary_task,
                 ),
                 AfterWork(AfterWorkOption.STAY),
@@ -268,6 +299,7 @@ class DocumentAgent(ConversableAgent):
                 AfterWork(self._task_manager_agent),
             ],
         )
+
         register_hand_off(
             agent=self._query_agent,
             hand_to=[
@@ -281,6 +313,15 @@ class DocumentAgent(ConversableAgent):
                 AfterWork(AfterWorkOption.TERMINATE),
             ],
         )
+
+        # The Error Agent always terminates the swarm
+        register_hand_off(
+            agent=self._error_agent,
+            hand_to=[
+                AfterWork(AfterWorkOption.TERMINATE),
+            ],
+        )
+
         self.register_reply([Agent, None], DocumentAgent.generate_inner_swarm_reply)
 
     def generate_inner_swarm_reply(
@@ -292,6 +333,7 @@ class DocumentAgent(ConversableAgent):
         context_variables = {
             "CompletedTaskCount": 0,
             "DocumentsToIngest": [],
+            "DocumentsIngested": [],
             "QueriesToRun": [],
             "QueryResults": [],
         }
@@ -301,6 +343,7 @@ class DocumentAgent(ConversableAgent):
             self._data_ingestion_agent,
             self._query_agent,
             self._summary_agent,
+            self._error_agent,
         ]
         chat_result, context_variables, last_speaker = initiate_swarm_chat(
             initial_agent=self._triage_agent,
@@ -309,8 +352,13 @@ class DocumentAgent(ConversableAgent):
             context_variables=context_variables,
             after_work=AfterWorkOption.TERMINATE,
         )
+        if last_speaker == self._error_agent:
+            # If we finish with the error agent, we return their message which contains the error
+            return True, chat_result.summary
         if last_speaker != self._summary_agent:
+            # If the swarm finished but not with the summary agent, we assume something has gone wrong with the flow
             return True, DEFAULT_ERROR_SWARM_MESSAGE
+
         return True, chat_result.summary
 
     def _init_swarm_agents(self, agents: list[ConversableAgent]) -> None:
