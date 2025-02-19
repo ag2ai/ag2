@@ -35,7 +35,7 @@ In our [Adding Browsing Capabilities to AG2](/blog/2025-01-31-Websurfing-Tools) 
 
 With [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent), your agents can seamlessly browse the web, retrieve real-time information, and interact with web pages—all with minimal setup.
 
-![WebSurferAgent Example](/docs/use-cases/reference-agents/assets/websurferagent_animated.gif)
+![WebSurferAgent Example](/docs/user-guide/reference-agents/assets/websurferagent_animated.gif)
 
 ## WebSurferAgent with BrowserUseTool
 <Warning>
@@ -98,7 +98,7 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
 
 llm_config = {
     "config_list": config_list,
@@ -420,7 +420,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 </Tip>
 
 ```python
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
 
 llm_config = {
     "config_list": config_list,

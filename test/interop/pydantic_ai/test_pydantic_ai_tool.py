@@ -33,7 +33,7 @@ class TestPydanticAITool:
             func=tool.function,
             parameters_json_schema=tool._parameters_json_schema,
         )
-        config_list = [{"model": "gpt-4o", "api_key": "abc"}]
+        config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "abc"}]
         chatbot = AssistantAgent(
             name="chatbot",
             llm_config={"config_list": config_list},

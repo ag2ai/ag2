@@ -1,11 +1,10 @@
 ```python
-import os
 import random
 
 from autogen import ConversableAgent, GroupChat, GroupChatManager
 
-config_list = {"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
-
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 def get_agent_by_name(agents, name) -> ConversableAgent:
     for agent in agents:

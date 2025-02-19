@@ -1,6 +1,5 @@
 ```python
 # Imports and an LLM configuration for our agents
-import os
 from autogen import (
     AssistantAgent,
     UserProxyAgent,
@@ -9,7 +8,8 @@ from autogen import (
     GroupChatManager,
 )
 
-config_list = {"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o"}
 
 planner = AssistantAgent(
     name="Planner",

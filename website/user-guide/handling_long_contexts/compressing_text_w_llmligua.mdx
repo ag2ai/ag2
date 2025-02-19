@@ -80,7 +80,8 @@ import autogen
 from autogen.agentchat.contrib.capabilities import transform_messages
 
 system_message = "You are a world-class researcher."
-config_list = [{"model": "gpt-4-turbo", "api_key": os.getenv("OPENAI_API_KEY")}]
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 # Define your agent; the user proxy and an assistant
 researcher = autogen.ConversableAgent(
@@ -140,7 +141,9 @@ The framework's architecture is designed so that it can be seamlessly integrated
 LLMLingua's flexibility allows for various configurations, such as customizing instructions for the LLM or setting specific token counts for compression. This example demonstrates how to set a target token count, enabling the use of models with smaller context sizes like gpt-3.5.
 
 ```python
-config_list = [{"model": "gpt-3.5-turbo", "api_key": os.getenv("OPENAI_API_KEY")}]
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+
 researcher = autogen.ConversableAgent(
     "assistant",
     llm_config={"config_list": config_list},

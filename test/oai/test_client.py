@@ -488,7 +488,7 @@ class TestO1:
 
     def test_oai_reasoning_max_tokens_replacement(self, mock_oai_client: OpenAIClient) -> None:
         """Test that max_tokens is replaced with max_completion_tokens"""
-        test_params = {"model": "o1-mini", "max_tokens": 100}
+        test_params = {"api_type": "openai", "model": "o1-mini", "max_tokens": 100}
 
         mock_oai_client._process_reasoning_model_params(test_params)
 

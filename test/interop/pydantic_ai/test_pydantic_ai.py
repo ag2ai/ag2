@@ -47,12 +47,7 @@ class TestPydanticAIInteroperabilityWithotContext:
         assert self.tool.func() in ["1", "2", "3", "4", "5", "6"]
 
     @pytest.mark.openai
-    def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
-        user_proxy = UserProxyAgent(
-            name="User",
-            human_input_mode="NEVER",
-        )
-
+    def test_with_llm(self, credentials_gpt_4o: Credentials, user_proxy: UserProxyAgent) -> None:
         chatbot = AssistantAgent(name="chatbot", llm_config=credentials_gpt_4o.llm_config)
 
         self.tool.register_for_execution(user_proxy)
@@ -160,7 +155,7 @@ class TestPydanticAIInteroperabilityWithContext:
             PydanticAIInteroperability.convert_tool(tool=self.pydantic_ai_tool, deps=None)
 
     def test_expected_tools(self) -> None:
-        config_list = [{"model": "gpt-4o", "api_key": "abc"}]
+        config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "abc"}]
         chatbot = AssistantAgent(
             name="chatbot",
             llm_config={"config_list": config_list},
@@ -191,12 +186,7 @@ class TestPydanticAIInteroperabilityWithContext:
         assert chatbot.llm_config["tools"] == expected_tools  # type: ignore[index]
 
     @pytest.mark.openai
-    def test_with_llm(self, credentials_gpt_4o: Credentials) -> None:
-        user_proxy = UserProxyAgent(
-            name="User",
-            human_input_mode="NEVER",
-        )
-
+    def test_with_llm(self, credentials_gpt_4o: Credentials, user_proxy: UserProxyAgent) -> None:
         chatbot = AssistantAgent(
             name="chatbot",
             llm_config=credentials_gpt_4o.llm_config,

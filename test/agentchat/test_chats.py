@@ -44,9 +44,12 @@ def test_chat_messages_for_summary():
     messages = assistant.chat_messages_for_summary(user)
     assert len(messages) == 1
 
-    groupchat = GroupChat(agents=[user, assistant], messages=[], max_round=2)
+    groupchat = GroupChat(agents=[user, assistant], messages=[], max_round=2, speaker_selection_method="round_robin")
     manager = GroupChatManager(
-        groupchat=groupchat, name="manager", llm_config=False, code_execution_config={"use_docker": False}
+        groupchat=groupchat,
+        name="manager",
+        llm_config=None,
+        code_execution_config={"use_docker": False},
     )
     user.initiate_chat(manager, message="What is the capital of France?")
     messages = manager.chat_messages_for_summary(user)

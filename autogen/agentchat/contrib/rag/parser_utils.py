@@ -60,7 +60,8 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     # ----------------------
     pdf_pipeline_options = PdfPipelineOptions()
     pdf_pipeline_options.do_ocr = True
-    pdf_pipeline_options.ocr_options.use_gpu = False  # <-- set this.
+    if hasattr(pdf_pipeline_options.ocr_options, "use_gpu"):
+        pdf_pipeline_options.ocr_options.use_gpu = False  # <-- set this.
     pdf_pipeline_options.do_table_structure = True
     pdf_pipeline_options.table_structure_options.do_cell_matching = True
     pdf_pipeline_options.ocr_options.lang = ["en"]

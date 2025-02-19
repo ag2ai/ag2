@@ -144,7 +144,8 @@ import autogen
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from typing import Dict, List
 
-config_list = [{"model": "gpt-3.5-turbo", "api_key": os.getenv("OPENAI_API_KEY")}]
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 # Define your agent; the user proxy and an assistant
 assistant = autogen.AssistantAgent(
