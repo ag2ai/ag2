@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -49,7 +48,6 @@ class TestOAIRealtimeClient:
             # read events for 3 seconds and then interrupt
             with move_on_after(3) as scope:
                 print("Reading events...")
-                await asyncio.sleep(1)
                 async for event in client.read_events():
                     print(f"-> Received event: {event}")
                     mock(event)
