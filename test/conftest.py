@@ -336,11 +336,6 @@ def mock_credentials() -> Credentials:
     return get_mock_credentials(model="gpt-4o")
 
 
-@pytest.fixture
-def user_proxy() -> UserProxyAgent:
-    return UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
-
-
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Exit status 5 means there were no tests collected
     # so we should set the exit status to 1
