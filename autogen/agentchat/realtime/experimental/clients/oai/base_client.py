@@ -12,7 +12,7 @@ from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 
 from ......doc_utils import export_module
 from ...realtime_events import RealtimeEvent
-from ..realtime_client import Role, register_realtime_client
+from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ global_logger = getLogger(__name__)
 
 @register_realtime_client()
 @export_module("autogen.agentchat.realtime.experimental.clients")
-class OpenAIRealtimeClient:
+class OpenAIRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API."""
 
     def __init__(
@@ -39,6 +39,7 @@ class OpenAIRealtimeClient:
         Args:
             llm_config (dict[str, Any]): The config for the client.
         """
+        super().__init__()
         self._llm_config = llm_config
         self._logger = logger
 
@@ -110,6 +111,7 @@ class OpenAIRealtimeClient:
         Args:
             audio (str): The audio to send.
         """
+        await self.queue_input_audio_buffer_delta(audio)
         await self.connection.input_audio_buffer.append(audio=audio)
 
     async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
@@ -163,12 +165,17 @@ class OpenAIRealtimeClient:
             raise RuntimeError("Client is not connected, call connect() first.")
 
         try:
-            async for message in self._connection:
-                for event in self._parse_message(message.model_dump()):
-                    yield event
+            async for event in self._read_events():
+                yield event
 
         finally:
             self._connection = None
+
+    async def _read_from_connection(self) -> AsyncGenerator[RealtimeEvent, None]:
+        """Read messages from the OpenAI Realtime API."""
+        async for message in self._connection:
+            for event in self._parse_message(message.model_dump()):
+                yield event
 
     def _parse_message(self, message: dict[str, Any]) -> list[RealtimeEvent]:
         """Parse a message from the OpenAI Realtime API.

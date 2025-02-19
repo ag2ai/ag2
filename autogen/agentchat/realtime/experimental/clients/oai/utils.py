@@ -5,7 +5,15 @@
 import json
 from typing import Any
 
-from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated, SessionUpdated, SpeechStarted
+from ...realtime_events import (
+    AudioDelta,
+    FunctionCall,
+    InputAudioBufferDelta,
+    RealtimeEvent,
+    SessionCreated,
+    SessionUpdated,
+    SpeechStarted,
+)
 
 __all__ = ["parse_oai_message"]
 
@@ -27,6 +35,8 @@ def parse_oai_message(message: dict[str, Any]) -> RealtimeEvent:
         return AudioDelta(raw_message=message, delta=message["delta"], item_id=message["item_id"])
     elif message.get("type") == "input_audio_buffer.speech_started":
         return SpeechStarted(raw_message=message)
+    elif message.get("type") == "input_audio_buffer.delta":
+        return InputAudioBufferDelta(delta=message.delta, item_id=None, raw_message=message)
     elif message.get("type") == "response.function_call_arguments.done":
         return FunctionCall(
             raw_message=message,
