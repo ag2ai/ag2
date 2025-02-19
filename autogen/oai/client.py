@@ -197,8 +197,8 @@ OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
 @lru_cache(maxsize=128)
-def log_cache_seed(cache_value: Union[str, int]) -> None:
-    logger.info(f"Using cache with seed value: {cache_value}")
+def log_cache_seed_value(cache_value: Union[str, int], client: "ModelClient") -> None:
+    logger.info(f"Using cache with seed value {cache_value} for client {client.__class__.__name__}")
 
 
 @export_module("autogen")
@@ -977,7 +977,7 @@ class OpenAIWrapper:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
 
-            log_cache_seed(cache if cache is not None else cache_seed)
+            log_cache_seed_value(cache if cache is not None else cache_seed, client=client)
 
             if cache_client is not None:
                 with cache_client as cache:
