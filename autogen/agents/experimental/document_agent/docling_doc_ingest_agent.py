@@ -39,6 +39,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         query_engine: Optional[DoclingMdQueryEngine] = None,
         return_agent_success: str = "TaskManagerAgent",
         return_agent_error: str = "ErrorManagerAgent",
+        collection_name: Optional[str] = None,
     ):
         """
         Initialize the DoclingDocIngestAgent.
@@ -48,13 +49,14 @@ class DoclingDocIngestAgent(ConversableAgent):
         llm_config (Optional[Union[dict, Literal[False]]]): The configuration for the LLM.
         parsed_docs_path (Union[Path, str]): The path where parsed documents will be stored.
         query_engine (Optional[DoclingMdQueryEngine]): The DoclingMdQueryEngine to use for querying documents.
+        collection_name (Optional[str]): The unique name for the Chromadb collection. Set this to a value to reuse a collection. If a query_engine is provided, this will be ignored.
         """
         name = name or "DoclingDocIngestAgent"
 
         parsed_docs_path = parsed_docs_path or Path("./parsed_docs")
         parsed_docs_path = preprocess_path(str_or_path=parsed_docs_path, mk_path=True)
 
-        self.docling_query_engine = query_engine or DoclingMdQueryEngine()
+        self.docling_query_engine = query_engine or DoclingMdQueryEngine(collection_name=collection_name)
 
         def data_ingest_task(context_variables: dict) -> SwarmResult:  # type: ignore[type-arg]
             """
@@ -82,10 +84,7 @@ class DoclingDocIngestAgent(ConversableAgent):
                     if output_files:
                         output_file = output_files[0]
                         if output_file.suffix == ".md":
-                            if self.docling_query_engine.get_collection_name() is None:
-                                self.docling_query_engine.init_db(input_doc_paths=[output_file])
-                            else:
-                                self.docling_query_engine.add_docs(new_doc_paths=[output_file])
+                            self.docling_query_engine.add_docs(new_doc_paths=[output_file])
 
                     # Keep track of documents ingested
                     context_variables["DocumentsIngested"].append(input_file_path)
