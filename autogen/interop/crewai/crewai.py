@@ -24,7 +24,6 @@ with optional_import_block():
 
 @register_interoperable_class("crewai")
 @export_module("autogen.interop")
-@require_optional_import("crewai", "interop-crewai")
 class CrewAIInteroperability:
     """A class implementing the `Interoperable` protocol for converting CrewAI tools
     to a general `Tool` format.
@@ -33,6 +32,7 @@ class CrewAIInteroperability:
     """
 
     @classmethod
+    @require_optional_import("crewai", "interop-crewai")
     def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """Converts a given CrewAI tool into a general `Tool` format.
 

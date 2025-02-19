@@ -24,7 +24,6 @@ with optional_import_block():
 
 @register_interoperable_class("pydanticai")
 @export_module("autogen.interop")
-@require_optional_import("pydantic_ai", "interop-pydantic-ai")
 class PydanticAIInteroperability:
     """A class implementing the `Interoperable` protocol for converting Pydantic AI tools
     into a general `Tool` format.
@@ -36,6 +35,7 @@ class PydanticAIInteroperability:
     """
 
     @staticmethod
+    @require_optional_import("pydantic_ai", "interop-pydantic-ai")
     def inject_params(
         ctx: Any,
         tool: Any,
@@ -91,6 +91,7 @@ class PydanticAIInteroperability:
         return wrapper
 
     @classmethod
+    @require_optional_import("pydantic_ai", "interop-pydantic-ai")
     def convert_tool(cls, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
         """Converts a given Pydantic AI tool into a general `Tool` format.
 

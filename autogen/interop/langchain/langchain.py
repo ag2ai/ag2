@@ -18,7 +18,6 @@ with optional_import_block():
 
 @register_interoperable_class("langchain")
 @export_module("autogen.interop")
-@require_optional_import("langchain_core", "interop-langchain")
 class LangChainInteroperability:
     """A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.
@@ -29,6 +28,7 @@ class LangChainInteroperability:
     """
 
     @classmethod
+    @require_optional_import("langchain_core", "interop-langchain")
     def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """Converts a given Langchain tool into a general `Tool` format.
 
