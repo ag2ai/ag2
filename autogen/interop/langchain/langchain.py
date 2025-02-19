@@ -6,15 +6,19 @@ import sys
 from typing import Any, Optional
 
 from ...doc_utils import export_module
-from ...import_utils import optional_import_block
+from ...import_utils import optional_import_block, require_optional_import
 from ...tools import Tool
 from ..registry import register_interoperable_class
 
 __all__ = ["LangChainInteroperability"]
 
+with optional_import_block():
+    from langchain_core.tools import BaseTool as LangchainTool
+
 
 @register_interoperable_class("langchain")
 @export_module("autogen.interop")
+@require_optional_import("langchain_core", "interop-langchain")
 class LangChainInteroperability:
     """A class implementing the `Interoperable` protocol for converting Langchain tools
     into a general `Tool` format.
@@ -43,18 +47,18 @@ class LangChainInteroperability:
             ValueError: If the provided tool is not an instance of `LangchainTool`, or if
                         any additional arguments are passed.
         """
-        from langchain_core.tools import BaseTool as LangchainTool
-
         if not isinstance(tool, LangchainTool):
             raise ValueError(f"Expected an instance of `langchain_core.tools.BaseTool`, got {type(tool)}")
         if kwargs:
             raise ValueError(f"The LangchainInteroperability does not support any additional arguments, got {kwargs}")
 
         # needed for type checking
-        langchain_tool: LangchainTool = tool  # type: ignore
+        langchain_tool: LangchainTool = tool
 
-        def func(tool_input: langchain_tool.args_schema) -> Any:  # type: ignore
-            return langchain_tool.run(tool_input.model_dump())
+        model_type = langchain_tool.get_input_schema()
+
+        def func(tool_input: model_type) -> Any:  # type: ignore[valid-type]
+            return langchain_tool.run(tool_input.model_dump())  # type: ignore[attr-defined]
 
         return Tool(
             name=langchain_tool.name,
