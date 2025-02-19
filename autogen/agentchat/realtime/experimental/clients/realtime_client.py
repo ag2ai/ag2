@@ -7,6 +7,8 @@ from collections.abc import AsyncGenerator
 from logging import Logger
 from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, TypeVar, runtime_checkable
 
+from asyncer import create_task_group
+
 from .....doc_utils import export_module
 from ..realtime_events import InputAudioBufferDelta, RealtimeEvent
 
@@ -117,8 +119,8 @@ class RealtimeClientBase:
 
     async def _read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read events from a Realtime Client."""
-        try:
-            connection_reader = asyncio.create_task(self._read_from_connection_task())
+        async with create_task_group() as tg:
+            tg.start_soon(self._read_from_connection_task)
             while True:
                 try:
                     event = await self._eventQueue.get()
@@ -128,11 +130,6 @@ class RealtimeClientBase:
                         break
                 except Exception:
                     break
-        except asyncio.CancelledError:
-            if connection_reader.done() is False:
-                connection_reader.cancel()
-            raise
-        await asyncio.gather(connection_reader)
 
     async def queue_input_audio_buffer_delta(self, audio: str) -> None:
         """queue InputAudioBufferDelta.
