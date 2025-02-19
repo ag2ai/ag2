@@ -164,7 +164,6 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     )
 
 
-@pytest.mark.openai
 @skip_on_missing_imports(["openai"])
 def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest.MonkeyPatch):
     chat_completion = ChatCompletion(**{
