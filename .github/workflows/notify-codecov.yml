@@ -3,7 +3,6 @@ name: Notify Codecov
 on:
   workflow_run:
     workflows:
-      - "ContribGraphRagTests"
       - "Contrib tests with LLMs"
       - "Contrib tests without LLMs"
       - "Core tests with LLMs"
