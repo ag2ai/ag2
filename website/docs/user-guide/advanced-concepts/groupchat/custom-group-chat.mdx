@@ -1,6 +1,6 @@
 ---
-title: Customized Group Chat flows
-sidebarTitle: Custom Group Chat
+title: Customized GroupChat flows
+sidebarTitle: Custom GroupChat
 ---
 
 <Tip>
@@ -33,7 +33,8 @@ from autogen import (
     GroupChatManager,
 )
 
-config_list = {"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o"}
 ```
 
 #### Agents and workflow
@@ -410,7 +411,8 @@ from autogen import ConversableAgent, GroupChat, GroupChatManager
 import random
 import os
 
-config_list = {"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
+# Put your key in the OPENAI_API_KEY environment variable
+config_list = {"api_type": "openai", "model": "gpt-4o"}
 
 # Helper function to get an agent from our working list by name
 def get_agent_by_name(agents, name) -> ConversableAgent:

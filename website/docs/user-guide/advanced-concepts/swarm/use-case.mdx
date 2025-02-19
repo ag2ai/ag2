@@ -19,7 +19,7 @@ It's useful to draw your agents, flows, context variables, and tools and then cr
 
 This is the scenario we will run through, with customers able to enquire about their orders. However, we will make sure that they are authenticated to do so.
 
-![Swarm Enhanced Demonstration](./assets/swarm-enhanced-01.png)
+![Swarm Enhanced Demonstration](../assets/swarm-enhanced-01.png)
 
 Key aspects of this swarm are:
 
@@ -45,7 +45,8 @@ from autogen import (
     register_hand_off
 )
 
-llm_config = {"model": "gpt-4o-mini", "cache_seed": None}
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 ```
 
 #### Context
@@ -767,13 +768,13 @@ Using the three enhanced features of AG2's Swarm, we were able to control the fl
 Here's the flow above.
 
 At the beginning, we weren't logged in and there was only one path.
-![Swarm Enhanced Demonstration](./assets/swarm-enhanced-02.png)
+![Swarm Enhanced Demonstration](../assets/swarm-enhanced-02.png)
 
 After we logged in, we needed to get the order id.
-![Swarm Enhanced Demonstration](./assets/swarm-enhanced-03.png)
+![Swarm Enhanced Demonstration](../assets/swarm-enhanced-03.png)
 
 With the order id, we can handle order enquiries and retrieve order details.
-![Swarm Enhanced Demonstration](./assets/swarm-enhanced-04.png)
+![Swarm Enhanced Demonstration](../assets/swarm-enhanced-04.png)
 
 ### More Swarm examples
 - [Introduction to Swarm notebook](/docs/use-cases/notebooks/notebooks/agentchat_swarm)

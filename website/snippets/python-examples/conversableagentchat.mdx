@@ -3,8 +3,8 @@
 from autogen import ConversableAgent
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
-#    Provider defaults to OpenAI and uses the OPENAI_API_KEY environment variable
-llm_config = {"model": "gpt-4o-mini"}
+#    Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 # 3. Create our agent
 my_agent = ConversableAgent(

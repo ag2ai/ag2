@@ -42,12 +42,6 @@ class TestUpdateGroupPages:
                             "docs/use-cases/use-cases/customer-service",
                         ],
                     },
-                    {
-                        "group": "Reference Agents",
-                        "pages": [
-                            "docs/use-cases/reference-agents/index",
-                        ],
-                    },
                     {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
                     {
                         "group": "Community Gallery",
@@ -91,12 +85,6 @@ class TestUpdateGroupPages:
                         "group": "Use cases",
                         "pages": [
                             "docs/use-cases/use-cases/customer-service",
-                        ],
-                    },
-                    {
-                        "group": "Reference Agents",
-                        "pages": [
-                            "docs/use-cases/reference-agents/index",
                         ],
                     },
                     {"group": "Notebooks", "pages": ["docs/use-cases/updated-notebook/index"]},
@@ -782,13 +770,13 @@ class TestEditLinks:
                     },
                     {"group": "Advanced Concepts", "pages": ["docs/user-guide/advanced-concepts/rag"]},
                     {"group": "Model Providers", "pages": ["docs/user-guide/models/openai"]},
+                    {"group": "Reference Agents", "pages": ["docs/user-guide/reference-agents/index"]},
                 ],
             },
             {
                 "group": "Use Cases",
                 "pages": [
                     {"group": "Use cases", "pages": ["docs/use-cases/use-cases/customer-service"]},
-                    {"group": "Reference Agents", "pages": ["docs/use-cases/reference-agents/index"]},
                     {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
                     "docs/use-cases/community-gallery/community-gallery",
                 ],
@@ -805,8 +793,8 @@ class TestEditLinks:
             "docs/user-guide/basic-concepts/llm-configuration",
             "docs/user-guide/advanced-concepts/rag",
             "docs/user-guide/models/openai",
+            "docs/user-guide/reference-agents/index",
             "docs/use-cases/use-cases/customer-service",
-            "docs/use-cases/reference-agents/index",
             "docs/use-cases/notebooks/notebooks",
             "docs/use-cases/community-gallery/community-gallery",
             "docs/contributor-guide/contributing",
