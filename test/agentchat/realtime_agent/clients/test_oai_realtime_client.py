@@ -46,7 +46,7 @@ class TestOAIRealtimeClient:
 
         async with client.connect():
             # read events for 3 seconds and then interrupt
-            with move_on_after(77) as scope:
+            with move_on_after(3) as scope:
                 print("Reading events...")
 
                 async for event in client.read_events():
@@ -58,6 +58,8 @@ class TestOAIRealtimeClient:
 
         # check that we received the expected two events
         calls_kwargs = [arg_list.args for arg_list in mock.call_args_list]
+        assert(len(mock.call_args_list) > 0)
+        assert(len(mock.call_args_list) > 1)
         assert isinstance(calls_kwargs[0][0], SessionCreated)
         assert isinstance(calls_kwargs[1][0], SessionUpdated)
 
