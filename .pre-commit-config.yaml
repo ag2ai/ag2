@@ -27,6 +27,10 @@ repos:
     - id: trailing-whitespace
     - id: end-of-file-fixer
     - id: no-commit-to-branch
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.5.0
+    hooks:
+      - id: nbstripout
   - repo: local
     hooks:
       - id: build-setup-scripts

@@ -1,0 +1,34 @@
+codecov:
+  require_ci_to_pass: yes
+  notify:
+    after_n_builds: 15
+    wait_for_ci: yes
+
+coverage:
+  status:
+    project:
+      default:
+        # Basic settings
+        informational: true
+        target: auto
+        threshold: 1%
+        base: auto
+        if_ci_failed: success
+    patch:
+      default:
+        # Settings for new code in PRs
+        informational: true
+        target: auto
+        threshold: 1%
+        base: auto
+
+# Configure codecov bot behavior
+comment: false
+
+# Ignore certain paths/files
+ignore:
+  - "test/**/*"
+  - "website/**/*"
+
+github_checks:
+  annotations: false
