@@ -2,4 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__: list[str] = []
+from .document import Document, DocumentType
+from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
+from .graph_rag_capability import GraphRagCapability
+
+__all__ = ["Document", "DocumentType", "GraphQueryEngine", "GraphRagCapability", "GraphStoreQueryResult"]

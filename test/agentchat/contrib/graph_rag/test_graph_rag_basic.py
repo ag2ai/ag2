@@ -11,7 +11,7 @@ from autogen.agentchat.contrib.graph_rag.graph_rag_capability import GraphRagCap
 from autogen.agentchat.conversable_agent import ConversableAgent
 
 
-def test_dry_run():
+def test_dry_run() -> None:
     """Dry run for basic graph rag objects."""
     mock_graph_query_engine = Mock(spec=GraphQueryEngine)
 
