@@ -164,7 +164,13 @@ class PatchStatic(PatchObject[F]):
         return isinstance(o, staticmethod)
 
     def patch(self, except_for: Iterable[str]) -> F:
-        if self.o.__name__ in except_for:
+        if hasattr(self.o, "__name__"):
+            name = self.o.__name__
+        elif hasattr(self.o, "__func__"):
+            name = self.o.__func__.__name__
+        else:
+            raise ValueError(f"Cannot determine name for object {self.o}")
+        if name in except_for:
             return self.o
 
         f: Callable[..., Any] = self.o.__func__  # type: ignore[attr-defined]
