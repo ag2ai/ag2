@@ -7,11 +7,8 @@ import sys
 
 import pytest
 
-from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
-from autogen.agentchat.contrib.graph_rag.neo4j_native_graph_query_engine import (
-    GraphStoreQueryResult,
-    Neo4jNativeGraphQueryEngine,
-)
+from autogen.agentchat.contrib.graph_rag import Document, DocumentType, GraphStoreQueryResult
+from autogen.agentchat.contrib.graph_rag.neo4j_native_graph_query_engine import Neo4jNativeGraphQueryEngine
 from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import reason
@@ -25,7 +22,7 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
 
 # Test fixture for creating and initializing a query engine
 @pytest.fixture(scope="module")
-def neo4j_native_query_engine():
+def neo4j_native_query_engine() -> Neo4jNativeGraphQueryEngine:
     input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.txt"
     input_document = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
 
@@ -88,7 +85,7 @@ def neo4j_native_query_engine():
 
 # Test fixture for auto generated knowledge graph
 @pytest.fixture(scope="module")
-def neo4j_native_query_engine_auto():
+def neo4j_native_query_engine_auto() -> Neo4jNativeGraphQueryEngine:
     input_path = "./test/agentchat/contrib/graph_rag/BUZZ_Employee_Handbook.txt"
 
     input_document = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
@@ -112,13 +109,13 @@ def neo4j_native_query_engine_auto():
     reason=reason,
 )
 @skip_on_missing_imports(["neo4j", "neo4j_graphrag"], "neo4j")
-def test_neo4j_native_query_engine(neo4j_native_query_engine):
+def test_neo4j_native_query_engine(neo4j_native_query_engine: Neo4jNativeGraphQueryEngine) -> None:
     """Test querying with initialized knowledge graph"""
     question = "Which company is the employer?"
     query_result: GraphStoreQueryResult = neo4j_native_query_engine.query(question=question)
 
     logger.info(query_result.answer)
-    assert query_result.answer.find("BUZZ") >= 0
+    assert query_result.answer.find("BUZZ") >= 0  # type: ignore[union-attr]
 
 
 @pytest.mark.openai
@@ -128,18 +125,18 @@ def test_neo4j_native_query_engine(neo4j_native_query_engine):
     reason=reason,
 )
 @skip_on_missing_imports(["neo4j", "neo4j_graphrag"], "neo4j")
-def test_neo4j_native_query_auto(neo4j_native_query_engine_auto):
+def test_neo4j_native_query_auto(neo4j_native_query_engine_auto: Neo4jNativeGraphQueryEngine) -> None:
     """Test querying with auto-generated property graph"""
     question = "Which company is the employer?"
     query_result: GraphStoreQueryResult = neo4j_native_query_engine_auto.query(question=question)
 
     logger.info(query_result.answer)
-    assert query_result.answer.find("BUZZ") >= 0
+    assert query_result.answer.find("BUZZ") >= 0  # type: ignore[union-attr]
 
 
 @pytest.mark.neo4j
 @skip_on_missing_imports("neo4j_graphrag", "unknown")
-def test_neo4j_add_records(neo4j_native_query_engine):
+def test_neo4j_add_records(neo4j_native_query_engine: Neo4jNativeGraphQueryEngine) -> None:
     """Test the add_records functionality of the Neo4j Query Engine."""
     input_path = "./test/agentchat/contrib/graph_rag/the_matrix.txt"
     input_documents = [Document(doctype=DocumentType.TEXT, path_or_url=input_path)]
@@ -153,4 +150,4 @@ def test_neo4j_add_records(neo4j_native_query_engine):
 
     logger.info(query_result.answer)
 
-    assert query_result.answer.find("Keanu Reeves") >= 0
+    assert query_result.answer.find("Keanu Reeves") >= 0  # type: ignore[union-attr]
