@@ -19,13 +19,13 @@ class TestLiteLLmConfigFactory:
         [
             (
                 [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": ""}],
-                {"api_key": "", "provider": "openai/gpt-4o-mini"},
+                {"api_token": "", "provider": "openai/gpt-4o-mini"},
             ),
             (
                 [
                     {"api_type": "deepseek", "model": "deepseek-model", "api_key": "", "base_url": "test-url"},
                 ],
-                {"base_url": "test-url", "api_key": "", "provider": "deepseek/deepseek-model"},
+                {"base_url": "test-url", "api_token": "", "provider": "deepseek/deepseek-model"},
             ),
             (
                 [
@@ -37,19 +37,19 @@ class TestLiteLLmConfigFactory:
                         "api_version": "test",
                     },
                 ],
-                {"base_url": "test", "api_version": "test", "api_key": "", "provider": "azure/gpt-4o-mini"},
+                {"base_url": "test", "api_version": "test", "api_token": "", "provider": "azure/gpt-4o-mini"},
             ),
             (
                 [
                     {"api_type": "google", "model": "gemini", "api_key": ""},
                 ],
-                {"api_key": "", "provider": "gemini/gemini"},
+                {"api_token": "", "provider": "gemini/gemini"},
             ),
             (
                 [
                     {"api_type": "anthropic", "model": "sonnet", "api_key": ""},
                 ],
-                {"api_key": "", "provider": "anthropic/sonnet"},
+                {"api_token": "", "provider": "anthropic/sonnet"},
             ),
             (
                 [{"api_type": "ollama", "model": "mistral:7b"}],

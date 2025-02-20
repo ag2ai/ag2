@@ -51,7 +51,11 @@ class TestCrawl4AITool:
             True,
         ],
     )
-    def test_get_crawl_config(self, mock_credentials: Credentials, use_extraction_model: bool) -> None:
+    def test_get_crawl_config(
+        self, mock_credentials: Credentials, use_extraction_model: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
         class Product(BaseModel):
             name: str
             price: str

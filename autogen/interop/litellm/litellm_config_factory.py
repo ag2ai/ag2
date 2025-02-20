@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Callable, TypeVar
 
@@ -62,6 +63,17 @@ class DefaultLiteLLmConfigFactory(LiteLLmConfigFactory):
         non_base_api_types = ["google", "ollama"]
         return first_llm_config.get("api_type", "openai") not in non_base_api_types
 
+    @classmethod
+    def create(cls, first_llm_config: dict[str, Any]) -> dict[str, Any]:
+        api_type = first_llm_config.get("api_type", "openai")
+        if api_type != "openai" and "api_key" not in first_llm_config:
+            raise ValueError("API key is required.")
+        first_llm_config["api_token"] = first_llm_config.pop("api_key", os.getenv("OPENAI_API_KEY"))
+
+        first_llm_config = super().create(first_llm_config)
+
+        return first_llm_config
+
 
 @LiteLLmConfigFactory.register_factory()
 class GoogleLiteLLmConfigFactory(LiteLLmConfigFactory):
@@ -74,6 +86,7 @@ class GoogleLiteLLmConfigFactory(LiteLLmConfigFactory):
         # api type must be changed before calling super().create
         # litellm uses gemini as the api type for google
         first_llm_config["api_type"] = "gemini"
+        first_llm_config["api_token"] = first_llm_config.pop("api_key")
         first_llm_config = super().create(first_llm_config)
 
         return first_llm_config
