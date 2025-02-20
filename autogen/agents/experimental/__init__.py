@@ -4,8 +4,17 @@
 
 from .deep_research import DeepResearchAgent
 from .discord import DiscordAgent
+from .document_agent import DoclingDocIngestAgent, DocumentAgent
 from .slack import SlackAgent
 from .telegram import TelegramAgent
 from .websurfer import WebSurferAgent
 
-__all__ = ["DeepResearchAgent", "DiscordAgent", "SlackAgent", "TelegramAgent", "WebSurferAgent"]
+__all__ = [
+    "DeepResearchAgent",
+    "DiscordAgent",
+    "DoclingDocIngestAgent",
+    "DocumentAgent",
+    "SlackAgent",
+    "TelegramAgent",
+    "WebSurferAgent",
+]
