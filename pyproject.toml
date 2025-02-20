@@ -59,6 +59,7 @@ dependencies = [
     # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
     "pydantic>=2.6.1,<3",
     "docker",
+    "packaging",
     "asyncer==0.0.8",
     "fast-depends>=2.4.12,<3",
 ]
