@@ -22,6 +22,7 @@ __all__ = ["LangchainFactory"]
 @require_optional_import(
     ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "langchain_core"],
     "browser-use",
+    except_for=["__init__", "register_factory"],
 )
 class LangchainFactory(ABC):
     _factories: set["LangchainFactory"] = set()
