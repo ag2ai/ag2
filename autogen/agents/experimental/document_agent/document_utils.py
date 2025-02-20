@@ -24,14 +24,15 @@ def is_url(url: str) -> bool:
     It checks whether the URL has a valid scheme and network location.
     """
     try:
+        url = url.strip()
         result = urlparse(url)
         # urlparse will not raise an exception for invalid URLs, so we need to check the components
         return_bool = bool(result.scheme and result.netloc)
         if not return_bool:
-            _logger.error(f"Error when checking if {url} is a valid URL: Invalid URL.")
+            _logger.info(f"Error when checking if {url} is a valid URL: Invalid URL.")
         return return_bool
     except Exception as e:
-        _logger.error(f"Error when checking if {url} is a valid URL: {e}")
+        _logger.info(f"Error when checking if {url} is a valid URL: {e}")
         return False
 
 
@@ -102,20 +103,68 @@ def list_files(directory: Union[Path, str]) -> list[Path]:
     return [f for f in path.rglob("*") if f.is_file()]
 
 
-@export_module("autogen.agentchat.contrib.rag")
-def handle_input(input_path: Union[Path, str], output_dir: Optional[Union[Path, str]] = None) -> list[Path]:
+@export_module("autogen.agents.experimental.document_agent")
+def handle_input(input_path: Union[Path, str], output_dir: Union[Path, str] = "./output") -> list[Path]:
     """Process the input string and return the appropriate file paths"""
 
+    output_dir = preprocess_path(str_or_path=output_dir, is_dir=True, mk_path=True)
     if isinstance(input_path, str) and is_url(input_path):
         _logger.info("Detected URL. Downloading content...")
         return [download_url(url=input_path, output_dir=output_dir)]
-    else:
+
+    if isinstance(input_path, str):
         input_path = Path(input_path)
-    if input_path.is_dir():
+    if not input_path.exists():
+        raise ValueError("The input provided does not exist.")
+    elif input_path.is_dir():
         _logger.info("Detected directory. Listing files...")
         return list_files(directory=input_path)
     elif input_path.is_file():
         _logger.info("Detected file. Returning file path...")
-        return [Path(input_path)]
+        return [input_path]
     else:
         raise ValueError("The input provided is neither a URL, directory, nor a file path.")
+
+
+def preprocess_path(
+    str_or_path: Union[Path, str], mk_path: bool = False, is_file: bool = False, is_dir: bool = True
+) -> Path:
+    """Preprocess the path for file operations.
+
+    Args:
+        str_or_path (Union[Path, str]): The path to be processed.
+        mk_path (bool, optional): Whether to create the path if it doesn't exist. Default is True.
+        is_file (bool, optional): Whether the path is a file. Default is False.
+        is_dir (bool, optional): Whether the path is a directory. Default is True.
+
+    Returns:
+        Path: The preprocessed path.
+    """
+
+    # Convert the input to a Path object if it's a string
+    temp_path = Path(str_or_path)
+
+    # Ensure the path is absolute
+    absolute_path = temp_path.absolute()
+    absolute_path = absolute_path.resolve()
+    if absolute_path.exists():
+        return absolute_path
+
+    # Check if the path should be a file or directory
+    if is_file and is_dir:
+        raise ValueError("Path cannot be both a file and a directory.")
+
+    # If mk_path is True, create the directory or parent directory
+    if mk_path:
+        if is_file and not absolute_path.parent.exists():
+            absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        elif is_dir and not absolute_path.exists():
+            absolute_path.mkdir(parents=True, exist_ok=True)
+
+    # Perform checks based on is_file and is_dir flags
+    if is_file and not absolute_path.is_file():
+        raise FileNotFoundError(f"File not found: {absolute_path}")
+    elif is_dir and not absolute_path.is_dir():
+        raise NotADirectoryError(f"Directory not found: {absolute_path}")
+
+    return absolute_path

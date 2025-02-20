@@ -4,9 +4,10 @@
 
 import logging
 import os
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Optional, Union
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import chromadb
@@ -20,6 +21,8 @@ with optional_import_block():
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
+EMPTY_RESPONSE_TEXT = "Empty Response"  # Indicates that the query did not return any results
+EMPTY_RESPONSE_REPLY = "Sorry, I couldn't find any information on that. If you haven't ingested any documents, please try that."  # Default response for queries without results
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +34,7 @@ logger = logging.getLogger(__name__)
 class DoclingMdQueryEngine:
     """
     This engine leverages Chromadb to persist document embeddings in a named collection
-    and LlamaIndex’s VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
+    and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. The Chromadb collection serves as the storage layer, while
     the collection name uniquely identifies the set of documents within the persistent database.
     """
@@ -42,6 +45,7 @@ class DoclingMdQueryEngine:
         embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
         metadata: Optional[dict[str, Any]] = None,
         llm: Optional["LLM"] = None,
+        collection_name: Optional[str] = None,
     ) -> None:
         """
         Initializes the DoclingMdQueryEngine with db_path, metadata, and embedding function and llm.
@@ -55,6 +59,7 @@ class DoclingMdQueryEngine:
                 For more details about the default metadata, please refer to [HNSW configuration](https://cookbook.chromadb.dev/core/configuration/#hnsw-configuration)
             llm: LLM model used by LlamaIndex for query processing.
                  You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/)
+            collection_name (str): The unique name for the Chromadb collection. If omitted, a constant name will be used. Populate this to reuse previous ingested data.
         """
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.embedding_function: EmbeddingFunction[Any] = embedding_function or DefaultEmbeddingFunction()  # type: ignore[no-any-unimported,assignment]
@@ -64,36 +69,21 @@ class DoclingMdQueryEngine:
             "hnsw:M": 32,
         }
         self.client = chromadb.PersistentClient(path=db_path or "./chroma")
+        self.collection_name: Optional[str] = collection_name
 
-    def init_db(
-        self,
-        input_dir: Optional[str] = None,
-        input_doc_paths: Optional[list[str]] = None,
-        collection_name: Optional[str] = None,
-    ) -> None:
+        self.establish_db()
+
+    def establish_db(self) -> None:
         """
-        Initialize the database for document indexing.
-
-        Creates (or retrieves) a Chromadb collection using the provided collection name,
-        loads documents from a directory or a list of file paths, and builds the vector index
-        to enable efficient querying.
-
-        Args:
-            input_dir: The directory path from which to load documents.
-                The directory should contain Docling-parsed Markdown files.
-                If not provided, no directory-based documents are loaded.
-            input_doc_paths: A list of file paths to individual documents.
-                Each file should be a Docling-parsed Markdown file.
-                If not provided, no file-based documents are loaded.
-            collection_name: The unique name for the Chromadb collection.
-                This name identifies the collection that saves the embeddings of input documents.
-                If the collection name pre-exists, this method will
-                    retrieve the collection instead of creating a new one.
-                If omitted, the default name ("docling-parsed-docs") is used.
+        Establish a connection to the Chromadb database and initialize the collection.
         """
-        input_dir = input_dir or ""
-        input_doc_paths = input_doc_paths or []
-        self.collection_name = collection_name or DEFAULT_COLLECTION_NAME
+
+        self.collection_name = self.collection_name or DEFAULT_COLLECTION_NAME
+
+        if self._collection_exists(self.collection_name):
+            logger.info(f"Using existing collection {self.collection_name} from the database.")
+        else:
+            logger.info(f"Creating new collection {self.collection_name} in the database.")
 
         self.collection = self.client.create_collection(
             name=self.collection_name,
@@ -101,13 +91,7 @@ class DoclingMdQueryEngine:
             metadata=self.metadata,
             get_or_create=True,  # If collection already exists, get the collection
         )
-        logger.info(f"Collection {collection_name} was created in the database.")
-
-        documents = self._load_doc(input_dir, input_doc_paths)
-        logger.info("Documents are loaded successfully.")
-
-        self.index = self._create_index(self.collection, documents)
-        logger.info("VectorDB index was created with input documents")
+        self.index = self._create_index(self.collection)
 
     def query(self, question: str) -> str:
         """
@@ -119,12 +103,18 @@ class DoclingMdQueryEngine:
         Returns:
             A string containing the response generated by LLM.
         """
+        self.validate_query_index()
         self.query_engine = self.index.as_query_engine(llm=self.llm)
         response = self.query_engine.query(question)
 
+        if str(response) == EMPTY_RESPONSE_TEXT:
+            return EMPTY_RESPONSE_REPLY
+
         return str(response)
 
-    def add_docs(self, new_doc_dir: Optional[str] = None, new_doc_paths: Optional[list[str]] = None) -> None:
+    def add_docs(
+        self, new_doc_dir: Optional[Union[Path, str]] = None, new_doc_paths: Optional[list[Union[Path, str]]] = None
+    ) -> None:
         """
         Add additional documents to the existing vector index.
 
@@ -137,6 +127,7 @@ class DoclingMdQueryEngine:
             new_doc_paths: A list of file paths specifying additional documents to load.
                 Each file should be a Docling-parsed Markdown file.
         """
+        self.validate_query_index()
         new_doc_dir = new_doc_dir or ""
         new_doc_paths = new_doc_paths or []
         new_docs = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
@@ -144,7 +135,7 @@ class DoclingMdQueryEngine:
             self.index.insert(doc)
 
     def _load_doc(  # type: ignore
-        self, input_dir: Optional[str], input_docs: Optional[list[str]]
+        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]
     ) -> list["LlamaDocument"]:
         """
         Load documents from a directory and/or a list of file paths.
@@ -154,9 +145,9 @@ class DoclingMdQueryEngine:
           but the intended use is for documents processed by Docling.
 
         Args:
-            input_dir: The directory containing documents to be loaded.
+            input_dir (Optional[Union[Path, str]]): The directory containing documents to be loaded.
                 If provided, all files in the directory will be considered.
-            input_docs: A list of individual file paths to load.
+            input_docs (Optional[list[Union[Path, str]]]): A list of individual file paths to load.
                 Each path must point to an existing file.
 
         Returns:
@@ -187,36 +178,53 @@ class DoclingMdQueryEngine:
         return loaded_documents
 
     def _create_index(  # type: ignore
-        self, collection: "Collection", docs: list["LlamaDocument"]
+        self, collection: "Collection"
     ) -> "VectorStoreIndex":
         """
         Build a vector index for document retrieval using a Chromadb collection.
 
         Wraps the provided Chromadb collection into a vector store and uses LlamaIndex's
-        StorageContext to create a VectorStoreIndex from the supplied documents.
+        StorageContext to create a VectorStoreIndex from the collection.
 
         Args:
-            collection: A Chromadb Collection object that stores the embeddings of the documents.
-            docs: A list of LlamaDocument objects representing the documents to be indexed.
+            collection (Collection): A Chromadb Collection object that stores the embeddings of the documents.
 
         Returns:
-            A VectorStoreIndex object built from the provided documents and backed by the given collection.
+            A VectorStoreIndex object built from the provided collection.
         """
-
         self.vector_store = ChromaVectorStore(chroma_collection=collection)
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 
-        index = VectorStoreIndex.from_documents(docs, storage_context=self.storage_context)
+        index = VectorStoreIndex.from_vector_store(vector_store=self.vector_store, storage_context=self.storage_context)
 
         return index
 
-    def get_collection_name(self) -> Optional[str]:
+    def _collection_exists(self, collection_name: str) -> bool:
         """
-        Retrieve the name of the Chromadb collection used for indexing.
+        Check if a collection with the given name exists in the database.
+
+        Args:
+            collection_name (str): The name of the collection to check.
 
         Returns:
-            The name of the Chromadb collection as a string, or None if no index exists.
+            True if a collection with the given name exists in the database, False otherwise.
         """
-        if self.index:
+        existing_collections = self.client.list_collections()
+        return any(col == collection_name for col in existing_collections)
+
+    def get_collection_name(self) -> str:
+        """
+        Get the name of the collection used by the query engine.
+
+        Returns:
+            The name of the collection.
+        """
+        if self.collection_name:
             return self.collection_name
-        return None
+        else:
+            raise ValueError("Collection name not set.")
+
+    def validate_query_index(self) -> None:
+        """Ensures an index exists"""
+        if not hasattr(self, "index"):
+            raise Exception("Query index is not initialized. Please ingest some documents before querying.")

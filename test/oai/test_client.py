@@ -214,8 +214,8 @@ def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest
     wrapper = OpenAIWrapper(config_list=mock_credentials.config_list)
     _ = wrapper.create(messages=[{"role": "user", "content": prompt}], cache_seed=999)
 
-    mock_logger.info.assert_called_once()
-    actual = mock_logger.info.call_args[0][0]
+    mock_logger.debug.assert_called_once()
+    actual = mock_logger.debug.call_args[0][0]
     expected = "Using cache with seed value 999 for client OpenAIClient"
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
 
