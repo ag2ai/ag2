@@ -53,6 +53,7 @@ if openai_result.is_successful:
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
     ERROR = None
+    from openai.lib._pydantic import _ensure_strict_json_schema
 else:
     ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
     OpenAI = object
@@ -258,7 +259,9 @@ class PlaceHolderClient:
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
-    def __init__(self, client: Union[OpenAI, AzureOpenAI], response_format: Optional[BaseModel] = None):
+    def __init__(
+        self, client: Union[OpenAI, AzureOpenAI], response_format: Union[BaseModel, dict[str, Any], None] = None
+    ):
         self._oai_client = client
         self.response_format = response_format
         if (
@@ -395,9 +398,23 @@ class OpenAIClient:
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
                     kwargs.pop("stream")
-                kwargs["response_format"] = type_to_response_format_param(
-                    self.response_format or params["response_format"]
-                )
+
+                if isinstance(kwargs["response_format"], dict):
+                    kwargs["response_format"] = {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "schema": _ensure_strict_json_schema(
+                                kwargs["response_format"], path=(), root=kwargs["response_format"]
+                            ),
+                            "name": "response_format",
+                            "strict": True,
+                        },
+                    }
+                else:
+                    kwargs["response_format"] = type_to_response_format_param(
+                        self.response_format or params["response_format"]
+                    )
+
                 return self._oai_client.chat.completions.create(*args, **kwargs)
 
             create_or_parse = _create_or_parse
@@ -987,7 +1004,7 @@ class OpenAIWrapper:
                             **params,
                             **{"response_format": json.dumps(TypeAdapter(params["response_format"]).json_schema())},
                         }
-                        if "response_format" in params
+                        if "response_format" in params and not isinstance(params["response_format"], dict)
                         else params
                     )
                     request_ts = get_current_ts()
