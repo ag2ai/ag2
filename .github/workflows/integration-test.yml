@@ -93,7 +93,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          flags: integration, ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
