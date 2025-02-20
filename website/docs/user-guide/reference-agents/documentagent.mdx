@@ -3,18 +3,18 @@ title: DocumentAgent
 ---
 
 In the realm of AI and automation, handling documents and extracting information efficiently is of utmost importance.
-The DocumentAgent introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly by leveraging an internal swarm of agents to streamline document processing and information retrieval.
+[`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly, and with natural language instructions, by leveraging an internal swarm of agents to streamline document processing and information retrieval.
 
 <Warning>
-These tools are currently in our `experimental` namespace, indicating that we have tested the functionality but their interface may change. Please use them with that in mind and we appreciate any feedback on them.
+This agent is currently in our `experimental` namespace, indicating that we have tested the functionality but the agent's interface may change. Please use it with that in mind and we appreciate any feedback on it.
 
-If you do find any bugs please [log an issue](https://github.com/ag2ai/ag2/issues) in the AG2 repository. If you would like to add more tools or functionality, we would love your [contribution](https://docs.ag2.ai/docs/contributor-guide/contributing).
+If you do find any bugs please [log an issue](https://github.com/ag2ai/ag2/issues) in the AG2 repository. If you would like to update the agent, we would love your [contribution](https://docs.ag2.ai/docs/contributor-guide/contributing).
 </Warning>
 
 
 ## Installation
 
-Install AG2 with the `rag` extra to use the DocumentAgent.
+Install AG2 with the `rag` extra to install the necessary packages for the DocumentAgent.
 
 ```bash
 pip install ag2[rag]
@@ -22,8 +22,8 @@ pip install ag2[rag]
 
 ## Capabilities
 
-The document agent could perform the following tasks:
-1. Ingest documents from local or url. Supported formats:
+The document agent can perform the following tasks:
+1. Ingest documents from a local file or URL. Supported formats:
     - PDF
     - IMAGE
     - DOCX
@@ -31,21 +31,26 @@ The document agent could perform the following tasks:
     - PPTX
     - ASCIIDOC
     - MD
-2. Answer questions with RAG capability.
+2. Answer questions with RAG capability
 
-> **_NOTE:_**  currently, DocumentAgent answers questions only related to ingested documents.
+<Tip>
+Currently, DocumentAgent answers questions only related to ingested documents. If it can't find relevant information it will respond with that note.
+</Tip>
 
-## Internal Swarm Chat
-The `DocumentAgent` leverages a swarm of internal agents to handle complex document processing tasks. Swarm chat allows multiple agents to collaborate and complete tasks efficiently. Here's a breakdown of how internal swarm chat is used within the `DocumentAgent`:
+## Internal Swarm
+[`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent) leverages a [`Swarm`](/docs/user-guide/basic-concepts/orchestration/swarm) of internal agents to handle the complex document processing tasks fluidly and efficiently.
+
+Here's a breakdown of how the internal swarm chat is used within the [`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent):
 
 ### Swarm Agents
 
-The `DocumentAgent` orchestrates the following swarm agents:
+[`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent) orchestrates the following swarm agents:
 
 - **Triage Agent**: Decides what type of task to perform from user requests.
 - **Task Manager Agent**: Manages the tasks and initiates actions.
 - **Data Ingestion Agent**: Ingests the documents.
 - **Query Agent**: Answers user questions based on ingested documents.
+- **Error Agent**: If anything fails, the error agent will report the problem back.
 - **Summary Agent**: Generates a summary of the completed tasks.
 
 ### Workflow
@@ -57,41 +62,40 @@ The `DocumentAgent` orchestrates the following swarm agents:
 5. **Query Execution**: The `Query Agent` answers the user's questions.
 6. **Summary Generation**: The `Summary Agent` generates a summary of the completed tasks.
 
+## Example
 
-## examples
+<Tip>
+The internal ingestation of documents requires an LLM and it will use OpenAI's GPT-4o. Please ensure you have an `OPENAI_API_KEY` environment variable set.
+</Tip>
+
+In the following simple example we ask the [`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent) to ingest a document and then provide a financial summary.
+
+Note that the request is handled in natural language and the output will show the internal agents working together to understand, classify, ingest, and query.
 
 ```python
-import autogen
-from autogen.agents.experimental.document_agent.document_agent import DocumentAgent
+from autogen.agents.experimental import DocumentAgent
 
-config_list = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gpt-4o"],
-    },
-)
+llm_config = {"api_type": "openai", "model": "gpt-4o"}
 
-llm_config = {
-    "config_list": config_list,
-}
-
-
+# Create our DocumentAgent
 document_agent = DocumentAgent(llm_config=llm_config)
-document_agent.run(
-    "could you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf? What is the fiscal year 2024 financial summary?"
-)
 
+# Update this path to suit your environment
+document_agent.run(
+    "Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?",
+    max_turns=1
+)
 ```
 
 ```console
 user (to Document_Agent):
 
-could you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf? What is the fiscal year 2024 financial summary?
+Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?
 
 --------------------------------------------------------------------------------
 _User (to chat_manager):
 
-could you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf? What is the fiscal year 2024 financial summary?
+Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?
 
 --------------------------------------------------------------------------------
 
@@ -340,4 +344,33 @@ The fiscal year 2024 financial summary for Toast, Inc. is as follows:
 --------------------------------------------------------------------------------
 ```
 
-See this [notebook](https://github.com/ag2ai/ag2/tree/main/notebook/agents_document_agent.ipynb) for more examples of using document agent.
+## Collections
+
+By default, [`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent) will ingest documents into the same collection. Every time you run the agent it will utilise this collection, enabling you to keep documents ingested across different runs.
+
+However, if you want to run multiple [`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent)s or want to ingest into a clean or specific vector store collection, you can use the `collection_name` parameter when creating the agent to set a unique collection name.
+
+```python
+from autogen.agents.experimental import DocumentAgent
+
+llm_config = {"api_type": "openai", "model": "gpt-4o"}
+
+# Create our DocumentAgents with their own collections
+# so that their ingested data and queries will be unique to them
+document_agent_apple = DocumentAgent(
+    llm_config=llm_config,
+    collection_name="apple_financials"
+    )
+
+document_agent_nvidia = DocumentAgent(
+    llm_config=llm_config,
+    collection_name="nvidia_financials"
+    )
+
+...
+
+```
+
+## Further examples
+
+See this [notebook](/docs/use-cases/notebooks/notebooks/agents_document_agent) for more examples of using document agent.
