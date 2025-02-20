@@ -198,7 +198,7 @@ OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 @lru_cache(maxsize=128)
 def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient") -> None:
-    logger.info(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
+    logger.debug(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
 
 
 @export_module("autogen")
