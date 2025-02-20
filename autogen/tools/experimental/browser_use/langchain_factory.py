@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from typing import Any, Callable
 
 from ....import_utils import optional_import_block, require_optional_import
+from ....oai import get_first_llm_config
 
 with optional_import_block():
     from langchain_anthropic import ChatAnthropic
@@ -29,7 +29,7 @@ class LangchainFactory(ABC):
 
     @classmethod
     def create_base_chat_model(cls, llm_config: dict[str, Any]) -> "BaseChatModel":  # type: ignore [no-any-unimported]
-        first_llm_config = cls.get_first_llm_config(llm_config)
+        first_llm_config = get_first_llm_config(llm_config)
         for factory in LangchainFactory._factories:
             if factory.accepts(first_llm_config):
                 return factory.create(first_llm_config)
@@ -43,18 +43,6 @@ class LangchainFactory(ABC):
             return factory
 
         return decorator
-
-    @classmethod
-    def get_first_llm_config(cls, llm_config: dict[str, Any]) -> dict[str, Any]:
-        llm_config = deepcopy(llm_config)
-        if "config_list" not in llm_config:
-            if "model" in llm_config:
-                return llm_config
-            raise ValueError("llm_config must be a valid config dictionary.")
-
-        if len(llm_config["config_list"]) == 0:
-            raise ValueError("Config list must contain at least one config.")
-        return llm_config["config_list"][0]  # type: ignore [no-any-return]
 
     @classmethod
     def prepare_config(cls, first_llm_config: dict[str, Any]) -> dict[str, Any]:

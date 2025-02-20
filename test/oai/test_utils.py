@@ -20,6 +20,7 @@ import autogen
 from autogen.oai.openai_utils import (
     DEFAULT_AZURE_API_VERSION,
     filter_config,
+    get_first_llm_config,
     is_valid_api_key,
 )
 
@@ -396,6 +397,44 @@ def test_get_config_list():
     api_keys_with_empty = ["key1", "", "key3"]
     config_list_with_empty_key = autogen.get_config_list(api_keys_with_empty, base_urls, api_type, api_version)
     assert len(config_list_with_empty_key) == 2, "The config_list should exclude configurations with empty api_keys."
+
+
+@pytest.mark.parametrize(
+    ("llm_config", "expected"),
+    [
+        (
+            {"model": "gpt-4o-mini", "api_key": ""},
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+        (
+            {"config_list": [{"model": "gpt-4o-mini", "api_key": ""}]},
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+        (
+            {
+                "config_list": [
+                    {"model": "gpt-4o-mini", "api_key": ""},
+                    {"model": "gpt-4o", "api_key": ""},
+                ]
+            },
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+    ],
+)
+def test_get_first_llm_config(llm_config: dict[str, Any], expected: dict[str, Any]) -> None:
+    assert get_first_llm_config(llm_config) == expected
+
+
+@pytest.mark.parametrize(
+    ("llm_config", "error_message"),
+    [
+        ({}, "llm_config must be a valid config dictionary."),
+        ({"config_list": []}, "Config list must contain at least one config."),
+    ],
+)
+def test_get_first_llm_config_incorrect_config(llm_config: dict[str, Any], error_message: str) -> None:
+    with pytest.raises(ValueError, match=error_message):
+        get_first_llm_config(llm_config)
 
 
 def test_tags():

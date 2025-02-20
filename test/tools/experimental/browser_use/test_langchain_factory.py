@@ -25,42 +25,6 @@ class TestLangchainFactory:
         assert len(LangchainFactory._factories) == 6
 
     @pytest.mark.parametrize(
-        ("llm_config", "expected"),
-        [
-            (
-                {"model": "gpt-4o-mini", "api_key": test_api_key},
-                {"model": "gpt-4o-mini", "api_key": test_api_key},
-            ),
-            (
-                {"config_list": [{"model": "gpt-4o-mini", "api_key": test_api_key}]},
-                {"model": "gpt-4o-mini", "api_key": test_api_key},
-            ),
-            (
-                {
-                    "config_list": [
-                        {"model": "gpt-4o-mini", "api_key": test_api_key},
-                        {"model": "gpt-4o", "api_key": test_api_key},
-                    ]
-                },
-                {"model": "gpt-4o-mini", "api_key": test_api_key},
-            ),
-        ],
-    )
-    def test_get_first_llm_config(self, llm_config: dict[str, Any], expected: dict[str, Any]) -> None:
-        assert LangchainFactory.get_first_llm_config(llm_config) == expected
-
-    @pytest.mark.parametrize(
-        ("llm_config", "error_message"),
-        [
-            ({}, "llm_config must be a valid config dictionary."),
-            ({"config_list": []}, "Config list must contain at least one config."),
-        ],
-    )
-    def test_get_first_llm_config_incorrect_config(self, llm_config: dict[str, Any], error_message: str) -> None:
-        with pytest.raises(ValueError, match=error_message):
-            LangchainFactory.get_first_llm_config(llm_config)
-
-    @pytest.mark.parametrize(
         ("config_list", "llm_class_name", "base_url"),
         [
             (
