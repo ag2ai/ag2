@@ -1,0 +1,32 @@
+name: Notify Codecov
+
+on:
+  workflow_run:
+    workflows:
+      - "Contrib tests with LLMs"
+      - "Contrib tests without LLMs"
+      - "Core tests with LLMs"
+      - "Core tests without LLMs"
+      - "Integration tests"
+      - "Test with optional dependencies"
+    branches:
+      - '*'
+    types:
+      - completed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    # if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Send Codecov notification
+        uses: codecov/codecov-action@v5
+        with:
+          run_command: send-notifications
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
