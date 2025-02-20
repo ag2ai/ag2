@@ -177,5 +177,8 @@ class TestChatOpenAIFactory:
             {"config_list": [{"model": "gpt-4o-mini", "api_key": test_api_key}]},
         ],
     )
-    def test_create(self, llm_config: dict[str, Any]) -> None:
-        assert isinstance(ChatOpenAIFactory.create(llm_config), ChatOpenAI)
+    def test_create(self, llm_config: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        actual = ChatOpenAIFactory.create_base_chat_model(llm_config)
+        assert isinstance(actual, ChatOpenAI)
