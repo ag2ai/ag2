@@ -54,12 +54,12 @@ class LangchainFactory(ABC):
 
         if len(llm_config["config_list"]) == 0:
             raise ValueError("Config list must contain at least one config.")
-
         return llm_config["config_list"][0]  # type: ignore [no-any-return]
 
     @classmethod
     def prepare_config(cls, first_llm_config: dict[str, Any]) -> dict[str, Any]:
-        first_llm_config.pop("api_type", "openai")
+        for pop_keys in ["api_type", "response_format"]:
+            first_llm_config.pop(pop_keys, None)
         return first_llm_config
 
     @classmethod
