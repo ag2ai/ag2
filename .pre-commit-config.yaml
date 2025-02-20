@@ -67,7 +67,9 @@ repos:
               notebook/agentchat_graph_rag_neo4j.ipynb |
               notebook/agentchat_swarm_graphrag_telemetry_trip_planner.ipynb |
               website/node_modules/.* |
-              website/notebooks/.*
+              website/notebooks/.* |
+              test/agents/experimental/document_agent/pdf_parsed/Toast_financial_report.md |
+              test/agents/experimental/document_agent/pdf_parsed/nvidia_10k_2024.md
             )$
   # See https://jaredkhan.com/blog/mypy-pre-commit
   - repo: local

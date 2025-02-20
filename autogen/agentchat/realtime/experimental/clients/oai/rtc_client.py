@@ -12,7 +12,7 @@ import httpx
 
 from ......doc_utils import export_module
 from ...realtime_events import RealtimeEvent
-from ..realtime_client import Role, register_realtime_client
+from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ global_logger = getLogger(__name__)
 
 @register_realtime_client()
 @export_module("autogen.agentchat.realtime.experimental.clients.oai")
-class OpenAIRealtimeWebRTCClient:
+class OpenAIRealtimeWebRTCClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API that uses WebRTC protocol."""
 
     def __init__(
@@ -41,6 +41,7 @@ class OpenAIRealtimeWebRTCClient:
         Args:
             llm_config (dict[str, Any]): The config for the client.
         """
+        super().__init__()
         self._llm_config = llm_config
         self._logger = logger
         self._websocket = websocket
@@ -94,11 +95,12 @@ class OpenAIRealtimeWebRTCClient:
 
     async def send_audio(self, audio: str) -> None:
         """Send audio to the OpenAI Realtime API.
+        in case of WebRTC, audio is already sent by js client, so we just queue it in order to be logged.
 
         Args:
             audio (str): The audio to send.
         """
-        await self._websocket.send_json({"type": "input_audio_buffer.append", "audio": audio})
+        await self.queue_input_audio_buffer_delta(audio)
 
     async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
         """Truncate audio in the OpenAI Realtime API.
@@ -176,7 +178,12 @@ class OpenAIRealtimeWebRTCClient:
             pass
 
     async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
-        """Read messages from the OpenAI Realtime API.
+        """Read events from the OpenAI Realtime API."""
+        async for event in self._read_events():
+            yield event
+
+    async def _read_from_connection(self) -> AsyncGenerator[RealtimeEvent, None]:
+        """Read messages from the OpenAI Realtime API connection.
         Again, in case of WebRTC, we do not read OpenAI messages directly since we
         do not hold connection to OpenAI. Instead we read messages from the websocket, and javascript
         client on the other side of the websocket that is connected to OpenAI is relaying events to us.

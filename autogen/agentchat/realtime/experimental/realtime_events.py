@@ -25,6 +25,12 @@ class AudioDelta(RealtimeEvent):
     item_id: Any
 
 
+class InputAudioBufferDelta(RealtimeEvent):
+    type: Literal["input_audio_buffer.delta"] = "input_audio_buffer.delta"
+    delta: str
+    item_id: Any
+
+
 class SpeechStarted(RealtimeEvent):
     type: Literal["input_audio_buffer.speech_started"] = "input_audio_buffer.speech_started"
 
