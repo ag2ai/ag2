@@ -94,3 +94,7 @@ class RealtimeObserver(ABC):
             event (RealtimeServerEvent): The event from the OpenAI Realtime API.
         """
         ...
+
+    async def on_close(self) -> None:
+        """Handle close of RealtimeClient."""
+        ...

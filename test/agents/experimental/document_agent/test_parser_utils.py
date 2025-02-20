@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from pytest import LogCaptureFixture, fixture, raises
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
-from autogen.agentchat.contrib.rag.parser_utils import docling_parse_docs
+from autogen.agents.experimental.document_agent.parser_utils import docling_parse_docs
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.tools.tool import Tool
 
@@ -40,7 +40,7 @@ class TestDoclingParseDocs:
 
     def test_no_documents_found(self) -> None:
         """Test that ValueError is raised when no documents are found."""
-        with patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[]):  # noqa: SIM117
+        with patch("autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[]):  # noqa: SIM117
             with raises(ValueError, match="No documents found."):
                 list(docling_parse_docs("input_file_path", "output_dir_path"))
 
@@ -49,15 +49,17 @@ class TestDoclingParseDocs:
         input_file_path = tmp_path / "input_file_path"
         output_dir_path = tmp_path / "output"
         with (
-            patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[input_file_path]),
             patch(
-                "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
                 return_value=iter([mock_conversion_result]),
             ),
         ):
-            results = docling_parse_docs(str(input_file_path), str(output_dir_path))
+            results = docling_parse_docs(input_file_path, output_dir_path)
             assert isinstance(results, list)
-            assert isinstance(results[0], ConversionResult)
+            assert isinstance(results[0], Path)
 
     def test_exports_converted_documents(self, tmp_path: Path, mock_conversion_result: MagicMock) -> None:
         """Test that the function exports converted documents to the specified output directory.
@@ -68,13 +70,15 @@ class TestDoclingParseDocs:
         input_file_path = tmp_path / "input_file_path"
         output_dir_path = tmp_path / "output"
         with (
-            patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[input_file_path]),
             patch(
-                "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
                 return_value=iter([mock_conversion_result]),
             ),
         ):
-            docling_parse_docs(str(input_file_path), str(output_dir_path))
+            docling_parse_docs(input_file_path, output_dir_path, output_formats=["markdown", "json"])
 
             md_path = output_dir_path / "input_file_path.md"
             json_path = output_dir_path / "input_file_path.json"
@@ -103,14 +107,17 @@ class TestDoclingParseDocs:
         """
         input_file_path = tmp_path / "input_file_path"
         output_dir_path = tmp_path / "output"
+        caplog.set_level(logging.DEBUG)
 
         with (
-            patch("autogen.agentchat.contrib.rag.parser_utils.handle_input", return_value=[Path("input_file_path")]),
             patch(
-                "autogen.agentchat.contrib.rag.parser_utils.DocumentConverter.convert_all",
-                return_value=[mock_conversion_result],
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input",
+                return_value=[Path("input_file_path")],
             ),
-            caplog.at_level(logging.INFO),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
+                return_value=iter([mock_conversion_result]),
+            ),
         ):
             docling_parse_docs(input_file_path, output_dir_path)
             assert "Document converted in" in caplog.text
@@ -125,7 +132,7 @@ class TestDoclingParseDocs:
         invalid_input_file_path = tmp_path / "invalid_input_file_path"
         output_dir_path = tmp_path / "output"
 
-        with raises(ValueError, match="The input provided is neither a URL, directory, nor a file path."):
+        with raises(ValueError, match="The input provided does not exist."):
             docling_parse_docs(invalid_input_file_path, output_dir_path)
 
     def test_register_docling_parse_docs_as_a_tool(self, tmp_path: Path, mock_credentials: Credentials) -> None:
@@ -143,16 +150,17 @@ class TestDoclingParseDocs:
         user_agent = UserProxyAgent(
             name="UserAgent",
             human_input_mode="ALWAYS",
+            code_execution_config=False,
         )
 
         parser_tool.register_for_execution(user_agent)
 
         results = user_agent.function_map["docling_parse_docs"](
-            input_file_path=str(input_file_path), output_dir_path=str(output_dir_path)
+            input_file_path=input_file_path, output_dir_path=output_dir_path
         )
 
         assert isinstance(results, str)
-        assert "'text': 'Mock Markdown'" in results
+        assert str(output_dir_path) in results
 
         assistant = AssistantAgent(
             name="AssistantAgent",
@@ -174,9 +182,16 @@ class TestDoclingParseDocs:
                             "output_dir_path": {
                                 "anyOf": [{"format": "path", "type": "string"}, {"type": "string"}],
                                 "description": "output_dir_path",
+                                "default": "./output_dir",
+                            },
+                            "output_formats": {
+                                "items": {"type": "string"},
+                                "type": "array",
+                                "default": ["markdown"],
+                                "description": "output_formats",
                             },
                         },
-                        "required": ["input_file_path", "output_dir_path"],
+                        "required": ["input_file_path"],
                         "type": "object",
                     },
                 },

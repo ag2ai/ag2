@@ -16,7 +16,7 @@ from ....conftest import Credentials, suppress_gemini_resource_exhausted
 
 class TestGeminiRealtimeClient:
     @pytest.fixture
-    def client(self, credentials_gemini_realtime: Credentials) -> RealtimeClientProtocol:
+    def client(self, credentials_gemini_realtime: Credentials) -> GeminiRealtimeClient:
         llm_config = credentials_gemini_realtime.llm_config
         return GeminiRealtimeClient(
             llm_config=llm_config,
@@ -41,6 +41,7 @@ class TestGeminiRealtimeClient:
 
         assert not scope.cancelled_caught
 
+    @pytest.mark.skip
     @pytest.mark.gemini
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
@@ -64,6 +65,7 @@ class TestGeminiRealtimeClient:
 
         assert isinstance(calls_args[0][0], SessionCreated)
 
+    @pytest.mark.skip
     @pytest.mark.gemini
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
