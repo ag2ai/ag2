@@ -5,12 +5,11 @@ title: DocumentAgent
 In the realm of AI and automation, handling documents and extracting information efficiently is of utmost importance.
 [`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly, and with natural language instructions, by leveraging an internal swarm of agents to streamline document processing and information retrieval.
 
-<Warning>
-This agent is currently in our `experimental` namespace, indicating that we have tested the functionality but the agent's interface may change. Please use it with that in mind and we appreciate any feedback on it.
+<Tip>
+DocumentAgent is new and keen to support your RAG needs. However, as a first iteration it has been kept simple and uses a local vector database (Chroma).
 
-If you do find any bugs please [log an issue](https://github.com/ag2ai/ag2/issues) in the AG2 repository. If you would like to update the agent, we would love your [contribution](https://docs.ag2.ai/docs/contributor-guide/contributing).
-</Warning>
-
+DocumentAgent will continue to be developed to a production-ready standard and your feedback and [contributions](https://docs.ag2.ai/docs/contributor-guide/contributing) are most welcome!
+</Tip>
 
 ## Installation
 
@@ -67,6 +66,12 @@ Here's a breakdown of how the internal swarm chat is used within the [`DocumentA
 <Tip>
 The internal ingestation of documents requires an LLM and it will use OpenAI's GPT-4o. Please ensure you have an `OPENAI_API_KEY` environment variable set.
 </Tip>
+
+<Warning>
+This agent is currently in our `experimental` namespace, indicating that we have tested the functionality but the agent's interface may change. Please use it with that in mind.
+
+If you do find any bugs please [log an issue](https://github.com/ag2ai/ag2/issues) in the AG2 repository.
+</Warning>
 
 In the following simple example we ask the [`DocumentAgent`](/docs/api-reference/autogen/agents/experimental/DocumentAgent) to ingest a document and then provide a financial summary.
 
