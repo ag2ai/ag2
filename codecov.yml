@@ -26,12 +26,13 @@ coverage:
 
 # Configure codecov bot behavior
 comment:
+# Show only changed files in PR comment
+  layout: "condensed_header, condensed_files, condensed_footer"
+  behavior: new
+  # Hide PR comment if there are no changes in coverage
+  require_changes: true
   # Only post comment after all builds finish
   after_n_builds: 30
-  # Hide PR comment if there are no changes
-  require_changes: true
-  # Add a summary header
-  layout: "condensed_header, condensed_files, condensed_footer"
   hide_project_coverage: true
 
 # Ignore certain paths/files
