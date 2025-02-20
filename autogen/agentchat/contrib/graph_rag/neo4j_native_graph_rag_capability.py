@@ -20,7 +20,7 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         """Initialize GraphRAG capability with a neo4j native graph query engine"""
         self.query_engine = query_engine
 
-    def add_to_agent(self, agent: ConversableAgent):
+    def add_to_agent(self, agent: ConversableAgent) -> None:
         """Add native Neo4j GraphRAG capability to a ConversableAgent.
         llm_config of the agent must be None/False (default) to make sure the returned message only contains information retrieved from the graph DB instead of any LLMs.
         """
@@ -60,7 +60,8 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         Returns:
             A tuple containing a boolean indicating success and the assistant's reply.
         """
-        question = self._messages_summary(messages, recipient.system_message)
+        # todo: fix typing, this is not correct
+        question = self._messages_summary(messages, recipient.system_message)  # type: ignore[arg-type]
         result: GraphStoreQueryResult = self.query_engine.query(question)
 
         return True, result.answer if result.answer else "I'm sorry, I don't have an answer for that."
@@ -75,10 +76,7 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
         <content>
         """
         if isinstance(messages, str):
-            if system_message:
-                summary = f"IMPORTANT: {system_message}\nContext:\n\n{messages}"
-            else:
-                return messages
+            return (f"IMPORTANT: {system_message}\n" if system_message else "") + f"Context:\n\n{messages}"
 
         elif isinstance(messages, list):
             summary = ""
