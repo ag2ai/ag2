@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Type
+from typing import Any, Optional, Type, Union
 
 import pytest
 
@@ -32,26 +32,31 @@ class TestOptionalImportBlock:
 
 
 class TestRequiresOptionalImportCallables:
-    def test_function_attributes(self) -> None:
+    @pytest.mark.parametrize("except_for", [None, "dummy_function", ["dummy_function"]])
+    def test_function_attributes(self, except_for: Optional[Union[str, list[str]]]) -> None:
         def dummy_function() -> None:
             """Dummy function to test requires_optional_import"""
             pass
 
         dummy_function.__module__ = "some_random_module.dummy_stuff"
 
-        actual = require_optional_import("some_optional_module", "optional_dep")(dummy_function)
+        actual = require_optional_import("some_optional_module", "optional_dep", except_for=except_for)(dummy_function)
 
         assert actual is not None
         assert actual.__module__ == "some_random_module.dummy_stuff"
         assert actual.__name__ == "dummy_function"
         assert actual.__doc__ == "Dummy function to test requires_optional_import"
 
-        with pytest.raises(
-            ImportError,
-            match=r"Module 'some_optional_module' needed for some_random_module.dummy_stuff.dummy_function is missing, please install it using 'pip install ag2\[optional_dep\]'",
-        ):
+        if not except_for:
+            with pytest.raises(
+                ImportError,
+                match=r"Module 'some_optional_module' needed for some_random_module.dummy_stuff.dummy_function is missing, please install it using 'pip install ag2\[optional_dep\]'",
+            ):
+                actual()
+        else:
             actual()
 
+    # todo: add except_for in all tests below
     def test_function_call(self) -> None:
         @require_optional_import("some_optional_module", "optional_dep")
         def dummy_function() -> None:
