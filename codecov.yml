@@ -1,9 +1,9 @@
 codecov:
   require_ci_to_pass: yes
   notify:
-    manual_trigger: true
-    # after_n_builds: 30
-    # wait_for_ci: yes
+    # manual_trigger: true
+    after_n_builds: 30
+    wait_for_ci: yes
 
 coverage:
   status:
