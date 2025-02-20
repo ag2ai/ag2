@@ -2,7 +2,6 @@ codecov:
   require_ci_to_pass: yes
   notify:
     # manual_trigger: true
-    after_n_builds: 30
     wait_for_ci: yes
 
 coverage:
@@ -33,8 +32,6 @@ comment:
   behavior: new
   # Hide PR comment if there are no changes in coverage
   require_changes: true
-  # Only post comment after all builds finish
-  after_n_builds: 30
   hide_project_coverage: true
 
 # Ignore certain paths/files
