@@ -5,7 +5,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
-from ....oai import get_first_llm_config  # noqa
+from ....oai import get_first_llm_config
 
 __all__ = ["LiteLLmConfigFactory"]
 
