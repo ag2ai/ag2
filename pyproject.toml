@@ -296,6 +296,7 @@ markers = [
     "interop",
     "browser_use",
     "crawl4ai",
+    "websockets",
 ]
 
 [tool.black]
