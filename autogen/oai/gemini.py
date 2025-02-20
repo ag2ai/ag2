@@ -252,7 +252,12 @@ class GeminiClient:
             self._response_format = params.get("response_format")
             generation_config["response_mime_type"] = "application/json"
 
-            response_schema = dict(jsonref.replace_refs(params.get("response_format").model_json_schema()))
+            response_format_schema_raw = params.get("response_format")
+
+            if isinstance(response_format_schema_raw, dict):
+                response_schema = dict(jsonref.replace_refs(response_format_schema_raw))
+            else:
+                response_schema = dict(jsonref.replace_refs(params.get("response_format").model_json_schema()))
             if "$defs" in response_schema:
                 response_schema.pop("$defs")
             generation_config["response_schema"] = response_schema
@@ -571,9 +576,12 @@ class GeminiClient:
             return response
 
         try:
-            # Parse JSON and validate against the Pydantic model
+            # Parse JSON and validate against the Pydantic model if Pydantic model was provided
             json_data = json.loads(response)
-            return self._response_format.model_validate(json_data)
+            if isinstance(self._response_format, dict):
+                return json_data
+            else:
+                return self._response_format.model_validate(json_data)
         except Exception as e:
             raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 

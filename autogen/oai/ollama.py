@@ -237,7 +237,11 @@ class OllamaClient:
         # https://ollama.com/blog/structured-outputs
         if params.get("response_format"):
             self._response_format = params["response_format"]
-            ollama_params["format"] = params.get("response_format").model_json_schema()
+            ollama_params["format"] = (
+                params.get("response_format").model_json_schema()
+                if isinstance(self._response_format, BaseModel)
+                else params.get("response_format")
+            )
 
         # Token counts will be returned
         prompt_tokens = 0
@@ -491,8 +495,11 @@ class OllamaClient:
             return response
 
         try:
-            # Parse JSON and validate against the Pydantic model
-            return self._response_format.model_validate_json(response)
+            # Parse JSON and validate against the Pydantic model if Pydantic model was provided
+            if isinstance(self._response_format, dict):
+                return response
+            else:
+                return self._response_format.model_validate_json(response)
         except Exception as e:
             raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
