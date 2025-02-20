@@ -11,7 +11,7 @@ from autogen.import_utils import optional_import_block, skip_on_missing_imports
 with optional_import_block():
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
-    from autogen.tools.experimental.browser_use.langchain_factory import ChatOpenAIFactory, LangchainFactory
+    from autogen.interop.langchain.langchain_chat_model_factory import ChatOpenAIFactory, LangChainChatModelFactory
 
 
 @skip_on_missing_imports(
@@ -22,7 +22,7 @@ class TestLangchainFactory:
     test_api_key = "test"  # pragma: allowlist secret
 
     def test_number_of_factories(self) -> None:
-        assert len(LangchainFactory._factories) == 6
+        assert len(LangChainChatModelFactory._factories) == 6
 
     @pytest.mark.parametrize(
         ("config_list", "llm_class_name", "base_url"),
@@ -91,7 +91,7 @@ class TestLangchainFactory:
         llm_class_name: str,
         base_url: Optional[str],
     ) -> None:
-        llm = LangchainFactory.create_base_chat_model(llm_config={"config_list": config_list})
+        llm = LangChainChatModelFactory.create_base_chat_model(llm_config={"config_list": config_list})
         assert llm.__class__.__name__ == llm_class_name
         if llm_class_name == "AzureChatOpenAI":
             assert isinstance(llm, AzureChatOpenAI)
@@ -124,7 +124,7 @@ class TestLangchainFactory:
         self, config_list: list[dict[str, str]], error_msg: str
     ) -> None:
         with pytest.raises(ValueError, match=error_msg):
-            LangchainFactory.create_base_chat_model(llm_config={"config_list": config_list})
+            LangChainChatModelFactory.create_base_chat_model(llm_config={"config_list": config_list})
 
 
 @skip_on_missing_imports(

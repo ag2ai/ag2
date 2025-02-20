@@ -8,9 +8,9 @@ from pydantic import BaseModel
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
+from ....interop import LiteLLmConfigFactory
 from ... import Tool
 from ...dependency_injection import Depends, on
-from .litellm_config_factory import LiteLLmConfigFactory
 
 with optional_import_block():
     from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig

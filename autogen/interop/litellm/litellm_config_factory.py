@@ -5,11 +5,13 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
-from ....oai import get_first_llm_config
+from ...doc_utils import export_module
+from ...oai import get_first_llm_config
 
 __all__ = ["LiteLLmConfigFactory"]
 
 
+@export_module("autogen.interop")
 class LiteLLmConfigFactory(ABC):
     _factories: set["LiteLLmConfigFactory"] = set()
 

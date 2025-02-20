@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from autogen.tools.experimental.crawl4ai.litellm_config_factory import LiteLLmConfigFactory
+from autogen.interop import LiteLLmConfigFactory
 
 
 class TestLiteLLmConfigFactory:
