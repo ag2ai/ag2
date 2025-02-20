@@ -216,7 +216,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: ${{ matrix.python-version }}, ${{ matrix.os }}
+          flags: agent-eval, ${{ matrix.python-version }}, ${{ matrix.os }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -255,7 +255,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+          flags: gpt-assistant-agent, ${{ matrix.os }}, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -495,7 +495,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+          flags: llama-index-agent, ${{ matrix.os }}, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -887,7 +887,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+          flags: swarm, ${{ matrix.os }}, ${{ matrix.python-version }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -942,6 +942,6 @@ jobs:
           uses: codecov/codecov-action@v5
           with:
             files: ./coverage.xml
-            flags: ${{ matrix.os }}, ${{ matrix.python-version }}
+            flags: reasoning, ${{ matrix.os }}, ${{ matrix.python-version }}
             fail_ci_if_error: true
             token: ${{ secrets.CODECOV_TOKEN }}
