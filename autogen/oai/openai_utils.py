@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import importlib
 import importlib.metadata
 import json
 import logging
@@ -554,6 +555,9 @@ def config_list_from_json(
 
         with open(config_list_path) as json_file:
             config_list = json.load(json_file)
+
+    config_list = filter_config(config_list, filter_dict)
+
     return filter_config(config_list, filter_dict)
 
 

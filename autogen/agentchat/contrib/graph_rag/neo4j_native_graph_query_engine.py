@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
@@ -32,7 +32,7 @@ class Neo4jNativeGraphQueryEngine:
     create a vector index, and query the graph using Neo4j and LLM.
     """
 
-    def __init__(
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         host: str = "neo4j://localhost",
         port: int = 7687,
@@ -75,7 +75,7 @@ class Neo4jNativeGraphQueryEngine:
         self.relations = relations
         self.potential_schema = potential_schema
 
-    def init_db(self, input_doc: Union[list[Document], None] = None):
+    def init_db(self, input_doc: Optional[Union[list[Document]]] = None) -> None:
         """Initialize the Neo4j graph database using the provided input doc.
         Currently this method only supports single document input (only reads the first doc).
 
@@ -123,7 +123,7 @@ class Neo4jNativeGraphQueryEngine:
 
         return True
 
-    def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
+    def query(self, question: str, n_results: int = 1, **kwargs: Any) -> GraphStoreQueryResult:
         """Query the Neo4j database using a natural language question.
 
         Args:
@@ -142,7 +142,7 @@ class Neo4jNativeGraphQueryEngine:
 
         return GraphStoreQueryResult(answer=result.answer)
 
-    def _create_index(self, name: str):
+    def _create_index(self, name: str) -> None:
         """Create a vector index for the Neo4j knowledge graph.
 
         Args:
@@ -159,13 +159,13 @@ class Neo4jNativeGraphQueryEngine:
         )
         logger.info(f"Vector index '{name}' created successfully.")
 
-    def _clear_db(self):
+    def _clear_db(self) -> None:
         """Clear all nodes and relationships from the Neo4j database."""
         logger.info("Clearing all nodes and relationships in the database...")
         self.driver.execute_query("MATCH (n) DETACH DELETE n;")
         logger.info("Database cleared successfully.")
 
-    def _initialize_kg_builders(self):
+    def _initialize_kg_builders(self) -> None:
         """Initialize the knowledge graph builders"""
         logger.info("Initializing the knowledge graph builders...")
         self.text_kg_builder = SimpleKGPipeline(
@@ -199,7 +199,8 @@ class Neo4jNativeGraphQueryEngine:
         logger.info("Building the knowledge graph...")
         for doc in input_doc:
             if doc.doctype == DocumentType.TEXT:
-                with open(doc.path_or_url) as file:
+                # todo: we assume this is a path, and not URL
+                with open(doc.path_or_url) as file:  # type: ignore[arg-type]
                     text = file.read()
                 asyncio.run(self.text_kg_builder.run_async(text=text))
             elif doc.doctype == DocumentType.PDF:

@@ -4,6 +4,4 @@
 
 from .query_engine import VectorDbQueryEngine
 
-__all__ = [
-    "VectorDbQueryEngine",
-]
+__all__ = ["VectorDbQueryEngine"]

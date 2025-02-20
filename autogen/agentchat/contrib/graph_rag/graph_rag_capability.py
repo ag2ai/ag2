@@ -8,6 +8,8 @@ from ...conversable_agent import ConversableAgent
 from ..capabilities.agent_capability import AgentCapability
 from .graph_query_engine import GraphQueryEngine
 
+__all__ = ["GraphRagCapability"]
+
 
 class GraphRagCapability(AgentCapability):
     """A graph-based RAG capability uses a graph query engine to give a conversable agent the graph-based RAG ability.
@@ -52,10 +54,10 @@ class GraphRagCapability(AgentCapability):
     ```
     """
 
-    def __init__(self, query_engine: GraphQueryEngine):
+    def __init__(self, query_engine: GraphQueryEngine) -> None:
         """Initialize graph-based RAG capability with a graph query engine"""
         ...
 
-    def add_to_agent(self, agent: ConversableAgent):
+    def add_to_agent(self, agent: ConversableAgent) -> None:
         """Add the capability to an agent"""
         ...
