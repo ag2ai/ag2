@@ -14,10 +14,8 @@ from ...dependency_injection import on
 with optional_import_block():
     from browser_use import Agent, Controller
     from browser_use.browser.browser import Browser, BrowserConfig
-    from langchain_anthropic import ChatAnthropic
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from langchain_ollama import ChatOllama
-    from langchain_openai import AzureChatOpenAI, ChatOpenAI
+
+    from .langchain_factory import LangchainFactory
 
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
@@ -37,7 +35,14 @@ class BrowserUseResult(BaseModel):
 
 
 @require_optional_import(
-    ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "browser_use"],
+    [
+        "langchain_anthropic",
+        "langchain_google_genai",
+        "langchain_ollama",
+        "langchain_openai",
+        "langchain_core",
+        "browser_use",
+    ],
     "browser-use",
 )
 @export_module("autogen.tools.experimental")
@@ -88,7 +93,7 @@ class BrowserUseTool(Tool):
             browser: Annotated[Browser, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
         ) -> BrowserUseResult:
-            llm = BrowserUseTool._get_llm(llm_config)
+            llm = LangchainFactory.create_base_chat_model(llm_config)
 
             max_steps = agent_kwargs.pop("max_steps", 100)
 
@@ -121,51 +126,3 @@ class BrowserUseTool(Tool):
             else llm_config.get("response_format")
         )
         return Controller(output_model=response_format)
-
-    @staticmethod
-    def _get_llm(
-        llm_config: dict[str, Any],
-    ) -> Any:
-        if "config_list" not in llm_config:
-            if "model" in llm_config:
-                return ChatOpenAI(model=llm_config["model"])
-            raise ValueError("llm_config must be a valid config dictionary.")
-
-        try:
-            model = llm_config["config_list"][0]["model"]
-            api_type = llm_config["config_list"][0].get("api_type", "openai")
-
-            # Ollama does not require an api_key
-            api_key = None if api_type == "ollama" else llm_config["config_list"][0]["api_key"]
-
-            if api_type == "deepseek" or api_type == "azure" or api_type == "azure":
-                base_url = llm_config["config_list"][0].get("base_url")
-                if not base_url:
-                    raise ValueError(f"base_url is required for {api_type} api type.")
-            if api_type == "azure":
-                api_version = llm_config["config_list"][0].get("api_version")
-                if not api_version:
-                    raise ValueError(f"api_version is required for {api_type} api type.")
-
-        except (KeyError, TypeError) as e:
-            raise ValueError(f"llm_config must be a valid config dictionary: {e}")
-
-        if api_type == "openai":
-            return ChatOpenAI(model=model, api_key=api_key)
-        elif api_type == "azure":
-            return AzureChatOpenAI(
-                model=model,
-                api_key=api_key,
-                azure_endpoint=base_url,
-                api_version=api_version,
-            )
-        elif api_type == "deepseek":
-            return ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
-        elif api_type == "anthropic":
-            return ChatAnthropic(model=model, api_key=api_key)
-        elif api_type == "google":
-            return ChatGoogleGenerativeAI(model=model, api_key=api_key)
-        elif api_type == "ollama":
-            return ChatOllama(model=model, num_ctx=32000)
-        else:
-            raise ValueError(f"Currently unsupported language model api type for browser use: {api_type}")

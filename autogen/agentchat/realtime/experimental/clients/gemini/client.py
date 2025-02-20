@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from ......doc_utils import export_module
 from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
-from ..realtime_client import Role, register_realtime_client
+from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
@@ -30,7 +30,7 @@ API_VERSION = "v1alpha"
 
 @register_realtime_client()
 @export_module("autogen.agentchat.realtime.experimental.clients")
-class GeminiRealtimeClient:
+class GeminiRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for Gemini Realtime API."""
 
     def __init__(
@@ -44,6 +44,7 @@ class GeminiRealtimeClient:
         Args:
             llm_config (dict[str, Any]): The config for the client.
         """
+        super().__init__()
         self._llm_config = llm_config
         self._logger = logger
 
@@ -123,6 +124,7 @@ class GeminiRealtimeClient:
                 ]
             }
         }
+        await self.queue_input_audio_buffer_delta(audio)
         if self._is_reading_events:
             await self.connection.send(json.dumps(msg))
 
@@ -185,13 +187,18 @@ class GeminiRealtimeClient:
             self._connection = None
 
     async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
-        """Read Events from the Gemini Realtime API."""
+        """Read Events from the Gemini Realtime Client"""
         if self._connection is None:
             raise RuntimeError("Client is not connected, call connect() first.")
         await self._initialize_session()
 
         self._is_reading_events = True
 
+        async for event in self._read_events():
+            yield event
+
+    async def _read_from_connection(self) -> AsyncGenerator[RealtimeEvent, None]:
+        """Read messages from the Gemini Realtime connection."""
         async for raw_message in self.connection:
             message = raw_message.decode("ascii") if isinstance(raw_message, bytes) else raw_message
             events = self._parse_message(json.loads(message))

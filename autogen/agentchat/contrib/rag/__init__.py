@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from .query_engine import VectorDbQueryEngine
 
-__version__ = "0.7.5"
+__all__ = ["VectorDbQueryEngine"]
