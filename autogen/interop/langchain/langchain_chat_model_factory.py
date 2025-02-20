@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 
-from ....import_utils import optional_import_block, require_optional_import
+from ...doc_utils import export_module
+from ...import_utils import optional_import_block, require_optional_import
+from ...oai import get_first_llm_config
 
 with optional_import_block():
     from langchain_anthropic import ChatAnthropic
@@ -16,7 +17,9 @@ with optional_import_block():
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 
-__all__ = ["LangchainFactory"]
+__all__ = ["LangChainChatModelFactory"]
+
+T = TypeVar("T", bound="LangChainChatModelFactory")
 
 
 @require_optional_import(
@@ -24,37 +27,26 @@ __all__ = ["LangchainFactory"]
     "browser-use",
     except_for=["__init__", "register_factory"],
 )
-class LangchainFactory(ABC):
-    _factories: set["LangchainFactory"] = set()
+@export_module("autogen.interop")
+class LangChainChatModelFactory(ABC):
+    _factories: set["LangChainChatModelFactory"] = set()
 
     @classmethod
     def create_base_chat_model(cls, llm_config: dict[str, Any]) -> "BaseChatModel":  # type: ignore [no-any-unimported]
-        first_llm_config = cls.get_first_llm_config(llm_config)
-        for factory in LangchainFactory._factories:
+        first_llm_config = get_first_llm_config(llm_config)
+        for factory in LangChainChatModelFactory._factories:
             if factory.accepts(first_llm_config):
                 return factory.create(first_llm_config)
 
         raise ValueError("Could not find a factory for the given config.")
 
     @classmethod
-    def register_factory(cls) -> Callable[[type["LangchainFactory"]], type["LangchainFactory"]]:
-        def decorator(factory: type["LangchainFactory"]) -> type["LangchainFactory"]:
+    def register_factory(cls) -> Callable[[type[T]], type[T]]:
+        def decorator(factory: type[T]) -> type[T]:
             cls._factories.add(factory())
             return factory
 
         return decorator
-
-    @classmethod
-    def get_first_llm_config(cls, llm_config: dict[str, Any]) -> dict[str, Any]:
-        llm_config = deepcopy(llm_config)
-        if "config_list" not in llm_config:
-            if "model" in llm_config:
-                return llm_config
-            raise ValueError("llm_config must be a valid config dictionary.")
-
-        if len(llm_config["config_list"]) == 0:
-            raise ValueError("Config list must contain at least one config.")
-        return llm_config["config_list"][0]  # type: ignore [no-any-return]
 
     @classmethod
     def prepare_config(cls, first_llm_config: dict[str, Any]) -> dict[str, Any]:
@@ -76,8 +68,8 @@ class LangchainFactory(ABC):
         return first_llm_config.get("api_type", "openai") == cls.get_api_type()  # type: ignore [no-any-return]
 
 
-@LangchainFactory.register_factory()
-class ChatOpenAIFactory(LangchainFactory):
+@LangChainChatModelFactory.register_factory()
+class ChatOpenAIFactory(LangChainChatModelFactory):
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> "ChatOpenAI":  # type: ignore [no-any-unimported]
         first_llm_config = cls.prepare_config(first_llm_config)
@@ -89,7 +81,7 @@ class ChatOpenAIFactory(LangchainFactory):
         return "openai"
 
 
-@LangchainFactory.register_factory()
+@LangChainChatModelFactory.register_factory()
 class DeepSeekFactory(ChatOpenAIFactory):
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> "ChatOpenAI":  # type: ignore [no-any-unimported]
@@ -102,8 +94,8 @@ class DeepSeekFactory(ChatOpenAIFactory):
         return "deepseek"
 
 
-@LangchainFactory.register_factory()
-class ChatAnthropicFactory(LangchainFactory):
+@LangChainChatModelFactory.register_factory()
+class ChatAnthropicFactory(LangChainChatModelFactory):
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> "ChatAnthropic":  # type: ignore [no-any-unimported]
         first_llm_config = cls.prepare_config(first_llm_config)
@@ -115,8 +107,8 @@ class ChatAnthropicFactory(LangchainFactory):
         return "anthropic"
 
 
-@LangchainFactory.register_factory()
-class ChatGoogleGenerativeAIFactory(LangchainFactory):
+@LangChainChatModelFactory.register_factory()
+class ChatGoogleGenerativeAIFactory(LangChainChatModelFactory):
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> "ChatGoogleGenerativeAI":  # type: ignore [no-any-unimported]
         first_llm_config = cls.prepare_config(first_llm_config)
@@ -128,8 +120,8 @@ class ChatGoogleGenerativeAIFactory(LangchainFactory):
         return "google"
 
 
-@LangchainFactory.register_factory()
-class AzureChatOpenAIFactory(LangchainFactory):
+@LangChainChatModelFactory.register_factory()
+class AzureChatOpenAIFactory(LangChainChatModelFactory):
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> "AzureChatOpenAI":  # type: ignore [no-any-unimported]
         first_llm_config = cls.prepare_config(first_llm_config)
@@ -145,8 +137,8 @@ class AzureChatOpenAIFactory(LangchainFactory):
         return "azure"
 
 
-@LangchainFactory.register_factory()
-class ChatOllamaFactory(LangchainFactory):
+@LangChainChatModelFactory.register_factory()
+class ChatOllamaFactory(LangChainChatModelFactory):
     @classmethod
     def create(cls, first_llm_config: dict[str, Any]) -> "ChatOllama":  # type: ignore [no-any-unimported]
         first_llm_config = cls.prepare_config(first_llm_config)

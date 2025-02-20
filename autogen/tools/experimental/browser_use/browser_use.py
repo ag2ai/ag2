@@ -15,7 +15,7 @@ with optional_import_block():
     from browser_use import Agent, Controller
     from browser_use.browser.browser import Browser, BrowserConfig
 
-    from .langchain_factory import LangchainFactory
+    from ....interop.langchain.langchain_chat_model_factory import LangChainChatModelFactory
 
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
@@ -93,7 +93,7 @@ class BrowserUseTool(Tool):
             browser: Annotated[Browser, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
         ) -> BrowserUseResult:
-            llm = LangchainFactory.create_base_chat_model(llm_config)
+            llm = LangChainChatModelFactory.create_base_chat_model(llm_config)
 
             max_steps = agent_kwargs.pop("max_steps", 100)
 
