@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
@@ -18,6 +18,8 @@ with optional_import_block():
 
 
 __all__ = ["LangChainChatModelFactory"]
+
+T = TypeVar("T", bound="LangChainChatModelFactory")
 
 
 @require_optional_import(
@@ -39,8 +41,8 @@ class LangChainChatModelFactory(ABC):
         raise ValueError("Could not find a factory for the given config.")
 
     @classmethod
-    def register_factory(cls) -> Callable[[type["LangChainChatModelFactory"]], type["LangChainChatModelFactory"]]:
-        def decorator(factory: type["LangChainChatModelFactory"]) -> type["LangChainChatModelFactory"]:
+    def register_factory(cls) -> Callable[[type[T]], type[T]]:
+        def decorator(factory: type[T]) -> type[T]:
             cls._factories.add(factory())
             return factory
 
