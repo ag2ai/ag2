@@ -15,7 +15,7 @@ import autogen
 
 from ..conftest import (
     Credentials,
-    credentials_anthropic_claude_sonnet,
+    credentials_gemini_flash,
     credentials_gpt_4o_mini,
     suppress_gemini_resource_exhausted,
 )
@@ -26,8 +26,8 @@ credentials_structured_output = [
         marks=pytest.mark.openai,
     ),
     pytest.param(
-        credentials_anthropic_claude_sonnet.__name__,
-        marks=pytest.mark.anthropic,
+        credentials_gemini_flash.__name__,
+        marks=pytest.mark.gemini,
     ),
 ]
 
