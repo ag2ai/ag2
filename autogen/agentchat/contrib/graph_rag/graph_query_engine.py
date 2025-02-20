@@ -5,9 +5,11 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from dataclasses import dataclass, field
-from typing import Optional, Protocol
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from .document import Document
+
+__all__ = ["GraphQueryEngine", "GraphStoreQueryResult"]
 
 
 @dataclass
@@ -19,16 +21,17 @@ class GraphStoreQueryResult:
     """
 
     answer: Optional[str] = None
-    results: list = field(default_factory=list)
+    results: list[Any] = field(default_factory=list)
 
 
+@runtime_checkable
 class GraphQueryEngine(Protocol):
     """An abstract base class that represents a graph query engine on top of a underlying graph database.
 
     This interface defines the basic methods for graph-based RAG.
     """
 
-    def init_db(self, input_doc: Optional[list[Document]] = None):
+    def init_db(self, input_doc: Optional[list[Document]] = None) -> None:
         """This method initializes graph database with the input documents or records.
         Usually, it takes the following steps,
         1. connecting to a graph database.
@@ -41,10 +44,10 @@ class GraphQueryEngine(Protocol):
         """
         pass
 
-    def add_records(self, new_records: list) -> bool:
+    def add_records(self, new_records: list[Any]) -> bool:
         """Add new records to the underlying database and add to the graph if required."""
         pass
 
-    def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
+    def query(self, question: str, n_results: int = 1, **kwarg: Any) -> GraphStoreQueryResult:
         """This method transform a string format question into database query and return the result."""
         pass

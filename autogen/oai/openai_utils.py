@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import importlib
 import importlib.metadata
 import json
 import logging
@@ -11,6 +12,7 @@ import os
 import re
 import tempfile
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -185,6 +187,30 @@ def get_config_list(
             config["api_version"] = api_version
         config_list.append(config)
     return config_list
+
+
+@export_module("autogen")
+def get_first_llm_config(llm_config: dict[str, Any]) -> dict[str, Any]:
+    """Get the first LLM config from the given LLM config.
+
+    Args:
+        llm_config (dict): The LLM config.
+
+    Returns:
+        dict: The first LLM config.
+
+    Raises:
+        ValueError: If the LLM config is invalid.
+    """
+    llm_config = deepcopy(llm_config)
+    if "config_list" not in llm_config:
+        if "model" in llm_config:
+            return llm_config
+        raise ValueError("llm_config must be a valid config dictionary.")
+
+    if len(llm_config["config_list"]) == 0:
+        raise ValueError("Config list must contain at least one config.")
+    return llm_config["config_list"][0]  # type: ignore [no-any-return]
 
 
 @export_module("autogen")
@@ -554,6 +580,9 @@ def config_list_from_json(
 
         with open(config_list_path) as json_file:
             config_list = json.load(json_file)
+
+    config_list = filter_config(config_list, filter_dict)
+
     return filter_config(config_list, filter_dict)
 
 

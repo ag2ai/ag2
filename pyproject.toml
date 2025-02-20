@@ -389,6 +389,8 @@ files = [
     "autogen/messages",
     "autogen/import_utils.py",
     "autogen/agents/experimental/document_agent",
+    "autogen/agentchat/contrib/rag",
+    "autogen/agentchat/contrib/graph_rag",
     "website/*.py",
     "test/io",
     "test/tools",
@@ -399,6 +401,8 @@ files = [
     "test/test_import_utils.py",
     "test/test_import.py",
     "test/agents/experimental/document_agent",
+#    "test/agentchat/contrib/rag",
+    "test/agentchat/contrib/graph_rag",
     "test/website",
 ]
 

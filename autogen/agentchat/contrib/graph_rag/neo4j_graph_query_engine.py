@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 import sys
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 if sys.version_info >= (3, 10):
     from typing import TypeAlias
@@ -12,11 +12,12 @@ else:
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
-from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
+from .graph_query_engine import GraphStoreQueryResult
 
 with optional_import_block():
     from llama_index.core import PropertyGraphIndex, SimpleDirectoryReader
     from llama_index.core.base.embeddings.base import BaseEmbedding
+    from llama_index.core.chat_engine.types import ChatMode
     from llama_index.core.indices.property_graph import (
         DynamicLLMPathExtractor,
         SchemaLLMPathExtractor,
@@ -25,13 +26,14 @@ with optional_import_block():
     from llama_index.core.llms import LLM
     from llama_index.core.readers.json import JSONReader
     from llama_index.core.schema import Document as LlamaDocument
+    from llama_index.core.schema import TransformComponent
     from llama_index.embeddings.openai import OpenAIEmbedding
     from llama_index.graph_stores.neo4j import Neo4jPropertyGraphStore
     from llama_index.llms.openai import OpenAI
 
 
 @require_optional_import("llama_index", "neo4j")
-class Neo4jGraphQueryEngine(GraphQueryEngine):
+class Neo4jGraphQueryEngine:
     """This class serves as a wrapper for a property graph query engine backed by LlamaIndex and Neo4j,
     facilitating the creating, connecting, updating, and querying of LlamaIndex property graphs.
 
@@ -51,7 +53,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
     For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
     """
 
-    def __init__(
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         host: str = "bolt://localhost",
         port: int = 7687,
@@ -94,7 +96,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         self.schema = schema
         self.strict = strict
 
-    def init_db(self, input_doc: Optional[list[Document]] = None):
+    def init_db(self, input_doc: Optional[list[Document]] = None) -> None:
         """Build the knowledge graph with input documents."""
         self.documents = self._load_doc(input_doc if input_doc is not None else [])
 
@@ -120,7 +122,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             show_progress=True,
         )
 
-    def connect_db(self):
+    def connect_db(self) -> None:
         """Connect to an existing knowledge graph database."""
         self.graph_store = Neo4jPropertyGraphStore(
             username=self.username,
@@ -139,7 +141,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             show_progress=True,
         )
 
-    def add_records(self, new_records: list) -> bool:
+    def add_records(self, new_records: list[Document]) -> bool:
         """Add new records to the knowledge graph. Must be local files.
 
         Args:
@@ -166,7 +168,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
             print(f"Error adding records: {e}")
             return False
 
-    def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
+    def query(self, question: str, n_results: int = 1, **kwargs: Any) -> GraphStoreQueryResult:
         """Query the property graph with a question using LlamaIndex chat engine.
         We use the condense_plus_context chat mode
         which condenses the conversation history and the user query into a standalone question,
@@ -185,7 +187,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
 
         # Initialize chat engine if not already initialized
         if not hasattr(self, "chat_engine"):
-            self.chat_engine = self.index.as_chat_engine(chat_mode="condense_plus_context", llm=self.llm)
+            self.chat_engine = self.index.as_chat_engine(chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT, llm=self.llm)
 
         response = self.chat_engine.chat(question)
         return GraphStoreQueryResult(answer=str(response))
@@ -197,7 +199,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         with self.graph_store._driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n;")
 
-    def _load_doc(self, input_doc: list[Document]) -> list["LlamaDocument"]:
+    def _load_doc(self, input_doc: list[Document]) -> list["LlamaDocument"]:  # type: ignore[no-any-unimported]
         """Load documents from the input files. Currently support the following file types:
         .csv - comma-separated values
         .docx - Microsoft Word
@@ -214,7 +216,7 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         .json JSON files
         """
         for doc in input_doc:
-            if not os.path.exists(doc.path_or_url):
+            if not os.path.exists(doc.path_or_url):  # type: ignore[arg-type]
                 raise ValueError(f"Document file not found: {doc.path_or_url}")
 
         common_type_input_files = []
@@ -228,11 +230,11 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         if common_type_input_files:
             loaded_documents.extend(SimpleDirectoryReader(input_files=common_type_input_files).load_data())
         for json_file in json_type_input_files:
-            loaded_documents.extend(JSONReader().load_data(input_file=json_file))
+            loaded_documents.extend(JSONReader().load_data(input_file=json_file))  # type: ignore[arg-type]
 
         return loaded_documents
 
-    def _create_kg_extractors(self):
+    def _create_kg_extractors(self) -> list["TransformComponent"]:  # type: ignore[no-any-unimported]
         """If strict is True,
         extract paths following a strict schema of allowed relationships for each entity.
 
@@ -242,13 +244,13 @@ class Neo4jGraphQueryEngine(GraphQueryEngine):
         # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
         """
         #
-        kg_extractors = [
+        kg_extractors: list["TransformComponent"] = [  # type: ignore[no-any-unimported]
             SchemaLLMPathExtractor(
                 llm=self.llm,
                 possible_entities=self.entities,
                 possible_relations=self.relations,
                 kg_validation_schema=self.schema,
-                strict=self.strict,
+                strict=self.strict if self.strict else False,
             ),
         ]
 
