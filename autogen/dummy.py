@@ -11,3 +11,7 @@ def add(a: int, b: int) -> int:
 
 def ag2_ceil(x: float) -> int:
     return ceil(x)
+
+
+def sub(a: int, b: int) -> int:
+    return a - b
