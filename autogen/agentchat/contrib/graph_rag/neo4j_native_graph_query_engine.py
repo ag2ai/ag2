@@ -8,7 +8,7 @@ from typing import List, Optional, Union
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
-from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
+from .graph_query_engine import GraphStoreQueryResult
 
 with optional_import_block():
     from neo4j import GraphDatabase
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["neo4j", "neo4j_graphrag"], "neo4j")
-class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
+class Neo4jNativeGraphQueryEngine:
     """A graph query engine implemented using the Neo4j GraphRAG SDK.
     Provides functionality to initialize a knowledge graph,
     create a vector index, and query the graph using Neo4j and LLM.

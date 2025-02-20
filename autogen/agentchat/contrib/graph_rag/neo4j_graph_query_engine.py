@@ -12,7 +12,7 @@ else:
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
-from .graph_query_engine import GraphQueryEngine, GraphStoreQueryResult
+from .graph_query_engine import GraphStoreQueryResult
 
 with optional_import_block():
     from llama_index.core import PropertyGraphIndex, SimpleDirectoryReader
@@ -31,7 +31,7 @@ with optional_import_block():
 
 
 @require_optional_import("llama_index", "neo4j")
-class Neo4jGraphQueryEngine(GraphQueryEngine):
+class Neo4jGraphQueryEngine:
     """This class serves as a wrapper for a property graph query engine backed by LlamaIndex and Neo4j,
     facilitating the creating, connecting, updating, and querying of LlamaIndex property graphs.
 

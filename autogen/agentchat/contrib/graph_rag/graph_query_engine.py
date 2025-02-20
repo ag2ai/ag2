@@ -5,7 +5,7 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from dataclasses import dataclass, field
-from typing import Optional, Protocol
+from typing import Optional, Protocol, runtime_checkable
 
 from .document import Document
 
@@ -22,6 +22,7 @@ class GraphStoreQueryResult:
     results: list = field(default_factory=list)
 
 
+@runtime_checkable
 class GraphQueryEngine(Protocol):
     """An abstract base class that represents a graph query engine on top of a underlying graph database.
 
