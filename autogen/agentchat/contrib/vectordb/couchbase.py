@@ -10,13 +10,12 @@ import time
 from datetime import timedelta
 from typing import Any, Callable, Literal, Optional
 
-import numpy as np
-
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
 with optional_import_block():
+    import numpy as np
     from couchbase import search
     from couchbase.auth import PasswordAuthenticator
     from couchbase.cluster import Cluster, ClusterOptions
@@ -25,6 +24,7 @@ with optional_import_block():
     from couchbase.options import SearchOptions
     from couchbase.vector_search import VectorQuery, VectorSearch
     from sentence_transformers import SentenceTransformer
+
 
 logger = get_logger(__name__)
 
