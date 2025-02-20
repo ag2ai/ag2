@@ -22,10 +22,13 @@ class Neo4jGraphCapability(GraphRagCapability):
         """Initialize GraphRAG capability with a graph query engine"""
         self.query_engine = query_engine
 
-    def add_to_agent(self, agent: UserProxyAgent):
+    def add_to_agent(self, agent: ConversableAgent) -> None:
         """Add Neo4j GraphRAG capability to a UserProxyAgent.
         The restriction to a UserProxyAgent to make sure the returned message only contains information retrieved from the graph DB instead of any LLMs.
         """
+        if not isinstance(agent, UserProxyAgent):
+            raise Exception("Neo4j GraphRAG capability can only be added to a UserProxyAgent.")
+
         self.graph_rag_agent = agent
 
         # Validate the agent config
@@ -60,16 +63,21 @@ class Neo4jGraphCapability(GraphRagCapability):
         Returns:
             A tuple containing a boolean indicating success and the assistant's reply.
         """
-        question = self._get_last_question(messages[-1])
+        if not messages:
+            return False, None
 
-        result: GraphStoreQueryResult = self.query_engine.query(question)
+        question = self._get_last_question(messages[-1])
+        if not question:
+            return False, None
+
+        result: GraphStoreQueryResult = self.query_engine.query(question)  # type: ignore[arg-type]
 
         return True, result.answer
 
-    def _get_last_question(self, message: Union[dict[str, Any], str]) -> None:
+    def _get_last_question(self, message: Union[dict[str, Any], str]) -> Optional[Union[str, dict[str, Any]]]:
         """Retrieves the last message from the conversation history."""
         if isinstance(message, str):
             return message
         if isinstance(message, dict) and "content" in message:
-            return message["content"]
+            return message["content"]  # type: ignore[no-any-return]
         return None
