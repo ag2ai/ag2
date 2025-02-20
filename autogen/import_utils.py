@@ -83,7 +83,7 @@ class PatchObject(ABC, Generic[T]):
     def accept(cls, o: Any) -> bool: ...
 
     @abstractmethod
-    def patch(self) -> T: ...
+    def patch(self, except_for: Iterable[str]) -> T: ...
 
     def get_object_with_metadata(self) -> Any:
         return self.o
@@ -122,7 +122,13 @@ class PatchObject(ABC, Generic[T]):
         return decorator
 
     @classmethod
-    def create(cls, o: T, *, missing_modules: Iterable[str], dep_target: str) -> Optional["PatchObject[T]"]:
+    def create(
+        cls,
+        o: T,
+        *,
+        missing_modules: Iterable[str],
+        dep_target: str,
+    ) -> Optional["PatchObject[T]"]:
         for subclass in cls._registry:
             if subclass.accept(o):
                 return subclass(o, missing_modules, dep_target)
@@ -135,7 +141,10 @@ class PatchCallable(PatchObject[F]):
     def accept(cls, o: Any) -> bool:
         return inspect.isfunction(o) or inspect.ismethod(o)
 
-    def patch(self) -> F:
+    def patch(self, except_for: Iterable[str]) -> F:
+        if self.o.__name__ in except_for:
+            return self.o
+
         f: Callable[..., Any] = self.o
 
         @wraps(f.__call__)  # type: ignore[operator]
@@ -154,7 +163,16 @@ class PatchStatic(PatchObject[F]):
         # return inspect.ismethoddescriptor(o)
         return isinstance(o, staticmethod)
 
-    def patch(self) -> F:
+    def patch(self, except_for: Iterable[str]) -> F:
+        if hasattr(self.o, "__name__"):
+            name = self.o.__name__
+        elif hasattr(self.o, "__func__"):
+            name = self.o.__func__.__name__
+        else:
+            raise ValueError(f"Cannot determine name for object {self.o}")
+        if name in except_for:
+            return self.o
+
         f: Callable[..., Any] = self.o.__func__  # type: ignore[attr-defined]
 
         @wraps(f)
@@ -175,7 +193,10 @@ class PatchInit(PatchObject[F]):
     def accept(cls, o: Any) -> bool:
         return inspect.ismethoddescriptor(o) and o.__name__ == "__init__"
 
-    def patch(self) -> F:
+    def patch(self, except_for: Iterable[str]) -> F:
+        if self.o.__name__ in except_for:
+            return self.o
+
         f: Callable[..., Any] = self.o
 
         @wraps(f)
@@ -196,10 +217,13 @@ class PatchProperty(PatchObject[Any]):
     def accept(cls, o: Any) -> bool:
         return inspect.isdatadescriptor(o) and hasattr(o, "fget")
 
-    def patch(self) -> property:
+    def patch(self, except_for: Iterable[str]) -> property:
         if not hasattr(self.o, "fget"):
             raise ValueError(f"Cannot patch property without getter: {self.o}")
         f: Callable[..., Any] = self.o.fget
+
+        if f.__name__ in except_for:
+            return self.o  # type: ignore[no-any-return]
 
         @wraps(f)
         def _call(*args: Any, **kwargs: Any) -> Any:
@@ -219,14 +243,20 @@ class PatchClass(PatchObject[type[Any]]):
     def accept(cls, o: Any) -> bool:
         return inspect.isclass(o)
 
-    def patch(self) -> type[Any]:
-        # Patch __init__ method if possible
+    def patch(self, except_for: Iterable[str]) -> type[Any]:
+        if self.o.__name__ in except_for:
+            return self.o
 
         for name, member in inspect.getmembers(self.o):
+            # Patch __init__ method if possible, but not other internal methods
             if name.startswith("__") and name != "__init__":
                 continue
             patched = patch_object(
-                member, missing_modules=self.missing_modules, dep_target=self.dep_target, fail_if_not_patchable=False
+                member,
+                missing_modules=self.missing_modules,
+                dep_target=self.dep_target,
+                fail_if_not_patchable=False,
+                except_for=except_for,
             )
             with suppress(AttributeError):
                 setattr(self.o, name, patched)
@@ -234,15 +264,30 @@ class PatchClass(PatchObject[type[Any]]):
         return self.o
 
 
-def patch_object(o: T, *, missing_modules: Iterable[str], dep_target: str, fail_if_not_patchable: bool = True) -> T:
+def patch_object(
+    o: T,
+    *,
+    missing_modules: Iterable[str],
+    dep_target: str,
+    fail_if_not_patchable: bool = True,
+    except_for: Optional[Union[str, Iterable[str]]] = None,
+) -> T:
     patcher = PatchObject.create(o, missing_modules=missing_modules, dep_target=dep_target)
     if fail_if_not_patchable and patcher is None:
         raise ValueError(f"Cannot patch object of type {type(o)}")
 
-    return patcher.patch() if patcher else o
+    except_for = except_for if except_for is not None else []
+    except_for = [except_for] if isinstance(except_for, str) else except_for
+
+    return patcher.patch(except_for=except_for) if patcher else o
 
 
-def require_optional_import(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+def require_optional_import(
+    modules: Union[str, Iterable[str]],
+    dep_target: str,
+    *,
+    except_for: Optional[Union[str, Iterable[str]]] = None,
+) -> Callable[[T], T]:
     """Decorator to handle optional module dependencies
 
     Args:
@@ -259,7 +304,7 @@ def require_optional_import(modules: Union[str, Iterable[str]], dep_target: str)
     else:
 
         def decorator(o: T) -> T:
-            return patch_object(o, missing_modules=missing_modules, dep_target=dep_target)
+            return patch_object(o, missing_modules=missing_modules, dep_target=dep_target, except_for=except_for)
 
     return decorator
 

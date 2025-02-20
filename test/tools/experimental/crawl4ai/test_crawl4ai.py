@@ -69,6 +69,7 @@ class TestCrawl4AITool:
                 {"api_type": "anthropic", "model": "sonnet", "api_key": "test"},
             ],
             [{"api_type": "ollama", "model": "mistral:7b"}],
+            [{"api_type": "ollama", "model": "mistral:7b", "client_host": "http://127.0.0.1:11434"}],
         ],
     )
     def test_get_provider_and_api_key(self, config_list: list[dict[str, Any]]) -> None:
@@ -80,7 +81,10 @@ class TestCrawl4AITool:
         provider = f"{api_type}/{model}"
 
         if api_type == "ollama":
-            assert lite_llm_config == {"provider": provider}
+            if "client_host" in config_list[0]:
+                assert lite_llm_config == {"provider": provider, "api_base": config_list[0]["client_host"]}
+            else:
+                assert lite_llm_config == {"provider": provider}
         else:
             assert all(key in lite_llm_config for key in ["provider", "api_token"])
             assert lite_llm_config["provider"] == provider
