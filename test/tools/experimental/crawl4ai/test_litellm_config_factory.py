@@ -11,6 +11,9 @@ from autogen.tools.experimental.crawl4ai.litellm_config_factory import LiteLLmCo
 
 
 class TestLiteLLmConfigFactory:
+    def test_number_of_factories(self) -> None:
+        assert len(LiteLLmConfigFactory._factories) == 3
+
     @pytest.mark.parametrize(
         ("config_list", "expected"),
         [
