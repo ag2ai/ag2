@@ -28,7 +28,7 @@ coverage:
 # Configure codecov bot behavior
 comment:
 # Show only changed files in PR comment
-  layout: "condensed_header, condensed_files, condensed_footer"
+  layout: "files"
   behavior: new
   # Hide PR comment if there are no changes in coverage
   require_changes: true
