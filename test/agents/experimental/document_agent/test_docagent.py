@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from autogen.agents.experimental.document_agent.document_agent import (
-    DocumentAgent,
+    DocAgent,
     DocumentTask,
     DocumentTriageAgent,
 )
@@ -26,10 +26,11 @@ def test_document_triage_agent_init(credentials_gpt_4o_mini: Credentials) -> Non
 @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
 def test_document_agent_init(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
     llm_config = credentials_gpt_4o_mini.llm_config
-    document_agent = DocumentAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
+    document_agent = DocAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
 
     assert hasattr(document_agent, "_task_manager_agent")
     assert hasattr(document_agent, "_triage_agent")
     assert hasattr(document_agent, "_data_ingestion_agent")
     assert hasattr(document_agent, "_query_agent")
+    assert hasattr(document_agent, "_error_agent")
     assert hasattr(document_agent, "_summary_agent")
