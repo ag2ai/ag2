@@ -174,7 +174,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                     If chunk_mode is "one_line", this parameter will be ignored.
                 - `embedding_model` (Optional, str) - the embedding model to use for the retrieve chat.
                     If key not provided, a default model `all-MiniLM-L6-v2` will be used. All available
-                    models can be found at `https://www.sbert.net/docs/pretrained_models.html`.
+                    models can be found at `https://www.sbert.net/docs/sentence_transformer/pretrained_models.html`.
                     The default model is a fast model. If you want to use a high performance model,
                     `all-mpnet-base-v2` is recommended.
                     *[Deprecated]* no need when use `vector_db` instead of `client`.
