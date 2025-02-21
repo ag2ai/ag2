@@ -383,7 +383,6 @@ class OpenAIClient:
 
     @staticmethod
     def _convert_system_role_to_user(messages: list[dict[str, Any]]) -> None:
-        print(f"{messages=}")
         for msg in messages:
             if msg.get("role", "") == "system":
                 msg["role"] = "user"
