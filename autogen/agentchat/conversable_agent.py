@@ -242,6 +242,7 @@ class ConversableAgent(LLMAgent):
             else (lambda x: content_str(x.get("content")) == "TERMINATE")
         )
         self.silent = silent
+        self.run_executor: Optional[ConversableAgent] = None
 
         # Take a copy to avoid modifying the given dict
         if isinstance(llm_config, dict):
@@ -3301,7 +3302,7 @@ class ConversableAgent(LLMAgent):
             return self.client.total_usage_summary
 
     @contextmanager
-    def _create_executor(
+    def _create_or_get_executor(
         self,
         executor_kwargs: Optional[dict[str, Any]] = None,
         tools: Optional[Union[Tool, Iterable[Tool]]] = None,
@@ -3323,19 +3324,20 @@ class ConversableAgent(LLMAgent):
         if "is_termination_msg" not in executor_kwargs:
             executor_kwargs["is_termination_msg"] = lambda x: (x["content"] is not None) and "TERMINATE" in x["content"]
 
-        executor = ConversableAgent(
-            name=agent_name,
-            human_input_mode=agent_human_input_mode,
-            **executor_kwargs,
-        )
-
         try:
+            if not self.run_executor:
+                self.run_executor = ConversableAgent(
+                    name=agent_name,
+                    human_input_mode=agent_human_input_mode,
+                    **executor_kwargs,
+                )
+
             tools = [] if tools is None else tools
             tools = [tools] if isinstance(tools, Tool) else tools
             for tool in tools:
-                tool.register_for_execution(executor)
+                tool.register_for_execution(self.run_executor)
                 tool.register_for_llm(self)
-            yield executor
+            yield self.run_executor
         finally:
             if tools is not None:
                 for tool in tools:
@@ -3368,7 +3370,7 @@ class ConversableAgent(LLMAgent):
             clear_history: whether to clear the chat history.
             user_input: the user will be asked for input at their turn.
         """
-        with self._create_executor(
+        with self._create_or_get_executor(
             executor_kwargs=executor_kwargs,
             tools=tools,
             agent_name="user",
@@ -3418,7 +3420,7 @@ class ConversableAgent(LLMAgent):
             clear_history: whether to clear the chat history.
             user_input: the user will be asked for input at their turn.
         """
-        with self._create_executor(
+        with self._create_or_get_executor(
             executor_kwargs=executor_kwargs,
             tools=tools,
             agent_name="user",

@@ -1788,6 +1788,47 @@ def test_tool_integration(mock_credentials: Credentials):
     assert "tool2" in tool_schemas
 
 
+def test_create_or_get_executor(mock_credentials: Credentials):
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+    executor_agent = None
+
+    def log_result(result: str):
+        return "I have logged the result."
+
+    tool = Tool(
+        name="log_result",
+        description="Logs the result of the task.",
+        func_or_tool=log_result,
+    )
+
+    expected_tools = [
+        {
+            "type": "function",
+            "function": {
+                "description": "Logs the result of the task.",
+                "name": "log_result",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"result": {"type": "string", "description": "result"}},
+                    "required": ["result"],
+                },
+            },
+        }
+    ]
+    executor_agent = None
+    for _ in range(2):
+        with agent._create_or_get_executor(
+            tools=[tool],
+        ) as executor:
+            if not executor_agent:
+                executor_agent = executor
+            else:
+                assert executor_agent == executor
+            assert isinstance(executor_agent, ConversableAgent)
+            assert agent.llm_config["tools"] == expected_tools
+            assert len(executor_agent.function_map.keys()) == 1
+
+
 if __name__ == "__main__":
     # test_trigger()
     # test_context()
