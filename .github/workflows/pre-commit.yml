@@ -18,6 +18,7 @@ jobs:
 
   pre-commit-check:
     runs-on: ubuntu-latest
+    environment: permit-tests
     env:
       SKIP: "mypy"
     steps:
