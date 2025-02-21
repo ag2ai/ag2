@@ -1,23 +1,57 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
-name: Core tests without LLMs
+name: PR checks
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # daily at midnight UTC
-  workflow_dispatch: # allows manual triggering of the workflow
   pull_request:
-    branches: ["main"]
   merge_group:
     types: [checks_requested]
+  workflow_dispatch: # allows manual triggering of the workflow
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
   cancel-in-progress: true
 permissions: {}
+
 jobs:
-  paths-filter:
+  pre-commit-check:
+    runs-on: ubuntu-latest
+    env:
+      SKIP: "mypy"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Set $PY environment variable
+        run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
+      - uses: pre-commit/action@v3.0.1
+
+  type-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: uv pip install --system ".[types]"
+      # Any additional configuration for mypy should be defined in pyproject.toml under the [tool.mypy] section
+      - run: |
+          mypy
+
+  test-paths-filter:
     runs-on: ubuntu-latest
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
@@ -35,42 +69,20 @@ jobs:
               - ".github/workflows/**"
             setup:
               - "pyproject.toml"
-      - name: autogen has changes
-        run: echo "autogen has changes"
-        if: steps.filter.outputs.autogen == 'true'
-      - name: test has changes
-        run: echo "test has changes"
-        if: steps.filter.outputs.test == 'true'
-      - name: workflows has changes
-        run: echo "workflows has changes"
-        if: steps.filter.outputs.workflows == 'true'
-      - name: setup has changes
-        run: echo "setup has changes"
-        if: steps.filter.outputs.setup == 'true'
-  test:
-    needs: paths-filter
-    if: needs.paths-filter.outputs.hasChanges == 'true'
-    runs-on: ${{ matrix.os }}
-    environment: permit-tests
-    env:
-      AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        exclude:
-          - os: macos-latest
-            python-version: "3.9"
+
+  core-test-without-llm:
+    needs: test-paths-filter
+    if: needs.test-paths-filter.outputs.hasChanges == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,cosmosdb,interop,redis,websockets]
@@ -78,12 +90,6 @@ jobs:
         run: |
           uv pip install --system -e ".[jupyter-executor]"
           python -m ipykernel install --user --name python3
-      - name: Set AUTOGEN_USE_DOCKER based on OS
-        shell: bash
-        run: |
-          if [[ ${{ matrix.os }} != ubuntu-latest ]]; then
-            echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
-          fi
       - name: Test with pytest skipping openai tests
         run: |
           bash scripts/test-core-skip-llm.sh
@@ -94,14 +100,46 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: core-without-llm, ${{ matrix.os }}, ${{ matrix.python-version }}
+          flags: core-without-llm, ubuntu-latest, 3.11
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  build-check:
+  docs-paths-filter:
+    runs-on: ubuntu-latest
+    outputs:
+      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.website == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' || steps.filter.outputs.scripts == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            autogen:
+              - "autogen/**"
+            website:
+              - "website/**"
+            workflows:
+              - ".github/workflows/pr-checks.yml"
+            setup:
+              - "pyproject.toml"
+              - ".muffet-excluded-links.txt"
+            scripts:
+              - "scripts/broken-links-check.sh"
+              - "scripts/docs_build.sh"
+              - "scripts/docs_serve.sh"
+
+  build-docs:
+    needs: docs-paths-filter
+    if: needs.docs-paths-filter.outputs.hasChanges == 'true'
+    uses: ./.github/workflows/build-docs.yml
+    with:
+      python-version: "3.10"
+      node-version: "18.x"
+
+  pr-check:
     if: always()
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [pre-commit-check, type-check, core-test-without-llm, build-docs]
     steps:
       - name: Get Date
         shell: bash
