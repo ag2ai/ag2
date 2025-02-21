@@ -1,0 +1,233 @@
+name: PR checks
+
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch: # allows manual triggering of the workflow
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+permissions: {}
+
+jobs:
+  pre-commit-check:
+    runs-on: ubuntu-latest
+    env:
+      SKIP: "mypy"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Set $PY environment variable
+        run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
+      - uses: pre-commit/action@v3.0.1
+
+  type-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        optional-dependencies:
+          - "none"
+          # LLMs
+          - "openai"
+          - "gemini"
+          - "anthropic"
+          - "deepseek"
+          # ToDo: Should we run for optional dependencies?
+          # optional dependencies
+          # - "browser-use"
+          # - "commsagent-discord"
+          # - "commsagent-slack"
+          # - "commsagent-telegram"
+          # - "jupyter-executor"
+          # - "retrievechat"
+          # - "retrievechat-pgvector"
+          # - "retrievechat-mongodb"
+          # - "retrievechat-qdrant"
+          # - "graph-rag-falkor-db"
+          # - "neo4j"
+          # - "twilio"
+          # - "interop"
+          # - "crawl4ai"
+          # - "docs"
+          # - "interop-crewai"
+          # - "interop-langchain"
+          # - "interop-pydantic-ai"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      # All additional modules should be defined in pyproject.toml
+      - run: uv pip install --system ".[types]"
+        if: matrix.optional-dependencies == 'none'
+      - run: uv pip install --system ".[types, ${{ matrix.optional-dependencies }}]"
+        if: matrix.optional-dependencies != 'none'
+      # Any additional configuration should be defined in pyproject.toml
+      - run: |
+          mypy
+
+  test-paths-filter:
+    runs-on: ubuntu-latest
+    outputs:
+      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            autogen:
+              - "autogen/**"
+            test:
+              - "test/**"
+            workflows:
+              - ".github/workflows/**"
+            setup:
+              - "pyproject.toml"
+
+  core-test-without-llm:
+    needs: test-paths-filter
+    if: needs.test-paths-filter.outputs.hasChanges == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # ToDo: Should we run for all OS?
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install packages and dependencies
+        run: |
+          uv pip install --system -e .[test,cosmosdb,interop,redis,websockets]
+      - name: Install optional dependencies for code executors
+        run: |
+          uv pip install --system -e ".[jupyter-executor]"
+          python -m ipykernel install --user --name python3
+      - name: Set AUTOGEN_USE_DOCKER based on OS
+        shell: bash
+        run: |
+          if [[ ${{ matrix.os }} != ubuntu-latest ]]; then
+            echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
+          fi
+      - name: Test with pytest skipping openai tests
+        run: |
+          bash scripts/test-core-skip-llm.sh
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
+      - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: core-without-llm, ${{ matrix.os }}, 3.9
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  docs-paths-filter:
+    runs-on: ubuntu-latest
+    outputs:
+      hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.website == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' || steps.filter.outputs.scripts == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            autogen:
+              - "autogen/**"
+            website:
+              - "website/**"
+            workflows:
+              - ".github/workflows/pr-checks.yml"
+            setup:
+              - "pyproject.toml"
+              - ".muffet-excluded-links.txt"
+            scripts:
+              - "scripts/broken-links-check.sh"
+              - "scripts/docs_build.sh"
+              - "scripts/docs_serve.sh"
+
+  build-docs:
+    needs: docs-paths-filter
+    if: needs.docs-paths-filter.outputs.hasChanges == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Build documentation
+        run: |
+          uv pip install --system -e ".[docs]"
+          ./scripts/docs_build.sh
+        working-directory: .
+
+  pr-check:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre-commit-check, type-check, core-test-without-llm, build-docs]
+    steps:
+      - name: Get Date
+        shell: bash
+        run: |
+          echo "date=$(date +'%m/%d/%Y %H:%M:%S')" >> "$GITHUB_ENV"
+
+      - name: Run Type is ${{ github.event_name }}
+        if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'}}
+        shell: bash
+        run: |
+          echo "run_type=${{ github.event_name }}" >> "$GITHUB_ENV"
+
+      - name: Fail workflow if build failed
+        id: check_build_failed
+        if: contains(join(needs.*.result, ','), 'failure')
+        uses: actions/github-script@v7
+        with:
+          script: core.setFailed('Build Failed!')
+
+      - name: Fail workflow if build cancelled
+        id: check_build_cancelled
+        if: contains(join(needs.*.result, ','), 'cancelled')
+        uses: actions/github-script@v7
+        with:
+          script: core.setFailed('Build Cancelled!')
