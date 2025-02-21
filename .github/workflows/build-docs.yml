@@ -1,0 +1,68 @@
+name: Build docs
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: true
+        default: '3.10'
+        type: string
+      node-version:
+        description: 'Node version to use'
+        required: true
+        default: '18.x'
+        type: string
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ github.event.inputs.node-version }}
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python-version }}
+
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Build documentation
+        run: |
+          uv venv
+          . .venv/bin/activate
+          uv pip install -e ".[docs]"
+          ./scripts/docs_build.sh
+        working-directory: .
+
+      - name: Prepare website content
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Create a temporary directory for filtered content
+          mkdir -p temp_website
+
+          # Navigate to build directory
+          cd build
+
+          # Copy files except .ipynb, node_modules, .quarto, .gitignore, temp_website, _blogs, use-cases, user-guide and talks
+          find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -path "./_blogs/*" -not -path "./use-cases/*" -not -path "./user-guide/*" -not -path "./talks/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} ../temp_website/ \;
+
+      - name: Deploy to Mintlify
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: mintlify-pages
+          publish_dir: ./website/temp_website
