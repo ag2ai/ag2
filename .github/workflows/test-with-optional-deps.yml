@@ -53,6 +53,7 @@ jobs:
     needs: paths-filter
     if: needs.paths-filter.outputs.hasChanges == 'true'
     runs-on: ${{ matrix.os }}
+    environment: permit-tests
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
     strategy:
@@ -77,6 +78,7 @@ jobs:
           - "interop-crewai"
           - "interop-langchain"
           - "interop-pydantic-ai"
+          - "websockets"
         os: [ubuntu-latest, macos-latest, windows-latest]
         # Run tests only for py versions 3.9, 3.10, 3.13
         python-version: ["3.9", "3.10", "3.13"]

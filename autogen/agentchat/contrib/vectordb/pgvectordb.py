@@ -9,13 +9,12 @@ import re
 import urllib.parse
 from typing import Any, Callable, Optional, Union
 
-import numpy as np
-
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
 with optional_import_block():
+    import numpy as np
     import pgvector  # noqa: F401
     import psycopg
     from pgvector.psycopg import register_vector
@@ -25,7 +24,7 @@ PGVECTOR_MAX_BATCH_SIZE = os.environ.get("PGVECTOR_MAX_BATCH_SIZE", 40000)
 logger = get_logger(__name__)
 
 
-@require_optional_import(["psycopg", "sentence_transformers"], "retrievechat-pgvector")
+@require_optional_import(["psycopg", "sentence_transformers", "numpy"], "retrievechat-pgvector")
 class Collection:
     """A Collection object for PGVector.
 
