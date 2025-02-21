@@ -534,6 +534,7 @@ def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
 
 
 # rendered_notebook is the final mdx file
+@require_optional_import("yaml", "docs")
 def post_process_mdx(
     rendered_mdx: Path,
     source_notebooks: Path,
@@ -922,6 +923,7 @@ def separate_front_matter_and_content(file_path: Path) -> tuple[str, str]:
     return "", content
 
 
+@require_optional_import("yaml", "docs")
 def _get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
     try:
         all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
@@ -932,6 +934,7 @@ def _get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
     return all_authors_info
 
 
+@require_optional_import("yaml", "docs")
 def _add_authors_and_social_preview(
     website_build_dir: Path, target_dir: Path, all_authors_info: dict[str, dict[str, str]]
 ) -> None:

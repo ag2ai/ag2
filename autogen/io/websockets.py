@@ -88,9 +88,6 @@ class IOWebsockets(IOStream):
 
         Args:
             websocket (ServerConnection): The websocket server.
-
-        Raises:
-            ImportError: If the websockets module is not available.
         """
         self._websocket = websocket
 

@@ -402,8 +402,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -520,8 +518,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -567,8 +563,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -612,8 +606,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -657,8 +649,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -702,8 +692,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -743,8 +731,6 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -788,8 +774,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -833,8 +817,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -878,8 +860,6 @@ jobs:
             python-version: "3.9"
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
@@ -923,8 +903,6 @@ jobs:
               python-version: "3.9"
       steps:
         - uses: actions/checkout@v4
-          with:
-            lfs: true
         - uses: astral-sh/setup-uv@v5
           with:
             version: "latest"
