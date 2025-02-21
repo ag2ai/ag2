@@ -16,8 +16,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
   cancel-in-progress: true
 permissions: {}
-
-# ToDo: Should I add environment: permit-tests to paths-filter job?
 jobs:
   paths-filter:
     runs-on: ubuntu-latest
