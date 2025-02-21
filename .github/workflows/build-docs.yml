@@ -41,6 +41,8 @@ jobs:
 
       - name: Build documentation
         run: |
+          uv venv
+          . .venv/bin/activate
           uv pip install -e ".[docs]"
           ./scripts/docs_build.sh
         working-directory: .
