@@ -41,7 +41,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          uv pip install --system -e ".[docs]"
+          uv pip install -e ".[docs]"
           ./scripts/docs_build.sh
         working-directory: .
 
