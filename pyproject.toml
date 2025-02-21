@@ -102,6 +102,7 @@ retrievechat-pgvector = [
 retrievechat-mongodb = [
     "pyautogen[retrievechat]",
     "pymongo>=4.0.0",
+    "numpy",
 ]
 
 retrievechat-qdrant = [
