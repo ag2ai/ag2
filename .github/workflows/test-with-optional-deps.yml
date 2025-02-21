@@ -9,8 +9,6 @@ on:
   workflow_dispatch: # allows manual triggering of the workflow
   pull_request:
     branches: ["main"]
-  merge_group:
-    types: [checks_requested]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
