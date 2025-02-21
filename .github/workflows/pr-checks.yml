@@ -131,34 +131,10 @@ jobs:
   build-docs:
     needs: docs-paths-filter
     if: needs.docs-paths-filter.outputs.hasChanges == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: website
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v5
-        with:
-          version: "latest"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18.x
-      - name: setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-
-      - name: Build documentation
-        run: |
-          uv pip install --system -e ".[docs]"
-          ./scripts/docs_build.sh
-        working-directory: .
+    uses: ./.github/actions/build-docs
+    with:
+      python-version: "3.10"
+      node-version: "18.x"
 
   pr-check:
     if: always()
