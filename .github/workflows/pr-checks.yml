@@ -104,21 +104,16 @@ jobs:
   core-test-without-llm:
     needs: test-paths-filter
     if: needs.test-paths-filter.outputs.hasChanges == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        # ToDo: Should we run for all OS?
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
-      - name: Set up Python 3.9
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.11"
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,cosmosdb,interop,redis,websockets]
@@ -126,12 +121,6 @@ jobs:
         run: |
           uv pip install --system -e ".[jupyter-executor]"
           python -m ipykernel install --user --name python3
-      - name: Set AUTOGEN_USE_DOCKER based on OS
-        shell: bash
-        run: |
-          if [[ ${{ matrix.os }} != ubuntu-latest ]]; then
-            echo "AUTOGEN_USE_DOCKER=False" >> $GITHUB_ENV
-          fi
       - name: Test with pytest skipping openai tests
         run: |
           bash scripts/test-core-skip-llm.sh
@@ -142,7 +131,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: core-without-llm, ${{ matrix.os }}, 3.9
+          flags: core-without-llm, ubuntu-latest, 3.11
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
