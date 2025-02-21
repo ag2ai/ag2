@@ -13,8 +13,6 @@ from collections import defaultdict
 from time import sleep
 from typing import Any, Callable, Optional, Union
 
-import numpy as np
-
 from ..doc_utils import export_module
 
 # Adding a NullHandler to silence FLAML log warning during
@@ -26,6 +24,7 @@ flaml_logger.addHandler(null_handler)
 from ..import_utils import optional_import_block, require_optional_import
 
 with optional_import_block() as result:
+    import numpy as np
     from flaml import BlendSearch, tune
     from flaml.tune.space import is_constant
 
@@ -362,6 +361,7 @@ class Completion(OpenAICompletion):
         return params
 
     @classmethod
+    @require_optional_import("numpy", "flaml")
     def _eval(cls, config: dict[str, Any], prune: bool = True, eval_only: bool = False):
         """Evaluate the given config as the hyperparameter setting for the openai api call.
 
@@ -919,6 +919,7 @@ class Completion(OpenAICompletion):
         return params
 
     @classmethod
+    @require_optional_import("numpy", "flaml")
     def test(
         cls,
         data,

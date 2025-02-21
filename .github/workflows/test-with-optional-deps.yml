@@ -78,6 +78,7 @@ jobs:
           - "interop-crewai"
           - "interop-langchain"
           - "interop-pydantic-ai"
+          - "websockets"
         os: [ubuntu-latest, macos-latest, windows-latest]
         # Run tests only for py versions 3.9, 3.10, 3.13
         python-version: ["3.9", "3.10", "3.13"]
