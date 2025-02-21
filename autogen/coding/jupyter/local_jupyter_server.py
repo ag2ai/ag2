@@ -71,12 +71,13 @@ class LocalJupyterServer(JupyterConnectable):
                 "Jupyter gateway server is not installed. Please install it with `pip install jupyter_kernel_gateway`."
             )
 
-        self.ip = ip
+        self.ip: str = ip
 
         if isinstance(token, LocalJupyterServer.GenerateToken):
             token = secrets.token_hex(32)
 
-        self.token = token
+        self.token: str = token
+        self._subprocess: subprocess.Popen[str]
         logging_config = {
             "handlers": {
                 "file": {
@@ -134,7 +135,7 @@ class LocalJupyterServer(JupyterConnectable):
                 #   Jupyter Kernel Gateway 3.0.0 is available at http://127.0.0.1:8890
                 if port is None:
                     port = int(line.split(":")[-1])
-                self.port = port
+                self.port: int = port
 
                 break
 
