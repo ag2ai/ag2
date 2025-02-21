@@ -27,7 +27,19 @@ jobs:
             <head>
               <meta charset="UTF-8">
               <meta http-equiv="refresh" content="0; url=https://docs.ag2.ai">
-              <script>window.location.href = "https://docs.ag2.ai";</script>
+              <!-- Google tag (gtag.js) -->
+              <script async src="https://www.googletagmanager.com/gtag/js?id=G-M24T8371GM"></script>
+              <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', 'G-M24T8371GM');
+              </script>
+              <script>
+                setTimeout(function() {
+                  window.location.href = "https://docs.ag2.ai";
+                }, 500);
+              </script>
               <title>Page Redirection</title>
             </head>
             <body>
@@ -42,6 +54,14 @@ jobs:
           <html>
             <head>
               <meta charset="UTF-8">
+              <!-- Google tag (gtag.js) -->
+              <script async src="https://www.googletagmanager.com/gtag/js?id=G-M24T8371GM"></script>
+              <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', 'G-M24T8371GM');
+              </script>
               <script>
                 const newDomain = 'https://docs.ag2.ai';
                 let path = window.location.pathname;
@@ -60,7 +80,9 @@ jobs:
                 // Handle -index and create final URL with hash
                 const redirectUrl = (newDomain + path).replace(/-index$/, "/index") + hash;
 
-                window.location.href = redirectUrl;
+                setTimeout(function() {
+                  window.location.href = redirectUrl;
+                }, 500);
               </script>
               <title>Page Redirection</title>
             </head>
