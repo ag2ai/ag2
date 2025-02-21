@@ -45,61 +45,17 @@ class TestCrawl4AITool:
         assert isinstance(result, str)
 
     @pytest.mark.parametrize(
-        "config_list",
-        [
-            [
-                {"api_type": "openai", "model": "gpt-4o-mini", "api_key": "test"},
-            ],
-            [
-                {"api_type": "deepseek", "model": "deepseek-model", "api_key": "test", "base_url": "test"},
-            ],
-            [
-                {
-                    "api_type": "azure",
-                    "model": "gpt-4o-mini",
-                    "api_key": "test",
-                    "base_url": "test",
-                    "api_version": "test",
-                },
-            ],
-            [
-                {"api_type": "google", "model": "gemini", "api_key": "test"},
-            ],
-            [
-                {"api_type": "anthropic", "model": "sonnet", "api_key": "test"},
-            ],
-            [{"api_type": "ollama", "model": "mistral:7b"}],
-            [{"api_type": "ollama", "model": "mistral:7b", "client_host": "http://127.0.0.1:11434"}],
-        ],
-    )
-    def test_get_provider_and_api_key(self, config_list: list[dict[str, Any]]) -> None:
-        lite_llm_config = Crawl4AITool._get_lite_llm_config({"config_list": config_list})
-
-        api_type = config_list[0]["api_type"]
-        model = config_list[0]["model"]
-        api_type = api_type if api_type != "google" else "gemini"
-        provider = f"{api_type}/{model}"
-
-        if api_type == "ollama":
-            if "client_host" in config_list[0]:
-                assert lite_llm_config == {"provider": provider, "api_base": config_list[0]["client_host"]}
-            else:
-                assert lite_llm_config == {"provider": provider}
-        else:
-            assert all(key in lite_llm_config for key in ["provider", "api_token"])
-            assert lite_llm_config["provider"] == provider
-
-        if api_type == "deepseek" or api_type == "azure":
-            assert "base_url" in lite_llm_config
-
-    @pytest.mark.parametrize(
         "use_extraction_model",
         [
             False,
             True,
         ],
     )
-    def test_get_crawl_config(self, mock_credentials: Credentials, use_extraction_model: bool) -> None:
+    def test_get_crawl_config(
+        self, mock_credentials: Credentials, use_extraction_model: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
         class Product(BaseModel):
             name: str
             price: str

@@ -15,6 +15,7 @@ from .openai_utils import (
     config_list_openai_aoai,
     filter_config,
     get_config_list,
+    get_first_llm_config,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "config_list_openai_aoai",
     "filter_config",
     "get_config_list",
+    "get_first_llm_config",
 ]
