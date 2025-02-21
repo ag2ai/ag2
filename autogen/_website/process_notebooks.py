@@ -801,7 +801,7 @@ def add_notebooks_blogs_and_user_stories_to_nav(website_build_directory: Path) -
     mint_config["navigation"].append(user_stories_section)
 
     # add blogs to navigation
-    blogs_dir = website_build_directory / "_blogs"
+    blogs_dir = website_build_directory / "docs" / "_blogs"
     blog_section = {"group": "Blog", "pages": [generate_nav_group(blogs_dir, "Recent posts", "docs/blog")]}
     mint_config["navigation"].append(blog_section)
 
@@ -969,7 +969,7 @@ def _add_authors_and_social_preview(
             rel_file_path = (
                 str(file_path.relative_to(website_build_dir.parent))
                 .replace("build/docs/", "website/docs/")
-                .replace("website/docs/blog/", "website/_blogs/")
+                .replace("website/docs/blog/", "website/docs/_blogs/")
             )
             content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
 
@@ -986,7 +986,7 @@ def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory:
     Args:
         website_build_directory (Path): Build directory of the website
     """
-    blog_dir = website_build_directory / "_blogs"
+    blog_dir = website_build_directory / "docs" / "_blogs"
     generated_blog_dir = website_build_directory / "docs" / "blog"
 
     authors_yml = website_build_directory / "blogs_and_user_stories_authors.yml"

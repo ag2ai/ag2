@@ -473,8 +473,8 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         """Create temporary test directory with blog posts and authors file."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             website_dir = Path(tmp_dir)
-            blog_dir = website_dir / "_blogs"
-            blog_dir.mkdir()
+            blog_dir = website_dir / "docs" / "_blogs"
+            blog_dir.mkdir(parents=True)
 
             # Create first blog post
             post1_dir = blog_dir / "2023-04-21-LLM-tuning-math"
@@ -606,7 +606,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
 
         # Get directory paths
         generated_blog_dir = test_dir / "docs" / "blog"
-        blog_dir = test_dir / "_blogs"
+        blog_dir = test_dir / "docs" / "_blogs"
 
         # Verify directory structure matches
         blog_files = set(p.relative_to(blog_dir) for p in blog_dir.glob("**/*.mdx"))
