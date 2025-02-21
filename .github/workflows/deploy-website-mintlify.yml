@@ -13,8 +13,6 @@ on:
       - "scripts/docs_serve.sh"
       - ".muffet-excluded-links.txt"
   workflow_dispatch:
-  merge_group:
-    types: [checks_requested]
 permissions:
   contents: write
 jobs:

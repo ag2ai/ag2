@@ -348,6 +348,20 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
+@skip_on_missing_imports(["openai"])
+def test_convert_system_role_to_user() -> None:
+    messages = [
+        {"content": "Your name is Jack and you are a comedian in a two-person comedy show.", "role": "system"},
+        {"content": "Jack, tell me a joke.", "role": "user", "name": "user"},
+    ]
+    OpenAIClient._convert_system_role_to_user(messages)
+    expected = [
+        {"content": "Your name is Jack and you are a comedian in a two-person comedy show.", "role": "user"},
+        {"content": "Jack, tell me a joke.", "role": "user", "name": "user"},
+    ]
+    assert messages == expected
+
+
 class TestOpenAIClientBadRequestsError:
     def test_is_agent_name_error_message(self) -> None:
         assert OpenAIClient._is_agent_name_error_message("Invalid 'messages[0].something") is False

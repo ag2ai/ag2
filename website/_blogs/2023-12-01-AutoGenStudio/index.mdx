@@ -28,7 +28,7 @@ To help you rapidly prototype multi-agent solutions for your tasks, we are intro
 
 See the official AutoGen Studio documentation [here](https://docs.ag2.ai/docs/autogen-studio/getting-started) for more details.
 
-AutoGen Studio is open source [code here](https://github.com/ag2ai/build-with-ag2/blob/main/samples/apps/autogen-studio), and can be installed via pip. Give it a try!
+AutoGen Studio is open source [code here](https://github.com/ag2ai/build-with-ag2/tree/e2e35c93df85e4a744ad950a99781633ee95b42b/samples/apps/autogen-studio), and can be installed via pip. Give it a try!
 
 ```bash
 pip install autogenstudio
@@ -104,7 +104,7 @@ There are two ways to install AutoGen Studio - from PyPi or from source. We **re
      yarn build
      ```
 
-   For Windows users, to build the frontend, you may need alternative commands provided in the [autogen studio readme](https://github.com/ag2ai/build-with-ag2/blob/main/samples/apps/autogen-studio).
+   For Windows users, to build the frontend, you may need alternative commands provided in the [autogen studio readme](https://github.com/ag2ai/build-with-ag2/tree/e2e35c93df85e4a744ad950a99781633ee95b42b/samples/apps/autogen-studio).
 
 ### Running the Application
 
@@ -168,7 +168,7 @@ AutoGen Studio comes with 3 example skills: `fetch_profile`, `find_papers`, `gen
 
 ## The AutoGen Studio API
 
-While AutoGen Studio is a web interface, it is powered by an underlying python API that is reusable and modular. Importantly, we have implemented an API where agent workflows can be declaratively specified (in JSON), loaded and run. An example of the current API is shown below. Please consult the [AutoGen Studio repo](https://github.com/ag2ai/build-with-ag2/blob/main/samples/apps/autogen-studio) for more details.
+While AutoGen Studio is a web interface, it is powered by an underlying python API that is reusable and modular. Importantly, we have implemented an API where agent workflows can be declaratively specified (in JSON), loaded and run. An example of the current API is shown below. Please consult the [AutoGen Studio repo](https://github.com/ag2ai/build-with-ag2/tree/e2e35c93df85e4a744ad950a99781633ee95b42b/samples/apps/autogen-studio) for more details.
 
 ```python
 import json
@@ -219,7 +219,7 @@ A: To reset your conversation history, you can delete the `database.sqlite` file
 A: Yes, you can view the generated messages in the debug console of the web UI, providing insights into the agent interactions. Alternatively, you can inspect the `database.sqlite` file for a comprehensive record of messages.
 
 **Q: Where can I find documentation and support for AutoGen Studio?**
-A: We are constantly working to improve AutoGen Studio. For the latest updates, please refer to the [AutoGen Studio Readme](https://github.com/ag2ai/build-with-ag2/blob/main/samples/apps/autogen-studio). For additional support, please open an issue on [GitHub](https://github.com/ag2ai/ag2) or ask questions on [Discord](https://discord.gg/pAbnFJrkgZ).
+A: We are constantly working to improve AutoGen Studio. For the latest updates, please refer to the [AutoGen Studio Readme](https://github.com/ag2ai/build-with-ag2/tree/e2e35c93df85e4a744ad950a99781633ee95b42b/samples/apps/autogen-studio). For additional support, please open an issue on [GitHub](https://github.com/ag2ai/ag2) or ask questions on [Discord](https://discord.gg/pAbnFJrkgZ).
 
 **Q: Can I use Other Models with AutoGen Studio?**
 Yes. AutoGen standardizes on the openai model api format, and you can use any api server that offers an openai compliant endpoint. In the AutoGen Studio UI, each agent has an `llm_config` field where you can input your model endpoint details including `model name`, `api key`, `base url`, `model type` and `api version`. For Azure OpenAI models, you can find these details in the Azure portal. Note that for Azure OpenAI, the `model name` is the deployment id or engine, and the `model type` is "azure".
