@@ -17,6 +17,10 @@ on:
       - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
       - ".github/workflows/core-llm-test.yml"
       - "pyproject.toml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
 permissions:
   {}
 

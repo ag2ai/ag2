@@ -9,11 +9,17 @@ on:  # Trigger the workflow on pull request or merge
 defaults:
   run:
     shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
 permissions: {}
     # actions: read
   # checks: read
   # contents: read
   # deployments: read
+
+# ToDo: Do we even need a separate pre-commit workflow as it is already part of the PR checks workflow?
 jobs:
 
   pre-commit-check:
