@@ -381,6 +381,12 @@ class OpenAIClient:
 
         return wrapper
 
+    @staticmethod
+    def _convert_system_role_to_user(messages: list[dict[str, Any]]) -> None:
+        for msg in messages:
+            if msg.get("role", "") == "system":
+                msg["role"] = "user"
+
     def create(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
 
@@ -426,6 +432,10 @@ class OpenAIClient:
 
         # needs to be updated when the o3 is released to generalize
         is_o1 = "model" in params and params["model"].startswith("o1")
+
+        is_mistral = "model" in params and "mistral" in params["model"]
+        if is_mistral:
+            OpenAIClient._convert_system_role_to_user(params["messages"])
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
         if params.get("stream", False) and "messages" in params and not is_o1:
