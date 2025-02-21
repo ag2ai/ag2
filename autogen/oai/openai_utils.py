@@ -740,10 +740,7 @@ def retrieve_assistants_by_name(client: OpenAI, name: str) -> list[Assistant]:
 def detect_gpt_assistant_api_version() -> str:
     """Detect the openai assistant API version"""
     oai_version = importlib.metadata.version("openai")
-    if parse(oai_version) < parse("1.21"):
-        return "v1"
-    else:
-        return "v2"
+    return "v1" if parse(oai_version) < parse("1.21") else "v2"
 
 
 def create_gpt_vector_store(client: OpenAI, name: str, fild_ids: list[str]) -> Any:

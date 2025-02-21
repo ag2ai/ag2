@@ -8,13 +8,12 @@ from copy import deepcopy
 from time import monotonic, sleep
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
 
-import numpy as np
-
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
 with optional_import_block():
+    import numpy as np
     from pymongo import MongoClient, UpdateOne, errors
     from pymongo.collection import Collection
     from pymongo.driver_info import DriverInfo
@@ -33,7 +32,7 @@ def with_id_rename(docs: Iterable) -> list[dict[str, Any]]:
     return [{**{k: v for k, v in d.items() if k != "_id"}, "id": d["_id"]} for d in docs]
 
 
-@require_optional_import(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
+@require_optional_import(["pymongo", "sentence_transformers", "numpy"], "retrievechat-mongodb")
 class MongoDBAtlasVectorDB(VectorDB):
     """A Collection object for MongoDB."""
 

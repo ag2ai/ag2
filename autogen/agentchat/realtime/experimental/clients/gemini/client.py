@@ -9,15 +9,18 @@ from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from ......doc_utils import export_module
+from ......import_utils import optional_import_block, require_optional_import
 from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
 from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
+
+with optional_import_block():
+    from websockets.asyncio.client import connect
+
 
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
 
     from ..realtime_client import RealtimeClientProtocol
-
-from websockets.asyncio.client import connect
 
 __all__ = ["GeminiRealtimeClient"]
 
@@ -29,6 +32,7 @@ API_VERSION = "v1alpha"
 
 
 @register_realtime_client()
+@require_optional_import("websockets", "gemini")
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class GeminiRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for Gemini Realtime API."""
