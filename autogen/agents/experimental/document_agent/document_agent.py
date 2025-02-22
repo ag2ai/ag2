@@ -204,6 +204,7 @@ class DocAgent(ConversableAgent):
             queries: list[Query],
             context_variables: dict[str, Any],
         ) -> SwarmResult:
+            """Initiate all document and query tasks by storing them in context for future reference."""
             logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
                 return SwarmResult(values="Task already initiated", context_variables=context_variables)
@@ -240,6 +241,7 @@ class DocAgent(ConversableAgent):
         )
 
         def execute_rag_query(context_variables: dict) -> SwarmResult:  # type: ignore[type-arg]
+            """Execute outstanding RAG queries, call the tool once for each outstanding query. Call this tool with no arguments."""
             if len(context_variables["QueriesToRun"]) == 0:
                 return SwarmResult(
                     agent=TASK_MANAGER_NAME,
