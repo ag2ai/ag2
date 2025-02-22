@@ -7,12 +7,14 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from autogen.agentchat.contrib.rag.query_engine import VectorDbQueryEngine
-from autogen.agentchat.contrib.vectordb.base import Document, VectorDBFactory
+from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
 from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
 from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
-    from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
+    from llama_index.core import StorageContext, VectorStoreIndex
+    from llama_index.node_parser.docling import DoclingNodeParser
+    from llama_index.readers.docling import DoclingReader
     from llama_index.vector_stores.mongodb import MongoDBAtlasVectorSearch
 
 
@@ -77,7 +79,9 @@ class MongoDBQueryEngine(VectorDbQueryEngine):
         if not self.connect_db():
             return False
 
-        self.add_records(new_doc_dir, new_doc_paths)  # type: ignore[no-untyped-call]
+        if new_doc_dir or new_doc_paths:
+            self.add_records(new_doc_dir, new_doc_paths)  # type: ignore[no-untyped-call]
+
         self.indexer = VectorStoreIndex.from_vector_store(
             self.vector_search_engine, storage_context=self.storage_context
         )
@@ -104,15 +108,35 @@ class MongoDBQueryEngine(VectorDbQueryEngine):
         if new_doc_paths_or_urls:
             document_list.append(new_doc_paths_or_urls)
 
-        document_reader = SimpleDirectoryReader(input_files=document_list).load_data()
-        self.vector_db.insert_docs([
-            Document(  # type: ignore[typeddict-item, typeddict-unknown-key]
-                id=document.id_,
-                content=document.text,
-                metadata=document.metadata,
-            )
-            for document in document_reader
-        ])
+        reader = DoclingReader(export_type=DoclingReader.ExportType.JSON)
+        node_parser = DoclingNodeParser()
+
+        documents = reader.load_data(document_list)
+        parser_nodes = node_parser._parse_nodes(documents)
+
+        # print("Parser data: ", parser)
+
+        # # document_reader = SimpleDirectoryReader(input_files=document_list).load_data()
+        # self.vector_db.insert_docs([
+        #     Document(  # type: ignore[typeddict-item, typeddict-unknown-key]
+        #         id=document.id_,
+        #         content=document.get_content(),
+        #         metadata=document.metadata,
+        #     )
+        #     for document in parser
+        # ])
+
+        docs_to_insert = []
+        for node in parser_nodes:
+            doc_dict = {
+                "id": node.id_,  # Ensure the key is 'id'
+                "content": node.get_content(),
+                "metadata": node.metadata,
+            }
+            docs_to_insert.append(doc_dict)
+
+        # Insert documents into vector DB.
+        self.vector_db.insert_docs(docs_to_insert)  # type: ignore[arg-type]
 
     def query(self, question, *args, **kwargs):  # type: ignore[no-untyped-def]
         response = self.indexer.as_chat_engine().query(question)  # type: ignore[attr-defined]
