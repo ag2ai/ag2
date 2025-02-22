@@ -42,7 +42,7 @@ Support features:
 
 ## Main Distinctions
 
-- Currently, Gemini doesn't include a "system_message" field. However, you can incorporate this instruction into the first message of your interaction.
+- Gemini accepts [system instructions](https://ai.google.dev/gemini-api/docs/text-generation?lang=python#system-instructions) to guide model behavior.  If provided, a system message is passed to Gemini's `system_instruction` field.
 - If no API key is specified for Gemini, then authentication will happen using the default google auth mechanism for Google Cloud. Service accounts are also supported, where the JSON key file has to be provided.
 
 Sample OAI_CONFIG_LIST
