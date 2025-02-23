@@ -17,22 +17,24 @@ from autogen.agentchat.contrib.rag.mongodb import MongoDBQueryEngine
 # A dummy client to simulate MongoDB's behavior.
 class DummyCollection:
     def __init__(self):
-        # Some methods might be called on the collection; add those as needed.
         self.list_collection_names = MagicMock(return_value=[])
 
 
 class DummyDatabase:
     def __init__(self):
-        # Instead of returning a new DummyCollection every time, you can use one or simulate a dict.
         self._dummy_collection = DummyCollection()
 
     def __getitem__(self, key):
-        # Return a dummy collection when a collection is accessed.
+        # When accessing a collection via subscripting, return the dummy collection.
         return self._dummy_collection
 
     def list_collection_names(self):
-        # Provide a dummy implementation for list_collection_names.
+        # Return an empty list or a list of dummy collection names.
         return []
+
+    def create_collection(self, name, *args, **kwargs):
+        # Simulate creation of a new collection by returning a dummy collection.
+        return DummyCollection()
 
 
 class DummyClient:
@@ -46,7 +48,7 @@ class DummyClient:
         return "ok"
 
     def __getitem__(self, key):
-        # Return a DummyDatabase when a database is accessed.
+        # Return a dummy database when subscripting the client.
         return DummyDatabase()
 
 
