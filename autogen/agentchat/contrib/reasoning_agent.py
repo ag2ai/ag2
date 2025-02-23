@@ -5,9 +5,7 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Callable, Optional, TypeVar
-
-F = TypeVar("F", bound=Callable[..., Any])
+from typing import Any, Optional
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block
@@ -670,7 +668,7 @@ Please provide your rating along with a brief explanation of your assessment.
 
             # Selection
             while not self._is_terminal(node) and len(node.children) > 0:
-                # TODO: In the original UCT formula, child.value represents the win ratio.
+                # NOTE: In the original UCT formula, child.value represents the win ratio.
                 # Here, we use the average rating rather than the win ratio.
                 # The rating might be biased from the LLM, which could affect the bounds of this vanilla UCT equation.
                 # More intensive analysis is needed in the future.
