@@ -6,14 +6,12 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Union
 
-from autogen.agentchat.contrib.rag.query_engine import VectorDbQueryEngine
 from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
 from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
 from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
-    from llama_index.core import Document, SimpleDirectoryReader, StorageContext, VectorStoreIndex
-    from llama_index.core.node_parser import SentenceSplitter
+    from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
     from llama_index.vector_stores.mongodb import MongoDBAtlasVectorSearch
 
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
@@ -23,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["pymongo", "llama_index"], "rag")
-class MongoDBQueryEngine(VectorDbQueryEngine):
+class MongoDBQueryEngine:
     """
     A query engine backed by MongoDB Atlas that supports document insertion and querying.
 
@@ -70,9 +68,9 @@ class MongoDBQueryEngine(VectorDbQueryEngine):
             collection_name=collection_name,
         )
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_search_engine)
-        self.indexer: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
+        self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
 
-    def connect_db(self, *args, **kwargs) -> bool:  # type: ignore[no-untyped-def]
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """
         Connect to the MongoDB database by issuing a ping.
 
@@ -87,12 +85,12 @@ class MongoDBQueryEngine(VectorDbQueryEngine):
             logger.error("Failed to connect to MongoDB: %s", error)
             return False
 
-    def init_db(  # type: ignore[no-untyped-def]
+    def init_db(
         self,
         new_doc_dir: Optional[Union[str, Path]] = None,
         new_doc_paths: Optional[List[Union[str, Path]]] = None,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ) -> bool:
         """
         Initialize the database by loading documents from the given directory or file paths,
@@ -128,14 +126,12 @@ class MongoDBQueryEngine(VectorDbQueryEngine):
             logger.error("Failed to initialize the database: %s", e)
             return False
 
-    def add_records(  # type: ignore[no-untyped-def, override]
+    def add_records(
         self,
         new_doc_dir: Optional[Union[str, Path]] = None,
         new_doc_paths_or_urls: Optional[Union[List[Union[str, Path]], Union[str, Path]]] = None,
-        chunk_size: int = 500,
-        chunk_overlap: int = 300,
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """
         Load, parse, and insert documents into the index.
@@ -167,37 +163,18 @@ class MongoDBQueryEngine(VectorDbQueryEngine):
             logger.error("Error loading documents: %s", e)
             return
 
-        node_parser = SentenceSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        )
-        doc_chunks: List[Document] = []  # type: ignore[no-any-unimported]
-
-        for document in raw_documents:
-            try:
-                # Split the document text into chunks.
-                chunks = node_parser.split_text(document.text)
-                metadata = document.metadata
-                doc_id = document.id_  # Ensure this is not a tuple.
-                for chunk in chunks:
-                    new_doc = Document(text=chunk, id_=doc_id, metadata=metadata)
-                    doc_chunks.append(new_doc)
-            except Exception as e:
-                logger.error("Error parsing document %s: %s", document.id_, e)
-
-        if not doc_chunks:
+        if not raw_documents:
             logger.warning("No document chunks created for insertion.")
             return
 
-        # Insert document chunks using the indexer.
         try:
-            for doc in doc_chunks:
+            for doc in raw_documents:
                 self.indexer.insert(doc)  # type: ignore[union-attr]
-            logger.info("Inserted %d document chunks successfully.", len(doc_chunks))
+            logger.info("Inserted %d document chunks successfully.", len(raw_documents))
         except Exception as e:
             logger.error("Error inserting documents into the index: %s", e)
 
-    def query(self, question: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+    def query(self, question: str, *args: Any, **kwargs: Any) -> Any:
         """
         Query the index using the given question.
 
