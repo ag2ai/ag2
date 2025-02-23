@@ -5,7 +5,6 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Optional
 from typing import Any, Callable, Optional, TypeVar
 
 F = TypeVar("F", bound=Callable[..., Any])
