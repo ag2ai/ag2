@@ -123,7 +123,7 @@ retrievechat-couchbase = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.6.0",
+    "graphrag_sdk==0.6.1",
     "falkordb>=1.0.10",
 ]
 
@@ -149,9 +149,9 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.17",
+    "llama-index==0.12.19",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-core==0.12.18",
+    "llama-index-core==0.12.19",
     "llama-index-readers-web==0.3.5",
 ]
 
@@ -249,7 +249,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.6",
+    "ruff==0.9.7",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -259,7 +259,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.6.0",
+    "uv==0.6.2",
 ]
 
 
