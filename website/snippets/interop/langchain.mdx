@@ -1,0 +1,133 @@
+LangChain is a popular framework with lots of tools for working with LLMs. It's got a range of tools that can be easily integrated into AG2. If you want to see the full list, check out the [LangChain Community Tools](https://github.com/langchain-ai/langchain/tree/master/libs/community/langchain_community/tools). You can quickly add things like API queries, web scraping, and text generation to your AG2 setup.
+
+### Installation
+To get LangChain tools working with AG2, you’ll need to install a couple of dependencies:
+
+```bash
+pip install ag2[interop-langchain]
+```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[interop-langchain]
+```
+or
+```bash
+pip install -U pyautogen[interop-langchain]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
+Also, we’ll use LangChain’s [Wikipedia Tool](https://python.langchain.com/docs/integrations/tools/wikipedia/), which needs the wikipedia package. Install it like this:
+
+```bash
+pip install wikipedia
+```
+
+### Imports
+
+Now, let’s import the necessary modules and tools.
+
+- [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) and [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html) are the tools for querying Wikipedia.
+- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) are the agents for interaction within AG2.
+- [`Interoperability`](/docs/reference/interop/interoperability) is what helps connect LangChain tools with AG2.
+
+```python
+import os
+
+from langchain_community.tools import WikipediaQueryRun
+from langchain_community.utilities import WikipediaAPIWrapper
+
+from autogen import AssistantAgent, UserProxyAgent
+from autogen.interop import Interoperability
+```
+
+### Agent Configuration
+
+Let’s set up the agents for interaction.
+- `config_list`  is where you define the LLM configuration, like the model and API key.
+- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+user_proxy = UserProxyAgent(
+    name="User",
+    human_input_mode="NEVER",
+)
+
+chatbot = AssistantAgent(
+    name="chatbot",
+    llm_config={"config_list": config_list},
+)
+```
+
+### Tool Integration
+Here’s where we connect everything.
+- First, we set up [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html), which fetches the top Wikipedia result (with a character limit).
+- Then, we use [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) to perform Wikipedia queries.
+- [`Interoperability`](/docs/reference/interop/interoperability) helps convert the LangChain tool to AG2’s format.
+- Finally, we register the tool for use with both the `user_proxy` and `chatbot`.
+
+```python
+api_wrapper = WikipediaAPIWrapper(top_k_results=1, doc_content_chars_max=1000)
+langchain_tool = WikipediaQueryRun(api_wrapper=api_wrapper)
+
+interop = Interoperability()
+ag2_tool = interop.convert_tool(tool=langchain_tool, type="langchain")
+
+ag2_tool.register_for_execution(user_proxy)
+ag2_tool.register_for_llm(chatbot)
+```
+
+### Initiating the Chat
+
+Once everything’s set up, we can send a message to the chatbot, and it’ll use the Wikipedia tool to fetch the relevant information.
+
+```python
+message = "Tell me about the history of the United States"
+user_proxy.initiate_chat(recipient=chatbot, message=message, max_turns=2)
+```
+
+### Output
+
+When the chat is initiated, here’s the output you’ll see:
+
+```console
+User (to chatbot):
+
+Tell me about the history of the United States
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+***** Suggested tool call (call_hhy2G43ymytUFmJlDsK9J0tk): wikipedia *****
+Arguments:
+{"tool_input":{"query":"history of the United States"}}
+**************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION wikipedia...
+User (to chatbot):
+
+***** Response from calling tool (call_hhy2G43ymytUFmJlDsK9J0tk) *****
+Page: History of the United States
+Summary: The history of the lands that became the United States began with the arrival of the first people in the Americas around 15,000 BC. After European colonization of North America began in the late 15th century, wars and epidemics decimated Indigenous societies. By the 1760s, the thirteen British colonies were established. The Southern Colonies built an agricultural system on slave labor, enslaving millions from Africa. After defeating France, the British Parliament imposed a series of taxes; resistance to these taxes, especially the Boston Tea Party in 1773, led to Parliament issuing the Intolerable Acts designed to end self-government.
+In 1776, the United States declared its independence. Led by General George Washington, it won the Revolutionary War in 1783. The Constitution was adopted in 1789, and a Bill of Rights was added in 1791 to guarantee inalienable rights. Washington, the first president, and his adviser Alexander Hamilton created a
+**********************************************************************
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+The history of the United States begins with the arrival of the first peoples in the Americas around 15,000 BC. This pre-Columbian era was followed by European colonization, beginning in the late 15th century, which dramatically altered the indigenous societies through wars and epidemics.
+
+By the 1760s, thirteen British colonies were established along the Atlantic seaboard. In the Southern Colonies, an agricultural economy heavily reliant on enslaved labor from Africa was developed. The British victory over France in the Seven Years' War led Parliament to impose various taxes on the colonies. Resistance to these taxes, exemplified by the Boston Tea Party in 1773, prompted the Parliament to enact the Intolerable Acts, seeking to curtail colonial self-governance.
+
+The United States declared independence in 1776. Under the leadership of General George Washington, the American Revolutionary War concluded successfully in 1783. Subsequently, the U.S. Constitution was adopted in 1789, with the Bill of Rights added in 1791 to ensure inalienable rights. During this early period, President George Washington and his advisor Alexander Hamilton played significant roles in forming the young nation's governmental and economic foundations.
+
+This overview covers the early formation and foundational moments of what became the United States, setting the stage for the country's subsequent expansion and development. TERMINATE
+
+--------------------------------------------------------------------------------
+```
