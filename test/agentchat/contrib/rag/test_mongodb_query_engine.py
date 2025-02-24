@@ -6,153 +6,234 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
-import unittest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+import os
 
-# Replace 'your_module' with the actual module name where MongoDBQueryEngine is defined.
-from autogen.agentchat.contrib.rag.mongodb_query_engine import MongoDBQueryEngine
+import pytest
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
+
+# Import the class and constant from your module.
+from autogen.agentchat.contrib.rag.mongodb_query_engine import (
+    DEFAULT_COLLECTION_NAME,
+    MongoDBQueryEngine,
+)
+from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
+from autogen.import_utils import skip_on_missing_imports
+
+# ----- Fake classes for simulating MongoDB behavior ----- #
 
 
-# A dummy client to simulate MongoDB's behavior.
-class DummyCollection:
-    def __init__(self):
-        self.list_collection_names = MagicMock(return_value=[])
-
-
-class DummyDatabase:
-    def __init__(self):
-        self._dummy_collection = DummyCollection()
+@pytest.mark.openai
+@skip_on_missing_imports(["pymongo", "openai", "llama_index"], "rag")
+class FakeDBExists:
+    def list_collection_names(self):
+        return [DEFAULT_COLLECTION_NAME]
 
     def __getitem__(self, key):
-        # When accessing a collection via subscripting, return the dummy collection.
-        return self._dummy_collection
+        return {}  # Return a dummy collection
 
+
+class FakeDBNoCollection:
     def list_collection_names(self):
-        # Return an empty list or a list of dummy collection names.
         return []
 
-    def create_collection(self, name, *args, **kwargs):
-        # Simulate creation of a new collection by returning a dummy collection.
-        return DummyCollection()
-
-
-class DummyClient:
-    def __init__(self, should_fail=False):
-        self.should_fail = should_fail
-        self.admin = MagicMock()
-
-    def command(self, command):
-        if self.should_fail:
-            raise Exception("Ping failed")
-        return "ok"
-
     def __getitem__(self, key):
-        # Return a dummy database when subscripting the client.
-        return DummyDatabase()
+        return {}  # Return a dummy collection
 
 
-# A dummy chat engine to simulate query responses.
-class DummyChatEngine:
-    def query(self, question):
-        return f"Response to: {question}"
+class FakeMongoClientExists:
+    def __init__(self, connection_string):
+        self.connection_string = connection_string
+        self.admin = self
+
+    def command(self, cmd):
+        if cmd == "ping":
+            return {"ok": 1}
+        raise Exception("Ping failed")
+
+    def __getitem__(self, name):
+        return FakeDBExists()
 
 
-class TestMongoDBQueryEngine(unittest.TestCase):
-    def setUp(self):
-        # Patch the vector database factory and search engine constructors.
-        patcher_factory = patch("autogen.agentchat.contrib.vectordb.base.VectorDBFactory.create_vector_db")
-        self.mock_create_vector_db = patcher_factory.start()
-        self.addCleanup(patcher_factory.stop)
+class FakeMongoClientNoCollection:
+    def __init__(self, connection_string):
+        self.connection_string = connection_string
+        self.admin = self
 
-        patcher_search = patch("llama_index.vector_stores.mongodb.MongoDBAtlasVectorSearch")
-        self.mock_mongo_search = patcher_search.start()
-        self.addCleanup(patcher_search.stop)
+    def command(self, cmd):
+        if cmd == "ping":
+            return {"ok": 1}
+        raise Exception("Ping failed")
 
-        # Set up a dummy MongoDB client.
-        self.dummy_client = DummyClient()
-        dummy_vector_db = MagicMock()
-        dummy_vector_db.client = self.dummy_client
-        self.mock_create_vector_db.return_value = dummy_vector_db
-
-        # Instantiate the engine with dummy parameters.
-        self.engine = MongoDBQueryEngine(connection_string="dummy", database_name="test_db")
-        # Pre-assign a dummy indexer (used in query and add_records).
-        self.engine.indexer = MagicMock()
-
-    def test_connect_db_success(self):
-        # Simulate a successful ping.
-        self.dummy_client.should_fail = False
-        result = self.engine.connect_db()
-        self.assertTrue(result)
-        # Verify that the ping command was called.
-        self.dummy_client.admin.command.assert_called_with("ping")
-
-    def test_connect_db_failure(self):
-        # Simulate a failure during the ping.
-        self.dummy_client.should_fail = True
-        self.dummy_client.admin.command.side_effect = Exception("Ping failed")
-        result = self.engine.connect_db()
-        self.assertFalse(result)
-
-    @patch("llama_index.core.SimpleDirectoryReader")
-    @patch("your_module.VectorStoreIndex.from_documents")
-    def test_init_db_with_documents(self, mock_from_documents, mock_simple_dir_reader):
-        # Create dummy documents.
-        dummy_documents = ["doc1", "doc2"]
-        reader_instance = MagicMock()
-        reader_instance.load_data.return_value = dummy_documents
-        mock_simple_dir_reader.return_value = reader_instance
-
-        # Patch Path.glob to return a list with at least one file.
-        with patch.object(Path, "glob", return_value=[Path("dummy.txt")]):
-            result = self.engine.init_db(new_doc_dir="dummy_dir")
-            self.assertTrue(result)
-            # Ensure that the index was built with the dummy documents.
-            mock_from_documents.assert_called_with(dummy_documents, storage_context=self.engine.storage_context)
-
-    def test_init_db_no_documents(self):
-        # Without any document directory or file paths, the method should return False.
-        result = self.engine.init_db()
-        self.assertFalse(result)
-
-    @patch("your_module.SimpleDirectoryReader")
-    def test_add_records_no_documents(self, mock_simple_dir_reader):
-        # When no document paths or directory are provided, expect a warning and no processing.
-        with self.assertLogs(level="WARNING") as cm:
-            self.engine.add_records()
-            self.assertTrue(any("No documents found for adding records." in msg for msg in cm.output))
-
-    @patch("your_module.SimpleDirectoryReader")
-    def test_add_records_with_documents(self, mock_simple_dir_reader):
-        # Create dummy documents to be loaded.
-        dummy_documents = ["doc1", "doc2", "doc3"]
-        reader_instance = MagicMock()
-        reader_instance.load_data.return_value = dummy_documents
-        mock_simple_dir_reader.return_value = reader_instance
-
-        # Ensure that the indexer's insert method is callable.
-        self.engine.indexer.insert = MagicMock()
-
-        # Provide a list of dummy document paths.
-        self.engine.add_records(new_doc_paths_or_urls=["dummy1.txt", "dummy2.txt"])
-        # Verify that insert was called for each dummy document.
-        self.assertEqual(self.engine.indexer.insert.call_count, len(dummy_documents))
-
-    def test_query_success(self):
-        # Simulate a working chat engine.
-        dummy_chat_engine = DummyChatEngine()
-        self.engine.indexer.as_chat_engine.return_value = dummy_chat_engine
-
-        response = self.engine.query("Test question")
-        self.assertEqual(response, "Response to: Test question")
-
-    def test_query_failure(self):
-        # Simulate failure by having as_chat_engine raise an exception.
-        self.engine.indexer.as_chat_engine.side_effect = Exception("Query failed")
-        response = self.engine.query("Test question")
-        self.assertIsNone(response)
+    def __getitem__(self, name):
+        return FakeDBNoCollection()
 
 
-if __name__ == "__main__":
-    unittest.main()
+# ----- Fake vector DB and index implementations ----- #
+
+
+class FakeVectorDB:
+    def __init__(self, client):
+        self.client = client
+
+
+class FakeIndex:
+    def __init__(self, docs=None):
+        self.docs = docs or []
+
+    def as_chat_engine(self, llm):
+        # Return a fake chat engine with a query method.
+        class FakeChatEngine:
+            def query(self, question):
+                return f"Answer to {question}"
+
+        return FakeChatEngine()
+
+    def insert(self, doc):
+        self.docs.append(doc)
+
+
+# Fake MongoDBAtlasVectorSearch so that no real collection creation is attempted.
+class FakeMongoDBAtlasVectorSearch:
+    def __init__(self, mongodb_client, db_name, collection_name):
+        self.client = mongodb_client  # so that admin.command("ping") works.
+        self.db_name = db_name
+        self.collection_name = collection_name
+        self.stores_text = True  # Added attribute to mimic real behavior.
+
+
+# Fake create_vector_db function to be used in place of the factory.
+def fake_create_vector_db(
+    db_type, connection_string, database_name, index_name, embedding_function, collection_name, overwrite
+):
+    # Choose a fake MongoClient based on the connection string.
+    if "exists" in connection_string:
+        client = FakeMongoClientExists(connection_string)
+    else:
+        client = FakeMongoClientNoCollection(connection_string)
+    return FakeVectorDB(client)
+
+
+# ----- Pytest tests ----- #
+
+
+def test_connect_db_no_collection(monkeypatch):
+    """
+    Test connect_db when the target collection does not exist.
+    It should catch the error and return False.
+    """
+    monkeypatch.setattr("autogen.agentchat.contrib.rag.mongodb_query_engine.MongoClient", FakeMongoClientNoCollection)
+    monkeypatch.setattr(VectorDBFactory, "create_vector_db", fake_create_vector_db)
+    engine = MongoDBQueryEngine(
+        connection_string="dummy_no_collection", database_name="vector_db", collection_name=DEFAULT_COLLECTION_NAME
+    )
+    result = engine.connect_db()
+    assert result is False
+
+
+def test_connect_db_existing(monkeypatch):
+    """
+    Test connect_db when the collection exists.
+    It should succeed and return True.
+    """
+    monkeypatch.setattr("autogen.agentchat.contrib.rag.mongodb_query_engine.MongoClient", FakeMongoClientExists)
+    # Override MongoDBAtlasVectorSearch with our fake.
+    monkeypatch.setattr(
+        "autogen.agentchat.contrib.rag.mongodb_query_engine.MongoDBAtlasVectorSearch", FakeMongoDBAtlasVectorSearch
+    )
+    monkeypatch.setattr(VectorDBFactory, "create_vector_db", fake_create_vector_db)
+    # Override from_vector_store to accept keyword arguments.
+    monkeypatch.setattr(VectorStoreIndex, "from_vector_store", lambda vs, **kwargs: FakeIndex())
+    engine = MongoDBQueryEngine(
+        connection_string="dummy_exists", database_name="vector_db", collection_name=DEFAULT_COLLECTION_NAME
+    )
+    result = engine.connect_db()
+    assert result is True
+
+
+def test_init_db_existing_collection(monkeypatch):
+    """
+    Test init_db when the collection already exists.
+    It should raise an error internally and return False.
+    """
+    monkeypatch.setattr("autogen.agentchat.contrib.rag.mongodb_query_engine.MongoClient", FakeMongoClientExists)
+    engine = MongoDBQueryEngine(
+        connection_string="dummy_exists", database_name="vector_db", collection_name=DEFAULT_COLLECTION_NAME
+    )
+    # Use a dummy document name instead of an absolute path.
+    result = engine.init_db(new_doc_paths=["dummy_doc.md"])
+    # Since the collection exists, init_db should return False.
+    assert result is False
+
+
+def test_init_db_no_documents(monkeypatch):
+    """
+    Test init_db when no documents are provided.
+    It should log a warning and return False.
+    """
+    monkeypatch.setattr("autogen.agentchat.contrib.rag.mongodb_query_engine.MongoClient", FakeMongoClientNoCollection)
+    monkeypatch.setattr(VectorDBFactory, "create_vector_db", fake_create_vector_db)
+    # Override load_data to return an empty list.
+    monkeypatch.setattr(SimpleDirectoryReader, "load_data", lambda self: [])
+    engine = MongoDBQueryEngine(
+        connection_string="dummy_no_collection", database_name="vector_db", collection_name=DEFAULT_COLLECTION_NAME
+    )
+    result = engine.init_db(new_doc_paths=[])
+    assert result is False
+
+
+def test_init_db_success(monkeypatch):
+    """
+    Test successful initialization of the database.
+    It should load documents and build the index.
+    """
+    monkeypatch.setattr("autogen.agentchat.contrib.rag.mongodb_query_engine.MongoClient", FakeMongoClientNoCollection)
+    monkeypatch.setattr(
+        "autogen.agentchat.contrib.rag.mongodb_query_engine.MongoDBAtlasVectorSearch", FakeMongoDBAtlasVectorSearch
+    )
+    monkeypatch.setattr(VectorDBFactory, "create_vector_db", fake_create_vector_db)
+    # Simulate document loading returning two dummy docs.
+    monkeypatch.setattr(SimpleDirectoryReader, "load_data", lambda self: ["doc1", "doc2"])
+    # Override from_documents to return a FakeIndex containing the docs.
+    monkeypatch.setattr(VectorStoreIndex, "from_documents", lambda docs, **kwargs: FakeIndex(docs))
+    engine = MongoDBQueryEngine(
+        connection_string="dummy_no_collection", database_name="vector_db", collection_name=DEFAULT_COLLECTION_NAME
+    )
+    # Use a dummy document name.
+    result = engine.init_db(new_doc_paths=["dummy_doc.md"])
+    assert result is True
+    # Our fake loader returns ["doc1", "doc2"]
+    assert engine.index.docs == ["doc1", "doc2"]
+
+
+def test_add_records(monkeypatch):
+    """
+    Test that add_records loads documents and inserts them into the index.
+    """
+    fake_index = FakeIndex()
+    engine = MongoDBQueryEngine(
+        connection_string="dummy", database_name="vector_db", collection_name=DEFAULT_COLLECTION_NAME
+    )
+    engine.index = fake_index
+    # Override __init__ of SimpleDirectoryReader to bypass file existence checks.
+    monkeypatch.setattr(
+        SimpleDirectoryReader, "__init__", lambda self, input_files: setattr(self, "input_files", input_files)
+    )
+    # Override load_data to return dummy records.
+    monkeypatch.setattr(SimpleDirectoryReader, "load_data", lambda self: ["record1", "record2"])
+    # Force os.path.exists to always return True so that file existence checks pass.
+    monkeypatch.setattr(os.path, "exists", lambda path: True)
+    engine.add_records(new_doc_paths_or_urls=["dummy_path"])
+    assert fake_index.docs == ["record1", "record2"]
+
+
+def test_query(monkeypatch):
+    """
+    Test that query returns the expected response from the fake chat engine.
+    """
+    fake_index = FakeIndex()
+    engine = MongoDBQueryEngine(
+        connection_string="dummy", database_name="vector_db", collection_name=DEFAULT_COLLECTION_NAME
+    )
+    engine.index = fake_index
+    answer = engine.query("What is testing?", llm="dummy_llm")
+    assert answer == "Answer to What is testing?"
