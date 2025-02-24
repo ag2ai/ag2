@@ -183,8 +183,11 @@ def get_client(llm_config: dict[str, Any], logger: Logger, **kwargs: Any) -> "Re
     """
     global _realtime_client_classes
     for _, client_cls in _realtime_client_classes.items():
-        factory = client_cls.get_factory(llm_config=llm_config, logger=logger, **kwargs)
-        if factory:
-            return factory()
+        try:
+            factory = client_cls.get_factory(llm_config=llm_config, logger=logger, **kwargs)
+            if factory:
+                return factory()
+        except ImportError as e:
+            logger.warning(f"Failed to load Realtime API client: {e}")
 
     raise ValueError("Realtime API client not found.")
