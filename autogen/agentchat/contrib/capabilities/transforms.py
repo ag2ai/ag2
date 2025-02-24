@@ -145,7 +145,7 @@ class MessageTokenLimiter:
     The truncation process follows these steps in order:
 
     1. The minimum tokens threshold (`min_tokens`) is checked (0 by default). If the total number of tokens in messages
-        are less than this threshold, then the messages are returned as is. In other case, the following process is applied.
+        is less than this threshold, then the messages are returned as is. In other case, the following process is applied.
     2. Messages are processed in reverse order (newest to oldest).
     3. Individual messages are truncated based on max_tokens_per_message. For multimodal messages containing both text
         and other types of content, only the text content is truncated.

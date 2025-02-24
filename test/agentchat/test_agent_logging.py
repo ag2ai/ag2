@@ -24,7 +24,7 @@ TEACHER_MESSAGE = """
 """
 
 STUDENT_MESSAGE = """
-    You are roleplaying a high school student strugling with linear algebra.
+    You are roleplaying a high school student struggling with linear algebra.
     Regardless how well the teacher explains things to you, you just don't quite get it.
     Keep your questions short.
 """
