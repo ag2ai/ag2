@@ -249,7 +249,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.6",
+    "ruff==0.9.7",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -259,7 +259,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.6.0",
+    "uv==0.6.2",
 ]
 
 
