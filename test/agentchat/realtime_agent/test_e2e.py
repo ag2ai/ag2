@@ -103,7 +103,7 @@ class TestE2E:
 
         """
         i = 0
-        count = 1
+        count = 5
         while True:
             try:
                 credentials = request.getfixturevalue(credentials_llm_realtime)
