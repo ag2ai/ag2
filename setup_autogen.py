@@ -29,6 +29,7 @@ setuptools.setup(
     install_requires=["pyautogen==" + __version__],
     extras_require={
         "flaml": ["pyautogen[flaml]==" + __version__],
+        "openai": ["pyautogen[openai]==" + __version__],
         "jupyter-executor": ["pyautogen[jupyter-executor]==" + __version__],
         "retrievechat": ["pyautogen[retrievechat]==" + __version__],
         "retrievechat-pgvector": ["pyautogen[retrievechat-pgvector]==" + __version__],

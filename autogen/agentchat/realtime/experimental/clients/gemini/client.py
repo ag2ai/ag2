@@ -32,7 +32,7 @@ API_VERSION = "v1alpha"
 
 
 @register_realtime_client()
-@require_optional_import("websockets", "gemini")
+@require_optional_import("websockets", "gemini", except_for="get_factory")
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class GeminiRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for Gemini Realtime API."""

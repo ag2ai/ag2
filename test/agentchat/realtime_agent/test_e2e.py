@@ -15,14 +15,12 @@ from pytest import FixtureRequest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 
-# from autogen.import_utils import skip_on_missing_imports
 from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)
 
 
-# @skip_on_missing_imports("websockets", "websockets")
 class TestE2E:
     async def _test_e2e(self, credentials_llm: Credentials, credentials_openai: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
@@ -105,7 +103,7 @@ class TestE2E:
 
         """
         i = 0
-        count = 5
+        count = 1
         while True:
             try:
                 credentials = request.getfixturevalue(credentials_llm_realtime)
