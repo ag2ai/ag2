@@ -1,0 +1,17 @@
+---
+title: Generating a reply
+---
+
+API Reference: [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply)
+
+A critical part to any AG2 workflow is an agent's reply. Their reply is what ends up in the messages list for evaluation by the next agent(s).
+
+If you are creating a new agent and want to control what they generate (their **reply**), then working with ConversableAgent's [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) functions will be needed.
+
+Let's look at how the standard ConversableAgent's [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) method works.
+
+![generate_reply](./assets/generate-reply.png)
+
+Breakdown of [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply):
+
+1. [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) is called on the first turn of [initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat) and then when messages are received by an agent (API Reference: [receive](/docs/api-reference/autogen/ConversableAgent#receive)). In a GroupChat, it's called by the GroupChatManager in their [run_chat](./docs/api-reference/autogen/GroupChatManager#run-chat) method.
