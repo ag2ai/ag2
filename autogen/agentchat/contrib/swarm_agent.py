@@ -6,9 +6,10 @@ import json
 import warnings
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 from inspect import signature
 from types import MethodType
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 
@@ -199,6 +200,7 @@ def _establish_swarm_agent(agent: ConversableAgent):
 def _prepare_swarm_agents(
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
+    exclude_transit_message: bool = True,
 ) -> tuple[ConversableAgent, list[ConversableAgent]]:
     """Validates agents, create the tool executor, configure nested chats.
 
@@ -243,6 +245,17 @@ def _prepare_swarm_agents(
         # Register tools from the tools property
         for tool in agent.tools:
             tool_execution.register_for_execution()(tool)
+
+    if exclude_transit_message:
+        # get all transit functions names
+        to_be_removed = []
+        for agent in agents + nested_chat_agents:
+            if hasattr(agent, "_swarm_conditional_functions"):
+                to_be_removed += list(agent._swarm_conditional_functions.keys())
+
+        # register hook to remove transit messages for swarm agents
+        for agent in agents + nested_chat_agents:
+            agent.register_hook("process_all_messages_before_reply", make_remove_function(to_be_removed))
 
     return tool_execution, nested_chat_agents
 
@@ -582,6 +595,56 @@ def _create_swarm_manager(
     return manager
 
 
+def make_remove_function(tool_msgs_to_remove: List[str]):
+    """Create a function to remove messages with tool calls from the messages list.
+
+    The returned function can be registered as a hook to "process_all_messages_before_reply"" to remove messages with tool calls.
+    """
+
+    def remove_messages(messages: list, tool_msgs_to_remove: List[str]) -> list:
+        copied = copy.deepcopy(messages)
+        new_messages = []
+        removed_tool_ids = []
+        for message in copied:
+            # remove tool calls
+            if message.get("tool_calls") is not None:
+                filtered_tool_calls = []
+                for tool_call in message["tool_calls"]:
+                    if tool_call.get("function") is not None and tool_call["function"]["name"] in tool_msgs_to_remove:
+                        # remove
+                        removed_tool_ids.append(tool_call["id"])
+                    else:
+                        filtered_tool_calls.append(tool_call)
+                if len(filtered_tool_calls) > 0:
+                    message["tool_calls"] = filtered_tool_calls
+                else:
+                    del message["tool_calls"]
+                    if (
+                        message.get("content") is None
+                        or message.get("content") == ""
+                        or message.get("content") == "None"
+                    ):
+                        continue  # if no tool call and no content, skip this message
+                    # else: keep the message with tool_calls removed
+            # remove corresponding tool responses
+            elif message.get("tool_responses") is not None:
+                filtered_tool_responses = []
+                for tool_response in message["tool_responses"]:
+                    if tool_response["tool_call_id"] not in removed_tool_ids:
+                        filtered_tool_responses.append(tool_response)
+
+                if len(filtered_tool_responses) > 0:
+                    message["tool_responses"] = filtered_tool_responses
+                else:
+                    continue
+
+            new_messages.append(message)
+
+        return new_messages
+
+    return partial(remove_messages, tool_msgs_to_remove=tool_msgs_to_remove)
+
+
 @export_module("autogen")
 def initiate_swarm_chat(
     initial_agent: ConversableAgent,
@@ -592,6 +655,7 @@ def initiate_swarm_chat(
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
     after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat
 
@@ -614,12 +678,14 @@ def initiate_swarm_chat(
                 ```python
                 def custom_afterwork_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
+        exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
+            Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
         Dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents)
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, nested_chat_agents
@@ -674,6 +740,7 @@ async def a_initiate_swarm_chat(
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
     after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat asynchronously
 
@@ -696,12 +763,14 @@ async def a_initiate_swarm_chat(
                 ```python
                 def custom_afterwork_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
+        exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
+            Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
         Dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents)
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, nested_chat_agents
