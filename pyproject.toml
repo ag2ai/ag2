@@ -142,7 +142,9 @@ crawl4ai = [
 ]
 
 browser-use = [
-    "browser-use>=0.1.27,<0.2",
+    # ToDo: Restrict browser-use to a specific version
+    # browser-use>0.1.38 moved langchain-google-genai, aws, etc to its dev dependencies
+    "browser-use==0.1.37",
 ]
 
 neo4j = [
