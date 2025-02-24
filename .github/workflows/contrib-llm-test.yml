@@ -7,13 +7,13 @@ on:
   schedule:
     - cron: "0 0 * * *" # daily at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
-  pull_request_target:
-    branches: ["main"]
-    paths:
-      - "autogen/**"
-      - "test/agentchat/contrib/**"
-      - ".github/workflows/contrib-llm-test.yml"
-      - "pyproject.toml"
+  # pull_request_target:
+  #   branches: ["main"]
+  #   paths:
+  #     - "autogen/**"
+  #     - "test/agentchat/contrib/**"
+  #     - ".github/workflows/contrib-llm-test.yml"
+  #     - "pyproject.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
