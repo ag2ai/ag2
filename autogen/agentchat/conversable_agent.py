@@ -2489,13 +2489,13 @@ class ConversableAgent(LLMAgent):
         # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
         self.update_agent_state_before_reply(messages)
 
-        # Call the hookable method that gives registered hooks a chance to process all messages.
-        # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_all_messages_before_reply(messages)
-
         # Call the hookable method that gives registered hooks a chance to process the last message.
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_last_received_message(messages)
+
+        # Call the hookable method that gives registered hooks a chance to process all messages.
+        # Message modifications do not affect the incoming messages or self._oai_messages.
+        messages = self.process_all_messages_before_reply(messages)
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
