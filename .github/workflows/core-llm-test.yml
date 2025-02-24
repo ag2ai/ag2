@@ -7,16 +7,16 @@ on:
   schedule:
     - cron: "0 0 * * *" # daily at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
-  pull_request_target:
-    branches: ["main"]
-    paths:
-      - "autogen/**"
-      - "test/**"
-      - "notebook/agentchat_auto_feedback_from_code_execution.ipynb"
-      - "notebook/agentchat_function_call.ipynb"
-      - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
-      - ".github/workflows/core-llm-test.yml"
-      - "pyproject.toml"
+  # pull_request_target:
+  #   branches: ["main"]
+  #   paths:
+  #     - "autogen/**"
+  #     - "test/**"
+  #     - "notebook/agentchat_auto_feedback_from_code_execution.ipynb"
+  #     - "notebook/agentchat_function_call.ipynb"
+  #     - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
+  #     - ".github/workflows/core-llm-test.yml"
+  #     - "pyproject.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
