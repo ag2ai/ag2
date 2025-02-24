@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # Replace 'your_module' with the actual module name where MongoDBQueryEngine is defined.
-from autogen.agentchat.contrib.rag.mongodb import MongoDBQueryEngine
+from autogen.agentchat.contrib.rag.mongodb_query_engine import MongoDBQueryEngine
 
 
 # A dummy client to simulate MongoDB's behavior.
