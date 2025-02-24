@@ -7,11 +7,10 @@
 import logging
 import ssl
 import threading
-from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial
 from time import sleep
-from typing import Any, Callable, Optional, Protocol, Union
+from typing import Any, Callable, Iterable, Iterator, Optional, Protocol, Union
 
 from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
@@ -89,9 +88,6 @@ class IOWebsockets(IOStream):
 
         Args:
             websocket (ServerConnection): The websocket server.
-
-        Raises:
-            ImportError: If the websockets module is not available.
         """
         self._websocket = websocket
 

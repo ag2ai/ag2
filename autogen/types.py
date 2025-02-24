@@ -4,9 +4,10 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Literal, TypedDict, Union
 
-MessageContentType = Union[str, list[Union[dict, str]], None]
+from typing import Any, Literal, TypedDict, Union
+
+MessageContentType = Union[str, list[Union[dict[str, Any], str]], None]
 
 
 class UserMessageTextContentPart(TypedDict):

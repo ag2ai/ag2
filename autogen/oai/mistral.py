@@ -240,7 +240,7 @@ class MistralAIClient:
 
 @require_optional_import("mistralai", "mistral")
 def tool_def_to_mistral(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Converts AutoGen tool definition to a mistral tool format"""
+    """Converts AG2 tool definition to a mistral tool format"""
     mistral_tools = []
 
     for autogen_tool in tool_definitions:

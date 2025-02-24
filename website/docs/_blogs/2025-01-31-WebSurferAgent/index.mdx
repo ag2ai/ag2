@@ -1,0 +1,623 @@
+---
+title: Riding the Web with WebSurferAgent
+authors:
+  - rjambrecic
+tags: [tools, tool calling, web surfing, browser use, crawl4ai, WebSurferAgent]
+---
+
+<div>
+<img noZoom className="social-share-img"
+  src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+  alt="social preview"
+  style={{ position: 'absolute', left: '-9999px' }}
+/>
+</div>
+
+<div class="blog-authors">
+  <p class="authors">Author:</p>
+  <CardGroup cols={2}>
+    <Card href="https://github.com/rjambrecic">
+        <div class="col card">
+          <div class="img-placeholder">
+            <img noZoom src="https://github.com/rjambrecic.png" />
+          </div>
+          <div>
+            <p class="name">Robert Jambrecic</p>
+            <p>Machine Learning Engineer at Airt</p>
+          </div>
+        </div>
+    </Card>
+  </CardGroup>
+</div>
+
+## Introduction
+In our [Adding Browsing Capabilities to AG2](/blog/2025-01-31-Websurfing-Tools) guide, we explored how to build agents with basic web surfing capabilities. Now, let's take it to the next level with [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent)—a powerful agent that comes with built-in web browsing tools right out of the box!
+
+With [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent), your agents can seamlessly browse the web, retrieve real-time information, and interact with web pages—all with minimal setup.
+
+![WebSurferAgent Example](/docs/user-guide/reference-agents/assets/websurferagent_animated.gif)
+
+## WebSurferAgent with BrowserUseTool
+<Warning>
+[`Browser Use`](https://github.com/browser-use/browser-use) requires **Python 3.11 or higher**.
+</Warning>
+### Installation
+
+To get started with the [`Browser Use`](https://github.com/browser-use/browser-use) integration in AG2, follow these steps:
+
+1. Install AG2 with the `browser-use` extra:
+    ```bash
+    pip install ag2[browser-use]
+    ```
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[browser-use]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[browser-use]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
+2. Set up Playwright:
+
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
+
+3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
+    ```bash
+    pip install nest_asyncio
+    ```
+
+You're all set! Now you can start using browsing features in AG2.
+
+
+### Imports
+```python
+import os
+
+import nest_asyncio
+
+from autogen.agentchat import UserProxyAgent
+from autogen.agents.experimental import WebSurferAgent
+
+nest_asyncio.apply()
+```
+
+### Configure WebSurferAgent with Browser Use
+
+<Tip>
+[`Browser Use`](https://github.com/browser-use/browser-use) supports the following models: [Supported Models](https://docs.browser-use.com/customize/supported-models#supported-models)
+
+We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `DeepSeek` and `Ollama` haven't performed as well.
+</Tip>
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+
+llm_config = {
+    "config_list": config_list,
+}
+````
+
+[`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
+
+After creating the [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) there are two ways to start the chat session:
+
+#### **Recommended:** Using the [`run`](/docs/api-reference/autogen/ConversableAgent#run) Method
+
+The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplifies the process by eliminating the need for manual [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) creation.
+
+- ✅ **Easier setup** – No need to manually register tools
+
+```python
+websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="browser_use")
+
+websurfer.run(
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    tools=websurfer.tools,
+    max_turns=2,
+    user_input=False,
+)
+```
+
+#### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method
+This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) and registering tools for execution.
+
+- ⚠️ **More setup required**
+- ⚠️ **Must manually register tools**
+
+```python
+websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="browser_use")
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+# WebSurferAgent has a list of tools which are registered for LLM
+# We need to register the tools for execution with the UserProxyAgent
+for tool in websurfer.tools:
+    tool.register_for_execution(user_proxy)
+
+user_proxy.initiate_chat(
+    recipient=websurfer,
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    max_turns=2,
+)
+```
+
+### Output
+```console
+user_proxy (to WebSurfer):
+
+Get info from https://docs.ag2.ai/docs/Home
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+WebSurfer (to user_proxy):
+
+***** Suggested tool call (call_rl777jGrOGhc68goW5142urK): browser_use *****
+Arguments:
+{"task":"Get info from https://docs.ag2.ai/docs/Home"}
+****************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION browser_use...
+Call ID: call_rl777jGrOGhc68goW5142urK
+Input arguments: {'task': 'Get info from https://docs.ag2.ai/docs/Home'}
+INFO     [agent] 🚀 Starting task: Get info from https://docs.ag2.ai/docs/Home
+INFO     [agent]
+📍 Step 1
+INFO     [agent] 🤷 Eval: Unknown - No previous actions to evaluate.
+INFO     [agent] 🧠 Memory:
+INFO     [agent] 🎯 Next goal: Navigate to the specified URL to gather information
+INFO     [agent] 🛠️  Action 1/1: {"go_to_url":{"url":"https://docs.ag2.ai/docs/Home"}}
+INFO     [controller] 🔗  Navigated to https://docs.ag2.ai/docs/Home
+INFO     [agent]
+📍 Step 2
+INFO     [agent] 🤷 Eval: Unknown - No previous actions to evaluate.
+INFO     [agent] 🧠 Memory:
+INFO     [agent] 🎯 Next goal: Extract useful information regarding AG2 from the home page.
+INFO     [agent] 🛠️  Action 1/1: {"extract_content":{"include_links":true}}
+INFO     [controller] 📄  Extracted page as markdown
+: [AG2 home page![light logo](https://mintlify.s3.us-
+west-1.amazonaws.com/ag2ai/logo/ag2.svg)![dark logo](https://mintlify.s3.us-
+west-1.amazonaws.com/ag2ai/logo/ag2-white.svg)](/)
+
+Search or ask...
+
+⌘K
+
+Search...A
+
+Navigation
+
+Home
+
+AG2
+
+[Home](/docs/home/Home)[User Guide](/docs/user-guide/quick-start)[API
+References](/docs/api-reference/autogen/overview)[Use Cases](/docs/use-
+cases/use-cases/customer-service)[Contribute](/contributor-
+guide/contributing)[FAQs](/faq/FAQ)[Ecosystem](/ecosystem/agentops)[Blog](/docs/blog/2025-01-29-RealtimeAgent-
+with-gemini/index)
+
+##### Home
+
+  * [AG2](/docs/home/Home)
+
+![AG2 Logo](https://mintlify.s3.us-
+west-1.amazonaws.com/ag2ai/static/img/ag2.svg)
+
+## AG2
+
+The Open Source Agent OS
+
+[Getting Started - 3 Minute](/docs/user-guide/quick-start)
+
+###
+
+​
+
+Key Features
+
+##
+
+![Multi-Agent Conversation Framework](https://mintlify.s3.us-
+west-1.amazonaws.com/ag2ai/static/img/conv_2.svg)**Multi-Agent Conversation
+Framework**
+
+AG2 provides multi-agent conversation framework as a high-level abstraction.
+With this framework, one can conveniently build LLM workflows.
+
+##
+
+![Easily Build Diverse Applications](https://mintlify.s3.us-
+west-1.amazonaws.com/ag2ai/static/img/autogen_app.svg)**Easily Build Diverse
+Applications**
+
+AG2 offers a collection of working systems spanning a wide range of
+applications from various domains and complexities.
+
+##
+
+![Enhanced LLM Inference & Optimization](https://mintlify.s3.us-
+west-1.amazonaws.com/ag2ai/static/img/extend.svg)**Enhanced LLM Inference &
+Optimization**
+
+AG2 supports enhanced LLM inference APIs, which can be used to improve
+inference performance and reduce cost.
+
+###
+
+​
+
+Explore content
+
+## [Quick StartStart building your AG2 application.](/docs/user-guide/quick-
+start)## [ConceptsWork through the key concepts of AG2 including
+ConversableAgent, GroupChat, Swarm, and tools.](/docs/user-guide/basic-
+concepts/installing-ag2)## [Advanced ConceptsAdvance to RAG, Code Execution,
+and more complex GroupChats and Swarms.](/docs/user-guide/advanced-concepts)##
+[Use CasesTry out use case workflows including Customer Service, Travel
+Planning, and Game Design.](/docs/use-cases/use-cases)## [Notebook ExamplesA
+collection of interactive notebooks across all AG2 topics.](/docs/use-
+cases/notebooks/Notebooks)## [API ReferenceDelve into the AG2 API
+reference.](/docs/api-reference)## [How to ContributeGet involved with AG2 by
+adding what you need and making the framework even better!](/contributor-
+guide/contributing)
+
+###
+
+​
+
+Popular resources
+
+##
+
+[Foundation Capital Interview with Dr. Chi
+Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk)
+
+##
+
+[Learn AG2 on DeepLearningAI](https://www.youtube.com/watch?v=TBNTH-fwGPE)
+
+On this page
+
+  * Key Features
+  * Explore content
+  * Popular resources
+
+
+
+INFO     [agent]
+📍 Step 3
+INFO     [agent] 👍 Eval: Success - Successfully extracted information from the AG2 home page.
+INFO     [agent] 🧠 Memory: Extracted information includes the key features and content related to AG2.
+INFO     [agent] 🎯 Next goal: Complete the task and summarize the extracted information.
+INFO     [agent] 🛠️  Action 1/1: {"done":{"text":"Extracted information from AG2 home page:\n\n### AG2\n\n**The Open Source Agent OS**  \n[Getting Started - 3 Minute](https://docs/user-guide/quick-start)\n\n#### Key Features\n\n- **Multi-Agent Conversation Framework**: AG2 provides a high-level abstraction for building LLM workflows.\n- **Easily Build Diverse Applications**: Offers a collection of systems across various domains and complexities.\n- **Enhanced LLM Inference & Optimization**: Supports APIs to improve inference performance and reduce costs.\n\n#### Explore Content\n- [Quick Start](https://docs/user-guide/quick-start)\n- [Concepts](https://docs/user-guide/basic-concepts/installing-ag2)\n- [Advanced Concepts](https://docs/user-guide/advanced-concepts)\n- [Use Cases](https://docs/use-cases/use-cases)\n- [API Reference](https://docs/api-reference)\n- [How to Contribute](https://contributor-guide/contributing)  \n\n#### Popular Resources\n- [Foundation Capital Interview with Dr. Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk)  \n- [Learn AG2 on DeepLearningAI](https://www.youtube.com/watch?v=TBNTH-fwGPE)  \n"}}
+INFO     [agent] 📄 Result: Extracted information from AG2 home page:
+
+### AG2
+
+**The Open Source Agent OS**
+[Getting Started - 3 Minute](https://docs/user-guide/quick-start)
+
+#### Key Features
+
+- **Multi-Agent Conversation Framework**: AG2 provides a high-level abstraction for building LLM workflows.
+- **Easily Build Diverse Applications**: Offers a collection of systems across various domains and complexities.
+- **Enhanced LLM Inference & Optimization**: Supports APIs to improve inference performance and reduce costs.
+
+#### Explore Content
+- [Quick Start](https://docs/user-guide/quick-start)
+- [Concepts](https://docs/user-guide/basic-concepts/installing-ag2)
+- [Advanced Concepts](https://docs/user-guide/advanced-concepts)
+- [Use Cases](https://docs/use-cases/use-cases)
+- [API Reference](https://docs/api-reference)
+- [How to Contribute](https://contributor-guide/contributing)
+
+#### Popular Resources
+- [Foundation Capital Interview with Dr. Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk)
+- [Learn AG2 on DeepLearningAI](https://www.youtube.com/watch?v=TBNTH-fwGPE)
+
+INFO     [agent] ✅ Task completed successfully
+user_proxy (to WebSurfer):
+
+***** Response from calling tool (call_rl777jGrOGhc68goW5142urK) *****
+{"extracted_content":["🔗  Navigated to https://docs.ag2.ai/docs/Home","📄  Extracted page as markdown\n: [AG2 home page![light logo](https://mintlify.s3.us-\nwest-1.amazonaws.com/ag2ai/logo/ag2.svg)![dark logo](https://mintlify.s3.us-\nwest-1.amazonaws.com/ag2ai/logo/ag2-white.svg)](/)\n\nSearch or ask...\n\n⌘K\n\nSearch...\n\nNavigation\n\nHome\n\nAG2\n\n[Home](/docs/home/Home)[User Guide](/docs/user-guide/quick-start)[API\nReferences](/docs/api-reference/autogen/overview)[Use Cases](/docs/use-\ncases/use-cases/customer-service)[Contribute](/contributor-\nguide/contributing)[FAQs](/faq/FAQ)[Ecosystem](/ecosystem/agentops)[Blog](/docs/blog/2025-01-29-RealtimeAgent-\nwith-gemini/index)\n\n##### Home\n\n  * [AG2](/docs/home/Home)\n\n![AG2 Logo](https://mintlify.s3.us-\nwest-1.amazonaws.com/ag2ai/static/img/ag2.svg)\n\n## AG2\n\nThe Open Source Agent OS\n\n[Getting Started - 3 Minute](/docs/user-guide/quick-start)\n\n###\n\n​\n\nKey Features\n\n##\n\n![Multi-Agent Conversation Framework](https://mintlify.s3.us-\nwest-1.amazonaws.com/ag2ai/static/img/conv_2.svg)**Multi-Agent Conversation\nFramework**\n\nAG2 provides multi-agent conversation framework as a high-level abstraction.\nWith this framework, one can conveniently build LLM workflows.\n\n##\n\n![Easily Build Diverse Applications](https://mintlify.s3.us-\nwest-1.amazonaws.com/ag2ai/static/img/autogen_app.svg)**Easily Build Diverse\nApplications**\n\nAG2 offers a collection of working systems spanning a wide range of\napplications from various domains and complexities.\n\n##\n\n![Enhanced LLM Inference & Optimization](https://mintlify.s3.us-\nwest-1.amazonaws.com/ag2ai/static/img/extend.svg)**Enhanced LLM Inference &\nOptimization**\n\nAG2 supports enhanced LLM inference APIs, which can be used to improve\ninference performance and reduce cost.\n\n###\n\n​\n\nExplore content\n\n## [Quick StartStart building your AG2 application.](/docs/user-guide/quick-\nstart)## [ConceptsWork through the key concepts of AG2 including\nConversableAgent, GroupChat, Swarm, and tools.](/docs/user-guide/basic-\nconcepts/installing-ag2)## [Advanced ConceptsAdvance to RAG, Code Execution,\nand more complex GroupChats and Swarms.](/docs/user-guide/advanced-concepts)##\n[Use CasesTry out use case workflows including Customer Service, Travel\nPlanning, and Game Design.](/docs/use-cases/use-cases)## [Notebook ExamplesA\ncollection of interactive notebooks across all AG2 topics.](/docs/use-\ncases/notebooks/Notebooks)## [API ReferenceDelve into the AG2 API\nreference.](/docs/api-reference)## [How to ContributeGet involved with AG2 by\nadding what you need and making the framework even better!](/contributor-\nguide/contributing)\n\n###\n\n​\n\nPopular resources\n\n##\n\n[Foundation Capital Interview with Dr. Chi\nWang](https://www.youtube.com/watch?v=RLwyXRVvlNk)\n\n##\n\n[Learn AG2 on DeepLearningAI](https://www.youtube.com/watch?v=TBNTH-fwGPE)\n\nOn this page\n\n  * Key Features\n  * Explore content\n  * Popular resources\n\n\n","Extracted information from AG2 home page:\n\n### AG2\n\n**The Open Source Agent OS**  \n[Getting Started - 3 Minute](https://docs/user-guide/quick-start)\n\n#### Key Features\n\n- **Multi-Agent Conversation Framework**: AG2 provides a high-level abstraction for building LLM workflows.\n- **Easily Build Diverse Applications**: Offers a collection of systems across various domains and complexities.\n- **Enhanced LLM Inference & Optimization**: Supports APIs to improve inference performance and reduce costs.\n\n#### Explore Content\n- [Quick Start](https://docs/user-guide/quick-start)\n- [Concepts](https://docs/user-guide/basic-concepts/installing-ag2)\n- [Advanced Concepts](https://docs/user-guide/advanced-concepts)\n- [Use Cases](https://docs/use-cases/use-cases)\n- [API Reference](https://docs/api-reference)\n- [How to Contribute](https://contributor-guide/contributing)  \n\n#### Popular Resources\n- [Foundation Capital Interview with Dr. Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk)  \n- [Learn AG2 on DeepLearningAI](https://www.youtube.com/watch?v=TBNTH-fwGPE)  \n"],"final_result":"Extracted information from AG2 home page:\n\n### AG2\n\n**The Open Source Agent OS**  \n[Getting Started - 3 Minute](https://docs/user-guide/quick-start)\n\n#### Key Features\n\n- **Multi-Agent Conversation Framework**: AG2 provides a high-level abstraction for building LLM workflows.\n- **Easily Build Diverse Applications**: Offers a collection of systems across various domains and complexities.\n- **Enhanced LLM Inference & Optimization**: Supports APIs to improve inference performance and reduce costs.\n\n#### Explore Content\n- [Quick Start](https://docs/user-guide/quick-start)\n- [Concepts](https://docs/user-guide/basic-concepts/installing-ag2)\n- [Advanced Concepts](https://docs/user-guide/advanced-concepts)\n- [Use Cases](https://docs/use-cases/use-cases)\n- [API Reference](https://docs/api-reference)\n- [How to Contribute](https://contributor-guide/contributing)  \n\n#### Popular Resources\n- [Foundation Capital Interview with Dr. Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk)  \n- [Learn AG2 on DeepLearningAI](https://www.youtube.com/watch?v=TBNTH-fwGPE)  \n"}
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+WebSurfer (to user_proxy):
+
+Here's the information extracted from the AG2 home page:
+
+### AG2
+**The Open Source Agent OS**
+[Getting Started - 3 Minute](https://docs/user-guide/quick-start)
+
+#### Key Features
+- **Multi-Agent Conversation Framework**: AG2 provides a high-level abstraction for building LLM (Large Language Model) workflows.
+- **Easily Build Diverse Applications**: Offers a collection of systems across various domains and complexities.
+- **Enhanced LLM Inference & Optimization**: Supports enhanced inference APIs to improve performance and reduce costs.
+
+#### Explore Content
+- [Quick Start](https://docs/user-guide/quick-start)
+- [Concepts](https://docs/user-guide/basic-concepts/installing-ag2)
+- [Advanced Concepts](https://docs/user-guide/advanced-concepts)
+- [Use Cases](https://docs/use-cases/use-cases)
+- [API Reference](https://docs/api-reference)
+- [How to Contribute](https://contributor-guide/contributing)
+
+#### Popular Resources
+- [Foundation Capital Interview with Dr. Chi Wang](https://www.youtube.com/watch?v=RLwyXRVvlNk)
+- [Learn AG2 on DeepLearningAI](https://www.youtube.com/watch?v=TBNTH-fwGPE)
+
+--------------------------------------------------------------------------------
+```
+
+## WebSurferAgent with Crawl4AITool
+
+### Installation
+
+To integrate [`Crawl4AI`](https://github.com/unclecode/crawl4ai) with AG2, follow these steps:
+
+1. Install AG2 with the `crawl4ai` extra:
+    ```bash
+    pip install ag2[crawl4ai]
+    ```
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[crawl4ai]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[crawl4ai]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
+2. Set up Playwright:
+
+    ```bash
+    # Installs Playwright and browsers for all OS
+    playwright install
+    # Additional command, mandatory for Linux only
+    playwright install-deps
+    ```
+3. For running the code in Jupyter, use `nest_asyncio` to allow nested event loops.
+    ```bash
+    pip install nest_asyncio
+    ```
+
+Once installed, you're ready to start using the browsing features in AG2.
+
+### Imports
+
+```python
+import os
+
+import nest_asyncio
+
+from autogen.agentchat import UserProxyAgent
+from autogen.agents.experimental import WebSurferAgent
+
+nest_asyncio.apply()
+```
+
+### Configure WebSurferAgent with Crawl4AI
+
+<Tip>
+[`Crawl4AI`](https://github.com/unclecode/crawl4ai) is built on top of [LiteLLM](https://github.com/BerriAI/litellm) and supports the same models as LiteLLM.
+
+We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. However, as of this writing, `DeepSeek` is encountering some issues.
+</Tip>
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+
+llm_config = {
+    "config_list": config_list,
+}
+```
+
+The only difference from the previous example is that the `web_tool` parameter must be set to `crawl4ai` in order for the [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) to be used.
+
+
+As in previous example, there are two ways to start the chat session:
+
+#### **Recommended:** Using the [`run`](/docs/api-reference/autogen/ConversableAgent#run) Method
+
+The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplifies the process by eliminating the need for manual [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) creation.
+
+- ✅ **Easier setup** – No need to manually register tools
+
+```python
+# `web_tool` parameter must be set to `crawl4ai` in order for the `Crawl4AITool` to be used.
+websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="crawl4ai")
+
+websurfer.run(
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    tools=websurfer.tools,
+    max_turns=2,
+    user_input=False,
+)
+```
+
+#### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method
+This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) and registering tools for execution.
+
+- ⚠️ **More setup required**
+- ⚠️ **Must manually register tools**
+
+```python
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="crawl4ai")
+
+websurfer_tools = websurfer.tools
+# WebSurferAgent has a list of tools which are registered for LLM
+# We need to register the tools for execution with the UserProxyAgent
+for tool in websurfer_tools:
+    tool.register_for_execution(user_proxy)
+
+user_proxy.initiate_chat(
+    recipient=websurfer,
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    max_turns=2,
+)
+```
+
+### Output
+```console
+user_proxy (to WebSurfer):
+
+Get info from https://docs.ag2.ai/docs/Home
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+WebSurfer (to user_proxy):
+
+***** Suggested tool call (call_UvcLMFR8osM9AsyxVdmzgmBs): crawl4ai *****
+Arguments:
+{"url":"https://docs.ag2.ai/docs/Home","instruction":"Extract the main sections and any key information such as features, usage guidelines, and any other relevant details."}
+*************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION crawl4ai...
+Call ID: call_UvcLMFR8osM9AsyxVdmzgmBs
+Input arguments: {'url': 'https://docs.ag2.ai/docs/Home', 'instruction': 'Extract the main sections and any key information such as features, usage guidelines, and any other relevant details.'}
+[INIT].... → Crawl4AI 0.4.247
+[FETCH]... ↓ https://docs.ag2.ai/docs/Home... | Status: True | Time: 1.36s
+[SCRAPE].. ◆ Processed https://docs.ag2.ai/docs/Home... | Time: 47ms
+INFO:httpx:HTTP Request: GET https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json "HTTP/1.1 200 OK"
+/Users/robert/projects/ag2/.venv-crawl4ai/lib/python3.11/site-packages/pydantic/_internal/_config.py:345: UserWarning: Valid config keys have changed in V2:
+* 'fields' has been removed
+  warnings.warn(message, UserWarning)
+14:23:43 - LiteLLM:INFO: utils.py:2825 -
+LiteLLM completion() model= gpt-4o-mini; provider = openai
+INFO:LiteLLM:
+LiteLLM completion() model= gpt-4o-mini; provider = openai
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+14:23:57 - LiteLLM:INFO: utils.py:1030 - Wrapper: Completed Call, calling success_handler
+INFO:LiteLLM:Wrapper: Completed Call, calling success_handler
+[EXTRACT]. ■ Completed for https://docs.ag2.ai/docs/Home... | Time: 15.169699541991577s
+[COMPLETE] ● https://docs.ag2.ai/docs/Home... | Status: True | Total: 16.59s
+user_proxy (to WebSurfer):
+
+***** Response from calling tool (call_UvcLMFR8osM9AsyxVdmzgmBs) *****
+[
+    {
+        "index": 0,
+        "tags": [
+            "introduction"
+        ],
+        "content": [
+            "# AG2",
+            "The Open Source Agent OS"
+        ],
+        "error": false
+    },
+    {
+        "index": 1,
+        "tags": [
+            "getting_started"
+        ],
+        "content": [
+            "[Getting Started - 3 Minute](https://docs.ag2.ai/docs/</docs/user-guide/quick-start>)"
+        ],
+        "error": false
+    },
+    {
+        "index": 2,
+        "tags": [
+            "key_features"
+        ],
+        "content": [
+            "Key Features",
+            "**Multi-Agent Conversation Framework**",
+            "AG2 provides multi-agent conversation framework as a high-level abstraction. With this framework, one can conveniently build LLM workflows.",
+            "**Easily Build Diverse Applications**",
+            "AG2 offers a collection of working systems spanning a wide range of applications from various domains and complexities.",
+            "**Enhanced LLM Inference & Optimization**",
+            "AG2 supports enhanced LLM inference APIs, which can be used to improve inference performance and reduce cost."
+        ],
+        "error": false
+    },
+    {
+        "index": 3,
+        "tags": [
+            "explore_content"
+        ],
+        "content": [
+            "## [Quick StartStart building your AG2 application.](https://docs.ag2.ai/docs/</docs/user-guide/quick-start>)",
+            "## [ConceptsWork through the key concepts of AG2 including ConversableAgent, GroupChat, Swarm, and tools.](https://docs.ag2.ai/docs/</docs/user-guide/basic-concepts/installing-ag2>)",
+            "## [Advanced ConceptsAdvance to RAG, Code Execution, and more complex GroupChats and Swarms.](https://docs.ag2.ai/docs/</docs/user-guide/advanced-concepts>)",
+            "## [Use CasesTry out use case workflows including Customer Service, Travel Planning, and Game Design.](https://docs.ag2.ai/docs/</docs/use-cases/use-cases>)",
+            "## [Notebook ExamplesA collection of interactive notebooks across all AG2 topics.](https://docs.ag2.ai/docs/</docs/use-cases/notebooks/Notebooks>)",
+            "## [API ReferenceDelve into the AG2 API reference.](https://docs.ag2.ai/docs/</docs/api-reference>)",
+            "## [How to ContributeGet involved with AG2 by adding what you need and making the framework even better!](https://docs.ag2.ai/docs/</contributor-guide/contributing>)"
+        ],
+        "error": false
+    },
+    {
+        "index": 4,
+        "tags": [
+            "popular_resources"
+        ],
+        "content": [
+            "Popular resources",
+            "[Foundation Capital Interview with Dr. Chi Wang](https://docs.ag2.ai/docs/<https:/www.youtube.com/watch?v=RLwyXRVvlNk>)",
+            "[Learn AG2 on DeepLearningAI](https://docs.ag2.ai/docs/<https:/www.youtube.com/watch?v=TBNTH-fwGPE>)"
+        ],
+        "error": false
+    }
+]
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+WebSurfer (to user_proxy):
+
+Here is the extracted information from the AG2 documentation website:
+
+### Introduction
+- **AG2**: The Open Source Agent OS
+
+### Getting Started
+- [Quick Start - 3 Minute Guide](https://docs.ag2.ai/docs/user-guide/quick-start)
+
+### Key Features
+1. **Multi-Agent Conversation Framework**: AG2 provides a framework for multi-agent conversations, allowing users to build LLM workflows conveniently.
+2. **Easily Build Diverse Applications**: AG2 comes with a collection of systems that cater to a range of applications across various domains and complexities.
+3. **Enhanced LLM Inference & Optimization**: The platform supports enhanced LLM inference APIs, improving performance and reducing costs.
+
+### Explore Content
+- [Quick Start: Start building your AG2 application.](https://docs.ag2.ai/docs/user-guide/quick-start)
+- [Concepts: Learn about key concepts including ConversableAgent, GroupChat, Swarm, and tools.](https://docs.ag2.ai/docs/user-guide/basic-concepts/installing-ag2)
+- [Advanced Concepts: Explore topics such as RAG, Code Execution, and complex GroupChats and Swarms.](https://docs.ag2.ai/docs/user-guide/advanced-concepts)
+- [Use Cases: Experiment with workflows in areas like Customer Service, Travel Planning, and Game Design.](https://docs.ag2.ai/docs/use-cases/use-cases)
+- [Notebook Examples: Access a collection of interactive notebooks covering all AG2 topics.](https://docs.ag2.ai/docs/use-cases/notebooks/Notebooks)
+- [API Reference: Detailed exploration of the AG2 API reference.](https://docs.ag2.ai/docs/api-reference)
+- [How to Contribute: Guidelines for getting involved with AG2 and enhancing the framework.](https://docs.ag2.ai/docs/contributor-guide/contributing)
+
+### Popular Resources
+...
+
+This summary covers the main sections, key features, links to further exploration, and resources available in the documentation.
+
+--------------------------------------------------------------------------------
+```
+
+## Conclusion
+
+In this post, we've shown how to boost your agents with web browsing abilities using the [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent). By using tools like [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) and [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool), your agents can easily fetch real-time information from the web. This makes your agents more useful and flexible, whether you're getting data from specific pages or gathering info across different topics. With these tools, AG2 helps you create smarter agents that can navigate the web and bring back the details you need with minimal effort.

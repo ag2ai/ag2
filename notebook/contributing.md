@@ -25,13 +25,13 @@ The `tags` field is a list of tags that will be used to categorize the notebook.
 
 The following points are best practices for authoring notebooks to ensure consistency and ease of use for the website.
 
-- The Colab button will be automatically generated on the website for all notebooks where it is missing. Going forward, it is recommended to not include the Colab button in the notebook itself.
+- The Colab button will be automatically generated on the website for all notebooks where it is missing. Going forward, it is recommended not to include the Colab button in the notebook itself.
 - Ensure the header is a `h1` header, - `#`
 - Don't put anything between the yaml and the header
 
 ### Consistency for installation and LLM config
 
-You don't need to explain in depth how to install AutoGen. Unless there are specific instructions for the notebook just use the following markdown snippet:
+You don't need to explain in depth how to install AG2. Unless there are specific instructions for the notebook just use the following markdown snippet:
 
 ``````
 ````{=mdx}

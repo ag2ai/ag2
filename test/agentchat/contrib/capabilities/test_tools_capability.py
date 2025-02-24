@@ -26,7 +26,7 @@ def test_agent():
     return AssistantAgent(
         name="test_agent",
         llm_config={
-            "config_list": [{"model": "gpt-4O", "api_key": "sk-proj-ABC"}],
+            "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": "sk-proj-ABC"}],
         },
     )
 

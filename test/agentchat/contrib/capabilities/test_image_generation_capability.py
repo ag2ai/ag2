@@ -63,7 +63,7 @@ def api_key():
 def dalle_config() -> dict[str, Any]:
     config_list = openai_utils.config_list_from_models(model_list=["dall-e-3"], exclude="aoai")
     if not config_list:
-        config_list = [{"model": "dall-e-3", "api_key": api_key()}]
+        config_list = [{"api_type": "openai", "model": "dall-e-3", "api_key": api_key()}]
     return {"config_list": config_list, "timeout": 120, "cache_seed": None}
 
 

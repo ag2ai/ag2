@@ -4,8 +4,8 @@ from typing import Annotated
 
 from autogen import ConversableAgent, register_function
 
-llm_config = {"model": "gpt-4o-mini"}
-
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 # 1. Our tool, returns the day of the week for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:

@@ -10,13 +10,19 @@ import json
 import logging
 import os
 import tempfile
+from typing import Any
 from unittest import mock
 from unittest.mock import patch
 
 import pytest
 
 import autogen
-from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, filter_config, is_valid_api_key
+from autogen.oai.openai_utils import (
+    DEFAULT_AZURE_API_VERSION,
+    filter_config,
+    get_first_llm_config,
+    is_valid_api_key,
+)
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
@@ -96,7 +102,7 @@ FILTER_CONFIG_TEST = [
 ]
 
 
-def _compare_lists_of_dicts(list1: list[dict], list2: list[dict]) -> bool:
+def _compare_lists_of_dicts(list1: list[dict[str, Any]], list2: list[dict[str, Any]]) -> bool:
     dump1 = sorted(json.dumps(d, sort_keys=True) for d in list1)
     dump2 = sorted(json.dumps(d, sort_keys=True) for d in list2)
     return dump1 == dump2
@@ -391,6 +397,44 @@ def test_get_config_list():
     api_keys_with_empty = ["key1", "", "key3"]
     config_list_with_empty_key = autogen.get_config_list(api_keys_with_empty, base_urls, api_type, api_version)
     assert len(config_list_with_empty_key) == 2, "The config_list should exclude configurations with empty api_keys."
+
+
+@pytest.mark.parametrize(
+    ("llm_config", "expected"),
+    [
+        (
+            {"model": "gpt-4o-mini", "api_key": ""},
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+        (
+            {"config_list": [{"model": "gpt-4o-mini", "api_key": ""}]},
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+        (
+            {
+                "config_list": [
+                    {"model": "gpt-4o-mini", "api_key": ""},
+                    {"model": "gpt-4o", "api_key": ""},
+                ]
+            },
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+    ],
+)
+def test_get_first_llm_config(llm_config: dict[str, Any], expected: dict[str, Any]) -> None:
+    assert get_first_llm_config(llm_config) == expected
+
+
+@pytest.mark.parametrize(
+    ("llm_config", "error_message"),
+    [
+        ({}, "llm_config must be a valid config dictionary."),
+        ({"config_list": []}, "Config list must contain at least one config."),
+    ],
+)
+def test_get_first_llm_config_incorrect_config(llm_config: dict[str, Any], error_message: str) -> None:
+    with pytest.raises(ValueError, match=error_message):
+        get_first_llm_config(llm_config)
 
 
 def test_tags():

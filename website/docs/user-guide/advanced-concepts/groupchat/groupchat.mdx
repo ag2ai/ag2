@@ -1,0 +1,147 @@
+---
+title: GroupChat
+sidebarTitle: Overview
+---
+
+`GroupChat` has four built-in conversation patterns:
+
+| Method | Agent selection|
+| --- | --- |
+| `auto` <em>(default)</em> | Automatic, chosen by the `GroupChatManager` using an LLM |
+| `round_robin` | Sequentially in their added order |
+| `random` | Randomly |
+| `manual` | Selected by you at each turn |
+| *Callable* | Create your own flow |
+
+Coordinating the `GroupChat` is the `GroupChatManager`, an agent that provides a way to start and resume multi-agent chats.
+
+Let's continue our lesson planner example to include a lesson reviewer and a teacher agent.
+
+Before jumping into the code, here's a quick run down of what you need to do:
+- If using `auto` speaker selection, add specific descriptions to agents for GroupChatManager to use
+- Create a `GroupChat` and a `GroupChatManager`
+- Start the chat with the `GroupChatManager`
+
+
+<Tip>
+You can start any multi-agent chats using the `initiate_chat` method
+</Tip>
+
+import Example from "/snippets/python-examples/groupchat.mdx";
+
+<Example/>
+
+1. Separate to `system_message`, we add a `description` for our planner and reviewer agents and this is used exclusively for the purposes of determining the next agent by the `GroupChatManager` when using automatic speaker selection.
+
+2. The teacher's `system_message` is suitable as a description so, by not setting it, the `GroupChatManager` will use the `system_message` for the teacher when determining the next agent.
+
+3. The workflow is ended when the teacher's message contains the phrase "DONE!".
+
+4. Construct the `GroupChat` with our agents and selection method as automatic (which is the default).
+
+5. `GroupChat` requires a `GroupChatManager` to manage the chat and an LLM configuration is needed because they'll use an LLM to decide the next agent.
+
+6. Starting a chat with the `GroupChatManager` as the `recipient` kicks off the group chat.
+
+    ```console
+    teacher_agent (to group_manager):
+
+    Today, let's introduce our kids to the solar system.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: planner_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    planner_agent (to group_manager):
+
+    <title>Exploring the Solar System</title>
+    <learning_objectives>
+    1. Identify and name the planets in the solar system.
+    2. Describe key characteristics of each planet.
+    3. Understand the concept of orbit and how planets revolve around the sun.
+    4. Develop an appreciation for the scale and structure of our solar system.
+    </learning_objectives>
+    <script>
+    "Good morning, class! Today, we are going to embark on an exciting journey through our solar system. Have any of you ever looked up at the night sky and wondered what those bright dots are? Well, those dots are often stars, but some of them are planets in our own solar system!
+
+    To start our adventure, I want you to close your eyes and imagine standing on a giant spaceship, ready to zoom past the sun. Does anyone know what the sun is? (Pause for responses.) Right! The sun is a star at the center of our solar system.
+
+    Today, we are going to learn about the planets that travel around the sun - but not just their names, we're going to explore what makes each of them special! We will create a model of the solar system together, and by the end of the lesson, you will be able to name all the planets and tell me something interesting about each one.
+
+    So, are you ready to blast off and discover the wonders of space? Let's begin!"
+    </script>
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: reviewer_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    reviewer_agent (to group_manager):
+
+    **Review of the Lesson Plan: Exploring the Solar System**
+
+    1. **Alignment with Curriculum Standards**: Ensure that the lesson includes specific references to the fourth grade science standards for the solar system. This could include discussing gravity, the differences between inner and outer planets, and the role of the sun as a stable center of our solar system. Adding this information will support a deeper understanding of the topic and ensure compliance with state educational standards.
+
+    2. **Interactive Activities**: While creating a model of the solar system is a great hands-on activity, consider including additional interactive elements such as a group discussion or a game that reinforces the learning objectives. For instance, incorporating a "planet facts" game where students can share interesting facts about each planet would further engage the students and foster collaborative learning.
+
+    3. **Assessment of Learning**: It would be beneficial to include a formative assessment to gauge students' understanding at the end of the lesson. This could be a quick quiz, a group presentation about one planet, or a drawing activity where students depict their favorite planet and share one fact about it. This will help reinforce the learning objectives and provide students with an opportunity to demonstrate their knowledge.
+
+    Making these adjustments will enhance the educational experience and align it more closely with fourth-grade learning goals.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: planner_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    planner_agent (to group_manager):
+
+    **Revised Lesson Plan: Exploring the Solar System**
+
+    <title>Exploring the Solar System</title>
+    <learning_objectives>
+    1. Identify and name the planets in the solar system according to grade-level science standards.
+    2. Describe key characteristics of each planet, including differences between inner and outer planets.
+    3. Understand the concept of orbit and how gravity keeps planets revolving around the sun.
+    4. Develop an appreciation for the scale and structure of our solar system and the sun's role as the center.
+    </learning_objectives>
+    <script>
+    "Good morning, class! Today, we are going to embark on an exciting journey through our solar system. Have any of you ever looked up at the night sky and wondered what those bright dots are? Well, those dots are often stars, but some of them are planets in our own solar system!
+
+    To start our adventure, I want you to close your eyes and imagine standing on a giant spaceship, ready to zoom past the sun. Does anyone know what the sun is? (Pause for responses.) That's right! The sun is a star at the center of our solar system.
+
+    Now, today's goal is not only to learn the names of the planets but also to explore what makes each of them unique. We'll create a model of the solar system together, and through this process, we will also talk about the differences between the inner and outer planets.
+
+    As part of our exploration, we'll play a fun "planet facts" game. After learning about the planets, I will divide you into small groups, and each group will get a planet to research. You’ll find interesting facts about the planet, and we will come together to share what you discovered!
+
+    At the end of our lesson, I'll give you a quick quiz to see how much you've learned about the planets, or you can draw your favorite planet and share one cool fact you found with the class.
+
+    So, are you ready to blast off and discover the wonders of space? Let's begin!"
+    </script>
+
+    **Interactive Activities**:
+    - **Planet Facts Game**: After discussing each planet, students will work in groups to find and share a unique fact about their assigned planet.
+
+    **Assessment of Learning**:
+    - **Individual Reflection Drawing**: Students draw their favorite planet and write one fact about it.
+    - **Quick Quiz**: A short quiz at the end to assess understanding of the planets and their characteristics.
+
+    This revised plan incorporates additional interactive elements and assessments that align with educational standards and enhance the overall learning experience.
+
+    --------------------------------------------------------------------------------
+
+    Next speaker: teacher_agent
+
+
+    >>>>>>>> USING AUTO REPLY...
+    teacher_agent (to group_manager):
+
+    DONE!
+
+    --------------------------------------------------------------------------------
+    ```
+
+Now, let's look at how this is done in a Swarm.

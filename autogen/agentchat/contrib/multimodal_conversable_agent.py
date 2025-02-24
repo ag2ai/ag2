@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper
 from ...code_utils import content_str
@@ -30,7 +30,7 @@ class MultimodalConversableAgent(ConversableAgent):
         system_message: Optional[Union[str, list]] = DEFAULT_LMM_SYS_MSG,
         is_termination_msg: str = None,
         *args,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): agent name.
@@ -61,7 +61,7 @@ class MultimodalConversableAgent(ConversableAgent):
             MultimodalConversableAgent.a_generate_oai_reply,
         )
 
-    def update_system_message(self, system_message: Union[dict, list, str]):
+    def update_system_message(self, system_message: Union[dict[str, Any], list[str], str]):
         """Update the system message.
 
         Args:
@@ -71,7 +71,7 @@ class MultimodalConversableAgent(ConversableAgent):
         self._oai_system_message[0]["role"] = "system"
 
     @staticmethod
-    def _message_to_dict(message: Union[dict, list, str]) -> dict:
+    def _message_to_dict(message: Union[dict[str, Any], list[str], str]) -> dict:
         """Convert a message to a dictionary. This implementation
         handles the GPT-4V formatting for easier prompts.
 
@@ -100,10 +100,10 @@ class MultimodalConversableAgent(ConversableAgent):
 
     def generate_oai_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Generate a reply using autogen.oai."""
         client = self.client if config is None else config
         if client is None:

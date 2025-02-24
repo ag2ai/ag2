@@ -192,7 +192,7 @@ class BedrockClient:
         return base_params, additional_params
 
     def create(self, params) -> ChatCompletion:
-        """Run Amazon Bedrock inference and return AutoGen response"""
+        """Run Amazon Bedrock inference and return AG2 response"""
         # Set custom client class settings
         self.parse_custom_params(params)
 
@@ -271,11 +271,11 @@ class BedrockClient:
         }
 
 
-def extract_system_messages(messages: list[dict]) -> list:
+def extract_system_messages(messages: list[dict[str, Any]]) -> list:
     """Extract the system messages from the list of messages.
 
     Args:
-        messages (list[dict]): List of messages.
+        messages (list[dict[str, Any]]): List of messages.
 
     Returns:
         List[SystemMessage]: List of System messages.
@@ -296,7 +296,7 @@ def extract_system_messages(messages: list[dict]) -> list:
 
 def oai_messages_to_bedrock_messages(
     messages: list[dict[str, Any]], has_tools: bool, supports_system_prompts: bool
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Bedrock format.
     We correct for any specific role orders and types, etc.
     AWS Bedrock requires messages to alternate between user and assistant roles. This function ensures that the messages
@@ -428,7 +428,7 @@ def oai_messages_to_bedrock_messages(
 
 def parse_content_parts(
     message: dict[str, Any],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     content: str | list[dict[str, Any]] = message.get("content")
     if isinstance(content, str):
         return [
@@ -522,7 +522,7 @@ def format_tools(tools: list[dict[str, Any]]) -> dict[Literal["tools"], list[dic
 
 
 def format_tool_calls(content):
-    """Converts Converse API response tool calls to AutoGen format"""
+    """Converts Converse API response tool calls to AG2 format"""
     tool_calls = []
     for tool_request in content:
         if "toolUse" in tool_request:

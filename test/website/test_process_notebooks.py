@@ -12,7 +12,6 @@ from typing import Optional, Union
 import pytest
 
 from autogen._website.process_notebooks import (
-    NavigationGroup,
     add_authors_and_social_img_to_blog_and_user_stories,
     add_front_matter_to_metadata_mdx,
     cleanup_tmp_dirs,
@@ -26,6 +25,8 @@ from autogen._website.process_notebooks import (
     get_sorted_files,
     update_group_pages,
 )
+from autogen._website.utils import NavigationGroup
+from autogen.import_utils import skip_on_missing_imports
 
 
 class TestUpdateGroupPages:
@@ -40,12 +41,6 @@ class TestUpdateGroupPages:
                         "group": "Use cases",
                         "pages": [
                             "docs/use-cases/use-cases/customer-service",
-                        ],
-                    },
-                    {
-                        "group": "Reference Agents",
-                        "pages": [
-                            "docs/use-cases/reference-agents/index",
                         ],
                     },
                     {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
@@ -91,12 +86,6 @@ class TestUpdateGroupPages:
                         "group": "Use cases",
                         "pages": [
                             "docs/use-cases/use-cases/customer-service",
-                        ],
-                    },
-                    {
-                        "group": "Reference Agents",
-                        "pages": [
-                            "docs/use-cases/reference-agents/index",
                         ],
                     },
                     {"group": "Notebooks", "pages": ["docs/use-cases/updated-notebook/index"]},
@@ -485,8 +474,8 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         """Create temporary test directory with blog posts and authors file."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             website_dir = Path(tmp_dir)
-            blog_dir = website_dir / "_blogs"
-            blog_dir.mkdir()
+            blog_dir = website_dir / "docs" / "_blogs"
+            blog_dir.mkdir(parents=True)
 
             # Create first blog post
             post1_dir = blog_dir / "2023-04-21-LLM-tuning-math"
@@ -612,13 +601,14 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
 
             yield website_dir
 
+    @skip_on_missing_imports("yaml", "docs")
     def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
         add_authors_and_social_img_to_blog_and_user_stories(test_dir)
 
         # Get directory paths
         generated_blog_dir = test_dir / "docs" / "blog"
-        blog_dir = test_dir / "_blogs"
+        blog_dir = test_dir / "docs" / "_blogs"
 
         # Verify directory structure matches
         blog_files = set(p.relative_to(blog_dir) for p in blog_dir.glob("**/*.mdx"))
@@ -782,13 +772,13 @@ class TestEditLinks:
                     },
                     {"group": "Advanced Concepts", "pages": ["docs/user-guide/advanced-concepts/rag"]},
                     {"group": "Model Providers", "pages": ["docs/user-guide/models/openai"]},
+                    {"group": "Reference Agents", "pages": ["docs/user-guide/reference-agents/index"]},
                 ],
             },
             {
                 "group": "Use Cases",
                 "pages": [
                     {"group": "Use cases", "pages": ["docs/use-cases/use-cases/customer-service"]},
-                    {"group": "Reference Agents", "pages": ["docs/use-cases/reference-agents/index"]},
                     {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
                     "docs/use-cases/community-gallery/community-gallery",
                 ],
@@ -805,8 +795,8 @@ class TestEditLinks:
             "docs/user-guide/basic-concepts/llm-configuration",
             "docs/user-guide/advanced-concepts/rag",
             "docs/user-guide/models/openai",
+            "docs/user-guide/reference-agents/index",
             "docs/use-cases/use-cases/customer-service",
-            "docs/use-cases/reference-agents/index",
             "docs/use-cases/notebooks/notebooks",
             "docs/use-cases/community-gallery/community-gallery",
             "docs/contributor-guide/contributing",

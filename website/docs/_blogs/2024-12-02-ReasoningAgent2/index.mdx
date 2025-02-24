@@ -1,0 +1,266 @@
+---
+title: ReasoningAgent - Tree of Thoughts with Beam Search in AG2
+authors:
+  - Hk669
+  - BabyCNM
+  - skzhang1
+  - sonichi
+  - qingyunwu
+tags: [LLM, GPT, research]
+---
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/sS8Q5yMuEhs?si=MfWmzflK94S94FEx" title="ReasoningAgent" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+**TL;DR:**
+* We introduce **ReasoningAgent**, an AG2 agent that implements tree-of-thought reasoning with beam search to solve complex problems.
+* ReasoningAgent explores multiple reasoning paths in parallel and uses a grader agent to evaluate and select the most promising paths.
+* The exploration trajectory and thought tree can be saved locally for further analysis. These logs can even be saved as SFT dataset and preference dataset for DPO and PPO training.
+
+![Tree of Thoughts](img/reasoningagent_1.webp)
+
+## Introduction
+
+Large language models (LLMs) have shown impressive capabilities in various tasks, but they can still struggle with complex reasoning problems that require exploring multiple solution paths. To address this limitation, we introduce ReasoningAgent, an AG2 agent that implements tree-of-thought reasoning with beam search.
+
+The key idea behind ReasoningAgent is to:
+1. Generate multiple possible reasoning steps at each point
+2. Evaluate these steps using a grader agent
+3. Keep track of the most promising paths using beam search
+4. Continue exploring those paths while pruning less promising ones
+
+This approach allows the agent to systematically explore different reasoning strategies while managing computational resources efficiently.
+
+## How ReasoningAgent Works
+
+ReasoningAgent consists of three main components:
+
+1. **A Thinker Agent**: Generates possible next steps in the reasoning process
+2. **A Grader Agent**: Evaluates the quality of different reasoning paths
+3. **Beam Search**: Maintains a fixed number of most promising paths
+
+The process works as follows:
+
+1. The thinker agent generates multiple possible next steps from the current state
+2. The grader agent evaluates each path and assigns a score
+3. Beam search selects the top-k paths based on these scores
+4. The process repeats until a solution is found or maximum depth is reached
+
+![Beam Search](img/reasoningagent_2.webp)
+
+## O1-Style Reasoning with Beam Size 1
+
+When `beam_size=1`, ReasoningAgent behaves similarly to Chain-of-Thought (CoT) or O1-style reasoning, where only a single reasoning path is explored. This is useful for:
+
+1. **Simple Problems**: When the problem is straightforward and multiple solution paths are unnecessary
+2. **Resource Conservation**: When you want to minimize API calls and computational costs
+3. **Baseline Comparison**: To compare performance with and without beam search
+
+For example:
+```python
+# Create a reasoning agent with beam size 1 (O1-style)
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    llm_config={"config_list": config_list},
+    verbose=False,
+    reason_config={
+        "beam_size": 1,  # Using beam size 1 for O1-style reasoning
+        "max_depth": 3
+    }
+)
+```
+
+This configuration means:
+- Only one path is explored at each step
+- The grader still evaluates the path, but no comparison between paths is needed
+- The process is more streamlined but may miss alternative solutions
+
+Here's a simple example of using ReasoningAgent:
+
+```python
+import os
+from autogen import (
+    AssistantAgent,
+    UserProxyAgent,
+    ReasoningAgent,
+    ThinkNode,
+    visualize_tree
+)
+
+
+# Configure the model
+config_list = [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]
+
+# Create a reasoning agent with beam search
+reasoning_agent = ReasoningAgent(
+    name="reason_agent",
+    llm_config={"config_list": config_list},
+    verbose=False,
+    reason_config={
+        "beam_size": 1,  # Using beam size 1 for O1-style reasoning
+        "max_depth": 3
+    }
+)
+
+# Create a user proxy agent
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    code_execution_config={"use_docker": False},
+    max_consecutive_auto_reply=10,
+)
+
+question = "What is the expected maximum dice value if you can roll a 6-sided dice three times?"
+
+user_proxy.initiate_chat(reasoning_agent, message=question)
+```
+
+## Larger Beam Size for Complex Problems
+
+For more complex problems, we can increase the beam size to explore multiple reasoning paths in parallel:
+
+```python
+
+def last_meaningful_msg(sender, recipient, summary_args):
+    """
+    This can be modified based on your required summary method.
+    """
+    import warnings
+
+    if sender == recipient:
+        return "TERMINATE"
+
+    summary = ""
+    chat_messages = recipient.chat_messages[sender]
+
+    for msg in reversed(chat_messages):
+        try:
+            content = msg["content"]
+            if isinstance(content, str):
+                summary = content.replace("TERMINATE", "")
+            elif isinstance(content, list):
+                # Remove the `TERMINATE` word in the content list.
+                summary = "\n".join(
+                    x["text"].replace("TERMINATE", "") for x in content if isinstance(x, dict) and "text" in x
+                )
+            if summary.strip().rstrip():
+                return summary
+        except (IndexError, AttributeError) as e:
+            warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
+    return summary
+
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    llm_config={"config_list": config_list},
+    verbose=False,
+    reason_config={
+        "beam_size": 3,
+        "max_depth": 3
+    }
+)
+
+# Example complex problem
+task = "Design a mixed integer linear program for a coffee roasting supply chain"
+response = user_proxy.initiate_chat(
+    reason_agent,
+    message=task,
+    summary_method=last_meaningful_msg # can be default i.e., "last_msg"
+)
+```
+
+The agent will explore multiple approaches simultaneously:
+1. Formulating the objective function
+2. Defining decision variables
+3. Establishing constraints
+
+## Visualizing the Reasoning Process
+
+ReasoningAgent includes built-in visualization support using graphviz:
+
+```python
+# After running a query, visualize the reasoning tree
+visualize_tree(reason_agent._root)
+```
+
+This generates a tree diagram showing:
+- Different reasoning paths explored
+- Evaluation scores for each path
+- Number of visits to each node
+
+## Save the Thought Tree as Training dataset
+As you have played with the `ReasoningAgent`, you may find the LLM's API expense is really high.
+On the other hand, the thought tree is a good training dataset for SFT, DPO, and PPO.
+
+After asking a question to the `ReasoningAgent`, you only need to simply call the `to_dict` function to save the thought tree as a file.
+
+```python
+import json
+
+data = reasoning_agent._root.to_dict()
+with open("reasoning_tree.json", "w") as f:
+    json.dump(data, f)
+
+# recover the node
+new_node = ThinkNode.from_dict(json.load(open("reasoning_tree.json", "r")))
+```
+
+You can also use `pickle` directly to save the thought tree.
+
+```python
+import pickle
+pickle.dump(reasoning_agent._root, open("reasoning_tree.pkl", "wb"))
+
+# recover the node
+new_node = pickle.load(open("reasoning_tree.pkl", "rb"))
+```
+
+### Cleaning for SFT
+This step finds the best trajectory in the thought tree and converts it to a SFT dataset as a sequence of strings. The best trajectory is determined by following the highest-scoring path from root to leaf.
+
+```python
+from autogen.agentchat.contrib.reasoning_agent import extract_sft_dataset
+
+# Example usage
+sft_data = extract_sft_dataset(reason_agent._root)
+json.dump(sft_data, open("sft_data.json", "w"), indent=2)
+```
+
+### Cleaning for RLHF (DPO and PPO)
+This step generates preference pairs by comparing sibling nodes in the tree. For each parent node with multiple children, we create training pairs where the higher-scored response is marked as preferred over the lower-scored one.
+
+```python
+from autogen.agentchat.contrib.reasoning_agent import extract_rlhf_preference_dataset
+
+# Example usage
+rlhf_data = extract_rlhf_preference_dataset(reason_agent._root)
+
+print(f"There are {len(rlhf_data)} pairs of data\n\n")
+json.dump(rlhf_data, open("rlhf_data.json", "w"), indent=2)
+```
+
+The resulting datasets can be used to:
+- Fine-tune a base model using SFT with the best trajectories
+- Train reward models or directly optimize policies using the preference pairs
+- Analyze and improve the reasoning patterns of the agent
+
+## Key Benefits
+
+1. **Systematic Exploration**: Instead of committing to a single reasoning path, ReasoningAgent explores multiple possibilities systematically.
+
+2. **Quality Control**: The grader agent helps ensure that each step in the reasoning process is sound.
+
+3. **Transparency**: The visualization tools help understand how the agent arrives at its conclusions.
+
+
+## Conclusion
+
+ReasoningAgent demonstrates how combining tree-of-thought reasoning with beam search can enhance an LLM's problem-solving capabilities. By systematically exploring and evaluating multiple solution paths, it can tackle complex problems more effectively than traditional approaches.
+
+The implementation is flexible and can be customized for different types of problems by adjusting parameters like beam size and maximum depth. We encourage the community to experiment with ReasoningAgent and contribute to its development.
+
+## For Further Reading
+
+* [Documentation about ReasoningAgent](/docs/reference/agentchat/contrib/reasoning_agent)
+* [Example notebook](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_reasoning_agent)
+* [The Original research paper about Tree of Thoughts](https://arxiv.org/abs/2305.10601) from Google DeepMind and Princeton University.
+
+*Do you have interesting use cases for ReasoningAgent? Would you like to see more features or improvements? Please join our [Discord](https://discord.com/invite/pAbnFJrkgZ) server for discussion.*

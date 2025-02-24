@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 from types import TracebackType
+from typing import Optional
 
 from ...doc_utils import export_module
 
@@ -35,7 +36,7 @@ class LocalJupyterServer(JupyterConnectable):
     def __init__(
         self,
         ip: str = "127.0.0.1",
-        port: int | None = None,
+        port: Optional[int] = None,
         token: str | GenerateToken = GenerateToken(),
         log_file: str = "jupyter_gateway.log",
         log_level: str = "INFO",
@@ -70,12 +71,13 @@ class LocalJupyterServer(JupyterConnectable):
                 "Jupyter gateway server is not installed. Please install it with `pip install jupyter_kernel_gateway`."
             )
 
-        self.ip = ip
+        self.ip: str = ip
 
         if isinstance(token, LocalJupyterServer.GenerateToken):
             token = secrets.token_hex(32)
 
-        self.token = token
+        self.token: str = token
+        self._subprocess: subprocess.Popen[str]
         logging_config = {
             "handlers": {
                 "file": {
@@ -133,7 +135,7 @@ class LocalJupyterServer(JupyterConnectable):
                 #   Jupyter Kernel Gateway 3.0.0 is available at http://127.0.0.1:8890
                 if port is None:
                     port = int(line.split(":")[-1])
-                self.port = port
+                self.port: int = port
 
                 break
 
@@ -165,6 +167,6 @@ class LocalJupyterServer(JupyterConnectable):
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
         self.stop()

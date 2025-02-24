@@ -11,19 +11,19 @@ from autogen import (
     SwarmResult,
     UserProxyAgent,
     initiate_swarm_chat,
+    register_hand_off,
 )
 
-llm_config = {"model": "gpt-4o-mini", "cache_seed": None}
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 workflow_context = {
     # customer details
     "customer_name": None,
     "logged_in_username": None,
-
     # workflow status
     "logged_in": False,
     "requires_login": True,
-
     # order enquiry details
     "has_order_id": False,
     "order_id": None,
@@ -69,6 +69,7 @@ ORDER_DATABASE = {
         "shipping_address": "123 Main St, State College, PA 12345",
     },
 }
+
 
 # ORDER FUNCTIONS
 def check_order_id(order_id: str, context_variables: dict) -> SwarmResult:
@@ -125,6 +126,7 @@ def login_customer_by_username(username: str, context_variables: dict) -> SwarmR
             values=f"User {username} not found. Please ask for the correct username.",
             agent=authentication_agent,
         )
+
 
 # AGENTS
 
@@ -227,7 +229,8 @@ nested_chat_two = {
 chat_queue = [nested_chat_one, nested_chat_two]
 
 # HANDOFFS
-order_triage_agent.register_hand_off(
+register_hand_off(
+    order_triage_agent,
     [
         ON_CONDITION(
             target=authentication_agent,
@@ -240,10 +243,11 @@ order_triage_agent.register_hand_off(
             available="logged_in",
         ),
         AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
-    ]
+    ],
 )
 
-authentication_agent.register_hand_off(
+register_hand_off(
+    authentication_agent,
     [
         ON_CONDITION(
             target=order_triage_agent,
@@ -251,7 +255,7 @@ authentication_agent.register_hand_off(
             available="logged_in",
         ),
         AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
-    ]
+    ],
 )
 
 
@@ -259,7 +263,8 @@ def has_order_in_context(agent: SwarmAgent, messages: List[Dict[str, Any]]) -> b
     return agent.get_context("has_order_id")
 
 
-order_mgmt_agent.register_hand_off(
+register_hand_off(
+    order_mgmt_agent,
     [
         ON_CONDITION(
             target={
@@ -275,7 +280,7 @@ order_mgmt_agent.register_hand_off(
         ),
         ON_CONDITION(target=order_triage_agent, condition="The customer has no more enquiries about this order."),
         AFTER_WORK(AfterWorkOption.REVERT_TO_USER),
-    ]
+    ],
 )
 
 chat_history = initiate_swarm_chat(

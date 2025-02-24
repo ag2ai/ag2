@@ -159,7 +159,7 @@ def test_log_new_agent(db_connection):
 
     cur = db_connection.cursor()
     agent_name = "some_assistant"
-    config_list = [{"model": "gpt-4o", "api_key": "some_key"}]
+    config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "some_key"}]
 
     agent = AssistantAgent(agent_name, llm_config={"config_list": config_list})
     init_args = {"foo": "bar", "baz": {"other_key": "other_val"}, "a": None}
@@ -184,7 +184,9 @@ def test_log_oai_wrapper(db_connection):
 
     cur = db_connection.cursor()
 
-    llm_config = {"config_list": [{"model": "gpt-4o", "api_key": "some_key", "base_url": "some url"}]}
+    llm_config = {
+        "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": "some_key", "base_url": "some url"}]
+    }
     init_args = {"llm_config": llm_config, "base_config": {}}
     wrapper = OpenAIWrapper(**llm_config)
 

@@ -4,9 +4,11 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional
+from typing import Any, Optional
+
+__all__ = ["Document", "DocumentType"]
 
 
 class DocumentType(Enum):
@@ -23,5 +25,5 @@ class Document:
     """A wrapper of graph store query results."""
 
     doctype: DocumentType
-    data: Optional[object] = None
-    path_or_url: Optional[str] = ""
+    data: Optional[Any] = None
+    path_or_url: Optional[str] = field(default_factory=lambda: "")

@@ -4,7 +4,7 @@
 
 import os
 import warnings
-from typing import Optional
+from typing import Any, Optional
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document
@@ -23,7 +23,7 @@ with optional_import_block():
 class FalkorGraphQueryEngine:
     """This is a wrapper for FalkorDB KnowledgeGraph."""
 
-    def __init__(
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         name: str,
         host: str = "127.0.0.1",
@@ -57,10 +57,10 @@ class FalkorGraphQueryEngine:
         self.model = model or OpenAiGenerativeModel("gpt-4o")
         self.model_config = KnowledgeGraphModelConfig.with_model(model)
         self.ontology = ontology
-        self.knowledge_graph = None
+        self.knowledge_graph: Optional["KnowledgeGraph"] = None  # type: ignore[no-any-unimported]
         self.falkordb = FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
 
-    def connect_db(self):
+    def connect_db(self) -> None:
         """Connect to an existing knowledge graph."""
         if self.name in self.falkordb.list_graphs():
             try:
@@ -86,11 +86,11 @@ class FalkorGraphQueryEngine:
         else:
             raise ValueError(f"Knowledge graph '{self.name}' does not exist")
 
-    def init_db(self, input_doc: list[Document]):
+    def init_db(self, input_doc: list[Document]) -> None:
         """Build the knowledge graph with input documents."""
         sources = []
         for doc in input_doc:
-            if os.path.exists(doc.path_or_url):
+            if doc.path_or_url and os.path.exists(doc.path_or_url):
                 sources.append(Source(doc.path_or_url))
 
         if sources:
@@ -123,7 +123,7 @@ class FalkorGraphQueryEngine:
     def add_records(self, new_records: list[Document]) -> bool:
         raise NotImplementedError("This method is not supported by FalkorDB SDK yet.")
 
-    def query(self, question: str, n_results: int = 1, **kwargs) -> GraphStoreQueryResult:
+    def query(self, question: str, n_results: int = 1, **kwargs: Any) -> GraphStoreQueryResult:
         """Query the knowledge graph with a question and optional message history.
 
         Args:
@@ -153,17 +153,17 @@ class FalkorGraphQueryEngine:
             self.falkordb.select_graph(self.ontology_table_name).delete()
         return True
 
-    def __get_ontology_storage_graph(self) -> "Graph":
+    def __get_ontology_storage_graph(self) -> "Graph":  # type: ignore[no-any-unimported]
         return self.falkordb.select_graph(self.ontology_table_name)
 
-    def _save_ontology_to_db(self, ontology: "Ontology"):
+    def _save_ontology_to_db(self, ontology: "Ontology") -> None:  # type: ignore[no-any-unimported]
         """Save graph ontology to a separate table with {graph_name}_ontology"""
         if self.ontology_table_name in self.falkordb.list_graphs():
             raise ValueError(f"Knowledge graph {self.name} is already created.")
         graph = self.__get_ontology_storage_graph()
         ontology.save_to_graph(graph)
 
-    def _load_ontology_from_db(self) -> "Ontology":
+    def _load_ontology_from_db(self) -> "Ontology":  # type: ignore[no-any-unimported]
         if self.ontology_table_name not in self.falkordb.list_graphs():
             raise ValueError(f"Knowledge graph {self.name} has not been created.")
         graph = self.__get_ontology_storage_graph()

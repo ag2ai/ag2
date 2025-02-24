@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import warnings
-from typing import Callable, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 from ...import_utils import optional_import_block, require_optional_import
 from ...retrieve_utils import TEXT_FORMATS, get_files_from_dir, split_files_to_chunks
@@ -30,9 +30,9 @@ class QdrantRetrieveUserProxyAgent(RetrieveUserProxyAgent):
         self,
         name="RetrieveChatAgent",  # default set to RetrieveChatAgent
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
-        retrieve_config: Optional[dict] = None,  # config for the retrieve agent
-        **kwargs,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
+        retrieve_config: Optional[dict[str, Any]] = None,  # config for the retrieve agent
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent.
@@ -175,7 +175,7 @@ def create_qdrant_from_dir(
     quantization_config: Optional["models.QuantizationConfig"] = None,
     hnsw_config: Optional["models.HnswConfigDiff"] = None,
     payload_indexing: bool = False,
-    qdrant_client_options: Optional[dict] = {},
+    qdrant_client_options: Optional[dict[str, Any]] = {},
 ):
     """Create a Qdrant collection from all the files in a given directory, the directory can also be a single file or a
       url to a single file.
@@ -271,7 +271,7 @@ def query_qdrant(
     collection_name: str = "all-my-documents",
     search_string: str = "",
     embedding_model: str = "BAAI/bge-small-en-v1.5",
-    qdrant_client_options: Optional[dict] = {},
+    qdrant_client_options: Optional[dict[str, Any]] = {},
 ) -> list[list["QueryResponse"]]:
     """Perform a similarity search with filters on a Qdrant collection
 

@@ -1,0 +1,84 @@
+---
+search:
+  exclude: true
+---
+- Home
+    - [Home](docs/home/home.md)
+    - [Quick Start](docs/home/quick-start.md)
+- User Guide
+    - Basic Concepts
+        - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
+        - LLM Configuration
+            - [LLM Configuration](docs/user-guide/basic-concepts/llm-configuration/llm-configuration.md)
+            - [Structured Outputs](docs/user-guide/basic-concepts/llm-configuration/structured-outputs.md)
+        - [Conversable Agent](docs/user-guide/basic-concepts/conversable-agent.md)
+        - [Human In The Loop](docs/user-guide/basic-concepts/human-in-the-loop.md)
+        - Orchestrating Agents
+            - [Orchestrations](docs/user-guide/basic-concepts/orchestration/orchestrations.md)
+            - [Sequential Chat](docs/user-guide/basic-concepts/orchestration/sequential-chat.md)
+            - [Nested Chat](docs/user-guide/basic-concepts/orchestration/nested-chat.md)
+            - [Swarm](docs/user-guide/basic-concepts/orchestration/swarm.md)
+            - [Ending A Chat](docs/user-guide/basic-concepts/orchestration/ending-a-chat.md)
+        - [Tools](docs/user-guide/basic-concepts/tools.md)
+    - Advanced Concepts
+        - [RAG](docs/user-guide/advanced-concepts/rag.md)
+        - GroupChat
+            - [Groupchat](docs/user-guide/advanced-concepts/groupchat/groupchat.md)
+            - [Custom Group Chat](docs/user-guide/advanced-concepts/groupchat/custom-group-chat.md)
+            - [Resuming Group Chat](docs/user-guide/advanced-concepts/groupchat/resuming-group-chat.md)
+        - Swarm
+            - [Deep Dive](docs/user-guide/advanced-concepts/swarm/deep-dive.md)
+            - [Nested Chat](docs/user-guide/advanced-concepts/swarm/nested-chat.md)
+            - [Concept Code](docs/user-guide/advanced-concepts/swarm/concept-code.md)
+            - [Use Case](docs/user-guide/advanced-concepts/swarm/use-case.md)
+        - [Code Execution](docs/user-guide/advanced-concepts/code-execution.md)
+        - [Tools With Secrets](docs/user-guide/advanced-concepts/tools-with-secrets.md)
+        - [Conversation Patterns Deep Dive](docs/user-guide/advanced-concepts/conversation-patterns-deep-dive.md)
+        - [LLM Configuration Deep Dive](docs/user-guide/advanced-concepts/llm-configuration-deep-dive.md)
+    - Model Providers
+        - [Openai](docs/user-guide/models/openai.md)
+        - [Amazon Bedrock](docs/user-guide/models/amazon-bedrock.md)
+        - [Anthropic](docs/user-guide/models/anthropic.md)
+        - [Cerebras](docs/user-guide/models/cerebras.md)
+        - [Cohere](docs/user-guide/models/cohere.md)
+        - [Deepseek V3](docs/user-guide/models/deepseek-v3.md)
+        - [Google Gemini](docs/user-guide/models/google-gemini.md)
+        - [Google Vertexai](docs/user-guide/models/google-vertexai.md)
+        - [Groq](docs/user-guide/models/groq.md)
+        - [Litellm With Watsonx](docs/user-guide/models/litellm-with-watsonx.md)
+        - [Lm Studio](docs/user-guide/models/lm-studio.md)
+        - [Mistralai](docs/user-guide/models/mistralai.md)
+        - [Ollama](docs/user-guide/models/ollama.md)
+        - [Togetherai](docs/user-guide/models/togetherai.md)
+        - [Vllm](docs/user-guide/models/vLLM.md)
+    - Reference Agents
+        - [Index](docs/user-guide/reference-agents/index.md)
+        - [Captainagent](docs/user-guide/reference-agents/captainagent.md)
+        - [Communication Agents](docs/user-guide/reference-agents/communication-agents.md)
+        - [Docagent](docs/user-guide/reference-agents/docagent.md)
+        - [Reasoningagent](docs/user-guide/reference-agents/reasoningagent.md)
+        - [Websurferagent](docs/user-guide/reference-agents/websurferagent.md)
+- Contributor Guide
+    - [Contributing](docs/contributor-guide/contributing.md)
+    - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
+    - [Documentation](docs/contributor-guide/documentation.md)
+    - [File Bug Report](docs/contributor-guide/file-bug-report.md)
+    - [Maintainer](docs/contributor-guide/maintainer.md)
+    - [Pre Commit](docs/contributor-guide/pre-commit.md)
+    - [Tests](docs/contributor-guide/tests.md)
+    - [Research](docs/contributor-guide/Research.md)
+- FAQs
+    - [Faq](docs/faq/FAQ.md)
+- Ecosystem
+    - [Agentops](docs/ecosystem/agentops.md)
+    - [Azure_Cosmos_Db](docs/ecosystem/azure_cosmos_db.md)
+    - [Composio](docs/ecosystem/composio.md)
+    - [Databricks](docs/ecosystem/databricks.md)
+    - [Llamaindex](docs/ecosystem/llamaindex.md)
+    - [Mem0](docs/ecosystem/mem0.md)
+    - [Memgpt](docs/ecosystem/memgpt.md)
+    - [Microsoft Fabric](docs/ecosystem/microsoft-fabric.md)
+    - [Ollama](docs/ecosystem/ollama.md)
+    - [Pgvector](docs/ecosystem/pgvector.md)
+    - [Portkey](docs/ecosystem/portkey.md)
+    - [Promptflow](docs/ecosystem/promptflow.md)

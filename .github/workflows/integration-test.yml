@@ -1,0 +1,128 @@
+# This workflow will install Python dependencies and run tests with Python 3.11
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Integration tests
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+  # pull_request_target:
+  #   branches: ["main"]
+  #   paths:
+  #     - "autogen/**"
+  #     - "test/**"
+  #     - ".github/workflows/integration-test.yml"
+  #     - "pyproject.toml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    environment: openai1
+    env:
+      AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Add more optional dependencies if needed
+        optional-dependencies:
+          - "browser-use"
+          - "crawl4ai"
+          - "interop"
+        # Add more LLMs if needed
+        llm: ["openai", "gemini", "anthropic", "deepseek"]
+        # Run tests only for py versions 3.11
+        python-version: ["3.11"]
+        os: [ubuntu-latest]
+    steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
+      # checkout to pr branch
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install packages and dependencies
+        run: |
+          uv pip install --system -e .[test,${{ matrix.optional-dependencies }},${{ matrix.llm }}]
+      - name: Install playwright
+        if: matrix.optional-dependencies == 'browser-use' || matrix.optional-dependencies == 'crawl4ai'
+        run: |
+          playwright install
+      - name: Test with pytest using optional dependency marks
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+        run: |
+          bash scripts/integration-test.sh -d "${{ matrix.optional-dependencies }}" -l "${{ matrix.llm }}"
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
+      - name: Upload coverage to Codecov
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: integration, ${{ matrix.optional-dependencies }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  integration-test-check:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - name: Get Date
+        shell: bash
+        run: |
+          echo "date=$(date +'%m/%d/%Y %H:%M:%S')" >> "$GITHUB_ENV"
+
+      - name: Run Type is ${{ github.event_name }}
+        if: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'}}
+        shell: bash
+        run: |
+          echo "run_type=${{ github.event_name }}" >> "$GITHUB_ENV"
+
+      - name: Fail workflow if build failed
+        id: check_build_failed
+        if: contains(join(needs.*.result, ','), 'failure')
+        uses: actions/github-script@v7
+        with:
+          script: core.setFailed('Build Failed!')
+
+      - name: Fail workflow if build cancelled
+        id: check_build_cancelled
+        if: contains(join(needs.*.result, ','), 'cancelled')
+        uses: actions/github-script@v7
+        with:
+          script: core.setFailed('Build Cancelled!')

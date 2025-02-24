@@ -3,20 +3,19 @@ title: RAG
 ---
 
 <Tip>
-Want an agent that can do this for you? We'll soon have a DocumentAgent available to take the hassle out of RAG.
+Want an agent that can do this for you? We'll soon have a DocAgent available to take the hassle out of RAG.
 </Tip>
 
 Retrieval-Augmented Generation is a technique to improve LLM-generated responses by giving it additional knowledge. This typically involves gathering the information and injecting it into an agent's system message for use by their LLM.
 
 There are a number of ways to incorporate RAG into your AG2 workflow and agents:
-- Use an AG2 reference agent, DocumentAgent (Coming Soon!)
+- Use an AG2 reference agent, DocAgent
 - Add RAG capabilities to an agent
-- Add RAG tools to an agent
 - Incorporate context into an agent's system message (manually and automatically)
 
-## 1. DocumentAgent
+## 1. DocAgent
 
-Coming soon is our DocumentAgent, built specifically for RAG, and it will take the hassle out of loading, parsing, storing, and querying documents/web pages.
+Use AG2's reference agent, [DocAgent](/docs/user-guide/reference-agents/docagent), built specifically for RAG. It will take the hassle out of loading, parsing, storing, and querying documents/web pages.
 
 ## 2. Add RAG capabilities to an agent
 
@@ -42,11 +41,7 @@ See the [Trip planning with a FalkorDB GraphRAG agent using a Swarm notebook](/d
 If you need a capability for a different GraphRAG database, consider building a capability similar to these using our [GraphRagCapability](/docs/api-reference/autogen/agentchat/contrib/graph_rag/graph_rag_capability/) base class.
 </Tip>
 
-## 3. Add RAG tools to an agent
-
-Together with our upcoming DocumentAgent, will be the ability to add RAG tools directly to your agents. Watch this space!
-
-## 4. Incorporating context into an Agent's system message
+## 3. Incorporating context into an Agent's system message
 
 ConversableAgent has a number of hooks that get run before an agent replies. You can utilise the `update_agent_state` hook to run a function that updates your agent's system message with some context before it goes to the LLM.
 
@@ -59,7 +54,7 @@ We start with our imports, LLM configuration, and the system message template, w
 import os
 from autogen import ConversableAgent, UserProxyAgent
 
-config_list = {"model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
+config_list = {"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
 
 base_system_message = "You are a helpful agent, answering questions about the files in a directory:\n{filelisting}"
 ```
@@ -67,7 +62,7 @@ base_system_message = "You are a helpful agent, answering questions about the fi
 Here's the function we'll attach to the hook, it gets all files in the current directory and updates the associated agent's system message accordingly.
 
 ```python
-def give_agent_file_listing(agent: ConversableAgent, messages: list[dict]) -> None:
+def give_agent_file_listing(agent: ConversableAgent, messages: list[dict[str, Any]]) -> None:
     # Get the list of files in the current directory
     files = os.listdir()
 

@@ -1,0 +1,7 @@
+people:
+  - name: "Davor Runje"
+    username: davorrunje
+    github: https://github.com/davorrunje
+    avatar: https://avatars.githubusercontent.com/u/24715380?v=4
+    include:
+      - team

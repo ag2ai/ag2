@@ -28,6 +28,11 @@ from autogen.agentchat.contrib.swarm_agent import (
 from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
+from autogen.tools.tool import Tool
+
+from ...conftest import (
+    Credentials,
+)
 
 TEST_MESSAGES = [{"role": "user", "content": "Initial message"}]
 
@@ -536,7 +541,7 @@ def test_update_system_message():
     message_container = MessageContainer()
 
     # 1. Test with a callable function
-    def custom_update_function(agent: ConversableAgent, messages: list[dict]) -> str:
+    def custom_update_function(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
         return f"System message with {agent.get_context('test_var')} and {len(messages)} messages"
 
     # 2. Test with a string template
@@ -587,7 +592,7 @@ def test_update_system_message():
     assert message_container.captured_sys_message == "Template message with test_value"
 
     # Test multiple update functions
-    def another_update_function(context_variables: dict[str, Any], messages: list[dict]) -> str:
+    def another_update_function(context_variables: dict[str, Any], messages: list[dict[str, Any]]) -> str:
         return "Another update"
 
     agent6 = ConversableAgent(
@@ -1203,6 +1208,29 @@ def test_update_on_condition_str():
     assert last_speaker is not None
 
     assert condition_container.captured_condition == "Transfer based on condition2"
+
+
+def test_agent_tool_registration_for_execution(mock_credentials: Credentials):
+    """Tests that an agent's tools property is used for registering tools for execution with the internal tool executor."""
+
+    agent = ConversableAgent(
+        name="my_agent",
+        llm_config=mock_credentials.llm_config,
+    )
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    # Create the mock tool and add it to the agent's _tools property
+    mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
+    agent.register_for_llm()(mock_tool)
+
+    # Prepare swarm agents, this is where the tool will be registered for execution
+    # with the internal tool executor agent
+    tool_execution, _ = _prepare_swarm_agents(agent, [agent])
+
+    # Check that the tool is register for execution with the tool_execution agent
+    assert "test_tool" in tool_execution._function_map
 
 
 if __name__ == "__main__":

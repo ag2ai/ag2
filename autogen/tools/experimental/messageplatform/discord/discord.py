@@ -212,7 +212,7 @@ class DiscordRetrieveTool(Tool):
 
                         # Fetch batch of messages
                         message_batch = []
-                        async for message in channel.history(**fetch_options):
+                        async for message in channel.history(**fetch_options):  # type: ignore[arg-type]
                             message_batch.append(message)
                             messages_retrieved += 1
 
