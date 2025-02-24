@@ -118,7 +118,7 @@ retrievechat-couchbase = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.6.0",
+    "graphrag_sdk==0.6.1",
     "falkordb>=1.0.10",
 ]
 
@@ -142,9 +142,9 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.17",
+    "llama-index==0.12.19",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-core==0.12.18",
+    "llama-index-core==0.12.19",
     "llama-index-readers-web==0.3.5",
 ]
 
@@ -187,7 +187,7 @@ together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
-websockets = ["websockets>=14.0,<15"]
+websockets = ["websockets>=14.0,<16"]
 long-context = ["llmlingua<0.3"]
 anthropic = ["anthropic[vertex]>=0.23.1"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
@@ -197,7 +197,7 @@ cohere = ["cohere>=5.5.8"]
 ollama = ["ollama>=0.4.5", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 
-commsagent-discord = ["discord.py>=2.4.0,<2.5"]
+commsagent-discord = ["discord.py>=2.4.0,<2.6"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
 commsagent-telegram = ["telethon>=1.38.1, <2"]
 
@@ -231,7 +231,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.6",
+    "ruff==0.9.7",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -241,7 +241,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.6.0",
+    "uv==0.6.2",
 ]
 
 
