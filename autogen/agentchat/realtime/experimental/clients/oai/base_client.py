@@ -11,6 +11,7 @@ from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
 from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
 
 from ......doc_utils import export_module
+from ......import_utils import require_optional_import
 from ...realtime_events import RealtimeEvent
 from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
@@ -24,6 +25,7 @@ global_logger = getLogger(__name__)
 
 
 @register_realtime_client()
+@require_optional_import("openai", "openai", except_for="get_factory")
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class OpenAIRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API."""
