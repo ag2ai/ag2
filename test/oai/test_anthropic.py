@@ -5,10 +5,11 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
-
+import os
 
 import pytest
 
+from autogen import ConversableAgent, register_function
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.oai.anthropic import AnthropicClient, _calculate_cost
 
@@ -16,7 +17,7 @@ with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
 
-from typing import List
+from typing import List, TypedDict
 
 from pydantic import BaseModel
 from typing_extensions import Literal
@@ -265,3 +266,86 @@ def test_extract_json_response(anthropic_client):
 
     with pytest.raises(ValueError, match="No valid JSON found in response for Structured Output."):
         anthropic_client._extract_json_response(no_json_response)
+
+
+@skip_on_missing_imports(["anthropic"], "anthropic")
+def test_convert_tools_to_functions(anthropic_client):
+
+    config_list = {
+        "model": "claude-3-5-sonnet-20241022",
+        "api_key": os.environ["ANTHROPIC_API_KEY"],
+        "api_type": "anthropic",
+    }
+
+    expected_tools = \
+    [
+        {
+            "function": {
+                "description": "What is the temperature in NYC?",
+                "name": "weather_tool",
+                "parameters": {
+                    "properties": {
+                        "city_list": {
+                            "$defs": {
+                                "city_list_class": {
+                                    "properties": {
+                                        "item1": {
+                                            "title": "Item1",
+                                            "type": "string"
+                                        },
+                                        "item2": {
+                                            "title": "Item2",
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "item1",
+                                        "item2"
+                                    ],
+                                    "title": "city_list_class",
+                                    "type": "object"
+                                }
+                            },
+                            "description": "city_list",
+                            "items": {
+                                "$ref": "#/$defs/city_list_class"
+                            },
+                            "type": "array"
+                        },
+                        "city_name": {
+                            "description": "city_name",
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "city_name",
+                        "city_list"
+                    ],
+                    "type": "object"
+                }
+            },
+            "type": "function"
+        }
+    ]
+
+    class city_list_class(TypedDict):
+        item1: str
+        item2: str
+
+    def weather_tool(city_name: str, city_list: List[city_list_class]) -> str:
+        return "29"
+
+    agent = ConversableAgent(
+        name="weather_agent",
+        system_message="You get the current temperature for a given city.",
+        llm_config=config_list,
+    )
+
+    register_function(
+        weather_tool,
+        caller=agent,
+        executor=agent,
+        description="What is the temperature in NYC?",
+    )
+
+    assert agent.llm_config["tools"] == expected_tools
