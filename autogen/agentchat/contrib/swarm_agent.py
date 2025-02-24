@@ -1,11 +1,13 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+
 import copy
 import json
 import warnings
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 from inspect import signature
 from types import MethodType
 from typing import Any, Callable, Optional, Union
@@ -19,6 +21,20 @@ from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
+
+__all__ = [
+    "AFTER_WORK",
+    "ON_CONDITION",
+    "AfterWork",
+    "AfterWorkOption",
+    "ContextStr",
+    "OnCondition",
+    "SwarmAgent",
+    "a_initiate_swarm_chat",
+    "create_swarm_transition",
+    "initiate_swarm_chat",
+    "register_hand_off",
+]
 
 
 @dataclass
@@ -73,11 +89,11 @@ class AfterWork:  # noqa: N801
     Args:
         agent: The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
-                def my_after_work_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def my_after_work_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
         next_agent_selection_msg: Optional[Union[str, Callable[..., Any]]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
-                def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
     """
 
     agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
@@ -125,11 +141,11 @@ class OnCondition:  # noqa: N801
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
-                def my_condition_string(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+                def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
         available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             The Callable signature is:
-                def my_available_func(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> bool
+                def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
 
     """
 
@@ -199,6 +215,7 @@ def _establish_swarm_agent(agent: ConversableAgent):
 def _prepare_swarm_agents(
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
+    exclude_transit_message: bool = True,
 ) -> tuple[ConversableAgent, list[ConversableAgent]]:
     """Validates agents, create the tool executor, configure nested chats.
 
@@ -243,6 +260,17 @@ def _prepare_swarm_agents(
         # Register tools from the tools property
         for tool in agent.tools:
             tool_execution.register_for_execution()(tool)
+
+    if exclude_transit_message:
+        # get all transit functions names
+        to_be_removed = []
+        for agent in agents + nested_chat_agents:
+            if hasattr(agent, "_swarm_conditional_functions"):
+                to_be_removed += list(agent._swarm_conditional_functions.keys())
+
+        # register hook to remove transit messages for swarm agents
+        for agent in agents + nested_chat_agents:
+            agent.register_hook("process_all_messages_before_reply", make_remove_function(to_be_removed))
 
     return tool_execution, nested_chat_agents
 
@@ -373,7 +401,7 @@ def _prepare_groupchat_auto_speaker(
             if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
             if a ContextStr, it will substitute the agentlist first and then the context variables
             if a Callable, it will not substitute the agentlist or context variables, signature:
-                def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
     """
 
     def substitute_agentlist(template: str) -> str:
@@ -582,6 +610,56 @@ def _create_swarm_manager(
     return manager
 
 
+def make_remove_function(tool_msgs_to_remove: list[str]) -> Callable[[list[dict[str, Any]]], list[dict[str, Any]]]:
+    """Create a function to remove messages with tool calls from the messages list.
+
+    The returned function can be registered as a hook to "process_all_messages_before_reply"" to remove messages with tool calls.
+    """
+
+    def remove_messages(messages: list[dict[str, Any]], tool_msgs_to_remove: list[str]) -> list[dict[str, Any]]:
+        copied = copy.deepcopy(messages)
+        new_messages = []
+        removed_tool_ids = []
+        for message in copied:
+            # remove tool calls
+            if message.get("tool_calls") is not None:
+                filtered_tool_calls = []
+                for tool_call in message["tool_calls"]:
+                    if tool_call.get("function") is not None and tool_call["function"]["name"] in tool_msgs_to_remove:
+                        # remove
+                        removed_tool_ids.append(tool_call["id"])
+                    else:
+                        filtered_tool_calls.append(tool_call)
+                if len(filtered_tool_calls) > 0:
+                    message["tool_calls"] = filtered_tool_calls
+                else:
+                    del message["tool_calls"]
+                    if (
+                        message.get("content") is None
+                        or message.get("content") == ""
+                        or message.get("content") == "None"
+                    ):
+                        continue  # if no tool call and no content, skip this message
+                    # else: keep the message with tool_calls removed
+            # remove corresponding tool responses
+            elif message.get("tool_responses") is not None:
+                filtered_tool_responses = []
+                for tool_response in message["tool_responses"]:
+                    if tool_response["tool_call_id"] not in removed_tool_ids:
+                        filtered_tool_responses.append(tool_response)
+
+                if len(filtered_tool_responses) > 0:
+                    message["tool_responses"] = filtered_tool_responses
+                else:
+                    continue
+
+            new_messages.append(message)
+
+        return new_messages
+
+    return partial(remove_messages, tool_msgs_to_remove=tool_msgs_to_remove)
+
+
 @export_module("autogen")
 def initiate_swarm_chat(
     initial_agent: ConversableAgent,
@@ -592,13 +670,14 @@ def initiate_swarm_chat(
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
     after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat
 
     Args:
         initial_agent: The first receiving agent of the conversation.
         messages: Initial message(s).
-        agents: List of swarm agents.
+        agents: list of swarm agents.
         user_agent: Optional user proxy agent for falling back to.
         swarm_manager_args: Optional group chat manager arguments used to establish the swarm's groupchat manager, required when AfterWorkOption.SWARM_MANAGER is used.
         max_rounds: Maximum number of conversation rounds.
@@ -614,12 +693,14 @@ def initiate_swarm_chat(
                 ```python
                 def custom_afterwork_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
+        exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
+            Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
         Dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents)
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, nested_chat_agents
@@ -674,6 +755,7 @@ async def a_initiate_swarm_chat(
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
     after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat asynchronously
 
@@ -694,14 +776,16 @@ async def a_initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
+        exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
+            Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
         Dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents)
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, nested_chat_agents
