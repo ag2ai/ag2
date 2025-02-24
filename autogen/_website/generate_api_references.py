@@ -369,7 +369,8 @@ def main() -> None:
     if not website_build_dir.exists():
         website_build_dir.mkdir()
 
-    copy_only_git_tracked_and_untracked_files(website_dir, website_build_dir)
+    ignore_dir = "mkdocs"
+    copy_only_git_tracked_and_untracked_files(website_dir, website_build_dir, ignore_dir)
 
     if args.api_dir.exists():
         # Force delete the directory and its contents

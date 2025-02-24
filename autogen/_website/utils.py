@@ -5,7 +5,7 @@
 import shutil
 import subprocess
 from pathlib import Path
-from typing import TypedDict, Union
+from typing import Optional, TypedDict, Union
 
 
 class NavigationGroup(TypedDict):
@@ -33,7 +33,15 @@ def copy_files(src_dir: Path, dst_dir: Path, files_to_copy: list[Path]) -> None:
             shutil.copy2(file, dst)
 
 
-def copy_only_git_tracked_and_untracked_files(src_dir: Path, dst_dir: Path) -> None:
+def copy_only_git_tracked_and_untracked_files(src_dir: Path, dst_dir: Path, ignore_dir: Optional[str] = None) -> None:
     """Copy only the files that are tracked by git or newly added from src_dir to dst_dir."""
     tracked_and_new_files = get_git_tracked_and_untracked_files_in_directory(src_dir)
+
+    if ignore_dir:
+        ignore_dir_rel_path = src_dir / ignore_dir
+
+        tracked_and_new_files = {
+            file for file in tracked_and_new_files if not any(parent == ignore_dir_rel_path for parent in file.parents)
+        }
+
     copy_files(src_dir, dst_dir, tracked_and_new_files)
