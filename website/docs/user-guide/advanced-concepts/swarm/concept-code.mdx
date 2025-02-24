@@ -72,7 +72,7 @@ agent_2 = AssistantAgent(
 
 agent_3 = AssistantAgent(
     name="Agent_3",
-    system_message="You are Agent 3, tell a joke",
+    system_message="You are Agent 3, please transfer to Agent 4",
     llm_config=llm_config,
 )
 
@@ -93,15 +93,12 @@ agent_5 = AssistantAgent(
 
 # 5. This is equivalent to writing a transfer function
 register_hand_off(agent=agent_3,hand_to=[OnCondition(agent_4, "Transfer to Agent 4")])
+print("Agent 3's registered hand-offs:")
+print(agent_3._swarm_conditional_functions)
+
+# 6. When agent 4 replies without calling any functions, the `AfterWork` will be in effect, in this case, we transfer to agent 5
 register_hand_off(agent=agent_4,hand_to=[AfterWork(agent_5)])
 
-print("Agent 1 function schema:")
-for func_schema in agent_1.llm_config["tools"]:
-    print(func_schema)
-
-print("Agent 3 function schema:")
-for func_schema in agent_3.llm_config["tools"]:
-    print(func_schema)
 
 context_variables = {"1": False, "2": False, "3": False}
 chat_result, context_variables, last_agent = initiate_swarm_chat(
