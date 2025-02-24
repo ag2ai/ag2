@@ -14,15 +14,15 @@ from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
-from autogen.import_utils import skip_on_missing_imports
 
+# from autogen.import_utils import skip_on_missing_imports
 from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)
 
 
-@skip_on_missing_imports("websockets", "websockets")
+# @skip_on_missing_imports("websockets", "websockets")
 class TestE2E:
     async def _test_e2e(self, credentials_llm: Credentials, credentials_openai: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
