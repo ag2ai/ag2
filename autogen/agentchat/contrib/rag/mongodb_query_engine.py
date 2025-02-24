@@ -13,7 +13,6 @@ from autogen.import_utils import optional_import_block, require_optional_import
 with optional_import_block():
     from langchain.base_language import BaseLanguageModel
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
-    from llama_index.core.llms.llm import LLM
     from llama_index.vector_stores.mongodb import MongoDBAtlasVectorSearch
     from pymongo import MongoClient
 
@@ -221,7 +220,7 @@ class MongoDBQueryEngine:
         except Exception as e:
             logger.error("Error inserting documents into the index: %s", e)
 
-    def query(self, question: str, llm: Union[str, LLM, "BaseLanguageModel"], *args: Any, **kwargs: Any) -> Any:  # type: ignore[no-any-unimported, type-arg]
+    def query(self, question: str, llm: Union[str, "BaseLanguageModel"], *args: Any, **kwargs: Any) -> Any:  # type: ignore[no-any-unimported, type-arg]
         """
         Query the index using the given question.
 
