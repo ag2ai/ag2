@@ -13,6 +13,7 @@ repos:
     - id: check-added-large-files
     - id: check-ast
     - id: check-yaml
+      exclude: 'website/mkdocs/mkdocs.yml'
     - id: check-toml
     - id: check-json
       exclude: |

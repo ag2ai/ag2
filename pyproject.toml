@@ -221,8 +221,19 @@ test = [
     "fastapi==0.115.8",
 ]
 
-# docs dependencies
 docs = [
+    "mkdocs-material==9.6.4",
+    "mkdocstrings[python]==0.28.1",
+    "mkdocs-literate-nav==0.6.1",
+    "mdx-include==1.4.2",
+    "mkdocs-git-revision-date-localized-plugin==1.3.0",
+    "mike==2.1.3",
+    "typer==0.15.1",
+    "mkdocs-minify-plugin==0.8.0",
+    "mkdocs-macros-plugin==1.3.7",  # includes with variables
+    "mkdocs-glightbox==0.4.0",  # img zoom
+    "pillow",  # required for mkdocs-glightbo
+    "cairosvg",  # required for mkdocs-glightbo
     "pdoc3==0.11.5",
     "jinja2==3.1.5",
     "pyyaml==6.0.2",
