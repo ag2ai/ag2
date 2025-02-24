@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+
 import copy
 import json
 import warnings
@@ -9,7 +10,7 @@ from enum import Enum
 from functools import partial
 from inspect import signature
 from types import MethodType
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 
@@ -20,6 +21,20 @@ from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
+
+__all__ = [
+    "AFTER_WORK",
+    "ON_CONDITION",
+    "AfterWork",
+    "AfterWorkOption",
+    "ContextStr",
+    "OnCondition",
+    "SwarmAgent",
+    "a_initiate_swarm_chat",
+    "create_swarm_transition",
+    "initiate_swarm_chat",
+    "register_hand_off",
+]
 
 
 @dataclass
@@ -74,11 +89,11 @@ class AfterWork:  # noqa: N801
     Args:
         agent: The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
-                def my_after_work_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def my_after_work_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
         next_agent_selection_msg: Optional[Union[str, Callable[..., Any]]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
-                def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
     """
 
     agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
@@ -126,11 +141,11 @@ class OnCondition:  # noqa: N801
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
-                def my_condition_string(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+                def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
         available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             The Callable signature is:
-                def my_available_func(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> bool
+                def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
 
     """
 
@@ -386,7 +401,7 @@ def _prepare_groupchat_auto_speaker(
             if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
             if a ContextStr, it will substitute the agentlist first and then the context variables
             if a Callable, it will not substitute the agentlist or context variables, signature:
-                def my_selection_message(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
     """
 
     def substitute_agentlist(template: str) -> str:
@@ -595,13 +610,13 @@ def _create_swarm_manager(
     return manager
 
 
-def make_remove_function(tool_msgs_to_remove: List[str]):
+def make_remove_function(tool_msgs_to_remove: list[str]) -> Callable[[list[dict[str, Any]]], list[dict[str, Any]]]:
     """Create a function to remove messages with tool calls from the messages list.
 
     The returned function can be registered as a hook to "process_all_messages_before_reply"" to remove messages with tool calls.
     """
 
-    def remove_messages(messages: list, tool_msgs_to_remove: List[str]) -> list:
+    def remove_messages(messages: list[dict[str, Any]], tool_msgs_to_remove: list[str]) -> list[dict[str, Any]]:
         copied = copy.deepcopy(messages)
         new_messages = []
         removed_tool_ids = []
@@ -662,7 +677,7 @@ def initiate_swarm_chat(
     Args:
         initial_agent: The first receiving agent of the conversation.
         messages: Initial message(s).
-        agents: List of swarm agents.
+        agents: list of swarm agents.
         user_agent: Optional user proxy agent for falling back to.
         swarm_manager_args: Optional group chat manager arguments used to establish the swarm's groupchat manager, required when AfterWorkOption.SWARM_MANAGER is used.
         max_rounds: Maximum number of conversation rounds.
@@ -761,7 +776,7 @@ async def a_initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.

@@ -23,6 +23,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     _setup_context_variables,
     a_initiate_swarm_chat,
     initiate_swarm_chat,
+    make_remove_function,
     register_hand_off,
 )
 from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
@@ -1234,8 +1235,6 @@ def test_agent_tool_registration_for_execution(mock_credentials: Credentials):
 
 
 def test_compress_message_func():
-    from autogen.agentchat.contrib.swarm_agent import make_remove_function
-
     # test make_remove_function, which is the core to enable `exclude_transit_message` passed to `initiate_swarm_chat`
     message_processor = make_remove_function([
         "transfer_Agent_1_to_Agent_2"  # remove the function call
