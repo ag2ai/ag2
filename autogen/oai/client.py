@@ -276,7 +276,15 @@ class OpenAIClient:
     def message_retrieval(
         self, response: Union[ChatCompletion, Completion]
     ) -> Union[list[str], list[ChatCompletionMessage]]:
-        """Retrieve the messages from the response."""
+        """Retrieve the messages from the response.
+
+        Args:
+            response (ChatCompletion | Completion): The response from openai.
+
+
+        Returns:
+            The message from the response.
+        """
         choices = response.choices
         if isinstance(response, Completion):
             return [choice.text for choice in choices]  # type: ignore [union-attr]
@@ -391,7 +399,6 @@ class OpenAIClient:
         """Create a completion for a given config using openai's client.
 
         Args:
-            client: The openai client.
             params: The params for the completion.
 
         Returns:
@@ -565,7 +572,7 @@ class OpenAIClient:
 
         return response
 
-    def _process_reasoning_model_params(self, params) -> None:
+    def _process_reasoning_model_params(self, params: dict[str, Any]) -> None:
         """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
