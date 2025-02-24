@@ -35,7 +35,7 @@ def your_function_name(
 
 Let's look at how we could prepend a message with who is sending the message (sender) and to whom it's going (recipient).
 
-In this example, our `Mike` agent will have this hook registered, so all their messages will have this text added
+In this example, our `Mike` agent will have this hook registered, so all their messages will have this text added.
 
 ```python
 from autogen import ConversableAgent, Agent
@@ -52,7 +52,7 @@ def update_message_before_send(
     sender: ConversableAgent,
     message: Union[dict[str, Any], str],
     recipient: Agent,
-    silent: bool):
+    silent: bool) -> Union[dict[str, Any], str]:
 
     if isinstance(message, dict):
         msg_text = message.get("content", message)
@@ -83,7 +83,7 @@ chat_result = agent_mike.initiate_chat(
 print(chat_result.chat_history)
 ```
 
-Here's the output, you can see Mike's messages (including the initial message) now have our text prepended:
+Here's the output, you can see Mike's messages (including the initial message) now have our text prepended and the chat history has the permanently changed messages:
 
 ```console
 Mike (to Bob):
@@ -125,9 +125,32 @@ Why don’t skeletons fight each other?
 They don’t have the guts!
 
 --------------------------------------------------------------------------------
+Chat History:
+[
+  {
+    "content": "<Mike said to Bob> Hello Bob, tell me a joke!",
+    "role": "assistant",
+    "name": "Mike"
+  },
+  {
+    "content": "Sure, here\u2019s a joke for you:\n\nWhy did the scarecrow win an award?\n\nBecause he was outstanding in his field!",
+    "role": "user",
+    "name": "Bob"
+  },
+  {
+    "content": "<Mike said to Bob> That's a good one, Bob! Here's one for you:\n\nWhat do you call fake spaghetti?\n\nAn impasta!",
+    "role": "assistant",
+    "name": "Mike"
+  },
+  {
+    "content": ":Bob  \nHaha, that's a great one, Mike! How about this:\n\nWhy don\u2019t skeletons fight each other?\n\nThey don\u2019t have the guts!",
+    "role": "user",
+    "name": "Bob"
+  }
+]
 ```
 
-This is a good hook if you need to adjust or edit the message before it is added to the messages list, such as for redacting text.
+This is a good hook if you need to edit the message before it is added to the messages list, such as for redacting text.
 
 
 ### 2. "update_agent_state"
@@ -186,7 +209,6 @@ def update_my_agent_state(
     # Update the agent's system message using the prompt template and the current date and day
     agent.update_system_message(calendar_prompt.replace("[CURRENT_DATE]", current_date).replace("[CURRENT_DAY]", day_of_week))
 
-
 # Register the hook with the Calendar agent
 agent_calendar.register_hook("update_agent_state", update_my_agent_state)
 
@@ -226,13 +248,13 @@ This is the second of the three hooks that run in the [ConversableAgent.generate
 
 This hook is used to process the last message in the messages list (as opposed to all messages, handled by the next hook).
 
-If the last message is a function call or is `exit` then it will not execute the associated function.
+If the last message is a function call or is "exit" then it will not execute the associated function.
 
 Changing the message will result in permanent changes to the chat messages of the agent with the hook, but not other agents. So, changes to the messages will be present in future [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) calls for the agent with the hook, but not other agent's calls to [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply).
 
 A couple of examples of where it is used:
-- The Teachability capability appends any relevant memos to the last message.
-- The Vision capability will update the last message if it contains an image with a caption for the image using an LLM call.
+- The [Teachability capability](/docs/api-reference/autogen/agentchat/contrib/capabilities/teachability/Teachability) appends any relevant memos to the last message.
+- The [Vision capability](/docs/api-reference/autogen/agentchat/contrib/capabilities/vision_capability/VisionCapability) will update the last message if it contains an image with a caption for the image using an LLM call.
 
 Signature:
 ```python
@@ -250,6 +272,7 @@ from typing import Any, Union
 llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
 
 agent_scientist = ConversableAgent(name="scientist", llm_config=llm_config)
+
 agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 
 # Our function for the hook, to replace "blue" with "red" in the last received message
@@ -312,7 +335,7 @@ This hook is used to work on all messages before replying.
 
 The changes to these messages will be used for the replying but will not persist beyond the [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) call.
 
-An example of the use of this hook is the TransformMessages capability where it carries out all transforms (such as limiting the number messages, filtering sensitive information, truncating individual messages) on messages before an agent replies.
+An example of the use of this hook is the [TransformMessages](/docs/api-reference/autogen/agentchat/contrib/capabilities/transform_messages/TransformMessages) capability where it carries out all transforms (such as limiting the number messages, filtering sensitive information, truncating individual messages) on messages before an agent replies.
 
 Signature:
 ```python
@@ -331,6 +354,7 @@ import json
 llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
 
 agent_mike = ConversableAgent(name="Mike", llm_config=llm_config, system_message="You are a comedian.")
+
 agent_bob = ConversableAgent(name="Bob", llm_config=llm_config, system_message="You are a comedian.")
 
 # Our function for the hook, to prepend the agent's name on each message
