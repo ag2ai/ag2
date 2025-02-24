@@ -74,6 +74,11 @@ flaml = [
 ]
 
 # public distributions
+
+openai = [
+    "openai[realtime]>=1.58",
+]
+
 jupyter-executor = [
     "jupyter-kernel-gateway",
     "websocket-client",
