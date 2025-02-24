@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.tool import Tool
 
 from ...conftest import Credentials
@@ -37,6 +38,7 @@ class A:
         return a + b
 
 
+@skip_on_missing_imports("openai", "openai")
 class TestRealtimeAgent:
     @pytest.fixture
     def agent(self, mock_credentials: Credentials) -> RealtimeAgent:

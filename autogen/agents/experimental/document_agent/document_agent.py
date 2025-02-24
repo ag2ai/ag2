@@ -24,7 +24,7 @@ from ....oai.client import OpenAIWrapper
 from .docling_doc_ingest_agent import DoclingDocIngestAgent
 from .docling_query_engine import DoclingMdQueryEngine
 
-__all__ = ["DocumentAgent"]
+__all__ = ["DocAgent"]
 
 logger = logging.getLogger(__name__)
 
@@ -121,9 +121,9 @@ class DocumentTriageAgent(ConversableAgent):
 
 
 @export_module("autogen.agents.experimental")
-class DocumentAgent(ConversableAgent):
+class DocAgent(ConversableAgent):
     """
-    The DocumentAgent is responsible for ingest and querying documents.
+    The DocAgent is responsible for ingest and querying documents.
 
     Internally, it generates a group of swarm agents to solve tasks.
     """
@@ -136,18 +136,18 @@ class DocumentAgent(ConversableAgent):
         parsed_docs_path: Optional[Union[str, Path]] = None,
         collection_name: Optional[str] = None,
     ):
-        """Initialize the DocumentAgent.
+        """Initialize the DocAgent.
 
         Args:
-            name (Optional[str]): The name of the DocumentAgent.
+            name (Optional[str]): The name of the DocAgent.
             llm_config (Optional[dict[str, Any]]): The configuration for the LLM.
-            system_message (Optional[str]): The system message for the DocumentAgent.
+            system_message (Optional[str]): The system message for the DocAgent.
             parsed_docs_path (Union[str, Path]): The path where parsed documents will be stored.
             collection_name (Optional[str]): The unique name for the data store collection. If omitted, a random name will be used. Populate this to reuse previous ingested data.
 
-        The DocumentAgent is responsible for generating a group of agents to solve a task.
+        The DocAgent is responsible for generating a group of agents to solve a task.
 
-        The agents that the DocumentAgent generates are:
+        The agents that the DocAgent generates are:
         - Triage Agent: responsible for deciding what type of task to perform from user requests.
         - Task Manager Agent: responsible for managing the tasks.
         - Parser Agent: responsible for parsing the documents.
@@ -156,7 +156,7 @@ class DocumentAgent(ConversableAgent):
         - Error Agent: responsible for returning errors gracefully.
         - Summary Agent: responsible for generating a summary of the user's questions.
         """
-        name = name or "DocumentAgent"
+        name = name or "DocAgent"
         llm_config = llm_config or {}
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
@@ -204,6 +204,7 @@ class DocumentAgent(ConversableAgent):
             queries: list[Query],
             context_variables: dict[str, Any],
         ) -> SwarmResult:
+            """Initiate all document and query tasks by storing them in context for future reference."""
             logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
                 return SwarmResult(values="Task already initiated", context_variables=context_variables)
@@ -240,6 +241,7 @@ class DocumentAgent(ConversableAgent):
         )
 
         def execute_rag_query(context_variables: dict) -> SwarmResult:  # type: ignore[type-arg]
+            """Execute outstanding RAG queries, call the tool once for each outstanding query. Call this tool with no arguments."""
             if len(context_variables["QueriesToRun"]) == 0:
                 return SwarmResult(
                     agent=TASK_MANAGER_NAME,
@@ -358,7 +360,7 @@ class DocumentAgent(ConversableAgent):
             ],
         )
 
-        self.register_reply([Agent, None], DocumentAgent.generate_inner_swarm_reply)
+        self.register_reply([Agent, None], DocAgent.generate_inner_swarm_reply)
 
         self.documents_ingested: list[str] = []
 

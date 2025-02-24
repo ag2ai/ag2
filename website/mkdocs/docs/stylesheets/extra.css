@@ -1,0 +1,369 @@
+/*
+all variables
+https://github.com/squidfunk/mkdocs-material/blob/master/src/assets/stylesheets/main/_colors.scss
+*/
+
+/* Load Jersey 10 font*/
+@import url('https://fonts.googleapis.com/css2?family=Jersey+10&display=swap');
+
+:root {
+    --md-primary-fg-color: #4b9cd6;
+    --md-primary-bg-color: #FFF;
+    --md-primary-fg-color--light: #4b9cd6;
+    --md-primary-fg-color--dark: #4b9cd6;
+}
+
+[data-md-color-accent=indigo] {
+    --md-accent-fg-color: #4b9cd6;
+    --md-accent-fg-color--transparent: #4b9cd61A;
+    --md-typeset-a-color: #4b9cd6;
+}
+
+[data-md-color-scheme=slate] {
+    --md-default-bg-color: hsla(var(--md-hue), 7%, 18%, 1);
+    --md-footer-bg-color--dark: hsla(var(--md-hue), 24%, 26%, 1);
+    --md-typeset-a-color: #4b9cd6;
+}
+
+.user-link::before {
+    content: " ";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.user-list-center {
+    justify-content: space-evenly;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.user {
+    flex: 1 0 20%;
+    margin: 1em;
+    min-width: 7em;
+}
+
+.user .avatar-wrapper {
+    width: 80px;
+    height: 80px;
+    margin: 10px auto;
+    overflow: hidden;
+    border-radius: 50%;
+    position: relative;
+}
+
+.user .avatar-wrapper img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.user .title {
+    text-align: center;
+}
+
+.user .count {
+    font-size: 80%;
+    text-align: center;
+}
+
+a.external-link {
+    /* For right to left languages */
+    direction: ltr;
+    display: inline-block;
+}
+
+a.external-link::after {
+    /* \00A0 is a non-breaking space
+            to make the mark be on the same line as the link
+        */
+    content: "\00A0[↪]";
+}
+
+a.internal-link::after {
+    /* \00A0 is a non-breaking space
+            to make the mark be on the same line as the link
+        */
+    content: "\00A0↪";
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+    letter-spacing: 0.01em;
+    font-family: 'Jersey 10', sans-serif;
+    text-transform: uppercase;
+    font-weight: 400;
+}
+
+.md-banner__inner strong.primary-text {
+    color: var(--md-primary-fg-color);
+}
+
+/* Home page hero section starts */
+.homepage-hero-section {
+    background-image: url('/ag2/assets/img/homepage-hero-background.png');
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3.078;
+}
+
+.hero-content {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    max-width: 1200px;
+    width: 100%;
+    height: 100%;
+}
+
+.hero-logo-section {
+    flex: 0 0 auto;
+}
+
+.hero-logo {
+    width: 200px;
+    height: auto;
+}
+
+.hero-text-section {
+    flex: 1;
+}
+
+.md-typeset h2.hero-title {
+    font-size: 1.5rem;
+    line-height: 1.5rem;
+    margin: 0px;
+}
+
+.md-typeset h2.hero-subtitle {
+    /* font-size: 1rem; */
+    line-height: 1.75rem;
+    color: #3E4342;
+    margin: 0;
+}
+
+p.hero-subtitle {
+    margin: 0 0 1.25em;
+}
+
+.md-typeset a.hero-btn {
+    display: inline-block;
+    position: relative;
+    overflow: hidden;
+    background-color: rgb(0, 0, 0);
+    color: #fff;
+    padding: 7px 10px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.85rem;
+    line-height: 100%;
+    box-sizing: border-box;
+    border: 2px solid rgb(255, 255, 255);
+    box-shadow: rgba(0, 0, 0, 0.16) 4px 4px 0px 0px;
+    --font-family-headings-custom: "Jersey 10" !important;
+    font-family: var(
+        --font-family-headings-custom,
+        var(--font-inter, sans-serif)
+);
+    transition: 200ms all ease;
+}
+
+.hero-btn::before{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -67px;
+    width: 100%;
+    height: 20px;
+    background-color: rgba(255, 255, 255, 0.15);
+    transform: rotate(125deg);
+    transform-origin: 50% 50%;
+    transition: left 0.5s ease-in-out;
+}
+
+.hero-btn::after{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -34px;
+    width: 100%;
+    height: 14px;
+    background-color: rgba(255, 255, 255, 0.15);
+    transform: rotate(125deg);
+    transform-origin: 50% 50%;
+    transition: left 0.5s ease-out;
+}
+
+.hero-btn:hover::before,
+.hero-btn:hover::after {
+    left: 100%;
+}
+
+.hero-btn:hover {
+    box-shadow: rgba(0, 0, 0, 0.16) 3px 3px 0px 0px;
+}
+
+@media screen and (max-width: 540px) {
+    .homepage-hero-section {
+        background-image: url('/assets/img/homepage-hero-background-large.png');
+        aspect-ratio: 1.43;
+    }
+    .hero-content {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        text-align: center;
+        padding: 8px;
+    }
+    .hero-subtitle{
+        margin-bottom: 0;
+    }
+
+    .hero-logo {
+        width: 80px;
+        margin: 0;
+    }
+    .hero-text-section{
+        flex: 0 0 auto;
+    }
+
+    .hero-title {
+        display: none;
+    }
+    .hero-btn {
+        font-size: 1rem;
+        padding: 5px 8px;
+        margin-top: 4px;
+    }
+}
+
+/* Home page hero section ends */
+/* Home page key features section starts */
+
+@media (min-width: 640px) {
+    .md-typeset .grid.sm\:grid-cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.md-typeset .key-features.grid>.card {
+    border: none;
+}
+
+.key-features .card {
+    padding: 0.5rem;
+    box-shadow: none;
+    border: none;
+    background: transparent;
+    text-align: center;
+}
+.key-features .card .px-6.py-5 {
+    padding: 0;
+    text-align: center;
+}
+
+.key-features .card .key-feature img {
+    width:132px;
+    height:132px;
+    margin:0 auto 10px;
+}
+
+.key-features .card p {
+    margin: 0;
+    line-height: 1.2;
+    font-size: 1em;
+}
+
+.key-features .card p:last-child {
+    margin-top: 1em;
+    line-height: 1.75;
+    font-size: 0.85em;
+}
+
+.key-features .card p b {
+    font-size: 0.75em;
+}
+
+  /* Home page key features section ends */
+
+/* Home page popular resources section starts */
+@media (min-width: 640px) {
+	.md-typeset .grid.sm\:grid-cols-2 {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.md-typeset .popular-resources .grid>.card {
+	padding: 0;
+	box-shadow: none;
+	border: none;
+	background: transparent;
+}
+
+.popular-resources .card .px-6.py-5 {
+	padding: 0;
+	text-align: center;
+}
+
+.popular-resources .youtube-video a {
+	display: block;
+	color: var(--md-typeset-color);
+	--font-family-headings-custom: "Jersey 10";
+	font-family: var(--font-family-headings-custom,
+			var(--font-inter, sans-serif));
+	text-align: left;
+	margin-top: -6px;
+}
+
+.popular-resources .youtube-video iframe {
+	border: 2px #000 solid;
+	border-radius: 0;
+	padding: 0;
+	width: 100%;
+	aspect-ratio: 16 / 9;
+}
+
+.popular-resources .youtube-video a:hover {
+	text-decoration: underline;
+}
+
+/* Home page popular resources section ends */
+
+/* Home page explore content section starts */
+
+.explore-content .card {
+	/* border: 2px #000 solid; */
+	border-radius: 0;
+	padding: 0;
+	color: var(--md-typeset-color);
+}
+
+.md-typeset .explore-content .grid>.card:hover {
+	color: var(--md-typeset-color);
+}
+
+.explore-content h2 {
+	font-size: 0.85rem;
+	margin-top: 0;
+}
+
+.explore-content .font-normal {
+	font-size: 0.65rem;
+	line-height: 1.25rem;
+	padding-right: 1rem;
+}
+
+/* Home page explore content section ends */

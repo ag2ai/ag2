@@ -1,0 +1,17 @@
+<!-- Elements added to "home.html" will only be displayed on the home page -->
+
+{% extends "main.html" %}
+
+{% block styles %}
+{{ super() }}
+{% endblock %}
+
+{% block tabs %}
+<!-- Main site entry button descriptions -->
+{% endblock %}
+
+{% block content %}
+<script>
+   window.location.href = "docs/home/home";
+</script>
+{% endblock %}

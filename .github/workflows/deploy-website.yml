@@ -1,10 +1,17 @@
-name: Deploy Redirect Page
+name: Deploy MkDocs to GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
+      - "autogen/**"
+      - "website/**"
       - ".github/workflows/deploy-website.yml"
+      - ".github/workflows/docs-check-broken-links.yml"
+      - "scripts/broken-links-check.sh"
+      - "scripts/docs_build_mkdocs.sh"
+      - "scripts/docs_serve_mkdocs.sh"
+      - ".muffet-excluded-links.txt"
   workflow_dispatch:
 permissions:
   contents: write
@@ -15,90 +22,34 @@ jobs:
       # Step 1: Check out the repository
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
 
-      # Step 2: Create redirect HTML files
-      - name: Create redirect HTML
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      # Step 3: Build MkDocs
+      - name: Build documentation
         run: |
-          mkdir -p dist
-          # Homepage redirect
-          cat > dist/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="UTF-8">
-              <meta http-equiv="refresh" content="0; url=https://docs.ag2.ai">
-              <!-- Google tag (gtag.js) -->
-              <script async src="https://www.googletagmanager.com/gtag/js?id=G-M24T8371GM"></script>
-              <script>
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', 'G-M24T8371GM');
-              </script>
-              <script>
-                setTimeout(function() {
-                  window.location.href = "https://docs.ag2.ai";
-                }, 500);
-              </script>
-              <title>Page Redirection</title>
-            </head>
-            <body>
-              If you are not redirected automatically, follow this <a href="https://docs.ag2.ai">link to the new documentation</a>.
-            </body>
-          </html>
-          EOF
-
-          # Deep link handling
-          cat > dist/404.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="UTF-8">
-              <!-- Google tag (gtag.js) -->
-              <script async src="https://www.googletagmanager.com/gtag/js?id=G-M24T8371GM"></script>
-              <script>
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', 'G-M24T8371GM');
-              </script>
-              <script>
-                const newDomain = 'https://docs.ag2.ai';
-                let path = window.location.pathname;
-                const hash = window.location.hash;
-
-                // Remove /ag2/ prefix and trailing slash
-                path = path.replace(/^\/ag2\//, '/').replace(/\/$/, "");
-
-                // Transform blog and talks URLs
-                if (path.includes('/blog/') || path.includes('/talks/')) {
-                  const afterPrefix = path.split(/\/(blog|talks)\//)[2];
-                  const transformed = afterPrefix.replace(/\//g, '-');
-                  path = path.replace(afterPrefix, transformed);
-                }
-
-                // Handle -index and create final URL with hash
-                const redirectUrl = (newDomain + path).replace(/-index$/, "/index") + hash;
-
-                setTimeout(function() {
-                  window.location.href = redirectUrl;
-                }, 500);
-              </script>
-              <title>Page Redirection</title>
-            </head>
-            <body>
-              If you are not redirected automatically, follow this <a href="https://docs.ag2.ai">link to the new documentation</a>.
-            </body>
-          </html>
-          EOF
+          uv venv
+          . .venv/bin/activate
+          uv pip install -e ".[docs]"
+          ./scripts/docs_build_mkdocs.sh
+          ls -la ./website/mkdocs/site
+        working-directory: .
 
       # Step 3: Deploy to gh-pages branch
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          publish_dir: ./website/mkdocs/site
           force_orphan: true
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'Deploy redirect page'
+          commit_message: 'Deploy MkDocs site to GitHub pages'

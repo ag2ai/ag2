@@ -1,10 +1,13 @@
 name: Type check
 # see: https://help.github.com/en/actions/reference/events-that-trigger-workflows
 on: # Trigger the workflow on pull request or merge
-  pull_request:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+  # pull_request:
+  # push:
+  #   branches:
+  #     - main
 
 defaults:
   run:
