@@ -197,8 +197,8 @@ class ToolCallMessage(BasePrintReceivedMessage):
 class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
 
-    @require_optional_import("PIL", "unknown")
     @classmethod
+    @require_optional_import("PIL", "unknown")
     def _replace_pil_image_with_placeholder(cls, image_url: dict[str, Any]) -> None:
         if "url" in image_url and isinstance(image_url["url"], Image):
             image_url["url"] = "<image>"
