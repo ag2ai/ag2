@@ -235,7 +235,7 @@ class MongoDBQueryEngine:
             Any: The response from the chat engine, or None if an error occurs.
         """
         try:
-            response = self.index.as_chat_engine(llm=self.llm).query(question)  # type: ignore[union-attr]
+            response = self.index.as_query_engine(llm=self.llm).query(question)  # type: ignore[union-attr]
             return response
         except Exception as e:
             logger.error("Query failed: %s", e)
