@@ -379,6 +379,7 @@ def test_prepare_prompt_multi_message(reasoning_agent):
     assert ground_truth is None
 
 
+
 def test_reasoning_agent_code_execution(mock_credentials: Credentials):
     """Test that ReasoningAgent properly executes code in responses"""
 
