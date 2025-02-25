@@ -1,0 +1,176 @@
+---
+title: Generating a reply
+---
+
+API Reference: [ConversableAgent.generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply)
+
+A critical part to any AG2 workflow is an agent's reply. Their reply is what ends up in the messages list for evaluation by the next agent(s).
+
+If you are creating a new agent and want to control what they generate (their *reply*), then understanding ConversableAgent's [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) method is important.
+
+Let's look at how the standard ConversableAgent's [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) method works.
+
+![generate_reply](./assets/generate-reply.png)
+
+### Breakdown of [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply):
+
+1. [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) is a ConversableAgent's primary function for getting its reply. It is called on the first turn of [initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat) and then when messages are received by an agent (API Reference: [receive](/docs/api-reference/autogen/ConversableAgent#receive)). In a GroupChat, it's called by the GroupChatManager in their [run_chat](./docs/api-reference/autogen/GroupChatManager#run-chat) method.
+
+2. Three hooks are evaluated, in the order shown, to update agent and message state in preparation for the upcoming reply functions. These hooks are functions and you will find out more in the [Hooks](/docs/contributor-guide/how-ag2-works/hooks) section.
+
+3. The final step is the evaluation of the reply functions, these are done in order and the default functions are shown. Setting your own reply functions using ConversableAgent's [register_reply](/docs/api-reference/autogen/ConversableAgent#register-reply) method.
+
+    - Check Termination and Human Reply
+      - Before replying, the agent will check if we meet any termination conditions. It's important to understand that termination occurs on the following agent, so if you are expecting an agent to include a keyword like `TERMINATE` in their text, the following agent's `is_termination_msg` condition should evaluate for that keyword.
+      - The maximum consecutive auto-reply limit for an agent and this will cause a termination.
+      - If it is to terminate but the agent's human input mode is `ALWAYS` or `TERMINATE` ([ConversableAgent.human_input_mode](/docs/api-reference/autogen/ConversableAgent#conversableagent)), it will prompt the user for input where they can continue the conversation or terminate by typing `exit`.
+      - If the termination condition is met and the user doesn't continue the conversation, no further reply functions will be evaluated and the result will be returned.
+
+    - Generate Function Call Reply
+      - The latest message in the messages list is checked to see if it contains function call recommendations and, if so, it will try to execute the function calls. If the functions are registered for execution with the current agent they will execute normally but if they are not registered with the agent it will respond with an error message as the function result.
+      - If functions are executed, no further reply functions will be evaluated and the result of the function(s) will be returned.
+      - Note: This function has been largely superseded by the next function as tool calls are more typical than function calls with LLMs.
+
+    - Generate Tool Call Reply
+      - This behaves the same way as the previous reply function but for tools, the same logic applies.
+
+    - Generate Code Execution Reply
+      - If the agent is configured for code execution (see more on [Code Execution](/docs/user-guide/advanced-concepts/code-execution)), it will look for code blocks in the previous messages (configurable, defaults to all messages since the agent last spoke) and execute all the code blocks, returning the result of the execution as the reply.
+      - If code blocks are found, no further reply functions will be evaluated and it will return the result of the execution(s).
+
+    - Generate LLM Reply
+      - If none of the previous reply functions are final and the agent has an LLM configured, an LLM-based reply will be generated.
+      - Each of the LLMs configured in the agent's LLM configuration will be attempted in order until one successfully returns a response (typically the first one).
+
+    - If no reply is generated
+      - If none of the reply functions generate a final result, the agent's [`ConversableAgent.default_auto_reply`](/docs/api-reference/autogen/ConversableAgent#conversableagent) value will be returned. The default for this property is an empty string and this denotes no reply.
+
+### Registering your own reply functions
+
+If you are creating a new type of agent, it's useful to create a reply function that triggers your agent's internal workflow and returns the result back into the conversation.
+
+ConversableAgent's [register_reply](/docs/api-reference/autogen/ConversableAgent#register-reply) method is used to register a function as a reply function on the agent.
+
+As the reply functions are evaluated in a specific order, if you want your reply function to be triggered first you can make sure it's the last one to be added (reply functions registered later will be checked earlier by default) or you can remove all other reply functions when you register yours, ensuring your one will be the only one called.
+
+Your reply function should return a Tuple that includes whether the reply is final (`True` if final, otherwise it will continue evaluating the following reply functions) and the message dictionary with your agent's reply.
+
+Signature of reply function:
+```python
+def my_reply_function(
+    agent: ConversableAgent,
+    messages: Optional[list[dict[str, Any]]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[OpenAIWrapper] = None,
+) -> tuple[bool, dict[str, Any]]:
+```
+
+Here's an example of registering a reply function that returns the date and time as a final reply.
+
+```python
+from autogen.oai.client import OpenAIWrapper
+from autogen import ConversableAgent, Agent
+from typing import Any, Optional
+import json
+
+llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+
+agent_calendar = ConversableAgent(
+    name="Calendar_agent",
+    # No LLM required for this agent, we'll use a function to reply
+)
+
+agent_bob = ConversableAgent(
+    name="Bob",
+    llm_config=llm_config,
+)
+
+# Our reply function
+def get_date_time_reply(
+    agent: ConversableAgent,
+    messages: Optional[list[dict[str, Any]]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[OpenAIWrapper] = None,
+) -> tuple[bool, dict[str, Any]]:
+
+    from datetime import datetime
+    now = datetime.now()
+
+    # Format the date and time as a string (e.g., "2025-02-25 14:30:00")
+    current_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Get day of week as a string (e.g., "Tuesday")
+    day_of_week = now.strftime("%A")
+
+    # Final reply, with the date/time as the message
+    return True, {"content": f"The current date/time is {current_date_time} and the day is {day_of_week}."}
+
+# Register the reply with our Calendar agent
+agent_calendar.register_reply(
+    trigger=[Agent, None],
+    reply_func=get_date_time_reply, # The function to call
+    # Inserts it at the start and, as its reply will be final, no other
+    # reply functions will be evaluated
+    # Alternatively, we could have set remove_other_reply_funcs=True to remove
+    # all other reply functions
+    position=0,
+)
+
+chat_result = agent_bob.initiate_chat(
+    recipient=agent_calendar,
+    message="Hi Calendar Agent!",
+    max_turns=2
+)
+
+print(f"Chat History:\n{json.dumps(chat_result.chat_history, indent=2)}")
+```
+
+We can see that the Calendar agent is now a simple clock (and that LLM's, such as Bob's one, can't be trusted for working out the day of the week!).
+
+```console
+Bob (to Calendar_agent):
+
+Hi Calendar Agent!
+
+--------------------------------------------------------------------------------
+Calendar_agent (to Bob):
+
+The current date/time is 2025-02-25 12:43:47 and the day is Tuesday.
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+Bob (to Calendar_agent):
+
+Actually, February 25, 2025, is a Monday. Is there anything specific you would like to know or do with this date?
+
+--------------------------------------------------------------------------------
+Calendar_agent (to Bob):
+
+The current date/time is 2025-02-25 12:43:49 and the day is Tuesday.
+
+--------------------------------------------------------------------------------
+Chat History:
+[
+  {
+    "content": "Hi Calendar Agent!",
+    "role": "assistant",
+    "name": "Bob"
+  },
+  {
+    "content": "The current date/time is 2025-02-25 12:43:47 and the day is Tuesday.",
+    "role": "user",
+    "name": "Calendar_agent"
+  },
+  {
+    "content": "Actually, February 25, 2025, is a Monday. Is there anything specific you would like to know or do with this date?",
+    "role": "assistant",
+    "name": "Bob"
+  },
+  {
+    "content": "The current date/time is 2025-02-25 12:43:49 and the day is Tuesday.",
+    "role": "user",
+    "name": "Calendar_agent"
+  }
+]
+```
