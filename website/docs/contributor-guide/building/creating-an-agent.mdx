@@ -169,6 +169,89 @@ If tools aren't a viable option for your agent consider a reply-based agent.
 It's important to understand how ConversableAgent generates a reply, see [this page](/docs/contributor-guide/how-ag2-works/generate-reply) for more details.
 </Tip>
 
+Let's take a look at a basic agent that tells the time utilising a reply function.
+
+```python
+from typing import Any, Optional, Union
+__all__ = ["TimeAgent"]
+
+# Where our agent appears in the documentation
+# autogen > agents > contrib > TimeAgent
+@export_module("autogen.agents.contrib")
+class TimeAgent(ConversableAgent): # Built on the ConversableAgent class
+    """This agent outputs the date and time."""
+    # Ensure there's a docstring for the agent for documentation
+
+    def __init__(
+        self,
+        system_message: Optional[Union[str, list]] = None, # This is how we can use ConversableAgent's parameters
+        *args,
+        date_time_format: str = "%Y-%m-%d %H:%M:%S", # This is a parameter that is unique to this agent
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the TimeAgent.
+
+        Args:
+            date_time_format (str): The format in which the date and time should be returned.
+        """ # Follow this docstring format
+
+        # This agent doesn't use an LLM so we don't need this, but it's here as an example
+        # of how to take in and use ConversableAgent parameters.
+        system_message = system_message or (
+            "You are a calendar agent that returns the date and time. "
+            "Please provide a date and time format for the responses."
+        )
+
+        # Store the date and time format on the agent
+        # Prefixed with an underscore to indicate it's a private variable
+        self._date_time_format = date_time_format
+
+        # Initialise the base class, passing through the system_message parameter
+        super().__init__(*args, system_message=system_message, **kwargs)
+
+        # Our reply function.
+        # This one is simple, but yours will be more complex and
+        # may even contain another AG2 workflow inside it
+        def get_date_time_reply(
+            agent: ConversableAgent,
+            messages: Optional[list[dict[str, Any]]] = None,
+            sender: Optional[Agent] = None,
+            config: Optional[OpenAIWrapper] = None,
+        ) -> tuple[bool, dict[str, Any]]:
+
+            from datetime import datetime
+            now = datetime.now()
+
+            # Format the date and time as a string (e.g., "2025-02-25 14:30:00")
+            current_date_time = now.strftime(self._date_time_format)
+
+            # Final reply, with the date/time as the message
+            return True, {"content": f"Tick, tock, the current date/time is {current_date_time}."}
+
+        # Register our reply function with the agent
+        # Removing all other reply functions so only this one will be used
+        self.register_reply(
+            trigger=[Agent, None],
+            reply_func=get_date_time_reply,
+            remove_other_reply_funcs=True
+        )
+```
+
+When we use this TimeAgent in an AG2 workflow it will always return the date and time:
+
+```console
+Bob (to time_agent):
+
+Hi Time Agent!
+
+--------------------------------------------------------------------------------
+time_agent (to Bob):
+
+Tick, tock, the current date/time is 2025-02-25 14:05:24.
+
+--------------------------------------------------------------------------------
+```
+
 ## Where to put your code
 
 Decide on a folder name that matches your agent name, use underscores to separate words, e.g. `deep_research`.

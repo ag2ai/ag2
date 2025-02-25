@@ -23,17 +23,19 @@ The Crawl4AITool uses a 3rd party package to crawl a website and extract informa
 Here's some code from the Crawl4AITool with annotations added ([current code here](https://github.com/ag2ai/ag2/blob/main/autogen/tools/experimental/crawl4ai/crawl4ai.py)):
 
 ```python
-# Import from 3rd party packages are handled with this context manager
+# Imports from 3rd party packages are handled with this context manager
 with optional_import_block():
     from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
     from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 __all__ = ["Crawl4AITool"]
 
-# Denote that this requires a 3rd party package, with "crawl4ai" being the namespace
-# Our AG2 'extra' is called "crawl4ai"
+# Denote that this requires a 3rd party package, with "crawl4ai"
+# being the namespace. Our AG2 'extra' is called "crawl4ai".
 @require_optional_import(["crawl4ai"], "crawl4ai")
-@export_module("autogen.tools.experimental") # Indicates where this appears in the API Reference documentation, autogen > tools > experimental > Crawl4AITool
+@export_module("autogen.tools.experimental")
+# Indicates where this appears in the API Reference documentation
+# autogen > tools > experimental > Crawl4AITool
 class Crawl4AITool(Tool): # Built on the Tool class
     """
     Crawl a website and extract information using the crawl4ai library.
@@ -99,7 +101,8 @@ class Crawl4AITool(Tool): # Built on the Tool class
 
             return await crawl4ai_helper(url=url, browser_cfg=browser_cfg, crawl_config=crawl_config)
 
-        # Initialise the base Tool class with the LLM description and the function to call
+        # Initialise the base Tool class with the LLM description
+        # and the function to call
         super().__init__(
             name="crawl4ai",
             description="Crawl a website and extract information.",
@@ -107,6 +110,38 @@ class Crawl4AITool(Tool): # Built on the Tool class
         )
 ```
 
+And this tool can now be registered with any [ConversableAgent](/docs/api-reference/autogen/ConversableAgent)-based agent.
+
+Here's how to use the Crawl4AITool:
+
+```python
+from autogen import ConversableAgent
+
+# Import the Tool
+from autogen.tools.experimental import Crawl4AITool
+
+config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+llm_config = {"config_list": config_list}
+
+# Agent for LLM tool recommendation
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+
+# Agent for tool execution
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+
+# Create the tool, with defaults
+crawlai_tool = Crawl4AITool()
+
+# Register it for LLM recommendation and execution
+crawlai_tool.register_for_llm(assistant)
+crawlai_tool.register_for_execution(user_proxy)
+
+result = user_proxy.initiate_chat(
+    recipient=assistant,
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    max_turns=2,
+)
+```
 
 ## Where to put your code
 
