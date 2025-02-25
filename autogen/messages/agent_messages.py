@@ -193,7 +193,6 @@ class ToolCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-@require_optional_import("PIL", "unknown", except_for="print")
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
