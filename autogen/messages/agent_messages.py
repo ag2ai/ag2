@@ -7,13 +7,16 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
-from PIL.Image import Image
 from pydantic import BaseModel, field_validator
 from termcolor import colored
 
 from ..code_utils import content_str
+from ..import_utils import optional_import_block, require_optional_import
 from ..oai.client import OpenAIWrapper
 from .base_message import BaseMessage, wrap_message
+
+with optional_import_block():
+    from PIL.Image import Image
 
 if TYPE_CHECKING:
     from ..agentchat.agent import Agent
@@ -188,6 +191,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
+@require_optional_import("PIL", "unknown", except_for="print")
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
