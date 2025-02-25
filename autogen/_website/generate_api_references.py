@@ -7,23 +7,22 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
-import logging
 import os
 import pkgutil
 import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Iterator, Optional
 
+from ..doc_utils import get_target_module
 from ..import_utils import optional_import_block, require_optional_import
+from .utils import copy_only_git_tracked_and_untracked_files
 
 with optional_import_block():
     import pdoc
     from jinja2 import Template
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def import_submodules(module_name: str, *, include_root: bool = True) -> list[str]:
@@ -61,9 +60,7 @@ def import_submodules(module_name: str, *, include_root: bool = True) -> list[st
 
 
 @require_optional_import("pdoc", "docs")
-def build_pdoc_dict(module_name: str) -> None:
-    module = importlib.import_module(module_name)  # nosemgrep
-
+def build_pdoc_dict(module: ModuleType, module_name: str) -> None:
     if not hasattr(module, "__pdoc__"):
         setattr(module, "__pdoc__", {})
 
@@ -76,9 +73,20 @@ def build_pdoc_dict(module_name: str) -> None:
         if not hasattr(obj, "__name__") or name.startswith("_"):
             continue
 
-        if hasattr(obj, "__module__") and obj.__module__ != module_name:
-            print(f"Skipping {obj.__module__}.{obj.__name__} because it is not from {module_name}")
+        target_module = get_target_module(obj)
+        if target_module and target_module != module_name:
             module.__pdoc__[name] = False
+
+
+@require_optional_import("pdoc", "docs")
+def process_modules(submodules: list[str]) -> None:
+    cached_modules: dict[str, ModuleType] = {}
+
+    # Pass 1: Build pdoc dictionary for all submodules
+    for submodule in submodules:
+        module = importlib.import_module(submodule)  # nosemgrep
+        cached_modules[submodule] = module
+        build_pdoc_dict(module, submodule)
 
 
 @require_optional_import("pdoc", "docs")
@@ -110,36 +118,11 @@ def generate(target_dir: Path, template_dir: Path) -> None:
     pdoc.tpl_lookup.directories.insert(0, str(template_dir))
 
     submodules = import_submodules("autogen")
-    print(f"{submodules=}")
+    # print(f"{submodules=}")
 
-    for submodule in submodules:
-        build_pdoc_dict(submodule)
+    process_modules(submodules)
 
     generate_markdown(target_dir)
-
-
-def read_file_content(file_path: Path) -> str:
-    """Read content from a file.
-
-    Args:
-        file_path (str): Path to the file
-
-    Returns:
-        str: Content of the file
-    """
-    with open(file_path, encoding="utf-8") as f:
-        return f.read()
-
-
-def write_file_content(file_path: str, content: str) -> None:
-    """Write content to a file.
-
-    Args:
-        file_path (str): Path to the file
-        content (str): Content to write
-    """
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(content)
 
 
 def convert_md_to_mdx(input_dir: Path) -> None:
@@ -240,9 +223,9 @@ def update_nav(mint_json_path: Path, new_nav_pages: list[Any]) -> None:
         print(f"Error updating mint.json: {e}")
 
 
-def update_mint_json_with_api_nav(script_dir: Path, api_dir: Path) -> None:
+def update_mint_json_with_api_nav(website_build_dir: Path, api_dir: Path) -> None:
     """Update mint.json with MDX files in the API directory."""
-    mint_json_path = script_dir / "mint.json"
+    mint_json_path = website_build_dir / "mint.json"
     if not mint_json_path.exists():
         print(f"File not found: {mint_json_path}")
         sys.exit(1)
@@ -264,7 +247,7 @@ def generate_mint_json_from_template(mint_json_template_path: Path, mint_json_pa
         os.remove(mint_json_path)
 
     # Copy the template file to mint.json
-    contents = read_file_content(mint_json_template_path)
+    contents = mint_json_template_path.read_text(encoding="utf-8")
     mint_json_template_content = Template(contents).render()
 
     # Parse the rendered template content as JSON
@@ -366,23 +349,36 @@ title: Overview
 def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
+    website_build_dir = website_dir / "build"
 
     parser = argparse.ArgumentParser(description="Process API reference documentation")
     parser.add_argument(
         "--api-dir",
         type=Path,
         help="Directory containing API documentation to process",
-        default=website_dir / "docs" / "api-reference",
+        default=website_build_dir / "docs" / "api-reference",
     )
 
+    parser.add_argument("--force", action="store_true", help="Force generation")
+
     args = parser.parse_args()
+
+    if args.force:
+        shutil.rmtree(website_build_dir, ignore_errors=True)
+
+    if not website_build_dir.exists():
+        website_build_dir.mkdir()
+
+    ignore_dir = "mkdocs"
+    copy_only_git_tracked_and_untracked_files(website_dir, website_build_dir, ignore_dir)
 
     if args.api_dir.exists():
         # Force delete the directory and its contents
         shutil.rmtree(args.api_dir, ignore_errors=True)
 
-    target_dir = args.api_dir.resolve().relative_to(website_dir)
-    template_dir = website_dir / "mako_templates"
+    target_dir = args.api_dir
+
+    template_dir = website_build_dir / "mako_templates"
 
     # Generate API reference documentation
     print("Generating API reference documentation...")
@@ -397,13 +393,13 @@ def main() -> None:
     convert_md_to_mdx(args.api_dir)
 
     # Create mint.json from the template file
-    mint_json_template_path = website_dir / "mint-json-template.json.jinja"
-    mint_json_path = website_dir / "mint.json"
+    mint_json_template_path = website_build_dir / "mint-json-template.json.jinja"
+    mint_json_path = website_build_dir / "mint.json"
 
     print("Generating mint.json from template...")
     generate_mint_json_from_template(mint_json_template_path, mint_json_path)
 
     # Update mint.json
-    update_mint_json_with_api_nav(website_dir, args.api_dir)
+    update_mint_json_with_api_nav(website_build_dir, args.api_dir)
 
     print("API reference processing complete!")

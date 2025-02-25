@@ -8,12 +8,26 @@
   "metadata": {
     "og:image": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
   },
-  "favicon": "/logo/ag2.svg",
+  "favicon": "/logo/favicon.svg",
   "analytics": {
     "ga4": {
         "measurementId": "G-2GN2KN2CE4"
     }
   },
+  "redirects": [
+    {
+      "source": "/reference/:slug*",
+      "destination": "/docs/api-reference/:slug*"
+    },
+    {
+      "source": "/blog/:slug*",
+      "destination": "/docs/blog/:slug*"
+    },
+    {
+      "source": "/notebooks/:slug*",
+      "destination": "/docs/use-cases/notebooks/notebooks/:slug*"
+    }
+  ],
   "search": {
     "prompt": "Search or ask..."
   },
@@ -56,24 +70,24 @@
       "url": "docs/use-cases"
     },
     {
+      "name": "User Stories",
+      "url": "docs/user-stories"
+    },
+    {
       "name": "Contribute",
-      "url": "contributor-guide"
+      "url": "docs/contributor-guide"
     },
     {
       "name": "FAQs",
-      "url": "faq"
+      "url": "docs/faq"
     },
     {
       "name": "Ecosystem",
-      "url": "ecosystem"
+      "url": "docs/ecosystem"
     },
     {
       "name": "Blog",
       "url": "docs/blog"
-    },
-    {
-      "name": "Community Talks",
-      "url": "docs/talks"
     }
   ],
   "anchors": [],
@@ -92,25 +106,63 @@
           "group": "Basic Concepts",
           "pages": [
             "docs/user-guide/basic-concepts/installing-ag2",
-            "docs/user-guide/basic-concepts/llm-configuration",
+            {
+              "group": "LLM Configuration",
+              "pages":
+              [
+                "docs/user-guide/basic-concepts/llm-configuration/llm-configuration",
+                "docs/user-guide/basic-concepts/llm-configuration/structured-outputs"
+              ]
+            },
             "docs/user-guide/basic-concepts/conversable-agent",
             "docs/user-guide/basic-concepts/human-in-the-loop",
-            "docs/user-guide/basic-concepts/orchestrations",
-            "docs/user-guide/basic-concepts/groupchat",
-            "docs/user-guide/basic-concepts/swarm",
-            "docs/user-guide/basic-concepts/tools",
-            "docs/user-guide/basic-concepts/structured-outputs",
-            "docs/user-guide/basic-concepts/ending-a-chat"
+            {
+              "group": "Orchestrating Agents",
+              "pages":
+              [
+                "docs/user-guide/basic-concepts/orchestration/orchestrations",
+                "docs/user-guide/basic-concepts/orchestration/sequential-chat",
+                "docs/user-guide/basic-concepts/orchestration/nested-chat",
+                "docs/user-guide/basic-concepts/orchestration/swarm",
+                "docs/user-guide/basic-concepts/orchestration/ending-a-chat"
+              ]
+            },
+            "docs/user-guide/basic-concepts/tools"
           ]
         },
         {
           "group": "Advanced Concepts",
           "pages": [
             "docs/user-guide/advanced-concepts/rag",
-            "docs/user-guide/advanced-concepts/custom-group-chat",
-            "docs/user-guide/advanced-concepts/resuming-group-chat",
-            "docs/user-guide/advanced-concepts/swarm-deep-dive",
-            "docs/user-guide/advanced-concepts/enhanced-swarm",
+
+            {
+              "group": "GroupChat",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/groupchat/groupchat",
+                "docs/user-guide/advanced-concepts/groupchat/custom-group-chat",
+                "docs/user-guide/advanced-concepts/groupchat/resuming-group-chat"
+              ]
+            },
+            {
+              "group": "Swarm",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/swarm/deep-dive",
+                "docs/user-guide/advanced-concepts/swarm/nested-chat",
+                "docs/user-guide/advanced-concepts/swarm/concept-code",
+                "docs/user-guide/advanced-concepts/swarm/use-case"
+              ]
+            },
+            {
+              "group": "Interoperability",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/interop/langchain",
+                "docs/user-guide/advanced-concepts/interop/crewai",
+                "docs/user-guide/advanced-concepts/interop/pydanticai"
+              ]
+            },
             "docs/user-guide/advanced-concepts/code-execution",
             "docs/user-guide/advanced-concepts/tools-with-secrets",
             "docs/user-guide/advanced-concepts/conversation-patterns-deep-dive",
@@ -136,6 +188,17 @@
             "docs/user-guide/models/togetherai",
             "docs/user-guide/models/vLLM"
           ]
+        },
+        {
+          "group": "Reference Agents",
+          "pages": [
+            "docs/user-guide/reference-agents/index",
+            "docs/user-guide/reference-agents/captainagent",
+            "docs/user-guide/reference-agents/communication-agents",
+            "docs/user-guide/reference-agents/docagent",
+            "docs/user-guide/reference-agents/reasoningagent",
+            "docs/user-guide/reference-agents/websurferagent"
+          ]
         }
       ]
     },
@@ -151,17 +214,8 @@
           ]
         },
         {
-          "group": "Reference Agents",
-          "pages": [
-            "docs/use-cases/reference-agents/index",
-            "docs/use-cases/reference-agents/captainagent",
-            "docs/use-cases/reference-agents/reasoningagent",
-            "docs/use-cases/reference-agents/websurferagent"
-          ]
-        },
-        {
           "group": "Notebooks",
-          "pages": ["docs/use-cases/notebooks/notebooks"]
+          "pages": ["docs/use-cases/notebooks/Notebooks"]
         },
         "docs/use-cases/community-gallery/community-gallery"
       ]
@@ -169,40 +223,40 @@
     {
       "group": "Contributor Guide",
       "pages": [
-        "contributor-guide/contributing",
-        "contributor-guide/setup-development-environment",
-        "contributor-guide/documentation",
-        "contributor-guide/file-bug-report",
-        "contributor-guide/maintainer",
-        "contributor-guide/pre-commit",
-        "contributor-guide/tests",
-        "contributor-guide/Research"
+        "docs/contributor-guide/contributing",
+        "docs/contributor-guide/setup-development-environment",
+        "docs/contributor-guide/documentation",
+        "docs/contributor-guide/file-bug-report",
+        "docs/contributor-guide/maintainer",
+        "docs/contributor-guide/pre-commit",
+        "docs/contributor-guide/tests",
+        "docs/contributor-guide/Research"
       ]
     },
     {
       "group": "FAQs",
-      "pages": ["faq/FAQ"]
+      "pages": ["docs/faq/FAQ"]
     },
     {
       "group": "Ecosystem",
       "pages": [
-        "ecosystem/agentops",
-        "ecosystem/azure_cosmos_db",
-        "ecosystem/composio",
-        "ecosystem/databricks",
-        "ecosystem/llamaindex",
-        "ecosystem/mem0",
-        "ecosystem/memgpt",
-        "ecosystem/microsoft-fabric",
-        "ecosystem/ollama",
-        "ecosystem/pgvector",
-        "ecosystem/portkey",
-        "ecosystem/promptflow"
+        "docs/ecosystem/agentops",
+        "docs/ecosystem/azure_cosmos_db",
+        "docs/ecosystem/composio",
+        "docs/ecosystem/databricks",
+        "docs/ecosystem/llamaindex",
+        "docs/ecosystem/mem0",
+        "docs/ecosystem/memgpt",
+        "docs/ecosystem/microsoft-fabric",
+        "docs/ecosystem/ollama",
+        "docs/ecosystem/pgvector",
+        "docs/ecosystem/portkey",
+        "docs/ecosystem/promptflow"
       ]
     }
   ],
   "footerSocials": {
-    "x": "https://x.com/Chi_Wang_",
+    "x": "https://x.com/ag2oss",
     "github": "https://github.com/ag2ai/ag2",
     "linkedin": "https://www.linkedin.com/company/ag2ai",
     "discord": "https://discord.gg/pAbnFJrkgZ",

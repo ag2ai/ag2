@@ -192,7 +192,7 @@ class BedrockClient:
         return base_params, additional_params
 
     def create(self, params) -> ChatCompletion:
-        """Run Amazon Bedrock inference and return AutoGen response"""
+        """Run Amazon Bedrock inference and return AG2 response"""
         # Set custom client class settings
         self.parse_custom_params(params)
 
@@ -271,11 +271,11 @@ class BedrockClient:
         }
 
 
-def extract_system_messages(messages: list[dict]) -> list:
+def extract_system_messages(messages: list[dict[str, Any]]) -> list:
     """Extract the system messages from the list of messages.
 
     Args:
-        messages (list[dict]): List of messages.
+        messages (list[dict[str, Any]]): List of messages.
 
     Returns:
         List[SystemMessage]: List of System messages.
@@ -296,7 +296,7 @@ def extract_system_messages(messages: list[dict]) -> list:
 
 def oai_messages_to_bedrock_messages(
     messages: list[dict[str, Any]], has_tools: bool, supports_system_prompts: bool
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Bedrock format.
     We correct for any specific role orders and types, etc.
     AWS Bedrock requires messages to alternate between user and assistant roles. This function ensures that the messages
@@ -341,15 +341,13 @@ def oai_messages_to_bedrock_messages(
             tool_uses = []
             tool_names = []
             for tool_call in message["tool_calls"]:
-                tool_uses.append(
-                    {
-                        "toolUse": {
-                            "toolUseId": tool_call["id"],
-                            "name": tool_call["function"]["name"],
-                            "input": json.loads(tool_call["function"]["arguments"]),
-                        }
+                tool_uses.append({
+                    "toolUse": {
+                        "toolUseId": tool_call["id"],
+                        "name": tool_call["function"]["name"],
+                        "input": json.loads(tool_call["function"]["arguments"]),
                     }
-                )
+                })
                 if has_tools:
                     tool_use_messages += 1
                 tool_names.append(tool_call["function"]["name"])
@@ -363,14 +361,10 @@ def oai_messages_to_bedrock_messages(
                 last_tool_use_index = len(processed_messages) - 1
             else:
                 # Not using tools, so put in a plain text message
-                processed_messages.append(
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {"text": f"Some internal function(s) that could be used: [{', '.join(tool_names)}]"}
-                        ],
-                    }
-                )
+                processed_messages.append({
+                    "role": "assistant",
+                    "content": [{"text": f"Some internal function(s) that could be used: [{', '.join(tool_names)}]"}],
+                })
         elif "tool_call_id" in message:
             if has_tools:
                 # Map the tool usage call to tool_result for Bedrock
@@ -396,12 +390,10 @@ def oai_messages_to_bedrock_messages(
                 tool_result_messages += 1
             else:
                 # Not using tools, so put in a plain text message
-                processed_messages.append(
-                    {
-                        "role": "user",
-                        "content": [{"text": f"Running the function returned: {message['content']}"}],
-                    }
-                )
+                processed_messages.append({
+                    "role": "user",
+                    "content": [{"text": f"Running the function returned: {message['content']}"}],
+                })
         elif message["content"] == "":
             # Ignoring empty messages
             pass
@@ -412,12 +404,10 @@ def oai_messages_to_bedrock_messages(
                     user_continue_message if expected_role == "user" else assistant_continue_message
                 )
 
-            processed_messages.append(
-                {
-                    "role": message["role"],
-                    "content": parse_content_parts(message=message),
-                }
-            )
+            processed_messages.append({
+                "role": message["role"],
+                "content": parse_content_parts(message=message),
+            })
 
     # We'll replace the last tool_use if there's no tool_result (occurs if we finish the conversation before running the function)
     if has_tools and tool_use_messages != tool_result_messages:
@@ -438,7 +428,7 @@ def oai_messages_to_bedrock_messages(
 
 def parse_content_parts(
     message: dict[str, Any],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     content: str | list[dict[str, Any]] = message.get("content")
     if isinstance(content, str):
         return [
@@ -450,21 +440,17 @@ def parse_content_parts(
     for part in content:
         # part_content: Dict = part.get("content")
         if "text" in part:  # part_content:
-            content_parts.append(
-                {
-                    "text": part.get("text"),
-                }
-            )
+            content_parts.append({
+                "text": part.get("text"),
+            })
         elif "image_url" in part:  # part_content:
             image_data, content_type = parse_image(part.get("image_url").get("url"))
-            content_parts.append(
-                {
-                    "image": {
-                        "format": content_type[6:],  # image/
-                        "source": {"bytes": image_data},
-                    },
-                }
-            )
+            content_parts.append({
+                "image": {
+                    "format": content_type[6:],  # image/
+                    "source": {"bytes": image_data},
+                },
+            })
         else:
             # Ignore..
             continue
@@ -536,7 +522,7 @@ def format_tools(tools: list[dict[str, Any]]) -> dict[Literal["tools"], list[dic
 
 
 def format_tool_calls(content):
-    """Converts Converse API response tool calls to AutoGen format"""
+    """Converts Converse API response tool calls to AG2 format"""
     tool_calls = []
     for tool_request in content:
         if "toolUse" in tool_request:

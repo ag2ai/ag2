@@ -12,7 +12,6 @@ from typing import Annotated, Any, Literal, Optional
 import pytest
 from pydantic import BaseModel, Field
 
-from autogen._pydantic import PYDANTIC_V1, model_dump
 from autogen.tools.dependency_injection import Field as AG2Field
 from autogen.tools.function_utils import (
     get_default_values,
@@ -176,7 +175,7 @@ def test_get_parameters() -> None:
         "required": ["a"],
     }
 
-    actual = model_dump(get_parameters(required, param_annotations, default_values))
+    actual = (get_parameters(required, param_annotations, default_values)).model_dump()
 
     assert actual == expected, actual
 
@@ -231,7 +230,7 @@ def test_get_function_schema_missing() -> None:
 
 
 def test_get_function_schema() -> None:
-    expected_v2 = {
+    expected = {
         "type": "function",
         "function": {
             "description": "function g",
@@ -261,46 +260,11 @@ def test_get_function_schema() -> None:
         },
     }
 
-    # the difference is that the v1 version does not handle Union types (Optional is Union[T, None])
-    expected_v1 = {
-        "type": "function",
-        "function": {
-            "description": "function g",
-            "name": "fancy name for g",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "a": {"type": "string", "description": "Parameter a"},
-                    "b": {"type": "integer", "description": "b", "default": 2},
-                    "c": {"type": "number", "description": "Parameter c", "default": 0.1},
-                    "d": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "array",
-                            "minItems": 2,
-                            "maxItems": 2,
-                            "items": [{"type": "integer"}, {"type": "array", "items": {"type": "number"}}],
-                        },
-                        "description": "d",
-                    },
-                },
-                "required": ["a", "d"],
-            },
-        },
-    }
-
     actual = get_function_schema(g, description="function g", name="fancy name for g")
-
-    if PYDANTIC_V1:
-        assert actual == expected_v1, actual
-    else:
-        assert actual == expected_v2, actual
+    assert actual == expected, actual
 
     actual = get_function_schema(a_g, description="function g", name="fancy name for g")
-    if PYDANTIC_V1:
-        assert actual == expected_v1, actual
-    else:
-        assert actual == expected_v2, actual
+    assert actual == expected, actual
 
 
 CurrencySymbol = Literal["USD", "EUR"]

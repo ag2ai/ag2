@@ -159,7 +159,7 @@ def test_log_new_agent(db_connection):
 
     cur = db_connection.cursor()
     agent_name = "some_assistant"
-    config_list = [{"model": "gpt-4o", "api_key": "some_key"}]
+    config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "some_key"}]
 
     agent = AssistantAgent(agent_name, llm_config={"config_list": config_list})
     init_args = {"foo": "bar", "baz": {"other_key": "other_val"}, "a": None}
@@ -184,7 +184,9 @@ def test_log_oai_wrapper(db_connection):
 
     cur = db_connection.cursor()
 
-    llm_config = {"config_list": [{"model": "gpt-4o", "api_key": "some_key", "base_url": "some url"}]}
+    llm_config = {
+        "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": "some_key", "base_url": "some url"}]
+    }
     init_args = {"llm_config": llm_config, "base_config": {}}
     wrapper = OpenAIWrapper(**llm_config)
 
@@ -295,9 +297,9 @@ def test_to_dict():
     assert result["foo_val"] == expected_foo_val_field
     assert result["o"] == expected_o_field
     assert len(result["agents"]) == 2
-    for agent in result["agents"]:
-        assert "autogen.ConversableAgent" in agent
-    assert "autogen.ConversableAgent" in result["first_agent"]
+    assert result["agents"][0] == "alice"
+    assert result["agents"][1] == "bob"
+    assert "alice" in result["first_agent"]
 
 
 @patch("logging.Logger.error")

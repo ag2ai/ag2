@@ -23,18 +23,18 @@ class TextAnalyzerAgent(ConversableAgent):
         name="analyzer",
         system_message: Optional[str] = system_message,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        llm_config: Optional[Union[dict, bool]] = None,
-        **kwargs,
+        llm_config: Optional[Union[dict[str, Any], bool]] = None,
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent.
         system_message (str): system message for the ChatCompletion inference.
         human_input_mode (str): This agent should NEVER prompt the human for input.
         llm_config (dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create)
+            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create)
             for available options.
             To disable llm-based auto reply, set to False.
-        **kwargs (dict): other kwargs in [ConversableAgent](../conversable_agent#init).
+        **kwargs (dict): other kwargs in [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name=name,
@@ -47,10 +47,10 @@ class TextAnalyzerAgent(ConversableAgent):
 
     def _analyze_in_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Analyzes the given text as instructed, and returns the analysis as a message.
         Assumes exactly two messages containing the text to analyze and the analysis instructions.
         See Teachability.analyze for an example of how to use this method.
@@ -69,8 +69,10 @@ class TextAnalyzerAgent(ConversableAgent):
         # Assemble the message.
         text_to_analyze = "# TEXT\n" + text_to_analyze + "\n"
         analysis_instructions = "# INSTRUCTIONS\n" + analysis_instructions + "\n"
-        msg_text = "\n".join(
-            [analysis_instructions, text_to_analyze, analysis_instructions]
-        )  # Repeat the instructions.
+        msg_text = "\n".join([
+            analysis_instructions,
+            text_to_analyze,
+            analysis_instructions,
+        ])  # Repeat the instructions.
         # Generate and return the analysis string.
         return self.generate_oai_reply([{"role": "user", "content": msg_text}], None, None)[1]

@@ -3,36 +3,47 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
+from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock
+from typing import Type
 
 import pytest
+from pydantic import BaseModel
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.interop import Interoperable
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.interop import CrewAIInteroperability, Interoperable
+from autogen.tools import Tool
 
-from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
+from ...conftest import Credentials
 
-if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-    from autogen.interop.crewai import CrewAIInteroperability
-else:
-    CrewAIInteroperability = MagicMock()
+with optional_import_block():
+    from crewai_tools import FileReadTool
 
 
 # skip if python version is not in [3.10, 3.11, 3.12]
 @pytest.mark.interop
-@pytest.mark.skipif(
-    sys.version_info < (3, 10) or sys.version_info >= (3, 13), reason="Only Python 3.10, 3.11, 3.12 are supported"
-)
+@skip_on_missing_imports("crewai", "interop-crewai")
 class TestCrewAIInteroperability:
-    @pytest.fixture(autouse=True)
-    def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
-        from crewai_tools import FileReadTool
+    # @pytest.fixture(autouse=True)
+    # def setup(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    #     monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
 
-        crewai_tool = FileReadTool()
-        self.model_type = crewai_tool.args_schema
-        self.tool = CrewAIInteroperability.convert_tool(crewai_tool)
+    #     crewai_tool = FileReadTool()
+    #     self.model_type = crewai_tool.args_schema
+    #     self.tool = CrewAIInteroperability.convert_tool(crewai_tool)
+
+    @pytest.fixture(scope="session")
+    def crewai_tool(self) -> "FileReadTool":  # type: ignore[no-any-unimported]
+        return FileReadTool()
+
+    @pytest.fixture(scope="session")
+    def model_type(self, crewai_tool: "FileReadTool") -> Type[BaseModel]:  # type: ignore[no-any-unimported]
+        return crewai_tool.args_schema  # type: ignore[no-any-return]
+
+    @pytest.fixture(scope="session")
+    def tool(self, crewai_tool: "FileReadTool") -> Tool:  # type: ignore[no-any-unimported]
+        return CrewAIInteroperability.convert_tool(crewai_tool)
 
     def test_type_checks(self) -> None:
         # mypy should fail if the type checks are not correct
@@ -41,45 +52,39 @@ class TestCrewAIInteroperability:
         # runtime check
         assert isinstance(interop, Interoperable)
 
-    def test_convert_tool(self) -> None:
+    def test_convert_tool(self, tool: Tool, model_type: Type[BaseModel]) -> None:
         with TemporaryDirectory() as tmp_dir:
             file_path = f"{tmp_dir}/test.txt"
             with open(file_path, "w") as file:
                 file.write("Hello, World!")
 
-            assert self.tool.name == "Read_a_file_s_content"
+            assert tool.name == "Read_a_file_s_content"
             assert (
-                self.tool.description
+                tool.description
                 == "A tool that reads the content of a file. To use this tool, provide a 'file_path' parameter with the path to the file you want to read. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
-            args = self.model_type(file_path=file_path)
+            args = model_type(file_path=file_path)
 
-            assert self.tool.func(args=args) == "Hello, World!"
+            assert tool.func(args=args) == "Hello, World!"
 
     @pytest.mark.openai
-    def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
-        user_proxy = UserProxyAgent(
-            name="User",
-            human_input_mode="NEVER",
-        )
-
+    def test_with_llm(
+        self, tool: Tool, credentials_gpt_4o_mini: Credentials, user_proxy: UserProxyAgent, tmp_path: Path
+    ) -> None:
         chatbot = AssistantAgent(
             name="chatbot",
             llm_config=credentials_gpt_4o_mini.llm_config,
         )
 
-        self.tool.register_for_execution(user_proxy)
-        self.tool.register_for_llm(chatbot)
+        tool.register_for_execution(user_proxy)
+        tool.register_for_llm(chatbot)
 
-        with TemporaryDirectory() as tmp_dir:
-            file_path = f"{tmp_dir}/test.txt"
-            with open(file_path, "w") as file:
-                file.write("Hello, World!")
+        file_path = tmp_path / "test.txt"
+        with file_path.open("w") as file:
+            file.write("Hello, World!")
 
-            user_proxy.initiate_chat(
-                recipient=chatbot, message=f"Read the content of the file at {file_path}", max_turns=2
-            )
+        user_proxy.initiate_chat(recipient=chatbot, message=f"Read the content of the file at {file_path}", max_turns=2)
 
         for message in user_proxy.chat_messages[chatbot]:
             if "tool_responses" in message:
@@ -88,6 +93,10 @@ class TestCrewAIInteroperability:
 
         assert False, "Tool response not found in chat messages"
 
+    @pytest.mark.skipif(
+        not (sys.version_info >= (3, 10) or sys.version_info < (3, 13)),
+        reason="Crew AI Interoperability is not supported",
+    )
     def test_get_unsupported_reason(self) -> None:
         assert CrewAIInteroperability.get_unsupported_reason() is None
 
@@ -96,6 +105,7 @@ class TestCrewAIInteroperability:
 @pytest.mark.skipif(
     sys.version_info >= (3, 10) or sys.version_info < (3, 13), reason="Crew AI Interoperability is supported"
 )
+@skip_on_missing_imports("crewai", "interop-crewai")
 class TestCrewAIInteroperabilityIfNotSupported:
     def test_get_unsupported_reason(self) -> None:
         assert (

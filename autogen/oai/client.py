@@ -7,14 +7,17 @@
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import re
 import sys
 import uuid
 import warnings
+from functools import lru_cache
 from typing import Any, Callable, Optional, Protocol, Union
 
-from pydantic import BaseModel, schema_json_of
+from pydantic import BaseModel
+from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
 from ..doc_utils import export_module
@@ -50,6 +53,7 @@ if openai_result.is_successful:
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
     ERROR = None
+    from openai.lib._pydantic import _ensure_strict_json_schema
 else:
     ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
     OpenAI = object
@@ -193,6 +197,11 @@ LEGACY_CACHE_DIR = ".cache"
 OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
 
+@lru_cache(maxsize=128)
+def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient") -> None:
+    logger.debug(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
+
+
 @export_module("autogen")
 class ModelClient(Protocol):
     """A client class must implement the following methods:
@@ -250,7 +259,9 @@ class PlaceHolderClient:
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
-    def __init__(self, client: Union[OpenAI, AzureOpenAI], response_format: Optional[BaseModel] = None):
+    def __init__(
+        self, client: Union[OpenAI, AzureOpenAI], response_format: Union[BaseModel, dict[str, Any], None] = None
+    ):
         self._oai_client = client
         self.response_format = response_format
         if (
@@ -265,7 +276,15 @@ class OpenAIClient:
     def message_retrieval(
         self, response: Union[ChatCompletion, Completion]
     ) -> Union[list[str], list[ChatCompletionMessage]]:
-        """Retrieve the messages from the response."""
+        """Retrieve the messages from the response.
+
+        Args:
+            response (ChatCompletion | Completion): The response from openai.
+
+
+        Returns:
+            The message from the response.
+        """
         choices = response.choices
         if isinstance(response, Completion):
             return [choice.text for choice in choices]  # type: ignore [union-attr]
@@ -370,11 +389,16 @@ class OpenAIClient:
 
         return wrapper
 
+    @staticmethod
+    def _convert_system_role_to_user(messages: list[dict[str, Any]]) -> None:
+        for msg in messages:
+            if msg.get("role", "") == "system":
+                msg["role"] = "user"
+
     def create(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
 
         Args:
-            client: The openai client.
             params: The params for the completion.
 
         Returns:
@@ -382,12 +406,28 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        if self.response_format is not None:
+        if self.response_format is not None or "response_format" in params:
 
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
                     kwargs.pop("stream")
-                kwargs["response_format"] = type_to_response_format_param(self.response_format)
+
+                if isinstance(kwargs["response_format"], dict):
+                    kwargs["response_format"] = {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "schema": _ensure_strict_json_schema(
+                                kwargs["response_format"], path=(), root=kwargs["response_format"]
+                            ),
+                            "name": "response_format",
+                            "strict": True,
+                        },
+                    }
+                else:
+                    kwargs["response_format"] = type_to_response_format_param(
+                        self.response_format or params["response_format"]
+                    )
+
                 return self._oai_client.chat.completions.create(*args, **kwargs)
 
             create_or_parse = _create_or_parse
@@ -399,6 +439,10 @@ class OpenAIClient:
 
         # needs to be updated when the o3 is released to generalize
         is_o1 = "model" in params and params["model"].startswith("o1")
+
+        is_mistral = "model" in params and "mistral" in params["model"]
+        if is_mistral:
+            OpenAIClient._convert_system_role_to_user(params["messages"])
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
         if params.get("stream", False) and "messages" in params and not is_o1:
@@ -528,7 +572,7 @@ class OpenAIClient:
 
         return response
 
-    def _process_reasoning_model_params(self, params) -> None:
+    def _process_reasoning_model_params(self, params: dict[str, Any]) -> None:
         """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
@@ -630,7 +674,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](/reference/autogen/OpenAIWrapper#create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -671,9 +715,10 @@ class OpenAIWrapper:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
             for config in config_list:
                 self._register_default_client(config, openai_config)  # could modify the config
-                self._config_list.append(
-                    {**extra_kwargs, **{k: v for k, v in config.items() if k not in self.openai_kwargs}}
-                )
+                self._config_list.append({
+                    **extra_kwargs,
+                    **{k: v for k, v in config.items() if k not in self.openai_kwargs},
+                })
         else:
             self._register_default_client(extra_kwargs, openai_config)
             self._config_list = [extra_kwargs]
@@ -891,11 +936,11 @@ class OpenAIWrapper:
                 E.g., `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`.
                 The actual prompt will be:
                 "Complete the following sentence: Today I feel".
-                More examples can be found at [templating](/docs/Use-Cases/enhanced_inference#templating).
             - cache (AbstractCache | None): A Cache object to use for response cache. Default to None.
                 Note that the cache argument overrides the legacy cache_seed argument: if this argument is provided,
                 then the cache_seed argument is ignored. If this argument is not provided or None,
-                then the cache_seed argument is used.
+                then the cache_seed argument is used. If both cache and cache_seed are None,
+                then LEGACY_DEFAULT_CACHE_SEED is used as the cache_seed.
             - agent (AbstractAgent | None): The object responsible for creating a completion if an agent.
             - (Legacy) cache_seed (int | None) for using the DiskCache. Default to 41.
                 An integer cache_seed is useful when implementing "controlled randomness" for the completion.
@@ -912,7 +957,7 @@ class OpenAIWrapper:
         ```
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
-            - api_version (str | None): The api version. Default to None. E.g., "2024-02-01".
+            - api_version (Optional[str]): The api version. Default to None. E.g., "2024-02-01".
 
         Raises:
             - RuntimeError: If all declared custom model clients are not registered
@@ -966,12 +1011,17 @@ class OpenAIWrapper:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
 
+            log_cache_seed_value(cache if cache is not None else cache_seed, client=client)
+
             if cache_client is not None:
                 with cache_client as cache:
                     # Try to get the response from cache
                     key = get_key(
-                        {**params, **{"response_format": schema_json_of(params["response_format"])}}
-                        if "response_format" in params
+                        {
+                            **params,
+                            **{"response_format": json.dumps(TypeAdapter(params["response_format"]).json_schema())},
+                        }
+                        if "response_format" in params and not isinstance(params["response_format"], dict)
                         else params
                     )
                     request_ts = get_current_ts()

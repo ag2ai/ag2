@@ -44,11 +44,6 @@ class TestCrawl4AITool:
         result = await tool_without_llm(url="https://docs.ag2.ai/docs/Home")
         assert isinstance(result, str)
 
-    def test_get_provider_and_api_key(self, mock_credentials: Credentials) -> None:
-        provider, api_key = Crawl4AITool._get_provider_and_api_key(mock_credentials.llm_config)
-        assert provider == "openai/gpt-4o", provider
-        assert isinstance(api_key, str)
-
     @pytest.mark.parametrize(
         "use_extraction_model",
         [
@@ -56,7 +51,11 @@ class TestCrawl4AITool:
             True,
         ],
     )
-    def test_get_crawl_config(self, mock_credentials: Credentials, use_extraction_model: bool) -> None:
+    def test_get_crawl_config(
+        self, mock_credentials: Credentials, use_extraction_model: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
         class Product(BaseModel):
             name: str
             price: str

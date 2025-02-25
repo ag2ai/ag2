@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Optional
+from typing import Any, Optional
 
 from ...conversable_agent import ConversableAgent
 
@@ -26,7 +26,7 @@ class CriticAgent(ConversableAgent):
         name="critic",
         system_message: Optional[str] = DEFAULT_SYSTEM_MESSAGE,
         description: Optional[str] = DEFAULT_DESCRIPTION,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): agent name.
@@ -34,7 +34,7 @@ class CriticAgent(ConversableAgent):
             Please override this attribute if you want to reprogram the agent.
         description (str): The description of the agent.
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](../../conversable_agent#init).
+            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
         """
         super().__init__(
             name=name,

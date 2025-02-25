@@ -1,0 +1,155 @@
+CrewAI provides a variety of powerful tools designed for tasks such as web scraping, search, code interpretation, and more. These tools are easy to integrate into the AG2 framework, allowing you to enhance your agents with advanced capabilities. You can explore the full list of available tools in the [CrewAI Tools](https://github.com/crewAIInc/crewAI-tools/tree/main) repository.
+
+### Installation
+Install the required packages for integrating CrewAI tools into the AG2 framework.
+This ensures all dependencies for both frameworks are installed.
+
+```bash
+pip install ag2[interop-crewai]
+```
+
+### Imports
+
+Import necessary modules and tools.
+- [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool): A CrewAI tool for web scraping.
+- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent): Core AG2 classes.
+- [`Interoperability`](/docs/reference/interop/interoperability): This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
+
+```python
+import os
+
+from crewai_tools import ScrapeWebsiteTool
+
+from autogen import AssistantAgent, UserProxyAgent
+from autogen.interop import Interoperability
+```
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+- `config_list` defines the LLM configurations, including the model and API key.
+- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+user_proxy = UserProxyAgent(
+    name="User",
+    human_input_mode="NEVER",
+)
+
+chatbot = AssistantAgent(
+    name="chatbot",
+    llm_config={"config_list": config_list},
+)
+```
+
+### Tool Integration
+
+Integrate the CrewAI tool with AG2.
+- [`Interoperability`](/docs/reference/interop/interoperability) converts the CrewAI tool to a format compatible with AG2.
+- [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool) is used for web scraping tasks.
+- Register the tool for both execution and interaction with LLMs.
+
+```python
+interop = Interoperability()
+crewai_tool = ScrapeWebsiteTool()
+ag2_tool = interop.convert_tool(tool=crewai_tool, type="crewai")
+
+ag2_tool.register_for_execution(user_proxy)
+ag2_tool.register_for_llm(chatbot)
+```
+
+### Initiating the chat
+Initiate the conversation between the [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) and the [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) to utilize the CrewAI tool.
+```python
+message = "Scrape the website https://ag2.ai/"
+chat_result = user_proxy.initiate_chat(recipient=chatbot, message=message, max_turns=2)
+```
+
+### Output
+The `chatbot` provides results based on the web scraping operation:
+
+```console
+User (to chatbot):
+
+Scrape the website https://ag2.ai/
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+***** Suggested tool call (call_ZStuwmexfN7j56uJKOi6BCid): Read_website_content *****
+Arguments:
+{"args":{"website_url":"https://ag2.ai/"}}
+*************************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION Read_website_content...
+Using Tool: Read website content
+User (to chatbot):
+
+***** Response from calling tool (call_ZStuwmexfN7j56uJKOi6BCid) *****
+
+AgentOS
+Join our growing community of over 20,000 agent builders Join our growing community of over 20,000 agent builders The Open-Source AgentOS Build production-ready multi-agent systems in minutes, not months. Github Discord The End-to-End Platform for Multi-Agent Automation The End-to-End Platform for Multi-Agent Automation Flexible Agent Construction and Orchestration Create specialized agents that work together seamlessly. AG2 makes it easy to define roles, configure behaviors, and orchestrate collaboration - all through simple, intuitive code. → Assistant agents for problem-solving → Executor agents for taking action → Critic agents for validation → Group chat managers for coordination Built-in Conversation Patterns Built-in Conversation Patterns Stop wrestling with agent coordination. AG2 handles message routing, state management, and conversation flow automatically. → Two-agent conversations → Group chats with dynamic speaker selection → Sequential chats with context carryover → Nested conversations for modularity Seamless Human-AI collaboration Seamless Human-AI collaboration Seamlessly integrate human oversight and input into your agent workflows. → Configurable human input modes → Flexible intervention points → Optional human approval workflows → Interactive conversation interfaces → Context-aware human handoff Roadmap AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 STUDIO → Visual agent system design → Real-time testing and debugging → One-click deployment to production → Perfect for prototyping and MVPs AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders AG2 MARKETPLACE → Share and monetize your agents → Discover pre-built solution templates → Quick-start your agent development → Connect with other builders SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls SCALING TOOLS → Zero to production deployment guides → Usage analytics and cost optimization → Team collaboration features → Enterprise-ready security controls Whether you're a solo founder prototyping the next big AI product, or an enterprise team deploying at scale we're building AG2 for you. This is AgentOS - making multi-agent development accessible to everyone. Github Join Our Growing Community Join Our Growing Community → 20,000+ active agent builders → Daily technical discussions → Weekly community calls → Open RFC process → Regular contributor events (Coming soon) Discord Problem Features Roadmap Community Documentation Problem Features Roadmap Community Documentation Problem Features Roadmap Community Documentation
+
+**********************************************************************
+
+--------------------------------------------------------------------------------
+chatbot (to User):
+
+The website "https://ag2.ai/" promotes a platform named AgentOS, which is designed for building multi-agent systems efficiently. Key highlights from the website are:
+
+- **Community**: They have a growing community of over 20,000 agent builders.
+
+- **End-to-End Platform**: AG2 is described as an end-to-end platform for multi-agent automation. It supports flexible agent construction and orchestration, helping to define roles, configure behaviors, and orchestrate collaboration.
+
+- **Agent Types**: It includes assistant agents for problem-solving, executor agents for taking action, critic agents for validation, and group chat managers for coordination.
+
+- **Built-in Conversation Patterns**: AG2 offers capabilities for message routing, state management, and conversation flow management, supporting various conversation types like two-agent conversations, group chats, and nested conversations.
+
+- **Human-AI Collaboration**: The platform facilitates seamless integration of human oversight and input, with options for human intervention and approval workflows.
+
+- **AG2 Studio**: This feature provides visual agent system design, real-time testing, debugging, and one-click deployment, suited for prototyping and MVPs.
+
+- **AG2 Marketplace**: Provides a place to share, monetize agents, discover pre-built solution templates, and connect with other builders.
+
+- **Scaling Tools**: Includes guides for deployment, analytics, cost optimization, team collaboration features, and enterprise-ready security controls.
+
+- **Community and Documentation**: They encourage connecting through GitHub and Discord and have regular community calls and events planned.
+
+This comprehensive platform seems to aim at both individual developers and enterprise teams looking to deploy multi-agent systems effectively and collaboratively. TERMINATE
+
+--------------------------------------------------------------------------------
+```
+
+You can also access a detailed summary of the interaction:
+
+```python
+print(chat_result.summary)
+```
+
+```console
+The website "https://ag2.ai/" promotes a platform named AgentOS, which is designed for building multi-agent systems efficiently. Key highlights from the website are:
+
+- **Community**: They have a growing community of over 20,000 agent builders.
+
+- **End-to-End Platform**: AG2 is described as an end-to-end platform for multi-agent automation. It supports flexible agent construction and orchestration, helping to define roles, configure behaviors, and orchestrate collaboration.
+
+- **Agent Types**: It includes assistant agents for problem-solving, executor agents for taking action, critic agents for validation, and group chat managers for coordination.
+
+- **Built-in Conversation Patterns**: AG2 offers capabilities for message routing, state management, and conversation flow management, supporting various conversation types like two-agent conversations, group chats, and nested conversations.
+
+- **Human-AI Collaboration**: The platform facilitates seamless integration of human oversight and input, with options for human intervention and approval workflows.
+
+- **AG2 Studio**: This feature provides visual agent system design, real-time testing, debugging, and one-click deployment, suited for prototyping and MVPs.
+
+- **AG2 Marketplace**: Provides a place to share, monetize agents, discover pre-built solution templates, and connect with other builders.
+
+- **Scaling Tools**: Includes guides for deployment, analytics, cost optimization, team collaboration features, and enterprise-ready security controls.
+
+- **Community and Documentation**: They encourage connecting through GitHub and Discord and have regular community calls and events planned.
+
+This comprehensive platform seems to aim at both individual developers and enterprise teams looking to deploy multi-agent systems effectively and collaboratively.
+```

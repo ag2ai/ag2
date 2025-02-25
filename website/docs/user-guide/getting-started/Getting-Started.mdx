@@ -21,13 +21,13 @@ and multi-agent conversation patterns.
   the orchestration, automation, and optimization of a complex LLM workflow. It
   maximizes the performance of LLM models and overcomes their weaknesses.
 - It supports [diverse conversation
-  patterns](/docs/Use-Cases/agent_chat#supporting-diverse-conversation-patterns)
+  patterns](/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive)
   for complex workflows. With customizable and conversable agents, developers can
   use AG2 to build a wide range of conversation patterns concerning
   conversation autonomy, the number of agents, and agent conversation topology.
 - It provides a collection of working systems with different complexities. These
   systems span a [wide range of
-  applications](/docs/Use-Cases/agent_chat#diverse-applications-implemented-with-autogen)
+  applications](/docs/use-cases/community-gallery/community-gallery)
   from various domains and complexities. This demonstrates how AG2 can
   easily support diverse conversation patterns.
 
@@ -53,7 +53,7 @@ pip install autogen
 import os
 from autogen import AssistantAgent, UserProxyAgent
 
-llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+llm_config = {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
 assistant = AssistantAgent("assistant", llm_config=llm_config)
 user_proxy = UserProxyAgent("user_proxy", code_execution_config=False)
 
@@ -78,7 +78,7 @@ import os
 import autogen
 from autogen import AssistantAgent, UserProxyAgent
 
-llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+llm_config = {"api_type", "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
 assistant = AssistantAgent("assistant", llm_config=llm_config)
 
 user_proxy = UserProxyAgent(
@@ -100,7 +100,7 @@ import os
 import autogen
 from autogen import AssistantAgent, UserProxyAgent
 
-llm_config = {"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+llm_config = {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
 
 with autogen.coding.DockerCommandLineCodeExecutor(work_dir="coding") as code_executor:
     assistant = AssistantAgent("assistant", llm_config=llm_config)
@@ -141,7 +141,7 @@ The figure below shows an example conversation flow with AG2.
 
 - Go through the [tutorial](/docs/tutorial/introduction) to learn more about the core concepts in AG2
 - Read the examples and guides in the [notebooks section](/notebooks)
-- Understand the use cases for [multi-agent conversation](/docs/Use-Cases/agent_chat) and [enhanced LLM inference](/docs/Use-Cases/enhanced_inference)
+- Understand the use cases for [multi-agent conversation](/docs/use-cases/use-cases/customer-service) and enhanced LLM inference
 - Read the [API](/docs/reference/agentchat/conversable_agent/) docs
 - Learn about [research](/docs/Research) around AG2
 - Chat on [Discord](https://discord.gg/pAbnFJrkgZ)

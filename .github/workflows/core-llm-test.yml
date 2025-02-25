@@ -4,15 +4,23 @@
 name: Core tests with LLMs
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "autogen/**"
-      - "test/**"
-      - "notebook/agentchat_auto_feedback_from_code_execution.ipynb"
-      - "notebook/agentchat_function_call.ipynb"
-      - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
-      - ".github/workflows/core-llm-test.yml"
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+  workflow_dispatch: # allows manual triggering of the workflow
+  # pull_request_target:
+  #   branches: ["main"]
+  #   paths:
+  #     - "autogen/**"
+  #     - "test/**"
+  #     - "notebook/agentchat_auto_feedback_from_code_execution.ipynb"
+  #     - "notebook/agentchat_function_call.ipynb"
+  #     - "notebook/agentchat_groupchat_finite_state_machine.ipynb"
+  #     - ".github/workflows/core-llm-test.yml"
+  #     - "pyproject.toml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
 permissions:
   {}
 
@@ -33,6 +41,21 @@ jobs:
           - 6379:6379
         options: --entrypoint redis-server
     steps:
+      - name: Get User Permission
+        id: checkAccess
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: write
+          username: ${{ github.triggering_actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check User Permission
+        if: steps.checkAccess.outputs.require-result == 'false'
+        run: |
+          echo "${{ github.triggering_actor }} does not have permissions on this repo."
+          echo "Current permission level is ${{ steps.checkAccess.outputs.user-permission }}"
+          echo "Job originally triggered by ${{ github.actor }}"
+          exit 1
       # checkout to pr branch
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,18 +68,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install packages and dependencies
-        if: matrix.llm == 'openai' || matrix.llm == 'deepseek'
-        run: |
-          docker --version
-          uv pip install --system -e ".[test,redis,interop]"
-          python -c "import autogen"
       - name: Install packages for ${{ matrix.llm }}
-        if: matrix.llm != 'openai' && matrix.llm != 'deepseek'
         run: |
           docker --version
-          uv pip install --system -e ".[test,redis,interop,${{ matrix.llm }}]"
-          python -c "import autogen"
+          uv pip install --system -e ".[test,redis,${{ matrix.llm }}]"
       - name: LLM tests using ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -67,9 +82,13 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: bash scripts/test-core-llm.sh -m "${{ matrix.llm }}"
+      - name: Show coverage report
+        run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        if: ${{ !contains(github.ref, 'gh-readonly-queue/') }}
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
+          files: ./coverage.xml
+          flags: core-llm, ${{ matrix.llm }}, ${{ matrix.os }}, ${{ matrix.python-version }}
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}

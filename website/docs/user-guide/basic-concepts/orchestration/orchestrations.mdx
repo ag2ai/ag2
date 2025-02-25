@@ -1,0 +1,22 @@
+---
+title: Orchestrating agents
+sidebarTitle: Overview
+---
+
+Many hands make for light work and orchestrating workflows containing many agents is a strength of the AG2 framework.
+
+1. **Two-agent chat**: The simplest form of conversation pattern where two agents chat back-and-forth with each other. This has been demonstrated in the previous examples.
+
+2. **Sequential chat**: A sequence of chats, each between two agents, chained together by a carryover mechanism (which brings the summary of the previous chat to the context of the next chat). Useful for simple sequential workflows.
+
+3. **Group chat**: A chat with more than two agents with options on how agents are selected. See [GroupChat Overview](/docs/user-guide/advanced-concepts/groupchat/groupchat) for further details.
+
+4. **Nested chat**: A mechanism to package a workflow into a single agent/chat for reuse in a workflow.
+
+5. **Swarm**: A pattern based on agents with handoffs. There's a shared context and each agent has tools and the ability to transfer control to other agents. The [original swarm concept](https://github.com/openai/swarm) was created by OpenAI.
+
+Continue on to explore these.
+
+<Note>
+We'll refer to *conversation patterns* throughout the documentation - they are simply a structured way of organizing the flow between agents.
+</Note>

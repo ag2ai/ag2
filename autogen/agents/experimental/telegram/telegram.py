@@ -1,0 +1,69 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from typing import Any, Optional, Union
+
+from .... import ConversableAgent
+from ....doc_utils import export_module
+from ....tools.experimental import TelegramRetrieveTool, TelegramSendTool
+
+__all__ = ["TelegramAgent"]
+
+
+@export_module("autogen.agents.experimental")
+class TelegramAgent(ConversableAgent):
+    """An agent that can send messages and retrieve messages on Telegram."""
+
+    def __init__(
+        self,
+        system_message: Optional[Union[str, list]] = None,
+        *args,
+        api_id: str,
+        api_hash: str,
+        chat_id: str,
+        has_writing_instructions: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the TelegramAgent.
+
+        Args:
+            llm_config (dict[str, Any]): The LLM configuration.
+            api_id: Telegram API ID from https://my.telegram.org/apps.
+            api_hash: Telegram API hash from https://my.telegram.org/apps.
+            chat_id: The ID of the destination (Channel, Group, or User ID).
+            has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
+        """
+        system_message = system_message or (
+            "You are a helpful AI assistant that communicates through Telegram. "
+            "Remember that Telegram uses Markdown-like formatting and has message length limits. "
+            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
+        )
+
+        self._send_tool = TelegramSendTool(api_id=api_id, api_hash=api_hash, chat_id=chat_id)
+        self._retrieve_tool = TelegramRetrieveTool(api_id=api_id, api_hash=api_hash, chat_id=chat_id)
+
+        # Add formatting instructions
+        if has_writing_instructions:
+            system_message = system_message + (
+                "\nFormat guidelines for Telegram:\n"
+                "1. Max message length: 4096 characters\n"
+                "2. HTML formatting:\n"
+                "   - <b>bold</b>\n"
+                "   - <i>italic</i>\n"
+                "   - <code>code</code>\n"
+                "   - <pre>code block</pre>\n"
+                "   - <a href='URL'>link</a>\n"
+                "   - <u>underline</u>\n"
+                "   - <s>strikethrough</s>\n"
+                "3. HTML rules:\n"
+                "   - Tags must be properly closed\n"
+                "   - Can't nest identical tags\n"
+                "   - Links require full URLs (with http://)\n"
+                "4. Supports @mentions and emoji"
+            )
+
+        super().__init__(*args, system_message=system_message, **kwargs)
+
+        self.register_for_llm()(self._send_tool)
+        self.register_for_llm()(self._retrieve_tool)

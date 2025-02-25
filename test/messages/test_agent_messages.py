@@ -11,6 +11,7 @@ import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.messages.agent_messages import (
     ClearAgentsHistoryMessage,
     ClearConversableAgentHistoryMessage,
@@ -32,7 +33,7 @@ from autogen.messages.agent_messages import (
     SelectSpeakerTryCountExceededMessage,
     SpeakerAttemptFailedMultipleAgentsMessage,
     SpeakerAttemptFailedNoAgentsMessage,
-    SpeakerAttemptSuccessfullMessage,
+    SpeakerAttemptSuccessfulMessage,
     TerminationAndHumanReplyMessage,
     TextMessage,
     ToolCallMessage,
@@ -40,6 +41,9 @@ from autogen.messages.agent_messages import (
     UsingAutoReplyMessage,
     create_received_message_model,
 )
+
+with optional_import_block():
+    import PIL
 
 
 @pytest.fixture(autouse=True)
@@ -414,6 +418,27 @@ class TestTextMessage:
 
         assert mock.call_args_list == expected_call_args_list
 
+    @skip_on_missing_imports("PIL", "unknown")
+    def test_serialization(self) -> None:
+        image = PIL.Image.new(mode="RGB", size=(200, 200))
+        content = [
+            {"type": "text", "text": "What's the breed of this dog?\n"},
+            {"type": "image_url", "image_url": {"url": image}},
+            {"type": "text", "text": "."},
+        ]
+        uuid = UUID("f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b")
+        text_message = TextMessage(content=content, sender_name="sender", recipient_name="recipient", uuid=uuid)
+
+        result = text_message.model_dump_json()
+
+        expected = (
+            '{"type":"text","content":{"uuid":"f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b",'
+            '"content":[{"type":"text","text":"What\'s the breed of this dog?\\n"},'
+            '{"type":"image_url","image_url":{"url":"<image>"}},'
+            '{"type":"text","text":"."}],"sender_name":"sender","recipient_name":"recipient"}}'
+        )
+        assert str(result) == expected, result
+
 
 class TestPostCarryoverProcessingMessage:
     def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
@@ -573,7 +598,7 @@ class TestClearAgentsHistoryMessage:
         assert mock.call_args_list == expected_call_args_list
 
 
-class TestSpeakerAttemptSuccessfullMessage:
+class TestSpeakerAttemptSuccessfulMessage:
     @pytest.mark.parametrize(
         "mentions, expected",
         [
@@ -585,17 +610,17 @@ class TestSpeakerAttemptSuccessfullMessage:
         attempts_left = 2
         verbose = True
 
-        actual = SpeakerAttemptSuccessfullMessage(
+        actual = SpeakerAttemptSuccessfulMessage(
             uuid=uuid,
             mentions=mentions,
             attempt=attempt,
             attempts_left=attempts_left,
             select_speaker_auto_verbose=verbose,
         )
-        assert isinstance(actual, SpeakerAttemptSuccessfullMessage)
+        assert isinstance(actual, SpeakerAttemptSuccessfulMessage)
 
         expected_model_dump = {
-            "type": "speaker_attempt_successfull",
+            "type": "speaker_attempt_successful",
             "content": {
                 "uuid": uuid,
                 "mentions": mentions,

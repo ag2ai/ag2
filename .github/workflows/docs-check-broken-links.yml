@@ -5,6 +5,11 @@ on:
     workflows: ["mintlify docs"]
     types:
       - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   check-broken-link:
@@ -21,9 +26,6 @@ jobs:
 
       - name: Install muffet
         run: go install github.com/raviqqe/muffet/v2@latest
-
-      - name: Sleep for 5 minutes
-        run: sleep 300
 
       - name: Check for broken links
         run: ./scripts/broken-links-check.sh

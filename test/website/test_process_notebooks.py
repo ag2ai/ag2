@@ -12,16 +12,21 @@ from typing import Optional, Union
 import pytest
 
 from autogen._website.process_notebooks import (
-    add_authors_and_social_img_to_blog_posts,
+    add_authors_and_social_img_to_blog_and_user_stories,
     add_front_matter_to_metadata_mdx,
-    cleanup_tmp_dirs_if_no_metadata,
+    cleanup_tmp_dirs,
     convert_callout_blocks,
+    copy_images_from_notebooks_dir_to_target_dir,
     ensure_mint_json_exists,
     extract_example_group,
+    extract_img_tag_from_figure_tag,
     generate_nav_group,
+    get_files_path_from_navigation,
     get_sorted_files,
     update_group_pages,
 )
+from autogen._website.utils import NavigationGroup
+from autogen.import_utils import skip_on_missing_imports
 
 
 class TestUpdateGroupPages:
@@ -36,12 +41,6 @@ class TestUpdateGroupPages:
                         "group": "Use cases",
                         "pages": [
                             "docs/use-cases/use-cases/customer-service",
-                        ],
-                    },
-                    {
-                        "group": "Reference Agents",
-                        "pages": [
-                            "docs/use-cases/reference-agents/index",
                         ],
                     },
                     {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
@@ -89,12 +88,6 @@ class TestUpdateGroupPages:
                             "docs/use-cases/use-cases/customer-service",
                         ],
                     },
-                    {
-                        "group": "Reference Agents",
-                        "pages": [
-                            "docs/use-cases/reference-agents/index",
-                        ],
-                    },
                     {"group": "Notebooks", "pages": ["docs/use-cases/updated-notebook/index"]},
                     {
                         "group": "Community Gallery",
@@ -131,7 +124,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
         (notebooks_dir / "example-1.mdx").touch()
         (notebooks_dir / "example-2.mdx").touch()
 
-        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        cleanup_tmp_dirs(tmp_path, False)
         assert not notebooks_dir.exists()
 
     # Test with the tmp_dir / "snippets" / "data" / "NotebooksMetadata.mdx"
@@ -148,7 +141,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
         metadata_dir.mkdir(parents=True, exist_ok=True)
         (metadata_dir / "NotebooksMetadata.mdx").touch()
 
-        cleanup_tmp_dirs_if_no_metadata(tmp_path)
+        cleanup_tmp_dirs(tmp_path, False)
         assert notebooks_dir.exists()
 
 
@@ -481,8 +474,8 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         """Create temporary test directory with blog posts and authors file."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             website_dir = Path(tmp_dir)
-            blog_dir = website_dir / "_blogs"
-            blog_dir.mkdir()
+            blog_dir = website_dir / "docs" / "_blogs"
+            blog_dir.mkdir(parents=True)
 
             # Create first blog post
             post1_dir = blog_dir / "2023-04-21-LLM-tuning-math"
@@ -572,7 +565,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                 lorem ipsum""").lstrip()
             (post2_dir / "index.mdx").write_text(post2_content)
 
-            # Create authors.yml
+            # Create blogs_and_user_stories_authors.yml
             authors_content = textwrap.dedent("""
                 sonichi:
                     name: Chi Wang
@@ -604,17 +597,18 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
                     url: https://github.com/davorinrusevljan
                     image_url: https://github.com/davorinrusevljan.png
                 """).lstrip()
-            (blog_dir / "authors.yml").write_text(authors_content)
+            (website_dir / "blogs_and_user_stories_authors.yml").write_text(authors_content)
 
             yield website_dir
 
+    @skip_on_missing_imports("yaml", "docs")
     def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
-        add_authors_and_social_img_to_blog_posts(test_dir)
+        add_authors_and_social_img_to_blog_and_user_stories(test_dir)
 
         # Get directory paths
         generated_blog_dir = test_dir / "docs" / "blog"
-        blog_dir = test_dir / "_blogs"
+        blog_dir = test_dir / "docs" / "_blogs"
 
         # Verify directory structure matches
         blog_files = set(p.relative_to(blog_dir) for p in blog_dir.glob("**/*.mdx"))
@@ -759,3 +753,160 @@ class TestConvertCalloutBlocks:
     def test_convert_callout_blocks(self, content: str, expected: str) -> None:
         actual = convert_callout_blocks(content)
         assert actual == expected, actual
+
+
+class TestEditLinks:
+    @pytest.fixture
+    def navigation(self) -> list[NavigationGroup]:
+        return [
+            {"group": "Home", "pages": ["docs/home/home"]},
+            {
+                "group": "User Guide",
+                "pages": [
+                    {
+                        "group": "Basic Concepts",
+                        "pages": [
+                            "docs/user-guide/basic-concepts/installing-ag2",
+                            "docs/user-guide/basic-concepts/llm-configuration",
+                        ],
+                    },
+                    {"group": "Advanced Concepts", "pages": ["docs/user-guide/advanced-concepts/rag"]},
+                    {"group": "Model Providers", "pages": ["docs/user-guide/models/openai"]},
+                    {"group": "Reference Agents", "pages": ["docs/user-guide/reference-agents/index"]},
+                ],
+            },
+            {
+                "group": "Use Cases",
+                "pages": [
+                    {"group": "Use cases", "pages": ["docs/use-cases/use-cases/customer-service"]},
+                    {"group": "Notebooks", "pages": ["docs/use-cases/notebooks/notebooks"]},
+                    "docs/use-cases/community-gallery/community-gallery",
+                ],
+            },
+            {"group": "Contributor Guide", "pages": ["docs/contributor-guide/contributing"]},
+            {"group": "FAQs", "pages": ["docs/faq/FAQ"]},
+            {"group": "Ecosystem", "pages": ["docs/ecosystem/agentops"]},
+        ]
+
+    def test_get_files_path_from_navigation(self, navigation: list[NavigationGroup]) -> None:
+        expected_files = [
+            "docs/home/home",
+            "docs/user-guide/basic-concepts/installing-ag2",
+            "docs/user-guide/basic-concepts/llm-configuration",
+            "docs/user-guide/advanced-concepts/rag",
+            "docs/user-guide/models/openai",
+            "docs/user-guide/reference-agents/index",
+            "docs/use-cases/use-cases/customer-service",
+            "docs/use-cases/notebooks/notebooks",
+            "docs/use-cases/community-gallery/community-gallery",
+            "docs/contributor-guide/contributing",
+            "docs/faq/FAQ",
+            "docs/ecosystem/agentops",
+        ]
+
+        expected = [Path(f) for f in expected_files]
+
+        actual = get_files_path_from_navigation(navigation)
+        assert actual == expected, actual
+
+
+class TestExtractImgTagFromFigureTag:
+    @pytest.fixture
+    def content(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Figure
+
+            <figure>
+                <img src="https://example.com/image.png" alt="image" />
+                <figcaption>Image caption</figcaption>
+            </figure>
+
+            <figure>
+                <img src="swarm_enhanced_01.png" alt="image" />
+                <figcaption>Image caption</figcaption>
+            </figure>
+
+            <figure>
+            <img
+            src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/friendly_and_suspicous.jpg"
+            alt="agent flow" />
+            <figcaption aria-hidden="true">agent flow</figcaption>
+            </figure>
+
+            ## Conclusion
+
+            This is a conclusion.
+            """).lstrip()
+
+    @pytest.fixture
+    def expected(self) -> str:
+        return textwrap.dedent("""
+            # Title
+
+            ## Introduction
+
+            This is an introduction.
+
+            ## Figure
+
+            <img src="https://example.com/image.png" alt="image" />
+
+            <img src="/docs/use-cases/notebooks/notebooks/swarm_enhanced_01.png" alt="image" />
+
+            <img
+            src="https://media.githubusercontent.com/media/ag2ai/ag2/main/notebook/friendly_and_suspicous.jpg"
+            alt="agent flow" />
+
+            ## Conclusion
+
+            This is a conclusion.
+            """).lstrip()
+
+    def test_extract_img_tag_from_figure_tag(self, content: str, expected: str) -> None:
+        img_rel_path = Path("docs/use-cases/notebooks/notebooks")
+        actual = extract_img_tag_from_figure_tag(content, img_rel_path)
+        assert actual == expected, actual
+
+
+class TestCopyImagesFromNotebooksDirToTargetDir:
+    @pytest.fixture
+    def setup_test_files(self, tmp_path: Path) -> dict[str, Path]:
+        # Create directories
+        notebook_dir = tmp_path / "notebooks"
+        notebook_sub_dir = notebook_dir / "sub_dir"
+        notebook_dir.mkdir()
+        notebook_sub_dir.mkdir()
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        # Create test files
+        files_to_create = [
+            (notebook_dir / "test1.png", b"png content"),
+            (notebook_dir / "test2.jpg", b"jpg content"),
+            (notebook_dir / "test3.txt", b"text content"),
+            (notebook_sub_dir / "test1.png", b"png content"),
+            (notebook_sub_dir / "test2.jpg", b"jpg content"),
+        ]
+
+        for file_path, content in files_to_create:
+            file_path.write_bytes(content)
+
+        return {"notebook_dir": notebook_dir, "target_dir": target_dir}
+
+    def test_copy_images(self, setup_test_files: dict[str, Path]) -> None:
+        copy_images_from_notebooks_dir_to_target_dir(setup_test_files["notebook_dir"], setup_test_files["target_dir"])
+
+        # Check only images were copied
+        copied_files = list(setup_test_files["target_dir"].iterdir())
+        assert len(copied_files) == 2
+        assert (setup_test_files["target_dir"] / "test1.png").exists()
+        assert (setup_test_files["target_dir"] / "test2.jpg").exists()
+        assert not (setup_test_files["target_dir"] / "test3.txt").exists()
+        assert not (setup_test_files["target_dir"] / "sub_dir").exists()

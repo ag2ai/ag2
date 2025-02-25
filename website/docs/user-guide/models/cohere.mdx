@@ -23,6 +23,18 @@ First you need to install the AG2 package with the Cohere extra.
 pip install ag2[cohere]
 ```
 
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[cohere]
+```
+or
+```bash
+pip install -U pyautogen[cohere]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 Cohere provides a number of models to use, included below. See the list of [models here](https://docs.cohere.com/docs/models).
 
 See the sample `OAI_CONFIG_LIST` below showing how the Cohere client class is used by specifying the `api_type` as `cohere`.

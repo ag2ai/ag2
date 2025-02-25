@@ -4,10 +4,7 @@
 # alternative api: https://rapidapi.com/omarmhaimdat/api/youtube-v2
 
 
-from typing import Any
-
-
-def get_youtube_caption(video_id: str) -> Any:
+def get_youtube_caption(video_id: str) -> str:
     """Retrieves the captions for a YouTube video.
 
     Args:
@@ -24,7 +21,7 @@ def get_youtube_caption(video_id: str) -> Any:
     import requests
 
     rapid_api_key = os.environ["RAPID_API_KEY"]
-    video_url = f"https://www.youtube.com/watch?v={video_id: str}"
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
     url = "https://youtube-transcript3.p.rapidapi.com/api/transcript-with-url"
 
     querystring = {"url": video_url, "lang": "en", "flat_text": "true"}

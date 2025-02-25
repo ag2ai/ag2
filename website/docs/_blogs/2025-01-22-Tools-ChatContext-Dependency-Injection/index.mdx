@@ -1,0 +1,263 @@
+---
+title: Tools with ChatContext Dependency Injection
+authors:
+  - rjambrecic
+tags: [tools, tool calling, dependency injection]
+---
+
+## Introduction
+
+In this post, we’ll build upon the concepts introduced in our previous blog on [Tools with Dependency Injection](/docs/blog/2025-01-07-Tools-Dependency-Injection/index). We’ll take a deeper look at how [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext) can be used to manage the flow of conversations in a more structured and secure way.
+
+By using [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext), we can track and control the sequence of function calls during a conversation. This is particularly useful in situations where one task must be completed before another — for example, ensuring that a user logs in before they can check their account balance. This approach helps to prevent errors and enhances the security of the system.
+
+**Benefits of Using [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext)**:
+- **Flow Control**: Ensures tasks are performed in the correct order, reducing the chance of mistakes.
+- **Enhanced Security**: Prevents unauthorized actions, such as accessing sensitive data before authentication.
+- **Simplified Debugging**: Logs the conversation history, making it easier to trace and resolve issues.
+
+<Note>This blog builds on the concepts shared in the [notebook](/docs/use-cases/notebooks/notebooks/tools_chat_context_dependency_injection).</Note>
+
+## Installation
+
+To install `AG2`, simply run the following command:
+
+```bash
+pip install ag2
+```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen
+```
+or
+```bash
+pip install -U pyautogen
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
+## Imports
+
+```python
+import os
+from typing import Annotated, Literal
+
+from pydantic import BaseModel
+
+from autogen.agentchat import AssistantAgent, UserProxyAgent
+from autogen.tools.dependency_injection import BaseContext, ChatContext, Depends
+```
+
+## Account and Helper Functions
+
+The following `Account` class and helper functions are adapted from
+the [Tools with Dependency Injection](/docs/blog/2025-01-07-Tools-Dependency-Injection/index) post. They define the structure for securely handling
+account data and operations like login and balance retrieval.
+
+### Define Account Class
+
+```python
+class Account(BaseContext, BaseModel):
+    username: str
+    password: str
+    currency: Literal["USD", "EUR"] = "USD"
+
+
+alice_account = Account(username="alice", password="password123")
+bob_account = Account(username="bob", password="password456")
+
+account_ballace_dict = {
+    (alice_account.username, alice_account.password): 300,
+    (bob_account.username, bob_account.password): 200,
+}
+```
+
+### Helper Functions
+
+These functions validate account credentials and retrieve account
+balances.
+
+```python
+def _verify_account(account: Account):
+    if (account.username, account.password) not in account_ballace_dict:
+        raise ValueError("Invalid username or password")
+
+
+def _get_balance(account: Account):
+    _verify_account(account)
+    return f"Your balance is {account_ballace_dict[(account.username, account.password)]}{account.currency}"
+```
+
+## Agent Configuration
+
+Configure the agents for the interaction.
+
+-   `config_list` defines the LLM configurations, including the model
+    and API key.
+-   [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual
+    human interaction (set to `NEVER`).
+-   [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM
+    settings.
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+agent = AssistantAgent(
+    name="agent",
+    llm_config={"config_list": config_list},
+)
+user_proxy = UserProxyAgent(
+    name="user_proxy_1",
+    human_input_mode="NEVER",
+    llm_config=False,
+)
+```
+
+## Injecting a ChatContext Parameter
+
+Now let’s upgrade the example from the previous post by introducing
+the [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext) parameter. This enhancement allows us to enforce
+proper execution order in the workflow, ensuring that users log in
+before accessing sensitive data like account balances.
+
+The following functions will be registered:
+
+-   `login`: Verifies the user’s credentials and ensures they are logged
+    in.
+-   `get_balance`: Retrieves the account balance but only if the user
+    has successfully logged in first.
+
+```python
+@user_proxy.register_for_execution()
+@agent.register_for_llm(description="Login")
+def login(
+    account: Annotated[Account, Depends(bob_account)],
+) -> str:
+    _verify_account(account)
+    return "You are logged in"
+
+
+@user_proxy.register_for_execution()
+@agent.register_for_llm(description="Get balance")
+def get_balance(
+    account: Annotated[Account, Depends(bob_account)],
+    chat_context: ChatContext,
+) -> str:
+    _verify_account(account)
+
+    # Extract the list of messages exchanged with the first agent in the conversation.
+    # The chat_context.chat_messages is a dictionary where keys are agents (objects)
+    # and values are lists of message objects. We take the first value (messages of the first agent).
+    messages_with_first_agent = list(chat_context.chat_messages.values())[0]
+
+    login_function_called = False
+    for message in messages_with_first_agent:
+        if "tool_calls" in message and message["tool_calls"][0]["function"]["name"] == "login":
+            login_function_called = True
+            break
+
+    if not login_function_called:
+        raise ValueError("Please login first")
+
+    balance = _get_balance(account)
+    return balance
+```
+
+Finally, we initiate a chat to retrieve the balance.
+
+```python
+user_proxy.initiate_chat(agent, message="Get users balance", max_turns=4)
+```
+
+When `user_proxy.initiate_chat(agent, message="Get users balance", max_turns=4)` is called, the following happens:
+
+- **User Request**: The user sends the message `"Get users balance"`, prompting the agent to suggest calling `get_balance`.
+- **First Function Call**: The agent attempts to execute `get_balance`, but since the user isn't logged in, it raises an error: `"Please login first"`. The agent then suggests calling `login` to authenticate the user.
+- **Login Execution**: The `login` function is executed, confirming the user's login with `"You are logged in"`.
+- **Second Function Call**: With the user logged in, the agent successfully calls `get_balance` and retrieves the balance.
+- **Final Response**: The agent responds with `"Your balance is 200 USD"`, confirming the correct execution of the workflow.
+
+```console
+user_proxy_1 (to agent):
+
+Get users balance
+
+--------------------------------------------------------------------------------
+agent (to user_proxy_1):
+
+***** Suggested tool call (call_aeSi4R4Mo7f6JpSLTpll6lmH): get_balance *****
+Arguments:
+{}
+****************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION get_balance...
+Call ID: call_aeSi4R4Mo7f6JpSLTpll6lmH
+Input arguments: {}
+user_proxy_1 (to agent):
+
+***** Response from calling tool (call_aeSi4R4Mo7f6JpSLTpll6lmH) *****
+Error: Please login first
+**********************************************************************
+
+--------------------------------------------------------------------------------
+agent (to user_proxy_1):
+
+***** Suggested tool call (call_7hY8yZWjrD7Irh1mKvFJL40y): login *****
+Arguments:
+{}
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION login...
+Call ID: call_7hY8yZWjrD7Irh1mKvFJL40y
+Input arguments: {}
+user_proxy_1 (to agent):
+
+***** Response from calling tool (call_7hY8yZWjrD7Irh1mKvFJL40y) *****
+You are logged in
+**********************************************************************
+
+--------------------------------------------------------------------------------
+agent (to user_proxy_1):
+
+***** Suggested tool call (call_yTSqe4kxUbCH6Kxub4wiYlIY): get_balance *****
+Arguments:
+{}
+****************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION get_balance...
+Call ID: call_yTSqe4kxUbCH6Kxub4wiYlIY
+Input arguments: {}
+user_proxy_1 (to agent):
+
+***** Response from calling tool (call_yTSqe4kxUbCH6Kxub4wiYlIY) *****
+Your balance is 200USD
+**********************************************************************
+
+--------------------------------------------------------------------------------
+agent (to user_proxy_1):
+
+Your balance is 200 USD.
+
+TERMINATE
+
+--------------------------------------------------------------------------------
+```
+
+
+## Conclusion
+
+In this post, we introduced [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext) as an extension of dependency injection, showing how it simplifies and secures workflows in conversational AI by ensuring tasks like login happen before accessing sensitive data, improving both functionality and security.
+
+**Highlights:**
+- **Flow Control**: [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext) can ensure that functions are executed in the correct sequence, reducing the risk of logical errors.
+- **Enhanced Security**: Sensitive actions like balance retrieval are protected by preconditions like login verification.
+- **Simplified Debugging**: With [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext), developers can trace conversations, making it easier to identify and resolve issues.
+
+By leveraging tools like [`ChatContext`](/docs/api-reference/autogen/tools/ChatContext#chatcontext) and employing dependency injection principles, you can build robust, secure, and user-friendly conversational workflows.

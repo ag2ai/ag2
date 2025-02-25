@@ -4,7 +4,7 @@
 
 from typing import Any, Optional, Union
 
-from .... import Agent, ConversableAgent, UserProxyAgent
+from .... import Agent, ConversableAgent
 from .falkor_graph_query_engine import FalkorGraphQueryEngine
 from .graph_query_engine import GraphStoreQueryResult
 from .graph_rag_capability import GraphRagCapability
@@ -21,10 +21,18 @@ class FalkorGraphRagCapability(GraphRagCapability):
         """Initialize GraphRAG capability with a graph query engine"""
         self.query_engine = query_engine
 
-    def add_to_agent(self, agent: UserProxyAgent):
-        """Add FalkorDB GraphRAG capability to a UserProxyAgent.
-        The restriction to a UserProxyAgent to make sure the returned message does not contain information retrieved from the graph DB instead of any LLMs.
+    def add_to_agent(self, agent: ConversableAgent) -> None:
+        """Add FalkorDB GraphRAG capability to a ConversableAgent.
+
+        Args:
+            agent: The ConversableAgent instance to add the capability to.
+
+        The restriction to a ConversableAgent to make sure the returned message does not contain information retrieved from the graph DB instead of any LLMs.
+
         """
+        if not isinstance(agent, ConversableAgent):
+            raise Exception("FalkorDB GraphRAG capability can only be added to a ConversableAgent.")
+
         self.graph_rag_agent = agent
 
         # Validate the agent config
@@ -42,10 +50,10 @@ class FalkorGraphRagCapability(GraphRagCapability):
     def _reply_using_falkordb_query(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Query FalkorDB and return the message. Internally, it utilises OpenAI to generate a reply based on the given messages.
         The history with FalkorDB is also logged and updated.
 
@@ -62,12 +70,13 @@ class FalkorGraphRagCapability(GraphRagCapability):
         Returns:
             A tuple containing a boolean indicating success and the assistant's reply.
         """
-        question = self._messages_summary(messages, recipient.system_message)
+        # todo: fix typing, this is not correct
+        question = self._messages_summary(messages, recipient.system_message)  # type: ignore[arg-type]
         result: GraphStoreQueryResult = self.query_engine.query(question)
 
         return True, result.answer if result.answer else "I'm sorry, I don't have an answer for that."
 
-    def _messages_summary(self, messages: Union[dict, str], system_message: str) -> str:
+    def _messages_summary(self, messages: Union[dict[str, Any], str], system_message: str) -> str:
         """Summarize the messages in the conversation history. Excluding any message with 'tool_calls' and 'tool_responses'
         Includes the 'name' (if it exists) and the 'content', with a new line between each one, like:
         customer:
@@ -77,10 +86,7 @@ class FalkorGraphRagCapability(GraphRagCapability):
         <content>
         """
         if isinstance(messages, str):
-            if system_message:
-                summary = f"IMPORTANT: {system_message}\nContext:\n\n{messages}"
-            else:
-                return messages
+            return (f"IMPORTANT: {system_message}\n" if system_message else "") + f"Context:\n\n{messages}"
 
         elif isinstance(messages, list):
             summary = ""

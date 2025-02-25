@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import os
 import pickle
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from ....formatting_utils import colored
 from ....import_utils import optional_import_block, require_optional_import
@@ -42,7 +42,7 @@ class Teachability(AgentCapability):
         path_to_db_dir: Optional[str] = "./tmp/teachable_agent_db",
         recall_threshold: Optional[float] = 1.5,
         max_num_retrievals: Optional[int] = 10,
-        llm_config: Optional[Union[dict, bool]] = None,
+        llm_config: Optional[Union[dict[str, Any], bool]] = None,
     ):
         """Args:
         verbosity (Optional, int): # 0 (default) for basic info, 1 to add memory operations, 2 for analyzer messages, 3 for memo lists.
@@ -91,7 +91,7 @@ class Teachability(AgentCapability):
         """Adds a few arbitrary memos to the DB."""
         self.memo_store.prepopulate()
 
-    def process_last_received_message(self, text: Union[dict, str]):
+    def process_last_received_message(self, text: Union[dict[str, Any], str]):
         """Appends any relevant memos to the message text, and stores any apparent teachings in new memos.
         Uses TextAnalyzerAgent to make decisions about memo storage and retrieval.
         """
@@ -106,7 +106,7 @@ class Teachability(AgentCapability):
         # Return the (possibly) expanded message text.
         return expanded_text
 
-    def _consider_memo_storage(self, comment: Union[dict, str]):
+    def _consider_memo_storage(self, comment: Union[dict[str, Any], str]):
         """Decides whether to store something from one user comment in the DB."""
         memo_added = False
 
@@ -164,7 +164,7 @@ class Teachability(AgentCapability):
             # Yes. Save them to disk.
             self.memo_store._save_memos()
 
-    def _consider_memo_retrieval(self, comment: Union[dict, str]):
+    def _consider_memo_retrieval(self, comment: Union[dict[str, Any], str]):
         """Decides whether to retrieve memos from the DB, and add them to the chat context."""
         # First, use the comment directly as the lookup key.
         if self.verbosity >= 1:
@@ -227,7 +227,7 @@ class Teachability(AgentCapability):
             memo_texts = memo_texts + "\n" + info
         return memo_texts
 
-    def _analyze(self, text_to_analyze: Union[dict, str], analysis_instructions: Union[dict, str]):
+    def _analyze(self, text_to_analyze: Union[dict[str, Any], str], analysis_instructions: Union[dict[str, Any], str]):
         """Asks TextAnalyzerAgent to analyze the given text according to specific instructions."""
         self.analyzer.reset()  # Clear the analyzer's list of messages.
         self.teachable_agent.send(
@@ -372,24 +372,21 @@ class MemoStore:
         examples.append({"text": "Please verify that each paper you listed actually uses langchain.", "label": "no"})
         examples.append({"text": "Tell gpt the output should still be latex code.", "label": "no"})
         examples.append({"text": "Hint: convert pdfs to text and then answer questions based on them.", "label": "yes"})
-        examples.append(
-            {"text": "To create a good PPT, include enough content to make it interesting.", "label": "yes"}
-        )
-        examples.append(
-            {
-                "text": "No, for this case the columns should be aspects and the rows should be frameworks.",
-                "label": "no",
-            }
-        )
+        examples.append({
+            "text": "To create a good PPT, include enough content to make it interesting.",
+            "label": "yes",
+        })
+        examples.append({
+            "text": "No, for this case the columns should be aspects and the rows should be frameworks.",
+            "label": "no",
+        })
         examples.append({"text": "When writing code, remember to include any libraries that are used.", "label": "yes"})
         examples.append({"text": "Please summarize the papers by Eric Horvitz on bounded rationality.", "label": "no"})
         examples.append({"text": "Compare the h-index of Daniel Weld and Oren Etzioni.", "label": "no"})
-        examples.append(
-            {
-                "text": "Double check to be sure that the columns in a table correspond to what was asked for.",
-                "label": "yes",
-            }
-        )
+        examples.append({
+            "text": "Double check to be sure that the columns in a table correspond to what was asked for.",
+            "label": "yes",
+        })
         for example in examples:
             self.add_input_output_pair(example["text"], example["label"])
         self._save_memos()

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class GPTAssistantAgent(ConversableAgent):
-    """An experimental AutoGen agent class that leverages the OpenAI Assistant API for conversational capabilities.
+    """An experimental AG2 agent class that leverages the OpenAI Assistant API for conversational capabilities.
     This agent is unique in its reliance on the OpenAI Assistant for state management, differing from other agents like ConversableAgent.
     """
 
@@ -31,11 +31,11 @@ class GPTAssistantAgent(ConversableAgent):
         self,
         name="GPT Assistant",
         instructions: Optional[str] = None,
-        llm_config: Optional[Union[dict, bool]] = None,
-        assistant_config: Optional[dict] = None,
+        llm_config: Optional[Union[dict[str, Any], bool]] = None,
+        assistant_config: Optional[dict[str, Any]] = None,
         overwrite_instructions: bool = False,
         overwrite_tools: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent. It will be used to find the existing assistant by name. Please remember to delete an old assistant with the same name if you intend to create a new assistant with the same name.
@@ -181,10 +181,10 @@ class GPTAssistantAgent(ConversableAgent):
 
     def _invoke_assistant(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Invokes the OpenAI assistant to generate a reply based on the given messages.
 
         Args:
@@ -283,16 +283,15 @@ class GPTAssistantAgent(ConversableAgent):
                     if msg.run_id == run.id:
                         for content in msg.content:
                             if content.type == "text":
-                                new_messages.append(
-                                    {"role": msg.role, "content": self._format_assistant_message(content.text)}
-                                )
+                                new_messages.append({
+                                    "role": msg.role,
+                                    "content": self._format_assistant_message(content.text),
+                                })
                             elif content.type == "image_file":
-                                new_messages.append(
-                                    {
-                                        "role": msg.role,
-                                        "content": f"Received file id={content.image_file.file_id}",
-                                    }
-                                )
+                                new_messages.append({
+                                    "role": msg.role,
+                                    "content": f"Received file id={content.image_file.file_id}",
+                                })
                 return new_messages
             elif run.status == "requires_action":
                 actions = []

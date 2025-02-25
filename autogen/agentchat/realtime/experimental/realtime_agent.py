@@ -30,8 +30,6 @@ class RealtimeAgentCallbacks:
 
 @export_module("autogen.agentchat.realtime.experimental")
 class RealtimeAgent:
-    """(Experimental) Agent for interacting with the Realtime Clients."""
-
     def __init__(
         self,
         *,
@@ -40,6 +38,7 @@ class RealtimeAgent:
         system_message: str = "You are a helpful AI Assistant.",
         llm_config: dict[str, Any],
         logger: Optional[Logger] = None,
+        observers: Optional[list[RealtimeObserver]] = None,
         **client_kwargs: Any,
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
@@ -50,6 +49,7 @@ class RealtimeAgent:
             system_message (str): The system message for the agent.
             llm_config (dict[str, Any], bool): The config for the agent.
             logger (Optional[Logger]): The logger for the agent.
+            observers (Optional[list[RealtimeObserver]]): The additional observers for the agent.
             **client_kwargs (Any): The keyword arguments for the client.
         """
         self._logger = logger
@@ -60,9 +60,9 @@ class RealtimeAgent:
             llm_config=llm_config, logger=self.logger, **client_kwargs
         )
 
-        self._registred_realtime_tools: dict[str, Tool] = {}
-        self._observers: list[RealtimeObserver] = [FunctionObserver(logger=logger)]
-
+        self._registered_realtime_tools: dict[str, Tool] = {}
+        self._observers: list[RealtimeObserver] = observers if observers else []
+        self._observers.append(FunctionObserver(logger=logger))
         if audio_adapter:
             self._observers.append(audio_adapter)
 
@@ -84,9 +84,9 @@ class RealtimeAgent:
         return self._realtime_client
 
     @property
-    def registred_realtime_tools(self) -> dict[str, Tool]:
+    def registered_realtime_tools(self) -> dict[str, Tool]:
         """Get the registered realtime tools."""
-        return self._registred_realtime_tools
+        return self._registered_realtime_tools
 
     def register_observer(self, observer: RealtimeObserver) -> None:
         """Register an observer with the Realtime Agent.
@@ -148,7 +148,7 @@ class RealtimeAgent:
             """
             tool = Tool(func_or_tool=func_or_tool, name=name, description=description)
 
-            self._registred_realtime_tools[tool.name] = tool
+            self._registered_realtime_tools[tool.name] = tool
 
             return tool
 

@@ -45,6 +45,18 @@ When installing AG2, you need to install the AG2 package with the Ollama extra.
 pip install ag2[ollama]
 ```
 
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[ollama]
+```
+or
+```bash
+pip install -U pyautogen[ollama]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 See the sample `OAI_CONFIG_LIST` below showing how the Ollama client class is used by specifying the `api_type` as `ollama`.
 
 ```python
@@ -81,6 +93,7 @@ If you need to specify the URL for your Ollama install, use the `client_host` ke
 The following Ollama parameters can be added to your config. See [this link](https://github.com/ollama/ollama/blob/main/docs/api.md#parameters) for further information on them.
 
 - num_predict (integer): -1 is infinite, -2 is fill context, 128 is default
+- num_ctx (integer)
 - repeat_penalty (float)
 - seed (integer)
 - stream (boolean)
@@ -95,6 +108,7 @@ Example:
         "model": "llama3.1:instruct",
         "api_type": "ollama",
         "num_predict": -1,
+        "num_ctx": 2048,
         "repeat_penalty": 1.1,
         "seed": 42,
         "stream": False,

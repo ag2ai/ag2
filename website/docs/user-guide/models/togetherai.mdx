@@ -21,6 +21,18 @@ First, you need to install the AG2 package to use AG2 with the Together.AI extra
 pip install ag2[together]
 ```
 
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[together]
+```
+or
+```bash
+pip install -U pyautogen[together]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 Together.AI provides a large number of models to use, included some below. See the list of [models here](https://docs.together.ai/docs/inference-models).
 
 See the sample `OAI_CONFIG_LIST` below showing how the Together.AI client class is used by specifying the `api_type` as `together`.

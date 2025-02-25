@@ -63,6 +63,7 @@ from .client_utils import FormatterProtocol
 
 with optional_import_block():
     import google.genai as genai
+    import jsonref
     import vertexai
     from PIL import Image
     from google.auth.credentials import Credentials
@@ -79,14 +80,12 @@ with optional_import_block():
         Type,
     )
     from jsonschema import ValidationError
-    from vertexai.generative_models import (
-        Content as VertexAIContent,
-    )
+    from vertexai.generative_models import Content as VertexAIContent
     from vertexai.generative_models import FunctionDeclaration as vaiFunctionDeclaration
+    from vertexai.generative_models import GenerationConfig, GenerativeModel
     from vertexai.generative_models import (
         GenerationResponse as VertexAIGenerationResponse,
     )
-    from vertexai.generative_models import GenerativeModel
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
     from vertexai.generative_models import Part as VertexAIPart
@@ -98,7 +97,7 @@ with optional_import_block():
 logger = logging.getLogger(__name__)
 
 
-@require_optional_import(["google", "vertexai", "PIL", "jsonschema"], "gemini")
+@require_optional_import(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")
 class GeminiClient:
     """Client for Google's Gemini API."""
 
@@ -164,8 +163,10 @@ class GeminiClient:
                 "Google Cloud project and compute location cannot be set when using an API Key!"
             )
 
+        self.api_version = kwargs.get("api_version")
+
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: Optional[type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -211,6 +212,7 @@ class GeminiClient:
             )
 
         params.get("api_type", "google")  # not used
+        http_options = {"api_version": self.api_version} if self.api_version else None
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
@@ -249,14 +251,23 @@ class GeminiClient:
         if params.get("response_format"):
             self._response_format = params.get("response_format")
             generation_config["response_mime_type"] = "application/json"
-            generation_config["response_schema"] = params.get("response_format")
+
+            response_format_schema_raw = params.get("response_format")
+
+            if isinstance(response_format_schema_raw, dict):
+                response_schema = dict(jsonref.replace_refs(response_format_schema_raw))
+            else:
+                response_schema = dict(jsonref.replace_refs(params.get("response_format").model_json_schema()))
+            if "$defs" in response_schema:
+                response_schema.pop("$defs")
+            generation_config["response_schema"] = response_schema
 
         # A. create and call the chat model.
         gemini_messages = self._oai_messages_to_gemini_messages(messages)
         if self.use_vertexai:
             model = GenerativeModel(
                 model_name,
-                generation_config=generation_config,
+                generation_config=GenerationConfig(**generation_config),
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
                 tools=tools,
@@ -265,7 +276,7 @@ class GeminiClient:
             chat = model.start_chat(history=gemini_messages[:-1], response_validation=response_validation)
             response = chat.send_message(gemini_messages[-1].parts, stream=stream, safety_settings=safety_settings)
         else:
-            client = genai.Client(api_key=self.api_key)
+            client = genai.Client(api_key=self.api_key, http_options=http_options)
             generate_content_config = GenerateContentConfig(
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
@@ -364,8 +375,8 @@ class GeminiClient:
 
         return response_oai
 
-    def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list, str]:
-        """Convert AutoGen content to Gemini parts, catering for text and tool calls"""
+    def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list[Any], str]:
+        """Convert AG2 content to Gemini parts, catering for text and tool calls"""
         rst = []
 
         if "role" in message and message["role"] == "tool":
@@ -397,14 +408,12 @@ class GeminiClient:
 
                 if self.use_vertexai:
                     rst.append(
-                        VertexAIPart.from_dict(
-                            {
-                                "functionCall": {
-                                    "name": function_name,
-                                    "args": json.loads(tool_call["function"]["arguments"]),
-                                }
+                        VertexAIPart.from_dict({
+                            "functionCall": {
+                                "name": function_name,
+                                "args": json.loads(tool_call["function"]["arguments"]),
                             }
-                        )
+                        })
                     )
                 else:
                     rst.append(
@@ -545,7 +554,7 @@ class GeminiClient:
         # 2. The last message must be from the user role.
         # We add a dummy message "continue" if the last role is not the user.
         if rst[-1].role not in ["user", "function"]:
-            text_part, type = self._oai_content_to_gemini_content({"content": "continue"})
+            text_part, _ = self._oai_content_to_gemini_content({"content": "continue"})
             rst.append(
                 VertexAIContent(parts=text_part, role="user")
                 if self.use_vertexai
@@ -567,21 +576,58 @@ class GeminiClient:
             return response
 
         try:
-            # Parse JSON and validate against the Pydantic model
+            # Parse JSON and validate against the Pydantic model if Pydantic model was provided
             json_data = json.loads(response)
-            return self._response_format.model_validate(json_data)
+            if isinstance(self._response_format, dict):
+                return json_data
+            else:
+                return self._response_format.model_validate(json_data)
         except Exception as e:
             raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
+
+    @staticmethod
+    def _convert_type_null_to_nullable(schema: Any) -> Any:
+        """
+        Recursively converts all occurrences of {"type": "null"} to {"nullable": True} in a schema.
+        """
+        if isinstance(schema, dict):
+            # If schema matches {"type": "null"}, replace it
+            if schema == {"type": "null"}:
+                return {"nullable": True}
+            # Otherwise, recursively process dictionary
+            return {key: GeminiClient._convert_type_null_to_nullable(value) for key, value in schema.items()}
+        elif isinstance(schema, list):
+            # Recursively process list elements
+            return [GeminiClient._convert_type_null_to_nullable(item) for item in schema]
+        return schema
+
+    @staticmethod
+    def _unwrap_references(function_parameters: dict[str, Any]) -> dict[str, Any]:
+        if "properties" not in function_parameters:
+            return function_parameters
+
+        function_parameters_copy = copy.deepcopy(function_parameters)
+
+        for property_name, property_value in function_parameters["properties"].items():
+            if "$defs" in property_value:
+                function_parameters_copy["properties"][property_name] = dict(jsonref.replace_refs(property_value))
+                function_parameters_copy["properties"][property_name].pop("$defs")
+
+        return function_parameters_copy
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
         functions = []
         for tool in tools:
             if self.use_vertexai:
+                tool["function"]["parameters"] = GeminiClient._convert_type_null_to_nullable(
+                    tool["function"]["parameters"]
+                )
+                function_parameters = GeminiClient._unwrap_references(tool["function"]["parameters"])
                 function = vaiFunctionDeclaration(
                     name=tool["function"]["name"],
                     description=tool["function"]["description"],
-                    parameters=tool["function"]["parameters"],
+                    parameters=function_parameters,
                 )
             else:
                 function = GeminiClient._create_gemini_function_declaration(tool)
@@ -658,7 +704,12 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
-        function_parameter["type"] = function_parameter["type"].upper()
+        function_parameter = GeminiClient._unwrap_references(function_parameter)
+
+        if "type" in function_parameter:
+            function_parameter["type"] = function_parameter["type"].upper()
+            # If the schema was created from pydantic BaseModel, it will "title" attribute which needs to be removed
+            function_parameter.pop("title", None)
 
         # Parameter properties and items
         if "properties" in function_parameter:
@@ -682,12 +733,10 @@ class GeminiClient:
         """Convert safety settings to VertexAI format if needed,
         like when specifying them in the OAI_CONFIG_LIST
         """
-        if isinstance(safety_settings, list) and all(
-            [
-                isinstance(safety_setting, dict) and not isinstance(safety_setting, VertexAISafetySetting)
-                for safety_setting in safety_settings
-            ]
-        ):
+        if isinstance(safety_settings, list) and all([
+            isinstance(safety_setting, dict) and not isinstance(safety_setting, VertexAISafetySetting)
+            for safety_setting in safety_settings
+        ]):
             vertexai_safety_settings = []
             for safety_setting in safety_settings:
                 if safety_setting["category"] not in VertexAIHarmCategory.__members__:

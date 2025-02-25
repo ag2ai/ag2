@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import copy
 import os
@@ -27,6 +27,7 @@ TOOL_ENABLED = False
 with optional_import_block() as result:
     import openai
     from openai import OpenAI
+    from openai.types.chat.chat_completion import ChatCompletion
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
@@ -163,6 +164,62 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     )
 
 
+@skip_on_missing_imports(["openai"])
+def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest.MonkeyPatch):
+    chat_completion = ChatCompletion(**{
+        "id": "chatcmpl-B2ZfaI387UgmnNXS69egxeKbDWc0u",
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "index": 0,
+                "logprobs": None,
+                "message": {
+                    "content": "The history of human civilization spans thousands of years, beginning with the emergence of Homo sapiens in Africa around 200,000 years ago. Early humans formed hunter-gatherer societies before transitioning to agriculture during the Neolithic Revolution, around 10,000 BCE, leading to the establishment of permanent settlements. The rise of city-states and empires, such as Mesopotamia, Ancient Egypt, and the Indus Valley, marked significant advancements in governance, trade, and culture. The classical era saw the flourish of philosophies and science in Greece and Rome, while the Middle Ages brought feudalism and the spread of religions. The Renaissance sparked exploration and modernization, culminating in the contemporary globalized world.",
+                    "refusal": None,
+                    "role": "assistant",
+                    "audio": None,
+                    "function_call": None,
+                    "tool_calls": None,
+                },
+            }
+        ],
+        "created": 1739953470,
+        "model": "gpt-4o-mini-2024-07-18",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_13eed4fce1",
+        "usage": {
+            "completion_tokens": 142,
+            "prompt_tokens": 23,
+            "total_tokens": 165,
+            "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0,
+            },
+            "prompt_tokens_details": {"audio_tokens": 0, "cached_tokens": 0},
+        },
+        "cost": 8.864999999999999e-05,
+    })
+
+    mock_logger = MagicMock()
+    mock_cache_get = MagicMock(return_value=chat_completion)
+    monkeypatch.setattr("autogen.oai.client.logger", mock_logger)
+    monkeypatch.setattr("autogen.cache.disk_cache.DiskCache.get", mock_cache_get)
+
+    prompt = "Write a 100 word summary on the topic of the history of human civilization."
+
+    # Test single client
+    wrapper = OpenAIWrapper(config_list=mock_credentials.config_list)
+    _ = wrapper.create(messages=[{"role": "user", "content": prompt}], cache_seed=999)
+
+    mock_logger.debug.assert_called_once()
+    actual = mock_logger.debug.call_args[0][0]
+    expected = "Using cache with seed value 999 for client OpenAIClient"
+    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
+
+
 @pytest.mark.openai
 @skip_on_missing_imports(["openai"])
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
@@ -289,6 +346,20 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
         # Test legacy cache is not used.
         assert not os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(123)))
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
+
+
+@skip_on_missing_imports(["openai"])
+def test_convert_system_role_to_user() -> None:
+    messages = [
+        {"content": "Your name is Jack and you are a comedian in a two-person comedy show.", "role": "system"},
+        {"content": "Jack, tell me a joke.", "role": "user", "name": "user"},
+    ]
+    OpenAIClient._convert_system_role_to_user(messages)
+    expected = [
+        {"content": "Your name is Jack and you are a comedian in a two-person comedy show.", "role": "user"},
+        {"content": "Jack, tell me a joke.", "role": "user", "name": "user"},
+    ]
+    assert messages == expected
 
 
 class TestOpenAIClientBadRequestsError:
@@ -488,7 +559,7 @@ class TestO1:
 
     def test_oai_reasoning_max_tokens_replacement(self, mock_oai_client: OpenAIClient) -> None:
         """Test that max_tokens is replaced with max_completion_tokens"""
-        test_params = {"model": "o1-mini", "max_tokens": 100}
+        test_params = {"api_type": "openai", "model": "o1-mini", "max_tokens": 100}
 
         mock_oai_client._process_reasoning_model_params(test_params)
 
@@ -530,7 +601,7 @@ class TestO1:
             assert test_params["messages"][0]["content"] == system_msg
             assert test_params["messages"][0]["role"] == "system"
 
-    def _test_completition(self, client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+    def _test_completion(self, client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         assert isinstance(client, OpenAIWrapper)
         response = client.create(messages=messages, cache_seed=123)
 
@@ -551,8 +622,8 @@ class TestO1:
         ],
     )
     @pytest.mark.openai
-    def test_completition_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
-        self._test_completition(o1_mini_client, messages)
+    def test_completion_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completion(o1_mini_client, messages)
 
     @pytest.mark.parametrize(
         "messages",
@@ -563,8 +634,8 @@ class TestO1:
     )
     @pytest.mark.openai
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
-    def test_completition_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
-        self._test_completition(o1_client, messages)
+    def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
+        self._test_completion(o1_client, messages)
 
 
 if __name__ == "__main__":

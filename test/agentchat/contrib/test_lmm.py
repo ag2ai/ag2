@@ -4,12 +4,15 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import unittest
 from unittest.mock import MagicMock
 
+from pytest import MonkeyPatch
+
 import autogen
+from autogen.agentchat import GroupChat
 from autogen.agentchat.contrib.img_utils import get_pil_image
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
@@ -31,7 +34,9 @@ class TestMultimodalConversableAgent(unittest.TestCase):
             llm_config={
                 "timeout": 600,
                 "seed": 42,
-                "config_list": [{"model": "gpt-4-vision-preview", "api_key": MOCK_OPEN_AI_API_KEY}],
+                "config_list": [
+                    {"api_type": "openai", "model": "gpt-4-vision-preview", "api_key": MOCK_OPEN_AI_API_KEY}
+                ],
             },
         )
 
@@ -85,7 +90,7 @@ class TestMultimodalConversableAgent(unittest.TestCase):
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
-def test_group_chat_with_lmm():
+def test_group_chat_with_lmm(monkeypatch: MonkeyPatch):
     """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.
     Each agent is set to describe an image in a unique style, but the chat should not exceed the specified max_rounds.
@@ -118,9 +123,12 @@ def test_group_chat_with_lmm():
         code_execution_config=False,
     )
 
+    # Mock speaker selection so it doesn't require a GroupChatManager with an LLM
+    monkeypatch.setattr(GroupChat, "_auto_select_speaker", lambda *args, **kwargs: agent1)
+
     # Setting up the group chat
     groupchat = autogen.GroupChat(agents=[agent1, agent2, user_proxy], messages=[], max_round=max_round)
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
 
     # Initiating the group chat and observing the number of rounds
     user_proxy.initiate_chat(group_chat_manager, message=f"What do you see? <img {base64_encoded_image}>")

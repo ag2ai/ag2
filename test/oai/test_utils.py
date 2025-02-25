@@ -4,20 +4,25 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import json
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
+from typing import Any
 from unittest import mock
 from unittest.mock import patch
 
 import pytest
 
 import autogen
-from autogen.oai.openai_utils import DEFAULT_AZURE_API_VERSION, OAI_PRICE1K, filter_config, is_valid_api_key
+from autogen.oai.openai_utils import (
+    DEFAULT_AZURE_API_VERSION,
+    filter_config,
+    get_first_llm_config,
+    is_valid_api_key,
+)
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
@@ -97,7 +102,7 @@ FILTER_CONFIG_TEST = [
 ]
 
 
-def _compare_lists_of_dicts(list1: list[dict], list2: list[dict]) -> bool:
+def _compare_lists_of_dicts(list1: list[dict[str, Any]], list2: list[dict[str, Any]]) -> bool:
     dump1 = sorted(json.dumps(d, sort_keys=True) for d in list1)
     dump2 = sorted(json.dumps(d, sort_keys=True) for d in list2)
     return dump1 == dump2
@@ -394,6 +399,44 @@ def test_get_config_list():
     assert len(config_list_with_empty_key) == 2, "The config_list should exclude configurations with empty api_keys."
 
 
+@pytest.mark.parametrize(
+    ("llm_config", "expected"),
+    [
+        (
+            {"model": "gpt-4o-mini", "api_key": ""},
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+        (
+            {"config_list": [{"model": "gpt-4o-mini", "api_key": ""}]},
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+        (
+            {
+                "config_list": [
+                    {"model": "gpt-4o-mini", "api_key": ""},
+                    {"model": "gpt-4o", "api_key": ""},
+                ]
+            },
+            {"model": "gpt-4o-mini", "api_key": ""},
+        ),
+    ],
+)
+def test_get_first_llm_config(llm_config: dict[str, Any], expected: dict[str, Any]) -> None:
+    assert get_first_llm_config(llm_config) == expected
+
+
+@pytest.mark.parametrize(
+    ("llm_config", "error_message"),
+    [
+        ({}, "llm_config must be a valid config dictionary."),
+        ({"config_list": []}, "Config list must contain at least one config."),
+    ],
+)
+def test_get_first_llm_config_incorrect_config(llm_config: dict[str, Any], error_message: str) -> None:
+    with pytest.raises(ValueError, match=error_message):
+        get_first_llm_config(llm_config)
+
+
 def test_tags():
     config_list = json.loads(JSON_SAMPLE)
 
@@ -445,24 +488,6 @@ def test_is_valid_api_key():
     assert is_valid_api_key("sk-aut0-gen--asajsdjsd22372X23kjdfdfdf2329ffUUDSDS12121212212")
     assert is_valid_api_key("sk--aut0-gen-asajsdjsd22372X23kjdfdfdf2329ffUUDSDS12121212212")
     assert is_valid_api_key(MOCK_OPEN_AI_API_KEY)
-
-
-def test_reminder_to_update_deepseek_pricing_after_promotion():
-    # Reference: https://api-docs.deepseek.com/quick_start/pricing
-    # Define the promotion end date - February 8th, 2025 at 16:00 UTC
-    promo_end_date = datetime(2025, 2, 8, 16, 0, tzinfo=timezone.utc)
-    current_time = datetime.now(timezone.utc)
-
-    # Get the pricing tuple for deepseek-chat
-    input_price, output_price = OAI_PRICE1K["deepseek-chat"]
-
-    # After promo end date: Assert promotional pricing has been updated
-    if current_time > promo_end_date:
-        assert (input_price, output_price) != (0.00014, 0.00028), (
-            f"DeepSeek promotional period ended on {promo_end_date.strftime('%B %d, %Y at %H:%M %Z')}. "
-            "Please update OAI_PRICE1K['deepseek-chat'] to standard pricing."
-            "Check https://api-docs.deepseek.com/quick_start/pricing for more details."
-        )
 
 
 if __name__ == "__main__":

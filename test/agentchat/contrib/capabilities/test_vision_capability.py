@@ -20,7 +20,7 @@ with optional_import_block() as result:
 @pytest.fixture
 def lmm_config():
     return {
-        "config_list": [{"model": "gpt-4-vision-preview", "api_key": "sk-my_key"}],
+        "config_list": [{"api_type": "openai", "model": "gpt-4-vision-preview", "api_key": "sk-my_key"}],
         "temperature": 0.5,
         "max_tokens": 300,
     }
@@ -75,7 +75,7 @@ def test_process_last_received_message_with_image(
     assert processed_content == expected_caption
 
 
-####### Test the Custom Caption Func
+# Test the Custom Caption Func
 
 
 @pytest.fixture

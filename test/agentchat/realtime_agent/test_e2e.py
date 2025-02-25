@@ -69,15 +69,13 @@ class TestE2E:
 
         client = TestClient(app)
         with client.websocket_connect("/media-stream") as websocket:
-            websocket.send_json(
-                {
-                    "event": "media",
-                    "media": {
-                        "timestamp": 0,
-                        "payload": text_to_speech(text="How is the weather in Seattle?", openai_api_key=api_key),
-                    },
-                }
-            )
+            websocket.send_json({
+                "event": "media",
+                "media": {
+                    "timestamp": 0,
+                    "payload": text_to_speech(text="How is the weather in Seattle?", openai_api_key=api_key),
+                },
+            })
 
             # Wait for the weather function to be called or timeout
             with move_on_after(20) as scope:

@@ -4,14 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import base64
 import os
 import unittest
 from unittest.mock import patch
 
-import numpy as np
 import requests
 
 from autogen.agentchat.contrib.img_utils import (
@@ -26,9 +25,11 @@ from autogen.agentchat.contrib.img_utils import (
 )
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
+with optional_import_block():
+    import numpy as np
+
 with optional_import_block() as result:
     from PIL import Image
-
 
 if result.is_successful:
     raw_pil_image = Image.new("RGB", (10, 10), color="red")
@@ -47,6 +48,7 @@ raw_encoded_image = (
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["numpy"], "flaml")
 class TestGetPilImage(unittest.TestCase):
     def test_read_local_file(self):
         # Create a small red image for testing
@@ -61,6 +63,7 @@ class TestGetPilImage(unittest.TestCase):
         self.assertTrue((np.array(raw_pil_image) == np.array(img2)).all())
 
 
+@skip_on_missing_imports(["numpy"], "flaml")
 def are_b64_images_equal(x: str, y: str):
     """Asserts that two base64 encoded images are equal."""
     img1 = get_pil_image(x)

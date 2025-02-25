@@ -6,13 +6,13 @@ import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import httpx
 
 from ......doc_utils import export_module
 from ...realtime_events import RealtimeEvent
-from ..realtime_client import Role, register_realtime_client
+from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ global_logger = getLogger(__name__)
 
 @register_realtime_client()
 @export_module("autogen.agentchat.realtime.experimental.clients.oai")
-class OpenAIRealtimeWebRTCClient:
+class OpenAIRealtimeWebRTCClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API that uses WebRTC protocol."""
 
     def __init__(
@@ -41,6 +41,7 @@ class OpenAIRealtimeWebRTCClient:
         Args:
             llm_config (dict[str, Any]): The config for the client.
         """
+        super().__init__()
         self._llm_config = llm_config
         self._logger = logger
         self._websocket = websocket
@@ -64,16 +65,14 @@ class OpenAIRealtimeWebRTCClient:
             call_id (str): The ID of the function call.
             result (str): The result of the function call.
         """
-        await self._websocket.send_json(
-            {
-                "type": "conversation.item.create",
-                "item": {
-                    "type": "function_call_output",
-                    "call_id": call_id,
-                    "output": result,
-                },
-            }
-        )
+        await self._websocket.send_json({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": result,
+            },
+        })
         await self._websocket.send_json({"type": "response.create"})
 
     async def send_text(self, *, role: Role, text: str) -> None:
@@ -84,27 +83,24 @@ class OpenAIRealtimeWebRTCClient:
             text (str): The text of the message.
         """
         # await self.connection.response.cancel() #why is this here?
-        await self._websocket.send_json(
-            {
-                "type": "response.cancel",
-            }
-        )
-        await self._websocket.send_json(
-            {
-                "type": "conversation.item.create",
-                "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
-            }
-        )
+        await self._websocket.send_json({
+            "type": "response.cancel",
+        })
+        await self._websocket.send_json({
+            "type": "conversation.item.create",
+            "item": {"type": "message", "role": role, "content": [{"type": "input_text", "text": text}]},
+        })
         # await self.connection.response.create()
         await self._websocket.send_json({"type": "response.create"})
 
     async def send_audio(self, audio: str) -> None:
         """Send audio to the OpenAI Realtime API.
+        in case of WebRTC, audio is already sent by js client, so we just queue it in order to be logged.
 
         Args:
             audio (str): The audio to send.
         """
-        await self._websocket.send_json({"type": "input_audio_buffer.append", "audio": audio})
+        await self.queue_input_audio_buffer_delta(audio)
 
     async def truncate_audio(self, audio_end_ms: int, content_index: int, item_id: str) -> None:
         """Truncate audio in the OpenAI Realtime API.
@@ -114,14 +110,12 @@ class OpenAIRealtimeWebRTCClient:
             content_index (int): The index of the content to truncate.
             item_id (str): The ID of the item to truncate.
         """
-        await self._websocket.send_json(
-            {
-                "type": "conversation.item.truncate",
-                "content_index": content_index,
-                "item_id": item_id,
-                "audio_end_ms": audio_end_ms,
-            }
-        )
+        await self._websocket.send_json({
+            "type": "conversation.item.truncate",
+            "content_index": content_index,
+            "item_id": item_id,
+            "audio_end_ms": audio_end_ms,
+        })
 
     async def session_update(self, session_options: dict[str, Any]) -> None:
         """Send a session update to the OpenAI Realtime API.
@@ -139,7 +133,7 @@ class OpenAIRealtimeWebRTCClient:
         await self._websocket.send_json({"type": "session.update", "session": session_options})
         logger.info("Sending session update finished")
 
-    def session_init_data(self) -> List[dict[str, Any]]:
+    def session_init_data(self) -> list[dict[str, Any]]:
         """Control initial session with OpenAI."""
         session_update = {
             "turn_detection": {"type": "server_vad"},
@@ -184,7 +178,12 @@ class OpenAIRealtimeWebRTCClient:
             pass
 
     async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
-        """Read messages from the OpenAI Realtime API.
+        """Read events from the OpenAI Realtime API."""
+        async for event in self._read_events():
+            yield event
+
+    async def _read_from_connection(self) -> AsyncGenerator[RealtimeEvent, None]:
+        """Read messages from the OpenAI Realtime API connection.
         Again, in case of WebRTC, we do not read OpenAI messages directly since we
         do not hold connection to OpenAI. Instead we read messages from the websocket, and javascript
         client on the other side of the websocket that is connected to OpenAI is relaying events to us.

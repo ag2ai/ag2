@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import unittest
 from unittest.mock import MagicMock, patch
@@ -23,7 +23,14 @@ class TestLLaVAAgent(unittest.TestCase):
             llm_config={
                 "timeout": 600,
                 "seed": 42,
-                "config_list": [{"model": "llava-fake", "base_url": "localhost:8000", "api_key": MOCK_OPEN_AI_API_KEY}],
+                "config_list": [
+                    {
+                        "api_type": "openai",
+                        "model": "llava-fake",
+                        "base_url": "localhost:8000",
+                        "api_key": MOCK_OPEN_AI_API_KEY,
+                    }
+                ],
             },
         )
 

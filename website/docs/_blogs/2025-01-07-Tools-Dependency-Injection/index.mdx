@@ -1,0 +1,398 @@
+---
+title: Tools Dependency Injection
+authors:
+  - rjambrecic
+tags: [tools, tool calling, dependency injection]
+---
+
+
+[Dependency Injection](https://en.wikipedia.org/wiki/Dependency_injection) is a secure way to connect external functions to agents without exposing sensitive data such as passwords, tokens, or personal information. This approach ensures that sensitive information remains protected while still allowing agents to perform their tasks effectively, even when working with large language models (LLMs).
+
+In this guide, we’ll explore how to build secure workflows that handle sensitive data safely.
+
+As an example, we’ll create an agent that retrieves user's account balance. The best part is that sensitive data like username and password are never shared with the LLM. Instead, it’s securely injected directly into the function at runtime, keeping it safe while maintaining seamless functionality.
+
+## Why Dependency Injection Is Essential
+
+Here’s why dependency injection is a game-changer for secure LLM workflows:
+
+- **Enhanced Security**: Your sensitive data is never directly exposed to the LLM.
+- **Simplified Development**: Secure data can be seamlessly accessed by functions without requiring complex configurations.
+- **Unmatched Flexibility**: It supports safe integration of diverse workflows, allowing you to scale and adapt with ease.
+
+In this guide, we’ll explore how to set up dependency injection and build secure workflows. Let’s dive in!
+
+**Note:** This blog builds upon the concepts covered in the following [notebook](/docs/use-cases/notebooks/notebooks/tools_dependency_injection).
+
+## Installation
+
+To install `AG2`, simply run the following command:
+
+```bash
+pip install ag2
+```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen
+```
+or
+```bash
+pip install -U pyautogen
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
+## Imports
+
+The functionality demonstrated in this guide is located in the [`autogen.tools.dependency_injection`](/docs/reference/tools/dependency_injection) module. This module provides key components for dependency injection:
+
+- [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext): abstract base class used to define and encapsulate data contexts, such as user account information, which can then be injected into functions or agents securely.
+- [`Depends`](/docs/api-reference/autogen/tools/Depends#depends): a function used to declare and inject dependencies, either from a context (like [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext)) or a function, ensuring sensitive data is provided securely without direct exposure.
+
+```python
+import os
+from typing import Annotated, Literal
+
+from pydantic import BaseModel
+
+from autogen import GroupChat, GroupChatManager
+from autogen.agentchat import ConversableAgent, UserProxyAgent
+from autogen.tools.dependency_injection import BaseContext, Depends
+```
+
+## Define a BaseContext Class
+We start by defining a [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext) class for accounts. This will act as the base structure for dependency injection. By using this approach, sensitive information like usernames and passwords is never exposed to the LLM.
+
+```python
+class Account(BaseContext, BaseModel):
+    username: str
+    password: str
+    currency: Literal["USD", "EUR"] = "USD"
+
+
+alice_account = Account(username="alice", password="password123")
+bob_account = Account(username="bob", password="password456")
+
+account_ballace_dict = {
+    (alice_account.username, alice_account.password): 300,
+    (bob_account.username, bob_account.password): 200,
+}
+```
+
+## Helper Functions
+To ensure that the provided account is valid and retrieve its balance, we create two helper functions.
+
+```python
+def _verify_account(account: Account):
+    if (account.username, account.password) not in account_ballace_dict:
+        raise ValueError("Invalid username or password")
+
+
+def _get_balance(account: Account):
+    _verify_account(account)
+    return f"Your balance is {account_ballace_dict[(account.username, account.password)]}{account.currency}"
+```
+
+## Injecting BaseContext Parameter
+
+Dependency injection simplifies passing data to a function. Here, we'll inject an `Account` instance into a function automatically.
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+
+- `config_list` defines the LLM configurations, including the model and API key.
+- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+assistant = ConversableAgent(
+    name="assistant",
+    llm_config={"config_list": config_list},
+)
+user_proxy = UserProxyAgent(
+    name="user_proxy_1",
+    human_input_mode="NEVER",
+    llm_config=False,
+)
+```
+
+### Register the Function with Dependency Injection
+We register a function where the account information for `bob` is injected as a dependency.
+
+**Note:** You can also use `account: Account = Depends(bob_account)` as an alternative syntax.
+
+```python
+@user_proxy.register_for_execution()
+@assistant.register_for_llm(description="Get the balance of the account")
+def get_balance_1(
+    # Account which will be injected to the function
+    account: Annotated[Account, Depends(bob_account)],
+    # It is also possible to use the following syntax to define the dependency
+    # account: Account = Depends(bob_account),
+) -> str:
+    return _get_balance(account)
+```
+
+### Initiate the Chat
+Finally, we initiate a chat to retrieve the balance.
+
+```python
+user_proxy.initiate_chat(assistant, message="Get users balance", max_turns=2)
+```
+
+```console
+user_proxy_1 (to assistant):
+
+Get users balance
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+assistant (to user_proxy_1):
+
+***** Suggested tool call (call_ognvIidhVCUdxvH0vnJEPxzk): get_balance_1 *****
+Arguments:
+{}
+******************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION get_balance_1...
+user_proxy_1 (to assistant):
+
+***** Response from calling tool (call_ognvIidhVCUdxvH0vnJEPxzk) *****
+Your balance is 200USD
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+assistant (to user_proxy_1):
+
+Your balance is 200 USD.
+
+--------------------------------------------------------------------------------
+```
+
+## Injecting Parameters Without BaseContext
+
+Sometimes, you might not want to use [`BaseContext`](/docs/api-reference/autogen/tools/BaseContext#basecontext). Here's how to inject simple parameters directly.
+
+### Agent Configuration
+
+Configure the agents for the interaction.
+
+- `config_list` defines the LLM configurations, including the model and API key.
+- [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
+- [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+assistant = ConversableAgent(
+    name="assistant",
+    llm_config={"config_list": config_list},
+)
+user_proxy = UserProxyAgent(
+    name="user_proxy_1",
+    human_input_mode="NEVER",
+    llm_config=False,
+)
+```
+
+### Register the Function with Direct Parameter Injection
+Instead of injecting a full context like `Account`, you can directly inject individual parameters, such as the username and password, into a function. This allows for more granular control over the data injected into the function, and still ensures that sensitive information is managed securely.
+
+Here’s how you can set it up:
+
+```python
+def get_username() -> str:
+    return "bob"
+
+def get_password() -> str:
+    return "password456"
+
+@user_proxy.register_for_execution()
+@assistant.register_for_llm(description="Get the balance of the account")
+def get_balance_2(
+    username: Annotated[str, Depends(get_username)],
+    password: Annotated[str, Depends(get_password)],
+    # or use lambdas
+    # username: Annotated[str, Depends(lambda: "bob")],
+    # password: Annotated[str, Depends(lambda: "password456")],
+) -> str:
+    account = Account(username=username, password=password)
+    return _get_balance(account)
+```
+
+
+### Initiate the Chat
+As before, initiate a chat to test the function.
+
+```python
+user_proxy.initiate_chat(assistant, message="Get users balance", max_turns=2)
+```
+
+```console
+user_proxy_1 (to assistant):
+
+Get users balance
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+assistant (to user_proxy_1):
+
+***** Suggested tool call (call_REyBiQkznsd2JzNr4i7Z2N7q): get_balance_2 *****
+Arguments:
+{}
+******************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION get_balance_2...
+user_proxy_1 (to assistant):
+
+***** Response from calling tool (call_REyBiQkznsd2JzNr4i7Z2N7q) *****
+Your balance is 200USD
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+assistant (to user_proxy_1):
+
+Your balance is 200 USD.
+
+--------------------------------------------------------------------------------
+```
+
+## Assigning Different Contexts to Multiple Agents
+
+You can assign different contexts, such as distinct account data, to different agents within the same group chat. This ensures that each assistant works with its own unique set of data—e.g., one assistant can use `alice_account`, while another can use `bob_account`.
+
+### GroupChat Configuration
+Let's configure a `GroupChat` with two assistant agents.
+
+```python
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+llm_config = {"config_list": config_list}
+assistant_1 = ConversableAgent(
+    name="assistant_1",
+    llm_config={"config_list": config_list},
+)
+assistant_2 = ConversableAgent(
+    name="assistant_2",
+    llm_config={"config_list": config_list},
+)
+user_proxy = UserProxyAgent(
+    name="user_proxy_1",
+    human_input_mode="NEVER",
+    llm_config=False,
+)
+
+groupchat = GroupChat(agents=[user_proxy, assistant_1, assistant_2], messages=[], max_round=5)
+manager = GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+```
+
+
+### Register Functions for Each Assistant
+
+- For `assistant_1`, we inject the `alice_account` context using `Depends(alice_account)`, ensuring that it retrieves the balance for Alice’s account.
+- For `assistant_2`, we inject the `bob_account` context using `Depends(bob_account)`, ensuring that it retrieves the balance for Bob’s account.
+
+```python
+@user_proxy.register_for_execution()
+@assistant_1.register_for_llm(description="Get the balance of the account")
+def get_balance_for_assistant_1(
+    account: Annotated[Account, Depends(alice_account)],
+) -> str:
+    return _get_balance(account)
+
+
+@user_proxy.register_for_execution()
+@assistant_2.register_for_llm(description="Get the balance of the account")
+def get_balance_for_assistant_2(
+    account: Annotated[Account, Depends(bob_account)],
+) -> str:
+    return _get_balance(account)
+```
+
+### Initiate the Chat
+Finally, initiate the group chat where both assistants respond by using their respective contexts. Each assistant will handle its own task — one will retrieve Alice’s balance, and the other will retrieve Bob’s balance
+
+```python
+message = "Both assistants, please get the balance of the account"
+user_proxy.initiate_chat(manager, message=message, max_turns=1)
+```
+
+```console
+user_proxy_1 (to chat_manager):
+
+Both assistants, please get the balance of the account
+
+--------------------------------------------------------------------------------
+
+Next speaker: assistant_1
+
+
+>>>>>>>> USING AUTO REPLY...
+assistant_1 (to chat_manager):
+
+***** Suggested tool call (call_wfTGOY4O9mEDBuIOrajJDSNj): get_balance_for_assistant_1 *****
+Arguments:
+{}
+********************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy_1
+
+
+>>>>>>>> EXECUTING FUNCTION get_balance_for_assistant_1...
+user_proxy_1 (to chat_manager):
+
+***** Response from calling tool (call_wfTGOY4O9mEDBuIOrajJDSNj) *****
+Your balance is 300USD
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: assistant_2
+
+
+>>>>>>>> USING AUTO REPLY...
+assistant_2 (to chat_manager):
+
+***** Suggested tool call (call_QNO5v9vGRUfRsmUAjL9yV318): get_balance_for_assistant_2 *****
+Arguments:
+{}
+********************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy_1
+
+
+>>>>>>>> EXECUTING FUNCTION get_balance_for_assistant_2...
+user_proxy_1 (to chat_manager):
+
+***** Response from calling tool (call_QNO5v9vGRUfRsmUAjL9yV318) *****
+Your balance is 200USD
+**********************************************************************
+
+--------------------------------------------------------------------------------
+```
+
+
+## Conclusion
+
+In this blog post, we explore **Dependency Injection (DI)** as a secure and effective way to manage sensitive data in workflows involving LLMs. Dependency Injection ensures that sensitive data, such as passwords or personal information, remains protected by injecting necessary details at runtime instead of exposing them directly to the LLM.
+
+The post provides a comprehensive guide on setting up and using DI with agents, illustrating how to securely retrieve account balances without sharing sensitive data. It includes step-by-step instructions on configuring agents, defining contexts, and using the Depends function to inject account details directly into the functions. Various methods are demonstrated, such as injecting contexts, passing simple parameters, and even managing multiple contexts for different agents in group chats.
+
+By following this guide, developers can create secure and flexible workflows that prevent unauthorized access to sensitive data while leveraging LLMs' full potential.

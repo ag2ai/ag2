@@ -1,7 +1,15 @@
 ```python
-from autogen import AFTER_WORK, ON_CONDITION, AfterWorkOption, SwarmAgent, SwarmResult, initiate_swarm_chat
+from autogen import (
+    AFTER_WORK,
+    ON_CONDITION,
+    AfterWorkOption,
+    SwarmAgent,
+    SwarmResult,
+    initiate_swarm_chat,
+    register_hand_off,
+)
 
-llm_config = {"model": "gpt-4o-mini", "cache_seed": None}
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "cache_seed": None}
 
 # 1. Context
 shared_context = {
@@ -42,7 +50,7 @@ Use the following format:
 """
 
 # 3. Our agents now have tools to use (functions above)
-lesson_planner = SwarmAgent(
+lesson_planner = ConversableAgent(
     name="planner_agent", llm_config=llm_config, system_message=planner_message, functions=[record_plan]
 )
 
@@ -52,7 +60,7 @@ and provide a maximum of 3 recommended changes for each review.
 Make sure you provide recommendations each time the plan is updated.
 """
 
-lesson_reviewer = SwarmAgent(
+lesson_reviewer = ConversableAgent(
     name="reviewer_agent", llm_config=llm_config, system_message=reviewer_message, functions=[record_review]
 )
 
@@ -61,7 +69,7 @@ You decide topics for lessons and work with a lesson planner.
 and reviewer to create and finalise lesson plans.
 """
 
-teacher = SwarmAgent(
+teacher = ConversableAgent(
     name="teacher_agent",
     llm_config=llm_config,
     system_message=teacher_message,
@@ -71,7 +79,7 @@ teacher = SwarmAgent(
 
 # Lesson planner will create a plan and hand off to the reviewer if we're still
 # allowing reviews. After that's done, transition to the teacher.
-lesson_planner.register_hand_off(
+register_hand_off(lesson_planner,
     [
         ON_CONDITION(
             target=lesson_reviewer,
@@ -84,7 +92,7 @@ lesson_planner.register_hand_off(
 
 # Lesson reviewer will review the plan and return control to the planner if there's
 # no plan to review, otherwise it will provide a review and
-lesson_reviewer.register_hand_off(
+register_hand_off(lesson_reviewer,
     [
         ON_CONDITION(
             target=lesson_planner, condition="After new feedback has been made and recorded, the plan must be updated."
@@ -95,7 +103,7 @@ lesson_reviewer.register_hand_off(
 
 # Teacher works with the lesson planner to create a plan. When control returns to them and
 # a plan exists, they'll end the swarm.
-teacher.register_hand_off(
+register_hand_off(teacher,
     [
         ON_CONDITION(target=lesson_planner, condition="Create a lesson plan.", available="reviews_left"),
         AFTER_WORK(AfterWorkOption.TERMINATE),

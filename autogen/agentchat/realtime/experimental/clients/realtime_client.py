@@ -2,12 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from collections.abc import AsyncGenerator
 from logging import Logger
-from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, Type, TypeVar, runtime_checkable
+from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, TypeVar, runtime_checkable
+
+from asyncer import create_task_group
 
 from .....doc_utils import export_module
-from ..realtime_events import RealtimeEvent
+from ..realtime_events import InputAudioBufferDelta, RealtimeEvent
 
 __all__ = ["RealtimeClientProtocol", "Role", "get_client", "register_realtime_client"]
 
@@ -65,7 +68,11 @@ class RealtimeClientProtocol(Protocol):
     def connect(self) -> AsyncContextManager[None]: ...
 
     def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
-        """Read messages from a Realtime API."""
+        """Read events from a Realtime Client."""
+        ...
+
+    async def _read_from_connection(self) -> AsyncGenerator[RealtimeEvent, None]:
+        """Read events from a Realtime connection."""
         ...
 
     def _parse_message(self, message: dict[str, Any]) -> list[RealtimeEvent]:
@@ -95,22 +102,60 @@ class RealtimeClientProtocol(Protocol):
         ...
 
 
-_realtime_client_classes: dict[str, Type[RealtimeClientProtocol]] = {}
+class RealtimeClientBase:
+    def __init__(self):
+        self._eventQueue = asyncio.Queue()
+
+    async def add_event(self, event: Optional[RealtimeEvent]):
+        await self._eventQueue.put(event)
+
+    async def get_event(self) -> Optional[RealtimeEvent]:
+        return await self._eventQueue.get()
+
+    async def _read_from_connection_task(self):
+        async for event in self._read_from_connection():
+            await self.add_event(event)
+        self.add_event(None)
+
+    async def _read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
+        """Read events from a Realtime Client."""
+        async with create_task_group() as tg:
+            tg.start_soon(self._read_from_connection_task)
+            while True:
+                try:
+                    event = await self._eventQueue.get()
+                    if event is not None:
+                        yield event
+                    else:
+                        break
+                except Exception:
+                    break
+
+    async def queue_input_audio_buffer_delta(self, audio: str) -> None:
+        """queue InputAudioBufferDelta.
+
+        Args:
+            audio (str): The audio.
+        """
+        await self.add_event(InputAudioBufferDelta(delta=audio, item_id=None, raw_message=dict()))
+
+
+_realtime_client_classes: dict[str, type[RealtimeClientProtocol]] = {}
 
 T = TypeVar("T", bound=RealtimeClientProtocol)
 
 
-def register_realtime_client() -> Callable[[Type[T]], Type[T]]:
+def register_realtime_client() -> Callable[[type[T]], type[T]]:
     """Register a Realtime API client.
 
     Args:
         name (str): The name of the Realtime API client.
 
     Returns:
-        Callable[[Type[T]], Type[T]]: The decorator to register the Realtime API client
+        Callable[[type[T]], type[T]]: The decorator to register the Realtime API client
     """
 
-    def decorator(client_cls: Type[T]) -> Type[T]:
+    def decorator(client_cls: type[T]) -> type[T]:
         """Register a Realtime API client.
 
         Args:

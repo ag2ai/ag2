@@ -29,7 +29,7 @@ def mock_response():
 @pytest.fixture
 def bedrock_client():
     # Set Bedrock client with some default values
-    client = BedrockClient()
+    client = BedrockClient(aws_region="us-east-1")
 
     client._supports_system_prompts = True
 
@@ -40,7 +40,7 @@ def bedrock_client():
 @skip_on_missing_imports(["boto3", "botocore"], "bedrock")
 def test_initialization():
     # Creation works without an api_key as it's handled in the parameter parsing
-    BedrockClient()
+    BedrockClient(aws_region="us-east-1")
 
 
 # Test parameters
@@ -204,9 +204,11 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client):
     ]
 
     # Call the create method
-    response = bedrock_client.create(
-        {"messages": bedrock_messages, "tools": converted_functions, "model": "anthropic.claude-3-sonnet-20240229-v1:0"}
-    )
+    response = bedrock_client.create({
+        "messages": bedrock_messages,
+        "tools": converted_functions,
+        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+    })
 
     # Assertions to check if the functions and content are included in the response
     assert response.choices[0].message.content == "Sample text about the functions"

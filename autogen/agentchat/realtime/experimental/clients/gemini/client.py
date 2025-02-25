@@ -6,18 +6,21 @@ import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from ......doc_utils import export_module
+from ......import_utils import optional_import_block, require_optional_import
 from ...realtime_events import AudioDelta, FunctionCall, RealtimeEvent, SessionCreated
-from ..realtime_client import Role, register_realtime_client
+from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
+
+with optional_import_block():
+    from websockets.asyncio.client import connect
+
 
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
 
     from ..realtime_client import RealtimeClientProtocol
-
-from websockets.asyncio.client import connect
 
 __all__ = ["GeminiRealtimeClient"]
 
@@ -29,8 +32,9 @@ API_VERSION = "v1alpha"
 
 
 @register_realtime_client()
+@require_optional_import("websockets", "gemini", except_for="get_factory")
 @export_module("autogen.agentchat.realtime.experimental.clients")
-class GeminiRealtimeClient:
+class GeminiRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for Gemini Realtime API."""
 
     def __init__(
@@ -44,10 +48,11 @@ class GeminiRealtimeClient:
         Args:
             llm_config (dict[str, Any]): The config for the client.
         """
+        super().__init__()
         self._llm_config = llm_config
         self._logger = logger
 
-        self._connection: Optional[ClientConnection] = None
+        self._connection: Optional["ClientConnection"] = None
         config = llm_config["config_list"][0]
 
         self._model: str = config["model"]
@@ -62,7 +67,7 @@ class GeminiRealtimeClient:
             "base_url",
             f"wss://{HOST}/ws/google.ai.generativelanguage.{API_VERSION}.GenerativeService.BidiGenerateContent?key={self._api_key}",
         )
-        self._final_config: Dict[str, Any] = {}
+        self._final_config: dict[str, Any] = {}
         self._pending_session_updates: dict[str, Any] = {}
         self._is_reading_events = False
 
@@ -123,6 +128,7 @@ class GeminiRealtimeClient:
                 ]
             }
         }
+        await self.queue_input_audio_buffer_delta(audio)
         if self._is_reading_events:
             await self.connection.send(json.dumps(msg))
 
@@ -185,13 +191,18 @@ class GeminiRealtimeClient:
             self._connection = None
 
     async def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
-        """Read Events from the Gemini Realtime API."""
+        """Read Events from the Gemini Realtime Client"""
         if self._connection is None:
             raise RuntimeError("Client is not connected, call connect() first.")
         await self._initialize_session()
 
         self._is_reading_events = True
 
+        async for event in self._read_events():
+            yield event
+
+    async def _read_from_connection(self) -> AsyncGenerator[RealtimeEvent, None]:
+        """Read messages from the Gemini Realtime connection."""
         async for raw_message in self.connection:
             message = raw_message.decode("ascii") if isinstance(raw_message, bytes) else raw_message
             events = self._parse_message(json.loads(message))

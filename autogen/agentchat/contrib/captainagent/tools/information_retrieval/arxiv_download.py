@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from ......coding.func_with_reqs import with_requirements
+from autogen.coding.func_with_reqs import with_requirements
 
 
 @with_requirements(["arxiv"])
-def arxiv_download(id_list: list, download_dir="./"):
+def arxiv_download(id_list: list[str], download_dir="./") -> list[str]:
     """Downloads PDF files from ArXiv based on a list of arxiv paper IDs.
 
     Args:

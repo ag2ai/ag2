@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import os
-from typing import Annotated, Any, Optional, Type
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
+from ....interop import LiteLLmConfigFactory
 from ... import Tool
 from ...dependency_injection import Depends, on
 
@@ -29,7 +29,7 @@ class Crawl4AITool(Tool):
     def __init__(
         self,
         llm_config: Optional[dict[str, Any]] = None,
-        extraction_model: Optional[Type[BaseModel]] = None,
+        extraction_model: Optional[type[BaseModel]] = None,
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
         """
@@ -68,9 +68,9 @@ class Crawl4AITool(Tool):
         async def crawl4ai_with_llm(
             url: Annotated[str, "The url to crawl and extract information from."],
             instruction: Annotated[str, "The instruction to provide on how and what to extract."],
-            llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
+            llm_config: Annotated[Any, Depends(on(llm_config))],
             llm_strategy_kwargs: Annotated[Optional[dict[str, Any]], Depends(on(llm_strategy_kwargs))],
-            extraction_model: Annotated[Optional[Type[BaseModel]], Depends(on(extraction_model))],
+            extraction_model: Annotated[Optional[type[BaseModel]], Depends(on(extraction_model))],
         ) -> Any:
             browser_cfg = BrowserConfig(headless=True)
             crawl_config = Crawl4AITool._get_crawl_config(
@@ -118,33 +118,13 @@ class Crawl4AITool(Tool):
             raise ValueError(check_parameters_error_msg)
 
     @staticmethod
-    def _get_provider_and_api_key(llm_config: dict[str, Any]) -> tuple[str, str]:
-        if "config_list" not in llm_config:
-            if "model" in llm_config:
-                model = llm_config["model"]
-                api_type = "openai"
-                api_key = os.getenv("OPENAI_API_KEY")
-            raise ValueError("llm_config must be a valid config dictionary.")
-        else:
-            try:
-                model = llm_config["config_list"][0]["model"]
-                api_type = llm_config["config_list"][0].get("api_type", "openai")
-                api_key = llm_config["config_list"][0]["api_key"]
-
-            except (KeyError, TypeError):
-                raise ValueError("llm_config must be a valid config dictionary.")
-
-        provider = f"{api_type}/{model}"
-        return provider, api_key  # type: ignore[return-value]
-
-    @staticmethod
     def _get_crawl_config(  # type: ignore[no-any-unimported]
         llm_config: dict[str, Any],
         instruction: str,
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
-        extraction_model: Optional[Type[BaseModel]] = None,
+        extraction_model: Optional[type[BaseModel]] = None,
     ) -> "CrawlerRunConfig":
-        provider, api_key = Crawl4AITool._get_provider_and_api_key(llm_config)
+        lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config(llm_config)
 
         if llm_strategy_kwargs is None:
             llm_strategy_kwargs = {}
@@ -159,8 +139,7 @@ class Crawl4AITool(Tool):
 
         # 1. Define the LLM extraction strategy
         llm_strategy = LLMExtractionStrategy(
-            provider=provider,
-            api_token=api_key,
+            **lite_llm_config,
             schema=schema,
             extraction_type=extraction_type,
             instruction=instruction,

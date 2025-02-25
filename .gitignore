@@ -9,6 +9,7 @@ node_modules/
 
 # Python virtualenv
 .venv*
+.env*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -189,3 +190,5 @@ local_cache
 notebook/result.png
 
 notebook/coding
+
+chroma

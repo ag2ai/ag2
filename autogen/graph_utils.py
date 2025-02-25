@@ -4,22 +4,42 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import logging
 from typing import Optional
 
 from .agentchat import Agent
+from .import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    import matplotlib.pyplot as plt
+    import networkx as nx
 
 
-def has_self_loops(allowed_speaker_transitions: dict) -> bool:
-    """Returns True if there are self loops in the allowed_speaker_transitions_Dict."""
+def has_self_loops(allowed_speaker_transitions: dict[str, list[Agent]]) -> bool:
+    """Check if there are self loops in the allowed_speaker_transitions.
+
+    Args:
+        allowed_speaker_transitions (dict[str, list[Agent]]): A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition
+
+    Returns:
+        True if there are self loops in the allowed_speaker_transitions_Dict.
+    """
+
     return any([key in value for key, value in allowed_speaker_transitions.items()])
 
 
 def check_graph_validity(
-    allowed_speaker_transitions_dict: dict,
+    allowed_speaker_transitions_dict: dict[str, list[Agent]],
     agents: list[Agent],
-):
-    """allowed_speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
+) -> None:
+    """Check the validity of the allowed_speaker_transitions_dict.
+
+    Args:
+        allowed_speaker_transitions_dict (dict[str, list[Agent]]):
+            A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
+        agents (list[Agent]): A list of Agents
+
     agents: A list of Agents
 
     Checks for the following:
@@ -33,7 +53,7 @@ def check_graph_validity(
         2. Warning if the set of agents in allowed_speaker_transitions do not match agents
         3. Warning if there are duplicated agents in any values of `allowed_speaker_transitions_dict`
     """
-    ### Errors
+    # Errors
 
     # Check 1. The dictionary must have a structure of keys and list as values
     if not isinstance(allowed_speaker_transitions_dict, dict):
@@ -48,9 +68,9 @@ def check_graph_validity(
         raise ValueError("allowed_speaker_transitions_dict has keys not in agents.")
 
     # Check 3. Every value is a list of Agents or empty list (not string).
-    if not all(
-        [all([isinstance(agent, Agent) for agent in value]) for value in allowed_speaker_transitions_dict.values()]
-    ):
+    if not all([
+        all([isinstance(agent, Agent) for agent in value]) for value in allowed_speaker_transitions_dict.values()
+    ]):
         raise ValueError("allowed_speaker_transitions_dict has values that are not lists of Agents.")
 
     # Warnings
@@ -96,8 +116,20 @@ def check_graph_validity(
             )
 
 
-def invert_disallowed_to_allowed(disallowed_speaker_transitions_dict: dict, agents: list[Agent]) -> dict:
-    """Start with a fully connected allowed_speaker_transitions_dict of all agents. Remove edges from the fully connected allowed_speaker_transitions_dict according to the disallowed_speaker_transitions_dict to form the allowed_speaker_transitions_dict."""
+def invert_disallowed_to_allowed(
+    disallowed_speaker_transitions_dict: dict[str, list[Agent]], agents: list[Agent]
+) -> dict[str, list[Agent]]:
+    """Invert the disallowed_speaker_transitions_dict to form the allowed_speaker_transitions_dict.
+
+    Start with a fully connected allowed_speaker_transitions_dict of all agents. Remove edges from the fully connected allowed_speaker_transitions_dict according to the disallowed_speaker_transitions_dict to form the allowed_speaker_transitions_dict.
+
+    Args:
+        disallowed_speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent cannot transition to.
+        agents: A list of Agents
+
+    Returns:
+        allowed_speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
+    """
     # Create a fully connected allowed_speaker_transitions_dict of all agents
     allowed_speaker_transitions_dict = {agent: [other_agent for other_agent in agents] for agent in agents}
 
@@ -110,16 +142,22 @@ def invert_disallowed_to_allowed(disallowed_speaker_transitions_dict: dict, agen
     return allowed_speaker_transitions_dict
 
 
+@require_optional_import(["matplotlib", "networkx"], "graph")
 def visualize_speaker_transitions_dict(
-    speaker_transitions_dict: dict, agents: list[Agent], export_path: Optional[str] = None
-):
-    """Visualize the speaker_transitions_dict using networkx."""
-    try:
-        import matplotlib.pyplot as plt
-        import networkx as nx
-    except ImportError as e:
-        logging.fatal("Failed to import networkx or matplotlib. Try running 'pip install autogen[graphs]'")
-        raise e
+    speaker_transitions_dict: dict[str, list[Agent]], agents: list[Agent], export_path: Optional[str] = None
+) -> None:
+    """Visualize the speaker_transitions_dict using networkx.
+
+    Args:
+        speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
+        agents: A list of Agents
+        export_path: The path to export the graph. If None, the graph will be shown.
+
+    Returns:
+        None
+
+
+    """
 
     g = nx.DiGraph()
 

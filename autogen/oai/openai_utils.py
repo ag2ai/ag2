@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import importlib
 import importlib.metadata
 import json
 import logging
@@ -11,6 +12,7 @@ import os
 import re
 import tempfile
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -31,6 +33,9 @@ NON_CACHE_KEY = [
     "credentials",
 ]
 DEFAULT_AZURE_API_VERSION = "2024-02-01"
+
+# The below pricing is for 1K tokens. Whenever there is an update in the LLM's pricing,
+# Please convert it to 1K tokens and update in the below dictionary in the format: (input_token_price, output_token_price).
 OAI_PRICE1K = {
     # https://openai.com/api/pricing/
     # o1
@@ -90,10 +95,8 @@ OAI_PRICE1K = {
     "gpt-35-turbo-0301": (0.0015, 0.002),
     "gpt-35-turbo-16k": (0.003, 0.004),
     "gpt-35-turbo-16k-0613": (0.003, 0.004),
-    # The below are the discounted prices offered by deepseek to all users till 2025-02-08 16:00 (UTC)
-    # TODO: After 2025-02-08 16:00 UTC, update to standard pricing
-    # Reference: https://api-docs.deepseek.com/quick_start/pricing
-    "deepseek-chat": (0.00014, 0.00028),
+    # deepseek
+    "deepseek-chat": (0.00027, 0.0011),
 }
 
 
@@ -184,6 +187,30 @@ def get_config_list(
             config["api_version"] = api_version
         config_list.append(config)
     return config_list
+
+
+@export_module("autogen")
+def get_first_llm_config(llm_config: dict[str, Any]) -> dict[str, Any]:
+    """Get the first LLM config from the given LLM config.
+
+    Args:
+        llm_config (dict): The LLM config.
+
+    Returns:
+        dict: The first LLM config.
+
+    Raises:
+        ValueError: If the LLM config is invalid.
+    """
+    llm_config = deepcopy(llm_config)
+    if "config_list" not in llm_config:
+        if "model" in llm_config:
+            return llm_config
+        raise ValueError("llm_config must be a valid config dictionary.")
+
+    if len(llm_config["config_list"]) == 0:
+        raise ValueError("Config list must contain at least one config.")
+    return llm_config["config_list"][0]  # type: ignore [no-any-return]
 
 
 @export_module("autogen")
@@ -553,6 +580,9 @@ def config_list_from_json(
 
         with open(config_list_path) as json_file:
             config_list = json.load(json_file)
+
+    config_list = filter_config(config_list, filter_dict)
+
     return filter_config(config_list, filter_dict)
 
 
@@ -710,10 +740,7 @@ def retrieve_assistants_by_name(client: OpenAI, name: str) -> list[Assistant]:
 def detect_gpt_assistant_api_version() -> str:
     """Detect the openai assistant API version"""
     oai_version = importlib.metadata.version("openai")
-    if parse(oai_version) < parse("1.21"):
-        return "v1"
-    else:
-        return "v2"
+    return "v1" if parse(oai_version) < parse("1.21") else "v2"
 
 
 def create_gpt_vector_store(client: OpenAI, name: str, fild_ids: list[str]) -> Any:

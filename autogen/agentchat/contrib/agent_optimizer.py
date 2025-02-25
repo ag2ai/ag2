@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from ... import OpenAIWrapper, filter_config
 from ...code_utils import execute_code
@@ -168,14 +168,14 @@ if result is not None: print(result)
 
 
 class AgentOptimizer:
-    """Base class for optimizing AutoGen agents. Specifically, it is used to optimize the functions used in the agent.
+    """Base class for optimizing AG2 agents. Specifically, it is used to optimize the functions used in the agent.
     More information could be found in the following paper: https://arxiv.org/abs/2402.11359.
     """
 
     def __init__(
         self,
         max_actions_per_step: int,
-        llm_config: dict,
+        llm_config: dict[str, Any],
         optimizer_model: Optional[str] = "gpt-4-1106-preview",
     ):
         """(These APIs are experimental and may change in the future.)
@@ -183,7 +183,7 @@ class AgentOptimizer:
         Args:
             max_actions_per_step (int): the maximum number of actions that the optimizer can take in one step.
             llm_config (dict): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](/reference/autogen/OpenAIWrapper#create) for available options.
+                Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create) for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
             optimizer_model: the model used for the optimizer.
         """
@@ -212,7 +212,7 @@ class AgentOptimizer:
         self.llm_config["config_list"] = filter_config(llm_config["config_list"], {"model": [self.optimizer_model]})
         self._client = OpenAIWrapper(**self.llm_config)
 
-    def record_one_conversation(self, conversation_history: list[dict], is_satisfied: bool = None):
+    def record_one_conversation(self, conversation_history: list[dict[str, Any]], is_satisfied: bool = None):
         """Record one conversation history.
 
         Args:
@@ -228,12 +228,12 @@ class AgentOptimizer:
                 "1",
             ], "The input is invalid. Please input 1 or 0. 1 represents satisfied. 0 represents not satisfied."
             is_satisfied = reply == "1"
-        self._trial_conversations_history.append(
-            {f"Conversation {len(self._trial_conversations_history)}": conversation_history}
-        )
-        self._trial_conversations_performance.append(
-            {f"Conversation {len(self._trial_conversations_performance)}": 1 if is_satisfied else 0}
-        )
+        self._trial_conversations_history.append({
+            f"Conversation {len(self._trial_conversations_history)}": conversation_history
+        })
+        self._trial_conversations_performance.append({
+            f"Conversation {len(self._trial_conversations_performance)}": 1 if is_satisfied else 0
+        })
 
     def step(self):
         """One step of training. It will return register_for_llm and register_for_executor at each iteration,
@@ -294,23 +294,19 @@ class AgentOptimizer:
             register_for_llm.append({"func_sig": {"name": name}, "is_remove": True})
             register_for_exector.update({name: None})
         for func in incumbent_functions:
-            register_for_llm.append(
-                {
-                    "func_sig": {
-                        "name": func.get("name"),
-                        "description": func.get("description"),
-                        "parameters": {"type": "object", "properties": func.get("arguments")},
-                    },
-                    "is_remove": False,
-                }
-            )
-            register_for_exector.update(
-                {
-                    func.get("name"): lambda **args: execute_func(
-                        func.get("name"), func.get("packages"), func.get("code"), **args
-                    )
-                }
-            )
+            register_for_llm.append({
+                "func_sig": {
+                    "name": func.get("name"),
+                    "description": func.get("description"),
+                    "parameters": {"type": "object", "properties": func.get("arguments")},
+                },
+                "is_remove": False,
+            })
+            register_for_exector.update({
+                func.get("name"): lambda **args: execute_func(
+                    func.get("name"), func.get("packages"), func.get("code"), **args
+                )
+            })
 
         self._trial_functions = incumbent_functions
         return register_for_llm, register_for_exector
@@ -365,15 +361,13 @@ class AgentOptimizer:
                 incumbent_functions = [item for item in incumbent_functions if item["name"] != name]
             else:
                 incumbent_functions = [item for item in incumbent_functions if item["name"] != name]
-                incumbent_functions.append(
-                    {
-                        "name": name,
-                        "description": description,
-                        "arguments": arguments,
-                        "packages": packages,
-                        "code": code,
-                    }
-                )
+                incumbent_functions.append({
+                    "name": name,
+                    "description": description,
+                    "arguments": arguments,
+                    "packages": packages,
+                    "code": code,
+                })
 
         return incumbent_functions
 

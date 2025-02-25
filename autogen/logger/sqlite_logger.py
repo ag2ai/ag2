@@ -173,8 +173,8 @@ class SqliteLogger(BaseLogger):
                         """
             self._run_query(query=query)
 
-            current_verion = self._get_current_db_version()
-            if current_verion is None:
+            current_version = self._get_current_db_version()
+            if current_version is None:
                 self._run_query(
                     query="INSERT INTO version (id, version_number) VALUES (1, ?);", args=(SqliteLogger.schema_version,)
                 )
@@ -275,7 +275,13 @@ class SqliteLogger(BaseLogger):
         else:
             response_messages = json.dumps(to_dict(response), indent=4)
 
-        source_name = source if isinstance(source, str) else source.name
+        source_name = (
+            source
+            if isinstance(source, str)
+            else source.name
+            if hasattr(source, "name") and source.name is not None
+            else ""
+        )
 
         query = """
             INSERT INTO chat_completions (

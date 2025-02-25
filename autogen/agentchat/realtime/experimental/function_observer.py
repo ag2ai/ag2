@@ -47,8 +47,8 @@ class FunctionObserver(RealtimeObserver):
             name (str): The name of the function to call.
             kwargs (Any[str, Any]): The arguments to pass to the function.
         """
-        if name in self.agent.registred_realtime_tools:
-            func = self.agent.registred_realtime_tools[name].func
+        if name in self.agent.registered_realtime_tools:
+            func = self.agent.registered_realtime_tools[name].func
             func = func if asyncio.iscoroutinefunction(func) else asyncify(func)
             try:
                 result = await func(**kwargs)
@@ -71,7 +71,7 @@ class FunctionObserver(RealtimeObserver):
     async def initialize_session(self) -> None:
         """Add registered tools to OpenAI with a session update."""
         session_update = {
-            "tools": [tool.realtime_tool_schema for tool in self.agent.registred_realtime_tools.values()],
+            "tools": [tool.realtime_tool_schema for tool in self.agent.registered_realtime_tools.values()],
             "tool_choice": "auto",
         }
         await self.realtime_client.session_update(session_update)

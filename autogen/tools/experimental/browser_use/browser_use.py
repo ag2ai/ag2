@@ -12,11 +12,11 @@ from ... import Depends, Tool
 from ...dependency_injection import on
 
 with optional_import_block():
-    from browser_use import Agent
+    from browser_use import Agent, Controller
     from browser_use.browser.browser import Browser, BrowserConfig
-    from langchain_anthropic import ChatAnthropic
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from langchain_openai import ChatOpenAI
+
+    from ....interop.langchain.langchain_chat_model_factory import LangChainChatModelFactory
+
 
 __all__ = ["BrowserUseResult", "BrowserUseTool"]
 
@@ -34,7 +34,17 @@ class BrowserUseResult(BaseModel):
     final_result: Optional[str]
 
 
-@require_optional_import(["langchain_openai", "browser_use"], "browser-use")
+@require_optional_import(
+    [
+        "langchain_anthropic",
+        "langchain_google_genai",
+        "langchain_ollama",
+        "langchain_openai",
+        "langchain_core",
+        "browser_use",
+    ],
+    "browser-use",
+)
 @export_module("autogen.tools.experimental")
 class BrowserUseTool(Tool):
     """BrowserUseTool is a tool that uses the browser to perform a task."""
@@ -83,9 +93,19 @@ class BrowserUseTool(Tool):
             browser: Annotated[Browser, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
         ) -> BrowserUseResult:
-            llm = BrowserUseTool._get_llm(llm_config)
-            agent = Agent(task=task, llm=llm, browser=browser, **agent_kwargs)
-            result = await agent.run()
+            llm = LangChainChatModelFactory.create_base_chat_model(llm_config)
+
+            max_steps = agent_kwargs.pop("max_steps", 100)
+
+            agent = Agent(
+                task=task,
+                llm=llm,
+                browser=browser,
+                controller=BrowserUseTool._get_controller(llm_config),
+                **agent_kwargs,
+            )
+
+            result = await agent.run(max_steps=max_steps)
 
             return BrowserUseResult(
                 extracted_content=result.extracted_content(),
@@ -99,28 +119,10 @@ class BrowserUseTool(Tool):
         )
 
     @staticmethod
-    def _get_llm(  # type: ignore[no-any-unimported]
-        llm_config: dict[str, Any],
-    ) -> Any:
-        if "config_list" not in llm_config:
-            if "model" in llm_config:
-                return ChatOpenAI(model=llm_config["model"])
-            raise ValueError("llm_config must be a valid config dictionary.")
-
-        try:
-            model = llm_config["config_list"][0]["model"]
-            api_type = llm_config["config_list"][0].get("api_type", "openai")
-            api_key = llm_config["config_list"][0]["api_key"]
-        except (KeyError, TypeError):
-            raise ValueError("llm_config must be a valid config dictionary.")
-
-        if api_type == "openai":
-            return ChatOpenAI(model=model, api_key=api_key)
-        elif api_type == "deepseek":
-            return ChatOpenAI(model=model, api_key=api_key, base_url=llm_config["config_list"][0].get("base_url"))
-        elif api_type == "anthropic":
-            return ChatAnthropic(model=model, api_key=api_key)
-        elif api_type == "google":
-            return ChatGoogleGenerativeAI(model=model, api_key=api_key)
-        else:
-            raise ValueError(f"Currently unsupported language model api type for browser use: {api_type}")
+    def _get_controller(llm_config: dict[str, Any]) -> Any:
+        response_format = (
+            llm_config["config_list"][0].get("response_format", None)
+            if "config_list" in llm_config
+            else llm_config.get("response_format")
+        )
+        return Controller(output_model=response_format)

@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional, TypeVar
 import pytest
 
 import autogen
+from autogen import UserProxyAgent
 from autogen.import_utils import optional_import_block
 
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
@@ -353,6 +354,15 @@ def credentials_from_test_param(request: pytest.FixtureRequest) -> Credentials:
     return credentials
 
 
+@pytest.fixture
+def user_proxy() -> UserProxyAgent:
+    return UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+
 credentials_all_llms = [
     pytest.param(
         credentials_gpt_4o_mini.__name__,
@@ -387,7 +397,6 @@ credentials_browser_use = [
         marks=pytest.mark.deepseek,
     ),
 ]
-
 
 T = TypeVar("T", bound=Callable[..., Any])
 
@@ -435,6 +444,7 @@ def suppress(
                             pytest.xfail(f"Suppressed '{exception}' raised {i + 1} times")
                             raise
                         await asyncio.sleep(timeout)
+
         else:
 
             @functools.wraps(func)

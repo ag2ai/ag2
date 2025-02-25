@@ -8,7 +8,7 @@
 import copy
 import traceback
 from contextlib import suppress
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
 
@@ -38,15 +38,15 @@ class SocietyOfMindAgent(ConversableAgent):
         self,
         name: str,
         chat_manager: GroupChatManager,
-        response_preparer: Optional[Union[str, Callable]] = None,
-        is_termination_msg: Optional[Callable[[dict], bool]] = None,
+        response_preparer: Optional[Union[str, Callable[..., Any]]] = None,
+        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable]] = None,
-        code_execution_config: Union[dict, Literal[False]] = False,
-        llm_config: Optional[Union[dict, Literal[False]]] = False,
-        default_auto_reply: Optional[Union[str, dict, None]] = "",
-        **kwargs,
+        function_map: Optional[dict[str, Callable[..., Any]]] = None,
+        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
+        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
+        default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
+        **kwargs: Any,
     ):
         super().__init__(
             name=name,
@@ -121,12 +121,10 @@ class SocietyOfMindAgent(ConversableAgent):
             # Add the modified message to the transcript
             _messages.append(message)
 
-        _messages.append(
-            {
-                "role": "system",
-                "content": prompt,
-            }
-        )
+        _messages.append({
+            "role": "system",
+            "content": prompt,
+        })
 
         response = self.client.create(context=None, messages=_messages, cache=self.client_cache, agent=self.name)
         extracted_response = self.client.extract_text_or_completion_object(response)[0]
@@ -159,10 +157,10 @@ class SocietyOfMindAgent(ConversableAgent):
 
     def generate_inner_monologue_reply(
         self,
-        messages: Optional[list[dict]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Union[str, dict, None]]:
+    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Generate a reply by running the group chat"""
         if self.chat_manager is None:
             return False, None

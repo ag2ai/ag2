@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 import asyncio
 import copy
@@ -19,9 +19,10 @@ import pytest
 from pydantic import BaseModel, Field
 
 import autogen
-from autogen.agentchat import ConversableAgent, UserProxyAgent
+from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from autogen.tools.tool import Tool
 
 from ..conftest import (
     Credentials,
@@ -295,12 +296,10 @@ def test_generate_code_execution_reply():
 
     dummy_messages_for_auto = []
     for i in range(3):
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
         # Without an assistant present
         agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}
@@ -335,12 +334,10 @@ def test_generate_code_execution_reply():
             "exitcode: 0 (execution succeeded)\nCode output: \nhello world\n",
         )
 
-        dummy_messages_for_auto.append(
-            {
-                "content": "no code block",
-                "role": "user",
-            }
-        )
+        dummy_messages_for_auto.append({
+            "content": "no code block",
+            "role": "user",
+        })
 
     # scenario 7: if last_n_messages is set to 'auto' and code is present, but not before an assistant message, then nothing happens
     agent._code_execution_config = {"last_n_messages": "auto", "use_docker": False}
@@ -604,7 +601,7 @@ def test__wrap_function_sync():
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
-        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
+        amount: float = Field(default=100.0, description="Amount of money in the currency")
 
     Currency(currency="USD", amount=100.0)
 
@@ -642,7 +639,7 @@ async def test__wrap_function_async():
 
     class Currency(BaseModel):
         currency: CurrencySymbol = Field(description="Currency code")
-        amount: Annotated[float, Field(default=100.0, description="Amount of money in the currency")]
+        amount: float = Field(default=100.0, description="Amount of money in the currency")
 
     Currency(currency="USD", amount=100.0)
 
@@ -1591,7 +1588,7 @@ def test_context_variables():
     assert agent._context_variables == expected_final_context
 
 
-@pytest.mark.skip(reason="This test is failing. We need to investigate the issue.")
+@pytest.mark.skip(reason="'anyOf' parameters works with vertexai setup but it is not supported in google.genai")
 @pytest.mark.gemini
 @suppress_gemini_resource_exhausted
 def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value(
@@ -1611,6 +1608,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
     def login(
         additional_notes: Annotated[Optional[str], "Additional notes"] = None,
     ) -> str:
+        mock()
         return "Login successful."
 
     user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
@@ -1639,6 +1637,198 @@ def test_conversable_agent_with_deepseek_reasoner(
     assert isinstance(result.summary, str)
 
 
+def test_invalid_functions_parameter():
+    """Test initialization with valid and invalid parameters"""
+
+    # Invalid functions parameter
+    with pytest.raises(TypeError):
+        ConversableAgent("test_agent", functions="invalid")
+
+
+def test_update_system_message():
+    """Tests the update_agent_state_before_reply functionality with multiple scenarios"""
+
+    # Test invalid update function
+    with pytest.raises(ValueError, match="The update function must be either a string or a callable"):
+        ConversableAgent("agent3", update_agent_state_before_reply=UpdateSystemMessage(123))
+
+    # Test invalid callable (wrong number of parameters)
+    def invalid_update_function(context_variables):
+        return "Invalid function"
+
+    with pytest.raises(ValueError, match="The update function must accept two parameters"):
+        ConversableAgent("agent4", update_agent_state_before_reply=UpdateSystemMessage(invalid_update_function))
+
+    # Test invalid callable (wrong return type)
+    def invalid_return_function(context_variables, messages) -> dict:
+        return {}
+
+    with pytest.raises(ValueError, match="The update function must return a string"):
+        ConversableAgent("agent5", update_agent_state_before_reply=UpdateSystemMessage(invalid_return_function))
+
+
+def test_tools_property(conversable_agent):
+    """Test the tools property returns a copy of the tools list."""
+    # Initial tools list should be empty
+    assert len(conversable_agent.tools) == 0
+
+    # Create a mock tool
+    mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=lambda x: x)
+
+    # Add tool directly to internal list
+    conversable_agent._tools.append(mock_tool)
+
+    # Get tools list
+    tools = conversable_agent.tools
+    assert len(tools) == 1
+    assert tools[0] == mock_tool
+
+    # Verify we got a copy by modifying the returned list
+    tools.clear()
+    assert len(conversable_agent._tools) == 1  # Original list should be unchanged
+
+
+def test_add_tool_for_llm(mock_credentials: Credentials):
+    """Test adding a tool for LLM use."""
+
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
+
+    # Add the tool
+    agent.register_for_llm()(mock_tool)
+
+    # Verify tool was added to internal list
+    assert len(agent._tools) == 1
+    assert agent._tools[0] == mock_tool
+
+    # Verify tool was registered with LLM
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    assert mock_tool.name in tool_schemas
+
+
+def test_add_tool_for_llm_invalid_type(conversable_agent):
+    """Test adding an invalid tool type raises TypeError."""
+    with pytest.raises(
+        TypeError, match="'func_or_tool' must be a function or a Tool object, got '<class 'str'>' instead."
+    ):
+        conversable_agent.register_for_llm()("not a tool")
+
+
+def test_remove_tool_for_llm(mock_credentials: Credentials):
+    """Test removing a tool."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
+
+    agent.register_for_llm()(mock_tool)
+
+    # Remove the tool
+    agent.remove_tool_for_llm(mock_tool)
+
+    # Verify tool was removed from internal list
+    assert len(agent._tools) == 0
+
+    # Verify tool was unregistered from LLM
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    print(mock_tool.name)
+    print(tool_schemas)
+    assert mock_tool.name not in tool_schemas
+
+
+def test_remove_tool_for_llm_not_found(mock_credentials: Credentials):
+    """Test removing a non-existent tool raises ValueError."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
+
+    with pytest.raises(AssertionError, match="The agent config doesn't have tool"):
+        agent.remove_tool_for_llm(mock_tool)
+
+
+def test_tool_integration(mock_credentials: Credentials):
+    """Test full tool integration workflow."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    tool1 = Tool(name="tool1", description="A test tool", func_or_tool=sample_tool_func)
+
+    tool2 = Tool(name="tool2", description="A test tool", func_or_tool=sample_tool_func)
+
+    # Add tools
+    agent.register_for_llm()(tool1)
+    agent.register_for_llm()(tool2)
+
+    # Verify both tools are in the list
+    assert len(agent.tools) == 2
+    tool_names = {t.name for t in agent.tools}
+    assert tool_names == {"tool1", "tool2"}
+
+    # Remove one tool
+    agent.remove_tool_for_llm(tool1)
+
+    # Verify only one tool remains
+    assert len(agent.tools) == 1
+    assert agent.tools[0].name == "tool2"
+
+    # Verify LLM config was updated
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    assert "tool1" not in tool_schemas
+    assert "tool2" in tool_schemas
+
+
+def test_create_or_get_executor(mock_credentials: Credentials):
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+    executor_agent = None
+
+    def log_result(result: str):
+        return "I have logged the result."
+
+    tool = Tool(
+        name="log_result",
+        description="Logs the result of the task.",
+        func_or_tool=log_result,
+    )
+
+    expected_tools = [
+        {
+            "type": "function",
+            "function": {
+                "description": "Logs the result of the task.",
+                "name": "log_result",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"result": {"type": "string", "description": "result"}},
+                    "required": ["result"],
+                },
+            },
+        }
+    ]
+    executor_agent = None
+    for _ in range(2):
+        with agent._create_or_get_executor(
+            tools=[tool],
+        ) as executor:
+            if not executor_agent:
+                executor_agent = executor
+            else:
+                assert executor_agent == executor
+            assert isinstance(executor_agent, ConversableAgent)
+            assert agent.llm_config["tools"] == expected_tools
+            assert len(executor_agent.function_map.keys()) == 1
+
+
 if __name__ == "__main__":
     # test_trigger()
     # test_context()
@@ -1651,4 +1841,5 @@ if __name__ == "__main__":
     # test_function_registration_e2e_sync()
     # test_process_gemini_carryover()
     # test_process_carryover()
-    test_context_variables()
+    # test_context_variables()
+    test_invalid_functions_parameter()

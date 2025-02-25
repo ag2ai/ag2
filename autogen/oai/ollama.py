@@ -28,7 +28,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
@@ -86,7 +86,7 @@ class OllamaClient:
             None
         """
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: Optional[type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -137,6 +137,10 @@ class OllamaClient:
         if "num_predict" in params:
             # Maximum number of tokens to predict, note: -1 is infinite, -2 is fill context, 128 is default
             options_dict["num_predict"] = validate_parameter(params, "num_predict", int, False, 128, None, None)
+
+        if "num_ctx" in params:
+            # Set size of context window used to generate next token, 2048 is default
+            options_dict["num_ctx"] = validate_parameter(params, "num_ctx", int, False, 2048, None, None)
 
         if "repeat_penalty" in params:
             options_dict["repeat_penalty"] = validate_parameter(
@@ -233,7 +237,11 @@ class OllamaClient:
         # https://ollama.com/blog/structured-outputs
         if params.get("response_format"):
             self._response_format = params["response_format"]
-            ollama_params["format"] = params.get("response_format").model_json_schema()
+            ollama_params["format"] = (
+                params.get("response_format").model_json_schema()
+                if isinstance(self._response_format, BaseModel)
+                else params.get("response_format")
+            )
 
         # Token counts will be returned
         prompt_tokens = 0
@@ -487,8 +495,11 @@ class OllamaClient:
             return response
 
         try:
-            # Parse JSON and validate against the Pydantic model
-            return self._response_format.model_validate_json(response)
+            # Parse JSON and validate against the Pydantic model if Pydantic model was provided
+            if isinstance(self._response_format, dict):
+                return response
+            else:
+                return self._response_format.model_validate_json(response)
         except Exception as e:
             raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
 
@@ -501,7 +512,7 @@ def _format_json_response(response: Any, original_answer: str) -> str:
 @require_optional_import("fix_busted_json", "ollama")
 def response_to_tool_call(response_string: str) -> Any:
     """Attempts to convert the response to an object, aimed to align with function format `[{},{}]`"""
-    # We try and detect the list[dict] format:
+    # We try and detect the list[dict[str, Any]] format:
     # Pattern 1 is [{},{}]
     # Pattern 2 is {} (without the [], so could be a single function call)
     patterns = [r"\[[\s\S]*?\]", r"\{[\s\S]*\}"]
@@ -557,7 +568,7 @@ def response_to_tool_call(response_string: str) -> Any:
     return None
 
 
-def _object_to_tool_call(data_object: Any) -> list[dict]:
+def _object_to_tool_call(data_object: Any) -> list[dict[str, Any]]:
     """Attempts to convert an object to a valid tool call object List[Dict] and returns it, if it can, otherwise None"""
     # If it's a dictionary and not a list then wrap in a list
     if isinstance(data_object, dict):

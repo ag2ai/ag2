@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-#!/usr/bin/env python3 -m pytest
+# !/usr/bin/env python3 -m pytest
 
 
 import pytest
@@ -56,11 +56,7 @@ def test_load_config(cohere_client):
         "model": "command-r-plus",
         "temperature": 1,
         "p": 0.8,
-        "seed": None,
         "max_tokens": 100,
-        "frequency_penalty": 0,
-        "presence_penalty": 0,
-        "k": 0,
     }
     result = cohere_client.parse_params(params)
     assert result == expected_params, "Config should be correctly loaded"

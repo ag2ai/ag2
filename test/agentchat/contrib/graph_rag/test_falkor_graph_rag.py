@@ -8,10 +8,9 @@ import sys
 
 import pytest
 
-from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
+from autogen.agentchat.contrib.graph_rag import Document, DocumentType, GraphStoreQueryResult
 from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import (
     FalkorGraphQueryEngine,
-    GraphStoreQueryResult,
 )
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
@@ -28,7 +27,7 @@ reason = "do not run on MacOS or windows OR dependency is not installed"
     reason=reason,
 )
 @skip_on_missing_imports(["falkordb", "graphrag_sdk"], "neo4j")
-def test_falkor_db_query_engine():
+def test_falkor_db_query_engine() -> None:
     """Test FalkorDB Query Engine.
     1. create a test FalkorDB Query Engine with a schema.
     2. Initialize it with an input txt file.
@@ -62,4 +61,4 @@ def test_falkor_db_query_engine():
     query_result: GraphStoreQueryResult = query_engine.query(question=question)
 
     # Assert
-    assert query_result.answer.find("Keanu Reeves") >= 0
+    assert query_result.answer.find("Keanu Reeves") >= 0  # type: ignore[union-attr]

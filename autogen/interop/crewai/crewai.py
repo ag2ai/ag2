@@ -7,7 +7,7 @@ import sys
 from typing import Any, Optional
 
 from ...doc_utils import export_module
-from ...import_utils import optional_import_block
+from ...import_utils import optional_import_block, require_optional_import
 from ...tools import Tool
 from ..registry import register_interoperable_class
 
@@ -16,6 +16,10 @@ __all__ = ["CrewAIInteroperability"]
 
 def _sanitize_name(s: str) -> str:
     return re.sub(r"\W|^(?=\d)", "_", s)
+
+
+with optional_import_block():
+    from crewai.tools import BaseTool as CrewAITool
 
 
 @register_interoperable_class("crewai")
@@ -28,6 +32,7 @@ class CrewAIInteroperability:
     """
 
     @classmethod
+    @require_optional_import("crewai", "interop-crewai")
     def convert_tool(cls, tool: Any, **kwargs: Any) -> Tool:
         """Converts a given CrewAI tool into a general `Tool` format.
 
@@ -46,8 +51,6 @@ class CrewAIInteroperability:
             ValueError: If the provided tool is not an instance of `CrewAITool`, or if
                         any additional arguments are passed.
         """
-        from crewai.tools import BaseTool as CrewAITool
-
         if not isinstance(tool, CrewAITool):
             raise ValueError(f"Expected an instance of `crewai.tools.BaseTool`, got {type(tool)}")
         if kwargs:

@@ -23,6 +23,18 @@ First you need to install the AG2 package with the Mistral API extra.
 pip install ag2[mistral]
 ```
 
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[mistral]
+```
+or
+```bash
+pip install -U pyautogen[mistral]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 Mistral provides a number of models to use, included below. See the list of [models here](https://docs.mistral.ai/platform/endpoints/).
 
 See the sample `OAI_CONFIG_LIST` below showing how the Mistral AI client class is used by specifying the `api_type` as `mistral`.

@@ -4,18 +4,16 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from time import monotonic, sleep
-from typing import Any, Callable, Literal, Optional, Union
-
-import numpy as np
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
 
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import get_logger
 
 with optional_import_block():
+    import numpy as np
     from pymongo import MongoClient, UpdateOne, errors
     from pymongo.collection import Collection
     from pymongo.driver_info import DriverInfo
@@ -34,7 +32,7 @@ def with_id_rename(docs: Iterable) -> list[dict[str, Any]]:
     return [{**{k: v for k, v in d.items() if k != "_id"}, "id": d["_id"]} for d in docs]
 
 
-@require_optional_import(["pymongo", "sentence_transformers"], "retrievechat-mongodb")
+@require_optional_import(["pymongo", "sentence_transformers", "numpy"], "retrievechat-mongodb")
 class MongoDBAtlasVectorDB(VectorDB):
     """A Collection object for MongoDB."""
 
@@ -42,12 +40,12 @@ class MongoDBAtlasVectorDB(VectorDB):
         self,
         connection_string: str = "",
         database_name: str = "vector_db",
-        embedding_function: Optional[Callable] = None,
+        embedding_function: Optional[Callable[..., Any]] = None,
         collection_name: str = None,
         index_name: str = "vector_index",
         overwrite: bool = False,
-        wait_until_index_ready: float = None,
-        wait_until_document_ready: float = None,
+        wait_until_index_ready: Optional[float] = None,
+        wait_until_document_ready: Optional[float] = None,
     ):
         """Initialize the vector database.
 
@@ -59,9 +57,9 @@ class MongoDBAtlasVectorDB(VectorDB):
                 Defaults to None
             index_name: str | Index name for the vector database, defaults to 'vector_index'
             overwrite: bool = False
-            wait_until_index_ready: float | None | Blocking call to wait until the
+            wait_until_index_ready: Optional[float] | Blocking call to wait until the
                 database indexes are ready. None, the default, means no wait.
-            wait_until_document_ready: float | None | Blocking call to wait until the
+            wait_until_document_ready: Optional[float] | Blocking call to wait until the
                 database indexes are ready. None, the default, means no wait.
         """
         self.embedding_function = embedding_function or SentenceTransformer("all-MiniLM-L6-v2").encode
@@ -271,8 +269,8 @@ class MongoDBAtlasVectorDB(VectorDB):
         docs: list[Document],
         collection_name: str = None,
         upsert: bool = False,
-        batch_size=DEFAULT_INSERT_BATCH_SIZE,
-        **kwargs,
+        batch_size: int = DEFAULT_INSERT_BATCH_SIZE,
+        **kwargs: Any,
     ) -> None:
         """Insert Documents and Vector Embeddings into the collection of the vector database.
 
@@ -453,7 +451,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         collection_name: str = None,
         n_results: int = 10,
         distance_threshold: float = -1,
-        **kwargs,
+        **kwargs: Any,
     ) -> QueryResults:
         """Retrieve documents from the collection of the vector database based on the queries.
 
@@ -493,9 +491,9 @@ class MongoDBAtlasVectorDB(VectorDB):
                 oversampling_factor=kwargs.get("oversampling_factor", 10),
             )
             # Change each _id key to id. with_id_rename, but with (doc, score) tuples
-            results.append(
-                [({**{k: v for k, v in d[0].items() if k != "_id"}, "id": d[0]["_id"]}, d[1]) for d in query_result]
-            )
+            results.append([
+                ({**{k: v for k, v in d[0].items() if k != "_id"}, "id": d[0]["_id"]}, d[1]) for d in query_result
+            ])
         return results
 
 
@@ -507,7 +505,7 @@ def _vector_search(
     distance_threshold: float = -1.0,
     oversampling_factor=10,
     include_embedding=False,
-) -> list[tuple[dict, float]]:
+) -> list[tuple[dict[str, Any], float]]:
     """Core $vectorSearch Aggregation pipeline.
 
     Args:
