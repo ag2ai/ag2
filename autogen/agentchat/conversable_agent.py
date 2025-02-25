@@ -2179,7 +2179,12 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender] if sender else []
+
+        # if there are no messages, continue the conversation
+        if not messages:
+            return False, None
         message = messages[-1]
+
         reply = ""
         no_human_input_msg = ""
         sender_name = "the sender" if sender is None else sender.name
