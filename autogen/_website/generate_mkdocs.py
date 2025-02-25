@@ -19,7 +19,7 @@ def filter_excluded_files(files: list[Path], exclusion_list: list[str], website_
     return [
         file
         for file in files
-        if not any(str(file.relative_to(website_dir)).startswith(excl) for excl in exclusion_list)
+        if not any(Path(str(file.relative_to(website_dir))).as_posix().startswith(excl) for excl in exclusion_list)
     ]
 
 
