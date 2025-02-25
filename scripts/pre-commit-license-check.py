@@ -61,6 +61,42 @@ def get_staged_files() -> List[Path]:
         return []
 
 
+def list_git_untracked_files():
+    """
+    Lists untracked files in the current Git repository using the `git status` command.
+
+    Returns:
+        A list of strings, where each string is the path to an untracked file.
+        Returns an empty list if there are no untracked files or if not in a git repository.
+        Returns None if there's an error running git status.
+    """
+    try:
+        # Run 'git status --porcelain' to get a concise output
+        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True)
+
+        untracked_files = []
+        for line in result.stdout.splitlines():
+            # Untracked files are marked with '??' in porcelain mode
+            if line.startswith("??"):
+                # Extract the file path (remove the '?? ' prefix)
+                file_path = line[3:].strip()
+                untracked_files.append(file_path)
+
+        return untracked_files
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running 'git status': {e}")
+        if "not a git repository" in e.stderr.lower():
+            print("Not in a git repository.")
+            return []  # Return empty list
+        else:
+            return None  # Return None for other errors
+
+    except FileNotFoundError:
+        print("Error: 'git' command not found.  Make sure Git is installed and in your PATH.")
+        return None
+
+
 def should_check_file(file_path: Path) -> bool:
     """Skip __init__.py files and check if file exists."""
     # return file_path.name != "__init__.py" and file_path.exists()
@@ -120,12 +156,16 @@ def main() -> None:
     try:
         failed = False
         files_to_check = get_files_to_check()
+        untracked_files = list_git_untracked_files()
 
         if not files_to_check:
             print("No Python files to check")
             return
 
         for py_file in files_to_check:
+            if str(py_file) in untracked_files:
+                print(f"Skipping {py_file} as it is untracked in git.")
+                continue
             if not should_check_file(py_file):
                 continue
 
