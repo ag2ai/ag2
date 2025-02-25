@@ -40,6 +40,7 @@ Resources:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import copy
 import json
@@ -192,6 +193,17 @@ class GeminiClient:
         }
 
     def create(self, params: dict) -> ChatCompletion:
+        # When running in async context via run_in_executor from ConversableAgent.a_generate_oai_reply,
+        # this method runs in a new thread that doesn't have an event loop by default. The Google Genai
+        # client requires an event loop even for synchronous operations, so we need to ensure one exists.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop exists in this thread (which happens when called from an executor)
+            # Create a new event loop for this thread to satisfy Genai client requirements
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:
