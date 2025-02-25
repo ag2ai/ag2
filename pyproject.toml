@@ -94,7 +94,8 @@ retrievechat = [
     "pypdf",
     "ipython",
     "beautifulsoup4",
-    "markdownify",
+    "markdownify; platform_system=='Linux' or platform_system=='Darwin'",
+    "markdownify<1.0.0; platform_system=='Windows'",
 ]
 
 retrievechat-pgvector = [
