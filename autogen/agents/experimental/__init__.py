@@ -4,7 +4,7 @@
 
 from .deep_research import DeepResearchAgent
 from .discord import DiscordAgent
-from .document_agent import DocAgent, DoclingDocIngestAgent
+from .document_agent import DocAgent, DoclingDocIngestAgent, DoclingMdQueryEngine, InMemoryQueryEngine
 from .slack import SlackAgent
 from .telegram import TelegramAgent
 from .websurfer import WebSurferAgent
@@ -14,6 +14,8 @@ __all__ = [
     "DiscordAgent",
     "DocAgent",
     "DoclingDocIngestAgent",
+    "DoclingMdQueryEngine",
+    "InMemoryQueryEngine",
     "SlackAgent",
     "TelegramAgent",
     "WebSurferAgent",

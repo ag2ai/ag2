@@ -23,6 +23,7 @@ from ....doc_utils import export_module
 from ....oai.client import OpenAIWrapper
 from .docling_doc_ingest_agent import DoclingDocIngestAgent
 from .docling_query_engine import DoclingMdQueryEngine
+from .inmemory_query_engine import InMemoryQueryEngine
 
 __all__ = ["DocAgent"]
 
@@ -64,6 +65,8 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
     Please don't output anything else.
 
     Use the initiate_tasks tool to incorporate all ingestions and queries. Don't call it again until new ingestions or queries are raised.
+
+    When using tools that start with 'transfer_', use the ingest tools first and independently of the query transfer tools. Only one of these tools should be called at a time.
     """
 DEFAULT_ERROR_SWARM_MESSAGE: str = """
 Document Agent failed to perform task.
@@ -135,6 +138,7 @@ class DocAgent(ConversableAgent):
         system_message: Optional[str] = None,
         parsed_docs_path: Optional[Union[str, Path]] = None,
         collection_name: Optional[str] = None,
+        query_engine: Optional[Union[DoclingMdQueryEngine, InMemoryQueryEngine]] = None,
     ):
         """Initialize the DocAgent.
 
@@ -160,6 +164,9 @@ class DocAgent(ConversableAgent):
         llm_config = llm_config or {}
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
+
+        if query_engine is None:
+            query_engine = DoclingMdQueryEngine(collection_name=collection_name)
 
         super().__init__(
             name=name,
@@ -231,7 +238,6 @@ class DocAgent(ConversableAgent):
             ],
         )
 
-        query_engine = DoclingMdQueryEngine(collection_name=collection_name)
         self._data_ingestion_agent = DoclingDocIngestAgent(
             llm_config=llm_config,
             query_engine=query_engine,
