@@ -274,7 +274,6 @@ def test_visualize_tree_render_failure(mock_digraph):
             call("Make sure graphviz is installed on your system: https://graphviz.org/download/"),
         ])
 
-
 def test_prepare_prompt_single_message(reasoning_agent):
     """
     Test that when a single message is provided without a conversation history,
