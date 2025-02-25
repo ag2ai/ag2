@@ -216,7 +216,7 @@ class GeminiClient:
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
-        system_instruction = params.get("system_instruction")
+        system_instruction = self._extract_system_instruction(messages)
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
 
@@ -374,6 +374,16 @@ class GeminiClient:
         )
 
         return response_oai
+
+    def _extract_system_instruction(self, messages: list[dict]) -> str | None:
+        """Extract system instruction if provided."""
+        if messages is None or len(messages) == 0 or messages[0].get("role") != "system":
+            return None
+
+        message = messages.pop(0)
+        content = message["content"].strip()
+        content = content if len(content) > 0 else None
+        return content
 
     def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list[Any], str]:
         """Convert AG2 content to Gemini parts, catering for text and tool calls"""
