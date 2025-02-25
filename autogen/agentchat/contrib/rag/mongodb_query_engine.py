@@ -11,8 +11,8 @@ from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
 from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
-    from langchain.base_language import BaseLanguageModel
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
+    from llama_index.llms.langchain.base import LLM
     from llama_index.vector_stores.mongodb import MongoDBAtlasVectorSearch
     from pymongo import MongoClient
 
@@ -37,13 +37,14 @@ class MongoDBQueryEngine:
         indexer (Optional[VectorStoreIndex]): The index built from the documents.
     """
 
-    def __init__(
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         connection_string: str = "",
         database_name: str = "vector_db",
         embedding_function: Optional[Callable[..., Any]] = None,
         collection_name: str = DEFAULT_COLLECTION_NAME,
         index_name: str = "vector_index",
+        llm: Union[str, LLM] = "gpt-4o",
     ):
         """
         Initialize the MongoDBQueryEngine.
@@ -62,6 +63,8 @@ class MongoDBQueryEngine:
         self.vector_search_engine = None
         self.storage_context = None
         self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
+
+        self.llm = llm
 
     def _setup_vector_db(self, overwrite: bool) -> None:
         """
@@ -220,7 +223,7 @@ class MongoDBQueryEngine:
         except Exception as e:
             logger.error("Error inserting documents into the index: %s", e)
 
-    def query(self, question: str, llm: Union[str, "BaseLanguageModel"], *args: Any, **kwargs: Any) -> Any:  # type: ignore[no-any-unimported, type-arg]
+    def query(self, question: str, *args: Any, **kwargs: Any) -> Any:  # type: ignore[no-any-unimported, type-arg]
         """
         Query the index using the given question.
 
@@ -232,7 +235,7 @@ class MongoDBQueryEngine:
             Any: The response from the chat engine, or None if an error occurs.
         """
         try:
-            response = self.index.as_chat_engine(llm=llm).query(question)  # type: ignore[union-attr]
+            response = self.index.as_chat_engine(llm=self.llm).query(question)  # type: ignore[union-attr]
             return response
         except Exception as e:
             logger.error("Query failed: %s", e)
