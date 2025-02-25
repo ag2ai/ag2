@@ -389,7 +389,6 @@ class AnthropicClient:
             elif isinstance(obj, list):
                 for item in obj:
                     update_refs(item, defs_keys, prop_name)
-
         functions = []
         for tool in tools:
             if tool.get("type") == "function" and "function" in tool:
