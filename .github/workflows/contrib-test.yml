@@ -29,7 +29,6 @@ permissions:
 jobs:
   RetrieveChatTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -72,7 +71,6 @@ jobs:
 
   RetrieveChatTest-Ubuntu:
     runs-on: ubuntu-latest
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -196,7 +194,6 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.10"]
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -225,7 +222,6 @@ jobs:
 
   GPTAssistantAgent:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -265,7 +261,6 @@ jobs:
 
   TeachableAgent:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -305,7 +300,6 @@ jobs:
 
   WebSurfer:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -345,7 +339,6 @@ jobs:
 
   LMMTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -391,7 +384,6 @@ jobs:
 
   GeminiTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -434,7 +426,6 @@ jobs:
 
   TransformMessages:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -474,7 +465,6 @@ jobs:
 
   LlamaIndexAgent:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -509,7 +499,6 @@ jobs:
 
   AnthropicTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -552,7 +541,6 @@ jobs:
 
   CerebrasTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -595,7 +583,6 @@ jobs:
 
   MistralTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -638,7 +625,6 @@ jobs:
 
   TogetherTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -681,7 +667,6 @@ jobs:
 
   GroqTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -724,7 +709,6 @@ jobs:
 
   CohereTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -763,7 +747,6 @@ jobs:
 
   OllamaTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -806,7 +789,6 @@ jobs:
 
   BedrockTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -849,7 +831,6 @@ jobs:
 
   SwarmTest:
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -892,7 +873,6 @@ jobs:
 
   ReasoningTest:
       runs-on: ${{ matrix.os }}
-      environment: permit-tests
       strategy:
         fail-fast: false
         matrix:

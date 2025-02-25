@@ -16,6 +16,8 @@ import pytest
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
 from autogen.import_utils import skip_on_missing_imports
 
+from ...conftest import Credentials
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 
@@ -41,11 +43,9 @@ def think_node():
 
 
 @pytest.fixture
-def reasoning_agent():
+def reasoning_agent(mock_credentials: Credentials):
     """Create a ReasoningAgent instance for testing"""
-    config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "fake_key"}]
-    llm_config = {"config_list": config_list, "temperature": 0}
-    return ReasoningAgent("reasoning_agent", llm_config=llm_config)
+    return ReasoningAgent("reasoning_agent", llm_config=mock_credentials.llm_config)
 
 
 def test_think_node_init(think_node):
@@ -147,23 +147,19 @@ def test_think_node_serialization_with_children():
     assert new_root.children[0].content == "Child"
 
 
-def test_reasoning_agent_answer():
+def test_reasoning_agent_answer(mock_credentials: Credentials):
     for max_depth in range(1, 10):
         for beam_size in range(1, 10):
             for answer_approach in ["pool", "best"]:
-                helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach)
+                helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials)
 
 
-def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach):
+def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials: Credentials):
     """Test that ReasoningAgent properly terminates when TERMINATE is received"""
-    mock_config = {
-        "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": "fake", "base_url": "0.0.0.0:8000"}],
-        "temperature": 0,
-    }
     with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
         agent = ReasoningAgent(
             "test_agent",
-            llm_config=mock_config,
+            llm_config=mock_credentials.llm_config,
             reason_config={"beam_size": beam_size, "answer_approach": answer_approach, "max_depth": max_depth},
         )
 
@@ -274,6 +270,55 @@ def test_visualize_tree_render_failure(mock_digraph):
             call("Error rendering graph: Rendering failed"),
             call("Make sure graphviz is installed on your system: https://graphviz.org/download/"),
         ])
+
+
+def test_reasoning_agent_code_execution(mock_credentials: Credentials):
+    """Test that ReasoningAgent properly executes code in responses"""
+
+    # Create agent with code execution enabled
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
+        )
+
+        def mock_response(*args, **kwargs):
+            instance = args[0]
+            if instance.name == "tot_thinker":
+                return True, {
+                    "content": """Reflection
+Let's solve this with Python.
+
+Possible Options:
+Option 1: Calculate factorial with Python
+```python
+def factorial(n):
+    if n == 0:
+        return 1
+    return n * factorial(n-1)
+
+print(f"Factorial of 5 is {factorial(5)}")
+```
+
+Option 2: TERMINATE"""
+                }
+            elif instance.name == "reasoner_user_proxy":
+                # Mock the code execution result
+                return True, {"content": "Factorial of 5 is 120"}
+            elif instance.name == "test_agent":
+                return True, {"content": "The factorial of 5 is 120"}
+            return True, {"content": "5"}
+
+        mock_oai_reply.side_effect = mock_response
+
+        # Test code execution
+        response = agent._beam_reply("Calculate factorial of 5")
+
+        # Verify code was executed
+        assert "Factorial of 5 is 120" in agent._root.children[0].content
+        assert "Code Execution Result:" in agent._root.children[0].content
+        assert response == "The factorial of 5 is 120"
 
 
 if __name__ == "__main__":
