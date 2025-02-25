@@ -6,6 +6,7 @@ from typing import Any, Optional, Union
 from unittest.mock import MagicMock, _Call, call
 from uuid import UUID
 
+import PIL
 import pytest
 import termcolor.termcolor
 
@@ -413,6 +414,26 @@ class TestTextMessage:
         ]
 
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization(self) -> None:
+        image = PIL.Image.new(mode="RGB", size=(200, 200))
+        content = [
+            {"type": "text", "text": "What's the breed of this dog?\n"},
+            {"type": "image_url", "image_url": {"url": image}},
+            {"type": "text", "text": "."},
+        ]
+        uuid = UUID("f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b")
+        text_message = TextMessage(content=content, sender_name="sender", recipient_name="recipient", uuid=uuid)
+
+        result = text_message.model_dump_json()
+
+        expected = (
+            '{"type":"text","content":{"uuid":"f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b",'
+            '"content":[{"type":"text","text":"What\'s the breed of this dog?\\n"},'
+            '{"type":"image_url","image_url":{"url":"<image>"}},'
+            '{"type":"text","text":"."}],"sender_name":"sender","recipient_name":"recipient"}}'
+        )
+        assert str(result) == expected, result
 
 
 class TestPostCarryoverProcessingMessage:
