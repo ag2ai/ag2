@@ -203,7 +203,7 @@ class GeminiClient:
             # Create a new event loop for this thread to satisfy Genai client requirements
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
+
         if self.use_vertexai:
             self._initialize_vertexai(**params)
         else:
