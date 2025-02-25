@@ -1,41 +1,185 @@
 ---
-title: Structured outputs
+title: Structured Outputs
+description: Learn how to configure LLMs to return responses in a structured format using AG2's response_format configuration.
 ---
 
-Working with freeform text from LLMs isn't optimal when you know how you want the reply formatted.
+When working with LLMs, getting responses in a consistent, structured format can be challenging. AG2 provides built-in support for structured outputs through the `response_format` configuration option, allowing you to define exactly how you want the LLM's responses to be formatted.
 
-Using structured outputs, you define a class, based on Pydantic's `BaseModel`, for the reply format you want and attach it to the LLM configuration. Replies from agent using that configuration will be in a matching JSON format.
+## Benefits of Structured Outputs
 
-In earlier examples, we created a classroom lesson plan and provided guidance in the agent's system message to put the content in tags, like `<title>` and `<learning_objectives>`. Using structured outputs we can ensure that our lesson plans are formatted.
+Using structured outputs offers several advantages:
 
-import Example from "/snippets/python-examples/structured_output.mdx";
+- **Consistent Format**: Ensures responses follow a predefined structure
+- **Type Safety**: Validates response data against defined types
+- **Easy Parsing**: Automatically converts responses to Python objects
+- **Better Integration**: Simplifies integration with downstream systems
 
-<Example/>
+## Configuring Structured Outputs
 
+There are two ways to configure structured outputs in AG2:
 
-```console
+### 1. Using Pydantic Models
+
+The recommended approach is to define a Pydantic model that describes your desired output structure:
+
+```python
+from pydantic import BaseModel
+
+class Step(BaseModel):
+    explanation: str
+    output: str
+
+class MathReasoning(BaseModel):
+    steps: list[Step]
+    final_answer: str
+```
+
+Then add it to your LLM configuration:
+
+```python
+llm_config = {
+    "config_list": config_list,
+    "response_format": MathReasoning
+}
+
+assistant = autogen.AssistantAgent(
+    name="Math_solver",
+    llm_config=llm_config
+)
+```
+
+### 2. Using JSON Schema Configuration
+
+Alternatively, you can define the structure directly in your configuration JSON:
+
+```json
 {
-  "title": "Exploring the Solar System",
-  "learning_objectives": [
-    {
-      "title": "Understanding the Solar System",
-      "description": "Students will learn the names and order of the planets in the solar system."
-    },
-    {
-      "title": "Identifying Planet Characteristics",
-      "description": "Students will be able to describe at least one distinctive feature of each planet."
-    },
-    {
-      "title": "Creating a Planet Fact Sheet",
-      "description": "Students will create a fact sheet for one planet of their choice."
+    "model": "gpt-4",
+    "response_format": {
+        "type": "object",
+        "properties": {
+            "steps": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "explanation": {"type": "string"},
+                        "output": {"type": "string"}
+                    },
+                    "required": ["explanation", "output"]
+                }
+            },
+            "final_answer": {"type": "string"}
+        },
+        "required": ["steps", "final_answer"]
     }
-  ],
-  "script": "Introduction (10 minutes):\nBegin the class by asking students what they already know about the solar system. Write their responses on the board. \n\nIntroduce the topic by explaining that today they will be learning about the solar system, which includes the Sun, planets, moons, and other celestial objects.\n\nDirect Instruction (20 minutes):\nUse a visual aid (such as a poster or video) to show the solar system's structure. \n\nDiscuss the eight planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. \n\nFor each planet, mention:\n- Its position from the Sun.\n- Key characteristics (e.g., size, color, temperature).\n- Any notable features (e.g., rings, atmosphere). \n\nInteractive Activity (15 minutes):\nSplit the class into small groups. Give each group a set of planet cards that include pictures and information. Have them work together to put the planets in order from the Sun. Each group will present their order and one interesting fact about each planet they discussed."
 }
 ```
+
+## Customizing Output Formatting
+
+You can customize how structured outputs are presented by adding a `format` method to your Pydantic model:
+
+```python
+class MathReasoning(BaseModel):
+    steps: list[Step]
+    final_answer: str
+
+    def format(self) -> str:
+        steps_output = "\n".join(
+            f"Step {i + 1}: {step.explanation}\n  Output: {step.output}" 
+            for i, step in enumerate(self.steps)
+        )
+        return f"{steps_output}\n\nFinal Answer: {self.final_answer}"
+```
+
+## Supported LLM Providers
+
+AG2 supports structured outputs with the following providers:
+
+- OpenAI (`openai`)
+- Anthropic (`anthropic`)
+- Google Gemini (`google`)
+- Ollama (`ollama`)
+
+<Note>
+Structured output capabilities may vary between providers. Check the provider's documentation for specific limitations.
+</Note>
+
+## Best Practices
+
+1. **Keep Models Simple**: Start with simple structures and add complexity as needed
+2. **Use Type Hints**: Always specify types for model fields for better validation
+3. **Handle Errors**: Add error handling for cases where responses don't match the expected structure
+4. **Test Different Formats**: Experiment with different structures to find what works best for your use case
+
+## Example: Lesson Plan Generator
+
+Here's a complete example showing how to configure structured outputs for generating lesson plans:
+
+```python
+from pydantic import BaseModel
+from typing import List
+
+class LearningObjective(BaseModel):
+    title: str
+    description: str
+
+class LessonPlan(BaseModel):
+    title: str
+    learning_objectives: List[LearningObjective]
+    script: str
+
+    def format(self) -> str:
+        objectives = "\n".join(
+            f"- {obj.title}: {obj.description}"
+            for obj in self.learning_objectives
+        )
+        return f"""
+Title: {self.title}
+
+Learning Objectives:
+{objectives}
+
+Lesson Script:
+{self.script}
+"""
+
+llm_config = {
+    "config_list": config_list,
+    "response_format": LessonPlan
+}
+
+teacher = autogen.AssistantAgent(
+    name="Teacher",
+    llm_config=llm_config,
+    system_message="You are an experienced teacher who creates detailed lesson plans."
+)
+```
+
 <Tip>
-Add a `format` function to the LessonPlan class in the example to convert the returned value into a string. [Example here](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs).
+When using structured outputs with function calling, make sure your function return types match the expected structure in your response format.
 </Tip>
+
+## Common Issues and Solutions
+
+1. **Invalid Response Structure**
+   - Problem: LLM returns responses that don't match the defined structure
+   - Solution: Make your model structure clearer and provide examples in the system message
+
+2. **Complex Nested Structures**
+   - Problem: Deep nested structures are harder for LLMs to maintain
+   - Solution: Keep structures flat when possible, or break into smaller sub-components
+
+3. **Missing Required Fields**
+   - Problem: LLM omits required fields in responses
+   - Solution: Use optional fields where appropriate and validate responses
+
+## Related Resources
+
+- [Structured Output Notebook Example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs)
+- [JSON Configuration Example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs_from_config)
+- [OpenAI Structured Output Documentation](https://platform.openai.com/docs/guides/structured-outputs)
 
 <div className="edit-url-container">
     <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/website/docs/user-guide/basic-concepts/llm-configuration/structured-outputs.mdx" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>

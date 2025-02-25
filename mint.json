@@ -110,6 +110,8 @@
               "group": "LLM Configuration",
               "pages": [
                 "docs/user-guide/basic-concepts/llm-configuration/llm-configuration",
+                "docs/user-guide/basic-concepts/llm-configuration/structured-outputs",
+                "docs/user-guide/basic-concepts/llm-configuration/llm-configuration",
                 "docs/user-guide/basic-concepts/llm-configuration/structured-outputs"
               ]
             },
@@ -146,7 +148,8 @@
                 "docs/user-guide/advanced-concepts/swarm/deep-dive",
                 "docs/user-guide/advanced-concepts/swarm/nested-chat",
                 "docs/user-guide/advanced-concepts/swarm/concept-code",
-                "docs/user-guide/advanced-concepts/swarm/use-case"
+                "docs/user-guide/advanced-concepts/swarm/use-case",
+                "docs/user-guide/advanced-concepts/swarm/concept-code"
               ]
             },
             {
@@ -191,6 +194,7 @@
             "docs/user-guide/reference-agents/communication-agents",
             "docs/user-guide/reference-agents/docagent",
             "docs/user-guide/reference-agents/reasoningagent",
+            "docs/user-guide/reference-agents/websurferagent",
             "docs/user-guide/reference-agents/websurferagent"
           ]
         }
@@ -315,7 +319,8 @@
             "docs/use-cases/notebooks/notebooks/agentchat_graph_rag_neo4j_native",
             "docs/use-cases/notebooks/notebooks/tools_crawl4ai",
             "docs/use-cases/notebooks/notebooks/agents_websurfer",
-            "docs/use-cases/notebooks/notebooks/agentchat_realtime_gemini_websocket"
+            "docs/use-cases/notebooks/notebooks/agentchat_realtime_gemini_websocket",
+            "docs/use-cases/notebooks/notebooks/agentchat_cost_token_tracking"
           ]
         },
         "docs/use-cases/community-gallery/community-gallery"
@@ -1765,7 +1770,8 @@
                         "docs/api-reference/autogen/tools/experimental/browser_use/overview",
                         "docs/api-reference/autogen/tools/experimental/browser_use/BrowserUseResult"
                       ]
-                    }
+                    },
+                    "docs/api-reference/autogen/tools/experimental/BrowserUseTool"
                   ]
                 }
               ]
@@ -1777,7 +1783,8 @@
                 "docs/api-reference/autogen/types/UserMessageImageContentPart",
                 "docs/api-reference/autogen/types/UserMessageTextContentPart"
               ]
-            }
+            },
+            "docs/api-reference/autogen/ConversableAgent"
           ]
         }
       ]

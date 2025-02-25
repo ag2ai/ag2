@@ -52,15 +52,17 @@ def get_random_number() -> str:
 
 
 def update_context_3_with_random_number(context_variables: dict, random_number: int) -> SwarmResult:
- context_variables["3"] = random_number
+    context_variables["3"] = random_number
     return SwarmResult(value="success", context_variables=context_variables)
 
 
+# Note: max_consecutive_auto_reply=3 is added to prevent potential infinite loops
 agent_1 = AssistantAgent(
     name="Agent_1",
     system_message="You are Agent 1, first, call the function to update context 1, and transfer to Agent 2",
     llm_config=llm_config,
     functions=[update_context_1, transfer_to_agent_2],
+    max_consecutive_auto_reply=3  # Limit consecutive auto-replies to 3
 )
 
 agent_2 = AssistantAgent(
@@ -101,12 +103,14 @@ register_hand_off(agent=agent_4,hand_to=[AfterWork(agent_5)])
 
 
 context_variables = {"1": False, "2": False, "3": False}
+# max_turns=10 is added to limit the total number of chat turns
 chat_result, context_variables, last_agent = initiate_swarm_chat(
     initial_agent=agent_1,
     agents=[agent_1, agent_2, agent_3, agent_4, agent_5],
     messages="start",
     context_variables=context_variables,
     after_work=AfterWork(AfterWorkOption.TERMINATE),  # this is the default value
+    max_turns=10  # Limit total chat turns to 10
 )
 ```
 
@@ -119,10 +123,12 @@ from autogen import UserProxyAgent
 
 user_agent = UserProxyAgent(name="User", code_execution_config=False)
 
+# Note: max_consecutive_auto_reply=3 is added to prevent potential infinite loops
 agent_6 = AssistantAgent(
     name="Agent_6",
     system_message="You are Agent 6. Your job is to tell jokes.",
     llm_config=llm_config,
+    max_consecutive_auto_reply=3  # Limit consecutive auto-replies to 3
 )
 
 agent_7 = AssistantAgent(
@@ -141,11 +147,13 @@ register_hand_off(
     ]
 )
 
+# max_turns=5 is added to limit the total number of chat turns
 chat_result, _, _ = initiate_swarm_chat(
     initial_agent=agent_6,
     agents=[agent_6, agent_7],
     user_agent=user_agent,
     messages="start",
+    max_turns=5  # Limit total chat turns to 5
 )
 ```
 

@@ -81,6 +81,50 @@ websurfer = WebSurferAgent(
 Crawl4AI doesn't always require an LLM configuration, see [this notebook](/docs/use-cases/notebooks/notebooks/tools_crawl4ai) for examples with and without one.
 </Tip>
 
+## Setting Chat Consumption Limits
+
+To prevent excessive token usage and control costs, you can set limits on chat consumption using chat context dependency injection. Here's how to do it:
+
+```python
+from autogen.tools import ChatContext
+from autogen.agents.experimental import WebSurferAgent
+
+# Configure LLM with token limits
+llm_config = {
+    "api_type": "openai",
+    "model": "gpt-4o-mini",
+    "max_tokens": 2000,  # Maximum tokens per response
+}
+
+# Create the WebSurferAgent with chat context limits
+websurfer = WebSurferAgent(
+    name="WebSurfer",
+    llm_config=llm_config,
+    web_tool="browser_use",
+    max_consecutive_auto_reply=3,  # Limit consecutive auto-replies
+)
+
+# Create a ChatContext to track and limit messages
+chat_context = ChatContext(websurfer)
+chat_context.max_messages = 10  # Limit total messages in conversation
+
+# Use the agent with controlled chat consumption
+response = websurfer.run(
+    "Find the latest news about AG2",
+    context=chat_context,
+    tools=websurfer.tools
+)
+```
+
+In this example:
+- `max_tokens` in `llm_config` limits tokens per response
+- `max_consecutive_auto_reply` prevents infinite conversation loops
+- `ChatContext` with `max_messages` limits the total conversation length
+
+<Note>
+You can monitor token usage through the ChatContext's `chat_messages` attribute, which maintains a history of all messages and their token counts.
+</Note>
+
 Let's browse the web for news on AG2.
 
 import Example from "/snippets/python-examples/websurferagent.mdx";

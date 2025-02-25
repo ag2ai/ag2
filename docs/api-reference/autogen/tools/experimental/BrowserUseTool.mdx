@@ -18,6 +18,63 @@ BrowserUseTool(**kwargs)
 |--|--|
 | `**kwargs` |  |
 
+## Setting Chat Consumption Limits
+
+To prevent excessive resource usage and control costs when using BrowserUseTool, you can set upper limits on chat consumption using the TransformMessages capability with MessageTokenLimiter. This allows you to limit both the number of tokens and message history in your chat sessions.
+
+Here's how to set up chat consumption limits:
+
+```python
+from autogen.agentchat.contrib.capabilities import TransformMessages, MessageTokenLimiter
+from autogen import ConversableAgent
+
+# Create a token limiter that keeps messages between 100 and 2000 tokens
+token_limiter = MessageTokenLimiter(
+    min_tokens=100,  # Minimum tokens to keep
+    max_tokens=2000  # Maximum tokens allowed
+)
+
+# Create the transform messages capability
+transform_messages = TransformMessages(
+    transforms=[token_limiter],
+    verbose=True  # Set to True to see transformation logs
+)
+
+# Create your agent
+agent = ConversableAgent(
+    name="browser_agent",
+    llm_config={
+        "config_list": [{"model": "gpt-4"}],
+    }
+)
+
+# Add the message transformation capability to your agent
+transform_messages.add_to_agent(agent)
+```
+
+You can also combine multiple transformations to limit both tokens and message history:
+
+```python
+from autogen.agentchat.contrib.capabilities import MessageHistoryLimiter
+
+# Create both token and history limiters
+token_limiter = MessageTokenLimiter(max_tokens=2000)
+history_limiter = MessageHistoryLimiter(max_messages=10)  # Keep only last 10 messages
+
+# Combine both limiters
+transform_messages = TransformMessages(
+    transforms=[token_limiter, history_limiter],
+    verbose=True
+)
+
+# Apply to your agent
+transform_messages.add_to_agent(agent)
+```
+
+<Note>
+The order of transformations matters. In the example above, the token limit is applied first, followed by the message history limit.
+</Note>
+
 ### Instance Attributes
 
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>

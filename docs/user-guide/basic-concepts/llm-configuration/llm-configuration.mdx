@@ -42,6 +42,114 @@ The default LLM provider is OpenAI but if you would like to use a different prov
 AG2's LLM configuration allows you to specify many LLMs for fallback support and the ability to filter them for an agent, see the [LLM Configuration deep-dive](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
 </Tip>
 
+## Setting Consumption Limits
+
+To prevent excessive usage and control costs, you can set various limits on chat consumption. There are several ways to configure these limits:
+
+### Token Limits
+
+You can set a maximum number of tokens to be used per request using the `max_tokens` parameter in your LLM configuration:
+
+```python
+llm_config = {
+    "config_list": [
+        {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": os.environ["OPENAI_API_KEY"],
+            "max_tokens": 500  # Limit response to 500 tokens
+        }
+    ],
+}
+```
+
+### Conversation Turn Limits
+
+To prevent infinite conversation loops, you can set limits on conversation turns when creating your agent:
+
+```python
+my_agent = ConversableAgent(
+    name="helpful_agent",
+    llm_config=llm_config,
+    system_message="You are a poetic AI assistant",
+    max_consecutive_auto_reply=3  # Limit consecutive auto-replies to 3
+)
+```
+
+You can also set a maximum number of turns when initiating a chat:
+
+```python
+user_proxy.initiate_chat(
+    assistant,
+    message="Hello!",
+    max_turns=10  # Limit total conversation turns to 10
+)
+```
+
+### Cost Control
+
+For better cost management, you can set both a maximum cost per response and a total budget:
+
+```python
+llm_config = {
+    "config_list": [
+        {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": os.environ["OPENAI_API_KEY"],
+            "max_tokens": 500,
+            "max_cost_per_response": 0.05  # Maximum cost in USD per response
+        }
+    ],
+    "total_budget": 1.0  # Total budget in USD for all conversations
+}
+```
+
+<Note>
+Cost control features require proper configuration of token costs for your chosen model. Make sure to check the current pricing for your LLM provider and update the values accordingly.
+</Note>
+
+### Timeout Settings
+
+To prevent requests from hanging, you can set timeout limits:
+
+```python
+llm_config = {
+    "config_list": [
+        {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": os.environ["OPENAI_API_KEY"],
+            "timeout": 60  # Timeout in seconds
+        }
+    ],
+}
+```
+
+### Monitoring Usage
+
+You can monitor token usage and costs by enabling tracking:
+
+```python
+from autogen import ConversableAgent, config_list_from_json
+
+# Enable token tracking
+llm_config = {
+    "config_list": config_list_from_json(env_or_file="OAI_CONFIG_LIST"),
+    "track_token_count": True,
+}
+
+# Create agent with tracking
+agent = ConversableAgent(
+    name="tracking_agent",
+    llm_config=llm_config
+)
+
+# After conversations, you can check usage
+print(f"Total tokens used: {agent.total_tokens}")
+print(f"Total cost: ${agent.total_cost:.4f}")
+```
+
 ### Environment variables
 
 The examples in these guides include an LLM configuration for OpenAI's `GPT-4o mini` model and will need the `OPENAI_API_KEY` environment variable set with your OpenAI API key.
