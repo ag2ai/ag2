@@ -365,11 +365,42 @@ class AnthropicClient:
 
     @staticmethod
     def convert_tools_to_functions(tools: list) -> list:
+        """
+        Convert tool definitions into Anthropic-compatible functions,
+        updating nested $ref paths in property schemas.
+
+        Args:
+            tools (list): List of tool definitions.
+
+        Returns:
+            list: List of functions with updated $ref paths.
+        """
+
+        def update_refs(obj, defs_keys, prop_name):
+            """Recursively update $ref values that start with "#/$defs/"."""
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if key == "$ref" and isinstance(value, str) and value.startswith("#/$defs/"):
+                        ref_key = value[len("#/$defs/") :]
+                        if ref_key in defs_keys:
+                            obj[key] = f"#/properties/{prop_name}/$defs/{ref_key}"
+                    else:
+                        update_refs(value, defs_keys, prop_name)
+            elif isinstance(obj, list):
+                for item in obj:
+                    update_refs(item, defs_keys, prop_name)
+
         functions = []
         for tool in tools:
             if tool.get("type") == "function" and "function" in tool:
-                functions.append(tool["function"])
-
+                function = tool["function"]
+                parameters = function.get("parameters", {})
+                properties = parameters.get("properties", {})
+                for prop_name, prop_schema in properties.items():
+                    if "$defs" in prop_schema:
+                        defs_keys = set(prop_schema["$defs"].keys())
+                        update_refs(prop_schema, defs_keys, prop_name)
+                functions.append(function)
         return functions
 
     def _add_response_format_to_system(self, params: dict[str, Any]):
