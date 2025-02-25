@@ -6,12 +6,12 @@ from typing import Any, Optional, Union
 from unittest.mock import MagicMock, _Call, call
 from uuid import UUID
 
-import PIL
 import pytest
 import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 from autogen.messages.agent_messages import (
     ClearAgentsHistoryMessage,
     ClearConversableAgentHistoryMessage,
@@ -41,6 +41,9 @@ from autogen.messages.agent_messages import (
     UsingAutoReplyMessage,
     create_received_message_model,
 )
+
+with optional_import_block():
+    import PIL
 
 
 @pytest.fixture(autouse=True)
@@ -415,6 +418,7 @@ class TestTextMessage:
 
         assert mock.call_args_list == expected_call_args_list
 
+    @skip_on_missing_imports("PIL", "unknown")
     def test_serialization(self) -> None:
         image = PIL.Image.new(mode="RGB", size=(200, 200))
         content = [
