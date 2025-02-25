@@ -140,7 +140,8 @@ rag = [
     "llama-index>=0.12,<1",
     "llama-index-vector-stores-chroma==0.4.1",
     "llama-index-vector-stores-mongodb==0.6.0",
-    "requests>=2.32.3,<3",
+    "requests>=2.32.3,<3",,
+    "llama-index-llms-langchain==0.6.0"
 ]
 
 
