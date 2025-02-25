@@ -377,11 +377,11 @@ class AnthropicClient:
         """
 
         def update_refs(obj, defs_keys, prop_name):
-            """Recursively update $ref values that start with "#/$defs/". """
+            """Recursively update $ref values that start with "#/$defs/"."""
             if isinstance(obj, dict):
                 for key, value in obj.items():
                     if key == "$ref" and isinstance(value, str) and value.startswith("#/$defs/"):
-                        ref_key = value[len("#/$defs/"):]
+                        ref_key = value[len("#/$defs/") :]
                         if ref_key in defs_keys:
                             obj[key] = f"#/properties/{prop_name}/$defs/{ref_key}"
                     else:
@@ -389,6 +389,7 @@ class AnthropicClient:
             elif isinstance(obj, list):
                 for item in obj:
                     update_refs(item, defs_keys, prop_name)
+
         functions = []
         for tool in tools:
             if tool.get("type") == "function" and "function" in tool:

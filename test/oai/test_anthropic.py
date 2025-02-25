@@ -5,7 +5,6 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
-import os
 
 import pytest
 
@@ -16,7 +15,7 @@ with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
 
-from typing import List, TypedDict
+from typing import List
 
 from pydantic import BaseModel
 from typing_extensions import Literal
@@ -269,7 +268,66 @@ def test_extract_json_response(anthropic_client):
 
 @skip_on_missing_imports(["anthropic"], "anthropic")
 def test_convert_tools_to_functions(anthropic_client):
-    tools = [{"type": "function", "function": {"description": "weather tool", "name": "weather_tool", "parameters": {"type": "object", "properties": {"city_name": {"type": "string", "description": "city_name"}, "city_list": {"$defs": {"city_list_class": {"properties": {"item1": {"title": "Item1", "type": "string"}, "item2": {"title": "Item2", "type": "string"}}, "required": ["item1", "item2"], "title": "city_list_class", "type": "object"}}, "items": {"$ref": "#/$defs/city_list_class"}, "type": "array", "description": "city_list"}}, "required": ["city_name", "city_list"]}}}]
-    expected = [{"description": "weather tool", "name": "weather_tool", "parameters": {"type": "object", "properties": {"city_name": {"type": "string", "description": "city_name"}, "city_list": {"$defs": {"city_list_class": {"properties": {"item1": {"title": "Item1", "type": "string"}, "item2": {"title": "Item2", "type": "string"}}, "required": ["item1", "item2"], "title": "city_list_class", "type": "object"}}, "items": {"$ref": "#/properties/city_list/$defs/city_list_class"}, "type": "array", "description": "city_list"}}, "required": ["city_name", "city_list"]}}]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "description": "weather tool",
+                "name": "weather_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city_name": {"type": "string", "description": "city_name"},
+                        "city_list": {
+                            "$defs": {
+                                "city_list_class": {
+                                    "properties": {
+                                        "item1": {"title": "Item1", "type": "string"},
+                                        "item2": {"title": "Item2", "type": "string"},
+                                    },
+                                    "required": ["item1", "item2"],
+                                    "title": "city_list_class",
+                                    "type": "object",
+                                }
+                            },
+                            "items": {"$ref": "#/$defs/city_list_class"},
+                            "type": "array",
+                            "description": "city_list",
+                        },
+                    },
+                    "required": ["city_name", "city_list"],
+                },
+            },
+        }
+    ]
+    expected = [
+        {
+            "description": "weather tool",
+            "name": "weather_tool",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city_name": {"type": "string", "description": "city_name"},
+                    "city_list": {
+                        "$defs": {
+                            "city_list_class": {
+                                "properties": {
+                                    "item1": {"title": "Item1", "type": "string"},
+                                    "item2": {"title": "Item2", "type": "string"},
+                                },
+                                "required": ["item1", "item2"],
+                                "title": "city_list_class",
+                                "type": "object",
+                            }
+                        },
+                        "items": {"$ref": "#/properties/city_list/$defs/city_list_class"},
+                        "type": "array",
+                        "description": "city_list",
+                    },
+                },
+                "required": ["city_name", "city_list"],
+            },
+        }
+    ]
     actual = anthropic_client.convert_tools_to_functions(tools=tools)
     assert actual == expected
