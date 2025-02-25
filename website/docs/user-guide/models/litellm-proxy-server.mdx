@@ -1,19 +1,57 @@
 ---
-title: LiteLLM with watsonx
-sidebarTitle: LiteLLM with watsonx
+title: LiteLLM Server Proxy
+sidebarTitle: LiteLLM Server Proxy
 ---
 
-LiteLLM is an open-source, locally run proxy server providing an OpenAI-compatible API. It supports various LLM providers, including IBM's WatsonX, enabling seamless integration with tools like AG2.
+LiteLLM is an open-source, locally hosted proxy server that provides an OpenAI-compatible API. It acts as a bridge between various LLM providers, including OpenAI, Azure, and IBM's WatsonX.
 
-Running LiteLLM with WatsonX requires the following installations:
 
-1. **AG2** – A framework for building and orchestrating AI agents.
-2. **LiteLLM** – An OpenAI-compatible proxy for bridging non-compliant APIs.
-3. **IBM WatsonX** – LLM service requiring specific session token authentication.
+This guide walks you through integrating **LiteLLM** with **AG2** for seamless AI agent orchestration.
 
-### Prerequisites
+---
 
-Before setting up, ensure **Docker** is installed. Refer to the [Docker installation guide](https://docs.docker.com/get-docker/). Optionally, consider using **Postman** to easily test API requests.
+## Prerequisites
+
+Before proceeding, ensure the following:
+
+- **Docker** is installed. Refer to the [Docker installation guide](https://docs.docker.com/get-docker/)
+- **(Optional)** Install **Postman** for easier API request testing.
+
+---
+
+## Install AG2
+
+**AG2** is a powerful framework designed to simplify AI agent orchestration.
+
+### Installation
+
+1. Open a terminal with administrator privileges.
+2. Run the following command:
+    ```bash
+    pip install ag2
+    ```
+
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen
+    ```
+    or
+    ```bash
+    pip install -U pyautogen
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
+
+## Install LiteLLM
+LiteLLM runs as a lightweight proxy server, making it easier to integrate different LLM providers.
+
+### Installation
+To install LiteLLM, download the latest Docker image:
+
+```bash
+docker pull ghcr.io/berriai/litellm:main-latest
+```
 
 ---
 
@@ -75,15 +113,6 @@ To install LiteLLM, follow these steps:
    docker pull ghcr.io/berriai/litellm:main-latest
    ```
 
-   OR
-
-
-   **Install LiteLLM Python Library:**
-
-   ```bash
-   pip install 'litellm[proxy]'
-   ```
-
 
 2. **Create a LiteLLM Configuration File:**
 
@@ -113,32 +142,8 @@ To install LiteLLM, follow these steps:
    docker run -v <Directory>\litellm_config.yaml:/app/config.yaml -e WATSONX_API_KEY=<API_KEY> -e WATSONX_URL=https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-02 -e WX_PROJECT_ID=<PROJECT_ID> -p 4000:4000 ghcr.io/berriai/litellm:main-latest --config /app/config.yaml --detailed_debug
    ```
 
----
 
-## Installing AG2
 
-AG2 simplifies orchestration and communication between agents. To install:
-
-1. Open a terminal with administrator rights.
-2. Run the following command:
-
-```bash
-pip install ag2
-```
-
-<Tip>
-If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
-```bash
-pip install -U autogen
-```
-or
-```bash
-pip install -U pyautogen
-```
-as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
-</Tip>
-
-Once installed, AG2 agents can leverage WatsonX APIs via LiteLLM.
 
 ```python
 phi1 = {

@@ -45,7 +45,7 @@ search:
         - [Google Gemini](docs/user-guide/models/google-gemini.md)
         - [Google Vertexai](docs/user-guide/models/google-vertexai.md)
         - [Groq](docs/user-guide/models/groq.md)
-        - [Litellm With Watsonx](docs/user-guide/models/litellm-with-watsonx.md)
+        - [LiteLLM Proxy Server](docs/user-guide/models/litellm-proxy-server.md)
         - [Lm Studio](docs/user-guide/models/lm-studio.md)
         - [Mistralai](docs/user-guide/models/mistralai.md)
         - [Ollama](docs/user-guide/models/ollama.md)
