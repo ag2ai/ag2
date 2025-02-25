@@ -4,7 +4,7 @@
 
 from typing import Any, Optional, Union
 
-from .... import Agent, ConversableAgent, UserProxyAgent
+from .... import Agent, ConversableAgent
 from .falkor_graph_query_engine import FalkorGraphQueryEngine
 from .graph_query_engine import GraphStoreQueryResult
 from .graph_rag_capability import GraphRagCapability
@@ -22,16 +22,16 @@ class FalkorGraphRagCapability(GraphRagCapability):
         self.query_engine = query_engine
 
     def add_to_agent(self, agent: ConversableAgent) -> None:
-        """Add FalkorDB GraphRAG capability to a UserProxyAgent.
+        """Add FalkorDB GraphRAG capability to a ConversableAgent.
 
         Args:
-            agent: The UserProxyAgent instance to add the capability to.
+            agent: The ConversableAgent instance to add the capability to.
 
-        The restriction to a UserProxyAgent to make sure the returned message does not contain information retrieved from the graph DB instead of any LLMs.
+        The restriction to a ConversableAgent to make sure the returned message does not contain information retrieved from the graph DB instead of any LLMs.
 
         """
-        if not isinstance(agent, UserProxyAgent):
-            raise Exception("FalkorDB GraphRAG capability can only be added to a UserProxyAgent.")
+        if not isinstance(agent, ConversableAgent):
+            raise Exception("FalkorDB GraphRAG capability can only be added to a ConversableAgent.")
 
         self.graph_rag_agent = agent
 
