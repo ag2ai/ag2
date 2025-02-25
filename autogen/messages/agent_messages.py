@@ -7,12 +7,18 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from termcolor import colored
 
 from ..code_utils import content_str
+from ..import_utils import optional_import_block, require_optional_import
 from ..oai.client import OpenAIWrapper
 from .base_message import BaseMessage, wrap_message
+
+with optional_import_block() as result:
+    from PIL.Image import Image
+
+IS_PIL_AVAILABLE = result.is_successful
 
 if TYPE_CHECKING:
     from ..agentchat.agent import Agent
@@ -190,6 +196,29 @@ class ToolCallMessage(BasePrintReceivedMessage):
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
+
+    @classmethod
+    @require_optional_import("PIL", "unknown")
+    def _replace_pil_image_with_placeholder(cls, image_url: dict[str, Any]) -> None:
+        if "url" in image_url and isinstance(image_url["url"], Image):
+            image_url["url"] = "<image>"
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def validate_and_encode_content(
+        cls, content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]]
+    ) -> Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]]:
+        if not IS_PIL_AVAILABLE:
+            return content
+
+        if not isinstance(content, list):
+            return content
+
+        for item in content:
+            if isinstance(item, dict) and "image_url" in item and isinstance(item["image_url"], dict):
+                cls._replace_pil_image_with_placeholder(item["image_url"])
+
+        return content
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print

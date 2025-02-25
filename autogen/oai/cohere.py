@@ -31,23 +31,23 @@ from __future__ import annotations
 import json
 import logging
 import os
-import random
 import sys
 import time
 import warnings
-from typing import Any
+from typing import Any, Optional, Type
 
 from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from openai.types.completion_usage import CompletionUsage
+from pydantic import BaseModel
+
+from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
-from .client_utils import logging_formatter, validate_parameter
 
 with optional_import_block():
-    from cohere import Client as Cohere
-    from cohere.types import ToolParameterDefinitionsValue, ToolResult
-
+    from cohere import ClientV2 as CohereV2
+    from cohere.types import ToolResult
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:
@@ -85,8 +85,8 @@ class CohereClient:
             "Please include the api_key in your config list entry for Cohere or set the COHERE_API_KEY env variable."
         )
 
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Cohere, it will be ignored.", UserWarning)
+        # Store the response format, if provided (for structured outputs)
+        self._response_format: Optional[Type[BaseModel]] = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -122,55 +122,140 @@ class CohereClient:
             "Please specify the 'model' in your config list entry to nominate the Cohere model to use."
         )
 
+        # Handle structured output response format from Pydantic model
+        if "response_format" in params and params["response_format"] is not None:
+            self._response_format = params.get("response_format")
+
+            response_format = params["response_format"]
+
+            # Check if it's a Pydantic model
+            if hasattr(response_format, "model_json_schema"):
+                # Get the JSON schema from the Pydantic model
+                schema = response_format.model_json_schema()
+
+                def resolve_ref(ref: str, defs: dict) -> dict:
+                    """Resolve a $ref to its actual schema definition"""
+                    # Extract the definition name from "#/$defs/Name"
+                    def_name = ref.split("/")[-1]
+                    return defs[def_name]
+
+                def ensure_type_fields(obj: dict, defs: dict) -> dict:
+                    """Recursively ensure all objects in the schema have a type and properties field"""
+                    if isinstance(obj, dict):
+                        # If it has a $ref, replace it with the actual definition
+                        if "$ref" in obj:
+                            ref_def = resolve_ref(obj["$ref"], defs)
+                            # Merge the reference definition with any existing fields
+                            obj = {**ref_def, **obj}
+                            # Remove the $ref as we've replaced it
+                            del obj["$ref"]
+
+                        # Process each value recursively
+                        return {
+                            k: ensure_type_fields(v, defs) if isinstance(v, (dict, list)) else v for k, v in obj.items()
+                        }
+                    elif isinstance(obj, list):
+                        return [ensure_type_fields(item, defs) for item in obj]
+                    return obj
+
+                # Make a copy of $defs before processing
+                defs = schema.get("$defs", {})
+
+                # Process the schema
+                processed_schema = ensure_type_fields(schema, defs)
+
+                cohere_params["response_format"] = {"type": "json_object", "json_schema": processed_schema}
+            else:
+                raise ValueError("response_format must be a Pydantic BaseModel")
+
+        # Handle strict tools parameter for structured outputs with tools
+        if "tools" in params:
+            cohere_params["strict_tools"] = validate_parameter(params, "strict_tools", bool, False, False, None, None)
+
         # Validate allowed Cohere parameters
         # https://docs.cohere.com/reference/chat
-        cohere_params["temperature"] = validate_parameter(
-            params, "temperature", (int, float), False, 0.3, (0, None), None
-        )
-        cohere_params["max_tokens"] = validate_parameter(params, "max_tokens", int, True, None, (0, None), None)
-        cohere_params["k"] = validate_parameter(params, "k", int, False, 0, (0, 500), None)
-        cohere_params["p"] = validate_parameter(params, "p", (int, float), False, 0.75, (0.01, 0.99), None)
-        cohere_params["seed"] = validate_parameter(params, "seed", int, True, None, None, None)
-        cohere_params["frequency_penalty"] = validate_parameter(
-            params, "frequency_penalty", (int, float), True, 0, (0, 1), None
-        )
-        cohere_params["presence_penalty"] = validate_parameter(
-            params, "presence_penalty", (int, float), True, 0, (0, 1), None
-        )
+        if "temperature" in params:
+            cohere_params["temperature"] = validate_parameter(
+                params, "temperature", (int, float), False, 0.3, (0, None), None
+            )
 
-        # Cohere parameters we are ignoring:
-        # preamble - we will put the system prompt in here.
-        # parallel_tool_calls (defaults to True), perfect as is.
-        # conversation_id - allows resuming a previous conversation, we don't support this.
-        logging.info("Conversation ID: %s", params.get("conversation_id", "None"))
-        # connectors - allows web search or other custom connectors, not implementing for now but could be useful in the future.
-        logging.info("Connectors: %s", params.get("connectors", "None"))
-        # search_queries_only - to control whether only search queries are used, we're not using connectors so ignoring.
-        # documents - a list of documents that can be used to support the chat. Perhaps useful in the future for RAG.
-        # citation_quality - used for RAG flows and dependent on other parameters we're ignoring.
-        # max_input_tokens - limits input tokens, not needed.
-        logging.info("Max Input Tokens: %s", params.get("max_input_tokens", "None"))
-        # stop_sequences - used to stop generation, not needed.
-        logging.info("Stop Sequences: %s", params.get("stop_sequences", "None"))
+        if "max_tokens" in params:
+            cohere_params["max_tokens"] = validate_parameter(params, "max_tokens", int, True, None, (0, None), None)
+
+        if "k" in params:
+            cohere_params["k"] = validate_parameter(params, "k", int, False, 0, (0, 500), None)
+
+        if "p" in params:
+            cohere_params["p"] = validate_parameter(params, "p", (int, float), False, 0.75, (0.01, 0.99), None)
+
+        if "seed" in params:
+            cohere_params["seed"] = validate_parameter(params, "seed", int, True, None, None, None)
+
+        if "frequency_penalty" in params:
+            cohere_params["frequency_penalty"] = validate_parameter(
+                params, "frequency_penalty", (int, float), True, 0, (0, 1), None
+            )
+
+        if "presence_penalty" in params:
+            cohere_params["presence_penalty"] = validate_parameter(
+                params, "presence_penalty", (int, float), True, 0, (0, 1), None
+            )
 
         return cohere_params
 
     @require_optional_import("cohere", "cohere")
     def create(self, params: dict) -> ChatCompletion:
         messages = params.get("messages", [])
-        client_name = params.get("client_name") or "autogen-cohere"
+        client_name = params.get("client_name") or "AG2"
+        cohere_tool_names = set()
+        tool_calls_modified_ids = set()
+
         # Parse parameters to the Cohere API's parameters
         cohere_params = self.parse_params(params)
 
-        # Convert AG2 messages to Cohere messages
-        cohere_messages, preamble, final_message = oai_messages_to_cohere_messages(messages, params, cohere_params)
+        cohere_params["messages"] = messages
 
-        cohere_params["chat_history"] = cohere_messages
-        cohere_params["message"] = final_message
-        cohere_params["preamble"] = preamble
+        if "tools" in params:
+            cohere_tool_names = set([tool["function"]["name"] for tool in params["tools"]])
+            cohere_params["tools"] = params["tools"]
+
+        # Strip out name
+        for message in cohere_params["messages"]:
+            message_name = message.pop("name", "")
+            # Extract and prepend name to content or tool_plan if available
+            message["content"] = (
+                f"{message_name}: {(message.get('content') or message.get('tool_plan'))}"
+                if message_name
+                else (message.get("content") or message.get("tool_plan"))
+            )
+
+            # Handle tool calls
+            if message.get("tool_calls") is not None and len(message["tool_calls"]) > 0:
+                message["tool_plan"] = message.get("tool_plan", message["content"])
+                del message["content"]  # Remove content as tool_plan is prioritized
+
+                # If tool call name is missing or not recognized, modify role and content
+                for tool_call in message["tool_calls"] or []:
+                    if (not tool_call.get("function", {}).get("name")) or tool_call.get("function", {}).get(
+                        "name"
+                    ) not in cohere_tool_names:
+                        message["role"] = "assistant"
+                        message["content"] = f"{message.pop('tool_plan', '')}{str(message['tool_calls'])}"
+                        tool_calls_modified_ids = tool_calls_modified_ids.union(
+                            set([tool_call.get("id") for tool_call in message["tool_calls"]])
+                        )
+                        del message["tool_calls"]
+                        break
+
+            # Adjust role if message comes from a tool with a modified ID
+            if message.get("role") == "tool":
+                tool_id = message.get("tool_call_id")
+                if tool_id in tool_calls_modified_ids:
+                    message["role"] = "user"
+                    del message["tool_call_id"]  # Remove the tool call ID
 
         # We use chat model by default
-        client = Cohere(api_key=self.api_key, client_name=client_name)
+        client = CohereV2(api_key=self.api_key, client_name=client_name)
 
         # Token counts will be returned
         prompt_tokens = 0
@@ -186,60 +271,86 @@ class CohereClient:
             response = client.chat_stream(**cohere_params)
             # Streaming...
             ans = ""
-            for event in response:
-                if event.event_type == "text-generation":
-                    ans = ans + event.text
-                elif event.event_type == "tool-calls-generation":
-                    # When streaming, tool calls are compiled at the end into a single event_type
-                    ans = event.text
+            plan = ""
+            prompt_tokens = 0
+            completion_tokens = 0
+            for chunk in response:
+                if chunk.type == "content-delta":
+                    ans = ans + chunk.delta.message.content.text
+                elif chunk.type == "tool-plan-delta":
+                    plan = plan + chunk.delta.message.tool_plan
+                elif chunk.type == "tool-call-start":
                     cohere_finish = "tool_calls"
-                    tool_calls = []
-                    for tool_call in event.tool_calls:
-                        tool_calls.append(
-                            ChatCompletionMessageToolCall(
-                                id=str(random.randint(0, 100000)),
-                                function={
-                                    "name": tool_call.name,
-                                    "arguments": (
-                                        "" if tool_call.parameters is None else json.dumps(tool_call.parameters)
-                                    ),
-                                },
-                                type="function",
-                            )
-                        )
 
-            # Not using billed_units, but that may be better for cost purposes
-            prompt_tokens = event.response.meta.tokens.input_tokens
-            completion_tokens = event.response.meta.tokens.output_tokens
+                    # Initialize a new tool call
+                    tool_call = chunk.delta.message.tool_calls
+                    current_tool = {
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {"name": tool_call.function.name, "arguments": ""},
+                    }
+                elif chunk.type == "tool-call-delta":
+                    # Progressively build the arguments as they stream in
+                    if current_tool is not None:
+                        current_tool["function"]["arguments"] += chunk.delta.message.tool_calls.function.arguments
+                elif chunk.type == "tool-call-end":
+                    # Append the finished tool call to the list
+                    if current_tool is not None:
+                        if tool_calls is None:
+                            tool_calls = []
+                        tool_calls.append(ChatCompletionMessageToolCall(**current_tool))
+                        current_tool = None
+                elif chunk.type == "message-start":
+                    response_id = chunk.id
+                elif chunk.type == "message-end":
+                    prompt_tokens = (
+                        chunk.delta.usage.billed_units.input_tokens
+                    )  # Note total (billed+non-billed) available with ...usage.tokens...
+                    completion_tokens = chunk.delta.usage.billed_units.output_tokens
+
             total_tokens = prompt_tokens + completion_tokens
-            response_id = event.response.response_id
         else:
             response = client.chat(**cohere_params)
-            ans: str = response.text
 
-            # Not using billed_units, but that may be better for cost purposes
-            prompt_tokens = response.meta.tokens.input_tokens
-            completion_tokens = response.meta.tokens.output_tokens
-            total_tokens = prompt_tokens + completion_tokens
-
-            response_id = response.response_id
-            # If we have tool calls as the response, populate completed tool calls for our return OAI response
-            if response.tool_calls is not None:
+            if response.message.tool_calls is not None:
+                ans = response.message.tool_plan
                 cohere_finish = "tool_calls"
                 tool_calls = []
-                for tool_call in response.tool_calls:
+                for tool_call in response.message.tool_calls:
                     # if parameters are null, clear them out (Cohere can return a string "null" if no parameter values)
 
                     tool_calls.append(
                         ChatCompletionMessageToolCall(
-                            id=str(random.randint(0, 100000)),
+                            id=tool_call.id,
                             function={
-                                "name": tool_call.name,
-                                "arguments": ("" if tool_call.parameters is None else json.dumps(tool_call.parameters)),
+                                "name": tool_call.function.name,
+                                "arguments": (
+                                    "" if tool_call.function.arguments is None else tool_call.function.arguments
+                                ),
                             },
                             type="function",
                         )
                     )
+            else:
+                ans: str = response.message.content[0].text
+
+            # Not using billed_units, but that may be better for cost purposes
+            prompt_tokens = (
+                response.usage.billed_units.input_tokens
+            )  # Note total (billed+non-billed) available with ...usage.tokens...
+            completion_tokens = response.usage.billed_units.output_tokens
+            total_tokens = prompt_tokens + completion_tokens
+
+            response_id = response.id
+
+        # Clean up structured output if needed
+        if self._response_format:
+            # ans = clean_return_response_format(ans)
+            try:
+                parsed_response = self._convert_json_response(ans)
+                ans = _format_json_response(parsed_response, ans)
+            except ValueError as e:
+                ans = str(e)
 
         # 3. convert output
         message = ChatCompletionMessage(
@@ -266,8 +377,33 @@ class CohereClient:
 
         return response_oai
 
+    def _convert_json_response(self, response: str) -> Any:
+        """Extract and validate JSON response from the output for structured outputs.
+        Args:
+            response (str): The response from the API.
+        Returns:
+            Any: The parsed JSON response.
+        """
+        if not self._response_format:
+            return response
 
-@require_optional_import("cohere", "cohere")
+        try:
+            # Parse JSON and validate against the Pydantic model
+            json_data = json.loads(response)
+            return self._response_format.model_validate(json_data)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to parse response as valid JSON matching the schema for Structured Output: {str(e)}"
+            )
+
+
+def _format_json_response(response: Any, original_answer: str) -> str:
+    """Formats the JSON response for structured outputs using the format method if it exists."""
+    return (
+        response.format() if isinstance(response, FormatterProtocol) else clean_return_response_format(original_answer)
+    )
+
+
 def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_tool_calls) -> list[dict[str, Any]]:
     temp_tool_results = []
 
@@ -284,149 +420,6 @@ def extract_to_cohere_tool_results(tool_call_id: str, content_output: str, all_t
     return temp_tool_results
 
 
-@require_optional_import("cohere", "cohere")
-def oai_messages_to_cohere_messages(
-    messages: list[dict[str, Any]], params: dict[str, Any], cohere_params: dict[str, Any]
-) -> tuple[list[dict[str, Any]], str, str]:
-    """Convert messages from OAI format to Cohere's format.
-    We correct for any specific role orders and types.
-
-    Parameters:
-        messages: list[Dict[str, Any]]: AG2 messages
-        params: Dict[str, Any]:         AG2 parameters dictionary
-        cohere_params: Dict[str, Any]:  Cohere parameters dictionary
-
-    Returns:
-        List[Dict[str, Any]]:   Chat History messages
-        str:                    Preamble (system message)
-        str:                    Message (the final user message)
-    """
-    cohere_messages = []
-    preamble = ""
-
-    # Tools
-    if "tools" in params:
-        cohere_tools = []
-        for tool in params["tools"]:
-            # build list of properties
-            parameters = {}
-
-            for key, value in tool["function"]["parameters"]["properties"].items():
-                type_str = value["type"]
-                required = True  # Defaults to False, we could consider leaving it as default.
-                description = value["description"]
-
-                # If we have an 'enum' key, add that to the description (as not allowed to pass in enum as a field)
-                if "enum" in value:
-                    # Access the enum list
-                    enum_values = value["enum"]
-                    enum_strings = [str(value) for value in enum_values]
-                    enum_string = ", ".join(enum_strings)
-                    description = description + ". Possible values are " + enum_string + "."
-
-                parameters[key] = ToolParameterDefinitionsValue(
-                    description=description, type=type_str, required=required
-                )
-
-            cohere_tool = {
-                "name": tool["function"]["name"],
-                "description": tool["function"]["description"],
-                "parameter_definitions": parameters,
-            }
-
-            cohere_tools.append(cohere_tool)
-
-        if len(cohere_tools) > 0:
-            cohere_params["tools"] = cohere_tools
-
-    tool_calls = []
-    tool_results = []
-
-    # Rules for cohere messages:
-    # no 'name' field
-    # 'system' messages go into the preamble parameter
-    # user role = 'USER'
-    # assistant role = 'CHATBOT'
-    # 'content' field renamed to 'message'
-    # tools go into tools parameter
-    # tool_results go into tool_results parameter
-    messages_length = len(messages)
-    for index, message in enumerate(messages):
-        if "role" in message and message["role"] == "system":
-            # System message
-            preamble = (preamble if preamble == "" else f"{preamble}\n") + message["content"]
-        elif "tool_calls" in message:
-            # Suggested tool calls, build up the list before we put it into the tool_results
-            for tool_call in message["tool_calls"]:
-                tool_calls.append(tool_call)
-
-            # We also add the suggested tool call as a message
-            new_message = {
-                "role": "CHATBOT",
-                "message": message["content"],
-                "tool_calls": [
-                    {
-                        "name": tool_call_.get("function", {}).get("name"),
-                        "parameters": json.loads(tool_call_.get("function", {}).get("arguments") or "null"),
-                    }
-                    for tool_call_ in message["tool_calls"]
-                ],
-            }
-
-            cohere_messages.append(new_message)
-        elif "role" in message and message["role"] == "tool":
-            if not (tool_call_id := message.get("tool_call_id")):
-                continue
-
-            # Convert the tool call to a result
-            content_output = message["content"]
-            tool_results_chat_turn = extract_to_cohere_tool_results(tool_call_id, content_output, tool_calls)
-            if (index == messages_length - 1) or (messages[index + 1].get("role", "").lower() in ("user", "tool")):
-                # If the tool call is the last message or the next message is a user/tool message, this is a recent tool call.
-                # So, we pass it into tool_results.
-                tool_results.extend(tool_results_chat_turn)
-                continue
-
-            else:
-                # If its not the current tool call, we pass it as a tool message in the chat history.
-                new_message = {"role": "TOOL", "tool_results": tool_results_chat_turn}
-                cohere_messages.append(new_message)
-
-        elif "content" in message and isinstance(message["content"], str):
-            # Standard text message
-            new_message = {
-                "role": "USER" if message["role"] == "user" else "CHATBOT",
-                "message": message["content"],
-            }
-
-            cohere_messages.append(new_message)
-
-    # Append any Tool Results
-    if len(tool_results) != 0:
-        cohere_params["tool_results"] = tool_results
-
-        # Enable multi-step tool use: https://docs.cohere.com/docs/multi-step-tool-use
-        cohere_params["force_single_step"] = False
-
-        # If we're adding tool_results, like we are, the last message can't be a USER message
-        # So, we add a CHATBOT 'continue' message, if so.
-        # Changed key from "content" to "message" (jaygdesai/autogen_Jay)
-        if cohere_messages[-1]["role"].lower() == "user":
-            cohere_messages.append({"role": "CHATBOT", "message": "Please continue."})
-
-        # We return a blank message when we have tool results
-        # TODO: Check what happens if tool_results aren't the latest message
-        return cohere_messages, preamble, ""
-
-    else:
-        # We need to get the last message to assign to the message field for Cohere,
-        # if the last message is a user message, use that, otherwise put in 'continue'.
-        if cohere_messages[-1]["role"] == "USER":
-            return cohere_messages[0:-1], preamble, cohere_messages[-1]["message"]
-        else:
-            return cohere_messages, preamble, "Please continue."
-
-
 def calculate_cohere_cost(input_tokens: int, output_tokens: int, model: str) -> float:
     """Calculate the cost of the completion using the Cohere pricing."""
     total = 0.0
@@ -440,6 +433,15 @@ def calculate_cohere_cost(input_tokens: int, output_tokens: int, model: str) -> 
         warnings.warn(f"Cost calculation not available for {model} model", UserWarning)
 
     return total
+
+
+def clean_return_response_format(response_str: str) -> str:
+    """Clean up the response string by parsing through json library."""
+    # Parse the string to a JSON object to handle escapes
+    data = json.loads(response_str)
+
+    # Convert back to JSON string with minimal formatting
+    return json.dumps(data)
 
 
 class CohereError(Exception):

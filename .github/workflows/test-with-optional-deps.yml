@@ -7,8 +7,8 @@ on:
   schedule:
     - cron: "0 0 * * *" # daily at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
-  pull_request:
-    branches: ["main"]
+  # pull_request:
+  #   branches: ["main"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
@@ -51,7 +51,6 @@ jobs:
     needs: paths-filter
     if: needs.paths-filter.outputs.hasChanges == 'true'
     runs-on: ${{ matrix.os }}
-    environment: permit-tests
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
     strategy:
