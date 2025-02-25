@@ -19,7 +19,7 @@ def filter_excluded_files(files: list[Path], exclusion_list: list[str], website_
     return [
         file
         for file in files
-        if not any(str(file.relative_to(website_dir)).startswith(excl) for excl in exclusion_list)
+        if not any(Path(str(file.relative_to(website_dir))).as_posix().startswith(excl) for excl in exclusion_list)
     ]
 
 
@@ -141,7 +141,7 @@ def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
 
-    mint_inpur_dir = website_dir / "docs"
+    mint_input_dir = website_dir / "docs"
 
     mkdocs_root_dir = website_dir / "mkdocs"
     mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
@@ -149,9 +149,9 @@ def main() -> None:
     exclusion_list = ["docs/_blogs", "docs/home", "docs/.gitignore", "docs/use-cases"]
     nav_exclusions = ["Use Cases"]
 
-    files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_inpur_dir)
+    files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)
 
-    process_and_copy_files(mint_inpur_dir, mkdocs_output_dir, filtered_files)
+    process_and_copy_files(mint_input_dir, mkdocs_output_dir, filtered_files)
 
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
