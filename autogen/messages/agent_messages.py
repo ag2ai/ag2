@@ -15,8 +15,10 @@ from ..import_utils import optional_import_block, require_optional_import
 from ..oai.client import OpenAIWrapper
 from .base_message import BaseMessage, wrap_message
 
-with optional_import_block():
+with optional_import_block() as result:
     from PIL.Image import Image
+
+IS_PIL_AVAILABLE = result.is_successful
 
 if TYPE_CHECKING:
     from ..agentchat.agent import Agent
@@ -191,11 +193,11 @@ class ToolCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-@require_optional_import("PIL", "unknown", except_for="print")
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
 
+    @require_optional_import("PIL", "unknown")
     @classmethod
     def _replace_pil_image_with_placeholder(cls, image_url: dict[str, Any]) -> None:
         if "url" in image_url and isinstance(image_url["url"], Image):
@@ -206,6 +208,9 @@ class TextMessage(BasePrintReceivedMessage):
     def validate_and_encode_content(
         cls, content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]]
     ) -> Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]]:
+        if not IS_PIL_AVAILABLE:
+            return content
+
         if not isinstance(content, list):
             return content
 
