@@ -9,7 +9,7 @@ from .....conftest import Credentials
 
 
 @skip_on_missing_imports("discord", "commsagent-discord")
-class TestDiscordSendTool:
+class TestDiscordAgent:
     def test_init(self, mock_credentials: Credentials) -> None:
         discord_agent = DiscordAgent(
             name="DiscordAgent", llm_config=mock_credentials.llm_config, bot_token="", channel_name="", guild_name=""

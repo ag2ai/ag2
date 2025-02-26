@@ -9,7 +9,7 @@ from .....conftest import Credentials
 
 
 @skip_on_missing_imports("telethon", "commsagent-telegram")
-class TestTelegramSendTool:
+class TestTelegramAgent:
     def test_init(self, mock_credentials: Credentials) -> None:
         telegram_agent = TelegramAgent(
             name="TelegramAgent", llm_config=mock_credentials.llm_config, api_id="", api_hash="", chat_id=""

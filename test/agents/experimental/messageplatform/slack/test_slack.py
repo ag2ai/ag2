@@ -9,7 +9,7 @@ from .....conftest import Credentials
 
 
 @skip_on_missing_imports("slack_sdk", "commsagent-slack")
-class TestSlackSendTool:
+class TestSlackAgent:
     def test_init(self, mock_credentials: Credentials) -> None:
         slack_agent = SlackAgent(
             name="SlackAgent",
