@@ -323,6 +323,7 @@ def test_on_condition_handoff():
         messages=TEST_MESSAGES,
         agents=[agent1, agent2],
         max_rounds=5,
+        exclude_transit_message=False,
     )
     assert context_vars is None
     assert last_speaker
@@ -455,6 +456,7 @@ def test_function_transfer():
         agents=[agent1, agent2],
         context_variables=test_context_variables,
         max_rounds=4,
+        exclude_transit_message=False,
     )
     assert context_vars
     assert last_speaker
@@ -675,6 +677,7 @@ def test_string_agent_params_for_transfer():
         messages="Begin by calling the hello_world() function.",
         after_work=AfterWork(AfterWorkOption.TERMINATE),
         max_rounds=5,
+        exclude_transit_message=False,
     )
 
     # Assertions to verify the behavior
@@ -840,6 +843,7 @@ def test_on_condition_unique_function_names():
         messages=TEST_MESSAGES,
         agents=[agent1, agent2],
         max_rounds=5,
+        exclude_transit_message=False,
     )
     assert chat_result
     assert context_vars is None
