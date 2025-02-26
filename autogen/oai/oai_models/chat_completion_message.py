@@ -8,9 +8,9 @@
 
 from typing import List, Optional
 
-from pydantic import BaseModel
 from typing_extensions import Literal
 
+from ._models import BaseModel
 from .chat_completion_audio import ChatCompletionAudio
 from .chat_completion_message_tool_call import ChatCompletionMessageToolCall
 

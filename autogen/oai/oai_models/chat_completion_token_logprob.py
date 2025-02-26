@@ -8,7 +8,7 @@
 
 from typing import List, Optional
 
-from pydantic import BaseModel
+from ._models import BaseModel
 
 __all__ = ["ChatCompletionTokenLogprob", "TopLogprob"]
 
