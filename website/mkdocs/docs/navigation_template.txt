@@ -58,6 +58,8 @@ search:
         - [Docagent](docs/user-guide/reference-agents/docagent.md)
         - [Reasoningagent](docs/user-guide/reference-agents/reasoningagent.md)
         - [Websurferagent](docs/user-guide/reference-agents/websurferagent.md)
+- API References
+{api}
 - Contributor Guide
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
