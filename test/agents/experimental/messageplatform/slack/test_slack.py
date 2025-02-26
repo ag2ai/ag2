@@ -57,6 +57,7 @@ class TestSlackSendTool:
         ]
 
         assert set(tool.name for tool in slack_agent.tools) == {"slack_send", "slack_retrieve"}
+        assert isinstance(slack_agent.llm_config, dict), "llm_config should be a dictionary"
         assert slack_agent.llm_config["tools"] == expected_tools
         assert slack_agent.system_message == (
             "You are a helpful AI assistant that communicates through Slack. "

@@ -59,6 +59,7 @@ class TestTelegramSendTool:
         ]
 
         assert set(tool.name for tool in telegram_agent.tools) == {"telegram_send", "telegram_retrieve"}
+        assert isinstance(telegram_agent.llm_config, dict), "llm_config should be a dictionary"
         assert telegram_agent.llm_config["tools"] == expected_tools
         assert telegram_agent.system_message == (
             "You are a helpful AI assistant that communicates through Telegram. "

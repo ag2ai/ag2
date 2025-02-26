@@ -15,13 +15,18 @@ __all__ = ["TelegramAgent"]
 class TelegramAgent(ConversableAgent):
     """An agent that can send messages and retrieve messages on Telegram."""
 
+    DEFAULT_SYSTEM_MESSAGE = (
+        "You are a helpful AI assistant that communicates through Telegram. "
+        "Remember that Telegram uses Markdown-like formatting and has message length limits. "
+        "Keep messages clear and concise, and consider using appropriate formatting when helpful."
+    )
+
     def __init__(
         self,
-        system_message: Optional[Union[str, list]] = None,
-        *args,
         api_id: str,
         api_hash: str,
         chat_id: str,
+        system_message: Optional[Union[str, list[str]]] = None,
         has_writing_instructions: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -34,18 +39,15 @@ class TelegramAgent(ConversableAgent):
             chat_id: The ID of the destination (Channel, Group, or User ID).
             has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
         """
-        system_message = system_message or (
-            "You are a helpful AI assistant that communicates through Telegram. "
-            "Remember that Telegram uses Markdown-like formatting and has message length limits. "
-            "Keep messages clear and concise, and consider using appropriate formatting when helpful."
-        )
+
+        system_message = kwargs.pop("system_message", self.DEFAULT_SYSTEM_MESSAGE)
 
         self._send_tool = TelegramSendTool(api_id=api_id, api_hash=api_hash, chat_id=chat_id)
         self._retrieve_tool = TelegramRetrieveTool(api_id=api_id, api_hash=api_hash, chat_id=chat_id)
 
         # Add formatting instructions
         if has_writing_instructions:
-            system_message = system_message + (
+            formatting_instructions = (
                 "\nFormat guidelines for Telegram:\n"
                 "1. Max message length: 4096 characters\n"
                 "2. HTML formatting:\n"
@@ -63,7 +65,12 @@ class TelegramAgent(ConversableAgent):
                 "4. Supports @mentions and emoji"
             )
 
-        super().__init__(*args, system_message=system_message, **kwargs)
+            if isinstance(system_message, str):
+                system_message = system_message + formatting_instructions
+            elif isinstance(system_message, list):
+                system_message = system_message + [formatting_instructions]
+
+        super().__init__(system_message=system_message, **kwargs)
 
         self.register_for_llm()(self._send_tool)
         self.register_for_llm()(self._retrieve_tool)
