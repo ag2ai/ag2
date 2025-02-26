@@ -161,5 +161,5 @@ extra:
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/ag2ai
 
-  # version:
-  #   provider: mike
+  version:
+    provider: mike
