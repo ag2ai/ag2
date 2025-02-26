@@ -840,7 +840,7 @@ class SwarmResult(BaseModel):
     """
 
     values: str = ""
-    agent: Optional[Union[ConversableAgent, str]] = None
+    agent: Optional[Union[ConversableAgent, AfterWorkOption, str]] = None
     context_variables: dict[str, Any] = {}
 
     @field_serializer("agent", when_used="json")
