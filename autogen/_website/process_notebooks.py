@@ -603,7 +603,7 @@ def post_process_mdx(
     # Create the front matter metadata js file for examples by notebook section
     add_front_matter_to_metadata_mdx(front_matter, website_build_directory, rendered_mdx)
 
-    # Dump front_matter to ysaml
+    # Dump front_matter to yaml
     front_matter_str = yaml.dump(front_matter, default_flow_style=False)
 
     # Convert callout blocks
