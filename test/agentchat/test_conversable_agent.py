@@ -1741,6 +1741,7 @@ def test_remove_tool_for_llm(mock_credentials: Credentials):
     print(tool_schemas)
     assert mock_tool.name not in tool_schemas
 
+
 def test_remove_tool_by_name_for_llm(mock_credentials: Credentials):
     """Test removing a tool."""
     agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
