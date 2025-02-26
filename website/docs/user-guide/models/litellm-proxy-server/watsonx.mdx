@@ -1,0 +1,135 @@
+---
+title: LiteLLM with WatsonX
+sidebarTitle: LiteLLM with WatsonX
+---
+
+Before starting this guide, ensure you have completed the [Installation Guide](/docs/user-guide/models/litellm-proxy-server/installation) and installed all required dependencies.
+
+## Setup WatsonX
+
+To set up WatsonX, follow these steps:
+1. **Access WatsonX:**
+    - Sign up for [WatsonX.ai](https://www.ibm.com/watsonx).
+    - Create an API_KEY and PROJECT_ID.
+
+2. **Validate WatsonX API Access:**
+    - Verify access using the following commands:
+
+Tip: Verify access to watsonX APIs before installing LiteLLM.
+
+Get Session Token:
+
+```bash
+curl -L "https://iam.cloud.ibm.com/identity/token?=null"
+-H "Content-Type: application/x-www-form-urlencoded"
+-d "grant_type=urn%3Aibm%3Aparams%3Aoauth%3Agrant-type%3Aapikey"
+-d "apikey=<API_KEY>"
+```
+
+Get list of LLMs:
+
+```bash
+curl -L "https://us-south.ml.cloud.ibm.com/ml/v1/foundation_model_specs?version=2024-09-16&project_id=1eeb4112-5f6e-4a81-9b61-8eac7f9653b4&filters=function_text_generation%2C%21lifecycle_withdrawn%3Aand&limit=200"
+-H "Authorization: Bearer <SESSION TOKEN>"
+```
+
+Ask the LLM a question:
+
+```bash
+curl -L "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-02"
+-H "Content-Type: application/json"
+-H "Accept: application/json"
+-H "Authorization: Bearer <SESSION TOKEN>" \
+-d "{
+  \"model_id\": \"google/flan-t5-xxl\",
+  \"input\": \"What is the capital of Arkansas?:\",
+  \"parameters\": {
+    \"max_new_tokens\": 100,
+    \"time_limit\": 1000
+  },
+  \"project_id\": \"<PROJECT_ID>"}"
+```
+
+
+With access to watsonX API’s validated you can install the python library from [here](https://ibm.github.io/watsonx-ai-python-sdk/install.html).
+
+## Run LiteLLM as a Docker Container
+
+To connect LiteLLM with an `WatsonX models`, configure your `litellm_config.yaml`.
+Example 1:
+```yaml
+model_list:
+    - model_name: llama-3-8b
+    litellm_params:
+    # all params accepted by litellm.completion()
+    model: watsonx/meta-llama/llama-3-8b-instruct
+    api_key: "os.environ/WATSONX_API_KEY"
+    project_id: "os.environ/WX_PROJECT_ID"
+
+```
+Example 2:
+```yaml
+- model_name: "llama_3_2_90"
+    litellm_params:
+    model: watsonx/meta-llama/llama-3-2-90b-vision-instruct
+    api_key: os.environ["WATSONX_APIKEY"] = "" # IBM cloud API key
+    max_new_tokens: 4000
+```
+
+Before starting the container, ensure you have correctly set the following environment variables:
+    - `WATSONX_API_KEY`
+    - `WATSONX_URL`
+    - `WX_PROJECT_ID`
+
+Run the container using:
+```bash
+docker run -v $(pwd)/litellm_config.yaml:/app/config.yaml \
+-e WATSONX_API_KEY="your_watsonx_api_key" -e WATSONX_URL="your_watsonx_url" -e WX_PROJECT_ID="your_watsonx_project_id" \
+-p 4000:4000 ghcr.io/berriai/litellm:main-latest --config /app/config.yaml --detailed_debug
+```
+
+
+## Initiate Chat
+To communicate with LiteLLM, configure the models in `phi1` and `phi2` and initiate a chat session.
+
+```python
+from autogen import AssistantAgent
+
+phi1 = {
+    "config_list": [
+        {
+            "model": "llama-3-8b",
+            "base_url": "http://localhost:4000", #use http://0.0.0.0:4000 for Macs
+            "api_key":"watsonx",
+            "price" : [0,0]
+        },
+    ],
+    "cache_seed": None,  # Disable caching.
+}
+
+phi2 = {
+    "config_list": [
+        {
+            "model": "llama-3-8b",
+            "base_url": "http://localhost:4000", #use http://0.0.0.0:4000 for Macs
+            "api_key":"watsonx",
+            "price" : [0,0]
+        },
+    ],
+    "cache_seed": None,  # Disable caching.
+}
+
+jack = AssistantAgent(
+    name="Jack(Phi-2)",
+    llm_config=phi2,
+    system_message="Your name is Jack and you are a comedian in a two-person comedy show.",
+)
+
+emma = AssistantAgent(
+    name="Emma(Gemma)",
+    llm_config=phi1,
+    system_message="Your name is Emma and you are a comedian in two-person comedy show.",
+)
+
+jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turns=2)
+```
