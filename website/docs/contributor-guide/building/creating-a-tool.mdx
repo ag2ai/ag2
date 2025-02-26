@@ -143,6 +143,14 @@ result = user_proxy.initiate_chat(
 )
 ```
 
+## Protecting secrets
+
+Secrets such as password, tokens, or personal information needs to be protected from capture. AG2 provides dependency injection as a way to secure this sensitive information while still allowing agents to perform their tasks effectively, even when working with large language models (LLMs).
+
+See the DiscordSendTool example in the [Creating an Agent](/docs/contributor-guide/building/creating-an-agent#how-a-tool-based-agent-is-created) documentation to see how it is implemented for a tool.
+
+See [Tools with Secrets](/docs/user-guide/advanced-concepts/tools-with-secrets) for guidance.
+
 ## Where to put your code
 
 Decide on a folder name that matches your tool name, use underscores to separate words, e.g. `deep_research`.
