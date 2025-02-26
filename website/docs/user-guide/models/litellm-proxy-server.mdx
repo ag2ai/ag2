@@ -3,12 +3,10 @@ title: LiteLLM Server Proxy
 sidebarTitle: LiteLLM Server Proxy
 ---
 
-LiteLLM is an open-source, locally hosted proxy server that provides an OpenAI-compatible API. It acts as a bridge between various LLM providers, including OpenAI, Azure, and IBM's WatsonX.
+LiteLLM is an open-source, self-hosted proxy server that offers an OpenAI-compatible API, enabling seamless interaction with multiple LLM providers like OpenAI, Azure, IBM WatsonX etc.
+It simplifies model integration, providing a unified interface for diverse AI backends.
 
-
-This guide walks you through integrating **LiteLLM** with **AG2** for seamless AI agent orchestration.
-
----
+This guide will walk you through integrating **LiteLLM** with **AG2**, ensuring efficient AI agent orchestration with minimal setup.
 
 ## Prerequisites
 
@@ -17,31 +15,28 @@ Before proceeding, ensure the following:
 - **Docker** is installed. Refer to the [Docker installation guide](https://docs.docker.com/get-docker/)
 - **(Optional)** Install **Postman** for easier API request testing.
 
----
-
 ## Install AG2
 
 **AG2** is a powerful framework designed to simplify AI agent orchestration.
 
 ### Installation
 
-1. Open a terminal with administrator privileges.
-2. Run the following command:
-    ```bash
-    pip install ag2
-    ```
+To install `AG2`, simply run the following command:
+```bash
+pip install ag2
+```
 
-    <Tip>
-    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
-    ```bash
-    pip install -U autogen
-    ```
-    or
-    ```bash
-    pip install -U pyautogen
-    ```
-    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
-    </Tip>
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen
+```
+or
+```bash
+pip install -U pyautogen
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
 
 ## Install LiteLLM
 LiteLLM runs as a lightweight proxy server, making it easier to integrate different LLM providers.
@@ -53,9 +48,167 @@ To install LiteLLM, download the latest Docker image:
 docker pull ghcr.io/berriai/litellm:main-latest
 ```
 
----
+## LiteLLM with OpenAI
 
-## Installing WatsonX
+### Run LiteLLM as a Docker Container
+
+To connect LiteLLM with an `OpenAI model`, configure your `litellm_config.yaml` as follows:
+
+```yaml
+model_list:
+  - model_name: openai-gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+```
+
+Before starting the container, ensure you have correctly set the following environment variables:
+    - `OPENAI_API_KEY`
+
+Run the container using:
+```bash
+docker run -v $(pwd)/litellm_config.yaml:/app/config.yaml \
+-e OPENAI_API_KEY="your_api_key" \
+-p 4000:4000 ghcr.io/berriai/litellm:main-latest  --config /app/config.yaml --detailed_debug
+```
+
+Once running, LiteLLM will be accessible at: `http://0.0.0.0:4000`
+
+
+To confirm that `config.yaml` is correctly mounted, check the logs:
+
+```console
+...
+14:15:59 - LiteLLM Proxy:DEBUG: proxy_server.py:1507 - loaded config={
+    "model_list": [
+        {
+            "model_name": "openai-gpt-4o-mini",
+            "litellm_params": {
+                "model": "openai/gpt-4o-mini",
+                "api_key": "os.environ/OPENAI_API_KEY"
+            }
+        }
+    ]
+}
+...
+```
+
+### Initiate Chat
+To communicate with LiteLLM, configure the model in `config_list` and initiate a chat session.
+
+```python
+from autogen import AssistantAgent, UserProxyAgent
+
+config_list = [
+    {
+        "model": "openai-gpt-4o-mini",
+        "base_url": "http://0.0.0.0:4000",
+    }
+]
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+)
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config={"config_list": config_list},
+)
+
+
+user_proxy.initiate_chat(
+    recipient=assistant,
+    message="Solve the following equation: 2x + 3 = 7",
+    max_turns=3,
+)
+```
+
+## LiteLLM with Azure
+
+### Run LiteLLM as a Docker Container
+
+To connect LiteLLM with an `Azure model`, configure your `litellm_config.yaml` as follows:
+
+```yaml
+model_list:
+  - model_name: azure-gpt-4o-mini
+    litellm_params:
+      model: azure/gpt-4o-mini
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+```
+
+Before starting the container, ensure you have correctly set the following environment variables:
+    - `AZURE_API_KEY`
+    - `AZURE_API_BASE`
+    - `AZURE_API_VERSION`
+
+Run the container using:
+```bash
+docker run -v $(pwd)/litellm_config.yaml:/app/config.yaml  \
+-e AZURE_API_KEY="your_api_key"  -e AZURE_API_BASE="your_api_base_url" -e AZURE_API_VERSION="your_api_version"\
+-p 4000:4000     ghcr.io/berriai/litellm:main-latest  --config /app/config.yaml --detailed_debug
+```
+
+Once running, LiteLLM will be accessible at: `http://0.0.0.0:4000`
+
+
+To confirm that `config.yaml` is correctly mounted, check the logs:
+
+```console
+...
+13:49:43 - LiteLLM Proxy:DEBUG: proxy_server.py:1507 - loaded config={
+    "model_list": [
+        {
+            "model_name": "azure-gpt-4o-mini",
+            "litellm_params": {
+                "model": "azure/gpt-4o-mini",
+                "api_base": "os.environ/AZURE_API_BASE",
+                "api_key": "os.environ/AZURE_API_KEY",
+                "api_version": "os.environ/AZURE_API_VERSION"
+            }
+        }
+    ]
+}
+...
+```
+
+### Initiate Chat
+To communicate with LiteLLM, configure the model in `config_list` and initiate a chat session.
+
+```python
+from autogen import AssistantAgent, UserProxyAgent
+
+config_list = [
+    {
+        "model": "azure-gpt-4o-mini",
+        "base_url": "http://0.0.0.0:4000",
+    }
+]
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+)
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config={"config_list": config_list},
+)
+
+
+user_proxy.initiate_chat(
+    recipient=assistant,
+    message="Solve the following equation: 2x + 3 = 7",
+    max_turns=3,
+)
+```
+
+
+## LiteLLM with WatsonX
+
+### Setup WatsonX
 
 To set up WatsonX, follow these steps:
 1. **Access WatsonX:**
@@ -103,49 +256,48 @@ curl -L "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05
 
 With access to watsonX API’s validated you can install the python library from [here](https://ibm.github.io/watsonx-ai-python-sdk/install.html).
 
----
+### Run LiteLLM as a Docker Container
 
-## Installing LiteLLM
-To install LiteLLM, follow these steps:
-1. **Download LiteLLM Docker Image:**
+To connect LiteLLM with an `WatsonX models`, configure your `litellm_config.yaml`.
+Example 1:
+```yaml
+model_list:
+    - model_name: llama-3-8b
+    litellm_params:
+    # all params accepted by litellm.completion()
+    model: watsonx/meta-llama/llama-3-8b-instruct
+    api_key: "os.environ/WATSONX_API_KEY"
+    project_id: "os.environ/WX_PROJECT_ID"
 
-   ```bash
-   docker pull ghcr.io/berriai/litellm:main-latest
-   ```
+```
+Example 2:
+```yaml
+- model_name: "llama_3_2_90"
+    litellm_params:
+    model: watsonx/meta-llama/llama-3-2-90b-vision-instruct
+    api_key: os.environ["WATSONX_APIKEY"] = "" # IBM cloud API key
+    max_new_tokens: 4000
+```
 
+Before starting the container, ensure you have correctly set the following environment variables:
+    - `WATSONX_API_KEY`
+    - `WATSONX_URL`
+    - `WX_PROJECT_ID`
 
-2. **Create a LiteLLM Configuration File:**
-
-   - Save as `litellm_config.yaml` in a local directory.
-   - Example content for WatsonX:
-
-    ```bash
-    model_list:
-        - model_name: llama-3-8b
-        litellm_params:
-        # all params accepted by litellm.completion()
-        model: watsonx/meta-llama/llama-3-8b-instruct
-        api_key: "os.environ/WATSONX_API_KEY"
-        project_id: "os.environ/WX_PROJECT_ID"
-
-    ```
-    ```bash
-    - model_name: "llama_3_2_90"
-        litellm_params:
-        model: watsonx/meta-llama/llama-3-2-90b-vision-instruct
-        api_key: os.environ["WATSONX_APIKEY"] = "" # IBM cloud API key
-        max_new_tokens: 4000
-    ```
-3. **Start LiteLLM Container:**
-
-   ```bash
-   docker run -v <Directory>\litellm_config.yaml:/app/config.yaml -e WATSONX_API_KEY=<API_KEY> -e WATSONX_URL=https://us-south.ml.cloud.ibm.com/ml/v1/text/generation?version=2023-05-02 -e WX_PROJECT_ID=<PROJECT_ID> -p 4000:4000 ghcr.io/berriai/litellm:main-latest --config /app/config.yaml --detailed_debug
-   ```
+Run the container using:
+```bash
+docker run -v $(pwd)/litellm_config.yaml:/app/config.yaml \
+-e WATSONX_API_KEY="your_watsonx_api_key" -e WATSONX_URL="your_watsonx_url" -e WX_PROJECT_ID="your_watsonx_project_id" \
+-p 4000:4000 ghcr.io/berriai/litellm:main-latest --config /app/config.yaml --detailed_debug
+```
 
 
-
+### Initiate Chat
+To communicate with LiteLLM, configure the models in `phi1` and `phi2` and initiate a chat session.
 
 ```python
+from autogen import AssistantAgent
+
 phi1 = {
     "config_list": [
         {
@@ -170,20 +322,17 @@ phi2 = {
     "cache_seed": None,  # Disable caching.
 }
 
-from AG2 import ConversableAgent, AssistantAgent
-
-jack = ConversableAgent(
-    "Jack (Phi-2)",
+jack = AssistantAgent(
+    name="Jack(Phi-2)",
     llm_config=phi2,
     system_message="Your name is Jack and you are a comedian in a two-person comedy show.",
 )
 
-emma = ConversableAgent(
-    "Emma (Gemma)",
+emma = AssistantAgent(
+    name="Emma(Gemma)",
     llm_config=phi1,
     system_message="Your name is Emma and you are a comedian in two-person comedy show.",
 )
 
-#AG2
-chat_result = jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turns=2)
+jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turns=2)
 ```
