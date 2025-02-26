@@ -250,7 +250,7 @@ docs = [
 
 types = [
     "mypy==1.15.0",
-    "pyautogen[test]",
+    "pyautogen[test, openai]",
 ]
 
 lint = [

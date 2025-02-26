@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import re
@@ -194,6 +195,39 @@ if not logger.handlers:
 LEGACY_DEFAULT_CACHE_SEED = 41
 LEGACY_CACHE_DIR = ".cache"
 OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
+
+OPENAI_FALLBACK_KWARGS = {
+    "api_key",
+    "organization",
+    "project",
+    "base_url",
+    "websocket_base_url",
+    "timeout",
+    "max_retries",
+    "default_headers",
+    "default_query",
+    "http_client",
+    "_strict_response_validation",
+}
+
+AOPENAI_FALLBACK_KWARGS = {
+    "azure_endpoint",
+    "azure_deployment",
+    "api_version",
+    "api_key",
+    "azure_ad_token",
+    "azure_ad_token_provider",
+    "organization",
+    "websocket_base_url",
+    "timeout",
+    "max_retries",
+    "default_headers",
+    "default_query",
+    "http_client",
+    "_strict_response_validation",
+    "base_url",
+    "project",
+}
 
 
 @lru_cache(maxsize=128)
@@ -658,40 +692,15 @@ class OpenAIWrapper:
         "price",
     }
 
-    openai_kwargs = {  # set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs)
-        "api_key",
-        "organization",
-        "project",
-        "base_url",
-        "websocket_base_url",
-        "timeout",
-        "max_retries",
-        "default_headers",
-        "default_query",
-        "http_client",
-        "_strict_response_validation",
-    }
+    @property
+    def openai_kwargs(self) -> set[str]:
+        if openai_result.is_successful:
+            return set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs) | set(
+                inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs
+            )
+        else:
+            return OPENAI_FALLBACK_KWARGS | AOPENAI_FALLBACK_KWARGS
 
-    aopenai_kwargs = {  # set(inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs)
-        "azure_endpoint",
-        "azure_deployment",
-        "api_version",
-        "api_key",
-        "azure_ad_token",
-        "azure_ad_token_provider",
-        "organization",
-        "websocket_base_url",
-        "timeout",
-        "max_retries",
-        "default_headers",
-        "default_query",
-        "http_client",
-        "_strict_response_validation",
-        "base_url",
-        "project",
-    }
-
-    openai_kwargs = openai_kwargs | aopenai_kwargs
     total_usage_summary: Optional[dict[str, Any]] = None
     actual_usage_summary: Optional[dict[str, Any]] = None
 
