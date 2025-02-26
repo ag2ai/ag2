@@ -732,6 +732,7 @@ class OpenAIWrapper:
                             "base_url": "https://api.openai.com/v1",
                         },
                         {
+                            "api_type": "openai",
                             "model": "llama-7B",
                             "base_url": "http://127.0.0.1:8080",
                         },

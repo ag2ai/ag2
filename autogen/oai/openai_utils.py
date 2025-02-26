@@ -473,10 +473,10 @@ def filter_config(
         ```python
         # Example configuration list with various models and API types
         configs = [
-            {"model": "gpt-3.5-turbo"},
-            {"model": "gpt-4"},
+            {"api_type": "openai", "model": "gpt-3.5-turbo"},
+            {"api_type": "openai", "model": "gpt-4"},
             {"model": "gpt-3.5-turbo", "api_type": "azure"},
-            {"model": "gpt-3.5-turbo", "tags": ["gpt35_turbo", "gpt-35-turbo"]},
+            {"api_type": "openai", "model": "gpt-3.5-turbo", "tags": ["gpt35_turbo", "gpt-35-turbo"]},
         ]
         # Define filter criteria to select configurations for the 'gpt-3.5-turbo' model
         # that are also using the 'azure' API type
@@ -495,7 +495,7 @@ def filter_config(
         # Apply the filter to the configuration list
         filtered_configs = filter_config(configs, filter_criteria)
         # The resulting `filtered_configs` will be:
-        # [{'model': 'gpt-3.5-turbo', 'tags': ['gpt35_turbo', 'gpt-35-turbo']}]
+        # [{"api_type": "openai", 'model': 'gpt-3.5-turbo', 'tags': ['gpt35_turbo', 'gpt-35-turbo']}]
         ```
     Note:
         - If `filter_dict` is empty or None, no filtering is applied and `config_list` is returned as is.

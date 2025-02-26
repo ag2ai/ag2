@@ -34,6 +34,7 @@ Different tasks may require different models, and the `config_list` allows speci
 
 <Tabs>
   <Tab title="OpenAI">
+    - `api_type` (str, required): The model provider
     - `model` (str, required): The identifier of the model to be used, such as 'gpt-4o', 'gpt-4o-mini'.
     - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
     - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
@@ -43,6 +44,7 @@ Different tasks may require different models, and the `config_list` allows speci
     ```json
     [
       {
+        "api_type": "openai",
         "model": "gpt-4o",
         "api_key": os.environ['OPENAI_API_KEY']
       }
@@ -80,6 +82,7 @@ Different tasks may require different models, and the `config_list` allows speci
     ```json
     [
       {
+        "api_type": "openai",
         "model": "llama-7B",
         "base_url": "http://localhost:1234"
       }
@@ -89,7 +92,7 @@ Different tasks may require different models, and the `config_list` allows speci
 </Tabs>
 
 <Tip>
-By default this will create a model client which assumes an OpenAI API (or compatible) endpoint. To use custom model clients, see [here](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_custom_model.ipynb).
+These will create a model client which assumes an OpenAI API (or compatible) endpoint. To use custom model clients, see [here](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_custom_model.ipynb).
 </Tip>
 
 ### `OAI_CONFIG_LIST` pattern
@@ -183,6 +186,7 @@ class MyHttpClient(httpx.Client):
 
 config_list = [
     {
+        "api_type": "openai",
         "model": "my-gpt-4o-deployment",
         "api_key": "",
         "http_client": MyHttpClient(proxy="http://localhost:8030"),
@@ -336,6 +340,7 @@ llm_config = {
             "api_version": "2024-02-01",
         },
         {
+            "api_type": "openai",
             "model": "llama-7B",
             "base_url": "http://127.0.0.1:8080",
             "api_type": "openai",

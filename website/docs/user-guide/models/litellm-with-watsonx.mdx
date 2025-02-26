@@ -123,17 +123,17 @@ AG2 simplifies orchestration and communication between agents. To install:
 2. Run the following command:
 
 ```bash
-pip install ag2
+pip install ag2[openai]
 ```
 
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen
+pip install -U autogen[openai]
 ```
 or
 ```bash
-pip install -U pyautogen
+pip install -U pyautogen[openai]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>
@@ -144,6 +144,7 @@ Once installed, AG2 agents can leverage WatsonX APIs via LiteLLM.
 phi1 = {
     "config_list": [
         {
+            "api_type": "openai",
             "model": "llama-3-8b",
             "base_url": "http://localhost:4000", #use http://0.0.0.0:4000 for Macs
             "api_key":"watsonx",
@@ -156,6 +157,7 @@ phi1 = {
 phi2 = {
     "config_list": [
         {
+            "api_type": "openai",
             "model": "llama-3-8b",
             "base_url": "http://localhost:4000", #use http://0.0.0.0:4000 for Macs
             "api_key":"watsonx",
