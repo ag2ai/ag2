@@ -65,6 +65,10 @@ def test_swarm_result():
     result = SwarmResult(values="test", agent=agent)
     assert result.agent == agent
 
+    # Test AfterWorkOption
+    result = SwarmResult(agent=AfterWorkOption.TERMINATE)
+    assert isinstance(result.agent, AfterWorkOption)
+
 
 def test_swarm_result_serialization():
     agent = ConversableAgent(name="test_agent", human_input_mode="NEVER")
@@ -1285,6 +1289,78 @@ def test_compress_message_func():
     assert len(modified) == 3 and modified[-1]["tool_responses"][0]["tool_call_id"] == "mock_call_id", (
         f"Wrong message processing: {modified}"
     )
+
+
+def test_swarmresult_afterworkoption_tool_swarmresult():
+    """Tests processing of the return of an AfterWorkOption in a SwarmResult. This is put in the tool executors _next_agent attribute."""
+
+    def call_determine_next_agent_from_tool_execution(
+        last_speaker_agent: ConversableAgent,
+        tool_execution_swarm_result: Union[ConversableAgent, AfterWorkOption, str],
+        next_agent_afterworkoption: AfterWorkOption,
+        swarm_afterworkoption: AfterWorkOption,
+    ) -> Optional[Agent]:
+        another_agent = ConversableAgent(name="another_agent")
+        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent, another_agent])
+        tool_executor._swarm_next_agent = tool_execution_swarm_result
+        user = UserProxyAgent("User")
+        groupchat = GroupChat(
+            agents=[last_speaker_agent],
+            messages=[
+                {"tool_calls": "", "role": "tool", "content": "Test message"},
+                {"role": "tool", "content": "Test message 2", "name": "dummy_1"},
+                {"role": "assistant", "content": "Test message 3", "name": "dummy_1"},
+            ],
+        )
+
+        last_speaker_agent._swarm_after_work = next_agent_afterworkoption
+
+        return _determine_next_agent(
+            last_speaker=last_speaker_agent,
+            groupchat=groupchat,
+            initial_agent=last_speaker_agent,
+            use_initial_agent=False,
+            tool_execution=tool_executor,
+            swarm_agent_names=["dummy_1"],
+            user_agent=user,
+            swarm_after_work=swarm_afterworkoption,
+        )
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.STAY, AfterWorkOption.STAY
+    )
+    assert next_speaker is None, "Expected None as the next speaker for AfterWorkOption.TERMINATE"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.STAY, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker.name == "dummy_1", "Expected the last speaker as the next speaker for AfterWorkOption.TERMINATE"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.REVERT_TO_USER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker.name == "User", "Expected the user agent as the next speaker for AfterWorkOption.REVERT_TO_USER"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.SWARM_MANAGER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker == "auto", "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, "dummy_1", AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
 
 if __name__ == "__main__":
