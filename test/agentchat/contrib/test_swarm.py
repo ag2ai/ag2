@@ -1290,6 +1290,7 @@ def test_compress_message_func():
         f"Wrong message processing: {modified}"
     )
 
+
 def test_swarmresult_afterworkoption_tool_swarmresult():
     """Tests processing of the return of an AfterWorkOption in a SwarmResult. This is put in the tool executors _next_agent attribute."""
 
@@ -1297,7 +1298,7 @@ def test_swarmresult_afterworkoption_tool_swarmresult():
         last_speaker_agent: ConversableAgent,
         tool_execution_swarm_result: Union[ConversableAgent, AfterWorkOption, str],
         next_agent_afterworkoption: AfterWorkOption,
-        swarm_afterworkoption: AfterWorkOption
+        swarm_afterworkoption: AfterWorkOption,
     ) -> Optional[Agent]:
         another_agent = ConversableAgent(name="another_agent")
         tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent, another_agent])
@@ -1326,28 +1327,41 @@ def test_swarmresult_afterworkoption_tool_swarmresult():
         )
 
     dummy_agent = ConversableAgent("dummy_1")
-    next_speaker = call_determine_next_agent_from_tool_execution(dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.STAY, AfterWorkOption.STAY)
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.STAY, AfterWorkOption.STAY
+    )
     assert next_speaker is None, "Expected None as the next speaker for AfterWorkOption.TERMINATE"
 
     dummy_agent = ConversableAgent("dummy_1")
-    next_speaker = call_determine_next_agent_from_tool_execution(dummy_agent, AfterWorkOption.STAY, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE)
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.STAY, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
     assert next_speaker.name == "dummy_1", "Expected the last speaker as the next speaker for AfterWorkOption.TERMINATE"
 
     dummy_agent = ConversableAgent("dummy_1")
-    next_speaker = call_determine_next_agent_from_tool_execution(dummy_agent, AfterWorkOption.REVERT_TO_USER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE)
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.REVERT_TO_USER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
     assert next_speaker.name == "User", "Expected the user agent as the next speaker for AfterWorkOption.REVERT_TO_USER"
 
     dummy_agent = ConversableAgent("dummy_1")
-    next_speaker = call_determine_next_agent_from_tool_execution(dummy_agent, AfterWorkOption.SWARM_MANAGER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE)
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.SWARM_MANAGER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
     assert next_speaker == "auto", "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
     dummy_agent = ConversableAgent("dummy_1")
-    next_speaker = call_determine_next_agent_from_tool_execution(dummy_agent, "dummy_1", AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE)
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, "dummy_1", AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
     assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
     dummy_agent = ConversableAgent("dummy_1")
-    next_speaker = call_determine_next_agent_from_tool_execution(dummy_agent, dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE)
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
     assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
