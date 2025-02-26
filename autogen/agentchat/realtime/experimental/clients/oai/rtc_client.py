@@ -192,7 +192,6 @@ class OpenAIRealtimeWebRTCClient(RealtimeClientBase):
             try:
                 message_json = await self._websocket.receive_text()
                 message = json.loads(message_json)
-                self.logger.info(f"Received message: {message}")
                 for event in self._parse_message(message):
                     yield event
             except Exception as e:
