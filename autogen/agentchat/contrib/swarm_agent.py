@@ -835,7 +835,7 @@ class SwarmResult(BaseModel):
 
     Args:
         values (str): The result values as a string.
-        agent (ConversableAgent, str): The agent instance or agent name as a string, if applicable.
+        agent (ConversableAgent, AfterWorkOption, str): The agent instance, AfterWorkOption, or agent name as a string, if applicable.
         context_variables (dict): A dictionary of context variables.
     """
 
