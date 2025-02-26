@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-import httpx
+from autogen.import_utils import optional_import_block, require_optional_import
 
 from ......doc_utils import export_module
 from ...realtime_events import RealtimeEvent
@@ -19,12 +19,16 @@ if TYPE_CHECKING:
     from ...websockets import WebSocketProtocol as WebSocket
     from ..realtime_client import RealtimeClientProtocol
 
+with optional_import_block():
+    import httpx
+
 __all__ = ["OpenAIRealtimeWebRTCClient"]
 
 global_logger = getLogger(__name__)
 
 
 @register_realtime_client()
+@require_optional_import("httpx", "openai-realtime", except_for="get_factory")
 @export_module("autogen.agentchat.realtime.experimental.clients.oai")
 class OpenAIRealtimeWebRTCClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API that uses WebRTC protocol."""

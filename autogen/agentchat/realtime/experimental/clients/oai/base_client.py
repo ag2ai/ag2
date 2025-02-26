@@ -7,14 +7,16 @@ from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
-from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
-
 from ......doc_utils import export_module
-from ......import_utils import require_optional_import
+from ......import_utils import optional_import_block, require_optional_import
 from ...realtime_events import RealtimeEvent
 from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
+
+with optional_import_block():
+    from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
+    from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
+
 
 if TYPE_CHECKING:
     from ..realtime_client import RealtimeClientProtocol
@@ -25,7 +27,7 @@ global_logger = getLogger(__name__)
 
 
 @register_realtime_client()
-@require_optional_import("openai", "openai", except_for="get_factory")
+@require_optional_import("openai", "openai-realtime", except_for="get_factory")
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class OpenAIRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API."""
@@ -45,7 +47,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         self._llm_config = llm_config
         self._logger = logger
 
-        self._connection: Optional[AsyncRealtimeConnection] = None
+        self._connection: Optional["AsyncRealtimeConnection"] = None
 
         config = llm_config["config_list"][0]
         # model is passed to self._client.beta.realtime.connect function later
@@ -71,7 +73,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         return self._logger or global_logger
 
     @property
-    def connection(self) -> AsyncRealtimeConnection:
+    def connection(self) -> "AsyncRealtimeConnection":
         """Get the OpenAI WebSocket connection."""
         if self._connection is None:
             raise RuntimeError("OpenAI WebSocket is not initialized")

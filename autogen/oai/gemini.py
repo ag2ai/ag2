@@ -54,13 +54,11 @@ from io import BytesIO
 from typing import Any, Optional, Type
 
 import requests
-from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
-from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
-from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
 from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol
+from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     import google.genai as genai
