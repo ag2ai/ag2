@@ -586,12 +586,15 @@ Task: Given a list of messages including a previous discussion, write a prompt t
 
 **Format of Output:**
 QUESTION: *Write the initial question asked by the user here.*
+SUMMARY: *summarize the existing discussions.*
 
 STEPS ALREADY EXECUTED:
 - *Step 1*
 - *Step 2*
 - ...
 - Only in case the task has been completed, write: "The task has now been completed, write the final response and terminate the task."
+
+CURRENT_QUESTION: *Write the current/last question asked by the user here.*
 """
             self._prompt_rewriter.clear_history()
             self.send(
