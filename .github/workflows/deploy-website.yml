@@ -52,8 +52,15 @@ jobs:
       # Step 4: Deploy to gh-pages branch
       - name: Deploy to GitHub Pages
         run: |
-          echo "VERSION=$(python3 -c 'from importlib.metadata import version; print(".".join(version("pyautogen").split(".")[:3]))')" >> $GITHUB_ENV
-          echo "IS_RC=$(python3 -c 'from importlib.metadata import version; print("rc" in version("pyautogen"))')" >> $GITHUB_ENV
+          . .venv/bin/activate
+
+          # Get version directly from the package using a more reliable method
+          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          # Check if version contains "rc"
+          IS_RC=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print("rc" in autogen.__version__)')
+          echo "IS_RC=$IS_RC" >> $GITHUB_ENV
 
           echo $VERSION
           echo $IS_RC
