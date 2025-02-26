@@ -107,12 +107,14 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
                 fp.write(json.dumps(res.document.export_to_dict()))
                 conv_files.append(output_file)
 
-        # Export tables
+        # Export tables (used for evaluating conversion)
+        """
         for table_ix, table in enumerate(res.document.tables):
             # Save the table as html
             element_html_filename = output_dir / f"{doc_filename}-table-{table_ix + 1}.html"
             logger.debug(f"Saving HTML table to {element_html_filename}")
             with element_html_filename.open("w") as fp:
                 fp.write(table.export_to_html())
+        """
 
     return conv_files
