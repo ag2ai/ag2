@@ -91,6 +91,33 @@ class TestGeminiClient:
         assert vertexai_global_config.project == "fake-project-id", "Incorrect VertexAI project initialization"
         assert vertexai_global_config.credentials == mock_credentials, "Incorrect VertexAI credentials initialization"
 
+    def test_extract_system_instruction(self, gemini_client):
+        # Test: valid system instruction
+        messages = [{"role": "system", "content": "You are my personal assistant."}]
+        assert gemini_client._extract_system_instruction(messages) == "You are my personal assistant."
+
+        # Test: empty system instruction
+        messages = [{"role": "system", "content": " "}]
+        assert gemini_client._extract_system_instruction(messages) is None
+
+        # Test: the first message is not a system instruction
+        messages = [
+            {"role": "user", "content": "Hello!"},
+            {"role": "system", "content": "You are my personal assistant."},
+        ]
+        assert gemini_client._extract_system_instruction(messages) is None
+
+        # Test: empty message list
+        assert gemini_client._extract_system_instruction([]) is None
+
+        # Test: None input
+        assert gemini_client._extract_system_instruction(None) is None
+
+        # Test: system message without "content" key
+        messages = [{"role": "system"}]
+        with pytest.raises(KeyError):
+            gemini_client._extract_system_instruction(messages)
+
     def test_gemini_message_handling(self, gemini_client):
         messages = [
             {"role": "system", "content": "You are my personal assistant."},
