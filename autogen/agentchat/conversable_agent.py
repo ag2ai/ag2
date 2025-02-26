@@ -27,8 +27,6 @@ from typing import (
     Union,
 )
 
-from openai import BadRequestError
-
 from ..cache.cache import AbstractCache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -1659,7 +1657,7 @@ class ConversableAgent(LLMAgent):
             summary = sender._reflection_with_llm(
                 prompt, msg_list, llm_agent=agent, cache=summary_args.get("cache"), role=role
             )
-        except BadRequestError as e:
+        except Exception as e:
             warnings.warn(
                 f"Cannot extract summary using reflection_with_llm: {e}. Using an empty str as summary.", UserWarning
             )

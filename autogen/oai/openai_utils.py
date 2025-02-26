@@ -4,6 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from __future__ import annotations
+
 import importlib
 import importlib.metadata
 import json
@@ -14,12 +16,14 @@ import tempfile
 import time
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from dotenv import find_dotenv, load_dotenv
-from openai import OpenAI
-from openai.types.beta.assistant import Assistant
 from packaging.version import parse
+
+if TYPE_CHECKING:
+    from openai import OpenAI
+    from openai.types.beta.assistant import Assistant
 
 from ..doc_utils import export_module
 

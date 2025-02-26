@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
-import inspect
 import json
 import logging
 import re
@@ -256,6 +255,7 @@ class PlaceHolderClient:
         self.config = config
 
 
+@require_optional_import("openai", "openai")
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
@@ -640,7 +640,7 @@ class OpenAIClient:
         }
 
 
-@require_optional_import("openai", "openai")
+# @require_optional_import("openai", "openai")
 @export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
@@ -658,8 +658,39 @@ class OpenAIWrapper:
         "price",
     }
 
-    openai_kwargs = set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs)
-    aopenai_kwargs = set(inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs)
+    openai_kwargs = {  # set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs)
+        "api_key",
+        "organization",
+        "project",
+        "base_url",
+        "websocket_base_url",
+        "timeout",
+        "max_retries",
+        "default_headers",
+        "default_query",
+        "http_client",
+        "_strict_response_validation",
+    }
+
+    aopenai_kwargs = {  # set(inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs)
+        "azure_endpoint",
+        "azure_deployment",
+        "api_version",
+        "api_key",
+        "azure_ad_token",
+        "azure_ad_token_provider",
+        "organization",
+        "websocket_base_url",
+        "timeout",
+        "max_retries",
+        "default_headers",
+        "default_query",
+        "http_client",
+        "_strict_response_validation",
+        "base_url",
+        "project",
+    }
+
     openai_kwargs = openai_kwargs | aopenai_kwargs
     total_usage_summary: Optional[dict[str, Any]] = None
     actual_usage_summary: Optional[dict[str, Any]] = None
@@ -963,8 +994,8 @@ class OpenAIWrapper:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
         """
-        if ERROR:
-            raise ERROR
+        # if ERROR:
+        #     raise ERROR
         invocation_id = str(uuid.uuid4())
         last = len(self._clients) - 1
         # Check if all configs in config list are activated

@@ -13,14 +13,14 @@ import threading
 import uuid
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
-from openai import AzureOpenAI, OpenAI
-from openai.types.chat import ChatCompletion
-
 from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
 from .logger_utils import get_current_ts, to_dict
 
 if TYPE_CHECKING:
+    from openai import AzureOpenAI, OpenAI
+    from openai.types.chat import ChatCompletion
+
     from .. import Agent, ConversableAgent, OpenAIWrapper
     from ..oai.anthropic import AnthropicClient
     from ..oai.bedrock import BedrockClient

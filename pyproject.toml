@@ -51,7 +51,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "openai>=1.58",
     "diskcache",
     "termcolor",
     "python-dotenv",
@@ -76,7 +75,12 @@ flaml = [
 # public distributions
 
 openai = [
-    "openai[realtime]>=1.58",
+    "openai>=1.58",
+]
+
+openai-realtime = [
+    "autogen[openai]",
+    "openai[realtime]",
 ]
 
 jupyter-executor = [
@@ -182,6 +186,7 @@ teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
 gemini = [
+    "google-api-core",
     "google-genai>=1.2.0,<2.0",
     "google-cloud-aiplatform",
     "google-auth",
@@ -402,6 +407,7 @@ files = [
     "autogen/exception_utils.py",
     "autogen/coding",
     "autogen/oai/openai_utils.py",
+    "autogen/oai/oai_models",
     "autogen/io",
     "autogen/tools",
     "autogen/interop",
@@ -424,6 +430,7 @@ files = [
 #    "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",
     "test/website",
+    "test/oai/test_oai_models.py",
 ]
 
 exclude = [

@@ -7,14 +7,16 @@ from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
-from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
-
 from ......doc_utils import export_module
-from ......import_utils import require_optional_import
+from ......import_utils import optional_import_block, require_optional_import
 from ...realtime_events import RealtimeEvent
 from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
+
+with optional_import_block():
+    from openai import DEFAULT_MAX_RETRIES, NOT_GIVEN, AsyncOpenAI
+    from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
+
 
 if TYPE_CHECKING:
     from ..realtime_client import RealtimeClientProtocol
