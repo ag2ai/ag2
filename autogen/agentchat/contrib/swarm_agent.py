@@ -505,10 +505,12 @@ def _determine_next_agent(
 
     after_work_next_agent_selection_msg = None
 
-    # Resolve after_work condition (agent-level overrides global)
-    after_work_condition = (
-        last_swarm_speaker._swarm_after_work if last_swarm_speaker._swarm_after_work is not None else swarm_after_work
-    )
+    if after_work_condition is None:
+        # Resolve after_work condition if one hasn't been passed in (agent-level overrides global)
+        after_work_condition = (
+            last_swarm_speaker._swarm_after_work if last_swarm_speaker._swarm_after_work is not None else swarm_after_work
+        )
+
     if isinstance(after_work_condition, AfterWork):
         after_work_next_agent_selection_msg = after_work_condition.next_agent_selection_msg
         after_work_condition = after_work_condition.agent
