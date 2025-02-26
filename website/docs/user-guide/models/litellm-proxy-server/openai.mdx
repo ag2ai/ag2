@@ -1,0 +1,80 @@
+---
+title: LiteLLM with OpenAI
+sidebarTitle: LiteLLM with OpenAI
+---
+
+Before starting this guide, ensure you have completed the [Installation Guide](/docs/user-guide/models/litellm-proxy-server/installation) and installed all required dependencies.
+
+## Run LiteLLM as a Docker Container
+
+To connect LiteLLM with an `OpenAI model`, configure your `litellm_config.yaml` as follows:
+
+```yaml
+model_list:
+  - model_name: openai-gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+```
+
+Before starting the container, ensure you have correctly set the following environment variables:
+    - `OPENAI_API_KEY`
+
+Run the container using:
+```bash
+docker run -v $(pwd)/litellm_config.yaml:/app/config.yaml \
+-e OPENAI_API_KEY="your_api_key" \
+-p 4000:4000 ghcr.io/berriai/litellm:main-latest --config /app/config.yaml --detailed_debug
+```
+
+Once running, LiteLLM will be accessible at: `http://0.0.0.0:4000`
+
+
+To confirm that `config.yaml` is correctly mounted, check the logs:
+
+```console
+...
+14:15:59 - LiteLLM Proxy:DEBUG: proxy_server.py:1507 - loaded config={
+    "model_list": [
+        {
+            "model_name": "openai-gpt-4o-mini",
+            "litellm_params": {
+                "model": "openai/gpt-4o-mini",
+                "api_key": "os.environ/OPENAI_API_KEY"
+            }
+        }
+    ]
+}
+...
+```
+
+## Initiate Chat
+To communicate with LiteLLM, configure the model in `config_list` and initiate a chat session.
+
+```python
+from autogen import AssistantAgent, UserProxyAgent
+
+config_list = [
+    {
+        "model": "openai-gpt-4o-mini",
+        "base_url": "http://0.0.0.0:4000",
+    }
+]
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+)
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config={"config_list": config_list},
+)
+
+
+user_proxy.initiate_chat(
+    recipient=assistant,
+    message="Solve the following equation: 2x + 3 = 7",
+    max_turns=3,
+)
+```
