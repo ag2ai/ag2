@@ -47,7 +47,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         self._llm_config = llm_config
         self._logger = logger
 
-        self._connection: Optional[AsyncRealtimeConnection] = None
+        self._connection: Optional["AsyncRealtimeConnection"] = None
 
         config = llm_config["config_list"][0]
         # model is passed to self._client.beta.realtime.connect function later
@@ -73,7 +73,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         return self._logger or global_logger
 
     @property
-    def connection(self) -> AsyncRealtimeConnection:
+    def connection(self) -> "AsyncRealtimeConnection":
         """Get the OpenAI WebSocket connection."""
         if self._connection is None:
             raise RuntimeError("OpenAI WebSocket is not initialized")
