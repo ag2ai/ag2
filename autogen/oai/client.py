@@ -56,8 +56,9 @@ if openai_result.is_successful:
     from openai.lib._pydantic import _ensure_strict_json_schema
 else:
     ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
-    OpenAI = object
-    AzureOpenAI = object
+
+    # OpenAI = object
+    # AzureOpenAI = object
 
 with optional_import_block() as cerebras_result:
     from cerebras.cloud.sdk import (  # noqa
@@ -728,11 +729,9 @@ class OpenAIWrapper:
                         {
                             "model": "gpt-3.5-turbo",
                             "api_key": os.environ.get("OPENAI_API_KEY"),
-                            "api_type": "openai",
                             "base_url": "https://api.openai.com/v1",
                         },
                         {
-                            "api_type": "openai",
                             "model": "llama-7B",
                             "base_url": "http://127.0.0.1:8080",
                         },
@@ -832,9 +831,14 @@ class OpenAIWrapper:
             # TODO: logging for custom client
         else:
             if api_type is not None and api_type.startswith("azure"):
-                self._configure_azure_openai(config, openai_config)
-                client = AzureOpenAI(**openai_config)
-                self._clients.append(OpenAIClient(client, response_format=response_format))
+
+                @require_optional_import("openai", "openai")
+                def create_azure_openai_client():
+                    self._configure_azure_openai(config, openai_config)
+                    client = AzureOpenAI(**openai_config)
+                    self._clients.append(OpenAIClient(client, response_format=response_format))
+
+                create_azure_openai_client()
             elif api_type is not None and api_type.startswith("cerebras"):
                 if cerebras_import_exception:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
@@ -886,8 +890,13 @@ class OpenAIWrapper:
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             else:
-                client = OpenAI(**openai_config)
-                self._clients.append(OpenAIClient(client, response_format))
+
+                @require_optional_import("openai", "openai")
+                def create_openai_client():
+                    client = OpenAI(**openai_config)
+                    self._clients.append(OpenAIClient(client, response_format))
+
+                create_openai_client()
 
             if logging_enabled():
                 log_new_client(client, self, openai_config)
