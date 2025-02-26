@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Union
+from typing import Any
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -26,7 +26,6 @@ class TelegramAgent(ConversableAgent):
         api_id: str,
         api_hash: str,
         chat_id: str,
-        system_message: Optional[Union[str, list[str]]] = None,
         has_writing_instructions: bool = True,
         **kwargs: Any,
     ) -> None:
