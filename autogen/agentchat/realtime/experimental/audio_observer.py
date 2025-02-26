@@ -26,7 +26,6 @@ class AudioObserver(RealtimeObserver):
         Args:
             event (dict[str, Any]): The event from the OpenAI Realtime API.
         """
-
         if isinstance(event, InputAudioBufferDelta):
             self.logger.info("Received audio buffer delta")
 
