@@ -27,6 +27,19 @@ from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentEr
 from ..conftest import Credentials, suppress_json_decoder_error
 
 
+def test_groupchat_init():
+    groupchat = GroupChat(
+        agents=[],
+    )
+    assert groupchat.messages == []
+
+    groupchat = GroupChat(
+        agents=[],
+        messages=[{"content": "hello", "role": "user", "name": "alice"}],
+    )
+    assert groupchat.messages == [{"content": "hello", "role": "user", "name": "alice"}]
+
+
 def test_func_call_groupchat(monkeypatch: MonkeyPatch):
     agent1 = autogen.ConversableAgent(
         "alice",
