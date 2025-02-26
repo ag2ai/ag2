@@ -2980,11 +2980,9 @@ class ConversableAgent(LLMAgent):
                 for tool in current_tools:
                     tool_name = tool["function"]["name"]
 
-                    if isinstance(tool_sig, str):                    
-                        is_different = tool_name != tool_sig # Match by name
-                    else:
-                        is_different = tool != tool_sig # Match my schema
-                    
+                    # Match by tool name, or by tool signature
+                    is_different = tool_name != tool_sig if isinstance(tool_sig, str) else tool != tool_sig
+
                     if is_different:
                         filtered_tools.append(tool)
 
