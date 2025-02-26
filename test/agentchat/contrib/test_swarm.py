@@ -65,6 +65,10 @@ def test_swarm_result():
     result = SwarmResult(values="test", agent=agent)
     assert result.agent == agent
 
+    # Test AfterWorkOption
+    result = SwarmResult(agent=AfterWorkOption.TERMINATE)
+    assert isinstance(result.agent, AfterWorkOption)
+
 
 def test_swarm_result_serialization():
     agent = ConversableAgent(name="test_agent", human_input_mode="NEVER")
