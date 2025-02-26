@@ -11,6 +11,7 @@ from ...doc_utils import export_module
 from ...import_utils import optional_import_block
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
+from ..user_proxy_agent import UserProxyAgent
 
 EPSILON = 1e-6
 
@@ -28,6 +29,9 @@ Instructions:
 - Provide a brief description for each option.
 - Present your output in the specified format.
 - If the question is a multi-choice question, you should carefully eliminate obviously wrong choices, look for contextual clues in the question, and use logical reasoning to select the most plausible answer.
+- If you need to validate, simulate, or illustrate a reasoning concept with Python, place the code in a fenced block like ```python ... ``` and always print the results that you want to see.
+
+(Note: Randomness, floating point precision, or hardware specifics may affect outputs, so your reasoning should not rely heavily on Python results.)
 
 ---
 
@@ -38,9 +42,18 @@ REFLECTION:
 
 **Possible Options:**
 Option 1: Correct the error X in the previous steps.
+
 Option 2: Reiterate and understand the user's question.
+
 Option 3: Analyze and validate the results based on the previous steps.
-Option 4: Perform Y.
+
+Option 4: Simulate the experiment and perform stats analysis with python.
+```python
+...
+print(result)
+```
+
+Option 5: Perform Y.
 """
 
 
@@ -309,7 +322,6 @@ class ReasoningAgent(AssistantAgent):
         max_depth: int = 4,
         beam_size: int = 3,
         answer_approach: str = "pool",
-        verbose: bool = True,
         reason_config: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
@@ -322,7 +334,6 @@ class ReasoningAgent(AssistantAgent):
             max_depth (int): Maximum depth of the reasoning tree
             beam_size (int): DEPRECATED. Number of parallel reasoning paths to maintain
             answer_approach (str): DEPRECATED. Either "pool" or "best" - how to generate final answer
-            verbose (bool): Whether to show intermediate steps
 
             reason_config (dict): Configuration for the reasoning method. Supported parameters:
                 method (str): The search strategy to use. Options:
@@ -350,8 +361,16 @@ class ReasoningAgent(AssistantAgent):
                     `{"method": "lats", "nsim": 5, "forest_size": 3}`
         """
         reason_config = reason_config or {}
+        if "verbose" in kwargs:
+            # deprecate warning
+            warnings.warn(
+                "The parameter `verbose` in ReasoningAgent has been deprecated. "
+                "Please use the `silent` parameter as other AG2 agents.",
+                DeprecationWarning,
+            )
+            kwargs["silent"] = not kwargs.pop("verbose")
+
         super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self._verbose = verbose
         self._llm_config = llm_config
         self._grader_llm_config = grader_llm_config if grader_llm_config else llm_config
 
@@ -386,9 +405,24 @@ class ReasoningAgent(AssistantAgent):
         self._root = None
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
-        self._thinker = AssistantAgent(
-            name="tot_thinker", system_message=TreeofThought_message, llm_config=self._llm_config
-        )
+        tot_msg = TreeofThought_message
+        if self._code_execution_config:
+            self._user_proxy = UserProxyAgent(
+                name="reasoner_user_proxy",
+                human_input_mode="NEVER",
+                code_execution_config=self._code_execution_config,
+                max_consecutive_auto_reply=1,
+            )
+            self._code_execution_config = False  # the reasoning agent itself should not execute code.
+        else:
+            self._user_proxy = None
+            # `code_execution_config` is not given, we should remove instructions with python execution
+            # This line of code filters out lines from the `tot_msg` string that contain the words 'python' or '```' (indicating Python code blocks).
+            tot_msg = "\n".join([
+                line for line in tot_msg.split("\n") if not re.compile(r".*(python|```).*").search(line)
+            ])
+
+        self._thinker = AssistantAgent(name="tot_thinker", system_message=tot_msg, llm_config=self._llm_config)
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
 
     def generate_forest_response(
@@ -428,12 +462,12 @@ class ReasoningAgent(AssistantAgent):
                 message=f"Answer the question {prompt}. Here are some students' different answers:\n{{'\n-'.join(forest_answers)}}",
                 recipient=self,
                 request_reply=True,
-                silent=not self._verbose,
+                silent=self.silent,
             )
             return True, self.last_message(self)["content"].strip()
 
     def rate_node(self, node: ThinkNode, ground_truth: str = None, is_outcome: bool = False) -> float:
-        """Rate the quality of a reasoning path using the grader agent.
+        """Rate the quality of a reasoning path or the final answer using the grader agent.
 
         Args:
             node (ThinkNode): Node containing the reasoning trajectory to evaluate
@@ -499,7 +533,7 @@ Please provide your rating along with a brief explanation of your assessment.
             message=prompt,
             recipient=self._grader,
             request_reply=True,
-            silent=not self._verbose,
+            silent=self.silent,
         )
         rating = self._grader.last_message()["content"].strip()
         node.rating_details = rating
@@ -596,7 +630,7 @@ Please provide your rating along with a brief explanation of your assessment.
                 message=f"Answer the question {prompt}. Here is my thinking processes:\n{best_leaf.trajectory}",
                 recipient=self,
                 request_reply=True,
-                silent=not self._verbose,
+                silent=self.silent,
             )
         elif self._answer_approach == "pool":
             all_thoughts = "\n\n".join([
@@ -606,7 +640,7 @@ Please provide your rating along with a brief explanation of your assessment.
                 message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",
                 recipient=self,
                 request_reply=True,
-                silent=not self._verbose,
+                silent=self.silent,
             )
 
         final_answer = self.chat_messages[self][-1]["content"].strip()
@@ -634,7 +668,7 @@ Please provide your rating along with a brief explanation of your assessment.
 
             # Selection
             while not self._is_terminal(node) and len(node.children) > 0:
-                # TODO: In the original UCT formula, child.value represents the win ratio.
+                # NOTE: In the original UCT formula, child.value represents the win ratio.
                 # Here, we use the average rating rather than the win ratio.
                 # The rating might be biased from the LLM, which could affect the bounds of this vanilla UCT equation.
                 # More intensive analysis is needed in the future.
@@ -663,7 +697,7 @@ Please provide your rating along with a brief explanation of your assessment.
                 message=f"Answer the question {prompt}. Here is my thinking process:\n{node.trajectory}",
                 recipient=self,
                 request_reply=True,
-                silent=not self._verbose,
+                silent=self.silent,
             )
             _answer = self.last_message(self)["content"].strip()
             # We add the answer (as a node) to the leaf to help
@@ -705,7 +739,7 @@ Please provide your rating along with a brief explanation of your assessment.
             message=prompt,
             recipient=self._thinker,
             request_reply=True,
-            silent=not self._verbose,
+            silent=self.silent,
         )
         reply = self._thinker.last_message()["content"].strip()
         reflection = re.findall(r"REFLECTION:\s*(.+?)(?=\*\*Possible Options:\*\*|Option \d+:|$)", reply, re.DOTALL)
@@ -717,7 +751,20 @@ Please provide your rating along with a brief explanation of your assessment.
         # - re.DOTALL allows . to match newlines
         options = re.findall(r"Option \d+:(.+?)(?=Option \d+:|$)", reply, re.DOTALL)
 
-        return [ThinkNode(content=option.strip().rstrip(), parent=node) for option in options]
+        option_nodes = [ThinkNode(content=option.strip().rstrip(), parent=node) for option in options]
+
+        for node in option_nodes:
+            # use self._user_proxy to execute code if needed.
+            if self._user_proxy and "```python" in node.content:
+                self._user_proxy.clear_history()
+                self.send(
+                    message=node.content,
+                    recipient=self._user_proxy,
+                    request_reply=True,
+                    silent=self.silent,
+                )
+                node.content += "\n\n---\nCode Execution Result:\n" + self._user_proxy.last_message(self)["content"]
+        return option_nodes
 
     def _is_terminal(self, node: ThinkNode) -> bool:
         """Check if the node is a terminal state in the reasoning process.

@@ -1,0 +1,20 @@
+{"id":1,"name":"Colosseum","description":"An ancient amphitheater known for gladiatorial contests and public spectacles.","city":"Rome","type":"Historical"}
+{"id":2,"name":"Vatican Museums","description":"A complex of museums and galleries showcasing works of art collected by Popes over centuries.","city":"Rome","type":"Art"}
+{"id":3,"name":"Trevi Fountain","description":"A Baroque fountain known for its stunning sculptures and tradition of tossing coins.","city":"Rome","type":"Landmark"}
+{"id":4,"name":"Duomo","description":"Florence's main cathedral, known for its red-tiled dome designed by Brunelleschi.","city":"Florence","type":"Religious"}
+{"id":5,"name":"Uffizi Gallery","description":"A prominent art museum featuring works by Botticelli, Michelangelo, and da Vinci.","city":"Florence","type":"Art"}
+{"id":6,"name":"Ponte Vecchio","description":"A medieval stone bridge over the Arno River, lined with shops selling jewelry and art.","city":"Florence","type":"Landmark"}
+{"id":7,"name":"Grand Canal","description":"The main waterway of Venice, lined with stunning palaces and bridges.","city":"Venice","type":"Scenic"}
+{"id":8,"name":"St. Mark's Basilica","description":"Venice's famous cathedral known for its Byzantine architecture and gilded mosaics.","city":"Venice","type":"Religious"}
+{"id":9,"name":"Rialto Bridge","description":"One of Venice's iconic bridges crossing the Grand Canal, offering beautiful views.","city":"Venice","type":"Landmark"}
+{"id":10,"name":"Mole Antonelliana","description":"A landmark building in Turin known for its towering spire and as the Museum of Cinema.","city":"Turin","type":"Landmark"}
+{"id":11,"name":"Royal Palace of Naples","description":"A historic palace in Naples, once home to the Bourbon Kings of Naples and Sicily.","city":"Naples","type":"Historical"}
+{"id":12,"name":"Teatro San Carlo","description":"The oldest continuously active opera house in the world, located in Naples.","city":"Naples","type":"Cultural"}
+{"id":13,"name":"Teatro alla Scala","description":"One of the world's most famous opera houses, located in Milan.","city":"Milan","type":"Cultural"}
+{"id":14,"name":"Galleria Vittorio Emanuele II","description":"A historic shopping arcade and a major landmark in Milan, known for its stunning architecture.","city":"Milan","type":"Landmark"}
+{"id":15,"name":"Teatro Regio","description":"A prominent opera house in Turin, known for its rich history and performances.","city":"Turin","type":"Cultural"}
+{"id":16,"name":"Palazzo dei Normanni","description":"A royal palace in Palermo, originally built in the 9th century.","city":"Palermo","type":"Historical"}
+{"id":17,"name":"Cattedrale di Palermo","description":"The cathedral church of the Roman Catholic Archdiocese of Palermo, dedicated to the Assumption of the Virgin Mary.","city":"Palermo","type":"Religious"}
+{"id":18,"name":"San Giovanni degli Eremiti","description":"A church in Palermo, renowned for its distinctive red domes.","city":"Palermo","type":"Religious"}
+{"id":19,"name":"San Lorenzo Maggiore","description":"A church in Naples, one of the oldest in the city, featuring Roman and early Christian remains.","city":"Naples","type":"Religious"}
+{"id":20,"name":"Basilica di Santa Maria Maggiore","description":"A major basilica in Rome, known for its rich history and impressive architecture.","city":"Rome","type":"Religious"}
