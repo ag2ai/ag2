@@ -833,12 +833,13 @@ class OpenAIWrapper:
             if api_type is not None and api_type.startswith("azure"):
 
                 @require_optional_import("openai", "openai")
-                def create_azure_openai_client():
+                def create_azure_openai_client() -> "AzureOpenAI":
                     self._configure_azure_openai(config, openai_config)
                     client = AzureOpenAI(**openai_config)
                     self._clients.append(OpenAIClient(client, response_format=response_format))
+                    return client
 
-                create_azure_openai_client()
+                client = create_azure_openai_client()
             elif api_type is not None and api_type.startswith("cerebras"):
                 if cerebras_import_exception:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
@@ -892,11 +893,12 @@ class OpenAIWrapper:
             else:
 
                 @require_optional_import("openai", "openai")
-                def create_openai_client():
+                def create_openai_client() -> "OpenAI":
                     client = OpenAI(**openai_config)
                     self._clients.append(OpenAIClient(client, response_format))
+                    return client
 
-                create_openai_client()
+                client = create_openai_client()
 
             if logging_enabled():
                 log_new_client(client, self, openai_config)
