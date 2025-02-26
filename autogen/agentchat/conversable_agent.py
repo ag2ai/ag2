@@ -2973,7 +2973,22 @@ class ConversableAgent(LLMAgent):
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
             else:
-                self.llm_config["tools"] = [tool for tool in self.llm_config["tools"] if tool != tool_sig]
+                current_tools = self.llm_config["tools"]
+                filtered_tools = []
+
+                # Loop through and rebuild tools list without the tool to remove
+                for tool in current_tools:
+                    tool_name = tool["function"]["name"]
+
+                    if isinstance(tool_sig, str):                    
+                        is_different = tool_name != tool_sig # Match by name
+                    else:
+                        is_different = tool != tool_sig # Match my schema
+                    
+                    if is_different:
+                        filtered_tools.append(tool)
+
+                self.llm_config["tools"] = filtered_tools
         else:
             if not isinstance(tool_sig, dict):
                 raise ValueError(
