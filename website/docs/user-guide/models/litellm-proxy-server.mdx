@@ -70,7 +70,7 @@ Run the container using:
 ```bash
 docker run -v $(pwd)/litellm_config.yaml:/app/config.yaml \
 -e OPENAI_API_KEY="your_api_key" \
--p 4000:4000 ghcr.io/berriai/litellm:main-latest  --config /app/config.yaml --detailed_debug
+-p 4000:4000 ghcr.io/berriai/litellm:main-latest --config /app/config.yaml --detailed_debug
 ```
 
 Once running, LiteLLM will be accessible at: `http://0.0.0.0:4000`
@@ -148,8 +148,8 @@ Before starting the container, ensure you have correctly set the following envir
 Run the container using:
 ```bash
 docker run -v $(pwd)/litellm_config.yaml:/app/config.yaml  \
--e AZURE_API_KEY="your_api_key"  -e AZURE_API_BASE="your_api_base_url" -e AZURE_API_VERSION="your_api_version"\
--p 4000:4000     ghcr.io/berriai/litellm:main-latest  --config /app/config.yaml --detailed_debug
+-e AZURE_API_KEY="your_api_key" -e AZURE_API_BASE="your_api_base_url" -e AZURE_API_VERSION="your_api_version"\
+-p 4000:4000 ghcr.io/berriai/litellm:main-latest --config /app/config.yaml --detailed_debug
 ```
 
 Once running, LiteLLM will be accessible at: `http://0.0.0.0:4000`
