@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -23,11 +23,15 @@ class WebSurferTestHelper:
 
         return False
 
-    def test_init(self, credentials: Credentials, web_tool: str, expected: list[dict[str, Any]]) -> None:
+    def test_init(
+        self, credentials: Credentials, web_tool: Literal["browser_use", "crawl4ai"], expected: list[dict[str, Any]]
+    ) -> None:
         websurfer = WebSurferAgent(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
+        assert websurfer.llm_config is not False, "llm_config should not be False"
+        assert isinstance(websurfer.llm_config, dict), "llm_config should be a dictionary"
         assert websurfer.llm_config["tools"] == expected
 
-    def test_end2end(self, credentials: Credentials, web_tool: str) -> None:
+    def test_end2end(self, credentials: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
         websurfer = WebSurferAgent(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
 
@@ -46,7 +50,12 @@ class WebSurferTestHelper:
 
 @skip_on_missing_imports(["crawl4ai"], "crawl4ai")
 class TestCrawl4AIWebSurfer(WebSurferTestHelper):
-    def test_init(self, mock_credentials: Credentials) -> None:
+    def test_init(
+        self,
+        mock_credentials: Credentials,
+        web_tool: Literal["browser_use", "crawl4ai"],
+        expected: list[dict[str, Any]],
+    ) -> None:
         expected = [
             {
                 "function": {
@@ -70,13 +79,18 @@ class TestCrawl4AIWebSurfer(WebSurferTestHelper):
         super().test_init(mock_credentials, "crawl4ai", expected)
 
     @pytest.mark.openai
-    def test_end2end(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_end2end(self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
         super().test_end2end(credentials_gpt_4o_mini, "crawl4ai")
 
 
 @skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
 class TestBrowserUseWebSurfer(WebSurferTestHelper):
-    def test_init(self, mock_credentials: Credentials) -> None:
+    def test_init(
+        self,
+        mock_credentials: Credentials,
+        web_tool: Literal["browser_use", "crawl4ai"],
+        expected: list[dict[str, Any]],
+    ) -> None:
         expected = [
             {
                 "function": {
@@ -94,5 +108,5 @@ class TestBrowserUseWebSurfer(WebSurferTestHelper):
         super().test_init(mock_credentials, "browser_use", expected)
 
     @pytest.mark.openai
-    def test_end2end(self, credentials_gpt_4o_mini: Credentials) -> None:
+    def test_end2end(self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
         super().test_end2end(credentials_gpt_4o_mini, "browser_use")

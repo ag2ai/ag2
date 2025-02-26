@@ -22,7 +22,7 @@ class WebSurferAgent(ConversableAgent):
         llm_config: dict[str, Any],
         web_tool_llm_config: Optional[dict[str, Any]] = None,
         web_tool: Literal["browser_use", "crawl4ai"] = "browser_use",
-        web_tool_kwargs: dict[str, Any] = None,
+        web_tool_kwargs: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the WebSurferAgent.
