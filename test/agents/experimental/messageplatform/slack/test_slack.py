@@ -3,11 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+
 from autogen.agents.experimental import SlackAgent
+from autogen.import_utils import run_for_optional_imports
 
 from .....conftest import Credentials
 
 
+@run_for_optional_imports(["crewai_tools", "langchain", "pydantic_ai"], "commsagent-slack")
 @pytest.mark.commsagent_slack
 class TestSlackAgent:
     def test_init(self, mock_credentials: Credentials) -> None:

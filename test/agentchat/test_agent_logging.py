@@ -15,7 +15,6 @@ from _pytest.mark import ParameterSet
 
 import autogen
 import autogen.runtime_logging
-from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 

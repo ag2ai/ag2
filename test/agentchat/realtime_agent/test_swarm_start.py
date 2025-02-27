@@ -16,7 +16,6 @@ from pytest import FixtureRequest
 from autogen import ConversableAgent
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 from autogen.agentchat.realtime.experimental.realtime_swarm import register_swarm
-from autogen.import_utils import run_for_optional_imports
 from autogen.tools.dependency_injection import Field as AG2Field
 
 from ...conftest import Credentials

@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent
-from autogen.import_utils import run_for_optional_imports
 from autogen.tools.tool import Tool
 
 from ...conftest import Credentials

@@ -381,20 +381,20 @@ credentials_all_llms = [
 credentials_browser_use = [
     pytest.param(
         credentials_gpt_4o_mini.__name__,
-        marks=pytest.mark.openai,
+        marks=[pytest.mark.openai, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
         credentials_anthropic_claude_sonnet.__name__,
-        marks=pytest.mark.anthropic,
+        marks=[pytest.mark.anthropic, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
         credentials_gemini_flash_exp.__name__,
-        marks=pytest.mark.gemini,
+        marks=[pytest.mark.gemini, pytest.mark.aux_neg_flag],
     ),
     # Deeseek currently does not work too well with the browser-use
     pytest.param(
         credentials_deepseek_chat.__name__,
-        marks=pytest.mark.deepseek,
+        marks=[pytest.mark.deepseek, pytest.mark.aux_neg_flag],
     ),
 ]
 

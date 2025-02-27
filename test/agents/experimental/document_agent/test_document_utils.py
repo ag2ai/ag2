@@ -15,7 +15,7 @@ from autogen.agents.experimental.document_agent.document_utils import (
     is_url,
     list_files,
 )
-from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 with optional_import_block():
     import selenium
@@ -71,13 +71,13 @@ class TestDownloadUrl:
         with patch("webdriver_manager.chrome.ChromeDriverManager.install") as mock:
             yield mock
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_non_string_input(self) -> None:
         url = 123
         with pytest.raises(selenium.common.exceptions.InvalidArgumentException, match="invalid argument"):
             download_url(url)  # type: ignore[arg-type]
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_with_valid_url(self, mock_chrome: MagicMock) -> None:
         url = "https://www.google.com"
         mock_chrome.return_value.get.return_value = None
@@ -86,21 +86,21 @@ class TestDownloadUrl:
         assert isinstance(html_content, str)
         assert html_content != ""
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_with_invalid_url(self, mock_chrome: MagicMock) -> None:
         url = "invalid_url"
         mock_chrome.return_value.get.side_effect = ValueError("Invalid URL")
         with pytest.raises(ValueError, match="Invalid URL"):
             _download_rendered_html(url)
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_chrome_driver_not_installed(self, mock_chrome_driver_manager: MagicMock) -> None:
         url = "https://www.google.com"
         mock_chrome_driver_manager.side_effect = ValueError("Chrome driver not installed")
         with pytest.raises(ValueError, match="Chrome driver not installed"):
             _download_rendered_html(url)
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_chrome_driver_connection_error(self, mock_chrome: MagicMock) -> None:
         url = "https://www.google.com"
         mock_chrome.return_value.get.side_effect = ValueError("Connection error")
@@ -122,7 +122,7 @@ class TestDownloadUrl:
         with patch("builtins.open", new_callable=mock_open) as mock_file:
             yield mock_file
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_url_valid_html(self, mock_html_value: str, mock_download: str, tmp_path: Path) -> None:
         url = "https://www.example.com/index.html"
         filepath = download_url(url, tmp_path.resolve())
@@ -131,13 +131,13 @@ class TestDownloadUrl:
             content = html_file.read()
             assert content == mock_html_value
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_url_non_html(self, tmp_path: Path) -> None:
         url = "https://www.example.com/image.jpg"
         with pytest.raises(ValueError):
             download_url(url, tmp_path.resolve())
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_url_no_extension(self, mock_html_value: str, mock_download: str, tmp_path: Path) -> None:
         url = "https://www.example.com/path"
         filepath = download_url(url, str(tmp_path))
@@ -146,7 +146,7 @@ class TestDownloadUrl:
             content = html_file.read()
             assert content == mock_html_value
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_url_no_output_dir(
         self, mock_html_value: str, mock_download: str, mock_open_file: MagicMock
     ) -> None:
@@ -157,7 +157,7 @@ class TestDownloadUrl:
         m_file_handle = mock_open_file()
         m_file_handle.write.assert_called_with(mock_html_value)
 
-    @run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
     def test_download_url_invalid_url(self) -> None:
         url = "invalid url"
         with patch(

@@ -325,6 +325,9 @@ markers = [
     "browser_use",
     "crawl4ai",
     "websockets",
+    "commsagent_discord",
+    "commsagent_slack",
+    "commsagent-telegram",
 ]
 
 [tool.black]

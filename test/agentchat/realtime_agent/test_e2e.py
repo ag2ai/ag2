@@ -14,7 +14,6 @@ from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
-from autogen.import_utils import run_for_optional_imports
 
 from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace

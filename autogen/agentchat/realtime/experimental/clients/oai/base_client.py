@@ -146,7 +146,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         """Connect to the OpenAI Realtime API."""
         try:
             if not self._client:
-                self._client =  AsyncOpenAI(
+                self._client = AsyncOpenAI(
                     api_key=self.config.get("api_key", None),
                     organization=self.config.get("organization", None),
                     project=self.config.get("project", None),
