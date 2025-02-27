@@ -61,6 +61,7 @@ dependencies = [
     "packaging",
     "asyncer==0.0.8",
     "fast-depends>=2.4.12,<3",
+    "httpx>=0.28.1,<1",
 ]
 
 [project.optional-dependencies]

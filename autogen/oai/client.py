@@ -1146,6 +1146,8 @@ class OpenAIWrapper:
                         logger.debug(f"config {i} failed", exc_info=True)
                         if i == last:
                             raise
+                    else:
+                        raise
                 else:
                     raise
             except (
