@@ -401,7 +401,7 @@ def test_chats_general(credentials_gpt_4o_mini: Credentials, tasks_work_dir: str
     # print(blogpost.summary, insights_and_blogpost)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_chats_exceptions(credentials_gpt_4o: Credentials, tasks_work_dir: str):
     financial_tasks = [
         """What are the full names of NVDA and TESLA.""",
