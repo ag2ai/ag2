@@ -91,6 +91,13 @@ a.internal-link::after {
     content: "\00A0↪";
 }
 
+.md-header, .md-tabs {
+    background-color: #000;
+}
+[data-md-color-scheme=slate] .md-header, [data-md-color-scheme=slate] .md-tabs {
+    background-color: #323A52;
+}
+
 .md-typeset h1,
 .md-typeset h2,
 .md-typeset h3,
@@ -145,6 +152,7 @@ a.internal-link::after {
     font-size: 1.5rem;
     line-height: 1.5rem;
     margin: 0px;
+    color: #000000de;
 }
 
 .md-typeset h2.hero-subtitle {
@@ -156,6 +164,7 @@ a.internal-link::after {
 
 p.hero-subtitle {
     margin: 0 0 1.25em;
+    color: #000000de;
 }
 
 .md-typeset a.hero-btn {
