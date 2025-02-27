@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .query_engine import VectorDbQueryEngine
+from .query_engine import RAGQueryEngine
 
-__all__ = ["VectorDbQueryEngine"]
+__all__ = ["RAGQueryEngine"]

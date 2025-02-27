@@ -21,8 +21,9 @@ from ....agentchat.contrib.swarm_agent import (
 )
 from ....doc_utils import export_module
 from ....oai.client import OpenAIWrapper
+from .chroma_query_engine import VectorChromaQueryEngine
 from .docling_doc_ingest_agent import DoclingDocIngestAgent
-from .docling_query_engine import DoclingMdQueryEngine
+from .inmemory_query_engine import InMemoryQueryEngine
 
 __all__ = ["DocAgent"]
 
@@ -35,8 +36,10 @@ DEFAULT_SYSTEM_MESSAGE = """
 """
 TASK_MANAGER_NAME = "TaskManagerAgent"
 TASK_MANAGER_SYSTEM_MESSAGE = """
-    You are a task manager agent. You would only do the following 2 tasks:
-    1. You update the context variables based on the task decisions (DocumentTask) from the DocumentTriageAgent.
+    You are a task manager agent. You can do one of 4 tasks:
+    1. You initiate the tasks which updates the context variables based on the task decisions (DocumentTask) from the DocumentTriageAgent.
+    If the DocumentTriageAgent has suggested any ingestions or queries, call initiate_tasks to record them.
+    Put all ingestion and query tasks into the one tool call.
         i.e. output
         {
             "ingestions": [
@@ -57,13 +60,19 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
                 }
             ]
         }
-    2. You would hand off control to the appropriate agent based on the context variables.
+    2. You hand off control to the ingest agent if there are any documents to ingest.
+    3. If there are no documents to ingest and there are queries to run, hand control off to the query agent.
+    4. If there are no documents to ingest and no queries to run, hand control off to the summary agent.
 
     Put all file paths and URLs into the ingestions. A http/https URL is also a valid path and should be ingested.
 
-    Please don't output anything else.
-
     Use the initiate_tasks tool to incorporate all ingestions and queries. Don't call it again until new ingestions or queries are raised.
+
+    New ingestations and queries may be raised from time to time, so use the initiate_tasks again if you see new ingestions/queries.
+
+    Use tools to transfer to the ingest agent, query agent, or summary agent based on the context variables.
+
+    IF CALLING A TOOL, ONLY CALL TOOLS ONCE IN YOUR ENTIRE RESPONSE.
     """
 DEFAULT_ERROR_SWARM_MESSAGE: str = """
 Document Agent failed to perform task.
@@ -135,6 +144,7 @@ class DocAgent(ConversableAgent):
         system_message: Optional[str] = None,
         parsed_docs_path: Optional[Union[str, Path]] = None,
         collection_name: Optional[str] = None,
+        query_engine: Optional[Union[VectorChromaQueryEngine, InMemoryQueryEngine]] = None,
     ):
         """Initialize the DocAgent.
 
@@ -160,6 +170,9 @@ class DocAgent(ConversableAgent):
         llm_config = llm_config or {}
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
+
+        if query_engine is None:
+            query_engine = VectorChromaQueryEngine(collection_name=collection_name)
 
         super().__init__(
             name=name,
@@ -204,7 +217,7 @@ class DocAgent(ConversableAgent):
             queries: list[Query],
             context_variables: dict[str, Any],
         ) -> SwarmResult:
-            """Initiate all document and query tasks by storing them in context for future reference."""
+            """Add documents to ingest and queries to answer when received."""
             logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
                 return SwarmResult(values="Task already initiated", context_variables=context_variables)
@@ -231,7 +244,6 @@ class DocAgent(ConversableAgent):
             ],
         )
 
-        query_engine = DoclingMdQueryEngine(collection_name=collection_name)
         self._data_ingestion_agent = DoclingDocIngestAgent(
             llm_config=llm_config,
             query_engine=query_engine,

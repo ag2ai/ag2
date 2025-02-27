@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["chromadb", "llama_index"], "rag")
-class DoclingMdQueryEngine:
+class VectorChromaQueryEngine:
     """
     This engine leverages Chromadb to persist document embeddings in a named collection
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
@@ -48,7 +48,7 @@ class DoclingMdQueryEngine:
         collection_name: Optional[str] = None,
     ) -> None:
         """
-        Initializes the DoclingMdQueryEngine with db_path, metadata, and embedding function and llm.
+        Initializes the VectorChromaQueryEngine with db_path, metadata, and embedding function and llm.
         Args:
             db_path: The file system path where Chromadb will store its persistent data.
                 If not specified, the default directory "./chroma" is used.
