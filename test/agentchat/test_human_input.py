@@ -8,14 +8,13 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 import autogen
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_get_human_input(credentials_gpt_4o_mini: Credentials):
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(

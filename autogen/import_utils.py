@@ -9,6 +9,7 @@ from contextlib import contextmanager, suppress
 from functools import wraps
 from logging import getLogger
 from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
+from unittest.mock import MagicMock
 
 __all__ = [
     "optional_import_block",
@@ -72,6 +73,7 @@ def get_missing_imports(modules: Union[str, Iterable[str]]) -> list[str]:
 
 
 T = TypeVar("T")
+G = TypeVar("G", bound=Union[Callable[..., Any], type])
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -328,7 +330,7 @@ def _mark_object(o: T, dep_target: str) -> T:
     return pytest_mark_o  # type: ignore[no-any-return]
 
 
-def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[G], G]:
     """Decorator to run a test if and only if optional modules are installed
 
     Args:
@@ -339,19 +341,27 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
     # if missing_modules:
     #     raise ImportError(f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'")
 
-    def decorator(o: T) -> T:
-        @wraps(o)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            missing_modules = get_missing_imports(modules)
-            if missing_modules:
-                raise ImportError(
-                    f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
-                )
-            return o(*args, **kwargs)
+    def decorator(o: G) -> G:
+        missing_modules = get_missing_imports(modules)
 
-        pytest_mark_o = _mark_object(wrapper, dep_target)
+        if isinstance(o, type):
+            wrapped = MagicMock(spec=o)
+            wrapped.side_effect = ImportError(
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+            )
+        else:
 
-        return pytest_mark_o  # type: ignore[no-any-return]
+            @wraps(o)
+            def wrapped(*args: Any, **kwargs: Any) -> Any:
+                if missing_modules:
+                    raise ImportError(
+                        f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+                    )
+                return o(*args, **kwargs)
+
+        pytest_mark_o: G = _mark_object(wrapped, dep_target)
+
+        return pytest_mark_o
 
     return decorator
 

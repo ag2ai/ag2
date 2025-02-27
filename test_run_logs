@@ -1,0 +1,1127 @@
+(not aux_neg_flag) or (not (openai or openai_realtime or gemini or anthropic or deepseek or ollama or bedrock or cerebras))
+============================= test session starts ==============================
+platform linux -- Python 3.10.13, pytest-8.3.4, pluggy-1.5.0 -- /home/tvrtko/ag2/.venv-core/bin/python
+cachedir: .pytest_cache
+rootdir: /home/tvrtko/ag2
+configfile: pyproject.toml
+testpaths: test
+plugins: asyncio-0.25.3, cov-6.0.0, anyio-4.8.0
+asyncio: mode=strict, asyncio_default_fixture_loop_scope=None
+collecting ... collected 929 items / 153 deselected / 776 selected
+run-last-failure: rerun previous 6 failures first
+
+test/agents/experimental/document_agent/test_docagent.py::test_document_agent_init SKIPPEDll ag2[rag]') [  0%]
+test/test_browser_utils.py::test_simple_text_browser FAILED              [  0%]
+test/website/test_generate_api_references.py::test_generate_mint_json_from_template FAILED [  0%]
+test/website/test_generate_api_references.py::test_generate_mint_json_existing_file FAILED [  0%]
+test/website/test_generate_api_references.py::test_generate_mint_json_missing_template FAILED [  0%]
+test/website/test_generate_api_references.py::TestSplitReferenceFilesBySymbol::test_split_reference_by_symbols FAILED [  0%]
+test/agentchat/realtime_agent/clients/test_gemini_realtime_client.py::TestGeminiRealtimeClient::test_init PASSED [  0%]
+test/agentchat/realtime_agent/clients/test_oai_realtime_client.py::TestOAIRealtimeClient::test_init PASSED [  1%]
+test/agentchat/realtime_agent/test_realtime_agent.py::TestRealtimeAgent::test_register_tools[f-f-False-4_0] PASSED [  1%]
+test/agentchat/realtime_agent/test_realtime_agent.py::TestRealtimeAgent::test_register_tools[f_async-f_async-True-4_0] PASSED [  1%]
+test/agentchat/realtime_agent/test_realtime_agent.py::TestRealtimeAgent::test_register_tools[f-f-False-4_1] PASSED [  1%]
+test/agentchat/realtime_agent/test_realtime_agent.py::TestRealtimeAgent::test_register_tools[f_async-f_async-True-4_1] PASSED [  1%]
+test/agentchat/realtime_agent/test_realtime_agent.py::TestRealtimeAgent::test_register_tools[f_static-f_static-False-4] PASSED [  1%]
+test/agentchat/realtime_agent/test_realtime_agent.py::TestRealtimeAgent::test_register_tools[f_static_async-f_static_async-True-4] PASSED [  1%]
+test/agentchat/realtime_agent/test_realtime_observer.py::TestRealtimeObserver::test_shutdown PASSED [  1%]
+test/agentchat/realtime_agent/test_submodule.py::test_import PASSED      [  2%]
+test/agentchat/realtime_agent/test_submodule.py::test_import_clients PASSED [  2%]
+test/agentchat/test_agent_file_logging.py::test_start PASSED             [  2%]
+test/agentchat/test_agent_file_logging.py::test_log_chat_completion PASSED [  2%]
+test/agentchat/test_agent_file_logging.py::test_log_function_use PASSED  [  2%]
+test/agentchat/test_agent_file_logging.py::test_log_new_agent PASSED     [  2%]
+test/agentchat/test_agent_file_logging.py::test_log_event PASSED         [  2%]
+test/agentchat/test_agent_file_logging.py::test_log_new_wrapper PASSED   [  2%]
+test/agentchat/test_agent_file_logging.py::test_log_new_client PASSED    [  3%]
+test/agentchat/test_agent_setup_with_use_docker_settings.py::test_agent_setup_with_code_execution_off PASSED [  3%]
+test/agentchat/test_agent_setup_with_use_docker_settings.py::test_agent_setup_with_use_docker_false PASSED [  3%]
+test/agentchat/test_agent_setup_with_use_docker_settings.py::test_agent_setup_with_env_variable_false_and_docker_running PASSED [  3%]
+test/agentchat/test_agent_setup_with_use_docker_settings.py::test_agent_setup_with_default_and_docker_running PASSED [  3%]
+test/agentchat/test_agent_setup_with_use_docker_settings.py::test_raises_error_agent_setup_with_default_and_docker_not_running SKIPPED [  3%]
+test/agentchat/test_agent_setup_with_use_docker_settings.py::test_raises_error_agent_setup_with_env_variable_true_and_docker_not_running SKIPPED [  3%]
+test/agentchat/test_agent_setup_with_use_docker_settings.py::test_agent_setup_with_env_variable_true_and_docker_running PASSED [  3%]
+test/agentchat/test_agent_usage.py::test_agent_usage PASSED              [  4%]
+test/agentchat/test_agentchat_utils.py::test_tag_parsing[test_case0] PASSED [  4%]
+test/agentchat/test_agentchat_utils.py::test_tag_parsing[test_case1] PASSED [  4%]
+test/agentchat/test_agentchat_utils.py::test_tag_parsing[test_case2] PASSED [  4%]
+test/agentchat/test_agentchat_utils.py::test_tag_parsing[test_case3] PASSED [  4%]
+test/agentchat/test_agentchat_utils.py::test_tag_parsing[test_case4] PASSED [  4%]
+test/agentchat/test_agentchat_utils.py::test_tag_parsing[test_case5] PASSED [  4%]
+test/agentchat/test_agentchat_utils.py::test_tag_parsing[test_case6] PASSED [  5%]
+test/agentchat/test_chats.py::test_chat_messages_for_summary PASSED      [  5%]
+test/agentchat/test_chats.py::test_chats_exceptions PASSED               [  5%]
+test/agentchat/test_chats.py::test_post_process_carryover_item PASSED    [  5%]
+test/agentchat/test_conversable_agent.py::test_conversable_agent_name_with_white_space[agent name] PASSED [  5%]
+test/agentchat/test_conversable_agent.py::test_conversable_agent_name_with_white_space[agent_name ] PASSED [  5%]
+test/agentchat/test_conversable_agent.py::test_conversable_agent_name_with_white_space[ agent\nname] PASSED [  5%]
+test/agentchat/test_conversable_agent.py::test_conversable_agent_name_with_white_space[ agent\tname] PASSED [  5%]
+test/agentchat/test_conversable_agent.py::test_sync_trigger PASSED       [  6%]
+test/agentchat/test_conversable_agent.py::test_async_trigger PASSED      [  6%]
+test/agentchat/test_conversable_agent.py::test_async_trigger_in_sync_chat PASSED [  6%]
+test/agentchat/test_conversable_agent.py::test_sync_trigger_in_async_chat PASSED [  6%]
+test/agentchat/test_conversable_agent.py::test_context PASSED            [  6%]
+test/agentchat/test_conversable_agent.py::test_generate_code_execution_reply PASSED [  6%]
+test/agentchat/test_conversable_agent.py::test_max_consecutive_auto_reply PASSED [  6%]
+test/agentchat/test_conversable_agent.py::test_conversable_agent PASSED  [  6%]
+test/agentchat/test_conversable_agent.py::test_generate_reply PASSED     [  7%]
+test/agentchat/test_conversable_agent.py::test_generate_reply_raises_on_messages_and_sender_none PASSED [  7%]
+test/agentchat/test_conversable_agent.py::test_a_generate_reply_raises_on_messages_and_sender_none PASSED [  7%]
+test/agentchat/test_conversable_agent.py::test_generate_reply_with_messages_and_sender_none PASSED [  7%]
+test/agentchat/test_conversable_agent.py::test_a_generate_reply_with_messages_and_sender_none PASSED [  7%]
+test/agentchat/test_conversable_agent.py::test_update_function_signature_and_register_functions PASSED [  7%]
+test/agentchat/test_conversable_agent.py::test__wrap_function_sync PASSED [  7%]
+test/agentchat/test_conversable_agent.py::test__wrap_function_async PASSED [  7%]
+test/agentchat/test_conversable_agent.py::test_register_for_llm PASSED   [  8%]
+test/agentchat/test_conversable_agent.py::test_register_for_llm_api_style_function PASSED [  8%]
+test/agentchat/test_conversable_agent.py::test_register_for_llm_without_description PASSED [  8%]
+test/agentchat/test_conversable_agent.py::test_register_for_llm_with_docstring PASSED [  8%]
+test/agentchat/test_conversable_agent.py::test_register_for_llm_without_LLM PASSED [  8%]
+test/agentchat/test_conversable_agent.py::test_register_for_llm_without_configuration PASSED [  8%]
+test/agentchat/test_conversable_agent.py::test_register_for_llm_without_model_name PASSED [  8%]
+test/agentchat/test_conversable_agent.py::test_register_for_execution PASSED [  9%]
+test/agentchat/test_conversable_agent.py::test_register_functions PASSED [  9%]
+test/agentchat/test_conversable_agent.py::test_process_before_send PASSED [  9%]
+test/agentchat/test_conversable_agent.py::test_messages_with_carryover PASSED [  9%]
+test/agentchat/test_conversable_agent.py::test_chat_history PASSED       [  9%]
+test/agentchat/test_conversable_agent.py::test_http_client PASSED        [  9%]
+test/agentchat/test_conversable_agent.py::test_adding_duplicate_function_warning PASSED [  9%]
+test/agentchat/test_conversable_agent.py::test_process_gemini_carryover PASSED [  9%]
+test/agentchat/test_conversable_agent.py::test_process_carryover PASSED  [ 10%]
+test/agentchat/test_conversable_agent.py::test_handle_gemini_carryover PASSED [ 10%]
+test/agentchat/test_conversable_agent.py::test_handle_carryover PASSED   [ 10%]
+test/agentchat/test_conversable_agent.py::test_context_variables PASSED  [ 10%]
+test/agentchat/test_conversable_agent.py::test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value SKIPPEDn
+google.genai)                                                            [ 10%]
+test/agentchat/test_conversable_agent.py::test_invalid_functions_parameter PASSED [ 10%]
+test/agentchat/test_conversable_agent.py::test_update_system_message PASSED [ 10%]
+test/agentchat/test_conversable_agent.py::test_tools_property PASSED     [ 10%]
+test/agentchat/test_conversable_agent.py::test_add_tool_for_llm PASSED   [ 11%]
+test/agentchat/test_conversable_agent.py::test_add_tool_for_llm_invalid_type PASSED [ 11%]
+test/agentchat/test_conversable_agent.py::test_remove_tool_for_llm PASSED [ 11%]
+test/agentchat/test_conversable_agent.py::test_remove_tool_by_name_for_llm PASSED [ 11%]
+test/agentchat/test_conversable_agent.py::test_remove_tool_for_llm_not_found PASSED [ 11%]
+test/agentchat/test_conversable_agent.py::test_tool_integration PASSED   [ 11%]
+test/agentchat/test_conversable_agent.py::test_create_or_get_executor PASSED [ 11%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_annotated-f_with_annotated-False-6] PASSED [ 11%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_annotated_async-f_with_annotated_async-True-6] PASSED [ 12%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_without_annotated-f_without_annotated-False-7] PASSED [ 12%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_without_annotated_async-f_without_annotated_async-True-7] PASSED [ 12%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_annotated_and_depends-f_with_annotated_and_depends-False-8] PASSED [ 12%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_annotated_and_depends_async-f_with_annotated_and_depends_async-True-8] PASSED [ 12%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_multiple_depends-f_with_multiple_depends-False-9] PASSED [ 12%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_multiple_depends_async-f_with_multiple_depends_async-True-9] PASSED [ 12%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_wihout_base_context-f_wihout_base_context-False-7] PASSED [ 13%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_wihout_base_context_async-f_wihout_base_context_async-True-7] PASSED [ 13%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_default_depends-f_with_default_depends-False-7] PASSED [ 13%]
+test/agentchat/test_dependancy_injection.py::TestDependencyInjection::test_register_tools[f_with_default_depends_async-f_with_default_depends_async-True-7] PASSED [ 13%]
+test/agentchat/test_function_and_tool_calling.py::test_generate_function_call_reply_on_function_call_message[True] PASSED [ 13%]
+test/agentchat/test_function_and_tool_calling.py::test_generate_function_call_reply_on_function_call_message[False] PASSED [ 13%]
+test/agentchat/test_function_and_tool_calling.py::test_a_generate_function_call_reply_on_function_call_message[True] PASSED [ 13%]
+test/agentchat/test_function_and_tool_calling.py::test_a_generate_function_call_reply_on_function_call_message[False] PASSED [ 13%]
+test/agentchat/test_function_and_tool_calling.py::test_generate_tool_calls_reply_on_function_call_message[True] PASSED [ 14%]
+test/agentchat/test_function_and_tool_calling.py::test_generate_tool_calls_reply_on_function_call_message[False] PASSED [ 14%]
+test/agentchat/test_function_and_tool_calling.py::test_a_generate_tool_calls_reply_on_function_call_message[True] PASSED [ 14%]
+test/agentchat/test_function_and_tool_calling.py::test_a_generate_tool_calls_reply_on_function_call_message[False] PASSED [ 14%]
+test/agentchat/test_function_call.py::test_json_extraction PASSED        [ 14%]
+test/agentchat/test_function_call.py::test_execute_function PASSED       [ 14%]
+test/agentchat/test_function_call.py::test_a_execute_function PASSED     [ 14%]
+test/agentchat/test_function_call_groupchat.py::test_no_function_map PASSED [ 14%]
+test/agentchat/test_groupchat.py::test_groupchat_init PASSED             [ 15%]
+test/agentchat/test_groupchat.py::test_func_call_groupchat PASSED        [ 15%]
+test/agentchat/test_groupchat.py::test_chat_manager PASSED               [ 15%]
+test/agentchat/test_groupchat.py::test_speaker_selection_method PASSED   [ 15%]
+test/agentchat/test_groupchat.py::test_invalid_allow_repeat_speaker PASSED [ 15%]
+test/agentchat/test_groupchat.py::test_n_agents_less_than_3 PASSED       [ 15%]
+test/agentchat/test_groupchat.py::test_plugin PASSED                     [ 15%]
+test/agentchat/test_groupchat.py::test_agent_mentions PASSED             [ 15%]
+test/agentchat/test_groupchat.py::test_termination PASSED                [ 16%]
+test/agentchat/test_groupchat.py::test_next_agent PASSED                 [ 16%]
+test/agentchat/test_groupchat.py::test_send_intros PASSED                [ 16%]
+test/agentchat/test_groupchat.py::test_selection_helpers PASSED          [ 16%]
+test/agentchat/test_groupchat.py::test_init_default_parameters PASSED    [ 16%]
+test/agentchat/test_groupchat.py::test_graph_parameters PASSED           [ 16%]
+test/agentchat/test_groupchat.py::test_graceful_exit_before_max_round PASSED [ 16%]
+test/agentchat/test_groupchat.py::test_clear_agents_history PASSED       [ 17%]
+test/agentchat/test_groupchat.py::test_get_agent_by_name PASSED          [ 17%]
+test/agentchat/test_groupchat.py::test_get_nested_agents_in_groupchat PASSED [ 17%]
+test/agentchat/test_groupchat.py::test_nested_teams_chat PASSED          [ 17%]
+test/agentchat/test_groupchat.py::test_custom_speaker_selection PASSED   [ 17%]
+test/agentchat/test_groupchat.py::test_custom_speaker_selection_with_transition_graph PASSED [ 17%]
+test/agentchat/test_groupchat.py::test_custom_speaker_selection_overrides_transition_graph PASSED [ 17%]
+test/agentchat/test_groupchat.py::test_role_for_select_speaker_messages PASSED [ 17%]
+test/agentchat/test_groupchat.py::test_select_speaker_message_and_prompt_templates PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_speaker_selection_agent_name_match PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_role_for_reflection_summary PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_speaker_selection_auto_process_result PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_speaker_selection_validate_speaker_name PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_select_speaker_auto_messages PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_manager_messages_to_string PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_manager_messages_from_string PASSED [ 18%]
+test/agentchat/test_groupchat.py::test_manager_resume_functions PASSED   [ 19%]
+test/agentchat/test_groupchat.py::test_manager_resume_returns PASSED     [ 19%]
+test/agentchat/test_groupchat.py::test_manager_resume_messages PASSED    [ 19%]
+test/agentchat/test_groupchat.py::test_custom_model_client PASSED        [ 19%]
+test/agentchat/test_groupchat.py::test_select_speaker_transform_messages PASSED [ 19%]
+test/agentchat/test_groupchat.py::test_manager_resume_message_assignment PASSED [ 19%]
+test/agentchat/test_groupchat.py::test_groupchatmanager_no_llm_config PASSED [ 19%]
+test/agentchat/test_math_user_proxy_agent.py::test_add_remove_print PASSED [ 19%]
+test/agentchat/test_math_user_proxy_agent.py::test_execute_one_python_code PASSED [ 20%]
+test/agentchat/test_math_user_proxy_agent.py::test_execute_one_wolfram_query PASSED [ 20%]
+test/agentchat/test_math_user_proxy_agent.py::test_generate_prompt PASSED [ 20%]
+test/agentchat/test_nested.py::test_sync_nested_chat PASSED              [ 20%]
+test/agentchat/test_nested.py::test_async_nested_chat PASSED             [ 20%]
+test/agentchat/test_nested.py::test_async_nested_chat_chat_id_validation PASSED [ 20%]
+test/agentchat/test_nested.py::test_sync_nested_chat_in_group PASSED     [ 20%]
+test/agentchat/test_nested.py::test_async_nested_chat_in_group PASSED    [ 21%]
+test/agentchat/test_structured_output.py::test_structured_output_*****ting PASSED [ 21%]
+test/agentchat/test_tool_calls.py::test_multi_tool_call PASSED           [ 21%]
+test/agentchat/test_tool_calls.py::test_async_multi_tool_call PASSED     [ 21%]
+test/agents/contrib/time/test_timereplyagent.py::TestTimeReplyAgent::test_init PASSED [ 21%]
+test/agents/contrib/time/test_timereplyagent.py::TestTimeReplyAgent::test_output PASSED [ 21%]
+test/agents/contrib/time/test_timetoolagent.py::TestTimeToolAgent::test_init PASSED [ 21%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_valid_url PASSED [ 21%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_invalid_url_without_scheme PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_invalid_url_without_network_location PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_url_with_invalid_scheme PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_empty_url_string PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_url_string_with_whitespace PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_url_string_with_special_characters PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_attribute_error PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestIsUrl::test_logger_error PASSED [ 22%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_non_string_input SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_download_with_valid_url SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_download_with_invalid_url SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_chrome_driver_not_installed SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_chrome_driver_connection_error SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_download_url_valid_html SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_download_url_non_html SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_download_url_no_extension SKIPPEDll ag2[rag]') [ 23%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_download_url_no_output_dir SKIPPEDll ag2[rag]') [ 24%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_download_url_invalid_url SKIPPEDll ag2[rag]') [ 24%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_list_files PASSED [ 24%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_handle_input_directory PASSED [ 24%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_handle_input_file PASSED [ 24%]
+test/agents/experimental/document_agent/test_document_utils.py::TestDownloadUrl::test_handle_input_invalid_input PASSED [ 24%]
+test/cache/test_cache.py::TestCache::test_cosmos_close PASSED            [ 24%]
+test/cache/test_cache.py::TestCache::test_cosmos_context_manager PASSED  [ 25%]
+test/cache/test_cache.py::TestCache::test_cosmos_get_set PASSED          [ 25%]
+test/cache/test_cache.py::TestCache::test_cosmosdb_cache_initialization PASSED [ 25%]
+test/cache/test_cache.py::TestCache::test_redis_cache_initialization PASSED [ 25%]
+test/cache/test_cache.py::TestCache::test_redis_close PASSED             [ 25%]
+test/cache/test_cache.py::TestCache::test_redis_context_manager PASSED   [ 25%]
+test/cache/test_cache.py::TestCache::test_redis_get_set PASSED           [ 25%]
+test/cache/test_disk_cache.py::TestDiskCache::test_close PASSED          [ 25%]
+test/cache/test_disk_cache.py::TestDiskCache::test_context_manager PASSED [ 26%]
+test/cache/test_disk_cache.py::TestDiskCache::test_get PASSED            [ 26%]
+test/cache/test_disk_cache.py::TestDiskCache::test_init PASSED           [ 26%]
+test/cache/test_disk_cache.py::TestDiskCache::test_set PASSED            [ 26%]
+test/cache/test_in_memory_cache.py::test_prefixed_key PASSED             [ 26%]
+test/cache/test_in_memory_cache.py::test_get_with_default_value PASSED   [ 26%]
+test/cache/test_in_memory_cache.py::test_get_without_default_value PASSED [ 26%]
+test/cache/test_in_memory_cache.py::test_get_with_set_value PASSED       [ 26%]
+test/cache/test_in_memory_cache.py::test_get_with_set_value_and_seed PASSED [ 27%]
+test/cache/test_in_memory_cache.py::test_set PASSED                      [ 27%]
+test/cache/test_in_memory_cache.py::test_set_with_seed PASSED            [ 27%]
+test/cache/test_in_memory_cache.py::test_context_manager PASSED          [ 27%]
+test/coding/test_commandline_code_executor.py::test_execution_policy_enforcement[python-False] PASSED [ 27%]
+test/coding/test_commandline_code_executor.py::test_execution_policy_enforcement[bash-False] PASSED [ 27%]
+test/coding/test_commandline_code_executor.py::test_execution_policy_enforcement[html-False] PASSED [ 27%]
+test/coding/test_commandline_code_executor.py::test_execution_policy_enforcement[javascript-False] PASSED [ 27%]
+test/coding/test_commandline_code_executor.py::test_is_code_executor[LocalCommandLineCodeExecutor] PASSED [ 28%]
+test/coding/test_commandline_code_executor.py::test_is_code_executor[DockerCommandLineCodeExecutor] PASSED [ 28%]
+test/coding/test_commandline_code_executor.py::test_create_local PASSED  [ 28%]
+test/coding/test_commandline_code_executor.py::test_create_docker PASSED [ 28%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_init[LocalCommandLineCodeExecutor] PASSED [ 28%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_init[DockerCommandLineCodeExecutor] PASSED [ 28%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_execute_code[LocalCommandLineCodeExecutor-python] PASSED [ 28%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_execute_code[LocalCommandLineCodeExecutor-Python] PASSED [ 28%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_execute_code[LocalCommandLineCodeExecutor-py] PASSED [ 29%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_execute_code[DockerCommandLineCodeExecutor-python] PASSED [ 29%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_execute_code[DockerCommandLineCodeExecutor-Python] PASSED [ 29%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_execute_code[DockerCommandLineCodeExecutor-py] PASSED [ 29%]
+test/coding/test_commandline_code_executor.py::test_local_commandline_code_executor_save_files[LocalCommandLineCodeExecutor] PASSED [ 29%]
+test/coding/test_commandline_code_executor.py::test_local_commandline_code_executor_save_files[DockerCommandLineCodeExecutor] PASSED [ 29%]
+test/coding/test_commandline_code_executor.py::test_local_commandline_code_executor_save_files_only[LocalCommandLineCodeExecutor] PASSED [ 29%]
+test/coding/test_commandline_code_executor.py::test_local_commandline_code_executor_save_files_only[DockerCommandLineCodeExecutor] PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_commandline_code_executor_timeout[LocalCommandLineCodeExecutor] PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_commandline_code_executor_timeout[DockerCommandLineCodeExecutor] PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_local_commandline_code_executor_restart PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_docker_commandline_code_executor_restart PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_policy_override PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_conversable_agent_code_execution[LocalCommandLineCodeExecutor] PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_commandline_executor_conversable_agent_code_execution[DockerCommandLineCodeExecutor] PASSED [ 30%]
+test/coding/test_commandline_code_executor.py::test_dangerous_commands[bash-rm -rf /-Use of 'rm -rf' command is not allowed.] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_dangerous_commands[bash-mv myFile /dev/null-Moving files to /dev/null is not allowed.] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_dangerous_commands[bash-dd if=/dev/zero of=/dev/sda-Use of 'dd' command is not allowed.] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_dangerous_commands[bash-echo Hello > /dev/sda-Overwriting disk blocks directly is not allowed.] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_dangerous_commands[bash-:(){ :|:& };:-Fork bombs are not allowed.] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_invalid_relative_path[LocalCommandLineCodeExecutor] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_invalid_relative_path[DockerCommandLineCodeExecutor] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_valid_relative_path[LocalCommandLineCodeExecutor] PASSED [ 31%]
+test/coding/test_commandline_code_executor.py::test_valid_relative_path[DockerCommandLineCodeExecutor] PASSED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[ps1-LocalCommandLineCodeExecutor] SKIPPED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[ps1-DockerCommandLineCodeExecutor] SKIPPED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[pwsh-LocalCommandLineCodeExecutor] SKIPPED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[pwsh-DockerCommandLineCodeExecutor] SKIPPED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[powershell-LocalCommandLineCodeExecutor] SKIPPED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[powershell-DockerCommandLineCodeExecutor] SKIPPED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[bash-LocalCommandLineCodeExecutor] PASSED [ 32%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[bash-DockerCommandLineCodeExecutor] PASSED [ 33%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[sh-LocalCommandLineCodeExecutor] PASSED [ 33%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[sh-DockerCommandLineCodeExecutor] PASSED [ 33%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[shell-LocalCommandLineCodeExecutor] PASSED [ 33%]
+test/coding/test_commandline_code_executor.py::test_silent_pip_install[shell-DockerCommandLineCodeExecutor] PASSED [ 33%]
+test/coding/test_commandline_code_executor.py::test_local_executor_with_custom_python_env PASSED [ 33%]
+test/coding/test_commandline_code_executor.py::test_local_executor_with_custom_python_env_in_local_relative_path PASSED [ 33%]
+test/coding/test_factory.py::test_create_unknown PASSED                  [ 34%]
+test/coding/test_markdown_code_extractor.py::test_extract_code PASSED    [ 34%]
+test/coding/test_user_defined_functions.py::test_can_load_function_with_reqs[LocalCommandLineCodeExecutor] PASSED [ 34%]
+test/coding/test_user_defined_functions.py::test_can_load_function[LocalCommandLineCodeExecutor] PASSED [ 34%]
+test/coding/test_user_defined_functions.py::test_fails_for_function_incorrect_import[LocalCommandLineCodeExecutor] PASSED [ 34%]
+test/coding/test_user_defined_functions.py::test_fails_for_function_incorrect_dep[LocalCommandLineCodeExecutor] PASSED [ 34%]
+test/coding/test_user_defined_functions.py::test_*****ted_prompt[LocalCommandLineCodeExecutor] PASSED [ 34%]
+test/coding/test_user_defined_functions.py::test_*****ted_prompt_str_func[LocalCommandLineCodeExecutor] PASSED [ 34%]
+test/coding/test_user_defined_functions.py::test_can_load_str_function_with_reqs[LocalCommandLineCodeExecutor] PASSED [ 35%]
+test/coding/test_user_defined_functions.py::test_cant_load_broken_str_function_with_reqs[LocalCommandLineCodeExecutor] PASSED [ 35%]
+test/coding/test_user_defined_functions.py::test_cant_run_broken_str_function_with_reqs[LocalCommandLineCodeExecutor] PASSED [ 35%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_number_of_factories PASSED [ 35%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_get_provider_and_api_key[config_list0-*****0] PASSED [ 35%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_get_provider_and_api_key[config_list1-*****1] PASSED [ 35%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_get_provider_and_api_key[config_list2-*****2] PASSED [ 35%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_get_provider_and_api_key[config_list3-*****3] PASSED [ 35%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_get_provider_and_api_key[config_list4-*****4] PASSED [ 36%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_get_provider_and_api_key[config_list5-*****5] PASSED [ 36%]
+test/interop/litellm/test_litellm_config_factory.py::TestLiteLLmConfigFactory::test_get_provider_and_api_key[config_list6-*****6] PASSED [ 36%]
+test/interop/test_interoperability.py::TestInteroperability::test_supported_types PASSED [ 36%]
+test/interop/test_interoperability.py::TestInteroperability::test_crewai PASSED [ 36%]
+test/interop/test_interoperability.py::TestInteroperability::test_langchain SKIPPED [ 36%]
+test/interop/test_interoperable.py::test_interoperable PASSED            [ 36%]
+test/io/test_base.py::TestIOStream::test_initial_default_io_stream PASSED [ 36%]
+test/io/test_base.py::TestIOStream::test_set_default_io_stream PASSED    [ 37%]
+test/io/test_base.py::TestIOStream::test_get_default_on_new_thread PASSED [ 37%]
+test/io/test_console.py::TestConsoleIO::test_print PASSED                [ 37%]
+test/io/test_console.py::TestConsoleIO::test_send PASSED                 [ 37%]
+test/io/test_console.py::TestConsoleIO::test_input PASSED                [ 37%]
+test/io/test_console.py::TestConsoleIO::test_input_password[] PASSED     [ 37%]
+test/io/test_console.py::TestConsoleIO::test_input_password[Password: ] PASSED [ 37%]
+test/io/test_console.py::TestConsoleIO::test_input_password[Enter you password:] PASSED [ 38%]
+test/messages/test_agent_messages.py::TestToolResponseMessage::test_print PASSED [ 38%]
+test/messages/test_agent_messages.py::TestFunctionResponseMessage::test_print[message0] PASSED [ 38%]
+test/messages/test_agent_messages.py::TestFunctionResponseMessage::test_print[message1] PASSED [ 38%]
+test/messages/test_agent_messages.py::TestFunctionCallMessage::test_print PASSED [ 38%]
+test/messages/test_agent_messages.py::TestToolCallMessage::test_print[assistant] PASSED [ 38%]
+test/messages/test_agent_messages.py::TestToolCallMessage::test_print[None] PASSED [ 38%]
+test/messages/test_agent_messages.py::TestTextMessage::test_print_messages[message0-hello {name}] PASSED [ 38%]
+test/messages/test_agent_messages.py::TestTextMessage::test_print_messages[message1-Please extract table from the following image and convert it to Markdown.] PASSED [ 39%]
+test/messages/test_agent_messages.py::TestTextMessage::test_print_messages[message2-<image>] PASSED [ 39%]
+test/messages/test_agent_messages.py::TestTextMessage::test_print_context_lambda_message PASSED [ 39%]
+test/messages/test_agent_messages.py::TestTextMessage::test_serialization PASSED [ 39%]
+test/messages/test_agent_messages.py::TestPostCarryoverProcessingMessage::test_print PASSED [ 39%]
+test/messages/test_agent_messages.py::TestPostCarryoverProcessingMessage::test__process_carryover[This is a test message 1-This is a test message 1] PASSED [ 39%]
+test/messages/test_agent_messages.py::TestPostCarryoverProcessingMessage::test__process_carryover[carryover1-This is a test message 1\nThis is a test message 2] PASSED [ 39%]
+test/messages/test_agent_messages.py::TestPostCarryoverProcessingMessage::test__process_carryover[carryover2-This is a test message 1\nThis is a test message 2] PASSED [ 39%]
+test/messages/test_agent_messages.py::TestPostCarryoverProcessingMessage::test__process_carryover[carryover3-1\n2\n3] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestClearAgentsHistoryMessage::test_print[None-None-Clearing history for all agents.] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestClearAgentsHistoryMessage::test_print[None-5-Clearing history for all agents except last 5 messages.] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestClearAgentsHistoryMessage::test_print[agent2-None-Clearing history for clear_agent.] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestClearAgentsHistoryMessage::test_print[agent3-5-Clearing history for clear_agent except last 5 messages.] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestSpeakerAttemptSuccessfulMessage::test_print[mentions0-\x1b[32m>>>>>>>> Select speaker attempt 1 of 3 successfully sel*****: agent_1\x1b[0m] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestSpeakerAttemptFailedMultipleAgentsMessage::test_print[mentions0-\x1b[31m>>>>>>>> Select speaker attempt 1 of 3 failed as it included multiple agent names.\x1b[0m] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestSpeakerAttemptFailedNoAgentsMessage::test_print[mentions0-\x1b[31m>>>>>>>> Select speaker attempt #1 failed as it did not include any agent names.\x1b[0m] PASSED [ 40%]
+test/messages/test_agent_messages.py::TestGroupChatResumeMessage::test_print PASSED [ 41%]
+test/messages/test_agent_messages.py::TestGroupChatRunChatMessage::test_print PASSED [ 41%]
+test/messages/test_agent_messages.py::TestTerminationAndHumanReplyMessage::test_print PASSED [ 41%]
+test/messages/test_agent_messages.py::TestUsingAutoReplyMessage::test_print PASSED [ 41%]
+test/messages/test_agent_messages.py::TestExecuteCodeBlockMessage::test_print PASSED [ 41%]
+test/messages/test_agent_messages.py::TestExecuteFunctionMessage::test_print PASSED [ 41%]
+test/messages/test_agent_messages.py::TestExecutedFunctionMessage::test_print PASSED [ 41%]
+test/messages/test_agent_messages.py::TestSelectSpeakerMessage::test_print PASSED [ 42%]
+test/messages/test_agent_messages.py::TestSelectSpeakerTryCountExceededMessage::test_print PASSED [ 42%]
+test/messages/test_agent_messages.py::TestSelectSpeakerInvalidInputMessage::test_print PASSED [ 42%]
+test/messages/test_agent_messages.py::TestClearConversableAgentHistoryMessage::test_print PASSED [ 42%]
+test/messages/test_agent_messages.py::TestClearConversableAgentHistoryWarningMessage::test_print PASSED [ 42%]
+test/messages/test_agent_messages.py::TestGenerateCodeExecutionReplyMessage::test_print[code_blocks0-*****0] PASSED [ 42%]
+test/messages/test_agent_messages.py::TestGenerateCodeExecutionReplyMessage::test_print[code_blocks1-*****1] PASSED [ 42%]
+test/messages/test_agent_messages.py::TestConversableAgentUsageSummaryNoCostIncurredMessage::test_print PASSED [ 42%]
+test/messages/test_agent_messages.py::TestConversableAgentUsageSummaryMessage::test_print PASSED [ 43%]
+test/messages/test_base_message.py::TestBaseMessage::test_model_dump_validate PASSED [ 43%]
+test/messages/test_base_message.py::TestBaseMessage::test_single_content_parameter_message PASSED [ 43%]
+test/messages/test_client_messages.py::test__change_usage_summary_*****[actual_usage_summary0-total_usage_summary0-*****0] PASSED [ 43%]
+test/messages/test_client_messages.py::test__change_usage_summary_*****[None-None-*****1] PASSED [ 43%]
+test/messages/test_client_messages.py::TestUsageSummaryMessage::test_usage_summary_print_same_actual_and_total[actual_usage_summary0-total_usage_summary0] PASSED [ 43%]
+test/messages/test_client_messages.py::TestUsageSummaryMessage::test_usage_summary_print_different_actual_and_total[actual_usage_summary0-total_usage_summary0] PASSED [ 43%]
+test/messages/test_client_messages.py::TestUsageSummaryMessage::test_usage_summary_print_none_actual_and_total[None-None] PASSED [ 43%]
+test/messages/test_client_messages.py::TestStreamMessage::test_print PASSED [ 44%]
+test/messages/test_print_message.py::TestPrintMessage::test_print PASSED [ 44%]
+test/oai/test_client.py::TestOpenAIClientBadRequestsError::test_is_agent_name_error_message PASSED [ 44%]
+test/oai/test_client.py::TestOpenAIClientBadRequestsError::test_handle_*****_bad_request_error[Invalid 'messages[0].name': string does not match pattern. E***** a string that matches the pattern ...-True] PASSED [ 44%]
+test/oai/test_client.py::TestOpenAIClientBadRequestsError::test_handle_*****_bad_request_error[Invalid 'messages[1].name': string does not match pattern. E***** a string that matches the pattern ...-True] PASSED [ 44%]
+test/oai/test_client.py::TestOpenAIClientBadRequestsError::test_handle_*****_bad_request_error[Invalid 'messages[0].something': string does not match pattern. E***** a string that matches the pattern ...-False] PASSED [ 44%]
+test/oai/test_client.py::TestDeepSeekPatch::test_move_system_message_to_beginning[messages0-*****_messages0] PASSED [ 44%]
+test/oai/test_client.py::TestDeepSeekPatch::test_move_system_message_to_beginning[messages1-*****_messages1] PASSED [ 44%]
+test/oai/test_client.py::TestDeepSeekPatch::test_move_system_message_to_beginning[messages2-*****_messages2] PASSED [ 45%]
+test/oai/test_client.py::TestDeepSeekPatch::test_move_system_message_to_beginning[messages3-*****_messages3] PASSED [ 45%]
+test/oai/test_client.py::TestDeepSeekPatch::test_patch_messages_for_deepseek_reasoner[deepseek-reasoner-True] PASSED [ 45%]
+test/oai/test_client.py::TestDeepSeekPatch::test_patch_messages_for_deepseek_reasoner[deepseek-False] PASSED [ 45%]
+test/oai/test_client.py::TestDeepSeekPatch::test_patch_messages_for_deepseek_reasoner[something-else-False] PASSED [ 45%]
+test/oai/test_client.py::TestO1::test_reasoning_remove_unsupported_params PASSED [ 45%]
+test/oai/test_client.py::TestO1::test_oai_reasoning_max_tokens_replacement PASSED [ 45%]
+test/oai/test_client.py::TestO1::test_oai_reasoning_system_message_handling[o1-mini-True] PASSED [ 46%]
+test/oai/test_client.py::TestO1::test_oai_reasoning_system_message_handling[o1-preview-True] PASSED [ 46%]
+test/oai/test_client.py::TestO1::test_oai_reasoning_system_message_handling[o1-mini-2024-09-12-True] PASSED [ 46%]
+test/oai/test_client.py::TestO1::test_oai_reasoning_system_message_handling[o1-preview-2024-09-12-True] PASSED [ 46%]
+test/oai/test_client.py::TestO1::test_oai_reasoning_system_message_handling[o1-False] PASSED [ 46%]
+test/oai/test_client.py::TestO1::test_oai_reasoning_system_message_handling[o1-2024-12-17-False] PASSED [ 46%]
+test/oai/test_client.py::TestO1::test_completion_o1[messages0] SKIPPED   [ 46%]
+test/oai/test_client.py::TestO1::test_completion_o1[messages1] SKIPPED   [ 46%]
+test/oai/test_client_stream.py::test__update_dict_from_chunk PASSED      [ 47%]
+test/oai/test_client_utils.py::test_validate_parameter PASSED            [ 47%]
+test/oai/test_client_utils.py::test_should_hide_tools PASSED             [ 47%]
+test/oai/test_cohere.py::test_initialization_missing_api_key PASSED      [ 47%]
+test/oai/test_cohere.py::test_intialization PASSED                       [ 47%]
+test/oai/test_cohere.py::test_calculate_cohere_cost PASSED               [ 47%]
+test/oai/test_cohere.py::test_load_config PASSED                         [ 47%]
+test/oai/test_groq.py::test_initialization PASSED                        [ 47%]
+test/oai/test_groq.py::test_valid_initialization PASSED                  [ 48%]
+test/oai/test_groq.py::test_parsing_params PASSED                        [ 48%]
+test/oai/test_groq.py::test_cost_calculation PASSED                      [ 48%]
+test/oai/test_groq.py::test_create_response PASSED                       [ 48%]
+test/oai/test_groq.py::test_create_response_with_tool_call PASSED        [ 48%]
+test/oai/test_mistral.py::test_initialization PASSED                     [ 48%]
+test/oai/test_mistral.py::test_valid_initialization PASSED               [ 48%]
+test/oai/test_mistral.py::test_cost_calculation PASSED                   [ 48%]
+test/oai/test_mistral.py::test_create_response PASSED                    [ 49%]
+test/oai/test_mistral.py::test_create_response_with_tool_call PASSED     [ 49%]
+test/oai/test_utils.py::test_filter_config[test_case0] PASSED            [ 49%]
+test/oai/test_utils.py::test_filter_config[test_case1] PASSED            [ 49%]
+test/oai/test_utils.py::test_filter_config[test_case2] PASSED            [ 49%]
+test/oai/test_utils.py::test_config_list_from_json PASSED                [ 49%]
+test/oai/test_utils.py::test_config_list_*****_aoai PASSED               [ 49%]
+test/oai/test_utils.py::test_config_list_*****_aoai_env_vars PASSED      [ 50%]
+test/oai/test_utils.py::test_config_list_*****_aoai_env_vars_multi PASSED [ 50%]
+test/oai/test_utils.py::test_config_list_*****_aoai_file_not_found PASSED [ 50%]
+test/oai/test_utils.py::test_config_list_from_dotenv PASSED              [ 50%]
+test/oai/test_utils.py::test_get_config_list PASSED                      [ 50%]
+test/oai/test_utils.py::test_get_first_llm_config[llm_config0-*****0] PASSED [ 50%]
+test/oai/test_utils.py::test_get_first_llm_config[llm_config1-*****1] PASSED [ 50%]
+test/oai/test_utils.py::test_get_first_llm_config[llm_config2-*****2] PASSED [ 50%]
+test/oai/test_utils.py::test_get_first_llm_config_incorrect_config[llm_config0-llm_config must be a valid config dictionary.] PASSED [ 51%]
+test/oai/test_utils.py::test_get_first_llm_config_incorrect_config[llm_config1-Config list must contain at least one config.] PASSED [ 51%]
+test/oai/test_utils.py::test_tags PASSED                                 [ 51%]
+test/oai/test_utils.py::test_is_valid_api_key PASSED                     [ 51%]
+test/test_browser_utils.py::test_bing_search SKIPPED (do not run bing
+tests if key is missing)                                                 [ 51%]
+test/test_code_utils.py::test_infer_lang PASSED                          [ 51%]
+test/test_code_utils.py::test_extract_code PASSED                        [ 51%]
+test/test_code_utils.py::test_execute_code PASSED                        [ 51%]
+test/test_code_utils.py::test_execute_code_with_custom_filename_on_docker PASSED [ 52%]
+test/test_code_utils.py::test_execute_code_with_misformed_filename_on_docker PASSED [ 52%]
+test/test_code_utils.py::test_execute_code_raises_when_code_and_filename_are_both_none PASSED [ 52%]
+test/test_code_utils.py::test_execute_code_no_docker PASSED              [ 52%]
+test/test_code_utils.py::test_execute_code_timeout_no_docker PASSED      [ 52%]
+test/test_code_utils.py::test_decide_use_docker_truthy_values PASSED     [ 52%]
+test/test_code_utils.py::test_decide_use_docker_falsy_values PASSED      [ 52%]
+test/test_code_utils.py::test_decide_use_docker PASSED                   [ 52%]
+test/test_code_utils.py::test_decide_use_docker_with_env_var PASSED      [ 53%]
+test/test_code_utils.py::test_decide_use_docker_with_env_var_and_argument PASSED [ 53%]
+test/test_code_utils.py::test_can_use_docker_or_throw PASSED             [ 53%]
+test/test_code_utils.py::test_create_virtual_env PASSED                  [ 53%]
+test/test_code_utils.py::test_create_virtual_env_with_extra_args PASSED  [ 53%]
+test/test_code_utils.py::TestContentStr::test_empty_list PASSED          [ 53%]
+test/test_code_utils.py::TestContentStr::test_invalid_content PASSED     [ 53%]
+test/test_code_utils.py::TestContentStr::test_list_of_text_content PASSED [ 53%]
+test/test_code_utils.py::TestContentStr::test_mixed_content PASSED       [ 54%]
+test/test_code_utils.py::TestContentStr::test_non_dict_in_list PASSED    [ 54%]
+test/test_code_utils.py::TestContentStr::test_string_content PASSED      [ 54%]
+test/test_code_utils.py::TestGetPowerShellCommand::test_get_powershell_command_no_permission PASSED [ 54%]
+test/test_code_utils.py::TestGetPowerShellCommand::test_get_powershell_command_not_found PASSED [ 54%]
+test/test_code_utils.py::TestGetPowerShellCommand::test_get_powershell_command_powershell PASSED [ 54%]
+test/test_code_utils.py::TestGetPowerShellCommand::test_get_powershell_command_pwsh PASSED [ 54%]
+test/test_conftest.py::TestSecrets::test_sanitize_secrets PASSED         [ 55%]
+test/test_conftest.py::TestS*****s::test_raise_exception_with_***** SKIPPED [ 55%]
+test/test_conftest.py::TestS*****s::test_sensitive_output_is_sanitized PASSED [ 55%]
+test/test_graph_utils.py::TestHelpers::test_has_self_loops PASSED        [ 55%]
+test/test_graph_utils.py::TestGraphUtilCheckGraphValidity::test_valid_structure PASSED [ 55%]
+test/test_graph_utils.py::TestGraphUtilCheckGraphValidity::test_graph_with_invalid_structure PASSED [ 55%]
+test/test_graph_utils.py::TestGraphUtilCheckGraphValidity::test_graph_with_invalid_string PASSED [ 55%]
+test/test_graph_utils.py::TestGraphUtilCheckGraphValidity::test_graph_with_invalid_key PASSED [ 55%]
+test/test_graph_utils.py::TestGraphUtilCheckGraphValidity::test_isolated_agent_nodes_warning PASSED [ 56%]
+test/test_graph_utils.py::TestGraphUtilCheckGraphValidity::test_warning_for_mismatch_in_agents PASSED [ 56%]
+test/test_graph_utils.py::TestGraphUtilCheckGraphValidity::test_warning_for_duplicate_agents PASSED [ 56%]
+test/test_graph_utils.py::TestGraphUtilInvertDisallowedToAllowed::test_basic_functionality PASSED [ 56%]
+test/test_graph_utils.py::TestGraphUtilInvertDisallowedToAllowed::test_empty_disallowed_graph PASSED [ 56%]
+test/test_graph_utils.py::TestGraphUtilInvertDisallowedToAllowed::test_fully_disallowed_graph PASSED [ 56%]
+test/test_graph_utils.py::TestGraphUtilInvertDisallowedToAllowed::test_disallowed_graph_with_nonexistent_agent PASSED [ 56%]
+test/test_import.py::test_list_submodules PASSED                         [ 56%]
+test/test_import.py::test_submodules[autogen] PASSED                     [ 57%]
+test/test_import.py::test_submodules[autogen._website] PASSED            [ 57%]
+test/test_import.py::test_submodules[autogen._website.generate_api_references] PASSED [ 57%]
+test/test_import.py::test_submodules[autogen._website.generate_mkdocs] PASSED [ 57%]
+test/test_import.py::test_submodules[autogen._website.process_notebooks] PASSED [ 57%]
+test/test_import.py::test_submodules[autogen._website.utils] PASSED      [ 57%]
+test/test_import.py::test_submodules[autogen.agentchat] PASSED           [ 57%]
+test/test_import.py::test_submodules[autogen.agentchat.agent] PASSED     [ 57%]
+test/test_import.py::test_submodules[autogen.agentchat.assistant_agent] PASSED [ 58%]
+test/test_import.py::test_submodules[autogen.agentchat.chat] PASSED      [ 58%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib] PASSED   [ 58%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.agent_optimizer] PASSED [ 58%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities] PASSED [ 58%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.agent_capability] PASSED [ 58%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.generate_images] PASSED [ 58%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.teachability] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.text_compressors] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.tools_capability] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.transform_messages] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.transforms] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.transforms_util] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.capabilities.vision_capability] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.captainagent] PASSED [ 59%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.captainagent.agent_builder] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.captainagent.captainagent] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.captainagent.tool_retriever] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.captainagent.tools] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.gpt_assistant_agent] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.document] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine] PASSED [ 60%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.falkor_graph_rag_capability] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.graph_query_engine] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.graph_rag_capability] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.neo4j_graph_rag_capability] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.neo4j_native_graph_query_engine] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.graph_rag.neo4j_native_graph_rag_capability] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.img_utils] PASSED [ 61%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.llamaindex_conversable_agent] PASSED [ 62%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.llava_agent] PASSED [ 62%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.math_user_proxy_agent] PASSED [ 62%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.multimodal_conversable_agent] PASSED [ 62%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent] PASSED [ 62%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.rag] PASSED [ 62%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.rag.query_engine] PASSED [ 62%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.reasoning_agent] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.retrieve_assistant_agent] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.retrieve_user_proxy_agent] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.society_of_mind_agent] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.swarm_agent] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.text_analyzer_agent] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb.base] PASSED [ 63%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb.chromadb] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb.couchbase] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb.mongodb] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb.pgvectordb] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb.qdrant] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.vectordb.utils] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.contrib.web_surfer] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.conversable_agent] PASSED [ 64%]
+test/test_import.py::test_submodules[autogen.agentchat.groupchat] PASSED [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime] PASSED  [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental] PASSED [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.audio_adapters] PASSED [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.audio_adapters.twilio_audio_adapter] PASSED [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.audio_adapters.websocket_audio_adapter] PASSED [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.audio_observer] PASSED [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients] PASSED [ 65%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients.gemini] PASSED [ 66%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients.gemini.client] PASSED [ 66%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients.oai] PASSED [ 66%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients.oai.base_client] PASSED [ 66%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients.oai.rtc_client] PASSED [ 66%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients.oai.utils] PASSED [ 66%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.clients.realtime_client] PASSED [ 66%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.function_observer] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.realtime_agent] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.realtime_events] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.realtime_observer] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.realtime_swarm] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime.experimental.websockets] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.realtime_agent] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.user_proxy_agent] PASSED [ 67%]
+test/test_import.py::test_submodules[autogen.agentchat.utils] PASSED     [ 68%]
+test/test_import.py::test_submodules[autogen.agents] PASSED              [ 68%]
+test/test_import.py::test_submodules[autogen.agents.contrib] PASSED      [ 68%]
+test/test_import.py::test_submodules[autogen.agents.contrib.time] PASSED [ 68%]
+test/test_import.py::test_submodules[autogen.agents.contrib.time.time_reply_agent] PASSED [ 68%]
+test/test_import.py::test_submodules[autogen.agents.contrib.time.time_tool_agent] PASSED [ 68%]
+test/test_import.py::test_submodules[autogen.agents.experimental] PASSED [ 68%]
+test/test_import.py::test_submodules[autogen.agents.experimental.deep_research] PASSED [ 68%]
+test/test_import.py::test_submodules[autogen.agents.experimental.deep_research.deep_research] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.discord] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.discord.discord] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.document_agent] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.document_agent.chroma_query_engine] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.document_agent.docling_doc_ingest_agent] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.document_agent.document_agent] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.document_agent.document_utils] PASSED [ 69%]
+test/test_import.py::test_submodules[autogen.agents.experimental.document_agent.inmemory_query_engine] PASSED [ 70%]
+test/test_import.py::test_submodules[autogen.agents.experimental.document_agent.parser_utils] PASSED [ 70%]
+test/test_import.py::test_submodules[autogen.agents.experimental.slack] PASSED [ 70%]
+test/test_import.py::test_submodules[autogen.agents.experimental.slack.slack] PASSED [ 70%]
+test/test_import.py::test_submodules[autogen.agents.experimental.telegram] PASSED [ 70%]
+test/test_import.py::test_submodules[autogen.agents.experimental.telegram.telegram] PASSED [ 70%]
+test/test_import.py::test_submodules[autogen.agents.experimental.websurfer] PASSED [ 70%]
+test/test_import.py::test_submodules[autogen.agents.experimental.websurfer.websurfer] PASSED [ 71%]
+test/test_import.py::test_submodules[autogen.browser_utils] PASSED       [ 71%]
+test/test_import.py::test_submodules[autogen.cache] PASSED               [ 71%]
+test/test_import.py::test_submodules[autogen.cache.abstract_cache_base] PASSED [ 71%]
+test/test_import.py::test_submodules[autogen.cache.cache] PASSED         [ 71%]
+test/test_import.py::test_submodules[autogen.cache.cache_factory] PASSED [ 71%]
+test/test_import.py::test_submodules[autogen.cache.cosmos_db_cache] PASSED [ 71%]
+test/test_import.py::test_submodules[autogen.cache.disk_cache] PASSED    [ 71%]
+test/test_import.py::test_submodules[autogen.cache.in_memory_cache] PASSED [ 72%]
+test/test_import.py::test_submodules[autogen.cache.redis_cache] PASSED   [ 72%]
+test/test_import.py::test_submodules[autogen.code_utils] PASSED          [ 72%]
+test/test_import.py::test_submodules[autogen.coding] PASSED              [ 72%]
+test/test_import.py::test_submodules[autogen.coding.base] PASSED         [ 72%]
+test/test_import.py::test_submodules[autogen.coding.docker_commandline_code_executor] PASSED [ 72%]
+test/test_import.py::test_submodules[autogen.coding.factory] PASSED      [ 72%]
+test/test_import.py::test_submodules[autogen.coding.func_with_reqs] PASSED [ 72%]
+test/test_import.py::test_submodules[autogen.coding.jupyter] PASSED      [ 73%]
+test/test_import.py::test_submodules[autogen.coding.jupyter.base] PASSED [ 73%]
+test/test_import.py::test_submodules[autogen.coding.jupyter.docker_jupyter_server] PASSED [ 73%]
+test/test_import.py::test_submodules[autogen.coding.jupyter.embedded_ipython_code_executor] PASSED [ 73%]
+test/test_import.py::test_submodules[autogen.coding.jupyter.import_utils] PASSED [ 73%]
+test/test_import.py::test_submodules[autogen.coding.jupyter.jupyter_client] PASSED [ 73%]
+test/test_import.py::test_submodules[autogen.coding.jupyter.jupyter_code_executor] PASSED [ 73%]
+test/test_import.py::test_submodules[autogen.coding.jupyter.local_jupyter_server] PASSED [ 73%]
+test/test_import.py::test_submodules[autogen.coding.local_commandline_code_executor] PASSED [ 74%]
+test/test_import.py::test_submodules[autogen.coding.markdown_code_extractor] PASSED [ 74%]
+test/test_import.py::test_submodules[autogen.coding.utils] PASSED        [ 74%]
+test/test_import.py::test_submodules[autogen.doc_utils] PASSED           [ 74%]
+test/test_import.py::test_submodules[autogen.exception_utils] PASSED     [ 74%]
+test/test_import.py::test_submodules[autogen.extensions] PASSED          [ 74%]
+test/test_import.py::test_submodules[autogen.*****ting_utils] PASSED     [ 74%]
+test/test_import.py::test_submodules[autogen.function_utils] PASSED      [ 75%]
+test/test_import.py::test_submodules[autogen.graph_utils] PASSED         [ 75%]
+test/test_import.py::test_submodules[autogen.import_utils] PASSED        [ 75%]
+test/test_import.py::test_submodules[autogen.interop] PASSED             [ 75%]
+test/test_import.py::test_submodules[autogen.interop.crewai] PASSED      [ 75%]
+test/test_import.py::test_submodules[autogen.interop.crewai.crewai] PASSED [ 75%]
+test/test_import.py::test_submodules[autogen.interop.interoperability] PASSED [ 75%]
+test/test_import.py::test_submodules[autogen.interop.interoperable] PASSED [ 75%]
+test/test_import.py::test_submodules[autogen.interop.langchain] PASSED   [ 76%]
+test/test_import.py::test_submodules[autogen.interop.langchain.langchain_chat_model_factory] PASSED [ 76%]
+test/test_import.py::test_submodules[autogen.interop.langchain.langchain_tool] PASSED [ 76%]
+test/test_import.py::test_submodules[autogen.interop.litellm] PASSED     [ 76%]
+test/test_import.py::test_submodules[autogen.interop.litellm.litellm_config_factory] PASSED [ 76%]
+test/test_import.py::test_submodules[autogen.interop.pydantic_ai] PASSED [ 76%]
+test/test_import.py::test_submodules[autogen.interop.pydantic_ai.pydantic_ai] PASSED [ 76%]
+test/test_import.py::test_submodules[autogen.interop.pydantic_ai.pydantic_ai_tool] PASSED [ 76%]
+test/test_import.py::test_submodules[autogen.interop.registry] PASSED    [ 77%]
+test/test_import.py::test_submodules[autogen.io] PASSED                  [ 77%]
+test/test_import.py::test_submodules[autogen.io.base] PASSED             [ 77%]
+test/test_import.py::test_submodules[autogen.io.console] PASSED          [ 77%]
+test/test_import.py::test_submodules[autogen.io.websockets] PASSED       [ 77%]
+test/test_import.py::test_submodules[autogen.logger] PASSED              [ 77%]
+test/test_import.py::test_submodules[autogen.logger.base_logger] PASSED  [ 77%]
+test/test_import.py::test_submodules[autogen.logger.file_logger] PASSED  [ 77%]
+test/test_import.py::test_submodules[autogen.logger.logger_factory] PASSED [ 78%]
+test/test_import.py::test_submodules[autogen.logger.logger_utils] PASSED [ 78%]
+test/test_import.py::test_submodules[autogen.logger.sqlite_logger] PASSED [ 78%]
+test/test_import.py::test_submodules[autogen.math_utils] PASSED          [ 78%]
+test/test_import.py::test_submodules[autogen.messages] PASSED            [ 78%]
+test/test_import.py::test_submodules[autogen.messages.agent_messages] PASSED [ 78%]
+test/test_import.py::test_submodules[autogen.messages.base_message] PASSED [ 78%]
+test/test_import.py::test_submodules[autogen.messages.client_messages] PASSED [ 78%]
+test/test_import.py::test_submodules[autogen.messages.print_message] PASSED [ 79%]
+test/test_import.py::test_submodules[autogen.oai] PASSED                 [ 79%]
+test/test_import.py::test_submodules[autogen.oai.anthropic] PASSED       [ 79%]
+test/test_import.py::test_submodules[autogen.oai.bedrock] PASSED         [ 79%]
+test/test_import.py::test_submodules[autogen.oai.cerebras] PASSED        [ 79%]
+test/test_import.py::test_submodules[autogen.oai.client] PASSED          [ 79%]
+test/test_import.py::test_submodules[autogen.oai.client_utils] PASSED    [ 79%]
+test/test_import.py::test_submodules[autogen.oai.cohere] PASSED          [ 80%]
+test/test_import.py::test_submodules[autogen.oai.completion] PASSED      [ 80%]
+test/test_import.py::test_submodules[autogen.oai.gemini] PASSED          [ 80%]
+test/test_import.py::test_submodules[autogen.oai.groq] PASSED            [ 80%]
+test/test_import.py::test_submodules[autogen.oai.mistral] PASSED         [ 80%]
+test/test_import.py::test_submodules[autogen.oai.oai_models] PASSED      [ 80%]
+test/test_import.py::test_submodules[autogen.oai.oai_models._models] PASSED [ 80%]
+test/test_import.py::test_submodules[autogen.oai.oai_models.chat_completion] PASSED [ 80%]
+test/test_import.py::test_submodules[autogen.oai.oai_models.chat_completion_audio] PASSED [ 81%]
+test/test_import.py::test_submodules[autogen.oai.oai_models.chat_completion_message] PASSED [ 81%]
+test/test_import.py::test_submodules[autogen.oai.oai_models.chat_completion_message_tool_call] PASSED [ 81%]
+test/test_import.py::test_submodules[autogen.oai.oai_models.chat_completion_token_logprob] PASSED [ 81%]
+test/test_import.py::test_submodules[autogen.oai.oai_models.completion_usage] PASSED [ 81%]
+test/test_import.py::test_submodules[autogen.oai.ollama] PASSED          [ 81%]
+test/test_import.py::test_submodules[autogen.oai.*****_utils] PASSED     [ 81%]
+test/test_import.py::test_submodules[autogen.oai.together] PASSED        [ 81%]
+test/test_import.py::test_submodules[autogen.retrieve_utils] PASSED      [ 82%]
+test/test_import.py::test_submodules[autogen.runtime_logging] PASSED     [ 82%]
+test/test_import.py::test_submodules[autogen.token_count_utils] PASSED   [ 82%]
+test/test_import.py::test_submodules[autogen.tools] PASSED               [ 82%]
+test/test_import.py::test_submodules[autogen.tools.contrib] PASSED       [ 82%]
+test/test_import.py::test_submodules[autogen.tools.contrib.time] PASSED  [ 82%]
+test/test_import.py::test_submodules[autogen.tools.contrib.time.time] PASSED [ 82%]
+test/test_import.py::test_submodules[autogen.tools.dependency_injection] PASSED [ 82%]
+test/test_import.py::test_submodules[autogen.tools.experimental] PASSED  [ 83%]
+test/test_import.py::test_submodules[autogen.tools.experimental.browser_use] PASSED [ 83%]
+test/test_import.py::test_submodules[autogen.tools.experimental.browser_use.browser_use] PASSED [ 83%]
+test/test_import.py::test_submodules[autogen.tools.experimental.crawl4ai] PASSED [ 83%]
+test/test_import.py::test_submodules[autogen.tools.experimental.crawl4ai.crawl4ai] PASSED [ 83%]
+test/test_import.py::test_submodules[autogen.tools.experimental.deep_research] PASSED [ 83%]
+test/test_import.py::test_submodules[autogen.tools.experimental.deep_research.deep_research] PASSED [ 83%]
+test/test_import.py::test_submodules[autogen.tools.experimental.messageplatform] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.experimental.messageplatform.discord] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.experimental.messageplatform.discord.discord] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.experimental.messageplatform.slack] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.experimental.messageplatform.slack.slack] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.experimental.messageplatform.telegram] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.experimental.messageplatform.telegram.telegram] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.function_utils] PASSED [ 84%]
+test/test_import.py::test_submodules[autogen.tools.tool] PASSED          [ 85%]
+test/test_import.py::test_submodules[autogen.types] PASSED               [ 85%]
+test/test_import.py::test_submodules[autogen.version] PASSED             [ 85%]
+test/test_import_utils.py::TestOptionalImportBlock::test_optional_import_block PASSED [ 85%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_function_attributes[None] PASSED [ 85%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_function_attributes[dummy_function] PASSED [ 85%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_function_attributes[except_for2] PASSED [ 85%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_function_call[None] PASSED [ 85%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_function_call[dummy_function] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_function_call[except_for2] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_method_attributes[None] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_method_attributes[dummy_method] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_method_attributes[except_for2] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_method_call[None] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_method_call[dummy_method] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_method_call[except_for2] PASSED [ 86%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_static_call[None] PASSED [ 87%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_static_call[dummy_static_function] PASSED [ 87%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_static_call[except_for2] PASSED [ 87%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_property_call[None] PASSED [ 87%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_property_call[dummy_property] PASSED [ 87%]
+test/test_import_utils.py::TestRequiresOptionalImportCallables::test_property_call[except_for2] PASSED [ 87%]
+test/test_import_utils.py::TestRequiresOptionalImportClasses::test_class_init_call PASSED [ 87%]
+test/test_logging.py::test_log_completion[response0-*****_logged_response0] PASSED [ 88%]
+test/test_logging.py::test_log_completion[None-*****_logged_response1] PASSED [ 88%]
+test/test_logging.py::test_log_completion[error in response-*****_logged_response2] PASSED [ 88%]
+test/test_logging.py::test_log_function_use PASSED                       [ 88%]
+test/test_logging.py::test_to_dict PASSED                                [ 88%]
+test/test_logging.py::test_logging_exception_will_not_crash_only_print_error PASSED [ 88%]
+test/test_token_count.py::test_num_tokens_from_functions[input_functions0-44] PASSED [ 88%]
+test/test_token_count.py::test_num_tokens_from_functions[input_functions1-46] PASSED [ 88%]
+test/test_token_count.py::test_num_tokens_from_functions[input_functions2-45] PASSED [ 89%]
+test/test_token_count.py::test_num_tokens_from_functions[input_functions3-78] PASSED [ 89%]
+test/test_token_count.py::test_num_token_from_messages[mistral--524] PASSED [ 89%]
+test/test_token_count.py::test_num_token_from_messages[deepseek-chat-524] PASSED [ 89%]
+test/test_token_count.py::test_num_token_from_messages[claude-524] PASSED [ 89%]
+test/test_token_count.py::test_num_token_from_messages[gemini-524] PASSED [ 89%]
+test/test_token_count.py::test_num_tokens_from_gpt_image PASSED          [ 89%]
+test/test_token_count.py::test_count_token PASSED                        [ 89%]
+test/test_token_count.py::test_model_aliases PASSED                      [ 90%]
+test/tools/contrib/time/test_time.py::TestTimeTool::test_time_tool_init PASSED [ 90%]
+test/tools/contrib/time/test_time.py::TestTimeTool::test_time_tool_call PASSED [ 90%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_is_base_context_param PASSED [ 90%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_is_chat_context_param PASSED [ 90%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_get_chat_context_params PASSED [ 90%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_is_depends_param PASSED [ 90%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_with_annotated] PASSED [ 90%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_without_annotated] PASSED [ 91%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_without_annotated_and_depends] PASSED [ 91%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_with_annotated_async] PASSED [ 91%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_without_annotated_async] PASSED [ 91%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_without_annotated_and_depends_async] PASSED [ 91%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_without_MyContext] PASSED [ 91%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_without_MyContext_async] PASSED [ 91%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_with_default_depends] PASSED [ 92%]
+test/tools/test_dependency_injection.py::TestRemoveInj*****ParamsFromSignature::test_remove_inj*****_params_from_signature[f_with_default_depends_async] PASSED [ 92%]
+test/tools/test_dependency_injection.py::TestHelperFunctions::test_string_metadata_to_description_field[f_sync] PASSED [ 92%]
+test/tools/test_dependency_injection.py::TestHelperFunctions::test_string_metadata_to_description_field[f_async] PASSED [ 92%]
+test/tools/test_dependency_injection.py::TestHelperFunctions::test_set_return_annotation_to_any[f_sync] PASSED [ 92%]
+test/tools/test_dependency_injection.py::TestHelperFunctions::test_set_return_annotation_to_any[f_async] PASSED [ 92%]
+test/tools/test_function_utils.py::test_get_typed_annotation PASSED      [ 92%]
+test/tools/test_function_utils.py::test_get_typed_signature PASSED       [ 92%]
+test/tools/test_function_utils.py::test_get_typed_return_annotation PASSED [ 93%]
+test/tools/test_function_utils.py::test_get_parameter_json_schema PASSED [ 93%]
+test/tools/test_function_utils.py::test_get_required_params PASSED       [ 93%]
+test/tools/test_function_utils.py::test_get_default_values PASSED        [ 93%]
+test/tools/test_function_utils.py::test_get_param_annotations PASSED     [ 93%]
+test/tools/test_function_utils.py::test_get_missing_annotations PASSED   [ 93%]
+test/tools/test_function_utils.py::test_get_parameters PASSED            [ 93%]
+test/tools/test_function_utils.py::test_get_function_schema_no_return_type PASSED [ 93%]
+test/tools/test_function_utils.py::test_get_function_schema_unannotated_with_default PASSED [ 94%]
+test/tools/test_function_utils.py::test_get_function_schema_missing PASSED [ 94%]
+test/tools/test_function_utils.py::test_get_function_schema PASSED       [ 94%]
+test/tools/test_function_utils.py::test_get_function_schema_pydantic PASSED [ 94%]
+test/tools/test_function_utils.py::test_get_load_param_if_needed_function PASSED [ 94%]
+test/tools/test_function_utils.py::test_load_basemodels_if_needed_sync PASSED [ 94%]
+test/tools/test_function_utils.py::test_load_basemodels_if_needed_async PASSED [ 94%]
+test/tools/test_function_utils.py::test_serialize_to_str_with_nonascii PASSED [ 94%]
+test/tools/test_function_utils.py::test_serialize_to_json PASSED         [ 95%]
+test/tools/test_function_utils.py::test_serilize_to_str_list_pydantic PASSED [ 95%]
+test/tools/test_tool.py::TestTool::test_init PASSED                      [ 95%]
+test/tools/test_tool.py::TestTool::test_register_for_llm PASSED          [ 95%]
+test/tools/test_tool.py::TestTool::test_register_for_execution PASSED    [ 95%]
+test/tools/test_tool.py::TestTool::test__call__ PASSED                   [ 95%]
+test/tools/test_tool_imports.py::TestToolImports::test_imports_experimental PASSED [ 95%]
+test/tools/test_tool_imports.py::TestToolImports::test_imports_experimental_messageplatform PASSED [ 96%]
+test/tools/test_tool_imports.py::TestToolImports::test_imports_experimental_messageplatform_individual PASSED [ 96%]
+test/tools/test_tool_imports.py::TestToolImports::test_experimental_mesageplatform_all_exports PASSED [ 96%]
+test/website/test_generate_api_references.py::test_md_to_mdx_conversion_and_get_mdx_files PASSED [ 96%]
+test/website/test_generate_api_references.py::test_add_prefix PASSED     [ 96%]
+test/website/test_generate_api_references.py::TestCreateNavStructure::test_create_nav_structure_simple_paths PASSED [ 96%]
+test/website/test_generate_api_references.py::TestCreateNavStructure::test_create_nav_structure_with_groups PASSED [ 96%]
+test/website/test_generate_api_references.py::TestCreateNavStructure::test_create_nav_structure_mixed PASSED [ 96%]
+test/website/test_generate_api_references.py::TestCreateNavStructure::test_create_nav_structure_with_parent_groups PASSED [ 97%]
+test/website/test_generate_api_references.py::TestUpdateNav::test_update_nav_basic PASSED [ 97%]
+test/website/test_generate_api_references.py::TestUpdateNav::test_update_nav_with_exi*****_content PASSED [ 97%]
+test/website/test_generate_api_references.py::TestUpdateMintJsonWithApiNav::test_update_mint_json_with_api_nav PASSED [ 97%]
+test/website/test_generate_mkdocs.py::test_exclude_files PASSED          [ 97%]
+test/website/test_generate_mkdocs.py::test_process_and_copy_files PASSED [ 97%]
+test/website/test_generate_mkdocs.py::test_*****_navigation PASSED       [ 97%]
+test/website/test_generate_mkdocs.py::test_add_api_ref_to_mkdocs_template PASSED [ 97%]
+test/website/test_generate_mkdocs.py::test_generate_mkdocs_navigation PASSED [ 98%]
+test/website/test_process_notebooks.py::TestUpdateGroupPages::test_update_top_level_group PASSED [ 98%]
+test/website/test_process_notebooks.py::TestUpdateGroupPages::test_update_nested_group PASSED [ 98%]
+test/website/test_process_notebooks.py::test_ensure_mint_json PASSED     [ 98%]
+test/website/test_process_notebooks.py::test_cleanup_tmp_dirs_if_no_metadata PASSED [ 98%]
+test/website/test_process_notebooks.py::TestAddFrontMatterToMetadataMdx::test_without_metadata_mdx PASSED [ 98%]
+test/website/test_process_notebooks.py::TestAddFrontMatterToMetadataMdx::test_with_metadata_mdx PASSED [ 98%]
+test/website/test_process_notebooks.py::TestAddBlogsToNavigation::test_get_sorted_files PASSED [ 98%]
+test/website/test_process_notebooks.py::TestAddBlogsToNavigation::test_add_blogs_to_navigation PASSED [ 99%]
+test/website/test_process_notebooks.py::TestUpdateNavigation::test_extract_example_group PASSED [ 99%]
+test/website/test_process_notebooks.py::TestAddAuthorsAndSocialImgToBlogPosts::test_add_authors_and_social_img PASSED [ 99%]
+test/website/test_process_notebooks.py::TestConvertCalloutBlocks::test_convert_callout_blocks PASSED [ 99%]
+test/website/test_process_notebooks.py::TestEditLinks::test_get_files_path_from_navigation PASSED [ 99%]
+test/website/test_process_notebooks.py::TestExtractImgTagFromFigureTag::test_extract_img_tag_from_figure_tag PASSED [ 99%]
+test/website/test_process_notebooks.py::TestCopyImagesFromNotebooksDirToTargetDir::test_copy_images PASSED [ 99%]
+test/website/test_utils.py::test_copy_files PASSED                       [100%]
+
+=================================== FAILURES ===================================
+___________________________ test_simple_text_browser ___________________________
+
+args = (), kwargs = {'downloads_folder': '/tmp/tmpkre0t9o7'}
+missing_modules = ['markdownify', 'pathvalidate']
+
+    @wraps(o)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        missing_modules = get_missing_imports(modules)
+        if missing_modules:
+>           raise ImportError(
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+            )
+E           ImportError: Missing modules: markdownify, pathvalidate. Install using 'pip install ag2[websurfer]'
+
+autogen/import_utils.py:347: ImportError
+____________________ test_generate_mint_json_from_template _____________________
+
+args = ()
+kwargs = {'target_file': PosixPath('/tmp/tmpgkz_0ga8/mint.json'), 'template_content': '\n    {\n        "name": "AG2",\n       ..."PLACEHOLDER"]}\n        ]\n    }\n    ', 'template_file': PosixPath('/tmp/tmpgkz_0ga8/mint-json-template.json.jinja')}
+missing_modules = ['pdoc']
+
+    @wraps(o)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        missing_modules = get_missing_imports(modules)
+        if missing_modules:
+>           raise ImportError(
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+            )
+E           ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+
+autogen/import_utils.py:347: ImportError
+____________________ test_generate_mint_json_exi*****_file _____________________
+
+args = ()
+kwargs = {'target_file': PosixPath('/tmp/tmpqm8spisg/mint.json'), 'template_content': '\n    {\n        "name": "AG2",\n       ..."PLACEHOLDER"]}\n        ]\n    }\n    ', 'template_file': PosixPath('/tmp/tmpqm8spisg/mint-json-template.json.jinja')}
+missing_modules = ['pdoc']
+
+    @wraps(o)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        missing_modules = get_missing_imports(modules)
+        if missing_modules:
+>           raise ImportError(
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+            )
+E           ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+
+autogen/import_utils.py:347: ImportError
+___________________ test_generate_mint_json_missing_template ___________________
+
+args = (), kwargs = {'target_file': PosixPath('/tmp/tmpxorhr64t/mint.json')}
+missing_modules = ['pdoc']
+
+    @wraps(o)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        missing_modules = get_missing_imports(modules)
+        if missing_modules:
+>           raise ImportError(
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+            )
+E           ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+
+autogen/import_utils.py:347: ImportError
+_______ TestSplitReferenceFilesBySymbol.test_split_reference_by_symbols ________
+
+args = (<test.website.test_generate_api_references.TestSplitReferenceFilesBySymbol object at 0x783958cecd90>,)
+kwargs = {'api_dir': PosixPath('/tmp/tmp_9g2rqez'), '*****_files': ['overview.md', 'gather_usage_summary.md', 'config_list_from_dotenv.md', 'ConversableAgent.md', 'agentchat/MyClass.md', 'agentchat/overview.md']}
+missing_modules = ['pdoc']
+
+    @wraps(o)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        missing_modules = get_missing_imports(modules)
+        if missing_modules:
+>           raise ImportError(
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+            )
+E           ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+
+autogen/import_utils.py:347: ImportError
+=============================== warnings summary ===============================
+.venv-core/lib/python3.10/site-packages/pydantic/_internal/_config.py:295
+.venv-core/lib/python3.10/site-packages/pydantic/_internal/_config.py:295
+.venv-core/lib/python3.10/site-packages/pydantic/_internal/_config.py:295
+  /home/tvrtko/ag2/.venv-core/lib/python3.10/site-packages/pydantic/_internal/_config.py:295: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.10/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.*****_realtime - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+test/agentchat/realtime_agent/test_e2e.py:94
+  /home/tvrtko/ag2/test/agentchat/realtime_agent/test_e2e.py:94: PytestUnknownMarkWarning: Unknown pytest.mark.*****_realtime - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest.param("credentials_gpt_4o_realtime", marks=[pytest.mark.*****_realtime, pytest.mark.aux_neg_flag]),
+
+test/agentchat/realtime_agent/test_swarm_start.py:107
+  /home/tvrtko/ag2/test/agentchat/realtime_agent/test_swarm_start.py:107: PytestUnknownMarkWarning: Unknown pytest.mark.*****_realtime - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest.param("credentials_gpt_4o_realtime", marks=[pytest.mark.*****_realtime, pytest.mark.aux_neg_flag]),
+
+test/agentchat/test_agent_file_logging.py:29
+  /home/tvrtko/ag2/test/agentchat/test_agent_file_logging.py:29: PytestRemovedIn9Warning: Marks applied to fixtures have no effect
+  See docs: https://docs.pytest.org/en/stable/deprecations.html#applying-a-mark-to-a-fixture-function
+    def logger() -> FileLogger:
+
+test/agentchat/test_agent_file_logging.py:105
+  /home/tvrtko/ag2/test/agentchat/test_agent_file_logging.py:105: PytestCollectionWarning: cannot collect test class 'TestWrapper' because it has a __init__ constructor (from: test/agentchat/test_agent_file_logging.py)
+    class TestWrapper:
+
+autogen/agentchat/contrib/math_user_proxy_agent.py:400
+  /home/tvrtko/ag2/autogen/agentchat/contrib/math_user_proxy_agent.py:400: PydanticDeprecatedSince20: Pydantic V1 style `@root_validator` validators are deprecated. You should migrate to Pydantic V2 style `@model_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.10/migration/
+    @root_validator(skip_on_failure=True)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.rag - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.commsagent_telegram - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.cosmosdb - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+.venv-core/lib/python3.10/site-packages/jupyter_client/connect.py:22
+  /home/tvrtko/ag2/.venv-core/lib/python3.10/site-packages/jupyter_client/connect.py:22: DeprecationWarning: Jupyter is migrating its paths to use standard platformdirs
+  given by the platformdirs library.  To remove this warning and
+  see the appropriate new directories, set the environment variable
+  `JUPYTER_PLATFORM_DIRS=1` and then run `jupyter --paths`.
+  The use of platformdirs will be the default in `jupyter_core` v6
+    from jupyter_core.paths import jupyter_data_dir, jupyter_runtime_dir, secure_write
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.test - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+.venv-core/lib/python3.10/site-packages/crewai_tools/tools/scrapegraph_scrape_tool/scrapegraph_scrape_tool.py:34
+  /home/tvrtko/ag2/.venv-core/lib/python3.10/site-packages/crewai_tools/tools/scrapegraph_scrape_tool/scrapegraph_scrape_tool.py:34: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.10/migration/
+    @validator("website_url")
+
+.venv-core/lib/python3.10/site-packages/crewai_tools/tools/selenium_scraping_tool/selenium_scraping_tool.py:26
+  /home/tvrtko/ag2/.venv-core/lib/python3.10/site-packages/crewai_tools/tools/selenium_scraping_tool/selenium_scraping_tool.py:26: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.10/migration/
+    @validator("website_url")
+
+.venv-core/lib/python3.10/site-packages/crewai_tools/tools/vision_tool/vision_tool.py:15
+  /home/tvrtko/ag2/.venv-core/lib/python3.10/site-packages/crewai_tools/tools/vision_tool/vision_tool.py:15: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.10/migration/
+    @validator("image_path_url")
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.interop_crewai - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.interop_langchain - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.interop_pydantic_ai - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+test/io/test_websockets.py:30
+  /home/tvrtko/ag2/test/io/test_websockets.py:30: PytestCollectionWarning: cannot collect test class 'TestTextMessage' because it has a __init__ constructor (from: test/io/test_websockets.py)
+    @wrap_message
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.unknown - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.bedrock - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.cerebras - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.cohere - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.groq - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.mistral - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.ollama - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.together - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+autogen/import_utils.py:323
+  /home/tvrtko/ag2/autogen/import_utils.py:323: PytestUnknownMarkWarning: Unknown pytest.mark.websurfer - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytest_mark_markname = getattr(pytest.mark, markname)
+
+test/agentchat/test_conversable_agent.py::test_update_function_signature_and_register_functions
+  /home/tvrtko/ag2/autogen/agentchat/conversable_agent.py:2905: UserWarning: Function 'python' is being overridden.
+    warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
+
+test/agentchat/test_conversable_agent.py::test_create_or_get_executor
+  /home/tvrtko/ag2/autogen/agentchat/conversable_agent.py:2905: UserWarning: Function 'log_result' is being overridden.
+    warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
+
+test/agentchat/test_function_call.py::test_a_execute_function
+  /home/tvrtko/ag2/test/agentchat/test_function_call.py:171: RuntimeWarning: coroutine 'test_a_execute_function.<locals>.add_num' was never awaited
+    assert user.execute_function(func_call=correct_args)[1]["content"] != "15"
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+test/agentchat/test_function_call.py::test_a_execute_function
+  /home/tvrtko/ag2/test/agentchat/test_function_call.py:164: RuntimeWarning: coroutine 'sleep' was never awaited
+    asyncio.sleep(1)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - max_tokens cannot be None, defaulting to 512.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - stream must be of type bool, defaulting to False.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - temperature must be of type (int, float) or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - top_p must be of type (int, float) or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - top_k must be of type int or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - repetition_penalty must be of type float or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - presence_penalty must be of type (int, float) or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - frequency_penalty must be of type (int, float) or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - min_p must be of type (int, float) or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - safety_model must be of type str or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - max_tokens has numerical bounds, >= 0, or can be None, defaulting to 512.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - presence_penalty has numerical bounds, >= -2 and <= 2, or can be None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - frequency_penalty has numerical bounds, >= -2 and <= 2, or can be None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - min_p has numerical bounds, >= 0 and <= 1, or can be None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - stream must be one of these values [[False]], defaulting to False.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - temperature cannot be None, defaulting to 0.7.
+    warnings.warn(
+
+test/oai/test_client_utils.py::test_validate_parameter
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - temperature has numerical bounds, >= 0.0 and <= 1.0, defaulting to 1.0.
+    warnings.warn(
+
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - max_tokens must be of type int or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - seed must be of type int or None, defaulting to None.
+    warnings.warn(
+
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - stream must be of type bool or None, defaulting to False.
+    warnings.warn(
+
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - temperature must be of type (int, float) or None, defaulting to 1.
+    warnings.warn(
+
+test/oai/test_groq.py::test_parsing_params
+  /home/tvrtko/ag2/autogen/oai/client_utils.py:104: UserWarning: Config error - temperature has numerical bounds, >= 0 and <= 2, or can be None, defaulting to 1.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+---------- coverage: platform linux, python 3.10.13-final-0 ----------
+Coverage XML written to file coverage.xml
+
+============================= slowest 10 durations =============================
+21.25s call     test/coding/test_commandline_code_executor.py::test_docker_commandline_code_executor_restart
+10.41s call     test/agentchat/test_agent_usage.py::test_agent_usage
+9.65s call     test/coding/test_commandline_code_executor.py::test_silent_pip_install[bash-DockerCommandLineCodeExecutor]
+9.45s call     test/coding/test_commandline_code_executor.py::test_silent_pip_install[sh-DockerCommandLineCodeExecutor]
+9.19s call     test/coding/test_commandline_code_executor.py::test_silent_pip_install[shell-DockerCommandLineCodeExecutor]
+7.85s call     test/agentchat/test_math_user_proxy_agent.py::test_execute_one_python_code
+6.47s call     test/test_conftest.py::TestS*****s::test_sensitive_output_is_sanitized
+5.73s call     test/test_code_utils.py::test_execute_code
+4.37s call     test/coding/test_user_defined_functions.py::test_can_load_function_with_reqs[LocalCommandLineCodeExecutor]
+4.36s call     test/coding/test_commandline_code_executor.py::test_silent_pip_install[shell-LocalCommandLineCodeExecutor]
+=========================== short test summary info ============================
+FAILED test/test_browser_utils.py::test_simple_text_browser - ImportError: Missing modules: markdownify, pathvalidate. Install using 'pip install ag2[websurfer]'
+FAILED test/website/test_generate_api_references.py::test_generate_mint_json_from_template - ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+FAILED test/website/test_generate_api_references.py::test_generate_mint_json_exi*****_file - ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+FAILED test/website/test_generate_api_references.py::test_generate_mint_json_missing_template - ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+FAILED test/website/test_generate_api_references.py::TestSplitReferenceFilesBySymbol::test_split_reference_by_symbols - ImportError: Missing module: pdoc. Install using 'pip install ag2[docs]'
+= 5 failed, 746 passed, 25 skipped, 153 desel*****, 62 warnings in 166.28s (0:02:46) =

@@ -12,11 +12,12 @@ from contextlib import redirect_stdout
 import pytest
 
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials):
     assistant1 = AssistantAgent(
         "assistant",

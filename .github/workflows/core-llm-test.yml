@@ -28,7 +28,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai", "gemini", "anthropic", "deepseek"]
+        llm: ["openai", "gemini", "anthropic", "deepseek", "ollama", "bedrock", "cerebras"]
         python-version: ["3.9"]
         os: [ubuntu-latest]
       fail-fast: false

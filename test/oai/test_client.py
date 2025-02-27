@@ -635,7 +635,7 @@ class TestO1:
             [{"role": "user", "content": "2+2="}],
         ],
     )
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_completion_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_mini_client, messages)
 
