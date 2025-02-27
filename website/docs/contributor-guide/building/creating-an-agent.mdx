@@ -1,0 +1,330 @@
+---
+title: Creating a new agent
+---
+
+```python
+# Are you wanting to create your own AG2 agent type?
+# You're in the right place.
+agent = MyFantasticAgent()
+```
+
+<Tip>
+We'll be getting into the AG2 code-base, it's useful to understand how AG2 works under the hood, [see this section](/docs/contributor-guide/how-ag2-works/overview) for the rundown.
+</Tip>
+
+Creating a new agent in AG2 is easy and there are two main approaches you can take.
+
+1. Create and/or use tools as the agent's functionality, keeping the core ConversableAgent functionality pretty much unchanged.
+2. Create a reply function as the method for the agent to carry out its internal workflow.
+
+### Tools-based agents
+
+Pros:
+- Easier to implement
+- Can work well with a small distinct set of tools
+- Easy to add another tool
+- If you create tools, they can be used by other agents as well
+
+Cons:
+- Too many tools may confuse the LLM
+- Multiple tool calls can be triggered from one LLM response, this may produce undesired results if the sequence isn't right
+- Your agent must have an associated LLM as it needs to recommend tool calls
+
+### Reply-based agents
+
+Pros:
+- Most flexibility over how the agent works
+
+Cons:
+- More code required, more error handling, more tests
+- If using a tool or two is possible, this may be more complexity than necessary
+- Functionality encapsulated within the agent, can't be easily used by other agents
+
+## How a tool-based agent is created
+
+Let's take a look at a tool-based agent, the [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent). You can read more about how it's used [here](/docs/user-guide/reference-agents/communication-agents).
+
+All agents should be based on [ConversableAgent](/docs/api-reference/autogen/ConversableAgent), this makes them usable in all orchestrations.
+
+The DiscordAgent uses two tools to send and retrieve messages for a Discord channel. In addition to [ConversableAgent](/docs/api-reference/autogen/ConversableAgent)'s parameters, it also takes in the authentication and channel details, as well as a boolean to indicate whether writing instructions should be appended to the agent's system message.
+
+Let's look at the code for DiscordAgent with annotations added ([current code here](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/discord/discord.py)):
+```python
+@export_module("autogen.agents.experimental") # Indicates where this appears in the API Reference documentation, autogen > agents > experimental > DiscordAgent
+class DiscordAgent(ConversableAgent): # Built on the ConversableAgent class
+    """An agent that can send messages and retrieve messages on Discord."""
+    # Ensure there's a docstring for the agent for documentation
+
+    DEFAULT_SYSTEM_MESSAGE = (
+        "You are a helpful AI assistant that communicates through Discord. "
+        "Remember that Discord uses Markdown for formatting and has a character limit. "
+        "Keep messages clear and concise, and consider using appropriate formatting when helpful."
+    )
+
+    def __init__(
+        self,
+        bot_token: str, # Discord specific parameter
+        channel_name: str, # Discord specific parameter
+        guild_name: str, # Discord specific parameter
+        system_message: Optional[Union[str, list[str]]] = None, # We provide the ability to override the system message
+        has_writing_instructions: bool = True, # Flag to indicate whether writing instructions are added to the system message
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the DiscordAgent.
+
+        Args:
+            llm_config (dict[str, Any]): The LLM configuration.
+            bot_token (str): Discord bot token
+            channel_name (str): Channel name where messages will be sent / retrieved
+            guild_name (str): Guild (server) name where the channel is located
+            has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
+        """ # Follow this docstring format
+
+        # We set the system message to the passed in value or a default value
+        system_message = kwargs.pop("system_message", self.DEFAULT_SYSTEM_MESSAGE)
+
+        # Our two tools, one for sending and one for retrieving
+        self._send_tool = DiscordSendTool(bot_token=bot_token, channel_name=channel_name, guild_name=guild_name)
+        self._retrieve_tool = DiscordRetrieveTool(bot_token=bot_token, channel_name=channel_name, guild_name=guild_name)
+
+        # Add formatting instructions to the system message
+        if has_writing_instructions:
+            formatting_instructions = (
+                "\nFormat guidelines for Discord:\n"
+                "1. Max message length: 2000 characters\n"
+                "2. Supports Markdown formatting\n"
+                "3. Can use ** for bold, * for italic, ``` for code blocks\n"
+                "4. Consider using appropriate emojis when suitable\n"
+            )
+
+            if isinstance(system_message, str):
+                system_message = system_message + formatting_instructions
+            elif isinstance(system_message, list):
+                system_message = system_message + [formatting_instructions]
+
+        # Initialize our base ConversableAgent
+        super().__init__(system_message=system_message, **kwargs)
+
+        # Register the two tools with the agent for LLM recommendations (tool execution needs to be handled separately)
+        self.register_for_llm()(self._send_tool)
+        self.register_for_llm()(self._retrieve_tool)
+```
+
+### Agent's Tool
+
+Let's look at one of the tools that the agent is using, [DiscordSendTool](/docs/api-reference/autogen/tools/experimental/DiscordSendTool), to see how a [Tool](/docs/api-reference/autogen/tools/Tool) is created (annotations added):
+
+(See the [Creating a Tool](/docs/contributor-guide/building/creating-a-tool) page for a more detailed guide on creating tools)
+
+```python
+# Import from 3rd party packages are handled with this context manager
+with optional_import_block():
+    from discord import Client, Intents, utils
+
+# Some constants
+MAX_MESSAGE_LENGTH = 2000
+MAX_BATCH_RETRIEVE_MESSAGES = 100
+
+# Denote that this requires a 3rd party package, with "discord" being the namespace
+# Our AG2 'extra' is called "commsagent_discord"
+@require_optional_import(["discord"], "commsagent-discord")
+@export_module("autogen.tools.experimental") # Where this appears in the API Reference documentation
+class DiscordSendTool(Tool): # Built on the Tool class
+    """Sends a message to a Discord channel."""
+    # Ensure there's a docstring for the tool for documentation
+
+    def __init__(self, *, bot_token: str, channel_name: str, guild_name: str) -> None:
+        """
+        Initialize the DiscordSendTool.
+
+        Args:
+            bot_token: The bot token to use for sending messages.
+            channel_name: The name of the channel to send messages to.
+            guild_name: The name of the guild for the channel.
+        """
+
+        # Function that sends the message, uses dependency injection for bot token / channel / guild
+        async def discord_send_message(
+            message: Annotated[str, "Message to send to the channel."],
+            # Dependency Injection used to protect information from LLMs
+            # These following three parameters won't be used in tool calling but
+            # will be injected in when the tool is executed
+            bot_token: Annotated[str, Depends(on(bot_token))],
+            guild_name: Annotated[str, Depends(on(guild_name))],
+            channel_name: Annotated[str, Depends(on(channel_name))],
+        ) -> Any:
+            """
+            Sends a message to a Discord channel.
+
+            Args:
+                message: The message to send to the channel.
+                bot_token: The bot token to use for Discord. (uses dependency injection)
+                guild_name: The name of the server. (uses dependency injection)
+                channel_name: The name of the channel. (uses dependency injection)
+            """
+            ... # code for the sending of a message in here
+
+        # Initialise the base Tool class with the LLM description and the function to call
+        super().__init__(
+            name="discord_send",
+            description="Sends a message to a Discord channel.",
+            func_or_tool=discord_send_message, # This function gets called when the tool is executed
+        )
+```
+
+An important aspect of this tool is the use of AG2's dependency injection functionality. This protects the bot_token, guild_name, and channel_name, from the tool definition for the LLMs, so the LLM will not see the attributes or values. See [Tools with Secrets](/docs/user-guide/advanced-concepts/tools-with-secrets) for guidance.
+
+And, that's all that's needed to create a brand new agent powered by tools.
+
+## How a reply-based agent is created
+
+If tools aren't a viable option for your agent consider a reply-based agent.
+
+<Tip>
+It's important to understand how ConversableAgent generates a reply, see [this page](/docs/contributor-guide/how-ag2-works/generate-reply) for more details.
+</Tip>
+
+Let's take a look at a basic agent that tells the time utilising a reply function.
+
+```python
+from typing import Any, Optional, Union
+__all__ = ["TimeAgent"]
+
+# Where our agent appears in the documentation
+# autogen > agents > contrib > TimeAgent
+@export_module("autogen.agents.contrib")
+class TimeAgent(ConversableAgent): # Built on the ConversableAgent class
+    """This agent outputs the date and time."""
+    # Ensure there's a docstring for the agent for documentation
+
+    def __init__(
+        self,
+        system_message: Optional[Union[str, list]] = None, # This is how we can use ConversableAgent's parameters
+        *args,
+        date_time_format: str = "%Y-%m-%d %H:%M:%S", # This is a parameter that is unique to this agent
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the TimeAgent.
+
+        Args:
+            date_time_format (str): The format in which the date and time should be returned.
+        """ # Follow this docstring format
+
+        # This agent doesn't use an LLM so we don't need this, but it's here as an example
+        # of how to take in and use ConversableAgent parameters.
+        system_message = system_message or (
+            "You are a calendar agent that returns the date and time. "
+            "Please provide a date and time format for the responses."
+        )
+
+        # Store the date and time format on the agent
+        # Prefixed with an underscore to indicate it's a private variable
+        self._date_time_format = date_time_format
+
+        # Initialise the base class, passing through the system_message parameter
+        super().__init__(*args, system_message=system_message, **kwargs)
+
+        # Our reply function.
+        # This one is simple, but yours will be more complex and
+        # may even contain another AG2 workflow inside it
+        def get_date_time_reply(
+            agent: ConversableAgent,
+            messages: Optional[list[dict[str, Any]]] = None,
+            sender: Optional[Agent] = None,
+            config: Optional[OpenAIWrapper] = None,
+        ) -> tuple[bool, dict[str, Any]]:
+
+            from datetime import datetime
+            now = datetime.now()
+
+            # Format the date and time as a string (e.g., "2025-02-25 14:30:00")
+            current_date_time = now.strftime(self._date_time_format)
+
+            # Final reply, with the date/time as the message
+            return True, {"content": f"Tick, tock, the current date/time is {current_date_time}."}
+
+        # Register our reply function with the agent
+        # Removing all other reply functions so only this one will be used
+        self.register_reply(
+            trigger=[Agent, None],
+            reply_func=get_date_time_reply,
+            remove_other_reply_funcs=True
+        )
+```
+
+When we use this TimeAgent in an AG2 workflow it will always return the date and time:
+
+```console
+Bob (to time_agent):
+
+Hi Time Agent!
+
+--------------------------------------------------------------------------------
+time_agent (to Bob):
+
+Tick, tock, the current date/time is 2025-02-25 14:05:24.
+
+--------------------------------------------------------------------------------
+```
+
+## Where to put your code
+
+Decide on a folder name that matches your agent name, use underscores to separate words, e.g. `deep_research`.
+
+Create your agent code in a folder under [`autogen/agents/contrib/`](https://github.com/ag2ai/ag2/tree/main/autogen/agents/contrib).
+
+Put the tests for the agent in a folder under [`test/agents/contrib/`](https://github.com/ag2ai/ag2/tree/main/test/agents/contrib).
+
+If you are creating tools, put them in a folder under [`autogen/tools/contrib/`](https://github.com/ag2ai/ag2/tree/main/autogen/tools/contrib).
+
+For tools tests, put them in a folder under [`test/tools/contrib`](https://github.com/ag2ai/ag2/tree/main/test/tools/contrib).
+
+## Documentation
+
+As a way for other developers to learn about and understand how to use your agent, it is recommended to create a Jupyter notebook that:
+- Explains what the agent is
+- How to install AG2 for the agent (e.g. with extras)
+- Has sample codes, simple to advanced
+- Notes on capabilities and limitations
+
+As an example, here's the [notebook](/docs/use-cases/notebooks/notebooks/tools_commsplatforms) for the Discord, Slack, and Telegram tools.
+
+## 3rd party packages
+
+If your agent, or their tools, require a 3rd party package to be installed, add an extra in the [pyproject.toml](https://github.com/ag2ai/ag2/blob/main/pyproject.toml) file, for example:
+
+```text
+twilio = [
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.6,<1",
+    "twilio>=9.3.2,<10>"
+]
+```
+
+Put the current version of the packages as the minimum version and the next major version for the **less than** value.
+
+Changes to [pyproject.toml](https://github.com/ag2ai/ag2/blob/main/pyproject.toml) cover `pyautogen`, `autogen`, and `ag2` packages because they propagate automatically to [setup_ag2.py](https://github.com/ag2ai/ag2/blob/main/setup_ag2.py) and [setup_autogen.py](https://github.com/ag2ai/ag2/blob/main/setup_autogen.py).
+
+## Tests
+
+It's critical that tests are created for each piece of functionality within your agent or tool.
+
+See this [test file](https://github.com/ag2ai/ag2/blob/main/test/agents/experimental/websurfer/test_websurfer.py) for the [WebSurferAgent](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) as an example.
+
+See this documentation for how to run [tests locally and coverage](/docs/contributor-guide/tests).
+
+## Create a Pull Request
+
+We're excited to review and test your agent and tool! Create your Pull Request (PR) [here](https://github.com/ag2ai/ag2/pulls).
+
+Set the PR as a Draft PR if you're not ready for it to be merged into the AG2 repository.
+
+See our [Contributor Guide](/docs/contributor-guide/contributing) for more guidance.
+
+## Help me get started...
+
+Two basic agents and a tool are available in the agents and tools `contrib` namespaces that you can look at and use as a starting point for your own agents and tools.
+
+- TimeReplyAgent (reply-based Agent) - [source code](https://github.com/ag2ai/ag2/blob/main/autogen/agents/contrib/time/time_reply_agent.py), [test code](https://github.com/ag2ai/ag2/blob/main/test/agents/contrib/time/test_timereplyagent.py)
+- TimeToolAgent (tool-based Agent) - [source code](https://github.com/ag2ai/ag2/blob/main/autogen/agents/contrib/time/time_tool_agent.py), [test code](https://github.com/ag2ai/ag2/blob/main/test/agents/contrib/time/test_timetoolagent.py)
+- TimeTool (Tool) - [source code](https://github.com/ag2ai/ag2/blob/main/autogen/tools/contrib/time/time.py), [test code](https://github.com/ag2ai/ag2/blob/main/test/tools/contrib/time/test_time.py)
