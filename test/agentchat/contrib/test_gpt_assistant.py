@@ -14,13 +14,14 @@ import pytest
 
 from autogen import OpenAIWrapper, UserProxyAgent
 from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
-from autogen.oai.openai_utils import detect_gpt_assistant_api_version, retrieve_assistants_by_name
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.oai.openai_utils import detect_gpt_assistant_api_version, retrieve_assistants_by_name
 
 from ...conftest import Credentials
 
 with optional_import_block() as result:
     import openai  # noqa: F401
+
 
 @pytest.mark.openai
 @pytest.mark.parametrize("provider", ["openai", "azure"])

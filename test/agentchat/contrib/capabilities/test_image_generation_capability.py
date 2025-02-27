@@ -90,6 +90,7 @@ def image_gen_capability():
 
 @pytest.mark.openai
 @skip_on_missing_imports("PIL", "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 def test_dalle_image_generator(dalle_config: dict[str, Any]):
     """Tests DalleImageGenerator capability to generate images by calling the OpenAI API."""
     dalle_generator = dalle_image_generator(dalle_config, RESOLUTIONS[0], QUALITIES[0])
@@ -102,6 +103,7 @@ def test_dalle_image_generator(dalle_config: dict[str, Any]):
 @pytest.mark.parametrize("gen_config_1", itertools.product(RESOLUTIONS, QUALITIES, PROMPTS))
 @pytest.mark.parametrize("gen_config_2", itertools.product(RESOLUTIONS, QUALITIES, PROMPTS))
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 def test_dalle_image_generator_cache_key(
     dalle_config: dict[str, Any], gen_config_1: tuple[str, str, str], gen_config_2: tuple[str, str, str]
 ):

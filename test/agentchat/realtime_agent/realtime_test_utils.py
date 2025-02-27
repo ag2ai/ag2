@@ -8,7 +8,11 @@ from typing import Any, Callable, Literal, Optional, TypeVar, Union
 from unittest.mock import MagicMock
 
 from anyio import Event
-from openai import NotGiven, OpenAI
+
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
+    from openai import NotGiven, OpenAI
 
 __all__ = ["text_to_speech", "trace"]
 
@@ -19,7 +23,7 @@ def text_to_speech(
     openai_api_key: str,
     model: str = "tts-1",
     voice: Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"] = "alloy",
-    response_format: Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], NotGiven] = "pcm",
+    response_format: Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], "NotGiven"] = "pcm",
 ) -> str:
     """Convert text to voice using OpenAI API.
 

@@ -124,6 +124,7 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
 
 @pytest.mark.openai
 @skip_on_missing_imports(["chromadb"], "teachable")
+@skip_on_missing_imports(["openai"], "openai")
 def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
     """Runs this file's unit tests."""
     total_num_errors, total_num_tests = 0, 0
@@ -153,6 +154,7 @@ def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
 
 @pytest.mark.openai
 @skip_on_missing_imports(["chromadb"], "teachable")
+@skip_on_missing_imports(["openai"], "openai")
 def test_teachability_accuracy(credentials_gpt_4o_mini: Credentials):
     """A very cheap and fast test of teachability accuracy."""
     print(colored("\nTEST TEACHABILITY ACCURACY", "light_cyan"))

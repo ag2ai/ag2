@@ -10,7 +10,6 @@ from typing import Any, List
 from unittest.mock import MagicMock, patch
 
 import pytest
-from openai.types.chat.chat_completion import ChatCompletion
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
@@ -313,9 +312,6 @@ class TestGeminiClient:
         })
 
         # Assertions to check if response is structured as expected
-        assert isinstance(response, ChatCompletion), (
-            f"Response should be an instance of ChatCompletion - got {type(response)}"
-        )
         assert response.choices[0].message.content == "Example response", (
             "Response content should match expected output"
         )
@@ -369,7 +365,6 @@ class TestGeminiClient:
         })
 
         # Assertions to check if response is structured as expected
-        # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
         assert response.choices[0].message.content == "Example response", (
             "Response content should match expected output"
         )
