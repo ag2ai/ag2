@@ -22,6 +22,7 @@ import autogen
 from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.tool import Tool
 
 from ..conftest import (
@@ -1618,6 +1619,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
 
 @pytest.mark.deepseek
 @suppress_json_decoder_error
+@skip_on_missing_imports(["openai"], "openai")
 def test_conversable_agent_with_deepseek_reasoner(
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
