@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import Any, Optional
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -23,6 +23,9 @@ class DiscordAgent(ConversableAgent):
 
     def __init__(
         self,
+        name: str,
+        system_message: Optional[str] = None,
+        *,
         bot_token: str,
         channel_name: str,
         guild_name: str,
@@ -32,13 +35,14 @@ class DiscordAgent(ConversableAgent):
         """Initialize the DiscordAgent.
 
         Args:
-            llm_config (dict[str, Any]): The LLM configuration.
+            name (str): name of the agent.
+            system_message (str or list): system message for the ChatCompletion inference.
             bot_token (str): Discord bot token
             channel_name (str): Channel name where messages will be sent / retrieved
             guild_name (str): Guild (server) name where the channel is located
             has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
         """
-        system_message = kwargs.pop("system_message", self.DEFAULT_SYSTEM_MESSAGE)
+        discord_system_message = system_message or self.DEFAULT_SYSTEM_MESSAGE
 
         self._send_tool = DiscordSendTool(bot_token=bot_token, channel_name=channel_name, guild_name=guild_name)
         self._retrieve_tool = DiscordRetrieveTool(bot_token=bot_token, channel_name=channel_name, guild_name=guild_name)
@@ -53,12 +57,9 @@ class DiscordAgent(ConversableAgent):
                 "4. Consider using appropriate emojis when suitable\n"
             )
 
-            if isinstance(system_message, str):
-                system_message = system_message + formatting_instructions
-            elif isinstance(system_message, list):
-                system_message = system_message + [formatting_instructions]
+            discord_system_message = discord_system_message + formatting_instructions
 
-        super().__init__(system_message=system_message, **kwargs)
+        super().__init__(name=name, system_message=discord_system_message, **kwargs)
 
         self.register_for_llm()(self._send_tool)
         self.register_for_llm()(self._retrieve_tool)
