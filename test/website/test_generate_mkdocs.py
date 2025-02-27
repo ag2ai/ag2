@@ -10,6 +10,7 @@ from textwrap import dedent
 import pytest
 
 from autogen._website.generate_mkdocs import (
+    add_api_ref_to_mkdocs_template,
     filter_excluded_files,
     format_navigation,
     generate_mkdocs_navigation,
@@ -147,7 +148,7 @@ def navigation() -> list[NavigationGroup]:
             ],
         },
         {
-            "group": "Contributing",
+            "group": "Contributor Guide",
             "pages": [
                 "docs/contributing/contributing",
             ],
@@ -173,7 +174,7 @@ def expected_nav() -> str:
             - [Sequential Chat](docs/user-guide/basic-concepts/orchestration/sequential-chat.md)
     - Advanced Concepts
         - [RAG](docs/user-guide/advanced-concepts/rag.md)
-- Contributing
+- Contributor Guide
     - [Contributing](docs/contributing/contributing.md)"""
 
 
@@ -182,9 +183,37 @@ def test_format_navigation(navigation: list[NavigationGroup], expected_nav: str)
     assert actual == expected_nav
 
 
-# The commented out code `# @skip_on_missing_imports(["jinja2"], "docs")` is likely a decorator that
-# is used to skip a test if certain imports are missing. In this case, it seems to be checking if the
-# `jinja2` library is missing before running the test function `test_generate_mkdocs_navigation`.
+def test_add_api_ref_to_mkdocs_template() -> None:
+    mkdocs_nav = """- Home
+    - [Home](docs/home/home.md)
+- User Guide
+    - Basic Concepts
+        - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
+        - LLM Configuration
+            - [LLM Configuration](docs/user-guide/basic-concepts/llm-configuration/llm-configuration.md)
+        - [Websurferagent](docs/user-guide/reference-agents/websurferagent.md)
+- Contributor Guide
+    - [Contributing](docs/contributor-guide/contributing.md)
+"""
+
+    expected = """- Home
+    - [Home](docs/home/home.md)
+- User Guide
+    - Basic Concepts
+        - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
+        - LLM Configuration
+            - [LLM Configuration](docs/user-guide/basic-concepts/llm-configuration/llm-configuration.md)
+        - [Websurferagent](docs/user-guide/reference-agents/websurferagent.md)
+- API References
+{api}
+- Contributor Guide
+    - [Contributing](docs/contributor-guide/contributing.md)
+"""
+    section_to_follow = "Contributor Guide"
+    actual = add_api_ref_to_mkdocs_template(mkdocs_nav, section_to_follow)
+    assert actual == expected
+
+
 @skip_on_missing_imports(["jinja2"], "docs")
 def test_generate_mkdocs_navigation(navigation: list[NavigationGroup], expected_nav: str) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -215,7 +244,7 @@ def test_generate_mkdocs_navigation(navigation: list[NavigationGroup], expected_
 
         mintlify_nav_template_path.write_text(mintlify_nav_content)
 
-        nav_exclusions = ["Contributing"]
+        nav_exclusions = ["Contributor Guide"]
         generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
         actual = mkdocs_nav_path.read_text()
         expected = (
@@ -226,7 +255,7 @@ search:
 """
             + expected_nav.replace(
                 """
-- Contributing
+- Contributor Guide
     - [Contributing](docs/contributing/contributing.md)""",
                 "",
             )

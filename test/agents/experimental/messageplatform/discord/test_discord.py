@@ -9,7 +9,7 @@ from .....conftest import Credentials
 
 
 @skip_on_missing_imports("discord", "commsagent-discord")
-class TestDiscordSendTool:
+class TestDiscordAgent:
     def test_init(self, mock_credentials: Credentials) -> None:
         discord_agent = DiscordAgent(
             name="DiscordAgent", llm_config=mock_credentials.llm_config, bot_token="", channel_name="", guild_name=""
@@ -54,6 +54,7 @@ class TestDiscordSendTool:
         ]
 
         assert set(tool.name for tool in discord_agent.tools) == {"discord_send", "discord_retrieve"}
+        assert isinstance(discord_agent.llm_config, dict), "llm_config should be a dictionary"
         assert discord_agent.llm_config["tools"] == expected_tools
         assert discord_agent.system_message == (
             "You are a helpful AI assistant that communicates through Discord. "

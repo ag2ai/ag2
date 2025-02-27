@@ -78,13 +78,11 @@ import time
 import warnings
 from typing import Any, Optional
 
-from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
-from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
-from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
 from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol, validate_parameter
+from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex

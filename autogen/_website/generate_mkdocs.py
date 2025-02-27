@@ -122,6 +122,18 @@ def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: dict
     return "\n".join(result)
 
 
+def add_api_ref_to_mkdocs_template(mkdocs_nav: str, section_to_follow: str) -> str:
+    """Add API Reference section to the navigation template."""
+    api_reference_section = """- API References
+{api}
+"""
+    section_to_follow_marker = f"- {section_to_follow}"
+
+    replacement_content = f"{api_reference_section}{section_to_follow_marker}"
+    ret_val = mkdocs_nav.replace(section_to_follow_marker, replacement_content)
+    return ret_val
+
+
 @require_optional_import("jinja2", "docs")
 def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exclusions: list[str]) -> None:
     mintlify_nav_template_path = website_dir / "mint-json-template.json.jinja"
@@ -132,7 +144,10 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     mintlify_nav = mintlify_json["navigation"]
     filtered_nav = [item for item in mintlify_nav if item["group"] not in nav_exclusions]
 
-    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + format_navigation(filtered_nav) + "\n"
+    mkdocs_nav = format_navigation(filtered_nav)
+    mkdocs_nav_with_api_ref = add_api_ref_to_mkdocs_template(mkdocs_nav, "Contributor Guide")
+
+    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
     summary_md_path.write_text(mkdocs_nav_content)
 

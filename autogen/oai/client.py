@@ -56,8 +56,9 @@ if openai_result.is_successful:
     from openai.lib._pydantic import _ensure_strict_json_schema
 else:
     ERROR: Optional[ImportError] = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
-    OpenAI = object
-    AzureOpenAI = object
+
+    # OpenAI = object
+    # AzureOpenAI = object
 
 with optional_import_block() as cerebras_result:
     from cerebras.cloud.sdk import (  # noqa
@@ -196,6 +197,39 @@ LEGACY_DEFAULT_CACHE_SEED = 41
 LEGACY_CACHE_DIR = ".cache"
 OPEN_API_BASE_URL_PREFIX = "https://api.openai.com"
 
+OPENAI_FALLBACK_KWARGS = {
+    "api_key",
+    "organization",
+    "project",
+    "base_url",
+    "websocket_base_url",
+    "timeout",
+    "max_retries",
+    "default_headers",
+    "default_query",
+    "http_client",
+    "_strict_response_validation",
+}
+
+AOPENAI_FALLBACK_KWARGS = {
+    "azure_endpoint",
+    "azure_deployment",
+    "api_version",
+    "api_key",
+    "azure_ad_token",
+    "azure_ad_token_provider",
+    "organization",
+    "websocket_base_url",
+    "timeout",
+    "max_retries",
+    "default_headers",
+    "default_query",
+    "http_client",
+    "_strict_response_validation",
+    "base_url",
+    "project",
+}
+
 
 @lru_cache(maxsize=128)
 def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient") -> None:
@@ -256,6 +290,7 @@ class PlaceHolderClient:
         self.config = config
 
 
+@require_optional_import("openai", "openai")
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
@@ -640,7 +675,7 @@ class OpenAIClient:
         }
 
 
-@require_optional_import("openai", "openai")
+# @require_optional_import("openai", "openai")
 @export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
@@ -658,9 +693,15 @@ class OpenAIWrapper:
         "price",
     }
 
-    openai_kwargs = set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs)
-    aopenai_kwargs = set(inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs)
-    openai_kwargs = openai_kwargs | aopenai_kwargs
+    @property
+    def openai_kwargs(self) -> set[str]:
+        if openai_result.is_successful:
+            return set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs) | set(
+                inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs
+            )
+        else:
+            return OPENAI_FALLBACK_KWARGS | AOPENAI_FALLBACK_KWARGS
+
     total_usage_summary: Optional[dict[str, Any]] = None
     actual_usage_summary: Optional[dict[str, Any]] = None
 
@@ -688,7 +729,6 @@ class OpenAIWrapper:
                         {
                             "model": "gpt-3.5-turbo",
                             "api_key": os.environ.get("OPENAI_API_KEY"),
-                            "api_type": "openai",
                             "base_url": "https://api.openai.com/v1",
                         },
                         {
@@ -791,9 +831,15 @@ class OpenAIWrapper:
             # TODO: logging for custom client
         else:
             if api_type is not None and api_type.startswith("azure"):
-                self._configure_azure_openai(config, openai_config)
-                client = AzureOpenAI(**openai_config)
-                self._clients.append(OpenAIClient(client, response_format=response_format))
+
+                @require_optional_import("openai", "openai")
+                def create_azure_openai_client() -> "AzureOpenAI":
+                    self._configure_azure_openai(config, openai_config)
+                    client = AzureOpenAI(**openai_config)
+                    self._clients.append(OpenAIClient(client, response_format=response_format))
+                    return client
+
+                client = create_azure_openai_client()
             elif api_type is not None and api_type.startswith("cerebras"):
                 if cerebras_import_exception:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
@@ -845,8 +891,14 @@ class OpenAIWrapper:
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             else:
-                client = OpenAI(**openai_config)
-                self._clients.append(OpenAIClient(client, response_format))
+
+                @require_optional_import("openai", "openai")
+                def create_openai_client() -> "OpenAI":
+                    client = OpenAI(**openai_config)
+                    self._clients.append(OpenAIClient(client, response_format))
+                    return client
+
+                client = create_openai_client()
 
             if logging_enabled():
                 log_new_client(client, self, openai_config)
@@ -963,8 +1015,8 @@ class OpenAIWrapper:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
         """
-        if ERROR:
-            raise ERROR
+        # if ERROR:
+        #     raise ERROR
         invocation_id = str(uuid.uuid4())
         last = len(self._clients) - 1
         # Check if all configs in config list are activated
@@ -1065,32 +1117,35 @@ class OpenAIWrapper:
             try:
                 request_ts = get_current_ts()
                 response = client.create(params)
-            except APITimeoutError as err:
-                logger.debug(f"config {i} timed out", exc_info=True)
-                if i == last:
-                    raise TimeoutError(
-                        "OpenAI API call timed out. This could be due to congestion or too small a timeout value. The timeout can be specified by setting the 'timeout' value (in seconds) in the llm_config (if you are using agents) or the OpenAIWrapper constructor (if you are using the OpenAIWrapper directly)."
-                    ) from err
-            except APIError as err:
-                error_code = getattr(err, "code", None)
-                if logging_enabled():
-                    log_chat_completion(
-                        invocation_id=invocation_id,
-                        client_id=id(client),
-                        wrapper_id=id(self),
-                        agent=agent,
-                        request=params,
-                        response=f"error_code:{error_code}, config {i} failed",
-                        is_cached=0,
-                        cost=0,
-                        start_time=request_ts,
-                    )
+            except Exception as e:
+                if APITimeoutError is not None and isinstance(e, APITimeoutError):
+                    logger.debug(f"config {i} timed out", exc_info=True)
+                    if i == last:
+                        raise TimeoutError(
+                            "OpenAI API call timed out. This could be due to congestion or too small a timeout value. The timeout can be specified by setting the 'timeout' value (in seconds) in the llm_config (if you are using agents) or the OpenAIWrapper constructor (if you are using the OpenAIWrapper directly)."
+                        ) from e
+                elif APIError is not None and isinstance(e, APIError):
+                    error_code = getattr(e, "code", None)
+                    if logging_enabled():
+                        log_chat_completion(
+                            invocation_id=invocation_id,
+                            client_id=id(client),
+                            wrapper_id=id(self),
+                            agent=agent,
+                            request=params,
+                            response=f"error_code:{error_code}, config {i} failed",
+                            is_cached=0,
+                            cost=0,
+                            start_time=request_ts,
+                        )
 
-                if error_code == "content_filter":
-                    # raise the error for content_filter
-                    raise
-                logger.debug(f"config {i} failed", exc_info=True)
-                if i == last:
+                    if error_code == "content_filter":
+                        # raise the error for content_filter
+                        raise
+                    logger.debug(f"config {i} failed", exc_info=True)
+                    if i == last:
+                        raise
+                else:
                     raise
             except (
                 gemini_InternalServerError,

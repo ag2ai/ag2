@@ -30,6 +30,7 @@ setuptools.setup(
     extras_require={
         "flaml": ["pyautogen[flaml]==" + __version__],
         "openai": ["pyautogen[openai]==" + __version__],
+        "openai-realtime": ["pyautogen[openai-realtime]==" + __version__],
         "jupyter-executor": ["pyautogen[jupyter-executor]==" + __version__],
         "retrievechat": ["pyautogen[retrievechat]==" + __version__],
         "retrievechat-pgvector": ["pyautogen[retrievechat-pgvector]==" + __version__],
