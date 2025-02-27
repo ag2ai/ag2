@@ -10,8 +10,9 @@ from .... import ConversableAgent
 from ....agentchat.contrib.swarm_agent import SwarmResult
 from ....doc_utils import export_module
 from ..document_agent.parser_utils import docling_parse_docs
-from .docling_query_engine import DoclingMdQueryEngine
+from .chroma_query_engine import VectorChromaQueryEngine
 from .document_utils import preprocess_path
+from .inmemory_query_engine import InMemoryQueryEngine
 
 __all__ = ["DoclingDocIngestAgent"]
 
@@ -35,7 +36,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         name: Optional[str] = None,
         llm_config: Optional[Union[dict, Literal[False]]] = None,  # type: ignore[type-arg]
         parsed_docs_path: Optional[Union[Path, str]] = None,
-        query_engine: Optional[DoclingMdQueryEngine] = None,
+        query_engine: Optional[Union[VectorChromaQueryEngine, InMemoryQueryEngine]] = None,
         return_agent_success: str = "TaskManagerAgent",
         return_agent_error: str = "ErrorManagerAgent",
         collection_name: Optional[str] = None,
@@ -47,7 +48,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         name (str): The name of the DoclingDocIngestAgent.
         llm_config (Optional[Union[dict, Literal[False]]]): The configuration for the LLM.
         parsed_docs_path (Union[Path, str]): The path where parsed documents will be stored.
-        query_engine (Optional[DoclingMdQueryEngine]): The DoclingMdQueryEngine to use for querying documents.
+        query_engine (Optional[VectorChromaQueryEngine]): The VectorChromaQueryEngine to use for querying documents.
         collection_name (Optional[str]): The unique name for the Chromadb collection. Set this to a value to reuse a collection. If a query_engine is provided, this will be ignored.
         """
         name = name or "DoclingDocIngestAgent"
@@ -55,7 +56,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         parsed_docs_path = parsed_docs_path or Path("./parsed_docs")
         parsed_docs_path = preprocess_path(str_or_path=parsed_docs_path, mk_path=True)
 
-        self.docling_query_engine = query_engine or DoclingMdQueryEngine(collection_name=collection_name)
+        self._query_engine = query_engine or VectorChromaQueryEngine(collection_name=collection_name)
 
         def data_ingest_task(context_variables: dict) -> SwarmResult:  # type: ignore[type-arg]
             """
@@ -83,7 +84,7 @@ class DoclingDocIngestAgent(ConversableAgent):
                     if output_files:
                         output_file = output_files[0]
                         if output_file.suffix == ".md":
-                            self.docling_query_engine.add_docs(new_doc_paths=[output_file])
+                            self._query_engine.add_docs(new_doc_paths=[output_file])
 
                     # Keep track of documents ingested
                     context_variables["DocumentsIngested"].append(input_file_path)
