@@ -12,9 +12,11 @@ import pytest
 from autogen._website.generate_mkdocs import (
     add_api_ref_to_mkdocs_template,
     filter_excluded_files,
+    fix_asset_path,
     format_navigation,
     generate_mkdocs_navigation,
     process_and_copy_files,
+    transform_card_grp_component,
     transform_tab_component,
 )
 from autogen._website.utils import NavigationGroup
@@ -194,6 +196,58 @@ Some conclusion
 Some conclusion
 """)
     actual = transform_tab_component(content)
+    assert actual == expected
+
+
+def test_transform_card_grp_component() -> None:
+    content = dedent("""This is a sample quick start page.
+        <div class="popular-resources">
+            <div class="card-group not-prose grid gap-x-4 sm:grid-cols-2">
+                <CardGroup cols={2}>
+                <Card>
+                    <p>Hello World</p>
+                </Card>
+                <Card title="Quick Start" href="/docs/home/quick-start">
+                    <p>Hello World</p>
+                </Card>
+                </CardGroup>
+            </div>
+        </div>
+        """)
+
+    expected = dedent("""This is a sample quick start page.
+        <div class="popular-resources">
+            <div class="card-group not-prose grid gap-x-4 sm:grid-cols-2">
+                <div class="card">
+                    <p>Hello World</p>
+                </div>
+                <a class="card" href="/docs/home/quick-start">
+<h2>Quick Start</h2>
+                    <p>Hello World</p>
+                </a>
+            </div>
+        </div>
+        """)
+    actual = transform_card_grp_component(content)
+    assert actual == expected
+
+
+def test_fix_asset_path() -> None:
+    content = dedent("""This is a sample quick start page.
+<div class="key-feature">
+    <img noZoom src="/static/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+    <a class="hero-btn" href="/docs/home/quick-start">
+        <div>Getting Started - 3 Minute</div>
+    </a>
+</div>""")
+    expected = dedent("""This is a sample quick start page.
+<div class="key-feature">
+    <img noZoom src="/ag2/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+    <a class="hero-btn" href="/ag2/docs/home/quick-start">
+        <div>Getting Started - 3 Minute</div>
+    </a>
+</div>""")
+    actual = fix_asset_path(content)
     assert actual == expected
 
 

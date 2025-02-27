@@ -107,6 +107,33 @@ def transform_tab_component(content: str) -> str:
     return result
 
 
+def transform_card_grp_component(content: str) -> str:
+    # Replace CardGroup tags
+    modified_content = re.sub(r"<CardGroup\s+cols=\{(\d+)\}>\s*", "", content)
+    modified_content = re.sub(r"\s*</CardGroup>", "", modified_content)
+
+    # Replace Card tags with title and href attributes
+    pattern = r'<Card\s+title="([^"]*)"\s+href="([^"]*)">(.*?)</Card>'
+    replacement = r'<a class="card" href="\2">\n<h2>\1</h2>\3</a>'
+    modified_content = re.sub(pattern, replacement, modified_content, flags=re.DOTALL)
+
+    # Replace simple Card tags
+    modified_content = re.sub(r"<Card>", '<div class="card">', modified_content)
+    modified_content = re.sub(r"</Card>", "</div>", modified_content)
+
+    return modified_content
+
+
+def fix_asset_path(content: str) -> str:
+    # Replace static/img paths with ag2/assets/img
+    modified_content = re.sub(r'src="/static/img/([^"]+)"', r'src="/ag2/assets/img/\1"', content)
+
+    # Replace docs paths with ag2/docs
+    modified_content = re.sub(r'href="/docs/([^"]+)"', r'href="/ag2/docs/\1"', modified_content)
+
+    return modified_content
+
+
 def transform_content_for_mkdocs(content: str) -> str:
     # Transform admonitions (Tip, Warning, Note)
     tag_mappings = {
@@ -154,6 +181,12 @@ def transform_content_for_mkdocs(content: str) -> str:
 
     # Transform tab components
     content = transform_tab_component(content)
+
+    # Transform CardGroup components
+    content = transform_card_grp_component(content)
+
+    # Fix assets path
+    content = fix_asset_path(content)
 
     return content
 
@@ -254,6 +287,14 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     summary_md_path.write_text(mkdocs_nav_content)
 
 
+def copy_assets(website_dir: Path) -> None:
+    src_dir = website_dir / "static" / "img"
+    dest_dir = website_dir / "mkdocs" / "docs" / "assets" / "img"
+
+    git_tracket_img_files = get_git_tracked_and_untracked_files_in_directory(website_dir / "static" / "img")
+    copy_files(src_dir, dest_dir, git_tracket_img_files)
+
+
 def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
@@ -265,7 +306,6 @@ def main() -> None:
 
     exclusion_list = [
         "docs/_blogs",
-        "docs/home/home.md",
         "docs/.gitignore",
         "docs/use-cases",
         "docs/installation",
@@ -278,6 +318,6 @@ def main() -> None:
     files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)
 
+    copy_assets(website_dir)
     process_and_copy_files(mint_input_dir, mkdocs_output_dir, filtered_files)
-
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
