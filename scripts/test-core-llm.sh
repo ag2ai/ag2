@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Default mark if none is provided
-DEFAULT_MARK="openai or openai_realtime or gemini or anthropic or deepseek"
+DEFAULT_MARK="openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek"
 
 # Initialize MARK as the default value
 MARK="$DEFAULT_MARK"
