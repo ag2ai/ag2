@@ -304,6 +304,9 @@ def main() -> None:
     mkdocs_root_dir = website_dir / "mkdocs"
     mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
 
+    if mkdocs_output_dir.exists():
+        shutil.rmtree(mkdocs_output_dir)
+
     exclusion_list = [
         "docs/_blogs",
         "docs/.gitignore",
