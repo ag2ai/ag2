@@ -172,7 +172,6 @@
         {
           "group": "Model Providers",
           "pages": [
-            "docs/user-guide/models/openai",
             "docs/user-guide/models/amazon-bedrock",
             "docs/user-guide/models/anthropic",
             "docs/user-guide/models/cerebras",
@@ -181,10 +180,20 @@
             "docs/user-guide/models/google-gemini",
             "docs/user-guide/models/google-vertexai",
             "docs/user-guide/models/groq",
-            "docs/user-guide/models/litellm-with-watsonx",
+            {
+              "group": "LiteLLM Proxy Server",
+              "pages":
+              [
+                "docs/user-guide/models/litellm-proxy-server/installation",
+                "docs/user-guide/models/litellm-proxy-server/openai",
+                "docs/user-guide/models/litellm-proxy-server/azure",
+                "docs/user-guide/models/litellm-proxy-server/watsonx"
+              ]
+            },
             "docs/user-guide/models/lm-studio",
             "docs/user-guide/models/mistralai",
             "docs/user-guide/models/ollama",
+            "docs/user-guide/models/openai",
             "docs/user-guide/models/togetherai",
             "docs/user-guide/models/vLLM"
           ]
@@ -228,6 +237,22 @@
         "docs/contributor-guide/documentation",
         "docs/contributor-guide/file-bug-report",
         "docs/contributor-guide/maintainer",
+        {
+          "group": "How AG2 Works",
+          "pages": [
+            "docs/contributor-guide/how-ag2-works/overview",
+            "docs/contributor-guide/how-ag2-works/initiate-chat",
+            "docs/contributor-guide/how-ag2-works/generate-reply",
+            "docs/contributor-guide/how-ag2-works/hooks"
+          ]
+        },
+        {
+          "group": "Building Agents & Tools",
+          "pages": [
+            "docs/contributor-guide/building/creating-a-tool",
+            "docs/contributor-guide/building/creating-an-agent"
+          ]
+        },
         "docs/contributor-guide/pre-commit",
         "docs/contributor-guide/tests",
         "docs/contributor-guide/Research"

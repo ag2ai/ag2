@@ -128,7 +128,7 @@ class GroupChat:
     """
 
     agents: list[Agent]
-    messages: list[dict[str, Any]]
+    messages: list[dict[str, Any]] = field(default_factory=list)
     max_round: int = 10
     admin_name: str = "Admin"
     func_call_filter: bool = True

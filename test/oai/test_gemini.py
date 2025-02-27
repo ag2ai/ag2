@@ -10,7 +10,6 @@ from typing import Any, List
 from unittest.mock import MagicMock, patch
 
 import pytest
-from openai.types.chat.chat_completion import ChatCompletion
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
@@ -90,6 +89,33 @@ class TestGeminiClient:
         assert vertexai_global_config.location == "us-west1", "Incorrect VertexAI location initialization"
         assert vertexai_global_config.project == "fake-project-id", "Incorrect VertexAI project initialization"
         assert vertexai_global_config.credentials == mock_credentials, "Incorrect VertexAI credentials initialization"
+
+    def test_extract_system_instruction(self, gemini_client):
+        # Test: valid system instruction
+        messages = [{"role": "system", "content": "You are my personal assistant."}]
+        assert gemini_client._extract_system_instruction(messages) == "You are my personal assistant."
+
+        # Test: empty system instruction
+        messages = [{"role": "system", "content": " "}]
+        assert gemini_client._extract_system_instruction(messages) is None
+
+        # Test: the first message is not a system instruction
+        messages = [
+            {"role": "user", "content": "Hello!"},
+            {"role": "system", "content": "You are my personal assistant."},
+        ]
+        assert gemini_client._extract_system_instruction(messages) is None
+
+        # Test: empty message list
+        assert gemini_client._extract_system_instruction([]) is None
+
+        # Test: None input
+        assert gemini_client._extract_system_instruction(None) is None
+
+        # Test: system message without "content" key
+        messages = [{"role": "system"}]
+        with pytest.raises(KeyError):
+            gemini_client._extract_system_instruction(messages)
 
     def test_gemini_message_handling(self, gemini_client):
         messages = [
@@ -286,9 +312,6 @@ class TestGeminiClient:
         })
 
         # Assertions to check if response is structured as expected
-        assert isinstance(response, ChatCompletion), (
-            f"Response should be an instance of ChatCompletion - got {type(response)}"
-        )
         assert response.choices[0].message.content == "Example response", (
             "Response content should match expected output"
         )
@@ -342,7 +365,6 @@ class TestGeminiClient:
         })
 
         # Assertions to check if response is structured as expected
-        # assert isinstance(response, ChatCompletion), "Response should be an instance of ChatCompletion"
         assert response.choices[0].message.content == "Example response", (
             "Response content should match expected output"
         )

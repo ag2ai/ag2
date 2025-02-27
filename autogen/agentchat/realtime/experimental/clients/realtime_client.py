@@ -115,7 +115,7 @@ class RealtimeClientBase:
     async def _read_from_connection_task(self):
         async for event in self._read_from_connection():
             await self.add_event(event)
-        self.add_event(None)
+        await self.add_event(None)
 
     async def _read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read events from a Realtime Client."""

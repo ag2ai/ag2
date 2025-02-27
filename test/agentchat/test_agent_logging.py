@@ -15,6 +15,7 @@ from _pytest.mark import ParameterSet
 
 import autogen
 import autogen.runtime_logging
+from autogen.import_utils import skip_on_missing_imports
 
 from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
 
@@ -176,6 +177,7 @@ def _test_two_agents_logging(
 
 @pytest.mark.parametrize("credentials_fixture", credentials_all_llms)
 @suppress_gemini_resource_exhausted
+@skip_on_missing_imports(["openai"], "openai")
 def test_two_agents_logging(
     credentials_fixture: ParameterSet,
     request: pytest.FixtureRequest,

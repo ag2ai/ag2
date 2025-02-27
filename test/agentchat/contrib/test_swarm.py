@@ -29,6 +29,7 @@ from autogen.agentchat.contrib.swarm_agent import (
 from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.tool import Tool
 
 from ...conftest import (
@@ -64,6 +65,10 @@ def test_swarm_result():
     agent = ConversableAgent("test")
     result = SwarmResult(values="test", agent=agent)
     assert result.agent == agent
+
+    # Test AfterWorkOption
+    result = SwarmResult(agent=AfterWorkOption.TERMINATE)
+    assert isinstance(result.agent, AfterWorkOption)
 
 
 def test_swarm_result_serialization():
@@ -285,6 +290,7 @@ def test_after_work_options():
     assert chat_result.chat_history[3]["name"] == "agent2"
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_on_condition_handoff():
     """Test OnCondition in handoffs"""
 
@@ -348,6 +354,7 @@ def test_temporary_user_proxy():
         assert message.get("name") != "_User"
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_context_variables_updating_multi_tools():
     """Test context variables handling in tool calls"""
     testing_llm_config = {
@@ -410,6 +417,7 @@ def test_context_variables_updating_multi_tools():
     assert context_vars["my_key"] == 101
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_function_transfer():
     """Tests a function call that has a transfer to agent in the SwarmResult"""
     testing_llm_config = {
@@ -619,6 +627,7 @@ def test_update_system_message():
     assert message_container.captured_sys_message == "Another update"
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_string_agent_params_for_transfer():
     """Test that string agent parameters are handled correctly without using real LLMs."""
     # Define test configuration
@@ -720,6 +729,7 @@ def test_string_agent_params_for_transfer():
         assert final_context
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_after_work_callable():
     """Test Callable in an AfterWork handoff"""
 
@@ -798,6 +808,7 @@ def test_after_work_callable():
     assert len(chat_result.chat_history) == 4
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_on_condition_unique_function_names():
     """Test that OnCondition in handoffs generate unique function names"""
 
@@ -855,6 +866,7 @@ def test_on_condition_unique_function_names():
     assert "transfer_agent1_to_agent2_3" in agent1._function_map
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_prepare_swarm_agents():
     """Test preparation of swarm agents including tool executor setup"""
     testing_llm_config = {
@@ -908,6 +920,7 @@ def test_prepare_swarm_agents():
         _prepare_swarm_agents(agent1, [agent1, agent2, agent3])
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_create_nested_chats():
     """Test creation of nested chat agents and registration of handoffs"""
     testing_llm_config = {
@@ -1122,6 +1135,7 @@ def test_swarmresult_afterworkoption():
     assert next_speaker == "auto", "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_update_on_condition_str():
     """Test UpdateOnConditionStr updates condition strings properly for handoffs"""
 
@@ -1215,6 +1229,7 @@ def test_update_on_condition_str():
     assert condition_container.captured_condition == "Transfer based on condition2"
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_agent_tool_registration_for_execution(mock_credentials: Credentials):
     """Tests that an agent's tools property is used for registering tools for execution with the internal tool executor."""
 
@@ -1285,6 +1300,78 @@ def test_compress_message_func():
     assert len(modified) == 3 and modified[-1]["tool_responses"][0]["tool_call_id"] == "mock_call_id", (
         f"Wrong message processing: {modified}"
     )
+
+
+def test_swarmresult_afterworkoption_tool_swarmresult():
+    """Tests processing of the return of an AfterWorkOption in a SwarmResult. This is put in the tool executors _next_agent attribute."""
+
+    def call_determine_next_agent_from_tool_execution(
+        last_speaker_agent: ConversableAgent,
+        tool_execution_swarm_result: Union[ConversableAgent, AfterWorkOption, str],
+        next_agent_afterworkoption: AfterWorkOption,
+        swarm_afterworkoption: AfterWorkOption,
+    ) -> Optional[Agent]:
+        another_agent = ConversableAgent(name="another_agent")
+        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent, another_agent])
+        tool_executor._swarm_next_agent = tool_execution_swarm_result
+        user = UserProxyAgent("User")
+        groupchat = GroupChat(
+            agents=[last_speaker_agent],
+            messages=[
+                {"tool_calls": "", "role": "tool", "content": "Test message"},
+                {"role": "tool", "content": "Test message 2", "name": "dummy_1"},
+                {"role": "assistant", "content": "Test message 3", "name": "dummy_1"},
+            ],
+        )
+
+        last_speaker_agent._swarm_after_work = next_agent_afterworkoption
+
+        return _determine_next_agent(
+            last_speaker=last_speaker_agent,
+            groupchat=groupchat,
+            initial_agent=last_speaker_agent,
+            use_initial_agent=False,
+            tool_execution=tool_executor,
+            swarm_agent_names=["dummy_1"],
+            user_agent=user,
+            swarm_after_work=swarm_afterworkoption,
+        )
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.STAY, AfterWorkOption.STAY
+    )
+    assert next_speaker is None, "Expected None as the next speaker for AfterWorkOption.TERMINATE"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.STAY, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker.name == "dummy_1", "Expected the last speaker as the next speaker for AfterWorkOption.TERMINATE"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.REVERT_TO_USER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker.name == "User", "Expected the user agent as the next speaker for AfterWorkOption.REVERT_TO_USER"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, AfterWorkOption.SWARM_MANAGER, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker == "auto", "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, "dummy_1", AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
+
+    dummy_agent = ConversableAgent("dummy_1")
+    next_speaker = call_determine_next_agent_from_tool_execution(
+        dummy_agent, dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
+    )
+    assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
 
 if __name__ == "__main__":

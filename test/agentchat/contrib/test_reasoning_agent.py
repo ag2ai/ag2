@@ -97,6 +97,7 @@ def test_think_node_from_dict():
 
 
 @pytest.mark.openai
+@skip_on_missing_imports(["openai"], "openai")
 def test_reasoning_agent_init(reasoning_agent):
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"
@@ -150,6 +151,7 @@ def test_think_node_serialization_with_children():
     assert new_root.children[0].content == "Child"
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_reasoning_agent_answer(mock_credentials: Credentials):
     for max_depth in range(1, 10):
         for beam_size in range(1, 10):
@@ -311,6 +313,44 @@ def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent):
     assert "Paris" in ground_truth
 
 
+@skip_on_missing_imports(["openai"], "openai")
+def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent):
+    """
+    Test that when multiple messages are provided, _process_prompt uses the prompt rewriter.
+    If a message contains a GROUND_TRUTH marker, the method should split the content appropriately.
+    """
+    messages = [
+        {"role": "user", "content": f"{TEST_PROMPT} {TEST_GROUND_TRUTH}"},
+        {"role": "assistant", "content": "I believe the answer might be Paris."},
+    ]
+
+    # Monkey-patch the prompt rewriter's last_message to return a predetermined prompt.
+    simulated_rewritten_prompt = (
+        "QUESTION: What is the capital of France?\n\n"
+        "STEPS ALREADY EXECUTED:\n- Asked about the capital\n- Received a hint that it might be Paris"
+    )
+
+    with patch(
+        "autogen.agentchat.conversable_agent.ConversableAgent._generate_oai_reply_from_client"
+    ) as mock_oai_reply:
+
+        def mock_response(*args, **kwargs):
+            return {"content": simulated_rewritten_prompt}
+
+        mock_oai_reply.side_effect = mock_response
+
+        prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
+
+    # The returned prompt should match the simulated rewritten prompt.
+    assert prompt == simulated_rewritten_prompt
+    # The ground truth should start with 'GROUND_TRUTH'
+    assert ground_truth is not None
+    assert ground_truth.startswith("GROUND_TRUTH")
+    # Optionally, you can check that the ground truth includes the expected answer.
+    assert "Paris" in ground_truth
+
+
+@skip_on_missing_imports(["openai"], "openai")
 def test_reasoning_agent_code_execution(mock_credentials: Credentials):
     """Test that ReasoningAgent properly executes code in responses"""
 
