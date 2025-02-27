@@ -7,6 +7,26 @@ This notebook shows how to use AG2 with multiple local models using [LM Studio](
 
 To use the multi-model serving feature in LM Studio, you can start a "Multi Model Session" in the "Playground" tab. Then you select relevant models to load. Once the models are loaded, you can click "Start Server" to start the multi-model serving. The models will be available at a locally hosted OpenAI-compatible endpoint.
 
+## Installing AG2 with OpenAI API support
+
+Run the following command to install AG2 with the OpenAI package as LM Studio supports the OpenAI API.
+
+```bash
+pip install ag2[openai]
+```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[openai]
+```
+or
+```bash
+pip install -U pyautogen[openai]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
 ## Two Agent Chats
 
 In this example, we create a comedy chat between two agents
@@ -18,6 +38,7 @@ We first create configurations for the models.
 gemma = {
     "config_list": [
         {
+            "api_type": "openai",
             "model": "lmstudio-ai/gemma-2b-it-GGUF/gemma-2b-it-q8_0.gguf:0",
             "base_url": "http://localhost:1234/v1",
             "api_key": "lm-studio",
@@ -29,6 +50,7 @@ gemma = {
 phi2 = {
     "config_list": [
         {
+            "api_type": "openai",
             "model": "TheBloke/phi-2-GGUF/phi-2.Q4_K_S.gguf:0",
             "base_url": "http://localhost:1234/v1",
             "api_key": "lm-studio",

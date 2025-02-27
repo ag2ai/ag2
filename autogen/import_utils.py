@@ -147,7 +147,8 @@ class PatchCallable(PatchObject[F]):
 
         f: Callable[..., Any] = self.o
 
-        @wraps(f.__call__)  # type: ignore[operator]
+        # @wraps(f.__call__)  # type: ignore[operator]
+        @wraps(f)
         def _call(*args: Any, **kwargs: Any) -> Any:
             raise ImportError(self.msg)
 
