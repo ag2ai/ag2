@@ -2248,7 +2248,7 @@ def test_manager_resume_message_assignment():
 
 @pytest.mark.deepseek
 @suppress_json_decoder_error
-@run_for_optional_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "deepseek")
 def test_groupchat_with_deepseek_reasoner(
     credentials_gpt_4o_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,

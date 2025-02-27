@@ -28,7 +28,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai", "gemini", "anthropic", "deepseek", "ollama", "bedrock", "cerebras"]
+        llm: ["openai", "openai-realtime", "gemini", "gemini-realtime", "anthropic", "deepseek", "ollama", "bedrock", "cerebras"]
         python-version: ["3.9"]
         os: [ubuntu-latest]
       fail-fast: false
@@ -72,6 +72,10 @@ jobs:
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,${{ matrix.llm }}]"
+      - name: Install openai if llm is gemini-realtime
+        if: ${{ matrix.llm == 'gemini-realtime' }}
+        run: |
+          uv pip install --system -e ".[openai]"
       - name: LLM tests using ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
