@@ -68,7 +68,7 @@ For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](h
 AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `ag2` (or its alias `pyautogen` or `autogen`) on PyPI.
 
 ```bash
-pip install ag2
+pip install ag2[openai]
 ```
 
 Minimal dependencies are installed by default. You can install extra options based on the features you need.

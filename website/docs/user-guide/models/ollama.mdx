@@ -42,17 +42,17 @@ ollama list
 When installing AG2, you need to install the AG2 package with the Ollama extra.
 
 ``` bash
-pip install ag2[ollama]
+pip install ag2[openai,ollama]
 ```
 
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[ollama]
+pip install -U autogen[openai,ollama]
 ```
 or
 ```bash
-pip install -U pyautogen[ollama]
+pip install -U pyautogen[openai,ollama]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>
@@ -237,7 +237,7 @@ FINISH
 
 ## Tool Calling - Native vs Manual
 
-Ollama supports native tool calling (Ollama v0.3.1 library onward). If you install AG2 with `pip install ag2[ollama]` you will be able to use native tool calling.
+Ollama supports native tool calling (Ollama v0.3.1 library onward). If you install AG2 with `pip install ag2[openai,ollama]` you will be able to use native tool calling.
 
 The parameter `native_tool_calls` in your configuration allows you to specify if you want to use Ollama's native tool calling (default) or manual tool calling.
 
