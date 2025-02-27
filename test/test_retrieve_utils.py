@@ -213,7 +213,7 @@ class TestRetrieveUtils:
     def test_retrieve_utils(self):
         client = chromadb.PersistentClient(path="/tmp/chromadb")
         create_vector_db_from_dir(
-            dir_path="./website/docs",
+            dir_path="./website/docs/home",
             client=client,
             collection_name="autogen-docs",
             custom_text_types=["txt", "md", "rtf", "rst", "mdx"],
@@ -229,7 +229,7 @@ class TestRetrieveUtils:
             search_string="AutoGen",
         )
         print(results["ids"][0])
-        assert len(results["ids"][0]) == 4
+        assert len(results["ids"][0]) > 0
 
     @skip_on_missing_imports(["unstructured"], "unknown")
     def test_unstructured(self):

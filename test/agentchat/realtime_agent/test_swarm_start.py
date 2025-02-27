@@ -16,6 +16,7 @@ from pytest import FixtureRequest
 from autogen import ConversableAgent
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 from autogen.agentchat.realtime.experimental.realtime_swarm import register_swarm
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.dependency_injection import Field as AG2Field
 
 from ...conftest import Credentials
@@ -24,6 +25,7 @@ from .realtime_test_utils import text_to_speech, trace
 logger = getLogger(__name__)
 
 
+@skip_on_missing_imports(["openai"], "openai")
 class TestSwarmE2E:
     async def _test_e2e(self, credentials_llm_realtime: Credentials, credentials_gpt_4o_mini: Credentials) -> None:
         """End-to-end test for the RealtimeAgent.
