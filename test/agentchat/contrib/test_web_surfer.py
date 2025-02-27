@@ -35,6 +35,7 @@ else:
 
 
 @skip_on_missing_imports(["markdownify", "pathvalidate", "pdfminer", "requests", "bs4"], "websurfer")
+@skip_on_missing_imports(["openai"], "openai")
 def test_web_surfer() -> None:
     with pytest.MonkeyPatch.context() as mp:
         # we mock the API key so we can register functions (llm_config must be present for this to work)

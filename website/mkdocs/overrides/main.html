@@ -7,6 +7,7 @@
   {% elif page and page.title and not page.is_homepage %}
     {% set title = title ~ " - " ~ page.title | striptags %}
   {% endif %}
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta property="og:type" content="website" />
   <meta property="og:title" content="{{ title }}" />
   <meta property="og:description" content="{{ config.site_description }}" />

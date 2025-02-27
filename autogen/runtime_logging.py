@@ -11,13 +11,13 @@ import sqlite3
 import uuid
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar
 
-from openai import AzureOpenAI, OpenAI
-from openai.types.chat import ChatCompletion
-
 from .logger.base_logger import BaseLogger, LLMConfig
 from .logger.logger_factory import LoggerFactory
 
 if TYPE_CHECKING:
+    from openai import AzureOpenAI, OpenAI
+    from openai.types.chat import ChatCompletion
+
     from . import Agent, ConversableAgent, OpenAIWrapper
     from .oai.anthropic import AnthropicClient
     from .oai.bedrock import BedrockClient
@@ -71,7 +71,7 @@ def log_chat_completion(
     wrapper_id: int,
     agent: str | Agent,
     request: dict[str, float | str | list[dict[str, str]]],
-    response: str | ChatCompletion,
+    response: str | "ChatCompletion",
     is_cached: int,
     cost: float,
     start_time: str,

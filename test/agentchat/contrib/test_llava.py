@@ -16,6 +16,7 @@ from ...conftest import MOCK_OPEN_AI_API_KEY
 
 
 @skip_on_missing_imports(["replicate"], "lmm")
+@skip_on_missing_imports(["openai"], "openai")
 class TestLLaVAAgent(unittest.TestCase):
     def setUp(self):
         self.agent = LLaVAAgent(
@@ -25,7 +26,6 @@ class TestLLaVAAgent(unittest.TestCase):
                 "seed": 42,
                 "config_list": [
                     {
-                        "api_type": "openai",
                         "model": "llava-fake",
                         "base_url": "localhost:8000",
                         "api_key": MOCK_OPEN_AI_API_KEY,

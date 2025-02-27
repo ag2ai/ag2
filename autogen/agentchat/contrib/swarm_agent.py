@@ -505,10 +505,14 @@ def _determine_next_agent(
 
     after_work_next_agent_selection_msg = None
 
-    # Resolve after_work condition (agent-level overrides global)
-    after_work_condition = (
-        last_swarm_speaker._swarm_after_work if last_swarm_speaker._swarm_after_work is not None else swarm_after_work
-    )
+    if after_work_condition is None:
+        # Resolve after_work condition if one hasn't been passed in (agent-level overrides global)
+        after_work_condition = (
+            last_swarm_speaker._swarm_after_work
+            if last_swarm_speaker._swarm_after_work is not None
+            else swarm_after_work
+        )
+
     if isinstance(after_work_condition, AfterWork):
         after_work_next_agent_selection_msg = after_work_condition.next_agent_selection_msg
         after_work_condition = after_work_condition.agent
@@ -835,12 +839,12 @@ class SwarmResult(BaseModel):
 
     Args:
         values (str): The result values as a string.
-        agent (ConversableAgent, str): The agent instance or agent name as a string, if applicable.
+        agent (ConversableAgent, AfterWorkOption, str): The agent instance, AfterWorkOption, or agent name as a string, if applicable.
         context_variables (dict): A dictionary of context variables.
     """
 
     values: str = ""
-    agent: Optional[Union[ConversableAgent, str]] = None
+    agent: Optional[Union[ConversableAgent, AfterWorkOption, str]] = None
     context_variables: dict[str, Any] = {}
 
     @field_serializer("agent", when_used="json")
