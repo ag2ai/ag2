@@ -460,8 +460,9 @@ class ReasoningAgent(AssistantAgent):
         if len(forest_answers) == 1:
             return True, forest_answers[0]
         else:
+            forest_answers_str = "-" + "\n-".join(forest_answers)
             self.send(
-                message=f"Answer the question {prompt}. Here are some students' different answers:\n{{'\n-'.join(forest_answers)}}",
+                message=f"Answer the question {prompt}. Here are some students' different answers:\n{forest_answers_str}",
                 recipient=self,
                 request_reply=True,
                 silent=self.silent,
