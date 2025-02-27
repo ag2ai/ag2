@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-base_filter="not (openai or openai_realtime or gemini or anthropic or deepseek or ollama or bedrock or cerebras)"
+base_filter="not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)"
 args=()
 while [[ $# -gt 0 ]]; do
 	if [[ "$1" == "-m" ]]; then
