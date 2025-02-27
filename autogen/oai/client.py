@@ -1118,33 +1118,34 @@ class OpenAIWrapper:
                 request_ts = get_current_ts()
                 response = client.create(params)
             except Exception as e:
-                if APITimeoutError is not None and isinstance(e, APITimeoutError):
-                    logger.debug(f"config {i} timed out", exc_info=True)
-                    if i == last:
-                        raise TimeoutError(
-                            "OpenAI API call timed out. This could be due to congestion or too small a timeout value. The timeout can be specified by setting the 'timeout' value (in seconds) in the llm_config (if you are using agents) or the OpenAIWrapper constructor (if you are using the OpenAIWrapper directly)."
-                        ) from e
-                elif APIError is not None and isinstance(e, APIError):
-                    error_code = getattr(e, "code", None)
-                    if logging_enabled():
-                        log_chat_completion(
-                            invocation_id=invocation_id,
-                            client_id=id(client),
-                            wrapper_id=id(self),
-                            agent=agent,
-                            request=params,
-                            response=f"error_code:{error_code}, config {i} failed",
-                            is_cached=0,
-                            cost=0,
-                            start_time=request_ts,
-                        )
+                if openai_result.is_successful:
+                    if APITimeoutError is not None and isinstance(e, APITimeoutError):
+                        logger.debug(f"config {i} timed out", exc_info=True)
+                        if i == last:
+                            raise TimeoutError(
+                                "OpenAI API call timed out. This could be due to congestion or too small a timeout value. The timeout can be specified by setting the 'timeout' value (in seconds) in the llm_config (if you are using agents) or the OpenAIWrapper constructor (if you are using the OpenAIWrapper directly)."
+                            ) from e
+                    elif APIError is not None and isinstance(e, APIError):
+                        error_code = getattr(e, "code", None)
+                        if logging_enabled():
+                            log_chat_completion(
+                                invocation_id=invocation_id,
+                                client_id=id(client),
+                                wrapper_id=id(self),
+                                agent=agent,
+                                request=params,
+                                response=f"error_code:{error_code}, config {i} failed",
+                                is_cached=0,
+                                cost=0,
+                                start_time=request_ts,
+                            )
 
-                    if error_code == "content_filter":
-                        # raise the error for content_filter
-                        raise
-                    logger.debug(f"config {i} failed", exc_info=True)
-                    if i == last:
-                        raise
+                        if error_code == "content_filter":
+                            # raise the error for content_filter
+                            raise
+                        logger.debug(f"config {i} failed", exc_info=True)
+                        if i == last:
+                            raise
                 else:
                     raise
             except (
