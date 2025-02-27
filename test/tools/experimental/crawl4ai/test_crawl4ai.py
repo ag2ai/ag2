@@ -7,7 +7,7 @@ from typing import Any, Optional
 import pytest
 from pydantic import BaseModel
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools.experimental.crawl4ai import Crawl4AITool
 
 from ....conftest import Credentials
@@ -16,7 +16,7 @@ with optional_import_block():
     from crawl4ai import CrawlerRunConfig
 
 
-@skip_on_missing_imports(["crawl4ai"], "crawl4ai")
+@run_for_optional_imports(["crawl4ai"], "crawl4ai")
 class TestCrawl4AITool:
     @pytest.mark.asyncio
     async def test_without_llm(self) -> None:

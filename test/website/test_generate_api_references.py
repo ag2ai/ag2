@@ -19,7 +19,7 @@ from autogen._website.generate_api_references import (
     update_mint_json_with_api_nav,
     update_nav,
 )
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block():
     import jinja2
@@ -109,7 +109,7 @@ def target_file(temp_dir: Path) -> Path:
     return temp_dir / "mint.json"
 
 
-@skip_on_missing_imports(["jinja2", "pdoc"], "docs")
+@run_for_optional_imports(["jinja2", "pdoc"], "docs")
 def test_generate_mint_json_from_template(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that mint.json is generated correctly from template."""
     # Run the function
@@ -126,7 +126,7 @@ def test_generate_mint_json_from_template(template_file: Path, target_file: Path
     assert actual == expected
 
 
-@skip_on_missing_imports(["jinja2", "pdoc"], "docs")
+@run_for_optional_imports(["jinja2", "pdoc"], "docs")
 def test_generate_mint_json_existing_file(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that function works when mint.json already exists."""
     # Create an existing mint.json with different content
@@ -145,7 +145,7 @@ def test_generate_mint_json_existing_file(template_file: Path, target_file: Path
     assert actual == expected
 
 
-@skip_on_missing_imports(["jinja2", "pdoc"], "docs")
+@run_for_optional_imports(["jinja2", "pdoc"], "docs")
 def test_generate_mint_json_missing_template(target_file: Path) -> None:
     """Test handling of missing template file."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -580,7 +580,7 @@ MyClass(
             "agentchat/overview.md",
         ]
 
-    @skip_on_missing_imports(["jinja2", "pdoc"], "docs")
+    @run_for_optional_imports(["jinja2", "pdoc"], "docs")
     def test_split_reference_by_symbols(self, api_dir: Path, expected_files: list[str]) -> None:
         """Test that files are split correctly."""
         all_files_relative_to_api_dir = [str(p.relative_to(api_dir)) for p in api_dir.rglob("*.md")]

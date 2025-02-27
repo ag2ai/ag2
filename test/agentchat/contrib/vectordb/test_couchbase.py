@@ -13,7 +13,7 @@ import pytest
 from dotenv import load_dotenv
 
 from autogen.agentchat.contrib.vectordb.couchbase import CouchbaseVectorDB
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block() as result:
     from couchbase.auth import PasswordAuthenticator
@@ -96,7 +96,7 @@ def collection_name():
     return f"{COUCHBASE_COLLECTION}_{collection_id}"
 
 
-@skip_on_missing_imports(["couchbase"], "retrievechat-couchbase")
+@run_for_optional_imports(["couchbase"], "retrievechat-couchbase")
 def test_couchbase(db, collection_name):
     with pytest.raises(Exception):
         curr_col = db.get_collection(collection_name)

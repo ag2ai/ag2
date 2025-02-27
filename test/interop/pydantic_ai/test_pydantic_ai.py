@@ -10,7 +10,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
 
@@ -24,7 +24,7 @@ with optional_import_block():
 
 
 @pytest.mark.interop
-@skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
+@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithotContext:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -64,7 +64,7 @@ class TestPydanticAIInteroperabilityWithotContext:
 
 
 @pytest.mark.interop
-@skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
+@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityDependencyInjection:
     def test_dependency_injection(self) -> None:
         def f(  # type: ignore[no-any-unimported]
@@ -130,7 +130,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
 
 @pytest.mark.interop
-@skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
+@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithContext:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:

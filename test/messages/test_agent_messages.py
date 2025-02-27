@@ -11,7 +11,7 @@ import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.coding.base import CodeBlock
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.messages.agent_messages import (
     ClearAgentsHistoryMessage,
     ClearConversableAgentHistoryMessage,
@@ -418,7 +418,7 @@ class TestTextMessage:
 
         assert mock.call_args_list == expected_call_args_list
 
-    @skip_on_missing_imports("PIL", "unknown")
+    @run_for_optional_imports("PIL", "unknown")
     def test_serialization(self) -> None:
         image = PIL.Image.new(mode="RGB", size=(200, 200))
         content = [

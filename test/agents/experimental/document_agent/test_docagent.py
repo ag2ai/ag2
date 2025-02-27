@@ -11,7 +11,7 @@ from autogen.agents.experimental.document_agent.document_agent import (
     DocumentTask,
     DocumentTriageAgent,
 )
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ....conftest import Credentials
 
@@ -23,7 +23,7 @@ def test_document_triage_agent_init(credentials_gpt_4o_mini: Credentials) -> Non
     assert triage_agent.llm_config["response_format"] == DocumentTask  # type: ignore [index]
 
 
-@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+@run_for_optional_imports(["selenium", "webdriver_manager"], "rag")
 def test_document_agent_init(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
     llm_config = credentials_gpt_4o_mini.llm_config
     document_agent = DocAgent(llm_config=llm_config, parsed_docs_path=tmp_path)

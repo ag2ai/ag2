@@ -13,14 +13,14 @@ import sys
 import pytest
 
 import autogen
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.math_utils import eval_math_responses
 
 from ..conftest import Credentials, reason
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     functions = [
         {
@@ -218,7 +218,7 @@ async def test_a_execute_function():
     not sys.version.startswith("3.10"),
     reason=reason,
 )
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_update_function(credentials_gpt_4o_mini: Credentials):
     llm_config = {
         "config_list": credentials_gpt_4o_mini.config_list,

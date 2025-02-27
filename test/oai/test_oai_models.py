@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.oai.oai_models import (
     ChatCompletionMessage as ChatCompletionMessageLocal,
 )
@@ -24,7 +24,7 @@ with optional_import_block():
     from openai.types.completion_usage import CompletionUsage
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 class TestOAIModels:
     def test_chat_completion_schema(self) -> None:
         assert ChatCompletionLocal.model_json_schema() == ChatCompletion.model_json_schema()

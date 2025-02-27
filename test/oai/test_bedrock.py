@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
 
 
@@ -37,14 +37,14 @@ def bedrock_client():
 
 
 # Test initialization and configuration
-@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_initialization():
     # Creation works without an api_key as it's handled in the parameter parsing
     BedrockClient(aws_region="us-east-1")
 
 
 # Test parameters
-@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_parsing_params(bedrock_client):
     # All parameters (with default values)
     params = {
@@ -115,7 +115,7 @@ def test_parsing_params(bedrock_client):
 
 
 # Test text generation
-@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
 @patch("autogen.oai.bedrock.BedrockClient.create")
 def test_create_response(mock_chat, bedrock_client):
     # Mock BedrockClient.chat response
@@ -151,7 +151,7 @@ def test_create_response(mock_chat, bedrock_client):
 
 
 # Test functions/tools
-@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
 @patch("autogen.oai.bedrock.BedrockClient.create")
 def test_create_response_with_tool_call(mock_chat, bedrock_client):
     # Mock BedrockClient.chat response
@@ -217,7 +217,7 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client):
 
 
 # Test message conversion from OpenAI to Bedrock format
-@skip_on_missing_imports(["boto3", "botocore"], "bedrock")
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_oai_messages_to_bedrock_messages(bedrock_client):
     # Test that the "name" key is removed and system messages converted to user message
     test_messages = [

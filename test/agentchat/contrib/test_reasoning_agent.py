@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ...conftest import Credentials
 
@@ -94,7 +94,7 @@ def test_think_node_from_dict():
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_init(reasoning_agent):
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"
@@ -148,7 +148,7 @@ def test_think_node_serialization_with_children():
     assert new_root.children[0].content == "Child"
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_answer(mock_credentials: Credentials):
     for max_depth in range(1, 10):
         for beam_size in range(1, 10):
@@ -207,7 +207,7 @@ Option 3: Another option"""
     assert max_depth_found <= agent._max_depth
 
 
-@skip_on_missing_imports(["graphviz"], "unknown")
+@run_for_optional_imports(["graphviz"], "unknown")
 @patch("graphviz.Digraph")
 def test_visualize_tree_successful_case(mock_digraph):
     """Test successful tree visualization"""
@@ -256,7 +256,7 @@ def test_visualize_tree_successful_case(mock_digraph):
     mock_graph.render.assert_called_once_with("tree_of_thoughts", view=False, format="png", cleanup=True)
 
 
-@skip_on_missing_imports(["graphviz"], "unknown")
+@run_for_optional_imports(["graphviz"], "unknown")
 @patch("graphviz.Digraph")
 def test_visualize_tree_render_failure(mock_digraph):
     """Test visualization when rendering fails"""
@@ -274,7 +274,7 @@ def test_visualize_tree_render_failure(mock_digraph):
         ])
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_code_execution(mock_credentials: Credentials):
     """Test that ReasoningAgent properly executes code in responses"""
 

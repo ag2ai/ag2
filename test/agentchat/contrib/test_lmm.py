@@ -16,7 +16,7 @@ from autogen.agentchat import GroupChat
 from autogen.agentchat.contrib.img_utils import get_pil_image
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
@@ -26,8 +26,8 @@ base64_encoded_image = (
 )
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["openai"], "openai")
 class TestMultimodalConversableAgent(unittest.TestCase):
     def setUp(self):
         self.agent = MultimodalConversableAgent(
@@ -90,8 +90,8 @@ class TestMultimodalConversableAgent(unittest.TestCase):
         self.agent._print_received_message.assert_called_with(message_str, sender)
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["openai"], "openai")
 def test_group_chat_with_lmm(monkeypatch: MonkeyPatch):
     """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.

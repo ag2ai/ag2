@@ -13,13 +13,13 @@ import pytest
 import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials, suppress_gemini_resource_exhausted
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()
@@ -73,7 +73,7 @@ def _test_redis_cache(credentials: Credentials):
 
 @pytest.mark.openai
 @pytest.mark.redis
-@skip_on_missing_imports(["openai", "redis"], "redis")
+@run_for_optional_imports(["openai", "redis"], "redis")
 def test_redis_cache(credentials_gpt_4o_mini: Credentials):
     _test_redis_cache(credentials_gpt_4o_mini)
 
@@ -82,7 +82,7 @@ def test_redis_cache(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.gemini
 @suppress_gemini_resource_exhausted
 @pytest.mark.redis
-@skip_on_missing_imports(["openai", "redis"], "redis")
+@run_for_optional_imports(["openai", "redis"], "redis")
 def test_redis_cache_gemini(credentials_gemini_flash: Credentials):
     _test_redis_cache(credentials_gemini_flash)
 
@@ -90,13 +90,13 @@ def test_redis_cache_gemini(credentials_gemini_flash: Credentials):
 @pytest.mark.skip(reason="Currently not working")
 @pytest.mark.anthropic
 @pytest.mark.redis
-@skip_on_missing_imports(["openai", "redis"], "redis")
+@run_for_optional_imports(["openai", "redis"], "redis")
 def test_redis_cache_anthropic(credentials_anthropic_claude_sonnet: Credentials):
     _test_redis_cache(credentials_anthropic_claude_sonnet)
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
     start_time = time.time()

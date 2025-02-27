@@ -9,7 +9,7 @@ import pytest
 from autogen.agentchat import UserProxyAgent
 from autogen.agentchat.chat import ChatResult
 from autogen.agents.experimental import WebSurferAgent
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ....conftest import Credentials
 
@@ -48,7 +48,7 @@ class WebSurferTestHelper:
         assert self._check_tool_called(result, web_tool)
 
 
-@skip_on_missing_imports(["crawl4ai"], "crawl4ai")
+@run_for_optional_imports(["crawl4ai"], "crawl4ai")
 class TestCrawl4AIWebSurfer(WebSurferTestHelper):
     def test_init(
         self,
@@ -83,7 +83,7 @@ class TestCrawl4AIWebSurfer(WebSurferTestHelper):
         super().test_end2end(credentials_gpt_4o_mini, "crawl4ai")
 
 
-@skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
+@run_for_optional_imports(["langchain_openai", "browser_use"], "browser-use")
 class TestBrowserUseWebSurfer(WebSurferTestHelper):
     def test_init(
         self,

@@ -10,7 +10,7 @@ from pytest import LogCaptureFixture, fixture, raises
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.agents.experimental.document_agent.parser_utils import docling_parse_docs
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools.tool import Tool
 
 from ....conftest import Credentials
@@ -19,7 +19,7 @@ with optional_import_block():
     from docling.datamodel.document import ConversionResult, InputDocument
 
 
-@skip_on_missing_imports("docling", "rag")
+@run_for_optional_imports("docling", "rag")
 class TestDoclingParseDocs:
     @fixture
     def mock_document_input(self) -> MagicMock:

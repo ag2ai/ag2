@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.interop import Interoperability
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
@@ -18,7 +18,7 @@ with optional_import_block():
 
 @pytest.mark.interop
 class TestInteroperability:
-    @skip_on_missing_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
+    @run_for_optional_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
 
@@ -34,7 +34,7 @@ class TestInteroperability:
         if sys.version_info >= (3, 13):
             assert actual == ["langchain", "pydanticai"]
 
-    @skip_on_missing_imports("crewai_tools", "interop-crewai")
+    @run_for_optional_imports("crewai_tools", "interop-crewai")
     def test_crewai(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
 
@@ -60,6 +60,6 @@ class TestInteroperability:
             assert tool.func(args=args) == "Hello, World!"
 
     @pytest.mark.skip("This test is not yet implemented")
-    @skip_on_missing_imports("langchain", "interop-langchain")
+    @run_for_optional_imports("langchain", "interop-langchain")
     def test_langchain(self) -> None:
         raise NotImplementedError("This test is not yet implemented")

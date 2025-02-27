@@ -17,7 +17,7 @@ from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
     create_qdrant_from_dir,
     query_qdrant,
 )
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ....conftest import Credentials
 
@@ -30,7 +30,7 @@ with optional_import_block() as result:
     sys.platform in ["darwin", "win32"],
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
 )
-@skip_on_missing_imports(["qdrant_client", "fastembed", "openai"], "retrievechat-qdrant")
+@run_for_optional_imports(["qdrant_client", "fastembed", "openai"], "retrievechat-qdrant")
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     conversations = {}
     # ChatCompletion.start_logging(conversations)  # deprecated in v0.2
@@ -65,7 +65,7 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
+@run_for_optional_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
 def test_qdrant_filter():
     client = QdrantClient(":memory:")
     create_qdrant_from_dir(dir_path="./website/docs", client=client, collection_name="autogen-docs")
@@ -81,7 +81,7 @@ def test_qdrant_filter():
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
+@run_for_optional_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
 def test_qdrant_search():
     test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
     client = QdrantClient(":memory:")

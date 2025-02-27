@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-base_filter="not (openai or gemini or anthropic or deepseek)"
+base_filter="not (openai or openai_realtime or gemini or anthropic or deepseek)"
 args=()
 while [[ $# -gt 0 ]]; do
 	if [[ "$1" == "-m" ]]; then
@@ -15,5 +15,9 @@ while [[ $# -gt 0 ]]; do
 	fi
 	shift
 done
+
+base_filter="(not aux_neg_flag) or ($base_filter)"
+
+echo $base_filter
 
 bash scripts/test.sh -m "$base_filter" "${args[@]}"

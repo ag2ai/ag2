@@ -23,7 +23,7 @@ from autogen.agentchat.contrib.img_utils import (
     message_formatter_pil_to_b64,
     num_tokens_from_gpt_image,
 )
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block():
     import numpy as np
@@ -47,8 +47,8 @@ raw_encoded_image = (
 )
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["numpy"], "flaml")
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["numpy"], "flaml")
 class TestGetPilImage(unittest.TestCase):
     def test_read_local_file(self):
         # Create a small red image for testing
@@ -63,7 +63,7 @@ class TestGetPilImage(unittest.TestCase):
         self.assertTrue((np.array(raw_pil_image) == np.array(img2)).all())
 
 
-@skip_on_missing_imports(["numpy"], "flaml")
+@run_for_optional_imports(["numpy"], "flaml")
 def are_b64_images_equal(x: str, y: str):
     """Asserts that two base64 encoded images are equal."""
     img1 = get_pil_image(x)
@@ -71,7 +71,7 @@ def are_b64_images_equal(x: str, y: str):
     return (np.array(img1) == np.array(img2)).all()
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
+@run_for_optional_imports(["PIL"], "unknown")
 class TestGetImageData(unittest.TestCase):
     def test_http_image(self):
         with patch("requests.get") as mock_get:
@@ -103,7 +103,7 @@ class TestGetImageData(unittest.TestCase):
         os.remove(temp_file)
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
+@run_for_optional_imports(["PIL"], "unknown")
 class TestLlavaFormater(unittest.TestCase):
     def test_no_images(self):
         """Test the llava_formatter function with a prompt containing no images."""
@@ -135,7 +135,7 @@ class TestLlavaFormater(unittest.TestCase):
         self.assertEqual(result, expected_output)
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
+@run_for_optional_imports(["PIL"], "unknown")
 class TestGpt4vFormatter(unittest.TestCase):
     def test_no_images(self):
         """Test the gpt4v_formatter function with a prompt containing no images."""
@@ -205,7 +205,7 @@ class TestGpt4vFormatter(unittest.TestCase):
         self.assertEqual(result, expected_output)
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
+@run_for_optional_imports(["PIL"], "unknown")
 class TestExtractImgPaths(unittest.TestCase):
     def test_no_images(self):
         """Test the extract_img_paths function with a paragraph containing no images."""
@@ -238,7 +238,7 @@ class TestExtractImgPaths(unittest.TestCase):
         self.assertEqual(result, expected_output)
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
+@run_for_optional_imports(["PIL"], "unknown")
 class MessageFormatterPILtoB64Test(unittest.TestCase):
     def test_formatting(self):
         messages = [

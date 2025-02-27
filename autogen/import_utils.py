@@ -10,7 +10,7 @@ from functools import wraps
 from logging import getLogger
 from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
 
-__all__ = ["optional_import_block", "patch_object", "require_optional_import", "skip_on_missing_imports"]
+__all__ = ["optional_import_block", "patch_object", "require_optional_import", "run_for_optional_imports", "skip_on_missing_imports"]
 
 logger = getLogger(__name__)
 
@@ -309,8 +309,43 @@ def require_optional_import(
 
     return decorator
 
+def _mark_object(o: T, dep_target: str) -> T:
+    import pytest
 
-def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Optional[str] = None) -> Callable[[T], T]:
+    markname = dep_target.replace("-", "_")
+    pytest_mark_markname = getattr(pytest.mark, markname)
+    pytest_mark_o = pytest_mark_markname(o)
+
+    pytest_mark_o = pytest.mark.aux_neg_flag(pytest_mark_o)
+
+    return pytest_mark_o  # type: ignore[no-any-return]
+
+def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+    """Decorator to run a test if and only if optional modules are installed
+
+    Args:
+        module: Module name
+        dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
+    """    
+    # missing_modules = get_missing_imports(modules)
+    # if missing_modules:
+    #     raise ImportError(f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'")
+    
+    def decorator(o: T) -> T:
+        @wraps(o)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            missing_modules = get_missing_imports(modules)
+            if missing_modules:
+                raise ImportError(f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'")
+            return o(*args, **kwargs)
+        
+        pytest_mark_o = _mark_object(wrapper, dep_target)
+        
+        return pytest_mark_o  # type: ignore[no-any-return]
+    
+    return decorator
+
+def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
     """Decorator to skip a test if an optional module is missing
 
     Args:
@@ -320,25 +355,21 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Opti
     missing_modules = get_missing_imports(modules)
     # Add pytest.mark.dep_target decorator
     # For example, if dep_target is "jupyter-executor" add pytest.mark.jupyter_executor
-    mark_name = dep_target.replace("-", "_") if dep_target else "openai"
+    markname = dep_target.replace("-", "_")
 
     if not missing_modules:
 
         def decorator(o: T) -> T:
-            import pytest
-
-            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            pytest_mark_o = _mark_object(o, dep_target)
             return pytest_mark_o  # type: ignore[no-any-return]
 
     else:
 
         def decorator(o: T) -> T:
-            import pytest
-
-            install_target = "" if dep_target is None else f"[{dep_target}]"
-            pytest_mark_o = getattr(pytest.mark, mark_name)(o)
+            pytest_mark_o = _mark_object(o, dep_target)
+            
             return pytest.mark.skip(  # type: ignore[return-value,no-any-return]
-                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2{install_target}'"
+                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
             )(pytest_mark_o)
 
     return decorator

@@ -26,7 +26,7 @@ from autogen._website.process_notebooks import (
     update_group_pages,
 )
 from autogen._website.utils import NavigationGroup
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 
 class TestUpdateGroupPages:
@@ -601,7 +601,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
 
             yield website_dir
 
-    @skip_on_missing_imports("yaml", "docs")
+    @run_for_optional_imports("yaml", "docs")
     def test_add_authors_and_social_img(self, test_dir: Path) -> None:
         # Run the function
         add_authors_and_social_img_to_blog_and_user_stories(test_dir)

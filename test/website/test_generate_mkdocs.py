@@ -17,7 +17,7 @@ from autogen._website.generate_mkdocs import (
     process_and_copy_files,
 )
 from autogen._website.utils import NavigationGroup
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block():
     import jinja2
@@ -214,7 +214,7 @@ def test_add_api_ref_to_mkdocs_template() -> None:
     assert actual == expected
 
 
-@skip_on_missing_imports(["jinja2"], "docs")
+@run_for_optional_imports(["jinja2"], "docs")
 def test_generate_mkdocs_navigation(navigation: list[NavigationGroup], expected_nav: str) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create source directory structure

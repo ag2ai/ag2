@@ -303,7 +303,9 @@ testpaths = [
 markers = [
     "conda: test related to conda forge distribution",
     "all",
+    "aux_neg_flag",
     "openai",
+    "openai-realtime",
     "gemini",
     "anthropic",
     "deepseek",

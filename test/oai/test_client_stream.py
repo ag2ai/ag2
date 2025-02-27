@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen import OpenAIWrapper
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ..conftest import Credentials
 
@@ -28,7 +28,7 @@ with optional_import_block() as result:
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "2+2="}], stream=True)
@@ -37,7 +37,7 @@ def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> No
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}], stream=True)
@@ -80,7 +80,7 @@ def test__update_dict_from_chunk() -> None:
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test__update_function_call_from_chunk() -> None:
     function_call_chunks = [
         ChoiceDeltaFunctionCall(arguments=None, name="get_current_weather"),
@@ -113,7 +113,7 @@ def test__update_function_call_from_chunk() -> None:
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test__update_tool_calls_from_chunk() -> None:
     tool_calls_chunks = [
         ChoiceDeltaToolCall(
@@ -189,7 +189,7 @@ def test__update_tool_calls_from_chunk() -> None:
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
     functions = [
         {
@@ -221,7 +221,7 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
     tools = [
         {
@@ -263,7 +263,7 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_completion_stream(credentials_azure_gpt_35_turbo_instruct: Credentials) -> None:
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=", stream=True)

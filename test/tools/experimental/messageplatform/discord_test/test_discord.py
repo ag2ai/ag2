@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental.messageplatform import DiscordRetrieveTool, DiscordSendTool
 
 
-@skip_on_missing_imports("discord", "commsagent-discord")
+@run_for_optional_imports("discord", "commsagent-discord")
 class TestDiscordSendTool:
     @pytest.fixture(autouse=True)
     def mock_discord_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
@@ -264,7 +264,7 @@ class TestDiscordSendTool:
         assert len(mock_discord_client.guilds) == 0  # More explicit check
 
 
-@skip_on_missing_imports("discord", "commsagent-discord")
+@run_for_optional_imports("discord", "commsagent-discord")
 class TestDiscordRetrieveTool:
     @pytest.fixture(autouse=True)
     def mock_discord_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
