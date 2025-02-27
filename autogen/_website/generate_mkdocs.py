@@ -29,6 +29,84 @@ def copy_file(file: Path, mkdocs_output_dir: Path) -> None:
     shutil.copy2(file, dest)
 
 
+def transform_tab_component(content: str) -> str:
+    """Transform React-style tab components to MkDocs tab components.
+
+    Args:
+        content: String containing React-style tab components.
+            Expected format is:
+            <Tabs>
+                <Tab title="Title 1">
+                    content 1
+                </Tab>
+                <Tab title="Title 2">
+                    content 2
+                </Tab>
+            </Tabs>
+
+    Returns:
+        String with MkDocs tab components:
+            === "Title 1"
+                content 1
+
+            === "Title 2"
+                content 2
+    """
+    if "<Tabs>" not in content:
+        return content
+
+    # Find and replace each Tabs section
+    pattern = re.compile(r"<Tabs>(.*?)</Tabs>", re.DOTALL)
+
+    def replace_tabs(match):
+        tabs_content = match.group(1)
+
+        # Extract all Tab elements
+        tab_pattern = re.compile(r'<Tab title="([^"]+)">(.*?)</Tab>', re.DOTALL)
+        tabs = tab_pattern.findall(tabs_content)
+
+        if not tabs:
+            return ""
+
+        result = []
+
+        for i, (title, tab_content) in enumerate(tabs):
+            # Add tab header
+            result.append(f'=== "{title}"')
+
+            # Process content by maintaining indentation structure
+            lines = tab_content.strip().split("\n")
+
+            # Find minimum common indentation for non-empty lines
+            non_empty_lines = [line for line in lines if line.strip()]
+            min_indent = min([len(line) - len(line.lstrip()) for line in non_empty_lines]) if non_empty_lines else 0
+
+            # Remove common indentation and add 4-space indent
+            processed_lines = []
+            for line in lines:
+                if line.strip():
+                    # Remove the common indentation but preserve relative indentation
+                    if len(line) >= min_indent:
+                        processed_lines.append("    " + line[min_indent:])
+                    else:
+                        processed_lines.append("    " + line.lstrip())
+                else:
+                    processed_lines.append("")
+
+            result.append("\n".join(processed_lines))
+
+            # Add a blank line between tabs (but not after the last one)
+            if i < len(tabs) - 1:
+                result.append("")
+
+        return "\n".join(result)
+
+    # Replace each Tabs section
+    result = pattern.sub(replace_tabs, content)
+
+    return result
+
+
 def transform_content_for_mkdocs(content: str) -> str:
     # Transform admonitions (Tip, Warning, Note)
     tag_mappings = {
@@ -42,7 +120,26 @@ def transform_content_for_mkdocs(content: str) -> str:
 
         def replacement(match):
             inner_content = match.group(1).strip()
-            return f"!!! {mkdocs_type}\n    {inner_content}"
+
+            lines = inner_content.split("\n")
+
+            non_empty_lines = [line for line in lines if line.strip()]
+            min_indent = min([len(line) - len(line.lstrip()) for line in non_empty_lines]) if non_empty_lines else 0
+
+            # Process each line
+            processed_lines = []
+            for line in lines:
+                if line.strip():
+                    # Remove common indentation and add 4-space indent
+                    if len(line) >= min_indent:
+                        processed_lines.append("    " + line[min_indent:])
+                    else:
+                        processed_lines.append("    " + line.lstrip())
+                else:
+                    processed_lines.append("")
+
+            # Format the admonition with properly indented content
+            return f"!!! {mkdocs_type.lstrip()}\n" + "\n".join(processed_lines)
 
         content = re.sub(pattern, replacement, content, flags=re.DOTALL)
 
@@ -54,6 +151,9 @@ def transform_content_for_mkdocs(content: str) -> str:
         return f"style={{ {style_content} }}"
 
     content = re.sub(style_pattern, style_replacement, content)
+
+    # Transform tab components
+    content = transform_tab_component(content)
 
     return content
 
@@ -119,7 +219,9 @@ def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: dict
                 # Handle individual pages
                 result.append(format_page_entry(page, indent, keywords))
 
-    return "\n".join(result)
+    ret_val = "\n".join(result)
+    ret_val = ret_val.replace("- Home\n", "- [Home](index.md)\n")
+    return ret_val
 
 
 def add_api_ref_to_mkdocs_template(mkdocs_nav: str, section_to_follow: str) -> str:
@@ -161,7 +263,16 @@ def main() -> None:
     mkdocs_root_dir = website_dir / "mkdocs"
     mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
 
-    exclusion_list = ["docs/_blogs", "docs/home", "docs/.gitignore", "docs/use-cases"]
+    exclusion_list = [
+        "docs/_blogs",
+        "docs/home/home.md",
+        "docs/.gitignore",
+        "docs/use-cases",
+        "docs/installation",
+        "docs/user-guide/getting-started",
+        "docs/user-guide/models/litellm-with-watsonx.md",
+        "docs/contributor-guide/Migration-Guide.md",
+    ]
     nav_exclusions = ["Use Cases"]
 
     files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)

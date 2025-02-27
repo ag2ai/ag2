@@ -2,7 +2,7 @@
 search:
   exclude: true
 ---
-- Home
+- [Home](index.md)
     - [Home](docs/home/home.md)
     - [Quick Start](docs/home/quick-start.md)
 - User Guide
@@ -31,12 +31,15 @@ search:
             - [Nested Chat](docs/user-guide/advanced-concepts/swarm/nested-chat.md)
             - [Concept Code](docs/user-guide/advanced-concepts/swarm/concept-code.md)
             - [Use Case](docs/user-guide/advanced-concepts/swarm/use-case.md)
+        - Interoperability
+            - [Langchain](docs/user-guide/advanced-concepts/interop/langchain.md)
+            - [Crewai](docs/user-guide/advanced-concepts/interop/crewai.md)
+            - [Pydanticai](docs/user-guide/advanced-concepts/interop/pydanticai.md)
         - [Code Execution](docs/user-guide/advanced-concepts/code-execution.md)
         - [Tools With Secrets](docs/user-guide/advanced-concepts/tools-with-secrets.md)
         - [Conversation Patterns Deep Dive](docs/user-guide/advanced-concepts/conversation-patterns-deep-dive.md)
         - [LLM Configuration Deep Dive](docs/user-guide/advanced-concepts/llm-configuration-deep-dive.md)
     - Model Providers
-        - [Openai](docs/user-guide/models/openai.md)
         - [Amazon Bedrock](docs/user-guide/models/amazon-bedrock.md)
         - [Anthropic](docs/user-guide/models/anthropic.md)
         - [Cerebras](docs/user-guide/models/cerebras.md)
@@ -45,10 +48,15 @@ search:
         - [Google Gemini](docs/user-guide/models/google-gemini.md)
         - [Google Vertexai](docs/user-guide/models/google-vertexai.md)
         - [Groq](docs/user-guide/models/groq.md)
-        - [Litellm With Watsonx](docs/user-guide/models/litellm-with-watsonx.md)
+        - LiteLLM Proxy Server
+            - [Installation](docs/user-guide/models/litellm-proxy-server/installation.md)
+            - [Openai](docs/user-guide/models/litellm-proxy-server/openai.md)
+            - [Azure](docs/user-guide/models/litellm-proxy-server/azure.md)
+            - [Watsonx](docs/user-guide/models/litellm-proxy-server/watsonx.md)
         - [Lm Studio](docs/user-guide/models/lm-studio.md)
         - [Mistralai](docs/user-guide/models/mistralai.md)
         - [Ollama](docs/user-guide/models/ollama.md)
+        - [Openai](docs/user-guide/models/openai.md)
         - [Togetherai](docs/user-guide/models/togetherai.md)
         - [Vllm](docs/user-guide/models/vLLM.md)
     - Reference Agents
@@ -66,6 +74,14 @@ search:
     - [Documentation](docs/contributor-guide/documentation.md)
     - [File Bug Report](docs/contributor-guide/file-bug-report.md)
     - [Maintainer](docs/contributor-guide/maintainer.md)
+    - How AG2 Works
+        - [Overview](docs/contributor-guide/how-ag2-works/overview.md)
+        - [Initiate Chat](docs/contributor-guide/how-ag2-works/initiate-chat.md)
+        - [Generate Reply](docs/contributor-guide/how-ag2-works/generate-reply.md)
+        - [Hooks](docs/contributor-guide/how-ag2-works/hooks.md)
+    - Building Agents & Tools
+        - [Creating A Tool](docs/contributor-guide/building/creating-a-tool.md)
+        - [Creating An Agent](docs/contributor-guide/building/creating-an-agent.md)
     - [Pre Commit](docs/contributor-guide/pre-commit.md)
     - [Tests](docs/contributor-guide/tests.md)
     - [Research](docs/contributor-guide/Research.md)
