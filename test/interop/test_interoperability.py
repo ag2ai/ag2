@@ -16,12 +16,8 @@ with optional_import_block():
     from crewai_tools import FileReadTool
 
 
-@pytest.mark.skipif(
-    sys.version_info <= (3, 9) or sys.version_info >= (3, 13), reason="This test is only for Python 3.10 to 3.12"
-)
 @pytest.mark.interop
 class TestInteroperability:
-    @run_for_optional_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
 
@@ -37,7 +33,10 @@ class TestInteroperability:
         if sys.version_info >= (3, 13):
             assert actual == ["langchain", "pydanticai"]
 
-    @run_for_optional_imports("crewai_tools", "interop-crewai")
+    @pytest.mark.skipif(
+        sys.version_info < (3, 10) or sys.version_info >= (3, 13),
+        reason="This test is only supported in Python 3.10-3.12",
+    )
     def test_crewai(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", MOCK_OPEN_AI_API_KEY)
 
