@@ -43,13 +43,31 @@ jobs:
           ls -la ./website/mkdocs/site
         working-directory: .
 
-      # Step 3: Deploy to gh-pages branch
+      # Step 3: Configure Git user
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      # Step 4: Deploy to gh-pages branch
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./website/mkdocs/site
-          force_orphan: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'Deploy MkDocs site to GitHub pages'
+        run: |
+          . .venv/bin/activate
+
+          # Get version directly from the package using a more reliable method
+          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          # Check if version contains "rc"
+          IS_RC=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print("rc" in autogen.__version__ or "dev" in autogen.__version__)')
+          echo "IS_RC=$IS_RC" >> $GITHUB_ENV
+
+          echo $VERSION
+          echo $IS_RC
+
+          if [ "$IS_RC" == "False" ]; then
+            cd website/mkdocs && mike deploy -F mkdocs.yml --update-aliases $VERSION latest
+            mike set-default --push --allow-empty -F mkdocs.yml latest
+          else
+            cd website/mkdocs && mike deploy --push -F mkdocs.yml --update-aliases $VERSION
+          fi

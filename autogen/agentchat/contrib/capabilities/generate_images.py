@@ -7,8 +7,6 @@
 import re
 from typing import Any, Literal, Optional, Protocol, Union
 
-from openai import OpenAI
-
 from .... import Agent, ConversableAgent, code_utils
 from ....cache import AbstractCache
 from ....import_utils import optional_import_block, require_optional_import
@@ -18,6 +16,7 @@ from ..text_analyzer_agent import TextAnalyzerAgent
 
 with optional_import_block():
     from PIL.Image import Image
+    from openai import OpenAI
 
 SYSTEM_MESSAGE = "You've been given the special ability to generate images."
 DESCRIPTION_MESSAGE = "This agent has the ability to generate images."
@@ -66,6 +65,7 @@ class ImageGenerator(Protocol):
 
 
 @require_optional_import("PIL", "unknown")
+@require_optional_import("openai", "openai")
 class DalleImageGenerator:
     """Generates images using OpenAI's DALL-E models.
 

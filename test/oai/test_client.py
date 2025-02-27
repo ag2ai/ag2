@@ -7,6 +7,7 @@
 # !/usr/bin/env python3 -m pytest
 
 import copy
+import inspect
 import os
 import shutil
 import time
@@ -18,7 +19,14 @@ import pytest
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
-from autogen.oai.client import LEGACY_CACHE_DIR, LEGACY_DEFAULT_CACHE_SEED, OpenAIClient
+from autogen.oai.client import (
+    AOPENAI_FALLBACK_KWARGS,
+    LEGACY_CACHE_DIR,
+    LEGACY_DEFAULT_CACHE_SEED,
+    OPENAI_FALLBACK_KWARGS,
+    OpenAIClient,
+)
+from autogen.oai.oai_models import ChatCompletion
 
 from ..conftest import Credentials
 
@@ -26,8 +34,7 @@ TOOL_ENABLED = False
 
 with optional_import_block() as result:
     import openai
-    from openai import OpenAI
-    from openai.types.chat.chat_completion import ChatCompletion
+    from openai import AzureOpenAI, OpenAI
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
@@ -50,6 +57,13 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     response = client.create(messages=[{"role": "user", "content": "2+2="}], cache_seed=None)
     print(response)
     print(client.extract_text_or_completion_object(response))
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["openai"])
+def test_fallback_kwargs():
+    assert set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs) == OPENAI_FALLBACK_KWARGS
+    assert set(inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs) == AOPENAI_FALLBACK_KWARGS
 
 
 @pytest.mark.openai

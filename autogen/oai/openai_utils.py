@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import importlib
 import importlib.metadata
 import json
@@ -14,12 +15,14 @@ import tempfile
 import time
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from dotenv import find_dotenv, load_dotenv
-from openai import OpenAI
-from openai.types.beta.assistant import Assistant
 from packaging.version import parse
+
+if TYPE_CHECKING:
+    from openai import OpenAI
+    from openai.types.beta.assistant import Assistant
 
 from ..doc_utils import export_module
 
@@ -727,7 +730,7 @@ def config_list_from_dotenv(
     return config_list
 
 
-def retrieve_assistants_by_name(client: OpenAI, name: str) -> list[Assistant]:
+def retrieve_assistants_by_name(client: "OpenAI", name: str) -> list["Assistant"]:
     """Return the assistants with the given name from OAI assistant API"""
     assistants = client.beta.assistants.list()
     candidate_assistants = []
@@ -743,7 +746,7 @@ def detect_gpt_assistant_api_version() -> str:
     return "v1" if parse(oai_version) < parse("1.21") else "v2"
 
 
-def create_gpt_vector_store(client: OpenAI, name: str, fild_ids: list[str]) -> Any:
+def create_gpt_vector_store(client: "OpenAI", name: str, fild_ids: list[str]) -> Any:
     """Create a openai vector store for gpt assistant"""
     try:
         vector_store = client.beta.vector_stores.create(name=name)
@@ -765,8 +768,8 @@ def create_gpt_vector_store(client: OpenAI, name: str, fild_ids: list[str]) -> A
 
 
 def create_gpt_assistant(
-    client: OpenAI, name: str, instructions: str, model: str, assistant_config: dict[str, Any]
-) -> Assistant:
+    client: "OpenAI", name: str, instructions: str, model: str, assistant_config: dict[str, Any]
+) -> "Assistant":
     """Create a openai gpt assistant"""
     assistant_create_kwargs = {}
     gpt_assistant_api_version = detect_gpt_assistant_api_version()
@@ -814,7 +817,7 @@ def create_gpt_assistant(
     return client.beta.assistants.create(name=name, instructions=instructions, model=model, **assistant_create_kwargs)
 
 
-def update_gpt_assistant(client: OpenAI, assistant_id: str, assistant_config: dict[str, Any]) -> Assistant:
+def update_gpt_assistant(client: "OpenAI", assistant_id: str, assistant_config: dict[str, Any]) -> "Assistant":
     """Update openai gpt assistant"""
     gpt_assistant_api_version = detect_gpt_assistant_api_version()
     assistant_update_kwargs = {}

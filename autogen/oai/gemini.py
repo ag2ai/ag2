@@ -54,13 +54,11 @@ from io import BytesIO
 from typing import Any, Optional, Type
 
 import requests
-from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
-from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
-from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
 from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol
+from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     import google.genai as genai
@@ -228,7 +226,7 @@ class GeminiClient:
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
-        system_instruction = params.get("system_instruction")
+        system_instruction = self._extract_system_instruction(messages)
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
 
@@ -386,6 +384,21 @@ class GeminiClient:
         )
 
         return response_oai
+
+    def _extract_system_instruction(self, messages: list[dict]) -> str | None:
+        """Extract system instruction if provided."""
+        if messages is None or len(messages) == 0 or messages[0].get("role") != "system":
+            return None
+
+        message = messages.pop(0)
+        content = message["content"]
+
+        # Multi-model uses a list of dictionaries as content with text for the system message
+        # Otherwise normal agents will have strings as content
+        content = content[0].get("text", "").strip() if isinstance(content, list) else content.strip()
+
+        content = content if len(content) > 0 else None
+        return content
 
     def _oai_content_to_gemini_content(self, message: dict[str, Any]) -> tuple[list[Any], str]:
         """Convert AG2 content to Gemini parts, catering for text and tool calls"""
@@ -816,7 +829,13 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
         # Vertex AI pricing - based on Text input
         # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
 
-        if "gemini-1.5-flash" in model_name:
+        if "gemini-2.0-flash-lite" in model_name:
+            return total_cost_mil(0.075, 0.3)
+
+        elif "gemini-2.0-flash" in model_name:
+            return total_cost_mil(0.15, 0.6)
+
+        elif "gemini-1.5-flash" in model_name:
             if up_to_128k:
                 return total_cost_k(0.00001875, 0.000075)
             else:
@@ -841,7 +860,15 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if "gemini-1.5-flash-8b" in model_name:
+        if "gemini-2.0-flash-lite" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash-lite
+            return total_cost_mil(0.075, 0.3)
+
+        elif "gemini-2.0-flash" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash
+            return total_cost_mil(0.1, 0.4)
+
+        elif "gemini-1.5-flash-8b" in model_name:
             # https://ai.google.dev/pricing#1_5flash-8B
             if up_to_128k:
                 return total_cost_mil(0.0375, 0.15)

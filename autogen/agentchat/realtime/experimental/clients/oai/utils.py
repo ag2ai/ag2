@@ -36,7 +36,7 @@ def parse_oai_message(message: dict[str, Any]) -> RealtimeEvent:
     elif message.get("type") == "input_audio_buffer.speech_started":
         return SpeechStarted(raw_message=message)
     elif message.get("type") == "input_audio_buffer.delta":
-        return InputAudioBufferDelta(delta=message.delta, item_id=None, raw_message=message)
+        return InputAudioBufferDelta(delta=message["delta"], item_id=None, raw_message=message)
     elif message.get("type") == "response.function_call_arguments.done":
         return FunctionCall(
             raw_message=message,
