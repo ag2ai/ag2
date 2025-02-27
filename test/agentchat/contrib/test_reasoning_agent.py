@@ -94,6 +94,7 @@ def test_think_node_from_dict():
 
 
 @pytest.mark.openai
+@skip_on_missing_imports(["openai"], "openai")
 def test_reasoning_agent_init(reasoning_agent):
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"
@@ -147,6 +148,7 @@ def test_think_node_serialization_with_children():
     assert new_root.children[0].content == "Child"
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_reasoning_agent_answer(mock_credentials: Credentials):
     for max_depth in range(1, 10):
         for beam_size in range(1, 10):
@@ -272,6 +274,7 @@ def test_visualize_tree_render_failure(mock_digraph):
         ])
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_reasoning_agent_code_execution(mock_credentials: Credentials):
     """Test that ReasoningAgent properly executes code in responses"""
 
