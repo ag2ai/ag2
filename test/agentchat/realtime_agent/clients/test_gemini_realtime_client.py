@@ -31,7 +31,7 @@ class TestGeminiRealtimeClient:
         )
         assert isinstance(client, RealtimeClientProtocol)
 
-    @run_for_optional_imports(["genai", "websockets"], "gemini-realtime")
+    @run_for_optional_imports(["websockets"], "gemini-realtime")
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio()
     async def test_not_connected(self, client: GeminiRealtimeClient) -> None:
@@ -42,7 +42,7 @@ class TestGeminiRealtimeClient:
 
         assert not scope.cancelled_caught
 
-    @run_for_optional_imports(["genai", "websockets"], "gemini-realtime")
+    @run_for_optional_imports(["websockets"], "gemini-realtime")
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
     async def test_start_read_events(self, client: GeminiRealtimeClient) -> None:
@@ -66,7 +66,7 @@ class TestGeminiRealtimeClient:
         assert isinstance(calls_args[0][0], SessionCreated)
 
     @pytest.mark.skip
-    @run_for_optional_imports(["genai", "websockets"], "gemini-realtime")
+    @run_for_optional_imports(["websockets"], "gemini-realtime")
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
     async def test_send_text(self, client: GeminiRealtimeClient) -> None:

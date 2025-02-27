@@ -16,6 +16,9 @@ with optional_import_block():
     from crewai_tools import FileReadTool
 
 
+@pytest.mark.skipif(
+    sys.version_info <= (3, 9) or sys.version_info >= (3, 13), reason="This test is only for Python 3.10 to 3.12"
+)
 @pytest.mark.interop
 class TestInteroperability:
     @run_for_optional_imports(["crewai_tools", "langchain", "pydantic_ai"], "interop")
