@@ -16,7 +16,7 @@ Make sure all tests pass, this is required for [core-test.yml](https://github.co
 To run tests, install the [test] option:
 
 ```bash
-pip install -e."[test]"
+pip install -e."[openai,test]"
 ```
 
 Then you can run the tests from the `test` folder using the following command:
@@ -60,7 +60,7 @@ bash scripts/test-core-llm.sh -m "openai"
 Any code you commit should not decrease coverage. To ensure your code maintains or increases coverage, use the following commands after installing the required test dependencies:
 
 ```bash
-pip install -e ."[test]"
+pip install -e ."[openai,test]"
 
 bash scripts/test.sh test --cov-report=html
 ```

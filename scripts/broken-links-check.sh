@@ -15,5 +15,6 @@ muffet \
   --max-connections-per-host=1 \
   --rate-limit=1 \
   --max-response-body-size=20000000 \
+  --ignore-fragments \
   --exclude="($(paste -sd '|' .muffet-excluded-links.txt))" \
   https://docs.ag2.ai/docs/Home

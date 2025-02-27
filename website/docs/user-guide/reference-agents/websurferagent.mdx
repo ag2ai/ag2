@@ -18,21 +18,21 @@ If you want to add browsing capabilities to your existing agents, see [this note
 
 To get started with [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent), install AG2 with the `browser-use` and/or `crawl4ai` extras.
 ```bash
-pip install ag2[browser-use]
+pip install ag2[openai,browser-use]
 ```
 and/or
 ```bash
-pip install ag2[crawl4ai]
+pip install ag2[openai,crawl4ai]
 ```
 
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[browser-use]
+pip install -U autogen[openai,browser-use]
 ```
 or
 ```bash
-pip install -U pyautogen[browser-use]
+pip install -U pyautogen[openai,browser-use]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>

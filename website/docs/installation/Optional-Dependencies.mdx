@@ -3,17 +3,17 @@
 AG2 installs OpenAI package by default. To use LLMs by other providers, you can install the following packages:
 
 ```bash
-pip install ag2[gemini,anthropic,mistral,together,groq,cohere]
+pip install ag2[openai,gemini,anthropic,mistral,together,groq,cohere]
 ```
 
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[gemini,anthropic,mistral,together,groq,cohere]
+pip install -U autogen[openai,gemini,anthropic,mistral,together,groq,cohere]
 ```
 or
 ```bash
-pip install -U pyautogen[gemini,anthropic,mistral,together,groq,cohere]
+pip install -U pyautogen[openai,gemini,anthropic,mistral,together,groq,cohere]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>
