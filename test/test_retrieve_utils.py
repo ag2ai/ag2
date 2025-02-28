@@ -215,7 +215,7 @@ class TestRetrieveUtils:
         create_vector_db_from_dir(
             dir_path="./website/docs/home",
             client=client,
-            collection_name="autogen-docs",
+            collection_name="ag2-docs",
             custom_text_types=["txt", "md", "rtf", "rst", "mdx"],
             get_or_create=True,
         )
@@ -225,7 +225,7 @@ class TestRetrieveUtils:
             ],
             n_results=4,
             client=client,
-            collection_name="autogen-docs",
+            collection_name="ag2-docs",
             search_string="AutoGen",
         )
         print(results["ids"][0])
