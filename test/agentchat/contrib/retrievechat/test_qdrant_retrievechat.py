@@ -68,12 +68,12 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
 @skip_on_missing_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
 def test_qdrant_filter():
     client = QdrantClient(":memory:")
-    create_qdrant_from_dir(dir_path="./website/docs", client=client, collection_name="autogen-docs")
+    create_qdrant_from_dir(dir_path="./website/docs", client=client, collection_name="ag2-docs")
     results = query_qdrant(
         query_texts=["How can I use AutoGen UserProxyAgent and AssistantAgent to do code generation?"],
         n_results=4,
         client=client,
-        collection_name="autogen-docs",
+        collection_name="ag2-docs",
         # Return only documents with "AutoGen" in the string
         search_string="AutoGen",
     )

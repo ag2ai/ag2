@@ -130,7 +130,7 @@ class ChromaVectorDB(VectorDB):
         else:
             if not (self.active_collection and self.active_collection.name == collection_name):
                 self.active_collection = self.client.get_collection(
-                    collection_name, embedding_function=self.embedding_function
+                    name=collection_name, embedding_function=self.embedding_function
                 )
         return self.active_collection
 
