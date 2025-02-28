@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from autogen.agents.experimental.reasoning.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
+from autogen.agents.experimental import ReasoningAgent, ThinkNode
 from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import Credentials
@@ -236,7 +236,7 @@ def test_visualize_tree_successful_case(mock_digraph: MagicMock) -> None:
     mock_graph = MagicMock()
     mock_digraph.return_value = mock_graph
 
-    visualize_tree(root)
+    root.visualize_tree()
 
     # Verify Digraph initialization
     mock_digraph.assert_called_once()
@@ -274,7 +274,7 @@ def test_visualize_tree_render_failure(mock_digraph: MagicMock) -> None:
     mock_graph.render.side_effect = Exception("Rendering failed")
 
     with patch("builtins.print") as mock_print:
-        visualize_tree(root)
+        root.visualize_tree()
         mock_print.assert_has_calls([
             call("Error rendering graph: Rendering failed"),
             call("Make sure graphviz is installed on your system: https://graphviz.org/download/"),

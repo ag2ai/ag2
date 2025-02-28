@@ -6,13 +6,15 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple
 
 from ....agentchat.agent import Agent
 from ....agentchat.assistant_agent import AssistantAgent
 from ....agentchat.user_proxy_agent import UserProxyAgent
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block
+
+__all__ = ["ReasoningAgent", "ThinkNode"]
 
 EPSILON = 1e-6
 
@@ -58,7 +60,7 @@ Option 5: Perform Y.
 """
 
 
-@export_module("autogen")
+@export_module("autogen.agents.experimental")
 class ThinkNode:
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
         """A node in a tree structure representing a step in the reasoning process.
@@ -78,7 +80,7 @@ class ThinkNode:
             reflection (str): A string containing reflections on the reasoning process.
             rating_details (str): A string providing details about the rating of this node.
             depth (int): The depth of this node in the tree (root = 0).
-            children (List[ThinkNode]): List of child nodes.
+            children (list[ThinkNode]): list of child nodes.
             visits (int): Number of times this node has been visited during search.
 
         The node automatically maintains the tree structure by:
@@ -92,17 +94,17 @@ class ThinkNode:
         self.reflection: str = ""
         self.rating_details: str = ""
         self.depth: int = parent.depth + 1 if parent is not None else 0
-        self.children: List[ThinkNode] = []
+        self.children: list[ThinkNode] = []
         self.visits: int = 0
         if self.parent:
             self.parent.children.append(self)
 
     @property
-    def _trajectory_arr(self) -> List[str]:
+    def _trajectory_arr(self) -> list[str]:
         """Gets the full path from root to this node as a list of strings.
 
         Returns:
-            List[str]: List containing the content of each node from root to current node
+            list[str]: list containing the content of each node from root to current node
         """
         if self.parent:
             return self.parent._trajectory_arr + [self.content]
@@ -139,11 +141,11 @@ class ThinkNode:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert ThinkNode to dictionary representation.
 
         Returns:
-            Dict[str, Any]: Dictionary containing all node attributes and recursive children
+            dict[str, Any]: dictionary containing all node attributes and recursive children
         """
         return {
             "content": self.content,
@@ -156,11 +158,11 @@ class ThinkNode:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], parent: Optional["ThinkNode"] = None) -> "ThinkNode":
-        """Create ThinkNode from Dictionary representation.
+    def from_dict(cls, data: dict[str, Any], parent: Optional["ThinkNode"] = None) -> "ThinkNode":
+        """Create ThinkNode from dictionary representation.
 
         Args:
-            data (Dict[str, Any]): Dictionary containing node data
+            data (dict[str, Any]): dictionary containing node data
             parent (Optional[ThinkNode]): Parent node to attach to
 
         Returns:
@@ -179,61 +181,59 @@ class ThinkNode:
 
         return node
 
+    def visualize_tree(self) -> None:
+        """Visualize the tree of thoughts using graphviz.
 
-@export_module("autogen")
-def visualize_tree(root: ThinkNode) -> None:
-    """Visualize the tree of thoughts using graphviz.
+        Args:
+            root (ThinkNode): The root node of the tree.
+        """
+        with optional_import_block() as result:
+            from graphviz import Digraph
 
-    Args:
-        root (ThinkNode): The root node of the tree.
-    """
-    with optional_import_block() as result:
-        from graphviz import Digraph
+        if not result.is_successful:
+            print("Please install graphviz: pip install graphviz")
+            return
 
-    if not result.is_successful:
-        print("Please install graphviz: pip install graphviz")
-        return
+        dot = Digraph(comment="Tree of Thoughts")
+        dot.attr(rankdir="TB")  # Top to Bottom direction
 
-    dot = Digraph(comment="Tree of Thoughts")
-    dot.attr(rankdir="TB")  # Top to Bottom direction
+        def add_nodes(node: ThinkNode, node_id: str = "0") -> None:
+            # Truncate long content for better visualization
+            display_content = (node.content[:50] + "...") if len(node.content) > 50 else node.content
 
-    def add_nodes(node: ThinkNode, node_id: str = "0") -> None:
-        # Truncate long content for better visualization
-        display_content = (node.content[:50] + "...") if len(node.content) > 50 else node.content
+            # Add node with stats
+            label = f"{display_content}\n visits: {node.visits}\n value: {node.value}"
+            dot.node(node_id, label)
 
-        # Add node with stats
-        label = f"{display_content}\n visits: {node.visits}\n value: {node.value}"
-        dot.node(node_id, label)
+            # Recursively add children
+            for i, child in enumerate(node.children):
+                child_id = f"{node_id}_{i}"
+                add_nodes(child, child_id)
+                dot.edge(node_id, child_id)
 
-        # Recursively add children
-        for i, child in enumerate(node.children):
-            child_id = f"{node_id}_{i}"
-            add_nodes(child, child_id)
-            dot.edge(node_id, child_id)
+        add_nodes(self)
 
-    add_nodes(root)
-
-    # Render the graph
-    try:
-        dot.render("tree_of_thoughts", view=False, format="png", cleanup=True)
-    except Exception as e:
-        print(f"Error rendering graph: {e}")
-        print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
+        # Render the graph
+        try:
+            dot.render("tree_of_thoughts", view=False, format="png", cleanup=True)
+        except Exception as e:
+            print(f"Error rendering graph: {e}")
+            print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
 
 
-def extract_sft_dataset(root: ThinkNode) -> List[Dict[str, Any]]:
+def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
     """Extract the best trajectory or multiple equally good trajectories for SFT training.
 
     Args:
         root (ThinkNonde): The root node of the tree.
 
     Returns:
-        List[Dict]: List of best trajectories, each one is a pair of instruction and response.
+        list[dict]: list of best trajectories, each one is a pair of instruction and response.
     """
     instruction = root.content
     idx = len("# Question: ") + len(root.content) + 1
 
-    def _find_leaf_nodes(node: ThinkNode) -> List[ThinkNode]:
+    def _find_leaf_nodes(node: ThinkNode) -> list[ThinkNode]:
         """Recursively find all leaf nodes."""
         if not node.children:
             return [node]
@@ -257,7 +257,7 @@ def extract_sft_dataset(root: ThinkNode) -> List[Dict[str, Any]]:
     return best_trajectories
 
 
-def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: float = 0.2) -> List[Dict[str, Any]]:
+def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: float = 0.2) -> list[dict[str, Any]]:
     """Extract and generate preference pairs for RLHF training by comparing sibling nodes.
 
     Args:
@@ -266,7 +266,7 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
             one is positive and another is negative.
 
     Returns:
-        List[Dict]: List of preference pairs, where each pair contains two responses and
+        list[dict]: list of preference pairs, where each pair contains two responses and
         indicates which one is preferred.
     """
     preference_pairs = []
@@ -313,17 +313,17 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
     return preference_pairs
 
 
-@export_module("autogen")
+@export_module("autogen.agents.experimental")
 class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
         name: str,
-        llm_config: Dict[str, Any],
-        grader_llm_config: Optional[Dict[str, Any]] = None,
+        llm_config: dict[str, Any],
+        grader_llm_config: Optional[dict[str, Any]] = None,
         max_depth: int = 4,
         beam_size: int = 3,
-        answer_approach: str = "pool",
-        reason_config: Optional[Dict[str, Any]] = None,
+        answer_approach: Literal["pool", "best"] = "pool",
+        reason_config: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
@@ -371,8 +371,8 @@ class ReasoningAgent(AssistantAgent):
             kwargs["silent"] = not kwargs.pop("verbose")
 
         super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self._llm_config: Dict[str, Any] = llm_config
-        self._grader_llm_config: Dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
+        self._llm_config: dict[str, Any] = llm_config
+        self._grader_llm_config: dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
 
         if max_depth != 4 or beam_size != 3 or answer_approach != "pool":
             warnings.warn(
@@ -381,15 +381,18 @@ class ReasoningAgent(AssistantAgent):
                 DeprecationWarning,
             )
 
-        self._reason_config: Dict[str, Any] = reason_config or {}
-        self._method: str = reason_config.get("method", "beam_search")
+        self._reason_config: dict[str, Any] = reason_config or {}
+        self._method: Literal["beam_search", "mcts", "lats", "dfs"] = reason_config.get("method", "beam_search")
 
         self._beam_size: int = 1
         if self._method in ["beam_search", "dfs"]:
             if self._method != "dfs":
                 self._beam_size = reason_config.get("beam_size", beam_size)
-            self._answer_approach: str = reason_config.get("answer_approach", answer_approach)
-            assert self._answer_approach in ["pool", "best"]
+            self._answer_approach: Literal["pool", "best"] = reason_config.get("answer_approach", answer_approach)
+            if self._answer_approach not in ["pool", "best"]:
+                raise ValueError(
+                    f"Invalid answer_approach specified: '{self._answer_approach}'. Should be 'pool' or 'best'."
+                )
         elif self._method in ["mcts", "lats"]:
             self._nsim: int = reason_config.get("nsim", 3)
             self._exploration_constant: float = reason_config.get("exploration_constant", 1.41)
@@ -406,7 +409,7 @@ class ReasoningAgent(AssistantAgent):
         self._user_proxy: Optional[UserProxyAgent] = None
 
         if self._code_execution_config is not None:
-            self._code_execution_config: Dict[str, Any] = False
+            self._code_execution_config = False
             self._user_proxy = UserProxyAgent(
                 name="reasoner_user_proxy",
                 human_input_mode="NEVER",
@@ -424,16 +427,16 @@ class ReasoningAgent(AssistantAgent):
 
     def generate_forest_response(
         self,
-        messages: Optional[List[Dict[str, Any]]] = None,
+        messages: Optional[list[dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
-        config: Optional[Dict[str, Any]] = None,
+        config: Optional[dict[str, Any]] = None,
     ) -> tuple[bool, str]:
         """Generate a response using tree-of-thought reasoning.
 
         Args:
-            messages (Optional[List[Dict[str, Any]]]): Input messages to respond to
+            messages (Optional[list[dict[str, Any]]]): Input messages to respond to
             sender (Optional[Agent]): Agent sending the messages
-            config (Optional[Dict[str, Any]]): Optional configuration
+            config (Optional[dict[str, Any]]): Optional configuration
 
         Returns:
             Tuple[bool, str]: Success flag and generated response
@@ -444,7 +447,7 @@ class ReasoningAgent(AssistantAgent):
         if not prompt:
             return True, "TERMINATE"
 
-        forest_answers: List[str] = []
+        forest_answers: list[str] = []
         for _ in range(self._forest_size):
             if self._method in ["beam_search", "dfs"]:
                 response = self._beam_reply(prompt, ground_truth)
@@ -465,7 +468,7 @@ class ReasoningAgent(AssistantAgent):
                 request_reply=True,
                 silent=self.silent,
             )
-            last_msg: Optional[Dict[str, Any]] = self.last_message(self)
+            last_msg: Optional[dict[str, Any]] = self.last_message(self)
             if last_msg is None:
                 return True, ""
             return True, last_msg["content"].strip()
@@ -540,7 +543,7 @@ Please provide your rating along with a brief explanation of your assessment.
             silent=self.silent,
         )
         rating: str = ""
-        last_message: Optional[Dict[str, Any]] = self._grader.last_message()
+        last_message: Optional[dict[str, Any]] = self._grader.last_message()
         if last_message is not None:
             rating = last_message["content"].strip()
         node.rating_details = rating
@@ -553,7 +556,7 @@ Please provide your rating along with a brief explanation of your assessment.
         return reward
 
     def _process_prompt(
-        self, messages: List[Dict[str, Any]] | None, sender: Agent | None
+        self, messages: list[dict[str, Any]] | None, sender: Agent | None
     ) -> Tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
@@ -562,7 +565,7 @@ Please provide your rating along with a brief explanation of your assessment.
         It also looks for a specific keyword "GROUND_TRUTH" in any of the messages to separate the ground truth for evaluation purposes.
 
         Args:
-            messages (List[Dict[str, Any]]): A list of message dictionaries containing the content to process.
+            messages (list[dict[str, Any]]): A list of message dictionaries containing the content to process.
             sender (Agent): The agent sending the messages.
 
         Returns:
@@ -609,7 +612,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 request_reply=True,
                 silent=self.silent,
             )
-            last_msg: Optional[Dict[str, Any]] = self._prompt_rewriter.last_message()
+            last_msg: Optional[dict[str, Any]] = self._prompt_rewriter.last_message()
             prompt = last_msg["content"].strip() if last_msg is not None else ""
 
         if not prompt:
@@ -632,11 +635,11 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root  # save the root node for later visualization
-        prev_leafs: List[ThinkNode] = [root]
+        prev_leafs: list[ThinkNode] = [root]
         final_answers: set[ThinkNode] = set()  # store the final answers
 
         while prev_leafs and len(final_answers) < self._beam_size:
-            new_leafs: List[ThinkNode] = []
+            new_leafs: list[ThinkNode] = []
             for node in prev_leafs:
                 if self._is_terminal(node):
                     # Reached max depth; collect possible answers
@@ -685,7 +688,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 silent=self.silent,
             )
 
-        last_msg: Optional[Dict[str, Any]] = self.last_message(self)
+        last_msg: Optional[dict[str, Any]] = self.last_message(self)
         final_answer: str = last_msg["content"].strip() if last_msg is not None else ""
         return final_answer
 
@@ -701,7 +704,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root
-        answer_nodes: List[ThinkNode] = []
+        answer_nodes: list[ThinkNode] = []
 
         self._lats_context = "## Here are some previous trajectories and reflections\n\n"  # Store LATS's reflections
 
@@ -735,7 +738,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 request_reply=True,
                 silent=self.silent,
             )
-            last_msg: Optional[Dict[str, Any]] = self.last_message(self)
+            last_msg: Optional[dict[str, Any]] = self.last_message(self)
             _answer: str = last_msg["content"].strip() if last_msg is not None else ""
             _ans_node = ThinkNode(content=_answer, parent=node)
             reward = self.rate_node(_ans_node, ground_truth, is_outcome=True)
@@ -747,7 +750,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         best_ans_node = max(answer_nodes, key=lambda node: node.value)
         return best_ans_node.content
 
-    def _expand(self, node: ThinkNode) -> List[ThinkNode]:
+    def _expand(self, node: ThinkNode) -> list[ThinkNode]:
         """Expand the node by generating possible next steps based on the current trajectory.
 
         This method sends a message to the thinker agent, asking for possible next steps
@@ -759,7 +762,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
             node (ThinkNode): The node to expand, representing the current state in the reasoning process.
 
         Returns:
-            List[ThinkNode]: A list of new ThinkNode instances created from the options provided by the thinker.
+            list[ThinkNode]: A list of new ThinkNode instances created from the options provided by the thinker.
         """
         self._thinker.clear_history()
 
@@ -774,7 +777,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
             request_reply=True,
             silent=self.silent,
         )
-        last_msg: Optional[Dict[str, Any]] = self._thinker.last_message()
+        last_msg: Optional[dict[str, Any]] = self._thinker.last_message()
         reply: str = last_msg["content"].strip() if last_msg is not None else ""
         reflection = re.findall(r"REFLECTION:\s*(.+?)(?=\*\*Possible Options:\*\*|Option \d+:|$)", reply, re.DOTALL)
         if reflection:
@@ -792,7 +795,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                     request_reply=True,
                     silent=self.silent,
                 )
-                user_proxy_last_msg: Optional[Dict[str, Any]] = self._user_proxy.last_message(self)
+                user_proxy_last_msg: Optional[dict[str, Any]] = self._user_proxy.last_message(self)
                 user_proxy_last_msg_content: str = (
                     user_proxy_last_msg["content"] if user_proxy_last_msg is not None else ""
                 )
@@ -818,3 +821,47 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
             str: The name of the reasoning method
         """
         return self._method
+
+    def visualize_tree(self) -> None:
+        """Visualize the tree of thoughts using graphviz.
+
+        Raises:
+            RuntimeError: If the tree has not been generated yet.
+        """
+        if self._root:
+            self._root.visualize_tree()
+        else:
+            raise RuntimeError("No tree to visualize. Run the reasoning process first.")
+
+    def extract_sft_dataset(self) -> list[dict[str, Any]]:
+        """Extract the best trajectory or multiple equally good trajectories for SFT training.
+
+        Returns:
+            list[dict]: list of best trajectories, each one is a pair of instruction and response.
+
+        Raises:
+            RuntimeError: If the tree has not been generated yet.
+        """
+        if self._root:
+            return extract_sft_dataset(self._root)
+        else:
+            raise RuntimeError("No tree to extract dataset from. Run the reasoning process first.")
+
+    def extract_rlhf_preference_dataset(self, contrastive_threshold: float = 0.2) -> list[dict[str, Any]]:
+        """Extract and generate preference pairs for RLHF training by comparing sibling nodes.
+
+        Args:
+            contrastive_threshold (float): between (0, 1), a distance measure that we are confident to call
+                one is positive and another is negative.
+
+        Returns:
+            list[dict]: list of preference pairs, where each pair contains two responses and
+            indicates which one is preferred.
+
+        Raises:
+            RuntimeError: If the tree has not been generated yet.
+        """
+        if self._root:
+            return extract_rlhf_preference_dataset(self._root, contrastive_threshold)
+        else:
+            raise RuntimeError("No tree to extract dataset from. Run the reasoning process first.")

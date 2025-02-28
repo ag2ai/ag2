@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
+from .reasoning_agent import ReasoningAgent, ThinkNode
 
-__all__ = ["ReasoningAgent", "ThinkNode", "visualize_tree"]
+__all__ = ["ReasoningAgent", "ThinkNode"]
