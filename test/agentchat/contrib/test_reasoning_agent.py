@@ -34,6 +34,8 @@ Step 2: France is a country in Europe
 Step 3: Paris is the capital city of France"""
 
 TEST_CONTENT = "Paris is the capital of France"
+TEST_PROMPT = "What is the capital of France?"
+TEST_GROUND_TRUTH = "GROUND_TRUTH Paris"
 
 
 @pytest.fixture
@@ -54,6 +56,7 @@ def test_think_node_init(think_node):
     assert think_node.value == 0
     assert think_node.parent is None
     assert think_node.depth == 0
+
     assert think_node.children == []
     assert think_node.visits == 0
 
@@ -275,6 +278,47 @@ def test_visualize_tree_render_failure(mock_digraph):
 
 
 @skip_on_missing_imports(["openai"], "openai")
+def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent):
+    """
+    Test that when multiple messages are provided, _process_prompt uses the prompt rewriter.
+    If a message contains a GROUND_TRUTH marker, the method should split the content appropriately.
+    """
+    messages = [
+        {"role": "user", "content": f"{TEST_PROMPT} {TEST_GROUND_TRUTH}"},
+        {"role": "assistant", "content": "I believe the answer might be Paris."},
+    ]
+
+    # Monkey-patch the prompt rewriter's last_message to return a predetermined prompt.
+    simulated_rewritten_prompt = (
+        "QUESTION: What is the capital of France?\n\n"
+        "SUMMARY: The user asked about the capital, and a hint was received suggesting it might be Paris.\n\n"
+        "ACTIVITY LOG:\n"
+        "- Asked about the capital\n"
+        "- Received a hint that it might be Paris\n\n"
+        "CURRENT_QUESTION: What is the capital of France?"
+    )
+
+    with patch(
+        "autogen.agentchat.conversable_agent.ConversableAgent._generate_oai_reply_from_client"
+    ) as mock_oai_reply:
+
+        def mock_response(*args, **kwargs):
+            return {"content": simulated_rewritten_prompt}
+
+        mock_oai_reply.side_effect = mock_response
+
+        prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
+
+    # The returned prompt should match the simulated rewritten prompt.
+    assert prompt == simulated_rewritten_prompt
+    # The ground truth should start with 'GROUND_TRUTH'
+    assert ground_truth is not None
+    assert ground_truth.startswith("GROUND_TRUTH")
+    # Optionally, you can check that the ground truth includes the expected answer.
+    assert "Paris" in ground_truth
+
+
+@skip_on_missing_imports(["openai"], "openai")
 def test_reasoning_agent_code_execution(mock_credentials: Credentials):
     """Test that ReasoningAgent properly executes code in responses"""
 
@@ -322,6 +366,78 @@ Option 2: TERMINATE"""
         assert "Factorial of 5 is 120" in agent._root.children[0].content
         assert "Code Execution Result:" in agent._root.children[0].content
         assert response == "The factorial of 5 is 120"
+
+
+def test_prepare_prompt_single_message(reasoning_agent):
+    """
+    Test that when a single message is provided without a conversation history,
+    the _process_prompt method returns the message content as the prompt.
+    """
+    messages = [{"role": "user", "content": TEST_PROMPT}]
+    # Call _process_prompt. Here, we pass the agent itself as sender.
+    prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
+
+    # Since there is only one message, the prompt should equal the message content.
+    assert TEST_PROMPT in prompt
+    # No ground truth is expected.
+    assert ground_truth is None
+
+
+def test_prepare_prompt_with_ground_truth(reasoning_agent):
+    """
+    Test that when a message contains a GROUND_TRUTH marker,
+    _process_prompt splits the content appropriately.
+    """
+    # The message includes the ground truth marker.
+    message_content = f"{TEST_PROMPT} {TEST_GROUND_TRUTH}"
+    messages = [{"role": "user", "content": message_content}]
+    prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
+
+    # The prompt should contain the text before the marker.
+    assert TEST_PROMPT in prompt
+    # The ground truth should start with 'GROUND_TRUTH'
+    assert ground_truth is not None
+    assert ground_truth.startswith("GROUND_TRUTH")
+    # Optionally, you can check that the ground truth includes the expected answer.
+    assert "Paris" in ground_truth
+
+
+def test_prepare_prompt_multi_message(reasoning_agent):
+    """
+    Test that when multiple messages are provided, _process_prompt uses the prompt rewriter.
+    Because the method calls self.send with self._prompt_rewriter as recipient,
+    we override the _prompt_rewriter.last_message method to simulate a rewriter response.
+    """
+    messages = [
+        {"role": "user", "content": TEST_PROMPT},
+        {"role": "assistant", "content": "I believe the answer might be Paris."},
+    ]
+
+    # Monkey-patch the prompt rewriter's last_message to return a predetermined prompt.
+    simulated_rewritten_prompt = (
+        "QUESTION: What is the capital of France?\n\n"
+        "SUMMARY: The user asked about the capital, and a hint was received suggesting it might be Paris.\n\n"
+        "ACTIVITY LOG:\n"
+        "- Asked about the capital\n"
+        "- Received a hint that it might be Paris\n\n"
+        "CURRENT_QUESTION: What is the capital of France?"
+    )
+
+    with patch(
+        "autogen.agentchat.conversable_agent.ConversableAgent._generate_oai_reply_from_client"
+    ) as mock_oai_reply:
+
+        def mock_response(*args, **kwargs):
+            return {"content": simulated_rewritten_prompt}
+
+        mock_oai_reply.side_effect = mock_response
+
+        prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
+
+    # The returned prompt should match the simulated rewritten prompt.
+    assert prompt == simulated_rewritten_prompt
+    # Since no ground truth was provided in any message, ground_truth should be None.
+    assert ground_truth is None
 
 
 if __name__ == "__main__":
