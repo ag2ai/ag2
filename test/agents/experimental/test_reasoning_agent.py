@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
+from autogen.agents.experimental.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
 from autogen.import_utils import skip_on_missing_imports
 
 from ...conftest import Credentials

@@ -200,7 +200,7 @@ forest_agent = ReasoningAgent(
 Visualize the reasoning tree using graphviz:
 
 ```python
-from autogen.agentchat.contrib.reasoning_agent import visualize_tree
+from autogen.agents.experimental.reasoning_agent import visualize_tree
 
 # After running queries...
 visualize_tree(mcts_agent._root)
@@ -231,7 +231,7 @@ with open("reasoning_tree.json", "w") as f:
     json.dump(data, f)
 
 # Load tree
-from autogen.agentchat.contrib.reasoning_agent import ThinkNode
+from autogen.agents.experimental.reasoning_agent import ThinkNode
 loaded_tree = ThinkNode.from_dict(json.load(open("reasoning_tree.json")))
 ```
 

@@ -912,7 +912,7 @@ jobs:
             fi
         - name: Run tests
           run: |
-            bash scripts/test-skip-llm.sh test/agentchat/contrib/test_reasoning_agent.py
+            bash scripts/test-skip-llm.sh test/agents/experimental/test_reasoning_agent.py
         - name: Show coverage report
           run: bash scripts/show-coverage-report.sh
         - name: Upload coverage to Codecov

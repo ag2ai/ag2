@@ -8,11 +8,11 @@ import re
 import warnings
 from typing import Any, Optional
 
+from ...agentchat.agent import Agent
+from ...agentchat.assistant_agent import AssistantAgent
+from ...agentchat.user_proxy_agent import UserProxyAgent
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block
-from ..agent import Agent
-from ..assistant_agent import AssistantAgent
-from ..user_proxy_agent import UserProxyAgent
 
 EPSILON = 1e-6
 
