@@ -309,7 +309,7 @@ class ConversableAgent(LLMAgent):
                 raise ValueError("code_execution_config must be a dict or False.")
 
             # We have got a valid code_execution_config.
-            self._code_execution_config = code_execution_config
+            self._code_execution_config: Union[dict[str, Any], Literal[False]] = code_execution_config
 
             if self._code_execution_config.get("executor") is not None:
                 if "use_docker" in self._code_execution_config:
