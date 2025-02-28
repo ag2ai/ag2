@@ -7,11 +7,6 @@
 from .agent import Agent, LLMAgent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, a_initiate_chats, initiate_chats
-from .contrib.reasoning_agent import (
-    ReasoningAgent,
-    ThinkNode,
-    visualize_tree,
-)
 
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
@@ -47,10 +42,8 @@ __all__ = [
     "GroupChatManager",
     "LLMAgent",
     "OnCondition",
-    "ReasoningAgent",
     "SwarmAgent",
     "SwarmResult",
-    "ThinkNode",
     "UpdateSystemMessage",
     "UserProxyAgent",
     "a_initiate_chats",
@@ -60,5 +53,4 @@ __all__ = [
     "initiate_swarm_chat",
     "register_function",
     "register_hand_off",
-    "visualize_tree",
 ]
